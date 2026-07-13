@@ -17,7 +17,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import { Upload, Trash2 } from 'lucide-react';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSession } from 'next-auth/react';
@@ -27,19 +27,23 @@ import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/sc
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
-import { AvatarCrop } from '../AvatarCrop';
+import { AvatarCrop, type AvatarCropRef } from '../AvatarCrop';
+
+type UserWithAdmin = User & { isAdmin?: boolean };
 
 type EditUserDialogProps = {
-  user: User;
+  user: UserWithAdmin;
   open: boolean;
   setOpen: (open: boolean) => void;
-  onSave?: (updatedUser: Partial<User>) => Promise<void>;
+  onSave?: (updatedUser: Partial<UserWithAdmin>) => Promise<void>;
 };
 
 export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
   const { timezone: effectiveTimezone } = useEffectiveTimezone();
   // Only system admins may see/change the admin flag; the backend enforces this too.
   const { data: session } = useSession();
+  const avatarEditorRef = useRef<AvatarCropRef['current']>(null);
+  const [avatarDirty, setAvatarDirty] = useState(false);
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
@@ -87,6 +91,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       });
       // Reset preview from current user
       setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
+      setAvatarDirty(false);
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -94,6 +99,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepErrors: false,
         keepValues: false,
       });
+      setAvatarDirty(false);
     }
   }, [open, defaults, reset, user.avatar]);
 
@@ -130,6 +136,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       shouldValidate: true,
     });
     setValue('deleteAvatar', false, { shouldDirty: true });
+    setAvatarDirty(true);
 
     // Set preview Avatar
     if (file) {
@@ -142,6 +149,20 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const onDeleteAvatar = () => {
     setValue('avatarFile', undefined, { shouldDirty: true });
     setValue('deleteAvatar', true, { shouldDirty: true });
+    setAvatarDirty(false);
+    setAvatarPreview('');
+  };
+
+  const getCroppedAvatarFile = async () => {
+    const editor = avatarEditorRef.current;
+    if (!editor) return null;
+    const canvas = editor.getImageScaledToCanvas();
+    return new Promise<File | null>((resolve) => {
+      canvas.toBlob((blob: Blob | null) => {
+        if (!blob) return resolve(null);
+        resolve(new File([blob], 'avatar.png', { type: 'image/png' }));
+      }, 'image/png');
+    });
   };
 
   const resetForm = () =>
@@ -153,7 +174,16 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     const formData = new FormData();
     formData.append('firstName', parsed.firstName);
     formData.append('lastName', parsed.lastName);
-    if (parsed.avatarFile instanceof File) formData.append('avatar', parsed.avatarFile);
+    let avatarToUpload: File | undefined;
+    if (parsed.deleteAvatar) {
+      // deleteAvatar takes precedence over any editor state
+      avatarToUpload = undefined;
+    } else if (avatarDirty) {
+      avatarToUpload = await getCroppedAvatarFile() || undefined;
+    } else if (parsed.avatarFile instanceof File) {
+      avatarToUpload = parsed.avatarFile;
+    }
+    if (avatarToUpload) formData.append('avatar', avatarToUpload);
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
     formData.append('inactive', parsed.inactive ? 'true' : 'false');
     if (parsed.timezone) formData.append('timezone', parsed.timezone);
@@ -262,7 +292,11 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
           </div>
 
           {avatarPreview ? (
-            <AvatarCrop avatarPreview={avatarPreview} />
+            <AvatarCrop
+              avatarPreview={avatarPreview}
+              editorRef={avatarEditorRef}
+              onChange={() => setAvatarDirty(true)}
+            />
           ) : null}
 
           {/* First name */}

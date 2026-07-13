@@ -2,25 +2,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
-import {
-  ChevronDown,
-  Pencil,
-  Trash2,
-  NotebookText,
-  FileText,
-  Package,
-  Eye,
-  Download,
-  Plus,
-} from 'lucide-react';
+import { Pencil, FileText, Package, Plus } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,8 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import SelectField from '@/components/ui/SelectField';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
-import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
+import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import {
   Dialog,
@@ -48,20 +29,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
 import type { Problem } from '@prisma/client';
-import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { AssignmentWithDetails } from '@/lib/assignment-details';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
-
-const problemTypeLabels: Record<string, string> = {
-  FA: 'Finite Automaton',
-  PDA: 'Push-Down Automaton',
-  CFG: 'Context-Free Grammar',
-  RE: 'Regular Expression',
-  TM: 'Turing Machine',
-};
+import { buildProblemColumns } from './problem-columns';
 
 type ProblemLinkSettings = {
   problemId: string;
@@ -384,254 +357,16 @@ export default function AssignmentDashboardPage({
   // (this view re-renders on tab/dialog state and every query settle). All closed-
   // over handlers are useCallback-stable; the group column depends on isGroup.
   const problemColumns = useMemo(
-    () => [
-      {
-        id: 'number',
-        header: '#',
-        cell: ({ row }: { row: { index: number } }) => row.index + 1,
-        meta: { priority: 1 },
-        enableSorting: false,
-      },
-      {
-        accessorKey: 'title',
-        header: 'Title',
-        cell: ({ row }: { row: { original: Problem } }) => row.original.title,
-        meta: { priority: 1 },
-        enableSorting: true,
-      },
-      {
-        id: 'description_col',
-        header: 'Description',
-        cell: ({ row }: { row: { original: Problem } }) => {
-          const desc = row.original.description;
-          return desc ? (
-            <button
-              type="button"
-              onClick={() => openDescription(desc)}
-              className="text-blue-600 underline hover:text-blue-800"
-              title="View description"
-            >
-              View Description
-            </button>
-          ) : (
-            <span className="text-muted-foreground text-xs">â€”</span>
-          );
-        },
-        meta: { priority: 2 },
-        enableSorting: false,
-      },
-      // Group column: only present for group assignments
-      ...(assignment?.isGroup
-        ? [
-            {
-              id: 'group',
-              header: 'Group',
-              cell: ({ row }: { row: { original: Problem } }) => {
-                const pid = row.original.id;
-                const names = groupNamesByProblemId[pid] ?? [];
-
-                if (names.length === 0) return <span title="All students">All students</span>;
-
-                if (names.length === 1)
-                  return (
-                    <span className="truncate" title={names[0]}>
-                      {names[0]}
-                    </span>
-                  );
-                return (
-                  <span className="truncate" title={names.join(', ')}>
-                    {names[0]} (+{names.length - 1})
-                  </span>
-                );
-              },
-              meta: { priority: 2 },
-              enableSorting: false,
-            },
-          ]
-        : []),
-      {
-        accessorKey: 'type',
-        header: 'Type',
-        cell: ({ row }: { row: { original: Problem } }) =>
-          problemTypeLabels[row.original.type as string] || row.original.type,
-        meta: { priority: 1 },
-        enableSorting: true,
-      },
-      {
-        accessorKey: 'maxStates',
-        header: 'Max States',
-        cell: ({ row }: { row: { original: Problem } }) =>
-          row.original.maxStates === -1 ? 'Unlimited' : row.original.maxStates,
-        meta: { priority: 2 },
-        enableSorting: true,
-      },
-      {
-        accessorKey: 'assignmentMaxPoints',
-        header: 'Max Points',
-        cell: ({ row }: { row: { original: Problem & { assignmentMaxPoints?: number } } }) =>
-          typeof row.original.assignmentMaxPoints === 'number'
-            ? row.original.assignmentMaxPoints
-            : 'â€”',
-        meta: { priority: 1 },
-        enableSorting: true,
-      },
-      {
-        accessorKey: 'assignmentMaxSubmissions',
-        header: 'Max Submissions',
-        cell: ({ row }: { row: { original: Problem & { assignmentMaxSubmissions?: number } } }) => {
-          const value = row.original.assignmentMaxSubmissions;
-          if (typeof value !== 'number') return 'â€”';
-          return value === -1 ? 'Unlimited' : value;
-        },
-        meta: { priority: 1 },
-        enableSorting: true,
-        sortingFn: (
-          rowA: { getValue: (id: string) => unknown },
-          rowB: { getValue: (id: string) => unknown },
-          columnId: string,
-        ) => {
-          const normalize = (val: unknown) => {
-            if (typeof val !== 'number') return Number.POSITIVE_INFINITY;
-            return val === -1 ? Number.POSITIVE_INFINITY : val;
-          };
-          const a = normalize(rowA.getValue(columnId));
-          const b = normalize(rowB.getValue(columnId));
-          return a === b ? 0 : a > b ? 1 : -1;
-        },
-      },
-      {
-        accessorKey: 'assignmentAutograderEnabled',
-        header: 'Autograder',
-        cell: ({
-          row,
-        }: {
-          row: { original: Problem & { assignmentAutograderEnabled?: boolean } };
-        }) => {
-          const value = row.original.assignmentAutograderEnabled;
-          if (typeof value !== 'boolean') return 'â€”';
-          return value ? 'On' : 'Off';
-        },
-        meta: { priority: 2 },
-        enableSorting: true,
-        sortingFn: (
-          rowA: { getValue: (id: string) => unknown },
-          rowB: { getValue: (id: string) => unknown },
-          columnId: string,
-        ) => {
-          const toNumber = (val: unknown) => {
-            if (typeof val === 'boolean') return val ? 1 : 0;
-            return -1;
-          };
-          const a = toNumber(rowA.getValue(columnId));
-          const b = toNumber(rowB.getValue(columnId));
-          return a === b ? 0 : a > b ? 1 : -1;
-        },
-      },
-      {
-        accessorKey: 'isDeterministic',
-        header: 'Deterministic',
-        cell: ({ row }: { row: { original: Problem } }) =>
-          row.original.isDeterministic ? 'Yes' : 'No',
-        meta: { priority: 2 },
-        enableSorting: true,
-      },
-      {
-        id: 'answerFile',
-        header: 'Solution File',
-        cell: ({ row }: { row: { original: Problem } }) => {
-          const fileUrl = row.original.fileName
-            ? apiPaths.files.solution(row.original.fileName, { download: true })
-            : null;
-          const fileName = row.original.originalFileName || 'Download';
-          return fileUrl ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => openRenderViewer(row.original)}
-                title="Render file"
-                aria-label={`Render file for ${row.original.title}`}
-              >
-                <Eye className="h-4 w-4" />
-              </Button>
-              <Button asChild variant="secondary" size="sm">
-                <a
-                  href={fileUrl}
-                  download={fileName}
-                  title={`Download ${fileName}`}
-                  aria-label={`Download ${fileName} for ${row.original.title}`}
-                >
-                  <Download className="h-4 w-4" aria-hidden="true" />
-                </a>
-              </Button>
-            </div>
-          ) : (
-            <span className="text-muted-foreground">No file</span>
-          );
-        },
-        meta: { priority: 2 },
-        enableSorting: false,
-      },
-      {
-        id: 'actions',
-        header: 'Actions',
-        cell: ({ row }: { row: { original: Problem } }) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="secondary"
-                size="sm"
-                aria-label={`Manage problem ${row.original.title}`}
-              >
-                <ChevronDown className="mr-1 h-4 w-4" /> Manage
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel className="flex items-center gap-2">
-                <NotebookText className="h-4 w-4" />
-                {row.original.title}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => handleEditProblem(row.original)}
-                className="flex items-center gap-2"
-                hidden={courseIsArchived}
-              >
-                <Pencil className="mr-2 h-4 w-4" /> Edit Problem
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => openRenderViewer(row.original)}
-                className="flex items-center gap-2"
-              >
-                <Eye className="mr-2 h-4 w-4" /> View File
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="flex items-center gap-2"
-                disabled={!row.original.fileName}
-                onClick={() => {
-                  const url = row.original.fileName
-                    ? apiPaths.files.solution(row.original.fileName, { download: true })
-                    : null;
-                  if (!url) return;
-                  window.open(url, '_blank', 'noopener,noreferrer');
-                }}
-              >
-                <Download className="mr-2 h-4 w-4" /> Download File
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setProblemToRemove(row.original)}
-                className="flex items-center gap-2 text-red-600 focus:text-red-600"
-                hidden={courseIsArchived}
-              >
-                <Trash2 className="mr-2 h-4 w-4" /> Remove Problem
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
-        meta: { priority: 1 },
-      },
-    ],
+    () =>
+      buildProblemColumns({
+        isGroup: !!assignment?.isGroup,
+        groupNamesByProblemId,
+        courseIsArchived,
+        openDescription,
+        openRenderViewer,
+        handleEditProblem,
+        onRemoveProblem: setProblemToRemove,
+      }),
     [
       assignment?.isGroup,
       groupNamesByProblemId,
@@ -844,33 +579,18 @@ export default function AssignmentDashboardPage({
           />
         </TabsContent>
       </Tabs>
-      {/* JFLAP Viewer Dialog */}
-      {viewerOpen && viewerSrc && ['FA', 'PDA', 'TM'].includes(jffType ?? '') && (
-        <JffViewerDialog
+      {/* Submission viewer dialog, keyed off the problem type. */}
+      {viewerOpen && viewerSrc && (
+        <SubmissionViewerDialog
           open={viewerOpen}
           onOpenChange={setViewerOpen}
+          problemType={jffType}
           src={viewerSrc}
           title={viewerTitle}
+          epsSymbol={epsSymbol}
           width="80vw"
           height="80vh"
           showGridDefault={true}
-          epsSymbol={epsSymbol}
-        />
-      )}
-      {viewerOpen && viewerSrc && 'RE' === jffType && (
-        <RegexViewerDialog
-          src={viewerSrc}
-          open={viewerOpen}
-          onOpenChange={setViewerOpen}
-          title={viewerTitle}
-        />
-      )}
-      {viewerOpen && viewerSrc && 'CFG' === jffType && (
-        <CfgViewerDialog
-          src={viewerSrc}
-          open={viewerOpen}
-          onOpenChange={setViewerOpen}
-          title={viewerTitle}
         />
       )}
       {/* Description dialog */}

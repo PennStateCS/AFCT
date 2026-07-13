@@ -8,6 +8,8 @@ import type {
   SortingState,
   PaginationState,
   OnChangeFn,
+  Table as TanstackTable,
+  Column as TanstackColumn,
 } from '@tanstack/react-table';
 import {
   flexRender,
@@ -28,20 +30,214 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { usePersistentColumnVisibility } from '@/components/ui/use-persistent-column-visibility';
 
-// Define meta type for table columns
-interface ColumnMeta {
-  priority?: number;
-  align?: 'left' | 'center' | 'right';
-}
+type ColumnAlign = 'left' | 'center' | 'right';
 
-// Extend @tanstack/react-table types
+// Extend @tanstack/react-table's ColumnMeta so `columnDef.meta.priority` / `.align`
+// are typed everywhere — this augmentation is the single source of truth (there is no
+// separate local interface to keep in sync).
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData, TValue> {
     priority?: number;
-    align?: 'left' | 'center' | 'right';
+    align?: ColumnAlign;
   }
+}
+
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 75, 100];
+
+/** Tailwind text-alignment class for a column's `align` meta. */
+const alignTextClass = (align: ColumnAlign | undefined): string =>
+  align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : '';
+
+/** Flexbox justification matching a column's `align` meta. */
+const alignFlexClass = (align: ColumnAlign | undefined): string =>
+  align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : '';
+
+/** aria-sort value for a header cell given whether it's sortable and its sort state. */
+const ariaSort = (
+  canSort: boolean,
+  sorted: false | 'asc' | 'desc',
+): 'ascending' | 'descending' | 'none' | undefined => {
+  if (!canSort) return undefined;
+  if (sorted === 'asc') return 'ascending';
+  if (sorted === 'desc') return 'descending';
+  return 'none';
+};
+
+/** The table's toolbar: global search, caller action buttons, CSV export, column filter. */
+function DataTableToolbar<TData>({
+  table,
+  globalFilter,
+  setGlobalFilter,
+  actionButtons,
+  showExportButton,
+  onExport,
+  onResetColumns,
+  getColumnLabel,
+}: {
+  table: TanstackTable<TData>;
+  globalFilter: string;
+  setGlobalFilter: (value: string) => void;
+  actionButtons?: React.ReactNode;
+  showExportButton: boolean;
+  onExport: () => void;
+  onResetColumns: () => void;
+  getColumnLabel: (column: TanstackColumn<TData, unknown>) => string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <label htmlFor="table-search" className="sr-only">
+        Search table data
+      </label>
+
+      <div className="relative w-full sm:max-w-sm">
+        <Input
+          id="table-search"
+          placeholder="Search..."
+          value={globalFilter}
+          onChange={(e) => setGlobalFilter(e.target.value)}
+          className="pr-8"
+        />
+        {globalFilter && (
+          <button
+            type="button"
+            onClick={() => setGlobalFilter('')}
+            className="absolute top-1/2 right-2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+            aria-label="Clear search"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {actionButtons}
+
+        {showExportButton ? (
+          <Button variant="outline" onClick={onExport} aria-label="Export table data to CSV">
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+            Export to CSV
+          </Button>
+        ) : null}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">
+              <Filter className="h-4 w-4" aria-hidden="true" />
+              Filter Columns
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {table
+              .getAllLeafColumns()
+              .filter((col) => col.getCanHide())
+              .map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.id}
+                  className="capitalize"
+                  checked={col.getIsVisible()}
+                  onCheckedChange={(value) => col.toggleVisibility(!!value)}
+                >
+                  {getColumnLabel(col)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onResetColumns} className="text-red-600 hover:text-red-700">
+              Reset Columns
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
+/** The table's footer row: prev/next paging, an optional total, and a page-size select. */
+function DataTablePagination<TData>({
+  table,
+  rowCount,
+  manualPagination,
+  loading,
+  colSpan,
+}: {
+  table: TanstackTable<TData>;
+  rowCount?: number;
+  manualPagination: boolean;
+  loading: boolean;
+  colSpan: number;
+}) {
+  return (
+    <TableFooter>
+      <TableRow
+        className={loading ? 'hover:bg-transparent' : undefined}
+        style={{
+          backgroundColor: 'var(--table-background)',
+          color: 'var(--table-header-foreground)',
+        }}
+      >
+        <TableCell colSpan={colSpan}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-foreground flex items-center gap-1 font-normal">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+                aria-label="Previous page"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <span className="px-2 whitespace-nowrap" aria-live="polite">
+                Page {table.getState().pagination.pageIndex + 1} of{' '}
+                {Math.max(1, table.getPageCount())}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+                aria-label="Next page"
+              >
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
+
+            <div className="text-foreground flex items-center gap-3 font-normal">
+              {typeof rowCount === 'number' ? (
+                <span className="text-muted-foreground text-sm whitespace-nowrap" aria-live="polite">
+                  {rowCount} total
+                </span>
+              ) : null}
+              {/* Client-side filtering has no visible total; announce the filtered count
+                  to screen readers so search results aren't silent. */}
+              {!manualPagination ? (
+                <span className="sr-only" aria-live="polite">
+                  {table.getFilteredRowModel().rows.length} results
+                </span>
+              ) : null}
+              <Select
+                value={String(table.getState().pagination.pageSize)}
+                onValueChange={(value) => table.setPageSize(Number(value))}
+              >
+                <SelectTrigger aria-label="Rows per page">
+                  <SelectValue placeholder="Select rows per page" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      Show {size} Records
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </TableCell>
+      </TableRow>
+    </TableFooter>
+  );
 }
 
 import {
@@ -52,7 +248,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Filter,
   ArrowUp,
@@ -126,8 +322,10 @@ export function DataTable<TData, TValue>({
   globalFilter: globalFilterProp,
   onGlobalFilterChange,
 }: DataTableProps<TData, TValue>) {
-  const [columnVisibility, setColumnVisibility] =
-    useState<VisibilityState>(defaultColumnVisibility);
+  const { columnVisibility, setColumnVisibility, resetColumns } = usePersistentColumnVisibility(
+    storageKey,
+    defaultColumnVisibility,
+  );
 
   // Each of filtering / sorting / pagination is controlled by the parent when a
   // value is supplied, otherwise held internally (the original client behavior).
@@ -158,32 +356,6 @@ export function DataTable<TData, TValue>({
     const next = typeof updater === 'function' ? updater(globalFilter) : updater;
     setGlobalFilter(next);
   };
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        try {
-          setColumnVisibility({ ...defaultColumnVisibility, ...JSON.parse(saved) });
-        } catch {
-          console.warn('Invalid saved column state, ignoring.');
-        }
-      }
-    } catch {
-      // localStorage may not be available in all environments
-    }
-    // defaultColumnVisibility is only the hydration baseline; re-running when its
-    // object identity changes on a parent re-render would clobber user column choices.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(columnVisibility));
-    } catch {
-      // localStorage may not be available in all environments
-    }
-  }, [columnVisibility, storageKey]);
 
   const table = useReactTable<TData>({
     data,
@@ -222,15 +394,6 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: manualFiltering ? undefined : getFilteredRowModel(),
     getPaginationRowModel: manualPagination ? undefined : getPaginationRowModel(),
   });
-
-  const resetColumns = () => {
-    setColumnVisibility(defaultColumnVisibility);
-    try {
-      localStorage.removeItem(storageKey);
-    } catch {
-      // localStorage may not be available in all environments
-    }
-  };
 
   const exportToCSV = () => {
     const rows = table.getRowModel().rows;
@@ -286,70 +449,16 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <label htmlFor="table-search" className="sr-only">
-          Search table data
-        </label>
-
-        <div className="relative w-full sm:max-w-sm">
-          <Input
-            id="table-search"
-            placeholder="Search..."
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pr-8"
-          />
-          {globalFilter && (
-            <button
-              type="button"
-              onClick={() => setGlobalFilter('')}
-              className="absolute top-1/2 right-2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-              aria-label="Clear search"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {actionButtons}
-
-          {showExportButton ? (
-            <Button variant="outline" onClick={exportToCSV} aria-label="Export table data to CSV">
-              <FileDown className="h-4 w-4" aria-hidden="true" />
-              Export to CSV
-            </Button>
-          ) : null}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Filter className="h-4 w-4" aria-hidden="true" />
-                Filter Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {table
-                .getAllLeafColumns()
-                .filter((col) => col.getCanHide())
-                .map((col) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.id}
-                    className="capitalize"
-                    checked={col.getIsVisible()}
-                    onCheckedChange={(value) => col.toggleVisibility(!!value)}
-                  >
-                    {getColumnFilterLabel(col)}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={resetColumns} className="text-red-600 hover:text-red-700">
-                Reset Columns
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <DataTableToolbar
+        table={table}
+        globalFilter={globalFilter}
+        setGlobalFilter={setGlobalFilter}
+        actionButtons={actionButtons}
+        showExportButton={showExportButton}
+        onExport={exportToCSV}
+        onResetColumns={resetColumns}
+        getColumnLabel={getColumnFilterLabel}
+      />
 
       <div className="overflow-x-auto rounded-md border">
         <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
@@ -363,10 +472,10 @@ export function DataTable<TData, TValue>({
                   color: 'var(--table-header-foreground)',
                 }}
               >
-                {headerGroup.headers.map((header, hIndex) => {
+                {headerGroup.headers.map((header) => {
                   const sorted = header.column.getIsSorted();
                   const canSort = header.column.getCanSort();
-                  const priority = (header.column.columnDef.meta as ColumnMeta)?.priority;
+                  const priority = header.column.columnDef.meta?.priority;
 
                   const handleSortClick = () => {
                     if (!canSort) return;
@@ -382,31 +491,20 @@ export function DataTable<TData, TValue>({
                     }
                   };
 
-                  const align = (header.column.columnDef.meta as ColumnMeta)?.align;
-                  const alignHeadClass =
-                    align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : '';
-                  const alignFlexClass =
-                    align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : '';
+                  const align = header.column.columnDef.meta?.align;
+                  const flexClass = alignFlexClass(align);
 
                   return (
                     <TableHead
-                      key={`h-${hIndex}`}
-                      aria-sort={
-                        canSort
-                          ? sorted === 'asc'
-                            ? 'ascending'
-                            : sorted === 'desc'
-                              ? 'descending'
-                              : 'none'
-                          : undefined
-                      }
-                      className={`${getResponsiveClass(priority)} h-12 font-semibold whitespace-nowrap ${alignHeadClass}`}
+                      key={header.id}
+                      aria-sort={ariaSort(canSort, sorted)}
+                      className={`${getResponsiveClass(priority)} h-12 font-semibold whitespace-nowrap ${alignTextClass(align)}`}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
                           type="button"
                           onClick={handleSortClick}
-                          className={`flex w-full cursor-pointer items-center select-none ${alignFlexClass || 'text-left'}`}
+                          className={`flex w-full cursor-pointer items-center select-none ${flexClass || 'text-left'}`}
                           aria-label={`Sort by ${getSortableColumnLabel(header.column)}`}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
@@ -415,7 +513,7 @@ export function DataTable<TData, TValue>({
                           {!sorted && <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />}
                         </button>
                       ) : (
-                        <div className={`flex items-center ${alignFlexClass}`}>
+                        <div className={`flex items-center ${flexClass}`}>
                           {flexRender(header.column.columnDef.header, header.getContext())}
                         </div>
                       )}
@@ -441,28 +539,19 @@ export function DataTable<TData, TValue>({
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row, rIndex) => (
+              table.getRowModel().rows.map((row) => (
                 <TableRow
-                  key={`r-${rIndex}`}
+                  key={row.id}
                   className="bg-[var(--table-background)] hover:bg-[var(--table-highlight)]"
                 >
-                  {row.getVisibleCells().map((cell, cIndex) => {
-                    const cellAlign = cell.column.columnDef.meta?.align;
-                    const cellAlignClass =
-                      cellAlign === 'center'
-                        ? 'text-center'
-                        : cellAlign === 'right'
-                          ? 'text-right'
-                          : '';
-                    return (
-                      <TableCell
-                        key={`c-${cIndex}`}
-                        className={`whitespace-nowrap ${getResponsiveClass(cell.column.columnDef.meta?.priority)} ${cellAlignClass}`}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    );
-                  })}
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      className={`whitespace-nowrap ${getResponsiveClass(cell.column.columnDef.meta?.priority)} ${alignTextClass(cell.column.columnDef.meta?.align)}`}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))
             ) : (
@@ -478,77 +567,13 @@ export function DataTable<TData, TValue>({
             )}
           </TableBody>
 
-          <TableFooter>
-            <TableRow
-              className={loading ? 'hover:bg-transparent' : undefined}
-              style={{
-                backgroundColor: 'var(--table-background)',
-                color: 'var(--table-header-foreground)',
-              }}
-            >
-              <TableCell colSpan={columns.length}>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-foreground flex items-center gap-1 font-normal">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => table.previousPage()}
-                      disabled={!table.getCanPreviousPage()}
-                      aria-label="Previous page"
-                    >
-                      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                    <span className="px-2 whitespace-nowrap" aria-live="polite">
-                      Page {table.getState().pagination.pageIndex + 1} of{' '}
-                      {Math.max(1, table.getPageCount())}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => table.nextPage()}
-                      disabled={!table.getCanNextPage()}
-                      aria-label="Next page"
-                    >
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
-
-                  <div className="text-foreground flex items-center gap-3 font-normal">
-                    {typeof rowCount === 'number' ? (
-                      <span
-                        className="text-muted-foreground text-sm whitespace-nowrap"
-                        aria-live="polite"
-                      >
-                        {rowCount} total
-                      </span>
-                    ) : null}
-                    {/* Client-side filtering has no visible total; announce the
-                        filtered count to screen readers so search results aren't silent. */}
-                    {!manualPagination ? (
-                      <span className="sr-only" aria-live="polite">
-                        {table.getFilteredRowModel().rows.length} results
-                      </span>
-                    ) : null}
-                    <Select
-                      value={String(table.getState().pagination.pageSize)}
-                      onValueChange={(value) => table.setPageSize(Number(value))}
-                    >
-                      <SelectTrigger aria-label="Rows per page">
-                        <SelectValue placeholder="Select rows per page" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[5, 10, 20, 50, 75, 100].map((size) => (
-                          <SelectItem key={size} value={String(size)}>
-                            Show {size} Records
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </TableCell>
-            </TableRow>
-          </TableFooter>
+          <DataTablePagination
+            table={table}
+            rowCount={rowCount}
+            manualPagination={manualPagination}
+            loading={loading}
+            colSpan={columns.length}
+          />
         </Table>
       </div>
     </div>
