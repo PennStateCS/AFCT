@@ -41,7 +41,7 @@ const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> =
     title: 'Schedule',
     fields: ['timezone', 'startDate', 'endDate', 'registrationOpenAt', 'registrationCloseAt'],
   },
-  { title: 'Faculty', fields: ['instructorIds'] },
+  { title: 'Faculty & TAs', fields: ['instructorIds', 'taIds'] },
   { title: 'Options', fields: ['emptyStringNotation'] },
   { title: 'Review', fields: [] },
 ];
@@ -72,6 +72,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       registrationOpenAt: '',
       registrationCloseAt: '',
       instructorIds: [],
+      taIds: [],
       emptyStringNotation: 'EPSILON',
       timezone: COMMON_TIMEZONES.includes(browserTz as (typeof COMMON_TIMEZONES)[number])
         ? browserTz
@@ -115,7 +116,23 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     if (facultyQuery.isError) toast.error('Failed to load faculty list.');
   }, [facultyQuery.isError]);
 
-  const facultyName = (user: User) =>
+  const taQuery = useQuery({
+    queryKey: ['admin', 'users', 'ta'],
+    queryFn: async () => {
+      const res = await fetch(apiPaths.admin.users({ role: 'TA' }));
+      if (!res.ok) throw new Error('Failed to load TAs');
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const taList = taQuery.data ?? [];
+  useEffect(() => {
+    if (taQuery.isError) toast.error('Failed to load TA list.');
+  }, [taQuery.isError]);
+
+  const getUserName = (user: User) =>
     `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email || 'Unknown user';
 
   const resetForm = () => {
@@ -383,6 +400,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
             )}
 
             {step === 2 && (
+              <>
               <Controller
                 control={control}
                 name="instructorIds"
@@ -391,7 +409,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                     label="Assign Faculty"
                     items={facultyList.map((faculty) => ({
                       id: faculty.id,
-                      label: facultyName(faculty),
+                      label: getUserName(faculty),
                     }))}
                     value={field.value ?? []}
                     onChange={(value) => field.onChange(value)}
@@ -402,6 +420,27 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                   />
                 )}
               />
+
+              <Controller
+                control={control}
+                name="taIds"
+                render={({ field }) => (
+                  <SearchableMultiSelect
+                    label="Assign TAs"
+                    items={taList.map((ta) => ({
+                      id: ta.id,
+                      label: getUserName(ta),
+                    }))}
+                    value={field.value ?? []}
+                    onChange={(value) => field.onChange(value)}
+                    placeholder="Select TAs"
+                    searchPlaceholder="Search TAs..."
+                    emptyStateText="No TAs found."
+                    error={errors.taIds?.message}
+                  />
+                )}
+              />
+              </>
             )}
 
             {step === 3 && (
@@ -454,9 +493,18 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                     {(review.instructorIds ?? [])
                       .map((id) => {
                         const f = facultyList.find((u) => u.id === id);
-                        return f ? facultyName(f) : id;
+                        return f ? getUserName(f) : id;
                       })
                       .join(', ')}
+                  </dd>
+                  <dt className="text-muted-foreground">TAs</dt>
+                  <dd>
+                    {(review.taIds ?? [])
+                      .map((id) => {
+                        const ta = taList.find((u) => u.id === id);
+                        return ta ? getUserName(ta) : id;
+                      })
+                      .join(', ') || 'None'}
                   </dd>
                   <dt className="text-muted-foreground">Empty string</dt>
                   <dd>
