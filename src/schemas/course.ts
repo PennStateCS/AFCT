@@ -56,6 +56,7 @@ const BaseCourseFormObject = z
  */
 export const CreateCourseFormSchema = BaseCourseFormObject.extend({
   instructorIds: z.array(z.string()),
+  taIds: z.array(z.string()).optional(),
 }).superRefine((d, ctx) => {
   // Validate course code format
   const normalizedCode = normalizeCode(d.code);
@@ -238,8 +239,9 @@ export const CourseCreateApiSchema = z.object({
   ...courseApiBase,
   // A course cannot be created published, and it needs at least one faculty member
   // from the start (the roster rule "a course always has a faculty member" begins
-  // at creation). TAs and students are added later through the roster.
+  // at creation). TAs may also be seeded at creation.
   instructorIds: z.array(z.string()).min(1, 'At least one faculty member is required.'),
+  taIds: z.array(z.string()).optional(),
 });
 
 export const CourseUpdateApiSchema = z.object({
