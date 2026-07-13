@@ -138,7 +138,10 @@ const renderActionsCellDirect = (row: Row, onDeleted: () => void) => {
 describe('course actions — Archive / Restore (admin-only)', () => {
   beforeEach(() => {
     useSessionMock.mockReturnValue({ data: { user: { isAdmin: true } } });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{}' }),
+    );
   });
 
   it('archives an active course after confirmation', async () => {
@@ -194,7 +197,11 @@ describe('course actions — Delete Course (admin-only, active courses)', () => 
     useSessionMock.mockReturnValue({ data: { user: { isAdmin: true } } });
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ deleted: 'hard' }) }),
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ deleted: 'hard' }),
+      }),
     );
   });
 
@@ -206,7 +213,10 @@ describe('course actions — Delete Course (admin-only, active courses)', () => 
     await user.click(screen.getByRole('button', { name: 'Delete Course' }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
-    expect(global.fetch).toHaveBeenCalledWith('/api/courses/c1', { method: 'DELETE' });
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/courses/c1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
     await waitFor(() => expect(onDeleted).toHaveBeenCalled());
   });
 
@@ -242,7 +252,7 @@ describe('course-columns display cells', () => {
     expect(link).toHaveAttribute('href', '/dashboard/courses/c1');
     expect(link).toHaveAttribute('aria-label', fullName);
     expect(link).toHaveAttribute('title', fullName);
-    expect(link.textContent?.endsWith('...')).toBe(true);
+    expect(link.textContent?.endsWith('…')).toBe(true);
   });
 
   it('formats a 6-character registration code as XXX-XXX, uppercased', () => {
