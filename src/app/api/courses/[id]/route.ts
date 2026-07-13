@@ -505,38 +505,39 @@ export const PUT = withCourseAuth(
         return refreshed;
       });
 
-      // Attach problem counts to assignments
-      const assignmentsWithProblemCount = await Promise.all(
-        updatedCourse.assignments.map(
-          async (assignment: (typeof updatedCourse.assignments)[number]) => {
-            const totalProblemPoints = sumProblemPoints(assignment.problems);
-
-            const submissionCount = await prisma.submission.count({
-              where: { assignmentId: assignment.id },
-            });
-            const commentCount = await prisma.comment.count({
-              where: { assignmentId: assignment.id },
-            });
-            const hasSubmissionsOrComments = submissionCount > 0 || commentCount > 0;
-
-            return {
-              id: assignment.id,
-              title: assignment.title,
-              description: assignment.description,
-              dueDate: assignment.dueDate,
-              maxPoints: totalProblemPoints,
-              isPublished: assignment.isPublished,
-              createdAt: assignment.createdAt,
-              updatedAt: assignment.updatedAt,
-              courseId: assignment.courseId,
-              problemCount: assignment._count.problems,
-              submissionCount,
-              commentCount,
-              hasSubmissionsOrComments,
-            };
-          },
-        ),
+      // Attach problem counts to assignments. Batch the submission/comment totals
+      // across all assignments (one aggregate each) rather than a per-assignment
+      // count() loop — the same approach the GET view uses.
+      const updatedAssignmentIds = updatedCourse.assignments.map((a) => a.id);
+      const submissionCountMap = await countByAssignment(
+        prisma.submission as unknown as OptionalCountDelegate,
+        updatedAssignmentIds,
+        (assignmentId) => prisma.submission.count({ where: { assignmentId } }),
       );
+      const commentCountMap = await countByAssignment(
+        prisma.comment as unknown as OptionalCountDelegate,
+        updatedAssignmentIds,
+        (assignmentId) => prisma.comment.count({ where: { assignmentId } }),
+      );
+      const assignmentsWithProblemCount = updatedCourse.assignments.map((assignment) => {
+        const submissionCount = submissionCountMap.get(assignment.id) ?? 0;
+        const commentCount = commentCountMap.get(assignment.id) ?? 0;
+        return {
+          id: assignment.id,
+          title: assignment.title,
+          description: assignment.description,
+          dueDate: assignment.dueDate,
+          maxPoints: sumProblemPoints(assignment.problems),
+          isPublished: assignment.isPublished,
+          createdAt: assignment.createdAt,
+          updatedAt: assignment.updatedAt,
+          courseId: assignment.courseId,
+          problemCount: assignment._count.problems,
+          submissionCount,
+          commentCount,
+          hasSubmissionsOrComments: submissionCount > 0 || commentCount > 0,
+        };
+      });
 
       // Record what actually changed (before → after). Publish/archive status
       // changes especially matter for a course's lifecycle.
