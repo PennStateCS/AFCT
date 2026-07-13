@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +12,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
-import type { User } from '@prisma/client';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
@@ -28,6 +26,9 @@ import {
 } from '@/schemas/course';
 import type { z } from 'zod';
 import { apiPaths } from '@/lib/api-paths';
+import { apiClient, ApiError } from '@/lib/api/fetch-client';
+import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
+import { CourseDateTimeField } from './CourseDateTimeField';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
 type FormValues = z.input<typeof CreateCourseFormSchema>;
@@ -98,42 +99,8 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
   const startDateStr = watch('startDate'); // string (YYYY-MM-DDTHH:MM)
 
-  // Fetch faculty list when dialog opens. Shared cache entry (identical query
-  // key) with EditCourseDialog so the two dedupe onto one request.
-  const facultyQuery = useQuery({
-    queryKey: ['admin', 'users', 'faculty'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.admin.users({ role: 'FACULTY' }));
-      if (!res.ok) throw new Error('Failed to load faculty');
-      const data = await res.json();
-      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
-    },
-    enabled: open,
-    staleTime: 30_000,
-  });
-  const facultyList = facultyQuery.data ?? [];
-  useEffect(() => {
-    if (facultyQuery.isError) toast.error('Failed to load faculty list.');
-  }, [facultyQuery.isError]);
-
-  const taQuery = useQuery({
-    queryKey: ['admin', 'users', 'ta'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.admin.users({ role: 'TA' }));
-      if (!res.ok) throw new Error('Failed to load TAs');
-      const data = await res.json();
-      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
-    },
-    enabled: open,
-    staleTime: 30_000,
-  });
-  const taList = taQuery.data ?? [];
-  useEffect(() => {
-    if (taQuery.isError) toast.error('Failed to load TA list.');
-  }, [taQuery.isError]);
-
-  const getUserName = (user: User) =>
-    `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email || 'Unknown user';
+  // Faculty/TA option lists for the roster step (shared with DuplicateCourseDialog).
+  const { facultyList, taList } = useFacultyTaOptions(open);
 
   const resetForm = () => {
     setStep(0);
@@ -160,20 +127,14 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       credits: Number(raw.credits),
     };
 
-    const res = await fetch(apiPaths.courses(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (res.ok) {
+    try {
+      await apiClient.post(apiPaths.courses(), payload);
       toast.success('Course created successfully');
       resetForm();
       setOpen(false);
       onSuccess?.();
-    } else {
-      const msg = await safeMessage(res);
-      toast.error(msg ?? 'Failed to create course');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to create course');
     }
   };
 
@@ -311,89 +272,37 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                 />
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  {/* START datetime-local (string) */}
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="startDate"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="Start Date & Time"
-                        name="startDate"
-                        type="datetime-local"
-                        fieldProps={{
-                          ...field,
-                          value: field.value ?? '', // expect a string for datetime-local
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            field.onChange(e.target.value),
-                        }}
-                        error={errors.startDate?.message}
-                        requiredMark
-                      />
-                    )}
+                    label="Start Date & Time"
+                    error={errors.startDate?.message}
+                    requiredMark
                   />
-
-                  {/* END datetime-local (string) */}
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="endDate"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="End Date & Time"
-                        name="endDate"
-                        type="datetime-local"
-                        fieldProps={{
-                          ...field,
-                          value: field.value ?? '',
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            field.onChange(e.target.value),
-                        }}
-                        error={errors.endDate?.message}
-                        min={startDateStr || undefined} // prevent picking an end earlier than start
-                        requiredMark
-                      />
-                    )}
+                    label="End Date & Time"
+                    error={errors.endDate?.message}
+                    min={startDateStr || undefined} // prevent picking an end earlier than start
+                    requiredMark
                   />
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="registrationOpenAt"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="Self Registration Opens"
-                        name="registrationOpenAt"
-                        type="datetime-local"
-                        fieldProps={{
-                          ...field,
-                          value: field.value ?? '',
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            field.onChange(e.target.value),
-                        }}
-                        error={errors.registrationOpenAt?.message}
-                        requiredMark
-                      />
-                    )}
+                    label="Self Registration Opens"
+                    error={errors.registrationOpenAt?.message}
+                    requiredMark
                   />
-
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="registrationCloseAt"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="Self Registration Closes"
-                        name="registrationCloseAt"
-                        type="datetime-local"
-                        fieldProps={{
-                          ...field,
-                          value: field.value ?? '',
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            field.onChange(e.target.value),
-                        }}
-                        error={errors.registrationCloseAt?.message}
-                        requiredMark
-                      />
-                    )}
+                    label="Self Registration Closes"
+                    error={errors.registrationCloseAt?.message}
+                    requiredMark
                   />
                 </div>
               </>
@@ -567,11 +476,3 @@ function formatLocal(value: string | undefined) {
   return value ? value.replace('T', ' ') : '';
 }
 
-async function safeMessage(res: Response) {
-  try {
-    const data = await res.json();
-    return data?.message ?? null;
-  } catch {
-    return null;
-  }
-}

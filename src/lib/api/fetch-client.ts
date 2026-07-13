@@ -75,6 +75,8 @@ export const apiClient = {
   postForm: <T = unknown>(url: string, form: BodyInit) =>
     apiFetch<T>(url, { method: 'POST', form }),
   putForm: <T = unknown>(url: string, form: BodyInit) => apiFetch<T>(url, { method: 'PUT', form }),
+  patchForm: <T = unknown>(url: string, form: BodyInit) =>
+    apiFetch<T>(url, { method: 'PATCH', form }),
 };
 
 export type MutateResult<T> = { ok: true; data: T } | { ok: false; error: string };

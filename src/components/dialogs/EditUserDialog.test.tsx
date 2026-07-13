@@ -66,7 +66,11 @@ describe('EditUserDialog', () => {
     const setOpen = vi.fn();
     const onSave = vi.fn().mockResolvedValue(undefined);
 
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '{}',
+    } as unknown as Response);
 
     render(<EditUserDialog user={baseUser} open setOpen={setOpen} onSave={onSave} />);
 
