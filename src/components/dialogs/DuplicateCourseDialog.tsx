@@ -58,7 +58,7 @@ const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> =
     fields: ['startDate', 'endDate', 'registrationOpenAt', 'registrationCloseAt'],
   },
   { title: 'Content', fields: ['copyMode'] },
-  { title: 'Roster', fields: ['copyFaculty', 'copyTAs', 'instructorIds'] },
+  { title: 'Roster', fields: ['instructorIds', 'taIds'] },
   { title: 'Review', fields: [] },
 ];
 const LAST_STEP = STEPS.length - 1;
@@ -98,11 +98,12 @@ export default function DuplicateCourseDialog({
     registrationCloseAt: course?.registrationCloseAt
       ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
       : '',
-    emptyStringNotation: course?.emptyStringNotation ?? 'EPSILON',
+    emptyStringNotation:
+      ((course as { emptyStringNotation?: FormValues['emptyStringNotation'] })?.emptyStringNotation) ??
+      'EPSILON',
     copyMode: 'assignments_with_problems',
-    copyFaculty: false,
-    copyTAs: false,
     instructorIds: [],
+    taIds: [],
   };
 
   const {
@@ -112,6 +113,7 @@ export default function DuplicateCourseDialog({
     trigger,
     watch,
     getValues,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(DuplicateFormSchema),
@@ -141,8 +143,53 @@ export default function DuplicateCourseDialog({
     if (facultyQuery.isError) toast.error('Failed to load faculty list.');
   }, [facultyQuery.isError]);
 
-  const facultyName = (user: User) =>
+  const taQuery = useQuery({
+    queryKey: ['admin', 'users', 'ta'],
+    queryFn: async () => {
+      const res = await fetch(apiPaths.admin.users({ role: 'TA' }));
+      if (!res.ok) throw new Error('Failed to load TAs');
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const taList = taQuery.data ?? [];
+  useEffect(() => {
+    if (taQuery.isError) toast.error('Failed to load TA list.');
+  }, [taQuery.isError]);
+
+  const getUserName = (user: User) =>
     `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email || 'Unknown user';
+
+  type CourseRosterRow = { role: string; user: User };
+
+  const courseRosterQuery = useQuery<CourseRosterRow[]>({
+    queryKey: ['course', course?.id, 'roster'],
+    queryFn: async () => {
+      if (!course?.id) return [];
+      const res = await fetch(apiPaths.course(course.id, { view: 'roster' }));
+      if (!res.ok) throw new Error('Failed to load current course roster');
+      const data = await res.json();
+      const enrolled = Array.isArray(data?.enrolled) ? data.enrolled : [];
+      return enrolled.map((row: Record<string, unknown>) => ({
+        role: String(row.courseRole ?? row.role ?? ''),
+        user: {
+          id: String(row.id),
+          firstName: row.firstName as string | undefined,
+          lastName: row.lastName as string | undefined,
+          email: String(row.email ?? ''),
+          avatar: row.avatar as string | null | undefined,
+        },
+      }));
+    },
+    enabled: open && !!course?.id,
+    staleTime: 30_000,
+  });
+  const currentRoster = courseRosterQuery.data ?? [];
+  useEffect(() => {
+    if (courseRosterQuery.isError) toast.error('Failed to load current course roster.');
+  }, [courseRosterQuery.isError]);
 
   // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
@@ -164,11 +211,12 @@ export default function DuplicateCourseDialog({
       registrationCloseAt: course?.registrationCloseAt
         ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
         : '',
-      emptyStringNotation: course?.emptyStringNotation ?? 'EPSILON',
+      emptyStringNotation:
+        ((course as { emptyStringNotation?: FormValues['emptyStringNotation'] })?.emptyStringNotation) ??
+        'EPSILON',
       copyMode: 'assignments_with_problems',
-      copyFaculty: false,
-      copyTAs: false,
       instructorIds: [],
+      taIds: [],
     };
     reset(vals);
     setStep(0);
@@ -180,6 +228,35 @@ export default function DuplicateCourseDialog({
     setStep(0);
     setConfirmChecked(false);
     reset(defaults, { keepErrors: false });
+  };
+
+  const selectCurrentFaculty = async () => {
+    const currentFacultyIds = currentRoster
+      .filter((row) => row.role === 'FACULTY')
+      .map((row) => row.user.id);
+    if (currentFacultyIds.length === 0) return;
+    const existingIds = new Set(getValues('instructorIds') ?? []);
+    currentFacultyIds.forEach((id) => existingIds.add(id));
+    setValue('instructorIds', Array.from(existingIds), {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  };
+
+  const selectCurrentTAs = async () => {
+    const currentTAIds = currentRoster
+      .filter((row) => row.role === 'TA')
+      .map((row) => row.user.id);
+    console.log('current TA IDs:', currentTAIds);
+    if (currentTAIds.length === 0) return;
+    const existingIds = new Set(getValues('taIds') ?? []);
+    currentTAIds.forEach((id) => existingIds.add(id));
+    setValue('taIds', Array.from(existingIds), {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
   };
 
   // Advance only when the current step's own fields validate; errors render in
@@ -213,9 +290,8 @@ export default function DuplicateCourseDialog({
       credits: Number(raw.credits),
       copyAssignments: mode === 'assignments' || mode === 'assignments_with_problems',
       copyProblems: mode === 'problems' || mode === 'assignments_with_problems',
-      copyFaculty: !!raw.copyFaculty,
-      copyTAs: !!raw.copyTAs,
       instructorIds: raw.instructorIds ?? [],
+      taIds: raw.taIds ?? [],
     };
 
     try {
@@ -488,35 +564,26 @@ export default function DuplicateCourseDialog({
 
             {step === 3 && (
               <div className="space-y-3">
-                <div className="text-sm font-medium">Choose roster copy options</div>
-                <div className="flex items-center gap-4">
-                  <Controller
-                    control={control}
-                    name="copyFaculty"
-                    render={({ field }) => (
-                      <label className="flex items-center gap-2">
-                        <Checkbox
-                          checked={!!field.value}
-                          onCheckedChange={(val) => field.onChange(!!val)}
-                        />
-                        <span className="text-sm">Copy faculty roster</span>
-                      </label>
-                    )}
-                  />
-
-                  <Controller
-                    control={control}
-                    name="copyTAs"
-                    render={({ field }) => (
-                      <label className="flex items-center gap-2">
-                        <Checkbox
-                          checked={!!field.value}
-                          onCheckedChange={(val) => field.onChange(!!val)}
-                        />
-                        <span className="text-sm">Copy TA roster</span>
-                      </label>
-                    )}
-                  />
+                <div className="space-y-3">
+                  <div className="text-sm font-medium">Load current roster members</div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={selectCurrentFaculty}
+                      disabled={!course?.id || courseRosterQuery.isLoading || courseRosterQuery.isError}
+                    >
+                      Select current faculty
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={selectCurrentTAs}
+                      disabled={!course?.id || courseRosterQuery.isLoading || courseRosterQuery.isError}
+                    >
+                      Select current TAs
+                    </Button>
+                  </div>
                 </div>
 
                 <Controller
@@ -527,7 +594,7 @@ export default function DuplicateCourseDialog({
                       label="Add faculty"
                       items={facultyList.map((faculty) => ({
                         id: faculty.id,
-                        label: facultyName(faculty),
+                        label: getUserName(faculty),
                       }))}
                       value={field.value ?? []}
                       onChange={(value) => field.onChange(value)}
@@ -535,6 +602,26 @@ export default function DuplicateCourseDialog({
                       searchPlaceholder="Search faculty..."
                       emptyStateText="No faculty found."
                       error={errors.instructorIds?.message as string | undefined}
+                    />
+                  )}
+                />
+
+                <Controller
+                  control={control}
+                  name="taIds"
+                  render={({ field }) => (
+                    <SearchableMultiSelect
+                      label="Add TAs"
+                      items={taList.map((ta) => ({
+                        id: ta.id,
+                        label: getUserName(ta),
+                      }))}
+                      value={field.value ?? []}
+                      onChange={(value) => field.onChange(value)}
+                      placeholder="Select TAs"
+                      searchPlaceholder="Search TAs..."
+                      emptyStateText="No TAs found."
+                      error={errors.taIds?.message as string | undefined}
                     />
                   )}
                 />
@@ -569,10 +656,6 @@ export default function DuplicateCourseDialog({
                   </dd>
                   <dt className="text-muted-foreground">Copy</dt>
                   <dd>{COPY_MODE_LABELS[review.copyMode ?? ''] ?? review.copyMode}</dd>
-                  <dt className="text-muted-foreground">Faculty roster</dt>
-                  <dd>{review.copyFaculty ? 'Copied' : 'Not copied'}</dd>
-                  <dt className="text-muted-foreground">TA roster</dt>
-                  <dd>{review.copyTAs ? 'Copied' : 'Not copied'}</dd>
                   {(review.instructorIds ?? []).length > 0 && (
                     <>
                       <dt className="text-muted-foreground">Added faculty</dt>
@@ -580,7 +663,20 @@ export default function DuplicateCourseDialog({
                         {(review.instructorIds ?? [])
                           .map((id) => {
                             const f = facultyList.find((u) => u.id === id);
-                            return f ? facultyName(f) : id;
+                            return f ? getUserName(f) : id;
+                          })
+                          .join(', ')}
+                      </dd>
+                    </>
+                  )}
+                  {(review.taIds ?? []).length > 0 && (
+                    <>
+                      <dt className="text-muted-foreground">Added TAs</dt>
+                      <dd>
+                        {(review.taIds ?? [])
+                          .map((id) => {
+                            const ta = taList.find((u) => u.id === id);
+                            return ta ? getUserName(ta) : id;
                           })
                           .join(', ')}
                       </dd>
