@@ -28,6 +28,34 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
+import { useState } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import {
+  Filter,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  FileDown,
+  Inbox,
+  ArrowLeft,
+  ArrowRight,
+  X,
+  Loader2,
+} from 'lucide-react';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { usePersistentColumnVisibility } from '@/components/ui/use-persistent-column-visibility';
@@ -239,36 +267,6 @@ function DataTablePagination<TData>({
     </TableFooter>
   );
 }
-
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
-import { useState } from 'react';
-import {
-  Filter,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-  FileDown,
-  Inbox,
-  ArrowLeft,
-  ArrowRight,
-  X,
-  Loader2, // import spinner icon
-} from 'lucide-react';
-
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
