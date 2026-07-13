@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { ProblemTypeEnum } from '@/schemas/problem';
-import { withCourseAuth } from '@/lib/api/with-auth';
+import { logError } from '@/lib/api/activity';
+import {
+  ProblemAssociationSettingsArray,
+  type ProblemAssociationSettings,
+  type ProblemTypeEnum,
+} from '@/schemas/problem';
+import { withAssignmentAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { z } from 'zod';
 
 // Types
@@ -31,19 +37,20 @@ interface AssignmentWithProblems {
   }[];
 }
 
-const ProblemSettingsSchema = z.object({
-  problemId: z.string(),
-  maxPoints: z.number().min(0),
-  maxSubmissions: z
-    .number()
-    .int()
-    .refine((value) => value === -1 || value >= 1, {
-      message: 'Max submissions must be -1 (unlimited) or at least 1.',
-    }),
-  autograderEnabled: z.boolean(),
-});
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; aid: string }> };
 
-type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
+// Envelope for POST (associate problems). Lenient by design — a malformed
+// problemIds/groupId falls back rather than 400ing (`problemSettings` is validated
+// separately so it can return its own specific error). `groupId` is a group id or 'ALL'.
+const AssociateProblemsBodySchema = z
+  .object({
+    problemIds: z.array(z.string()).catch([]),
+    groupId: z.string().optional().catch(undefined),
+  })
+  .catch({ problemIds: [], groupId: undefined });
 
 /**
  * Attaches problems to an assignment with per-problem settings (points, submission
@@ -83,9 +90,11 @@ type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
  *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   500: { description: Server error. }
  */
-export const POST = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
-    const { aid: assignmentId } = await ctx.params;
+export const POST = withAssignmentAuth(
+  async (req, ctx: RouteCtx, { user, courseId, assignment }) => {
+    // The wrapper has verified this assignment belongs to `courseId` (else 404),
+    // so writes keyed on `assignmentId` can't cross into another course.
+    const assignmentId = assignment.id;
 
     try {
       // Parse the request body with better error handling
@@ -101,23 +110,17 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
       }
 
-      const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
-      const parsedSettings = z.array(ProblemSettingsSchema).safeParse(body.problemSettings ?? []);
+      const { problemIds, groupId } = AssociateProblemsBodySchema.parse(body);
+      const parsedSettings = ProblemAssociationSettingsArray.safeParse(body.problemSettings ?? []);
       if (!parsedSettings.success) {
         return NextResponse.json(
-          {
-            error: 'Invalid problemSettings in request body',
-            details: parsedSettings.error.issues,
-          },
+          { error: 'Invalid problemSettings in request body' },
           { status: 400 },
         );
       }
-      const settingsByProblemId = new Map<string, ProblemSettingsInput>(
+      const settingsByProblemId = new Map<string, ProblemAssociationSettings>(
         parsedSettings.data.map((setting) => [setting.problemId, setting]),
       );
-      // Optional group assignment: either a specific group id or 'ALL' for all groups
-      const groupId: string | undefined =
-        typeof body.groupId === 'string' ? body.groupId : undefined;
 
       // Only accept problems that actually belong to this course, and load the
       // existing assignment-problem links. Independent reads → run concurrently.
@@ -183,13 +186,9 @@ export const POST = withCourseAuth(
       // create group mappings for the requested problems **regardless** of whether the
       // problems were newly added in this request. This enables assigning an existing
       // assignment problem to one or more groups after it already exists on the assignment.
+      let mappedGroupCount = 0;
       if (groupId) {
-        // Fetch the assignment to inspect isGroup and course
-        const updatedAssignment = await prisma.assignment.findUnique({
-          where: { id: assignmentId },
-        });
-
-        if (updatedAssignment?.isGroup) {
+        if (assignment.isGroup) {
           let groupIdsToMap: string[] = [];
           if (groupId === 'ALL') {
             const groups = await prisma.group.findMany({ where: { courseId } });
@@ -213,6 +212,7 @@ export const POST = withCourseAuth(
                 data: mappings,
                 skipDuplicates: true,
               });
+              mappedGroupCount = mappings.length;
             }
           }
         }
@@ -239,7 +239,7 @@ export const POST = withCourseAuth(
       try {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'UPDATE_ASSIGNMENT_PROBLEMS',
+          action: 'ADD_ASSIGNMENT_PROBLEMS',
           severity: 'INFO',
           category: 'ASSIGNMENT',
           courseId,
@@ -254,10 +254,11 @@ export const POST = withCourseAuth(
             ),
             finalProblemIds: finalProblemIds,
             linksWithSubmissions: linksWithSubmissions.length,
+            ...(mappedGroupCount > 0 ? { groupId, mappedGroupCount } : {}),
           },
         });
-      } catch (logError) {
-        console.warn('Failed to log activity:', logError);
+      } catch (logErr) {
+        console.warn('Failed to log activity:', logErr);
         // Don't fail the whole request if logging fails
       }
 
@@ -280,16 +281,17 @@ export const POST = withCourseAuth(
     } catch (err) {
       // Handle unexpected errors
       console.error('Failed to update assignment problems:', err);
-      await createEnhancedActivityLog(prisma, req, {
-        userId: null,
+      await logError(req, {
+        userId: user.id,
         action: 'ASSIGNMENT_ADD_PROBLEMS_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        courseId,
+        assignmentId,
+        error: err,
       });
       return NextResponse.json({ error: 'Failed to update assignment problems.' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_ADD_PROBLEMS_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_ADD_PROBLEMS_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -315,29 +317,19 @@ export const POST = withCourseAuth(
  *   404: { description: Assignment or problem not found in this course. }
  *   500: { description: Server error. }
  */
-export const DELETE = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
-    const { aid: assignmentId } = await ctx.params;
+export const DELETE = withAssignmentAuth(
+  async (req, ctx: RouteCtx, { user, courseId, assignment }) => {
+    const assignmentId = assignment.id;
 
     try {
       // Parse the problemId from the request body
-      const { problemId } = await req.json();
+      const parsed = await readJson(req, z.object({ problemId: z.string().min(1, 'Missing problemId.') }));
+      if (!parsed.ok) return parsed.response;
+      const { problemId } = parsed.data;
 
-      if (!problemId) {
-        return NextResponse.json({ error: 'Missing problemId.' }, { status: 400 });
-      }
-
-      // Validate that both the assignment and the problem exist and belong to the
-      // course. Independent reads → run concurrently; the assignment is still
-      // checked first so its 404 takes precedence, preserving prior behavior.
-      const [assignment, problem] = await Promise.all([
-        prisma.assignment.findFirst({ where: { id: assignmentId, courseId } }),
-        prisma.problem.findFirst({ where: { id: problemId, courseId } }),
-      ]);
-
-      if (!assignment) {
-        return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
-      }
+      // The wrapper already verified the assignment belongs to this course; still
+      // confirm the problem does too.
+      const problem = await prisma.problem.findFirst({ where: { id: problemId, courseId } });
 
       if (!problem) {
         return NextResponse.json({ error: 'Problem not found in this course.' }, { status: 404 });
@@ -404,14 +396,13 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true, problems });
     } catch (error) {
       console.error('Error removing problem from assignment:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_REMOVE_PROBLEM_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to remove problem.' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED', blockWhenArchived: true },
 );

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { canManageCourse } from '@/lib/permissions';
 
 /**
@@ -31,7 +32,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user?.id) {
+    if (!user?.id || user.inactive) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -57,7 +58,8 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         userId: session?.user?.id ?? null,
         action: 'SUBMISSION_RERUN_DENIED',
         severity: 'SECURITY',
-        metadata: {},
+        courseId: submission.courseId,
+        metadata: { submissionId: submission.id, studentId: submission.studentId },
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -65,11 +67,6 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     if (!submission.fileName) {
       return NextResponse.json({ error: 'Submission has no file' }, { status: 400 });
     }
-
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: submission.assignmentId },
-      select: { courseId: true },
-    });
 
     const link = await prisma.assignmentProblem.findUnique({
       where: {
@@ -100,7 +97,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     const updated = await prisma.submission.update({
       where: { id },
       data: {
-        status: "PENDING",
+        status: 'PENDING',
         feedback: null,
         correct: null,
         evaluationRaw: Prisma.DbNull,
@@ -113,7 +110,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       action: 'SUBMISSION_RERUN',
       severity: 'INFO',
       category: 'SUBMISSION',
-      courseId: assignment?.courseId ?? null,
+      courseId: submission.courseId,
       assignmentId: submission.assignmentId,
       problemId: submission.problemId,
       submissionId: submission.id,
@@ -122,18 +119,19 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         assignmentId: submission.assignmentId,
         problemId: submission.problemId,
         submissionId: submission.id,
-        status: 'PENDING'
+        studentId: submission.studentId,
+        status: 'PENDING',
       },
     });
 
     return NextResponse.json({ success: true, submission: updated }, { status: 202 });
   } catch (error) {
     console.error('POST /api/submissions/[id]/rerun error:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'SUBMISSION_RERUN_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      error,
+      metadata: { submissionId: id },
     });
     return NextResponse.json({ error: 'Failed to rerun submission' }, { status: 500 });
   }

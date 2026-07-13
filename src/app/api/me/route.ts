@@ -6,10 +6,12 @@ import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { COMMON_TIMEZONES } from '@/lib/timezones';
+import { logError } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { readFormData } from '@/lib/api/request';
+import { UserProfileApiSchema } from '@/schemas/profile';
 
 const uploadDir = path.join('/private', 'uploads', 'pfps');
 
@@ -66,32 +68,19 @@ async function deleteFileIfExists(filename: string) {
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const formData = await req.formData();
-    const firstName = (formData.get('firstName') as string)?.trim();
-    const lastName = (formData.get('lastName') as string)?.trim();
-    const avatar = formData.get('avatar') as File | null;
-    const deleteAvatar = formData.get('deleteAvatar') === 'true';
-    const timezoneRaw = (formData.get('timezone') as string | null)?.trim() || '';
+    // Validate the scalar fields (names required, timezone allow-list, deleteAvatar)
+    // server-side; the avatar File stays on the raw form.
+    const parsed = await readFormData(req, UserProfileApiSchema);
+    if (!parsed.ok) return parsed.response;
+    const { firstName, lastName, deleteAvatar } = parsed.data;
+    const timezoneRaw = parsed.data.timezone ?? '';
+    const avatar = parsed.form.get('avatar') as File | null;
     const { maxBytes, maxMb } = await getSystemUploadLimit();
-
-    if (!firstName || !lastName) {
-      return NextResponse.json(
-        { error: 'First name and last name cannot be blank.' },
-        { status: 400 },
-      );
-    }
-
-    if (
-      timezoneRaw &&
-      !COMMON_TIMEZONES.includes(timezoneRaw as (typeof COMMON_TIMEZONES)[number])
-    ) {
-      return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
-    }
 
     if (!existsSync(uploadDir)) {
       await mkdir(uploadDir, { recursive: true });
@@ -99,6 +88,7 @@ export async function POST(req: Request) {
 
     const currentUser = await prisma.user.findUnique({
       where: { id: session.user.id },
+      select: { id: true, avatar: true },
     });
 
     if (!currentUser) {
@@ -114,17 +104,23 @@ export async function POST(req: Request) {
           { status: 413 },
         );
       }
-      // Save new avatar
+      // Reject anything that isn't an image (defense-in-depth; avatars are also
+      // served as octet-stream attachments so an odd file can't execute).
+      if (avatar.type && !avatar.type.startsWith('image/')) {
+        return NextResponse.json({ error: 'Avatar must be an image file.' }, { status: 400 });
+      }
+      // Store under a random, non-client-derived name (userId prefix + UUID +
+      // sanitized extension) and write through the traversal-safe resolver —
+      // matching the other upload paths.
       const bytes = await avatar.arrayBuffer();
       const buffer = Buffer.from(bytes);
-      const ext = path.extname(avatar.name) || '.png';
-      avatarFileName = `${currentUser.id}_${Date.now()}_${randomUUID()}${ext}`;
+      avatarFileName = safeStoredFilename(avatar.name, `${currentUser.id}_`);
 
       if (currentUser.avatar) {
         await deleteFileIfExists(currentUser.avatar);
       }
 
-      await writeFile(path.join(uploadDir, avatarFileName), buffer);
+      await writeFile(resolveInsideDir(uploadDir, avatarFileName), buffer);
     }
 
     if (deleteAvatar && currentUser.avatar) {
@@ -157,23 +153,22 @@ export async function POST(req: Request) {
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId: session.user.id,
         userFirstName: firstName,
         userLastName: lastName,
-        avatarUpdated: !!avatar,
-        avatarDeleted: deleteAvatar,
+        avatarUpdated: !!(avatar && avatar.size > 0),
+        avatarDeleted: !!(deleteAvatar && currentUser.avatar),
+        timezone: timezoneRaw || null,
       },
     });
 
     return NextResponse.json(updatedUser, { status: 200 });
   } catch (error) {
     console.error('[PROFILE_UPDATE_ERROR]', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: session.user.id,
       action: 'PROFILE_UPDATE_ERROR',
-      severity: 'ERROR',
+      error,
       category: 'USER',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
     });
     return NextResponse.json({ error: 'Failed to update profile.' }, { status: 500 });
   }
@@ -201,7 +196,7 @@ export async function POST(req: Request) {
  */
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

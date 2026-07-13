@@ -7,6 +7,9 @@ const fsMock = vi.hoisted(() => ({
 
 vi.mock('fs', () => ({ default: fsMock }));
 vi.mock('path', () => ({ default: { join: vi.fn((...args: string[]) => args.join('/')) } }));
+vi.mock('@/lib/safe-upload', () => ({
+  resolveInsideDir: (dir: string, name: string) => `${dir}/${name}`,
+}));
 
 import { isSafeUploadName, serveUploadedFile } from './serve-file';
 
@@ -46,7 +49,9 @@ describe('serveUploadedFile', () => {
     const res = await serveUploadedFile('a.png', 'pfps');
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('application/octet-stream');
-    expect(res.headers.get('Content-Disposition')).toBe('inline; filename="a.png"');
+    expect(res.headers.get('Content-Disposition')).toBe(
+      "inline; filename=\"a.png\"; filename*=UTF-8''a.png",
+    );
     expect(fsMock.existsSync).toHaveBeenCalledWith('/private/uploads/pfps/a.png');
     expect(fsMock.promises.readFile).toHaveBeenCalledWith('/private/uploads/pfps/a.png');
   });
@@ -60,7 +65,9 @@ describe('serveUploadedFile', () => {
       contentType: 'application/pdf',
     });
     expect(res.headers.get('Content-Type')).toBe('application/pdf');
-    expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="nice.pdf"');
+    expect(res.headers.get('Content-Disposition')).toBe(
+      "attachment; filename=\"nice.pdf\"; filename*=UTF-8''nice.pdf",
+    );
   });
 
   it('runs onServe after a successful read, but not on a 404', async () => {

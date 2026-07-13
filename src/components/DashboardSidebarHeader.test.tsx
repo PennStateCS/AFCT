@@ -1,5 +1,8 @@
 /** @vitest-environment jsdom */
 
+// JSX in this file compiles to React.createElement (classic runtime), so React is
+// a runtime value, not a type-only import.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, beforeEach, expect, vi } from 'vitest';
@@ -54,13 +57,7 @@ vi.mock('@/components/ui/tooltip', () => {
     TooltipContent: ({ children }: { children: React.ReactNode }) => (
       <div data-testid="tooltip-content">{children}</div>
     ),
-    Tooltip: ({
-      children,
-      open,
-    }: {
-      children: React.ReactNode;
-      open?: boolean;
-    }) => (
+    Tooltip: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
       <div data-testid="tooltip" data-open={open === undefined ? 'undefined' : String(open)}>
         {children}
       </div>
@@ -80,7 +77,10 @@ describe('DashboardSidebarHeader', () => {
   it('marks the dashboard link active when the pathname matches', () => {
     render(<DashboardSidebarHeader />);
 
-    expect(screen.getByRole('link', { name: 'AFCT Dashboard' })).toHaveAttribute('href', '/dashboard');
+    expect(screen.getByRole('link', { name: 'AFCT Dashboard' })).toHaveAttribute(
+      'href',
+      '/dashboard',
+    );
     expect(screen.getByTestId('sidebar-menu-button').dataset.active).toBe('true');
   });
 

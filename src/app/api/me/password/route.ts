@@ -1,9 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
+import { readJson } from '@/lib/api/request';
+
+const ChangePasswordBody = z.object({
+  oldPassword: z.string().min(1),
+  newPassword: z.string().min(1),
+});
 
 /**
  * Lets a signed-in user change their own password. Requires the current password,
@@ -41,7 +50,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
 
-    if (!session?.user?.id) {
+    if (!session?.user?.id || session.user.inactive) {
       console.warn('[CHANGE_PASSWORD] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -49,19 +58,19 @@ export async function POST(req: NextRequest) {
     const userId = session.user.id;
     actorId = userId;
 
-    const { oldPassword, newPassword } = await req.json();
-
-    if (!oldPassword || !newPassword) {
-      console.warn('[CHANGE_PASSWORD] Missing oldPassword or newPassword');
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-    }
+    const parsed = await readJson(req, ChangePasswordBody);
+    if (!parsed.ok) return parsed.response;
+    const { oldPassword, newPassword } = parsed.data;
 
     if (!isStrongPassword(newPassword)) {
       console.warn('[CHANGE_PASSWORD] New password does not meet policy');
       return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true, temporaryPassword: true },
+    });
 
     if (!user?.password) {
       console.error('[CHANGE_PASSWORD] User not found in database');
@@ -78,7 +87,7 @@ export async function POST(req: NextRequest) {
         action: 'CHANGE_PASSWORD_FAILED',
         severity: 'SECURITY',
         category: 'USER',
-        metadata: { userId, reason: 'incorrect current password' },
+        metadata: { reason: 'incorrect current password' },
       });
       return NextResponse.json({ error: 'Incorrect old password' }, { status: 400 });
     }
@@ -107,20 +116,17 @@ export async function POST(req: NextRequest) {
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId,
         wasTemporaryPassword: Boolean(user.temporaryPassword),
-        clearedTemporaryPassword: Boolean(user.temporaryPassword),
       },
     });
 
     return NextResponse.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     console.error('[CHANGE_PASSWORD_ERROR]', err);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'CHANGE_PASSWORD_ERROR',
-      severity: 'ERROR',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+      error: err,
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

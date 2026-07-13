@@ -1,13 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { writeFile } from 'fs/promises';
 import path from 'path';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isAdmin } from '@/lib/permissions';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { safeStoredFilename, resolveInsideDir, safeUnlinkInDir } from '@/lib/safe-upload';
+import { readFormData, readJson } from '@/lib/api/request';
+import { UserUpdateJsonApiSchema, UserUpdateFormApiSchema } from '@/schemas/user';
 
 // Avatars are stored here; the client-supplied name is never used to build a path.
 const pfpsDir = path.join('/private', 'uploads', 'pfps');
@@ -62,7 +66,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const session = await auth();
     const currentUser = session?.user;
 
-    if (!currentUser || !currentUser.id) {
+    if (!currentUser || !currentUser.id || currentUser.inactive) {
       console.warn('[PATCH] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -76,7 +80,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         userId: session?.user?.id ?? null,
         action: 'USER_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: {},
+        metadata: { targetUserId: userId },
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -93,19 +97,23 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let isAdminFlag: boolean | undefined;
 
     if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      firstName = formData.get('firstName') as string;
-      lastName = formData.get('lastName') as string;
-      inactive = formData.get('inactive') === 'true';
-      avatarFile = formData.get('avatar') as File;
-      deleteAvatar = formData.get('deleteAvatar') === 'true';
-      timezoneRaw = (formData.get('timezone') as string) || undefined;
-      isAdminFlag = formData.has('isAdmin') ? formData.get('isAdmin') === 'true' : undefined;
+      const parsed = await readFormData(req, UserUpdateFormApiSchema);
+      if (!parsed.ok) return parsed.response;
+      firstName = parsed.data.firstName;
+      lastName = parsed.data.lastName;
+      inactive = parsed.data.inactive;
+      deleteAvatar = parsed.data.deleteAvatar;
+      timezoneRaw = parsed.data.timezone || undefined;
+      isAdminFlag = parsed.data.isAdmin;
+      avatarFile = parsed.form.get('avatar') as File;
     } else {
-      const body = await req.json();
-      ({ firstName, lastName, inactive } = body);
-      timezoneRaw = body.timezone;
-      isAdminFlag = typeof body.isAdmin === 'boolean' ? body.isAdmin : undefined;
+      const parsed = await readJson(req, UserUpdateJsonApiSchema);
+      if (!parsed.ok) return parsed.response;
+      firstName = parsed.data.firstName;
+      lastName = parsed.data.lastName;
+      inactive = parsed.data.inactive;
+      timezoneRaw = parsed.data.timezone;
+      isAdminFlag = parsed.data.isAdmin;
     }
     if (
       timezoneRaw &&
@@ -181,9 +189,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
             );
             await createEnhancedActivityLog(prisma, req, {
               userId: session?.user?.id ?? null,
-              action: 'USER_UPDATE_DENIED',
-              severity: 'SECURITY',
-              metadata: {},
+              action: 'USER_UPDATE_REJECTED',
+              severity: 'WARNING',
+              metadata: { targetUserId: userId, reason: 'active-course' },
             });
             return NextResponse.json(
               { error: 'Users in an active course cannot be inactive' },
@@ -252,7 +260,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        actorId,
         targetUserId: userId,
         changedFields: Object.keys(changes),
         changes,
@@ -263,11 +270,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     return NextResponse.json(updatedUser);
   } catch (error) {
     console.error('[PATCH] Error updating user:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'USER_UPDATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      error,
     });
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
   }
@@ -306,7 +312,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'USER_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: {},
+        metadata: { targetUserId: userId },
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -336,8 +342,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        actorId,
-        deletedUserId: userId,
+        targetUserId: userId,
         deletedUserEmail: user?.email ?? null,
         deletedUserName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || null,
       },
@@ -346,11 +351,10 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (error) {
     console.error('[DELETE] Error deleting user:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'USER_DELETE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      error,
     });
     return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
   }

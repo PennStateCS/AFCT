@@ -1,9 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { getAssignmentsForUserRange, resolveUserTimezone } from '@/lib/calendar-assignments';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { prisma } from '@/lib/prisma';
+import { logError } from '@/lib/api/activity';
+import { readJson } from '@/lib/api/request';
+
+const RangeBody = z.object({ start: z.string().min(1), end: z.string().min(1) });
 
 /**
  * Returns the assignments visible to the signed-in user whose due dates fall in a
@@ -33,15 +37,16 @@ import { prisma } from '@/lib/prisma';
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest) {
+  let userId: string | null = null;
   try {
     const session = await auth();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user || session.user.inactive)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    userId = session.user.id;
 
-    const body = (await req.json()) as { start: string; end: string };
-    const { start, end } = body;
-    if (!start || !end) {
-      return NextResponse.json({ error: 'Missing start or end' }, { status: 400 });
-    }
+    const parsed = await readJson(req, RangeBody);
+    if (!parsed.ok) return parsed.response;
+    const { start, end } = parsed.data;
 
     const userTimezone = await resolveUserTimezone(session.user.id);
     const startInput = start.includes('T') ? start : `${start}T00:00`;
@@ -58,11 +63,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(assignments, { status: 200 });
   } catch (error) {
     console.error('Error fetching assignment range:', error);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+    await logError(req, {
+      userId,
       action: 'ASSIGNMENT_RANGE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      error,
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

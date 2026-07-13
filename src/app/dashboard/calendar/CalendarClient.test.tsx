@@ -135,7 +135,7 @@ describe('CalendarClient', () => {
 
     expect(screen.getByText('Loading assignments...')).toBeInTheDocument();
 
-    resolveFetch?.({ ok: true, json: async () => [] });
+    (resolveFetch as ((value: unknown) => void) | null)?.({ ok: true, json: async () => [] });
 
     await waitFor(() => {
       expect(screen.queryByText('Loading assignments...')).not.toBeInTheDocument();

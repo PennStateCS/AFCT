@@ -39,12 +39,12 @@ describe('roles', () => {
       const facultyRow = {
         getValue: () => 'FACULTY',
         original: { lastName: 'Smith' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const studentRow = {
         getValue: () => 'STUDENT',
         original: { lastName: 'Jones' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const result = roleSortingFn(facultyRow, studentRow, 'role');
       expect(result).toBeLessThan(0); // FACULTY should come before STUDENT
@@ -54,12 +54,12 @@ describe('roles', () => {
       const row1 = {
         getValue: () => 'STUDENT',
         original: { lastName: 'Brown' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const row2 = {
         getValue: () => 'STUDENT',
         original: { lastName: 'Smith' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const result = roleSortingFn(row1, row2, 'role');
       expect(result).toBeLessThan(0); // Brown should come before Smith
@@ -69,12 +69,12 @@ describe('roles', () => {
       const row1 = {
         getValue: () => 'STUDENT',
         original: {},
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const row2 = {
         getValue: () => 'STUDENT',
         original: { lastName: 'Smith' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const result = roleSortingFn(row1, row2, 'role');
       expect(result).toBeLessThan(0); // Empty should come before Smith
@@ -84,12 +84,12 @@ describe('roles', () => {
       const row1 = {
         getValue: () => 'UNKNOWN_ROLE',
         original: { lastName: 'Smith' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const row2 = {
         getValue: () => 'STUDENT',
         original: { lastName: 'Jones' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const result = roleSortingFn(row1, row2, 'role');
       expect(result).toBeGreaterThan(0); // Unknown (99) should come after STUDENT (3)
@@ -99,12 +99,12 @@ describe('roles', () => {
       const row1 = {
         getValue: () => 'FACULTY',
         original: { lastName: 'Doe' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const row2 = {
         getValue: () => 'FACULTY',
         original: { lastName: 'Doe' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const result = roleSortingFn(row1, row2, 'role');
       expect(result).toBe(0);
@@ -114,12 +114,12 @@ describe('roles', () => {
       const row1 = {
         getValue: () => 'TA',
         original: { lastName: 'anderson' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const row2 = {
         getValue: () => 'TA',
         original: { lastName: 'Brown' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const result = roleSortingFn(row1, row2, 'role');
       expect(result).toBeLessThan(0); // anderson should come before Brown
@@ -129,12 +129,12 @@ describe('roles', () => {
       const row1 = {
         getValue: () => 'FACULTY',
         original: { lastName: null },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const row2 = {
         getValue: () => 'FACULTY',
         original: { lastName: 'Smith' },
-      } as Row<any>;
+      } as unknown as Row<any>;
 
       const result = roleSortingFn(row1, row2, 'role');
       expect(typeof result).toBe('number');

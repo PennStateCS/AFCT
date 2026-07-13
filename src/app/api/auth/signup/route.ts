@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { createEnhancedActivityLog, inferSeverity } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, type LogSeverity } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
+import { readJson } from '@/lib/api/request';
+import { SignupSchema } from '@/schemas/auth';
 import {
   applyBotFriction,
   evaluateSignupRateLimit,
@@ -10,9 +13,7 @@ import {
   recordSignupSuccess,
 } from '@/lib/security/rate-limiter';
 import { verifyCaptchaToken } from '@/lib/security/captcha';
-import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
-
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+import { isEmailDomainAllowed, getEmailDomain, parseDomainList } from '@/lib/email';
 
 /**
  * Self-service account registration. New accounts are created with no elevated
@@ -55,44 +56,54 @@ const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
  */
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const {
-      firstName,
-      lastName,
-      email,
-      password,
-      interactionMs,
-      captchaToken,
-    } = body;
-    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
     const ipAddress = getClientIp(req);
 
     const settings = await prisma.systemSettings.findUnique({
       where: { id: 1 },
-      select: { allowSignup: true },
+      select: { allowSignup: true, signupAllowedDomains: true },
     });
     if (settings?.allowSignup === false) {
       return NextResponse.json({ error: 'Signup is disabled.' }, { status: 403 });
     }
 
-    if (!normalizedEmail || !password || !firstName || !lastName) {
-      return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
-    }
-    if (!isValidEmail(normalizedEmail)) {
-      return NextResponse.json({ error: 'Invalid email format.' }, { status: 400 });
-    }
-    if (!isStrongPassword(password)) {
-      return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
-    }
+    // Validate the body shape (required fields, email format, password strength)
+    // via the shared schema; `email` comes back trimmed + lowercased to match
+    // `normalizeEmail` used elsewhere.
+    const parsed = await readJson(req, SignupSchema);
+    if (!parsed.ok) return parsed.response;
+    const {
+      firstName,
+      lastName,
+      email: normalizedEmail,
+      password,
+      interactionMs,
+      captchaToken,
+    } = parsed.data;
 
+    // Domain allow-list (blank setting = any domain). Reject a non-approved domain
+    // before spending rate-limit budget; log it as a policy rejection (WARNING).
+    const allowedDomains = settings?.signupAllowedDomains ?? '';
+    if (!isEmailDomainAllowed(normalizedEmail, allowedDomains)) {
+      await createEnhancedActivityLog(prisma, req, {
+        action: 'SIGNUP_DOMAIN_REJECTED',
+        severity: 'WARNING',
+        category: 'USER',
+        metadata: { email: normalizedEmail, domain: getEmailDomain(normalizedEmail) },
+      });
+      const allowed = parseDomainList(allowedDomains).domains;
+      return NextResponse.json(
+        { error: `Email domain not allowed. Allowed domains: ${allowed.join(', ')}` },
+        { status: 403 },
+      );
+    }
     const rateDecision = evaluateSignupRateLimit({
       ip: ipAddress,
       identifier: normalizedEmail,
-      interactionMs: Number.isFinite(Number(interactionMs)) ? Number(interactionMs) : undefined,
+      interactionMs,
     });
 
     if (rateDecision.status === 'blocked') {
-      await logSecurityEvent('SIGNUP_RATE_LIMIT', {
+      await logSecurityEvent(req, 'SIGNUP_RATE_LIMIT', {
         ip: ipAddress,
         identifier: normalizedEmail,
       });
@@ -108,7 +119,7 @@ export async function POST(req: Request) {
     if (rateDecision.status === 'challenge') {
       const captchaValid = await verifyCaptchaToken(captchaToken, ipAddress);
       if (!captchaValid) {
-        await logSecurityEvent('SIGNUP_CHALLENGE_REQUIRED', {
+        await logSecurityEvent(req, 'SIGNUP_CHALLENGE_REQUIRED', {
           ip: ipAddress,
           identifier: normalizedEmail,
         });
@@ -121,7 +132,7 @@ export async function POST(req: Request) {
         );
       }
 
-      await logSecurityEvent('SIGNUP_CHALLENGE_SOLVED', {
+      await logSecurityEvent(req, 'SIGNUP_CHALLENGE_SOLVED', {
         ip: ipAddress,
         identifier: normalizedEmail,
       });
@@ -133,6 +144,7 @@ export async function POST(req: Request) {
 
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
+      select: { id: true },
     });
     if (existingUser) {
       return NextResponse.json({ error: 'Email already registered.' }, { status: 409 });
@@ -155,7 +167,6 @@ export async function POST(req: Request) {
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId: newUser.id,
         email: normalizedEmail,
       },
     });
@@ -165,12 +176,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'User created', userId: newUser.id }, { status: 201 });
   } catch (err) {
     console.error('[SIGNUP_ERROR]', err);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: null,
       action: 'SIGNUP_ERROR',
-      severity: 'ERROR',
+      error: err,
       category: 'USER',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
     });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -182,20 +192,15 @@ type SignupSecurityEventAction =
   | 'SIGNUP_CHALLENGE_SOLVED';
 
 async function logSecurityEvent(
+  req: Request,
   action: SignupSecurityEventAction,
   metadata: { ip?: string | null; identifier?: string | null },
 ) {
+  // Explicit severity: a rate-limit or forced challenge is a SECURITY signal; a
+  // solved challenge is routine INFO.
+  const severity: LogSeverity = action === 'SIGNUP_CHALLENGE_SOLVED' ? 'INFO' : 'SECURITY';
   try {
-    await prisma.activityLog.create({
-      data: {
-        action,
-        category: 'SECURITY',
-        severity: inferSeverity(action),
-        // Promote the known client IP into the column (not just metadata).
-        ipAddress: metadata.ip ?? null,
-        metadata,
-      },
-    });
+    await createEnhancedActivityLog(prisma, req, { action, severity, metadata });
   } catch (error) {
     console.error('[signup] security log failure', error);
   }

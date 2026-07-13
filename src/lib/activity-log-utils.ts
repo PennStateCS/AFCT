@@ -3,7 +3,8 @@
  * Note: This requires the enhanced ActivityLog schema with foreign keys
  */
 
-import { Prisma, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getClientIp } from './ip-utils';
 
 export type ActivityCategory =
@@ -56,8 +57,13 @@ export interface EnhancedActivityLogData {
   action: string;
   timestamp?: Date;
   category?: ActivityCategory;
-  /** Overrides the severity inferred from the action name. */
-  severity?: LogSeverity;
+  /**
+   * Required and explicit at every call site — the severity of an entry is a
+   * deliberate classification, not something to guess from the action name.
+   * (`inferSeverity` remains available for callers that genuinely want name-based
+   * derivation, but they must opt in by passing `severity: inferSeverity(action)`.)
+   */
+  severity: LogSeverity;
   courseId?: string | null;
   assignmentId?: string | null;
   problemId?: string | null;
@@ -197,13 +203,20 @@ export const ActivityLogQueries = {
  */
 export async function createEnhancedActivityLog(
   prisma: PrismaClient,
-  req: Request,
+  // Either a Request (API routes) or a pre-resolved client context. NextAuth event
+  // callbacks and credential verification run without a Request, so they pass the
+  // IP/UA they already have instead — one write path for every log site.
+  reqOrContext: Request | { ipAddress?: string | null; userAgent?: string | null },
   data: EnhancedActivityLogData,
 ): Promise<void> {
   const category = data.category || getActivityCategory(data.action);
-  const severity = data.severity ?? inferSeverity(data.action);
-  const ipAddress = getClientIp(req);
-  const userAgent = req.headers.get('user-agent') || undefined;
+  const severity = data.severity;
+  const ipAddress =
+    reqOrContext instanceof Request ? getClientIp(reqOrContext) : (reqOrContext.ipAddress ?? null);
+  const userAgent =
+    reqOrContext instanceof Request
+      ? reqOrContext.headers.get('user-agent') || undefined
+      : (reqOrContext.userAgent ?? undefined);
   const includeDisplayMetadata = data.includeDisplayMetadata !== false;
 
   const baseMetadata: Record<string, unknown> =

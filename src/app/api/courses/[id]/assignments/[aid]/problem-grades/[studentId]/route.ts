@@ -3,7 +3,14 @@ import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
-import { logDenial } from '@/lib/api/activity';
+import { readJson } from '@/lib/api/request';
+import { logDenial, logError } from '@/lib/api/activity';
+import { BatchProblemGradesSchema } from '@/schemas/grade';
+
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; aid: string; studentId: string }> };
 
 /**
  * Returns a student's per-problem grades and feedback for one assignment, keyed by
@@ -28,7 +35,7 @@ import { logDenial } from '@/lib/api/activity';
  *   500: { description: Server error. }
  */
 export const GET = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { aid: assignmentId, studentId } = await ctx.params;
 
     try {
@@ -122,16 +129,14 @@ export const GET = withCourseAuth(
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const graderId = user.id;
     const { aid: assignmentId, studentId } = await ctx.params;
 
     try {
-      const body = await req.json();
-      const grades = body?.grades;
-      if (typeof grades !== 'object' || grades === null || Array.isArray(grades)) {
-        return NextResponse.json({ error: 'A grades map is required' }, { status: 400 });
-      }
+      const parsed = await readJson(req, BatchProblemGradesSchema);
+      if (!parsed.ok) return parsed.response;
+      const grades = parsed.data.grades;
 
       // The assignment must belong to this course.
       const assignment = await prisma.assignment.findFirst({
@@ -140,6 +145,16 @@ export const POST = withCourseAuth(
       });
       if (!assignment) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      // The grade target must actually be enrolled in this course — never create
+      // grade rows for an arbitrary user id that isn't on the roster.
+      const enrolled = await prisma.roster.findFirst({
+        where: { courseId, userId: studentId },
+        select: { id: true },
+      });
+      if (!enrolled) {
+        return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
       }
 
       // maxPoints per problem — used for validation and to reject problem ids that
@@ -236,6 +251,7 @@ export const POST = withCourseAuth(
               assignmentId,
               problemId: change.problemId,
               metadata: {
+                targetUserId: studentId,
                 studentId,
                 graderId,
                 previousGrade: change.previousGrade,
@@ -246,24 +262,23 @@ export const POST = withCourseAuth(
             }),
           ),
         );
-      } catch (logError) {
+      } catch (logErr) {
         console.error(
           'POST /api/courses/[id]/[aid]/problem-grades/[studentId] audit error:',
-          logError,
+          logErr,
         );
       }
 
       return NextResponse.json({ ok: true, changed: changes.length });
     } catch (error) {
       console.error('POST /api/courses/[id]/[aid]/problem-grades/[studentId] error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: graderId,
         action: 'PROBLEM_GRADE_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to save grades' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED', blockWhenArchived: true },
 );

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+
+const ListSubmissionsBody = z.object({ problemIds: z.array(z.string()).default([]) });
 
 /**
  * Returns every submission across a set of problems, flattened for the admin
@@ -32,10 +36,11 @@ import { withAdminAuth } from '@/lib/api/with-auth';
  *   500: { description: Server error. }
  */
 export const POST = withAdminAuth(
-  async (req) => {
+  async (req, _ctx, { user }) => {
     try {
-      const body = await req.json();
-      const problemIds = Array.isArray(body?.problemIds) ? body.problemIds : [];
+      const parsed = await readJson(req, ListSubmissionsBody);
+      if (!parsed.ok) return parsed.response;
+      const problemIds = parsed.data.problemIds;
 
       if (problemIds.length === 0) {
         return NextResponse.json({ error: 'Missing problemIds' }, { status: 400 });
@@ -134,11 +139,10 @@ export const POST = withAdminAuth(
       return NextResponse.json(formattedSubmissions);
     } catch (error) {
       console.error('Error fetching submissions:', error);
-      await createEnhancedActivityLog(prisma, req, {
-        userId: null,
+      await logError(req, {
+        userId: user.id,
         action: 'ADMIN_SUBMISSIONS_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to fetch submissions' }, { status: 500 });
     }

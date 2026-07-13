@@ -1,46 +1,38 @@
 import { z } from 'zod';
+import { formBooleanOptional, formIntOptional } from './fields';
 
 /** Keep in sync with your Prisma enum */
 export const ProblemTypeEnum = z.enum(['FA', 'PDA', 'CFG', 'RE', 'TM']);
 
-/** Allowed upload types (adjust as needed) */
-const allowedExt = ['txt', 'fa', 'pda', 'cfg', 're', 'jff'];
+/**
+ * Allowed solution-file extensions. Enforced by BOTH the client file field (below)
+ * and the server routes (via {@link isAllowedProblemExtension}) so a non-browser
+ * client can't upload an arbitrary file type.
+ */
+export const ALLOWED_PROBLEM_EXTENSIONS = ['txt', 'fa', 'pda', 'cfg', 're', 'jff'] as const;
 
-// Server-side safe file validation
-const createFileSchema = () => {
-  // Check if File constructor is available (browser environment)
-  if (typeof File !== 'undefined') {
-    return z
-      .instanceof(File, { message: 'Answer file is required.' })
-      .refine((f) => f.size > 0, 'Answer file is required.')
-      .refine(
-        (f) => {
-          const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-          return allowedExt.includes(ext);
-        },
-        { message: `Allowed: .${allowedExt.join(',.')}` },
-      )
-      .refine((f) => f.size <= 5 * 1024 * 1024, 'File must be ≤ 5MB');
-  }
-  
-  // Server-side fallback - accept any for server-side processing
-  return z.any().refine((f) => {
-    // Server-side validation for FormData files
-    if (f && typeof f === 'object' && 'size' in f && 'name' in f) {
-      return f.size > 0 && f.size <= 5 * 1024 * 1024;
-    }
-    return true; // Let server handle validation
-  }, 'File must be valid and ≤ 5MB');
+/** True if `fileName`'s extension is in {@link ALLOWED_PROBLEM_EXTENSIONS}. */
+export const isAllowedProblemExtension = (fileName: string): boolean => {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  return (ALLOWED_PROBLEM_EXTENSIONS as readonly string[]).includes(ext);
 };
 
-const FileRequired = createFileSchema();
+// Required solution-file upload (used by the client CreateProblemSchema). `File`
+// is a global in both the browser and Node 22, so no environment guard is needed.
+const FileRequired = z
+  .instanceof(File, { message: 'Answer file is required.' })
+  .refine((f) => f.size > 0, 'Answer file is required.')
+  .refine((f) => isAllowedProblemExtension(f.name), {
+    message: `Allowed: .${ALLOWED_PROBLEM_EXTENSIONS.join(', .')}`,
+  })
+  .refine((f) => f.size <= 5 * 1024 * 1024, 'File must be ≤ 5MB');
 
 /**
  * Base object schema for add/edit Problem (without effects)
  */
 const BaseProblemObject = z.object({
-  title: z.string().trim().min(3, 'Title must be at least 3 characters.'),
-  description: z.string().trim().max(20000).optional().or(z.literal('')),
+  title: z.string().trim().min(3, 'Title must be at least 3 characters.').max(200, 'Title is too long.'),
+  description: z.string().trim().max(20000).optional(),
   type: ProblemTypeEnum,
   isUnlimitedSubmissions: z.boolean().default(true),
   maxSubmissions: z
@@ -61,7 +53,11 @@ const BaseProblemObject = z.object({
  * Add custom validation to the base object
  */
 function addProblemValidation<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
-  return schema.superRefine((d, ctx) => {
+  return schema.superRefine((data, ctx) => {
+    // The helper is generic over the raw shape, which Zod 4 types as an opaque
+    // mapped type; every variant (base / +file / partial) shares these base
+    // fields, so narrow to the known shape for the conditional checks.
+    const d = data as Partial<z.infer<typeof BaseProblemObject>>;
     const isFAorPDA = d.type === 'FA' || d.type === 'PDA';
 
     if (isFAorPDA && !d.isUnlimitedStates) {
@@ -112,13 +108,6 @@ function addProblemValidation<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
 /** Form-only schema (used by dialogs). */
 export const ProblemFormSchema = addProblemValidation(BaseProblemObject);
 
-/** Form schema with required file for creation dialogs */
-export const CreateProblemFormSchema = addProblemValidation(
-  BaseProblemObject.extend({
-    file: FileRequired,
-  })
-);
-
 /** CREATE: requires file and adds the same FA/PDA rules */
 export const CreateProblemSchema = addProblemValidation(
   BaseProblemObject.extend({
@@ -133,11 +122,83 @@ export const UpdateProblemSchema = addProblemValidation(
   })
 );
 
+/**
+ * Server-side validation for the problem create/update routes, which receive
+ * multipart form data (all scalar fields arrive as strings). Fed by `readFormData`;
+ * the File itself and the dynamic size limit / XML-structure check stay in the
+ * route, but the extension allow-list is enforced there via
+ * {@link isAllowedProblemExtension}. This is the server counterpart to the
+ * client-only `ProblemFormSchema` — the browser was previously the only validator.
+ */
+const problemApiScalars = {
+  title: z
+    .string()
+    .trim()
+    .min(3, 'Title must be at least 3 characters.')
+    .max(200, 'Title is too long.'),
+  description: z.string().trim().max(20000, 'Description is too long.').optional(),
+  type: ProblemTypeEnum,
+  assignmentId: z.string().trim().optional(),
+  maxPoints: formIntOptional({ min: 0 }),
+  maxSubmissions: formIntOptional(),
+  maxStates: formIntOptional(),
+  isDeterministic: formBooleanOptional,
+  autograderEnabled: formBooleanOptional,
+};
+
+export const ProblemCreateApiSchema = z.object(problemApiScalars);
+export const ProblemUpdateApiSchema = z.object(problemApiScalars);
+
+export type ProblemCreateApiInput = z.infer<typeof ProblemCreateApiSchema>;
+
+/**
+ * Per-problem settings sent when associating an existing problem with an
+ * assignment (AssociateProblemsDialog). `maxSubmissions === -1` means unlimited;
+ * otherwise it must be an integer ≥ 1. `z.number()` accepts NaN by type, so the
+ * refinements do the real bounds checking (and surface the dialog's messages).
+ */
+export const ProblemAssociationSettingsSchema = z.object({
+  problemId: z.string().min(1, 'Selected problem is no longer available.'),
+  maxPoints: z
+    .number()
+    .refine(
+      (n) => Number.isFinite(n) && n >= 0,
+      'Max points must be a number greater than or equal to 0.',
+    ),
+  maxSubmissions: z
+    .number()
+    .refine(
+      (n) => n === -1 || (Number.isInteger(n) && n >= 1),
+      'Max submissions must be unlimited or an integer greater than or equal to 1.',
+    ),
+  autograderEnabled: z.boolean(),
+});
+
+export const ProblemAssociationSettingsArray = z.array(ProblemAssociationSettingsSchema);
+
+export type ProblemAssociationSettings = z.infer<typeof ProblemAssociationSettingsSchema>;
+
+/**
+ * Server body for updating one problem's per-assignment settings (the PUT on
+ * .../assignments/[aid]/problems/[pid]). The problemId comes from the path, so
+ * unlike {@link ProblemAssociationSettingsSchema} it isn't part of the body.
+ */
+export const AssignmentProblemSettingsSchema = z.object({
+  maxPoints: z.number().min(0),
+  maxSubmissions: z
+    .number()
+    .int()
+    .refine((value) => value === -1 || value >= 1, {
+      message: 'Max submissions must be unlimited (-1) or at least 1.',
+    }),
+  autograderEnabled: z.boolean(),
+});
+
+export type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSchema>;
+
 /** Types */
 export type ProblemFormInput = z.infer<typeof ProblemFormSchema>;
 export type ProblemFormRaw = z.input<typeof ProblemFormSchema>;
-export type CreateProblemFormInput = z.infer<typeof CreateProblemFormSchema>;
-export type CreateProblemFormRaw = z.input<typeof CreateProblemFormSchema>;
 export type CreateProblemInput = z.infer<typeof CreateProblemSchema>;
 export type CreateProblemRaw = z.input<typeof CreateProblemSchema>;
 export type UpdateProblemInput = z.infer<typeof UpdateProblemSchema>;

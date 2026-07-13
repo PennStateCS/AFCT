@@ -58,13 +58,14 @@ function DialogContent({
           className,
         )}
         onInteractOutside={(event) => {
+          // Clicking outside never closes a dialog (an accidental click must not
+          // discard in-progress work), but Escape DOES close by default — it is
+          // the standard keyboard affordance (WCAG 2.1.2). A dialog with unsaved
+          // state can still opt out by preventing default in its own handler.
           onInteractOutside?.(event);
           if (!event.defaultPrevented) event.preventDefault();
         }}
-        onEscapeKeyDown={(event) => {
-          onEscapeKeyDown?.(event);
-          if (!event.defaultPrevented) event.preventDefault();
-        }}
+        onEscapeKeyDown={onEscapeKeyDown}
         {...props}
       >
         {children}

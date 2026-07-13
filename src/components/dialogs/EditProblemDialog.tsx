@@ -23,7 +23,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 import type { Problem } from '@prisma/client';
-import { ProblemFormSchema, UpdateProblemSchema, ProblemTypeEnum } from '@/schemas/problem';
+import type { ProblemTypeEnum } from '@/schemas/problem';
+import { ProblemFormSchema, UpdateProblemSchema } from '@/schemas/problem';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 
@@ -364,7 +365,6 @@ export function EditProblemDialog({
       <DialogContent
         className="bg-card max-w-lg"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Edit Problem</DialogTitle>
@@ -623,7 +623,7 @@ export function EditProblemDialog({
                     type="number"
                     fieldProps={{
                       ...field,
-                      value: isUnlimitedStates ? '' : String(Math.abs(field.value ?? 0) || ''),
+                      value: isUnlimitedStates ? '' : String(Math.abs(Number(field.value ?? 0)) || ''),
                       onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
                         field.onChange(e.target.value),
                     }}

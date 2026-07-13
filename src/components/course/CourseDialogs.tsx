@@ -1,21 +1,16 @@
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
-import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
 import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
 import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDialog';
 import { EnrollUserDialog } from '@/components/dialogs/EnrollUsersDialog';
 import BulkEnrollDialog from '@/components/dialogs/BulkEnrollDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { FullCourse, DeleteTarget, EnrollableUser } from '@/types/course';
-import { Assignment, Problem, Course } from '@prisma/client';
+import type { FullCourse, DeleteTarget, EnrollableUser } from '@/types/course';
+import type { Assignment, Problem } from '@prisma/client';
 
 interface CourseDialogsProps {
   course: FullCourse;
   timeZone: string;
-  // Edit course
-  editOpen: boolean;
-  setEditOpen: (open: boolean) => void;
-  onCourseSave: (course: Partial<Course>) => void;
 
   // Problems
   problemOpen: boolean;
@@ -48,12 +43,6 @@ interface CourseDialogsProps {
   onPublishConfirm: () => void;
   onPublishCancel: () => void;
 
-  // Archive confirm
-  archiveConfirmOpen: boolean;
-  pendingArchive: boolean | null;
-  onArchiveConfirm: () => void;
-  onArchiveCancel: () => void;
-
   // Enroll user
   enrollOpen: boolean;
   setEnrollOpen: (open: boolean) => void;
@@ -67,9 +56,6 @@ interface CourseDialogsProps {
 export function CourseDialogs({
   course,
   timeZone,
-  editOpen,
-  setEditOpen,
-  onCourseSave,
 
   problemOpen,
   setProblemOpen,
@@ -97,11 +83,6 @@ export function CourseDialogs({
   onPublishConfirm,
   onPublishCancel,
 
-  archiveConfirmOpen,
-  pendingArchive,
-  onArchiveConfirm,
-  onArchiveCancel,
-
   enrollOpen,
   setEnrollOpen,
   allUsers,
@@ -111,14 +92,6 @@ export function CourseDialogs({
 }: CourseDialogsProps) {
   return (
     <>
-      <EditCourseDialog
-        course={course}
-        timeZone={timeZone}
-        open={editOpen}
-        setOpen={setEditOpen}
-        onSave={onCourseSave}
-      />
-
       <CreateProblemDialog
         open={problemOpen}
         setOpen={setProblemOpen}
@@ -131,7 +104,9 @@ export function CourseDialogs({
         <EditAssignmentDialog
           courseIsArchived={course.isArchived}
           assignment={selectedAssignment}
-          timeZone={timeZone}
+          // Edit due dates in the COURSE's zone (where the server stores them), not the
+          // viewer's — otherwise saving would shift the deadline.
+          timeZone={course.timezone ?? timeZone}
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}
           onSave={onAssignmentSave}
@@ -156,7 +131,8 @@ export function CourseDialogs({
         setOpen={setCreateAssignmentOpen}
         courseId={course.id}
         courseIsArchived={course.isArchived}
-        timeZone={timeZone}
+        // New due dates are interpreted in the COURSE's zone, not the viewer's.
+        timeZone={course.timezone ?? timeZone}
         onCreate={onAssignmentCreate}
       />
 
@@ -174,24 +150,11 @@ export function CourseDialogs({
         title={pendingPublish ? 'Publish Course?' : 'Unpublish Course?'}
         description={
           pendingPublish
-            ? 'Are you sure you want to publish this course? It will be visible to students.'
-            : 'Are you sure you want to unpublish this course? Students will no longer see it.'
+            ? 'This takes effect immediately: the course becomes visible to enrolled students as soon as you confirm.'
+            : 'This takes effect immediately: students will no longer see the course as soon as you confirm.'
         }
         onConfirm={onPublishConfirm}
         onCancel={onPublishCancel}
-      />
-
-      <ConfirmDialog
-        open={archiveConfirmOpen}
-        confirmText={pendingArchive ? 'Archive' : 'Unarchive'}
-        title={pendingArchive ? 'Archive Course?' : 'Unarchive Course?'}
-        description={
-          pendingArchive
-            ? 'Are you sure you want to archive this course?'
-            : 'Are you sure you want to unarchive this course?'
-        }
-        onConfirm={onArchiveConfirm}
-        onCancel={onArchiveCancel}
       />
 
       <EnrollUserDialog

@@ -1,6 +1,7 @@
 'use client';
 
-import DiscussionPanel, { Comment as DiscussionComment } from './DiscussionPanel';
+import type { Comment as DiscussionComment } from './DiscussionPanel';
+import DiscussionPanel from './DiscussionPanel';
 
 export type ProblemDiscussionPanelProps = {
   courseIsArchived: boolean;

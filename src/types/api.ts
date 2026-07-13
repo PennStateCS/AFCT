@@ -204,29 +204,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/status/abandoned-files": {
+    "/api/admin/status/database": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Database status
+         * @description Database tab: reachability, engine details, per-engine stats (Postgres or  SQLite), and the last migration. System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/database/route.ts)
+         */
+        get: operations["getAdminStatusDatabase"];
         put?: never;
         post?: never;
-        /**
-         * Delete an orphaned upload
-         * @description Deletes a single orphaned upload — a file on disk that no DB row references  (see the abandoned-file report on the status dashboard). System administrators  only. Guards on every axis: the category must be known, the name  must be separator-free, the file must still be unreferenced, and the resolved  path must stay inside its category folder.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/abandoned-files/route.ts)
-         */
-        delete: operations["deleteAdminStatusAbandonedFiles"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/admin/status": {
+    "/api/admin/status/docker": {
         parameters: {
             query?: never;
             header?: never;
@@ -234,12 +234,128 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Operational status snapshot
-         * @description Aggregated health and diagnostics for the status dashboard (system administrators only). Returns host metrics, DB engine stats, masked env keys, active-session and error-rate summaries, and abandoned-file counts. Fields are best-effort — any probe that fails is simply omitted.
+         * Docker/container status
+         * @description Docker tab: container detection (cgroups, /.dockerenv, env hints) and container  id / hostname when running inside a container. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/route.ts)
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/docker/route.ts)
          */
-        get: operations["getAdminStatus"];
+        get: operations["getAdminStatusDocker"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Abandoned-file report
+         * @description Files tab: report of orphaned uploads — files on disk that no DB row  references, by category, with up to 50 samples. System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/files/route.ts)
+         */
+        get: operations["getAdminStatusFiles"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an orphaned upload
+         * @description Deletes a single orphaned upload. Guards on every axis (known category,  separator-free name, still unreferenced, path stays inside the category  folder). System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/files/route.ts)
+         */
+        delete: operations["deleteAdminStatusFiles"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Network status (DNS/TLS/latency/error-rate)
+         * @description Network tab: DNS resolution for the DB and auth hosts, auth-endpoint latency +  TLS certificate expiry, DB round-trip latency and connection count, and recent  error-rate ratios. DNS/TLS are TTL-cached. System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/network/route.ts)
+         */
+        get: operations["getAdminStatusNetwork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server status (host + process + software)
+         * @description Server tab: host + process metrics (uptime, CPU/memory/disk-IO sample, OS, IP  addresses) and software versions (Node/Next/Java/evaluator + build metadata).  System administrators only. Tool versions are TTL-cached server-side.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/server/route.ts)
+         */
+        get: operations["getAdminStatusServer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active session status
+         * @description Session tab: recent active sessions (last 24h, deduped) and rolling 5/15/60m  counts, from the audit log. Includes other users' session PII (emails, IPs), so  system administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/sessions/route.ts)
+         */
+        get: operations["getAdminStatusSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status summary (top cards)
+         * @description Summary cards at the top of the status dashboard: DB reachability/provider,  uptime, process CPU/memory, DB table count + size, 24h session counts, and this  probe's own latency. Fast by design so it renders immediately while the per-tab  detail loads lazily. System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/summary/route.ts)
+         */
+        get: operations["getAdminStatusSummary"];
         put?: never;
         post?: never;
         delete?: never;
@@ -375,7 +491,7 @@ export interface paths {
         };
         /**
          * Check whether an email is registered
-         * @description Reports whether an email is already registered, so the signup form can warn  before submitting. Unauthenticated by design; it therefore leaks account  existence, which is an accepted trade-off for signup UX.
+         * @description Reports whether an email is already registered, so the signup form can warn  before submitting. Unauthenticated by design; it therefore leaks account  existence, which is an accepted trade-off for signup UX — but it is IP rate-limited  so it can't be used to bulk-enumerate accounts, and it only ever returns a boolean.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/auth/check-email/route.ts)
          */
@@ -410,6 +526,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/client/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client login (issue a bearer token)
+         * @description Native-client login. Verifies email + password through the same shared path as  the browser login (rate limiting, account lockout, bot friction, bcrypt, security  logging) and, on success, issues a **bearer token** the client sends on every  later request as `Authorization: Bearer <token>`. Unlike the browser flow there's  no cookie, no CSRF, and no idle-timeout. The rate limiter's captcha "challenge"  (which a native client can't solve) is reported as a 429 back-off.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/auth/login/route.ts)
+         */
+        post: operations["postClientV1AuthLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/client/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client logout (revoke the current token)
+         * @description Revokes the bearer token used to make this request, so it can no longer  authenticate. Idempotent.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/auth/logout/route.ts)
+         */
+        post: operations["postClientV1AuthLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/client/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check the current token (whoami)
+         * @description Whoami / token check. A cheap endpoint the client can call to confirm its bearer  token is still valid: `200` with the user when the token is good, `401` when it's  missing, expired, or revoked. (Also renews the sliding expiry, like any  authenticated call.)
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/auth/me/route.ts)
+         */
+        get: operations["getClientV1AuthMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/client/v1/courses/{courseId}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a course's assignments + problems (client)
+         * @description A course's **published** assignments and their problems, for the token's user  (client screen after picking a course). Includes each problem's type, per-assignment  maxPoints/maxSubmissions, the student's grade, attempt count, and latest status —  never the answer-key file. A course the caller can't reach is masked as 404.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/courses/[courseId]/assignments/route.ts)
+         */
+        get: operations["getClientV1CoursesByCourseIdAssignments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/client/v1/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my courses (client)
+         * @description The signed-in user's courses (slim shape for the client), scoped to the token's  user — same visibility as the web app: enrolled, non-deleted courses that are  published or where the user is staff.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/courses/route.ts)
+         */
+        get: operations["getClientV1Courses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/client/v1/submissions/{submissionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a submission's result (client)
+         * @description The result of one submission — for polling after a submit. Returns the queue  `status` (PENDING/PROCESSING/COMPLETED/FAILED) and, once evaluated, whether it was  `correct`, the `grade`, and the `feedback` (the witness / counterexample string).  A caller may read their own submission; staff may read anyone's in their course.  Anything else is masked as 404.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/[submissionId]/route.ts)
+         */
+        get: operations["getClientV1SubmissionsBySubmissionId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/client/v1/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my submissions for a problem (client)
+         * @description The caller's own submission history for one problem (attempt list), newest first —  so the client can show past attempts and drill into any one's result via  `GET /submissions/{id}`. Scoped to the token's user, so it never exposes anyone  else's work.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/route.ts)
+         */
+        get: operations["getClientV1Submissions"];
+        put?: never;
+        /**
+         * Submit a solution (client)
+         * @description Submit a solution file (client). Same multipart body, validation, caps, cooldown,  late policy, storage, and queueing as the web `/api/submissions` — it runs the same  `createSubmission` service — but authenticated by a bearer token. Returns 202 with  the new submission's id + status.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/route.ts)
+         */
+        post: operations["postClientV1Submissions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/comments": {
         parameters: {
             query?: never;
@@ -430,7 +706,7 @@ export interface paths {
         post: operations["postComments"];
         /**
          * Delete a comment
-         * @description Deletes a comment by id. The comment's author may delete their own; otherwise  only course staff (faculty or TAs) or a system admin may remove it.
+         * @description Deletes a comment by id. Comments are immutable to students — **only course staff  (faculty or TAs) or a system admin may delete**, including deleting their own.  A student cannot delete a comment they authored.
          *
          *     **Auth:** required
          *
@@ -479,7 +755,7 @@ export interface paths {
         head?: never;
         /**
          * Archive or unarchive a course
-         * @description Toggles a course's archived state. Course faculty or a system admin (TAs  excluded). Archiving runs a safety  check (canArchiveCourse) using the course's stored dates rather than any client  value, to avoid timezone drift deciding whether a course has really ended.
+         * @description Toggles a course's archived state. **Both archiving and un-archiving are  admin-only** — freezing a course (or reopening a frozen one to edits) is a  privileged action. Archiving also runs a safety check (canArchiveCourse) using  the course's stored dates rather than any client value, to avoid timezone drift  deciding whether a course has really ended.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/archive/route.ts)
          */
@@ -765,7 +1041,7 @@ export interface paths {
         put?: never;
         /**
          * Create a course assignment
-         * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the actor's timezone. Late  submissions and their cutoff must agree — a cutoff is required when late is on,  forbidden when off, and must fall on or after the due date.
+         * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the **course's** timezone. Late  submissions and their cutoff must agree — a cutoff is required when late is on,  forbidden when off, and must fall on or after the due date.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/route.ts)
          */
@@ -787,7 +1063,7 @@ export interface paths {
         put?: never;
         /**
          * Duplicate a course
-         * @description Creates a new course modeled on an existing one, in a single transaction. The  caller becomes faculty on the copy; faculty/TA rosters are copied only when  asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects  what carries over: assignments only, problems only, or assignments with their  problems. The copy always starts unpublished with a fresh registration code.  System administrators only. Dates are interpreted in the actor's timezone.
+         * @description Creates a new course modeled on an existing one, in a single transaction. The  copy's faculty comes from the copied faculty roster and/or an explicit  `instructorIds` list — at least one faculty member is required (the caller is  NOT added automatically). TAs are copied only when asked. `copyMode` (or the  legacy copyAssignments/copyProblems booleans) selects what carries over:  assignments only, problems only, or assignments with their problems. The copy  always starts unpublished with a fresh registration code. System administrators  only. Dates are interpreted in the actor's timezone.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/duplicate/route.ts)
          */
@@ -1053,7 +1329,7 @@ export interface paths {
         head?: never;
         /**
          * Publish or unpublish a course
-         * @description Toggles a course's published state. Course faculty or a system admin (TAs  excluded). Unpublishing runs a  safety check (canUnpublishCourse) that refuses if students would lose access to  work already in progress.
+         * @description Toggles a course's published state. Course staff (faculty or TA) or a system admin.  Unpublishing runs a  safety check (canUnpublishCourse) that refuses if students would lose access to  work already in progress.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/publish/route.ts)
          */
@@ -1149,7 +1425,7 @@ export interface paths {
          * Get a course
          * @description Fetches one course with derived metadata, shaped by the `view` query param to  keep payloads lean (full/summary/roster/assignments/problems). Assignments come  back with derived point totals and submission/comment counts; problems are  tagged with whether an assignment uses them; the roster is flattened into a  single `enrolled` array, and the caller's own course role is included. Access is  restricted: any enrolled member of the course (any role) or a system admin.
          *
-         *     **Auth:** requires STUDENT / FACULTY
+         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
          */
@@ -1158,7 +1434,7 @@ export interface paths {
          * Update a course
          * @description Updates a course's details and, when `instructorIds` is supplied, reconciles its  faculty roster (adds, promotes, or removes to match the desired set). Runs the  same archive/unpublish safety checks as the dedicated toggles, requires a  registration window, and records a before→after diff of changed fields.  Course staff (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires STUDENT / FACULTY
+         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
          */
@@ -1166,9 +1442,9 @@ export interface paths {
         post?: never;
         /**
          * Delete a course
-         * @description Permanently deletes a course. Course staff (faculty or TAs) or a system admin,  and the course must already  be archived — a guard against deleting a live course. The archived requirement  is enforced both up front and again in the delete's `where` clause.
+         * @description Deletes a course (system admin only). An **empty** course — no assignments, no  problems, no student enrollments, and no submissions — is removed permanently  (its staff-only roster cascades away; audit logs keep a nulled course pointer).  Any course that holds real work or students is **soft-deleted** instead: the row  and all its data are retained but `deletedAt` is stamped so the access gates and  list queries treat it as gone (recoverable later). The response says which  happened via `{ deleted: 'hard' | 'soft' }`.
          *
-         *     **Auth:** requires STUDENT / FACULTY
+         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
          */
@@ -1277,7 +1553,7 @@ export interface paths {
         };
         /**
          * List all courses
-         * @description Returns every course with its roster and assignment metadata for the dashboard. This endpoint performs no authentication or authorization — any caller receives the full course list and roster names.
+         * @description Returns every course with its roster and assignment metadata. System administrators only — the payload spans all courses and includes every member's identity and each course's registration code.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/route.ts)
          */
@@ -1285,7 +1561,7 @@ export interface paths {
         put?: never;
         /**
          * Create a course
-         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. Datetime-local  strings are interpreted in the actor's effective timezone before being stored  as UTC.
+         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. A new course is  always created unpublished — publishing is a separate action — and requires at  least one faculty member. Datetime-local strings are interpreted in the course's  timezone before being stored as UTC.
          *
          *     **Auth:** requires FACULTY
          *
@@ -1355,7 +1631,7 @@ export interface paths {
         };
         /**
          * Get a problem file
-         * @description Serves a problem's attached file, inline. Any enrolled member of the problem's  course (any role) or a system admin may fetch it. The download is audited, and  traversal filenames are rejected.
+         * @description Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system  admin only** — a problem file is the autograder's answer/solution key, so a student  must never receive it (same sensitivity as a solution file). The download is audited,  and traversal filenames are rejected.
          *
          *     **Auth:** required
          *
@@ -1562,28 +1838,6 @@ export interface paths {
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/route.ts)
          */
         post: operations["postMe"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/public/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Verify login credentials
-         * @description Verifies email/password credentials and returns the matching user's public  profile. This only checks credentials and records the attempt in the audit  log — it does not establish a session (NextAuth owns the session cookie).  Every failure path returns the same generic "Invalid credentials" to avoid  revealing which part was wrong.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/public/login/route.ts)
-         */
-        post: operations["postPublicLogin"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2086,6 +2340,8 @@ export interface operations {
                         timezone?: string;
                         maxUploadSizeMb?: number;
                         allowSignup?: boolean;
+                        /** @description Comma-separated email-domain allow-list; blank = any */
+                        signupAllowedDomains?: string;
                         sessionTimeoutMinutes?: number;
                         submissionEvalTimeoutMs?: number;
                         submissionEvalMaxMemoryMb?: number;
@@ -2315,7 +2571,115 @@ export interface operations {
             };
         };
     };
-    deleteAdminStatusAbandonedFiles: {
+    getAdminStatusDatabase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DB health, details, and engine stats. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusDocker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Container info, or { docker: null } when not containerized. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Orphaned-upload counts and samples. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAdminStatusFiles: {
         parameters: {
             query?: never;
             header?: never;
@@ -2338,13 +2702,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": {
-                        ok?: boolean;
-                    };
-                };
+                content?: never;
             };
-            /** @description Unknown category, unsafe filename, or path outside the category folder. */
+            /** @description Unknown category, unsafe filename, or path outside the folder. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2362,7 +2722,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not a system administrator. */
+            /** @description Not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2400,37 +2760,21 @@ export interface operations {
             };
         };
     };
-    getAdminStatus: {
+    getAdminStatusNetwork: {
         parameters: {
-            query?: {
-                /** @description Set to "1" to include the most expensive probes (e.g. Postgres top-queries). */
-                deep?: "1";
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description A best-effort diagnostic snapshot (fields vary by DB engine and environment). */
+            /** @description Upstream connectivity probes and error-rate summaries. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": {
-                        /** @description Host and process metrics */
-                        system?: Record<string, never>;
-                        /** @description Reachability, engine details, and stats */
-                        database?: Record<string, never>;
-                        /** @description Public vars plus masked key/length summary */
-                        env?: Record<string, never>;
-                        /** @description Optional row counts and tool versions */
-                        app?: Record<string, never>;
-                        /** @description Detected DB provider and request latency */
-                        metrics?: Record<string, never>;
-                    };
-                };
+                content?: never;
             };
             /** @description Not signed in. */
             401: {
@@ -2441,7 +2785,115 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not a system administrator. */
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server metrics and software versions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active sessions and rolling counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cross-cutting summary numbers for the status cards. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2816,6 +3268,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Too many checks from this IP; retry after the Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     postAuthSignup: {
@@ -2890,6 +3351,400 @@ export interface operations {
                 };
             };
             /** @description Too many attempts; retry after the Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postClientV1AuthLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    email: string;
+                    password: string;
+                    /** @description Optional label to identify this token */
+                    deviceName?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A bearer token and the signed-in user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        token?: string;
+                        expiresAt?: string;
+                        user?: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Missing or malformed fields. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid email or password. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many attempts; retry after the Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postClientV1AuthLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Token revoked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1AuthMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The token is valid; returns the signed-in user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        user?: Record<string, never>;
+                        /** @description When the (sliding) token expires */
+                        expiresAt?: string | null;
+                    };
+                };
+            };
+            /** @description Missing, expired, or revoked token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1CoursesByCourseIdAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                courseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignments, each with its problems. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        assignments?: Record<string, never>[];
+                    };
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found or not accessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1Courses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's courses. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        courses?: Record<string, never>[];
+                    };
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1SubmissionsBySubmissionId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submissionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The submission's status and (when done) result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        status?: string;
+                        correct?: boolean | null;
+                        grade?: number | null;
+                        /** @description The witness / counterexample */
+                        feedback?: string | null;
+                    };
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Submission not found or not visible to the caller. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1Submissions: {
+        parameters: {
+            query: {
+                assignmentId: string;
+                problemId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's attempts for the problem, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        submissions?: Record<string, never>[];
+                    };
+                };
+            };
+            /** @description Missing assignmentId or problemId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postClientV1Submissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    assignmentId: string;
+                    problemId: string;
+                    /**
+                     * Format: binary
+                     * @description The solution file (XML)
+                     */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Submission accepted and queued (status PENDING). */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing fields, unlinked problem, or invalid file structure. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not enrolled, or the late policy rejected it. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Per-problem submission limit reached. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description File exceeds the system upload limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Resubmit cooldown in effect (see Retry-After). */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -3018,7 +3873,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not allowed to delete this comment. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3154,7 +4009,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not course faculty or a system admin (TAs excluded), or archiving is blocked by the safety check. */
+            /** @description Not an admin, or archiving is blocked by the safety check. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4406,7 +5261,7 @@ export interface operations {
                 "application/json": {
                     title: string;
                     description?: string;
-                    /** @description Interpreted as end-of-day in the actor's timezone */
+                    /** @description Interpreted as end-of-day in the course's timezone */
                     dueDate?: string;
                     allowLateSubmissions?: boolean;
                     /** @description Required when allowLateSubmissions is true */
@@ -4493,6 +5348,8 @@ export interface operations {
                     copyProblems?: boolean;
                     copyFaculty?: boolean;
                     copyTAs?: boolean;
+                    /** @description Additional faculty for the copy. Combined with copyFaculty, the result must include at least one faculty member. */
+                    instructorIds?: string[];
                 };
             };
         };
@@ -4509,7 +5366,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Missing fields, bad credits, bad code, or invalid dates. */
+            /** @description Missing fields, bad credits, bad code, invalid dates, or no faculty for the copy. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4855,6 +5712,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Missing userId, or the user isn't enrolled in the course. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not signed in. */
             401: {
                 headers: {
@@ -4875,15 +5741,6 @@ export interface operations {
             };
             /** @description Group not found in this course. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing userId, or the user isn't enrolled in the course. */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4934,6 +5791,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description Missing members array, or some users aren't enrolled. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not signed in. */
             401: {
                 headers: {
@@ -4954,15 +5820,6 @@ export interface operations {
             };
             /** @description Group not found in this course. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing members array, or some users aren't enrolled. */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5084,6 +5941,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Missing name. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not signed in. */
             401: {
                 headers: {
@@ -5113,15 +5979,6 @@ export interface operations {
             };
             /** @description Name already used by another group in the course. */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing name. */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5214,6 +6071,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Missing group name. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not signed in. */
             401: {
                 headers: {
@@ -5243,15 +6109,6 @@ export interface operations {
             };
             /** @description A group with that name already exists in the course. */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing group name. */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5631,7 +6488,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not course faculty or a system admin (TAs excluded), or unpublishing is blocked by the safety check. */
+            /** @description Not course staff or a system admin, or unpublishing is blocked by the safety check. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6130,12 +6987,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Course deleted. */
+            /** @description Course deleted; body reports whether it was a hard or soft delete. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        deleted?: "hard" | "soft";
+                    };
+                };
             };
             /** @description Not signed in. */
             401: {
@@ -6146,8 +7008,17 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not course staff (faculty or TAs) or a system admin, or the course is not archived. */
+            /** @description Not a system admin (logged as a security event). */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6407,6 +7278,24 @@ export interface operations {
                     "application/json": Record<string, never>[];
                 };
             };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description System administrators only. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Server error. */
             500: {
                 headers: {
@@ -6440,22 +7329,21 @@ export interface operations {
                     registrationOpenAt: string;
                     /** @description datetime-local string */
                     registrationCloseAt: string;
-                    isPublished?: boolean;
-                    instructorIds?: string[];
-                    facultyIds?: string[];
+                    /** @description Faculty to seed the roster; at least one is required. */
+                    instructorIds: string[];
                     emptyStringNotation?: string;
                 };
             };
         };
         responses: {
-            /** @description Course created; returns the course with its `enrolled` roster. */
+            /** @description Course created (always unpublished); returns the course with its `enrolled` roster. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Missing registration window, or Zod validation failed. */
+            /** @description Missing registration window, no faculty, or Zod validation failed. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6633,7 +7521,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not an enrolled member of the problem's course or a system admin. */
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7167,67 +8055,6 @@ export interface operations {
             };
         };
     };
-    postPublicLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    email: string;
-                    password: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Credentials are valid; returns the user's public fields. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        user?: {
-                            id?: string;
-                            email?: string;
-                            firstName?: string;
-                            lastName?: string;
-                        };
-                    };
-                };
-            };
-            /** @description Email or password missing. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Invalid credentials, or the account is inactive. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     postSessionExtend: {
         parameters: {
             query?: never;
@@ -7393,6 +8220,15 @@ export interface operations {
             };
             /** @description Assignment not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Per-problem submission limit reached. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

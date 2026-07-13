@@ -63,8 +63,10 @@ describe('apiPaths', () => {
   it('builds admin paths', () => {
     expect(apiPaths.admin.users()).toBe('/api/admin/users');
     expect(apiPaths.admin.users({ role: 'FACULTY' })).toBe('/api/admin/users?role=FACULTY');
-    expect(apiPaths.admin.status()).toBe('/api/admin/status');
-    expect(apiPaths.admin.status({ deep: true })).toBe('/api/admin/status?deep=1');
+    expect(apiPaths.admin.statusSummary()).toBe('/api/admin/status/summary');
+    expect(apiPaths.admin.statusServer()).toBe('/api/admin/status/server');
+    expect(apiPaths.admin.statusDatabase()).toBe('/api/admin/status/database');
+    expect(apiPaths.admin.statusFiles()).toBe('/api/admin/status/files');
     expect(apiPaths.admin.logsExportFields()).toBe('/api/admin/logs/export/fields');
   });
 

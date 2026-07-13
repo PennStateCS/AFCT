@@ -8,9 +8,6 @@ const prismaMock = vi.hoisted(() => ({
   roster: {
     findFirst: vi.fn(),
   },
-  assignmentProblem: {
-    findFirst: vi.fn(),
-  },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -43,8 +40,6 @@ import { GET } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
-  // Default: the problem is linked to a published assignment (students may fetch).
-  prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
 });
 
 describe('GET /api/files/problems/[file]', () => {
@@ -148,7 +143,7 @@ describe('GET /api/files/problems/[file]', () => {
     expect(res.status).toBe(200);
   });
 
-  it('allows enrolled student to download file', async () => {
+  it('denies an enrolled student — a problem file is the answer key (staff-only)', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
@@ -156,6 +151,7 @@ describe('GET /api/files/problems/[file]', () => {
       fileName: 'file.txt',
       originalFileName: 'original.txt',
     });
+    // Even a fully-enrolled student in a published course is denied.
     prismaMock.roster.findFirst.mockResolvedValue({
       role: 'STUDENT',
       course: { isPublished: true },
@@ -166,29 +162,16 @@ describe('GET /api/files/problems/[file]', () => {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
-    expect(res.status).toBe(200);
-  });
-
-  it('404-masks a problem file with no published assignment from a student', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
-    prismaMock.problem.findFirst.mockResolvedValue({
-      id: 'problem-1',
-      courseId: 'course-1',
-      fileName: 'file.txt',
-      originalFileName: 'original.txt',
-    });
-    prismaMock.roster.findFirst.mockResolvedValue({
-      role: 'STUDENT',
-      course: { isPublished: true },
-    });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null); // not in any published assignment
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-
-    const res = await GET(new Request('http://localhost/api/files/problems/file.txt'), {
-      params: Promise.resolve({ file: 'file.txt' }),
-    });
-
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'PROBLEM_FILE_DOWNLOAD_DENIED',
+        severity: 'SECURITY',
+        courseId: 'course-1',
+      }),
+    );
   });
 
   it('returns 404 when file not on disk', async () => {

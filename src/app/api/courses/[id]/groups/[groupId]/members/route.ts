@@ -1,7 +1,18 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+import { logError } from '@/lib/api/activity';
+
+const AddMemberBody = z.object({ userId: z.string().trim().min(1) });
+const SetMembersBody = z.object({ members: z.array(z.string()) });
+
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; groupId: string }> };
 
 /**
  * Lists a group's members, oldest first. Course staff (faculty or TAs) or a system
@@ -23,7 +34,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *   500: { description: Server error. }
  */
 export const GET = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { groupId } = await ctx.params;
 
     if (!groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
@@ -47,6 +58,7 @@ export const GET = withCourseAuth(
         action: 'VIEW_GROUP_MEMBERS',
         severity: 'INFO',
         category: 'COURSE',
+        courseId,
         metadata: { courseId, groupId },
       });
 
@@ -77,19 +89,19 @@ export const GET = withCourseAuth(
  *   401: { description: Not signed in. }
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
- *   422: { description: "Missing userId, or the user isn't enrolled in the course." }
+ *   400: { description: "Missing userId, or the user isn't enrolled in the course." }
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { groupId } = await ctx.params;
 
     if (!groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
 
     try {
-      const body = await req.json();
-      const userId = (body.userId ?? '').trim();
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 422 });
+      const parsed = await readJson(req, AddMemberBody);
+      if (!parsed.ok) return parsed.response;
+      const { userId } = parsed.data;
 
       // Ensure group + course consistency
       const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -101,7 +113,7 @@ export const POST = withCourseAuth(
         where: { courseId_userId: { courseId, userId } },
       });
       if (!rosterEntry)
-        return NextResponse.json({ error: 'User is not enrolled in course' }, { status: 422 });
+        return NextResponse.json({ error: 'User is not enrolled in course' }, { status: 400 });
 
       // Create or update group roster entry (skip duplicates)
       await prisma.groupRoster.upsert({
@@ -115,22 +127,23 @@ export const POST = withCourseAuth(
         action: 'ADD_GROUP_MEMBER',
         severity: 'INFO',
         category: 'COURSE',
-        metadata: { courseId, groupId, userId },
+        courseId,
+        metadata: { courseId, groupId, targetUserId: userId },
       });
 
       return NextResponse.json({ success: true }, { status: 201 });
     } catch (err) {
       console.error('[GROUP_MEMBERS_POST_ERROR]', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GROUP_MEMBER_ADD_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_MEMBER_ADD_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_MEMBER_ADD_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -165,17 +178,17 @@ export const POST = withCourseAuth(
  *   401: { description: Not signed in. }
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
- *   422: { description: "Missing members array, or some users aren't enrolled." }
+ *   400: { description: "Missing members array, or some users aren't enrolled." }
  *   500: { description: Server error. }
  */
 export const PATCH = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { groupId } = await ctx.params;
 
     try {
-      const body = (await req.json()) as { members?: unknown };
-      const members = Array.isArray(body?.members) ? (body.members as unknown[]).map(String) : null;
-      if (!members) return NextResponse.json({ error: 'Missing members array' }, { status: 422 });
+      const parsed = await readJson(req, SetMembersBody);
+      if (!parsed.ok) return parsed.response;
+      const members = parsed.data.members;
 
       // Ensure group exists and belongs to course
       const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -193,7 +206,7 @@ export const PATCH = withCourseAuth(
         if (invalid.length > 0)
           return NextResponse.json(
             { error: 'Some users are not enrolled in course', invalid },
-            { status: 422 },
+            { status: 400 },
           );
       }
 
@@ -223,20 +236,21 @@ export const PATCH = withCourseAuth(
         action: 'SET_GROUP_MEMBERS',
         severity: 'INFO',
         category: 'COURSE',
+        courseId,
         metadata: { courseId, groupId, added: toAdd, removed: toRemove },
       });
 
       return NextResponse.json({ success: true, added: toAdd, removed: toRemove });
     } catch (err) {
       console.error('PATCH /api/courses/[id]/groups/[groupId]/members error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GROUP_MEMBERS_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_MEMBERS_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_MEMBERS_UPDATE_DENIED', blockWhenArchived: true },
 );

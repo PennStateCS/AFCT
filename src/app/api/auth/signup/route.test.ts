@@ -69,6 +69,59 @@ describe('POST /api/auth/signup', () => {
     expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
 
+  it('rejects an email whose domain is not in the allow-list (403, no user created)', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      id: 1,
+      allowSignup: true,
+      signupAllowedDomains: 'psu.edu,example.edu',
+    });
+
+    const req = new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@gmail.com',
+        password: 'Strong1!a',
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'SIGNUP_DOMAIN_REJECTED' }),
+    );
+  });
+
+  it('allows an email whose domain is in the allow-list', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      id: 1,
+      allowSignup: true,
+      signupAllowedDomains: 'psu.edu,example.edu',
+    });
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({ id: 'u1', email: 'ada@psu.edu' });
+
+    const req = new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        firstName: 'Ada',
+        lastName: 'L',
+        email: 'ada@PSU.edu',
+        password: 'Strong1!a',
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.user.create).toHaveBeenCalled();
+  });
+
   it('returns 400 when required fields missing', async () => {
     const req = new Request('http://localhost/api/auth/signup', {
       method: 'POST',

@@ -28,10 +28,20 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+function CardTitle({
+  className,
+  role = "heading",
+  "aria-level": ariaLevel = 3,
+  ...props
+}: React.ComponentProps<"div">) {
+  // Card titles are headings by default so the page keeps a real heading outline
+  // for screen readers. Callers can override role/aria-level (many already pass
+  // their own level); this changes no rendered pixels.
   return (
     <div
       data-slot="card-title"
+      role={role}
+      aria-level={role === "heading" ? ariaLevel : undefined}
       className={cn("leading-none font-semibold", className)}
       {...props}
     />

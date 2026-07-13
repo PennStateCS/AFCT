@@ -1,12 +1,14 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CourseHeader } from './CourseHeader';
 import type { FullCourse } from '@/types/course';
+
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('@/lib/toast', () => ({ showToast: toastMock }));
 
 vi.mock('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -36,8 +38,12 @@ const mockCourse: FullCourse = {
   registrationCloseAt: new Date('2025-08-15T13:00:00Z'),
   isPublished: true,
   isArchived: false,
+  deletedAt: null,
+  timezone: 'America/New_York',
   emptyStringNotation: 'EPSILON',
   regCode: 'abc123',
+  createdAt: new Date('2025-06-01T13:00:00Z'),
+  updatedAt: new Date('2025-06-01T13:00:00Z'),
   problems: [],
   assignments: [],
   enrolled: [
@@ -58,71 +64,58 @@ const mockCourse: FullCourse = {
   ],
 };
 
-const onEditClick = vi.fn();
-const onPublishToggle = vi.fn();
-const onArchiveToggle = vi.fn();
-
-beforeEach(() => {
-  onEditClick.mockReset();
-  onPublishToggle.mockReset();
-  onArchiveToggle.mockReset();
-});
-
 describe('CourseHeader', () => {
-  it('renders course metadata and staff info for instructors', () => {
-    render(
-      <CourseHeader
-        course={mockCourse}
-        isStudent={false}
-        onEditClick={onEditClick}
-        onPublishToggle={onPublishToggle}
-        onArchiveToggle={onArchiveToggle}
-      />,
-    );
+  it('renders course metadata, status, and staff info for instructors', () => {
+    render(<CourseHeader course={mockCourse} isStudent={false} />);
 
     expect(screen.getByText(/CMPSC 431/)).toBeInTheDocument();
     expect(screen.getByText('Software Engineering')).toBeInTheDocument();
     expect(screen.getByText('Fall 2025')).toBeInTheDocument();
     expect(screen.getByText('3 credits')).toBeInTheDocument();
+    // Course status badge lives next to the metadata badges.
+    expect(screen.getByText(/^(Open|Upcoming|Closed)$/)).toBeInTheDocument();
+    // Faculty/TA line is instructor-only.
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit Course' })).toBeInTheDocument();
   });
 
-  it('hides instructor actions for students', () => {
-    render(
-      <CourseHeader
-        course={mockCourse}
-        isStudent
-        onEditClick={onEditClick}
-        onPublishToggle={onPublishToggle}
-        onArchiveToggle={onArchiveToggle}
-      />,
-    );
+  it('hides the staff/date line for students', () => {
+    render(<CourseHeader course={mockCourse} isStudent />);
 
-    expect(screen.queryByRole('button', { name: 'Edit Course' })).toBeNull();
+    // Title and badges still render, but the faculty/TA line does not.
+    expect(screen.getByText('Software Engineering')).toBeInTheDocument();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
   });
 
-  it('calls the appropriate callbacks when toggles and actions are used', async () => {
-    const user = userEvent.setup();
+  it('omits the TAs label when the course has no TAs', () => {
+    render(<CourseHeader course={mockCourse} isStudent={false} />);
+    expect(screen.queryByText('TAs:')).not.toBeInTheDocument();
+  });
 
-    render(
-      <CourseHeader
-        course={mockCourse}
-        isStudent={false}
-        onEditClick={onEditClick}
-        onPublishToggle={onPublishToggle}
-        onArchiveToggle={onArchiveToggle}
-      />,
-    );
+  it('lists TAs when the course has some', () => {
+    const withTa: FullCourse = {
+      ...mockCourse,
+      enrolled: [
+        ...mockCourse.enrolled,
+        { id: 'ta-1', firstName: 'Alan', lastName: 'Turing', role: 'STUDENT', courseRole: 'TA' },
+      ],
+    };
+    render(<CourseHeader course={withTa} isStudent={false} />);
+    expect(screen.getByText('TAs:')).toBeInTheDocument();
+    expect(screen.getByText('Alan Turing')).toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Edit Course' }));
-    expect(onEditClick).toHaveBeenCalledTimes(1);
+  it('shows the join code formatted and copies the plain code', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
 
-    const switches = screen.getAllByRole('switch');
-    await user.click(switches[0]);
-    await user.click(switches[1]);
+    render(<CourseHeader course={mockCourse} isStudent={false} />);
 
-    expect(onPublishToggle).toHaveBeenCalled();
-    expect(onArchiveToggle).toHaveBeenCalled();
+    // Displayed grouped as ABC-123 for readability.
+    expect(screen.getByText('ABC-123')).toBeInTheDocument();
+
+    // Copies the plain 6-character code the join endpoint expects.
+    fireEvent.click(screen.getByRole('button', { name: /copy join code/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('ABC123'));
+    expect(toastMock.success).toHaveBeenCalled();
   });
 });

@@ -28,6 +28,7 @@ import { POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
   validateMock.mockReturnValue({ isValid: true });
 });
@@ -111,6 +112,27 @@ describe('POST /api/courses/[id]/problems', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const formData = new FormData();
+    formData.set('title', 'Problem');
+    formData.set('type', 'FA');
+    formData.set('file', new File([new Uint8Array([1])], 'file.jff'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/problems', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.problem.create).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when the solution file fails structure validation', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
@@ -130,6 +152,23 @@ describe('POST /api/courses/[id]/problems', () => {
 
     expect(res.status).toBe(400);
     expect(prismaMock.problem.create).not.toHaveBeenCalled();
+    // This is problem creation, not a student submission: the audit event uses the
+    // PROBLEM action/category, and carries no assignmentId (problems aren't
+    // assignment-scoped at creation).
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'PROBLEM_INVALID_FILE_STRUCTURE',
+        category: 'PROBLEM',
+        courseId: 'c1',
+      }),
+    );
+    const invalidLog = activityLogMock.mock.calls.find(
+      (c) => c[2]?.action === 'PROBLEM_INVALID_FILE_STRUCTURE',
+    );
+    expect(invalidLog?.[2]).not.toHaveProperty('assignmentId');
+    expect(invalidLog?.[2]?.metadata).not.toHaveProperty('assignmentId');
   });
 
   it('returns 413 when the file exceeds the upload limit', async () => {
@@ -176,7 +215,11 @@ describe('POST /api/courses/[id]/problems', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      expect.objectContaining({ action: 'PROBLEM_CREATE_ERROR', severity: 'ERROR' }),
+      expect.objectContaining({
+        action: 'PROBLEM_CREATE_ERROR',
+        severity: 'ERROR',
+        courseId: 'c1',
+      }),
     );
   });
 });

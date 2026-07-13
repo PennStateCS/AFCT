@@ -93,6 +93,7 @@ const baseAssignment: Assignment = {
   description: 'Old description',
   dueDate: new Date('2026-09-01T23:59:00Z'),
   isPublished: false,
+  isGroup: false,
   allowLateSubmissions: true,
   lateCutoff: null,
   createdAt: new Date('2026-01-01T00:00:00Z'),

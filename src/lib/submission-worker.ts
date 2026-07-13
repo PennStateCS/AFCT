@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { SubmissionStatus } from "@prisma/client";
+import type { SubmissionStatus } from '@prisma/client';
 
 import fs from 'fs';
 import path from 'path';
@@ -120,7 +120,7 @@ async function logQueueEvent(
 export function startSubmissionWorker() {
   // Worker already started
   if (workerStarted) {
-    console.error("[SubmissionWorker] Already started");
+    console.error('[SubmissionWorker] Already started');
     return;
   }
   workerStarted = true;
@@ -133,9 +133,8 @@ export function startSubmissionWorker() {
   // Start the reaper that recovers submissions left PROCESSING by a crash/restart
   void reapStuckSubmissions();
 
-  console.log("[SubmissionWorker] Started safely");
+  console.log('[SubmissionWorker] Started safely');
 }
-
 
 // Spawn loops until we're running `desiredWorkers` of them. Scaling down is
 // handled by each loop retiring itself (see runWorkerLoop).
@@ -146,6 +145,12 @@ function ensureWorkers() {
   }
 }
 
+// Re-schedule a self-managing async task (each handles its own errors internally),
+// marking the promise as intentionally not awaited so setTimeout's void-return
+// contract is honored.
+function scheduleAsync(task: () => Promise<void>, ms: number): void {
+  setTimeout(() => void task(), ms);
+}
 
 // Periodically pull the queue settings so concurrency / attempt limits can be
 // changed at runtime. On any error we keep the last known values.
@@ -158,10 +163,9 @@ async function refreshQueueSettings() {
   } catch (error) {
     console.error('[SubmissionWorker] Settings refresh error:', error);
   } finally {
-    setTimeout(refreshQueueSettings, SETTINGS_REFRESH_MS);
+    scheduleAsync(refreshQueueSettings, SETTINGS_REFRESH_MS);
   }
 }
-
 
 // Recover submissions stuck in PROCESSING (e.g. the server died mid-evaluation)
 // by returning them to PENDING so another worker can pick them up. The attempts
@@ -188,10 +192,9 @@ async function reapStuckSubmissions() {
       error: error instanceof Error ? error.message : String(error),
     });
   } finally {
-    setTimeout(reapStuckSubmissions, REAP_INTERVAL_MS);
+    scheduleAsync(reapStuckSubmissions, REAP_INTERVAL_MS);
   }
 }
-
 
 async function runWorkerLoop() {
   // Scale down: if concurrency was lowered, retire this loop.
@@ -217,16 +220,13 @@ async function runWorkerLoop() {
         // Only add the filter when we have ids — an empty notIn is a Prisma footgun.
         ...(busyStudentIds.length ? { studentId: { notIn: busyStudentIds } } : {}),
       },
-      orderBy: [
-        { assignmentProblem: { assignment: { dueDate: 'asc' } } },
-        { submittedAt: 'asc' },
-      ],
-      select: { id: true, attempts: true }
+      orderBy: [{ assignmentProblem: { assignment: { dueDate: 'asc' } } }, { submittedAt: 'asc' }],
+      select: { id: true, attempts: true },
     });
 
     // No work to be done
     if (nextSubmission === null) {
-      setTimeout(runWorkerLoop, 3_000); // Larger sleep bececause there is no rush
+      scheduleAsync(runWorkerLoop, 3_000); // Larger sleep bececause there is no rush
       return;
     }
 
@@ -244,7 +244,13 @@ async function runWorkerLoop() {
       if (failed.count > 0) {
         const info = await prisma.submission.findUnique({
           where: { id: nextSubmission.id },
-          select: { id: true, studentId: true, courseId: true, assignmentId: true, problemId: true },
+          select: {
+            id: true,
+            studentId: true,
+            courseId: true,
+            assignmentId: true,
+            problemId: true,
+          },
         });
         if (info) {
           await logSubmissionActivity(info, 'SUBMISSION_FAILED_PERMANENTLY', 'ERROR', {
@@ -253,7 +259,7 @@ async function runWorkerLoop() {
           });
         }
       }
-      setTimeout(runWorkerLoop, 100);
+      scheduleAsync(runWorkerLoop, 100);
       return;
     }
 
@@ -261,12 +267,12 @@ async function runWorkerLoop() {
     // PROCESSING in a single statement, so only one worker can win it.
     const claimed = await prisma.submission.updateMany({
       where: { id: nextSubmission.id, status: 'PENDING' },
-      data: { status: 'PROCESSING', attempts: { increment: 1 } }
+      data: { status: 'PROCESSING', attempts: { increment: 1 } },
     });
 
     // count === 0 means another loop/instance beat us to it. Move on.
     if (claimed.count === 0) {
-      setTimeout(runWorkerLoop, 100); // Small sleep because it could be full
+      scheduleAsync(runWorkerLoop, 100); // Small sleep because it could be full
       return;
     }
 
@@ -275,18 +281,17 @@ async function runWorkerLoop() {
     await evaluateSubmission(nextSubmission.id);
 
     // Move to next check
-    setTimeout(runWorkerLoop, 100); // Small sleep as code ran and could be full
+    scheduleAsync(runWorkerLoop, 100); // Small sleep as code ran and could be full
     return;
   } catch (error) {
-    console.error("[SubmissionWorker] Database or loop error:", error);
+    console.error('[SubmissionWorker] Database or loop error:', error);
     await logQueueEvent('SUBMISSION_QUEUE_ERROR', 'ERROR', {
       error: error instanceof Error ? error.message : String(error),
     });
-    setTimeout(runWorkerLoop, 5_000); // Super long sleep due to error
+    scheduleAsync(runWorkerLoop, 5_000); // Super long sleep due to error
     return;
   }
 }
-
 
 async function evaluateSubmission(id: string) {
   let submission: WorkerSubmission | null = null;
@@ -314,7 +319,10 @@ async function evaluateSubmission(id: string) {
       data: {
         feedback: evaluation.feedback,
         correct: evaluation.correct,
-        evaluationRaw: evaluation.evaluationRaw === null ? Prisma.JsonNull : (evaluation.evaluationRaw as Prisma.InputJsonValue),
+        evaluationRaw:
+          evaluation.evaluationRaw === null
+            ? Prisma.JsonNull
+            : (evaluation.evaluationRaw as Prisma.InputJsonValue),
         status: evaluation.status,
       },
     });
@@ -391,7 +399,6 @@ async function evaluateSubmission(id: string) {
   }
 }
 
-
 // Internal worker steps, exposed for unit tests only. Not part of the module's
 // public API — production code drives the queue via startSubmissionWorker().
 export const __test__ = {
@@ -423,7 +430,6 @@ function getJavaRunnerCtor() {
   };
 }
 
-
 function createJavaRunner(jarPath: string) {
   const JavaRunnerCtor = getJavaRunnerCtor();
   try {
@@ -452,7 +458,6 @@ function createJavaRunner(jarPath: string) {
     };
   }
 }
-
 
 async function runJavaEvaluator(
   submission: WorkerSubmission,
@@ -501,10 +506,9 @@ async function runJavaEvaluator(
 
     if (!isDocker && os.platform() === 'win32') {
       // Windows local development: Count lines
-      const result = execSync(
-        `powershell -Command "(Get-Content '${uploadedFilePath}').Count"`,
-        { encoding: 'utf-8' },
-      );
+      const result = execSync(`powershell -Command "(Get-Content '${uploadedFilePath}').Count"`, {
+        encoding: 'utf-8',
+      });
       feedback = `File has ${result.trim()} lines (Windows).`;
     } else {
       // Docker/Linux: Use afct-evaluator.jar with JavaRunner
@@ -536,7 +540,10 @@ async function runJavaEvaluator(
             const args = ['--json', answerFilePath, uploadedFilePath];
 
             // Add optional arguments based on problem type
-            if (submission.assignmentProblem.problem.type === 'FA' || submission.assignmentProblem.problem.type === 'PDA') {
+            if (
+              submission.assignmentProblem.problem.type === 'FA' ||
+              submission.assignmentProblem.problem.type === 'PDA'
+            ) {
               const maxStates = submission.assignmentProblem.problem.maxStates ?? -1;
               args.push(maxStates.toString());
 
@@ -617,7 +624,8 @@ async function runJavaEvaluator(
             }
           } catch (evaluatorErr) {
             status = 'FAILED';
-            const errorMessage = evaluatorErr instanceof Error ? evaluatorErr.message : String(evaluatorErr);
+            const errorMessage =
+              evaluatorErr instanceof Error ? evaluatorErr.message : String(evaluatorErr);
             await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
               error: errorMessage,
             });

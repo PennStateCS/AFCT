@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import SubmissionsClient from './SubmissionsClient';
@@ -206,6 +206,39 @@ describe('SubmissionsClient', () => {
     releaseSubmissions?.();
     await waitFor(() => {
       expect(screen.getByText('ada@example.com')).toBeInTheDocument();
+    });
+  });
+
+  it('marks the All filter pressed by default and announces the result count', async () => {
+    installFetchRouter();
+    renderWithClient(<SubmissionsClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Correct' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    // The sr-only live region reports the visible count.
+    expect(screen.getByRole('status')).toHaveTextContent('1 submission');
+  });
+
+  it('toggling a status filter updates aria-pressed and the announced count', async () => {
+    installFetchRouter();
+    renderWithClient(<SubmissionsClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    // The single row is on-time + correct, so filtering to "Incorrect" hides it.
+    fireEvent.click(screen.getByRole('button', { name: 'Incorrect' }));
+
+    expect(screen.getByRole('button', { name: 'Incorrect' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false');
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('0 submissions');
+      expect(screen.queryByText('ada@example.com')).toBeNull();
     });
   });
 });

@@ -1,9 +1,9 @@
 'use client';
 
 // problem-columns.tsx
-import { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

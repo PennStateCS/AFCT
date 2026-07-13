@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
+  assignment: { findFirst: vi.fn() },
   group: { findMany: vi.fn(), findUnique: vi.fn() },
   groupAssignmentProblem: { findMany: vi.fn(), deleteMany: vi.fn() },
+  course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
 }));
 
@@ -19,6 +21,14 @@ import { GET, DELETE } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  // withAssignmentAuth resolves the assignment (and confirms it's in the course) here.
+  prismaMock.assignment.findFirst.mockResolvedValue({
+    id: 'a1',
+    courseId: 'c1',
+    isPublished: true,
+    isGroup: false,
+  });
   // clearAllMocks doesn't reset implementations, so drop any leaked mockRejectedValue.
   activityLogMock.mockReset();
 });
@@ -153,6 +163,21 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     expect(logArgs.action).toBe('REMOVE_GROUP_PROBLEMS');
     expect(logArgs.assignmentId).toBe('a1');
     expect(logArgs.metadata.problemIds).toEqual(['p1']);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
+      method: 'DELETE',
+      body: JSON.stringify({ problemIds: ['p1'], groupId: 'g1' }),
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) } as any);
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.groupAssignmentProblem.deleteMany).not.toHaveBeenCalled();
   });
 
   it('returns 400 for empty DELETE body', async () => {

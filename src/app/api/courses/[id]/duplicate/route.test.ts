@@ -32,6 +32,8 @@ describe('POST /api/courses/[id]/duplicate', () => {
     registrationOpenAt: '2024-12-01T09:00',
     registrationCloseAt: '2025-01-15T09:00',
     credits: 3,
+    // The copy must end up with at least one faculty member (no actor auto-add).
+    instructorIds: ['fac-1'],
   } as const;
   const makePayload = (overrides: Record<string, unknown> = {}) => ({
     ...basePayload,
@@ -159,7 +161,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       assignment: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
       assignmentProblem: { create: vi.fn() },
       problem: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
@@ -177,6 +179,35 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     expect(res.status).toBe(201);
     expect(tx.course.create).toHaveBeenCalled();
+    // A copy always starts fresh — never archived and never published — even when
+    // the source course is archived.
+    expect(tx.course.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ isArchived: false, isPublished: false }),
+      }),
+    );
+    // The explicit faculty list seeds the roster; the actor is NOT auto-added.
+    expect(tx.roster.createMany).toHaveBeenCalledWith({
+      data: [{ courseId: 'new-course', userId: 'fac-1', role: 'FACULTY' }],
+    });
+    expect(tx.roster.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when neither copyFaculty nor instructorIds provides faculty', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(makePayload({ instructorIds: [] })),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'Copy the faculty roster or pick at least one faculty member.',
+    });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it('duplicates with problems only mode', async () => {
@@ -187,7 +218,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       assignment: { findMany: vi.fn().mockResolvedValue([]) },
       problem: {
         findMany: vi
@@ -219,7 +250,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       assignment: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -263,6 +294,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
       roster: {
         create: vi.fn(),
+        createMany: vi.fn(),
         findMany: vi.fn().mockResolvedValue([
           { userId: 'u2', role: 'FACULTY' },
           { userId: 'u3', role: 'TA' },
@@ -278,14 +310,22 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
-      body: JSON.stringify(makePayload({ copyFaculty: true, copyTAs: true })),
+      body: JSON.stringify(
+        makePayload({ copyFaculty: true, copyTAs: true, instructorIds: [] }),
+      ),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(201);
-    // Should create roster for current user + 2 copied (faculty + TA)
-    expect(tx.roster.create).toHaveBeenCalledTimes(3);
+    // Copied faculty (u2) and TA (u3); the student (u4) and the actor are not added.
+    expect(tx.roster.createMany).toHaveBeenCalledWith({
+      data: [{ courseId: 'new-course', userId: 'u2', role: 'FACULTY' }],
+    });
+    expect(tx.roster.createMany).toHaveBeenCalledWith({
+      data: [{ courseId: 'new-course', userId: 'u3', role: 'TA' }],
+    });
+    expect(tx.roster.create).not.toHaveBeenCalled();
   });
 
   it('uses fallback timezone from system settings', async () => {
@@ -296,7 +336,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       assignment: { findMany: vi.fn().mockResolvedValue([]) },
       problem: { findMany: vi.fn().mockResolvedValue([]) },
     };
@@ -322,7 +362,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       assignment: {
         findMany: vi
           .fn()
@@ -383,7 +423,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       assignment: {
         findMany: vi
           .fn()
@@ -419,7 +459,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       assignment: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
       problem: {
         findMany: vi.fn().mockResolvedValue([{ id: 'p1', title: 'Problem 1' }]),
@@ -442,8 +482,8 @@ describe('POST /api/courses/[id]/duplicate', () => {
     expect(tx.assignment.create).not.toHaveBeenCalled();
   });
 
-  it('skips the actor when copying faculty and skips unmapped problem links', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+  it('dedups explicit faculty against the copied roster and skips unmapped problem links', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
@@ -452,11 +492,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
       roster: {
         create: vi.fn(),
-        // Includes the actor (u1) which must be skipped (already added as faculty).
-        findMany: vi.fn().mockResolvedValue([
-          { userId: 'u1', role: 'FACULTY' },
-          { userId: 'u2', role: 'FACULTY' },
-        ]),
+        createMany: vi.fn(),
+        // u2 is both copied (FACULTY on the source) and explicitly selected —
+        // they must get exactly one roster row.
+        findMany: vi.fn().mockResolvedValue([{ userId: 'u2', role: 'FACULTY' }]),
       },
       assignment: {
         findMany: vi.fn().mockResolvedValue([
@@ -484,15 +523,22 @@ describe('POST /api/courses/[id]/duplicate', () => {
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
       body: JSON.stringify(
-        makePayload({ copyMode: 'assignments_with_problems', copyFaculty: true }),
+        makePayload({
+          copyMode: 'assignments_with_problems',
+          copyFaculty: true,
+          instructorIds: ['u2', 'u9'],
+        }),
       ),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(201);
-    // Actor + one other faculty (u1 skipped as self) => 2 roster.create calls.
-    expect(tx.roster.create).toHaveBeenCalledTimes(2);
+    // One faculty createMany with the deduped pair (u2 once, plus u9).
+    expect(tx.roster.createMany).toHaveBeenCalledTimes(1);
+    const created = tx.roster.createMany.mock.calls[0][0].data;
+    expect(created).toHaveLength(2);
+    expect(created.map((r: { userId: string }) => r.userId).sort()).toEqual(['u2', 'u9']);
     // The unmapped problem link must be skipped.
     expect(tx.assignmentProblem.create).not.toHaveBeenCalled();
   });

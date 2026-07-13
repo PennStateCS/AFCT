@@ -5,6 +5,9 @@ export type CalendarAssignment = {
   title: string;
   courseId: string;
   dueDate: string | Date;
+  // Only ever `false` for a staff/admin viewer (students receive published-only).
+  // Absent is treated as published; `=== false` means an unpublished/draft entry.
+  isPublished?: boolean;
   course: {
     id: string;
     code: string;

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { routeCtx } from '@/test/route';
 
 const prismaMock = vi.hoisted(() => ({
   user: {
@@ -43,7 +44,7 @@ describe('GET /api/users', () => {
   it('returns 403 when unauthorized', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/users'));
+    const res = await GET(new Request('http://localhost/api/users'), routeCtx());
 
     expect(res.status).toBe(401);
   });
@@ -52,7 +53,7 @@ describe('GET /api/users', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     getUsersListMock.mockResolvedValue([{ id: 'u2', email: 'u2@example.com' }]);
 
-    const res = await GET(new Request('http://localhost/api/users'));
+    const res = await GET(new Request('http://localhost/api/users'), routeCtx());
 
     expect(res.status).toBe(200);
     expect(getUsersListMock).toHaveBeenCalledWith();
@@ -65,7 +66,7 @@ describe('GET /api/users', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     getUsersListMock.mockRejectedValue(new Error('Database error'));
 
-    const res = await GET(new Request('http://localhost/api/users'));
+    const res = await GET(new Request('http://localhost/api/users'), routeCtx());
 
     expect(res.status).toBe(500);
     const body = await res.json();
@@ -87,7 +88,7 @@ describe('POST /api/users', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(401);
   });
@@ -100,7 +101,7 @@ describe('POST /api/users', () => {
       body: JSON.stringify({ email: 'test@example.com' }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -118,7 +119,7 @@ describe('POST /api/users', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -136,7 +137,7 @@ describe('POST /api/users', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -155,7 +156,7 @@ describe('POST /api/users', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(409);
   });
@@ -175,7 +176,7 @@ describe('POST /api/users', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -196,7 +197,7 @@ describe('POST /api/users', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(201);
     expect(prismaMock.user.create).toHaveBeenCalled();
@@ -219,7 +220,7 @@ describe('POST /api/users', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(500);
     const body = await res.json();
