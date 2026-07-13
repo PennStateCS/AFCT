@@ -1563,7 +1563,7 @@ export interface paths {
          * Create a course
          * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. A new course is  always created unpublished — publishing is a separate action — and requires at  least one faculty member. Datetime-local strings are interpreted in the course's  timezone before being stored as UTC.
          *
-         *     **Auth:** requires FACULTY
+         *     **Auth:** requires FACULTY / TA
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/route.ts)
          */
