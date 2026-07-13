@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "public"."User" ADD COLUMN     "cropX" DOUBLE PRECISION,
+ADD COLUMN     "cropY" DOUBLE PRECISION,
+ADD COLUMN     "zoom" DOUBLE PRECISION;
