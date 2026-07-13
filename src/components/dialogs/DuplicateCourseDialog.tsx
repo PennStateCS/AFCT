@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
+import { CourseDateTimeField } from './CourseDateTimeField';
 
 function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
   const d = new Date(date);
@@ -388,68 +389,38 @@ export default function DuplicateCourseDialog({
             {step === 1 && (
               <>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="startDate"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="Start Date & Time"
-                        name="startDate"
-                        type="datetime-local"
-                        isValid={!!field.value}
-                        fieldProps={{ ...field, value: field.value ?? '' }}
-                        error={errors.startDate?.message as string | undefined}
-                      />
-                    )}
+                    label="Start Date & Time"
+                    error={errors.startDate?.message as string | undefined}
+                    showValidWhenSet
                   />
-
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="endDate"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="End Date & Time"
-                        name="endDate"
-                        type="datetime-local"
-                        isValid={!!field.value}
-                        fieldProps={{ ...field, value: field.value ?? '' }}
-                        error={errors.endDate?.message as string | undefined}
-                        min={startDateStr || undefined}
-                      />
-                    )}
+                    label="End Date & Time"
+                    error={errors.endDate?.message as string | undefined}
+                    min={startDateStr || undefined}
+                    showValidWhenSet
                   />
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="registrationOpenAt"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="Self Registration Opens"
-                        name="registrationOpenAt"
-                        type="datetime-local"
-                        isValid={!!field.value}
-                        fieldProps={{ ...field, value: field.value ?? '' }}
-                        error={errors.registrationOpenAt?.message as string | undefined}
-                      />
-                    )}
+                    label="Self Registration Opens"
+                    error={errors.registrationOpenAt?.message as string | undefined}
+                    showValidWhenSet
                   />
-
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="registrationCloseAt"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="Self Registration Closes"
-                        name="registrationCloseAt"
-                        type="datetime-local"
-                        isValid={!!field.value}
-                        fieldProps={{ ...field, value: field.value ?? '' }}
-                        error={errors.registrationCloseAt?.message as string | undefined}
-                        min={registrationOpenAtStr || undefined}
-                      />
-                    )}
+                    label="Self Registration Closes"
+                    error={errors.registrationCloseAt?.message as string | undefined}
+                    min={registrationOpenAtStr || undefined}
+                    showValidWhenSet
                   />
                 </div>
               </>
