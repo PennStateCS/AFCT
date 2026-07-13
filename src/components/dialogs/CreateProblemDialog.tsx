@@ -38,6 +38,7 @@ import { showToast } from '@/lib/toast';
 import FileUploadInput from '@/components/FileUploadInput';
 import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 import { apiPaths } from '@/lib/api-paths';
+import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { ProblemBasicFields } from '@/components/dialogs/ProblemBasicFields';
 
 // Helper: extract a string message for the file error without using `any`
@@ -251,56 +252,47 @@ export function CreateProblemDialog({
       }
 
       formData.append('file', values.file);
-      const res = await fetch(apiPaths.courseProblems(values.courseId), {
-        method: 'POST',
-        body: formData,
-      });
 
-      if (res.ok) {
-        const created = await res.json().catch(() => null);
-
-        // If we were opened in the context of an assignment, automatically add
-        // the created problem to that assignment (group assignment support is based on assignment.groupId)
-        if (created?.id && assignmentId) {
-          try {
-            const payload: { problemIds: string[]; groupId?: string } = {
-              problemIds: [created.id],
-            };
-            // If the assignment supports group assignments and a specific group
-            // was chosen (not 'ALL'), include the groupId. If 'ALL' is chosen,
-            // omit groupId to assign to all students.
-            if (assignmentIsGroup && selectedGroupId && selectedGroupId !== 'ALL') {
-              payload.groupId = selectedGroupId;
-            }
-
-            const ar = await fetch(apiPaths.assignmentProblems(courseId, assignmentId), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            });
-            if (!ar.ok) {
-              console.error('Failed to add created problem to assignment');
-            }
-          } catch (err) {
-            console.error('Failed to add created problem to assignment:', err);
+      let created: Problem | null = null;
+      try {
+        created = await apiClient.postForm<Problem>(
+          apiPaths.courseProblems(values.courseId),
+          formData,
+        );
+      } catch (err) {
+        if (err instanceof ApiError) {
+          console.error('Failed to create problem:', err.message);
+          // 4xx = validation/user error → show inline on the file field; 5xx → toast.
+          if (err.status >= 400 && err.status < 500) {
+            setError('file', { type: 'manual', message: err.message });
+          } else {
+            showToast.error(err.message);
           }
+          return;
         }
+        throw err;
+      }
 
-        onCreated?.(created, true);
-        resetForm();
-        setOpen(false);
-      } else {
-        const msg = await safeMessage(res);
-        const display = msg ?? `Request failed (${res.status})`;
-        console.error('Failed to create problem:', display);
-        // 4xx = validation/user error → show inline on the file field
-        // 5xx = server error → toast only
-        if (res.status >= 400 && res.status < 500) {
-          setError('file', { type: 'manual', message: display });
-        } else {
-          showToast.error(display);
+      // If we were opened in the context of an assignment, automatically add the
+      // created problem to it (best-effort; group support is based on assignment.groupId).
+      if (created?.id && assignmentId) {
+        try {
+          const payload: { problemIds: string[]; groupId?: string } = {
+            problemIds: [created.id],
+          };
+          // A specific group (not 'ALL') scopes the assignment; 'ALL' omits groupId.
+          if (assignmentIsGroup && selectedGroupId && selectedGroupId !== 'ALL') {
+            payload.groupId = selectedGroupId;
+          }
+          await apiClient.post(apiPaths.assignmentProblems(courseId, assignmentId), payload);
+        } catch (err) {
+          console.error('Failed to add created problem to assignment:', err);
         }
       }
+
+      onCreated?.(created ?? undefined, true);
+      resetForm();
+      setOpen(false);
     } catch (error) {
       console.error('Form submission error:', error);
       if (typeof error === 'string') {
@@ -549,19 +541,4 @@ export function CreateProblemDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-async function safeMessage(res: Response): Promise<string | null> {
-  try {
-    const data = await res.json();
-    return (
-      (data as { message?: string; error?: string })?.message ??
-      (data as { message?: string; error?: string })?.error ??
-      null
-    );
-  } catch {
-    // Response wasn't JSON (e.g. Next.js HTML error page) — return null so
-    // the caller can fall back to showing the HTTP status code instead.
-    return null;
-  }
 }
