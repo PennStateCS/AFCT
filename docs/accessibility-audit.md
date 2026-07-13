@@ -68,7 +68,7 @@ trivial (< 15 min), small (< 1 hr), medium (a focused session).
 |---|---|---|---|---|---|
 | S1 | `src/components/ui/InputGroup.tsx:161` | `focus-visible:ring-0` cancels the base input focus ring; login/signup/password fields show no visible keyboard focus | 2.4.7 | Delete the override so the base `ring-[3px]` shows | trivial |
 | S2 | `src/components/ui/dialog.tsx:60-67` | Base `DialogContent` force-prevents Escape and outside-click for every dialog app-wide; hard trap if a consumer hides the close button | 2.1.1 / 2.1.2 | Make prevention opt-in per dialog; keep Escape working by default | medium |
-| S3 | `src/components/JffViewerDialog.tsx:989-995` | Automaton canvas has no role, label, or text alternative; the parsed states/transitions are never exposed as text | 1.1.1 | Render an sr-only summary (type, states, initial/final, transition list) from the already-parsed data; `role="img"` + label on the container | medium |
+| S3 | `src/components/JffViewerDialog.tsx:208` | Automaton canvas has no role, label, or text alternative; the parsed states/transitions are never exposed as text | 1.1.1 | Render an sr-only summary (type, states, initial/final, transition list) from the already-parsed data; `role="img"` + label on the container | medium |
 | S4 | `src/app/dashboard/calendar/CalendarClient.tsx:288-308` | Custom `DayButton` ignores react-day-picker's roving tabindex and arrow-key props; every day cell is a tab stop (~35-42) and the advertised arrow-key nav does not work | 2.1.1 / 2.4.3 | Spread RDP's day props, honor `modifiers.focused`, keep one tabbable cell | medium |
 | S5 | `src/components/dialogs/FeedbackDialog.tsx:36` and `src/components/submissions/feedback.tsx:36` | Hardcoded `text-slate-900` on `bg-card`: near-black on dark surface in dark mode | 1.4.3 | Use `text-card-foreground` | trivial |
 | S6 | `src/app/dashboard/calendar/CalendarClient.tsx:338-341`, `src/components/dialogs/DayAssignmentsDialog.tsx:99-103` | White text on `bg-amber-600` draft chips, roughly 2.8-3.4:1 | 1.4.3 | Darken to amber-700/800 or switch to dark text | trivial |
@@ -202,10 +202,10 @@ following. None are critical or serious blockers.
 - **S6 / calendar chips** - white text on `bg-amber-600` (draft) and `dark:bg-sky-600`,
   ~3:1 to ~3.9:1, under 4.5:1 for small text.
 - **Hardcoded light palettes with no dark variant** - `SubmissionUploadForm.tsx:95`,
-  `FileUploadInput.tsx:126`, `ProblemListCard.tsx:54,74`, `JffViewerDialog.tsx:863`.
+  `FileUploadInput.tsx:126`, `ProblemListCard.tsx:54,74`, `JffViewerDialog.tsx:86`.
 
 ### Deferred as faculty-only / larger effort
-- **S3 / automaton text alternative** - `JffViewerDialog.tsx:989`. The cytoscape canvas
+- **S3 / automaton text alternative** - `JffViewerDialog.tsx:208`. The cytoscape canvas
   has no `role="img"`/label/text list. The parsed states/transitions are in memory and
   could back an sr-only description. Highest-value non-trivial item; revisit if the
   viewer ever becomes student-facing.
