@@ -94,8 +94,10 @@ const adminMenu = [
 ];
 
 // Persisted per-section expand/collapse state. One localStorage entry holds a
-// { sectionId: isOpen } map; a section defaults to open when it has no stored value.
+// { sectionId: isOpen } map; a section defaults to open when it has no stored value,
+// except Past Courses, which starts collapsed since it's the least-used section.
 const SIDEBAR_SECTIONS_KEY = 'afct.sidebarSections';
+const SECTION_DEFAULT_OPEN: Record<string, boolean> = { past: false };
 
 function useSidebarSections() {
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
@@ -114,11 +116,16 @@ function useSidebarSections() {
     }
   }, []);
 
-  const isOpen = useCallback((id: string) => openMap[id] ?? true, [openMap]);
+  const isOpen = useCallback(
+    (id: string) => openMap[id] ?? SECTION_DEFAULT_OPEN[id] ?? true,
+    [openMap],
+  );
 
   const toggle = useCallback((id: string) => {
     setOpenMap((prev) => {
-      const next = { ...prev, [id]: !(prev[id] ?? true) };
+      // Flip from the section's *effective* current state (honoring per-section
+      // defaults) so the first click on a default-collapsed section expands it.
+      const next = { ...prev, [id]: !(prev[id] ?? SECTION_DEFAULT_OPEN[id] ?? true) };
       try {
         localStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(next));
       } catch {
