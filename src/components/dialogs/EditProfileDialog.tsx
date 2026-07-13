@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getInitials } from '@/app/utils/initials';
 import {
   Dialog,
@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
+import { AvatarCrop, type AvatarCropRef } from '../AvatarCrop';
 import { Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,7 +30,6 @@ import {
 } from '@/schemas/profile';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { apiPaths } from '@/lib/api-paths';
-import { AvatarCrop } from '../AvatarCrop';
 
 // Sentinel for the "follow my device/system" choice. Radix Select forbids an
 // empty-string item value, so we use a token and translate it to '' on submit —
@@ -46,6 +46,8 @@ type EditProfileDialog = {
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
   const queryClient = useQueryClient();
+  const avatarEditorRef = useRef<AvatarCropRef['current']>(null);
+  const [avatarDirty, setAvatarDirty] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
@@ -89,6 +91,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       });
       // Reset preview from current user
       setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
+      setAvatarDirty(false);
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -96,6 +99,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         keepErrors: false,
         keepValues: false,
       });
+      setAvatarDirty(false);
     }
   }, [open, defaults, reset, user.avatar]);
 
@@ -107,6 +111,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       shouldValidate: true,
     });
     setValue('deleteAvatar', false, { shouldDirty: true });
+    setAvatarDirty(true);
 
     // Set preview Avatar
     if (file) {
@@ -118,6 +123,20 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
   const handleDeleteAvatar = () => {
     setValue('deleteAvatar', true, { shouldDirty: true });
+    setAvatarDirty(false);
+    setAvatarPreview('');
+  };
+
+  const getCroppedAvatarFile = async () => {
+    const editor = avatarEditorRef.current;
+    if (!editor) return null;
+    const canvas = editor.getImageScaledToCanvas();
+    return new Promise<File | null>((resolve) => {
+      canvas.toBlob((blob: Blob | null) => {
+        if (!blob) return resolve(null);
+        resolve(new File([blob], 'avatar.png', { type: 'image/png' }));
+      }, 'image/png');
+    });
   };
 
   const resetForm = () =>
@@ -129,7 +148,15 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     const formData = new FormData();
     formData.append('firstName', parsed.firstName);
     formData.append('lastName', parsed.lastName);
-    if (parsed.avatarFile) formData.append('avatar', parsed.avatarFile);
+    let avatarToUpload: File | undefined;
+    if (parsed.deleteAvatar) {
+      avatarToUpload = undefined;
+    } else if (avatarDirty) {
+      avatarToUpload = await getCroppedAvatarFile() || undefined;
+    } else if (parsed.avatarFile) {
+      avatarToUpload = parsed.avatarFile;
+    }
+    if (avatarToUpload) formData.append('avatar', avatarToUpload);
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
     // Always send it: a blank value tells the server to clear the override
     // (Automatic), so the display timezone follows the system/browser again.
@@ -232,7 +259,11 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
           </div>
 
           {avatarPreview ? (
-            <AvatarCrop avatarPreview={avatarPreview} />
+            <AvatarCrop
+              avatarPreview={avatarPreview}
+              editorRef={avatarEditorRef}
+              onChange={() => setAvatarDirty(true)}
+            />
           ) : null}
 
           {/* First Name */}

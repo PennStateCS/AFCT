@@ -56,6 +56,7 @@ const BaseCourseFormObject = z
  */
 export const CreateCourseFormSchema = BaseCourseFormObject.extend({
   instructorIds: z.array(z.string()),
+  taIds: z.array(z.string()).optional(),
 }).superRefine((d, ctx) => {
   // Validate course code format
   const normalizedCode = normalizeCode(d.code);
@@ -156,11 +157,9 @@ export const CourseFormSchema = BaseCourseFormObject.extend({
  */
 export const DuplicateFormSchema = BaseCourseFormObject.extend({
   copyMode: z.enum(['assignments', 'assignments_with_problems', 'problems']).optional(),
-  copyFaculty: z.boolean().optional(),
-  copyTAs: z.boolean().optional(),
-  // Additional faculty for the copy; with copyFaculty off, at least one is
-  // required (see the superRefine below) so the copy is never faculty-less.
+  // Additional faculty for the copy; at least one faculty must be selected.
   instructorIds: z.array(z.string()).optional(),
+  taIds: z.array(z.string()).optional(),
 })
   .refine((d) => d.startDate <= d.endDate, {
     path: ['startDate'],
@@ -206,11 +205,11 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
     }
 
     // The copy must end up with at least one faculty member.
-    if (!d.copyFaculty && (d.instructorIds ?? []).length === 0) {
+    if ((d.instructorIds ?? []).length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['instructorIds'],
-        message: 'Copy the faculty roster or pick at least one faculty member.',
+        message: 'Pick at least one faculty member.',
       });
     }
   });
@@ -238,8 +237,9 @@ export const CourseCreateApiSchema = z.object({
   ...courseApiBase,
   // A course cannot be created published, and it needs at least one faculty member
   // from the start (the roster rule "a course always has a faculty member" begins
-  // at creation). TAs and students are added later through the roster.
+  // at creation). TAs may also be seeded at creation.
   instructorIds: z.array(z.string()).min(1, 'At least one faculty member is required.'),
+  taIds: z.array(z.string()).optional(),
 });
 
 export const CourseUpdateApiSchema = z.object({
