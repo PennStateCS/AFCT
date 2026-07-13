@@ -9,6 +9,7 @@ import type {
   PaginationState,
   OnChangeFn,
   Table as TanstackTable,
+  Column as TanstackColumn,
 } from '@tanstack/react-table';
 import {
   flexRender,
@@ -64,6 +65,94 @@ const ariaSort = (
   if (sorted === 'desc') return 'descending';
   return 'none';
 };
+
+/** The table's toolbar: global search, caller action buttons, CSV export, column filter. */
+function DataTableToolbar<TData>({
+  table,
+  globalFilter,
+  setGlobalFilter,
+  actionButtons,
+  showExportButton,
+  onExport,
+  onResetColumns,
+  getColumnLabel,
+}: {
+  table: TanstackTable<TData>;
+  globalFilter: string;
+  setGlobalFilter: (value: string) => void;
+  actionButtons?: React.ReactNode;
+  showExportButton: boolean;
+  onExport: () => void;
+  onResetColumns: () => void;
+  getColumnLabel: (column: TanstackColumn<TData, unknown>) => string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <label htmlFor="table-search" className="sr-only">
+        Search table data
+      </label>
+
+      <div className="relative w-full sm:max-w-sm">
+        <Input
+          id="table-search"
+          placeholder="Search..."
+          value={globalFilter}
+          onChange={(e) => setGlobalFilter(e.target.value)}
+          className="pr-8"
+        />
+        {globalFilter && (
+          <button
+            type="button"
+            onClick={() => setGlobalFilter('')}
+            className="absolute top-1/2 right-2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+            aria-label="Clear search"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {actionButtons}
+
+        {showExportButton ? (
+          <Button variant="outline" onClick={onExport} aria-label="Export table data to CSV">
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+            Export to CSV
+          </Button>
+        ) : null}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">
+              <Filter className="h-4 w-4" aria-hidden="true" />
+              Filter Columns
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {table
+              .getAllLeafColumns()
+              .filter((col) => col.getCanHide())
+              .map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.id}
+                  className="capitalize"
+                  checked={col.getIsVisible()}
+                  onCheckedChange={(value) => col.toggleVisibility(!!value)}
+                >
+                  {getColumnLabel(col)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onResetColumns} className="text-red-600 hover:text-red-700">
+              Reset Columns
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
 
 /** The table's footer row: prev/next paging, an optional total, and a page-size select. */
 function DataTablePagination<TData>({
@@ -360,70 +449,16 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <label htmlFor="table-search" className="sr-only">
-          Search table data
-        </label>
-
-        <div className="relative w-full sm:max-w-sm">
-          <Input
-            id="table-search"
-            placeholder="Search..."
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pr-8"
-          />
-          {globalFilter && (
-            <button
-              type="button"
-              onClick={() => setGlobalFilter('')}
-              className="absolute top-1/2 right-2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-              aria-label="Clear search"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {actionButtons}
-
-          {showExportButton ? (
-            <Button variant="outline" onClick={exportToCSV} aria-label="Export table data to CSV">
-              <FileDown className="h-4 w-4" aria-hidden="true" />
-              Export to CSV
-            </Button>
-          ) : null}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Filter className="h-4 w-4" aria-hidden="true" />
-                Filter Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {table
-                .getAllLeafColumns()
-                .filter((col) => col.getCanHide())
-                .map((col) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.id}
-                    className="capitalize"
-                    checked={col.getIsVisible()}
-                    onCheckedChange={(value) => col.toggleVisibility(!!value)}
-                  >
-                    {getColumnFilterLabel(col)}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={resetColumns} className="text-red-600 hover:text-red-700">
-                Reset Columns
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <DataTableToolbar
+        table={table}
+        globalFilter={globalFilter}
+        setGlobalFilter={setGlobalFilter}
+        actionButtons={actionButtons}
+        showExportButton={showExportButton}
+        onExport={exportToCSV}
+        onResetColumns={resetColumns}
+        getColumnLabel={getColumnFilterLabel}
+      />
 
       <div className="overflow-x-auto rounded-md border">
         <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
