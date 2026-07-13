@@ -146,3 +146,32 @@ jobs:
           git add docker-compose.yml
           git commit -m "chore(release): pin prod image to ${DIGEST} [skip ci]"
           git push origin HEAD:${{ github.event.workflow_run.head_branch }}
+
+      # Sidecar images for the standalone deploy bundle (deploy/docker-compose.yml):
+      # publishing nginx + backup — instead of building them on the deployer's host —
+      # lets the bundle be a single compose file with no repo checkout. Placed last so
+      # a sidecar-build failure can never disrupt the critical app publish + auto-pin
+      # above; a failure here still surfaces (red job) without shipping a broken app.
+      - name: Build and push nginx image
+        if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/nginx
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/pennstatewilkes-barre/afct-nginx:main
+            ghcr.io/pennstatewilkes-barre/afct-nginx:sha-${{ github.event.workflow_run.head_sha }}
+
+      - name: Build and push backup image
+        if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/backup
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/pennstatewilkes-barre/afct-backup:main
+            ghcr.io/pennstatewilkes-barre/afct-backup:sha-${{ github.event.workflow_run.head_sha }}
