@@ -123,29 +123,50 @@ jobs:
       # Pin docker-compose.yml to the exact digest just published, and commit it
       # back to main. The push uses GITHUB_TOKEN, which does NOT re-trigger
       # workflows (no loop); the `[skip ci]` marker is a further safeguard.
+      #
+      # Race-safe: several quick pushes to main mean this run's checked-out commit
+      # can be stale by the time we push, and a plain push would be rejected
+      # (non-fast-forward). So each attempt re-fetches the branch tip, re-applies the
+      # pin onto it, and pushes; on rejection it retries. Pinning is bookkeeping — if
+      # it still loses the race after a few tries, we warn rather than fail the build
+      # (the image is already published; a later run will pin it).
       - name: Auto-pin prod compose to the published digest
         if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
         env:
           DIGEST: ${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
-          set -euo pipefail
+          set -eu
           if [ -z "${DIGEST}" ]; then
             echo "No digest available; skipping pin."
             exit 0
           fi
           IMAGE="ghcr.io/pennstatewilkes-barre/afct-dashboard@${DIGEST}"
-          sed -i -E \
-            "s#^([[:space:]]*image:[[:space:]]*)ghcr\.io/pennstatewilkes-barre/afct-dashboard.*#\1${IMAGE}#" \
-            docker-compose.yml
-          if git diff --quiet -- docker-compose.yml; then
-            echo "docker-compose.yml already pinned to ${DIGEST}."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docker-compose.yml
-          git commit -m "chore(release): pin prod image to ${DIGEST} [skip ci]"
-          git push origin HEAD:${{ github.event.workflow_run.head_branch }}
+
+          attempt=0
+          while [ "$attempt" -lt 5 ]; do
+            attempt=$((attempt + 1))
+            git fetch origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            sed -i -E \
+              "s#^([[:space:]]*image:[[:space:]]*)ghcr\.io/pennstatewilkes-barre/afct-dashboard.*#\1${IMAGE}#" \
+              docker-compose.yml
+            if git diff --quiet -- docker-compose.yml; then
+              echo "docker-compose.yml already pinned to ${DIGEST}."
+              exit 0
+            fi
+            git add docker-compose.yml
+            git commit -m "chore(release): pin prod image to ${DIGEST} [skip ci]"
+            if git push origin "HEAD:$BRANCH"; then
+              echo "pinned and pushed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "push rejected (branch moved); retrying (${attempt}/5)..."
+            sleep 3
+          done
+          echo "::warning::could not pin docker-compose.yml after 5 attempts; a later publish run will pin it."
 
       # Sidecar images for the standalone deploy bundle (deploy/docker-compose.yml):
       # publishing nginx + backup — instead of building them on the deployer's host —
