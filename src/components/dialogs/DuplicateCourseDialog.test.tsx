@@ -73,8 +73,35 @@ const course = {
 } as any;
 
 const originalFetch = global.fetch;
-const fetchMock = vi.fn();
 let originalLocation: Location;
+
+// On open the dialog fires three GETs (faculty list, TA list, current roster) plus the
+// duplicate POST on submit; route by URL so order doesn't matter. `facultyList` seeds the
+// "Add faculty" multiselect (the mock renders a checkbox per item, aria-labelled by name).
+const routeFetch = () =>
+  vi.fn(async (url: string, init?: RequestInit) => {
+    const u = String(url);
+    if (u.includes('/duplicate')) {
+      return { ok: true, json: async () => ({ id: 'new-course-id' }) } as Response;
+    }
+    if (init?.method === undefined && u.includes('role=FACULTY')) {
+      return {
+        ok: true,
+        json: async () => [
+          { id: 'faculty-1', firstName: 'Ada', lastName: 'Lovelace', role: 'FACULTY' },
+        ],
+      } as Response;
+    }
+    if (u.includes('role=TA')) return { ok: true, json: async () => [] } as Response;
+    if (u.includes('view=roster')) {
+      return { ok: true, json: async () => ({ enrolled: [] }) } as Response;
+    }
+    throw new Error(`Unexpected fetch: ${u}`);
+  });
+let fetchMock = routeFetch();
+
+const duplicateCalls = () =>
+  fetchMock.mock.calls.filter((c) => String(c[0]).includes('/duplicate'));
 
 describe('DuplicateCourseDialog', () => {
   beforeAll(() => {
@@ -94,7 +121,7 @@ describe('DuplicateCourseDialog', () => {
   });
 
   beforeEach(() => {
-    fetchMock.mockReset();
+    fetchMock = routeFetch();
     global.fetch = fetchMock as unknown as typeof fetch;
     toastErrorMock.mockReset();
   });
@@ -107,15 +134,6 @@ describe('DuplicateCourseDialog', () => {
   const clickNext = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
   };
-
-  // The dialog fetches the faculty list on open — resolve that first request.
-  const resolveFacultyRequest = () =>
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        { id: 'faculty-1', firstName: 'Ada', lastName: 'Lovelace', role: 'FACULTY' },
-      ],
-    } as Response);
 
   const renderDialog = (props: Partial<React.ComponentProps<typeof DuplicateCourseDialog>>) => {
     const queryClient = new QueryClient({
@@ -140,7 +158,6 @@ describe('DuplicateCourseDialog', () => {
     const setOpen = vi.fn();
     const onSuccess = vi.fn();
 
-    resolveFacultyRequest();
     renderDialog({ setOpen, onSuccess });
 
     // Details
@@ -162,34 +179,27 @@ describe('DuplicateCourseDialog', () => {
     await user.click(await screen.findByText('Assignments only'));
     await clickNext(user);
 
-    // Roster: copy the faculty roster AND pick an extra faculty member.
-    await user.click(await screen.findByText('Copy faculty roster'));
+    // Roster: add a faculty member via the "Add faculty" picker.
     await user.click(await screen.findByLabelText('Ada Lovelace'));
     await clickNext(user);
 
-    // Review: no submit yet (only the faculty fetch has fired), confirm required.
+    // Review: nothing submitted yet, confirm required.
     await screen.findByText('Advanced Theory');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(duplicateCalls()).toHaveLength(0);
     await user.click(screen.getByLabelText(/I confirm I want to duplicate/i));
-
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ id: 'new-course-id' }),
-    } as Response);
 
     await user.click(screen.getByRole('button', { name: 'Duplicate Course' }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(`/api/courses/${course.id}/duplicate`);
-
-    const [, requestInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    await waitFor(() => expect(duplicateCalls()).toHaveLength(1));
+    const [url, requestInit] = duplicateCalls()[0] as [string, RequestInit];
+    expect(url).toBe(`/api/courses/${course.id}/duplicate`);
     expect(JSON.parse(requestInit.body as string)).toMatchObject({
       title: 'Advanced Theory',
       code: 'CS 450',
       copyAssignments: true,
       copyProblems: false,
-      copyFaculty: true,
       instructorIds: ['faculty-1'],
+      taIds: [],
     });
 
     expect(onSuccess).toHaveBeenCalledWith('new-course-id');
@@ -200,7 +210,6 @@ describe('DuplicateCourseDialog', () => {
     const user = userEvent.setup();
     const setOpen = vi.fn();
 
-    resolveFacultyRequest();
     renderDialog({ setOpen, course: null });
 
     // Details
@@ -218,17 +227,17 @@ describe('DuplicateCourseDialog', () => {
     await user.type(screen.getByLabelText('Self Registration Closes'), '2026-01-14T12:00');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    // Content -> Roster (must satisfy the faculty requirement) -> Review
+    // Content -> Roster (satisfy the faculty requirement) -> Review
     await screen.findByText('What would you like to copy?');
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(await screen.findByText('Copy faculty roster'));
+    await user.click(await screen.findByLabelText('Ada Lovelace'));
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
     await user.click(await screen.findByLabelText(/I confirm I want to duplicate/i));
     await user.click(screen.getByRole('button', { name: 'Duplicate Course' }));
 
-    // Only the faculty-list fetch fired — no duplicate request went out.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // No duplicate request went out because the course id is missing.
+    expect(duplicateCalls()).toHaveLength(0);
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Cannot duplicate course because the course ID is missing.',
     );
@@ -237,7 +246,6 @@ describe('DuplicateCourseDialog', () => {
   it('holds the Details step when credits are invalid', async () => {
     const user = userEvent.setup();
 
-    resolveFacultyRequest();
     renderDialog({});
 
     await user.clear(screen.getByLabelText('Credits'));
@@ -252,7 +260,6 @@ describe('DuplicateCourseDialog', () => {
   it('holds the Roster step when no faculty would end up on the copy', async () => {
     const user = userEvent.setup();
 
-    resolveFacultyRequest();
     renderDialog({});
 
     // Details and Schedule are prefilled from the source course.
@@ -262,13 +269,11 @@ describe('DuplicateCourseDialog', () => {
     await screen.findByText('What would you like to copy?');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    // Roster: neither copyFaculty nor a picked faculty member -> blocked.
-    await screen.findByText('Copy faculty roster');
+    // Roster: no faculty picked -> the step holds with a validation error.
+    await screen.findByText('Add faculty');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    expect(
-      await screen.findByText('Copy the faculty roster or pick at least one faculty member.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Pick at least one faculty member.')).toBeInTheDocument();
     expect(screen.queryByText(/I confirm I want to duplicate/i)).toBeNull();
 
     // Picking a faculty member unblocks it.
