@@ -256,8 +256,8 @@ export default function SystemSettingsClient() {
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('general');
   // The ~19 Save-covered fields live in one reducer-managed object (was one useState
-  // slice each). `setField` is the typed single-field updater; the read aliases and
-  // write wrappers below keep the field JSX and submit logic referencing the same names.
+  // slice each). `setField` is the typed single-field updater the field JSX calls; a
+  // whole-object `reset` seeds/restores the form (on load, Cancel, and after save).
   const [form, dispatchForm] = useReducer(formReducer, initialSeed ?? EMPTY_FORM);
   const setField = useCallback(
     <K extends keyof FormSnapshot>(field: K, value: FormSnapshot[K]) => {
@@ -287,32 +287,6 @@ export default function SystemSettingsClient() {
     activityLogRetentionDays,
     hcaptchaSiteKey,
   } = form;
-  const setTimezone = (v: FormSnapshot['timezone']) => setField('timezone', v);
-  const setMaxUploadSizeMb = (v: FormSnapshot['maxUploadSizeMb']) => setField('maxUploadSizeMb', v);
-  const setAllowSignup = (v: FormSnapshot['allowSignup']) => setField('allowSignup', v);
-  const setSignupAllowedDomains = (v: FormSnapshot['signupAllowedDomains']) =>
-    setField('signupAllowedDomains', v);
-  const setClock24Hour = (v: FormSnapshot['clock24Hour']) => setField('clock24Hour', v);
-  const setSessionTimeoutMinutes = (v: FormSnapshot['sessionTimeoutMinutes']) =>
-    setField('sessionTimeoutMinutes', v);
-  const setEvalTimeoutSec = (v: FormSnapshot['evalTimeoutSec']) => setField('evalTimeoutSec', v);
-  const setResubmitCooldownSec = (v: FormSnapshot['resubmitCooldownSec']) =>
-    setField('resubmitCooldownSec', v);
-  const setEvalMaxMemoryMb = (v: FormSnapshot['evalMaxMemoryMb']) => setField('evalMaxMemoryMb', v);
-  const setMaxConcurrent = (v: FormSnapshot['maxConcurrent']) => setField('maxConcurrent', v);
-  const setMaxAttempts = (v: FormSnapshot['maxAttempts']) => setField('maxAttempts', v);
-  const setAnalyzerLimit = (v: FormSnapshot['analyzerLimit']) => setField('analyzerLimit', v);
-  const setLoginMaxAttempts = (v: FormSnapshot['loginMaxAttempts']) =>
-    setField('loginMaxAttempts', v);
-  const setLoginLockoutMinutes = (v: FormSnapshot['loginLockoutMinutes']) =>
-    setField('loginLockoutMinutes', v);
-  const setBackupEnabled = (v: FormSnapshot['backupEnabled']) => setField('backupEnabled', v);
-  const setBackupHour = (v: FormSnapshot['backupHour']) => setField('backupHour', v);
-  const setBackupRetentionDays = (v: FormSnapshot['backupRetentionDays']) =>
-    setField('backupRetentionDays', v);
-  const setActivityLogRetentionDays = (v: FormSnapshot['activityLogRetentionDays']) =>
-    setField('activityLogRetentionDays', v);
-  const setHcaptchaSiteKey = (v: FormSnapshot['hcaptchaSiteKey']) => setField('hcaptchaSiteKey', v);
 
   // Available backups + the "Back up now" action (managed independently of the
   // settings form's Save) live in a dedicated hook.
@@ -482,27 +456,10 @@ export default function SystemSettingsClient() {
         throw new Error(body?.error || 'Failed to save settings');
       }
       const savedSiteKey = hcaptchaSiteKey.trim();
-      setSignupAllowedDomains(canonicalDomains);
-      setMaxUploadSizeMb(clampedSize);
-      setSessionTimeoutMinutes(clampedTimeout);
-      setEvalTimeoutSec(msToSec(evalTimeoutMs));
-      setResubmitCooldownSec(msToSec(resubmitCooldownMs));
-      setEvalMaxMemoryMb(memoryMb);
-      setMaxConcurrent(concurrent);
-      setMaxAttempts(attempts);
-      setAnalyzerLimit(analyzer);
-      setLoginMaxAttempts(loginAttempts);
-      setLoginLockoutMinutes(lockoutMinutes);
-      setBackupHour(bkpHour);
-      setBackupRetentionDays(bkpRetention);
-      setActivityLogRetentionDays(logRetention);
-      setHcaptchaSiteKey(savedSiteKey);
-      setHcaptchaSecretConfigured(
-        hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
-      );
-      setHcaptchaSecretKey('');
-      setHcaptchaSecretClear(false);
-      setBaseline({
+      // Fold the saved (clamped/canonicalized) values back into the form and make them
+      // the new baseline in one shot, so what's shown and the dirty-check both match
+      // exactly what the server stored.
+      const savedSnapshot: FormSnapshot = {
         timezone,
         maxUploadSizeMb: clampedSize,
         allowSignup,
@@ -522,7 +479,14 @@ export default function SystemSettingsClient() {
         backupRetentionDays: bkpRetention,
         activityLogRetentionDays: logRetention,
         hcaptchaSiteKey: savedSiteKey,
-      });
+      };
+      dispatchForm({ type: 'reset', snapshot: savedSnapshot });
+      setBaseline(savedSnapshot);
+      setHcaptchaSecretConfigured(
+        hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
+      );
+      setHcaptchaSecretKey('');
+      setHcaptchaSecretClear(false);
       // Keep the read cache consistent with what we just saved so a later revisit
       // (served from cache) reflects the new values, not the pre-save response.
       queryClient.setQueryData<SystemSettingsResponse>(['admin', 'settings'], (prev) =>
@@ -566,25 +530,7 @@ export default function SystemSettingsClient() {
 
   const resetForm = () => {
     if (!baseline) return;
-    setTimezone(baseline.timezone);
-    setMaxUploadSizeMb(baseline.maxUploadSizeMb);
-    setAllowSignup(baseline.allowSignup);
-    setSignupAllowedDomains(baseline.signupAllowedDomains);
-    setClock24Hour(baseline.clock24Hour);
-    setSessionTimeoutMinutes(baseline.sessionTimeoutMinutes);
-    setEvalTimeoutSec(baseline.evalTimeoutSec);
-    setResubmitCooldownSec(baseline.resubmitCooldownSec);
-    setEvalMaxMemoryMb(baseline.evalMaxMemoryMb);
-    setMaxConcurrent(baseline.maxConcurrent);
-    setMaxAttempts(baseline.maxAttempts);
-    setAnalyzerLimit(baseline.analyzerLimit);
-    setLoginMaxAttempts(baseline.loginMaxAttempts);
-    setLoginLockoutMinutes(baseline.loginLockoutMinutes);
-    setBackupEnabled(baseline.backupEnabled);
-    setBackupHour(baseline.backupHour);
-    setBackupRetentionDays(baseline.backupRetentionDays);
-    setActivityLogRetentionDays(baseline.activityLogRetentionDays);
-    setHcaptchaSiteKey(baseline.hcaptchaSiteKey);
+    dispatchForm({ type: 'reset', snapshot: baseline });
     setHcaptchaSecretKey('');
     setHcaptchaSecretClear(false);
   };
@@ -693,7 +639,7 @@ export default function SystemSettingsClient() {
                   requiredMark
                   placeholder={loading ? 'Loading timezone...' : 'Select timezone'}
                   value={loading ? '' : timezone}
-                  onValueChange={(val) => setTimezone(val)}
+                  onValueChange={(val) => setField('timezone', val)}
                   disabled={disabled}
                   description="Default timezone for the server. Users can override this in their profile."
                   options={timezoneOptions}
@@ -708,7 +654,7 @@ export default function SystemSettingsClient() {
                   min={1}
                   max={1024}
                   value={maxUploadSizeMb === '' ? '' : String(maxUploadSizeMb)}
-                  setValue={(val) => setMaxUploadSizeMb(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('maxUploadSizeMb', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description="Applies to all uploads. 1–1024 MB."
                 />
@@ -721,7 +667,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SESSION_TIMEOUT_MINUTES}
                   max={MAX_SESSION_TIMEOUT_MINUTES}
                   value={sessionTimeoutMinutes === '' ? '' : String(sessionTimeoutMinutes)}
-                  setValue={(val) => setSessionTimeoutMinutes(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('sessionTimeoutMinutes', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Signs out after inactivity. ${MIN_SESSION_TIMEOUT_MINUTES}–${MAX_SESSION_TIMEOUT_MINUTES} min.`}
                 />
@@ -734,7 +680,7 @@ export default function SystemSettingsClient() {
                   min={MIN_LOGIN_MAX_ATTEMPTS}
                   max={MAX_LOGIN_MAX_ATTEMPTS}
                   value={loginMaxAttempts === '' ? '' : String(loginMaxAttempts)}
-                  setValue={(val) => setLoginMaxAttempts(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('loginMaxAttempts', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Failed attempts on one account before it's temporarily locked. ${MIN_LOGIN_MAX_ATTEMPTS}–${MAX_LOGIN_MAX_ATTEMPTS}.`}
                 />
@@ -747,7 +693,7 @@ export default function SystemSettingsClient() {
                   min={MIN_LOGIN_LOCKOUT_MINUTES}
                   max={MAX_LOGIN_LOCKOUT_MINUTES}
                   value={loginLockoutMinutes === '' ? '' : String(loginLockoutMinutes)}
-                  setValue={(val) => setLoginLockoutMinutes(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('loginLockoutMinutes', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`How long a locked account must wait. ${MIN_LOGIN_LOCKOUT_MINUTES}–${MAX_LOGIN_LOCKOUT_MINUTES} min.`}
                 />
@@ -760,7 +706,7 @@ export default function SystemSettingsClient() {
                   min={MIN_ACTIVITY_LOG_RETENTION_DAYS}
                   max={MAX_ACTIVITY_LOG_RETENTION_DAYS}
                   value={activityLogRetentionDays === '' ? '' : String(activityLogRetentionDays)}
-                  setValue={(val) => setActivityLogRetentionDays(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('activityLogRetentionDays', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`System Logs older than this are deleted daily. ${MIN_ACTIVITY_LOG_RETENTION_DAYS}–${MAX_ACTIVITY_LOG_RETENTION_DAYS} days.`}
                 />
@@ -769,7 +715,7 @@ export default function SystemSettingsClient() {
                   name="allow-signup"
                   label="Allow user signup"
                   checked={allowSignup}
-                  onCheckedChange={setAllowSignup}
+                  onCheckedChange={(v) => setField('allowSignup', v)}
                   disabled={disabled}
                   descriptionPlacement="inline"
                   description="When enabled, the Sign up option appears on the login page."
@@ -779,7 +725,7 @@ export default function SystemSettingsClient() {
                   label="Allowed signup email domains"
                   name="signup-allowed-domains"
                   value={signupAllowedDomains}
-                  setValue={setSignupAllowedDomains}
+                  setValue={(v) => setField('signupAllowedDomains', v)}
                   disabled={disabled || !allowSignup}
                   placeholder="psu.edu, example.edu"
                   description="Restrict self-signup to these email domains (comma-separated). Leave blank to allow any domain."
@@ -789,7 +735,7 @@ export default function SystemSettingsClient() {
                   name="clock-24-hour"
                   label="24-hour clock"
                   checked={clock24Hour}
-                  onCheckedChange={setClock24Hour}
+                  onCheckedChange={(v) => setField('clock24Hour', v)}
                   disabled={disabled}
                   descriptionPlacement="inline"
                   description="Display times on a 24-hour clock (e.g. 23:59) instead of 12-hour AM/PM, app-wide."
@@ -812,7 +758,7 @@ export default function SystemSettingsClient() {
                   min={msToSec(MIN_SUBMISSION_EVAL_TIMEOUT_MS)}
                   max={msToSec(MAX_SUBMISSION_EVAL_TIMEOUT_MS)}
                   value={evalTimeoutSec === '' ? '' : String(evalTimeoutSec)}
-                  setValue={(val) => setEvalTimeoutSec(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('evalTimeoutSec', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Max time per submission. ${msToSec(MIN_SUBMISSION_EVAL_TIMEOUT_MS)}–${msToSec(MAX_SUBMISSION_EVAL_TIMEOUT_MS)} s.`}
                 />
@@ -825,7 +771,7 @@ export default function SystemSettingsClient() {
                   min={msToSec(MIN_SUBMISSION_RESUBMIT_COOLDOWN_MS)}
                   max={msToSec(MAX_SUBMISSION_RESUBMIT_COOLDOWN_MS)}
                   value={resubmitCooldownSec === '' ? '' : String(resubmitCooldownSec)}
-                  setValue={(val) => setResubmitCooldownSec(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('resubmitCooldownSec', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description="Wait between resubmits to a problem. 0 disables."
                 />
@@ -838,7 +784,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SUBMISSION_EVAL_MAX_MEMORY_MB}
                   max={MAX_SUBMISSION_EVAL_MAX_MEMORY_MB}
                   value={evalMaxMemoryMb === '' ? '' : String(evalMaxMemoryMb)}
-                  setValue={(val) => setEvalMaxMemoryMb(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('evalMaxMemoryMb', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`JVM heap per evaluation. ${MIN_SUBMISSION_EVAL_MAX_MEMORY_MB}–${MAX_SUBMISSION_EVAL_MAX_MEMORY_MB} MB.`}
                 />
@@ -851,7 +797,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SUBMISSION_MAX_CONCURRENT}
                   max={MAX_SUBMISSION_MAX_CONCURRENT}
                   value={maxConcurrent === '' ? '' : String(maxConcurrent)}
-                  setValue={(val) => setMaxConcurrent(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('maxConcurrent', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Run at once. ${MIN_SUBMISSION_MAX_CONCURRENT}–${MAX_SUBMISSION_MAX_CONCURRENT}. Applies within ~30s.`}
                 />
@@ -864,7 +810,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SUBMISSION_MAX_ATTEMPTS}
                   max={MAX_SUBMISSION_MAX_ATTEMPTS}
                   value={maxAttempts === '' ? '' : String(maxAttempts)}
-                  setValue={(val) => setMaxAttempts(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('maxAttempts', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Retries before failing. ${MIN_SUBMISSION_MAX_ATTEMPTS}–${MAX_SUBMISSION_MAX_ATTEMPTS}.`}
                 />
@@ -877,7 +823,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SUBMISSION_ANALYZER_LIMIT}
                   max={MAX_SUBMISSION_ANALYZER_LIMIT}
                   value={analyzerLimit === '' ? '' : String(analyzerLimit)}
-                  setValue={(val) => setAnalyzerLimit(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('analyzerLimit', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Depth of the cfganalyzer equivalence check. Higher is more thorough but slower. ${MIN_SUBMISSION_ANALYZER_LIMIT}–${MAX_SUBMISSION_ANALYZER_LIMIT}.`}
                 />
@@ -895,7 +841,7 @@ export default function SystemSettingsClient() {
                   name="backup-enabled"
                   label="Enable automatic backups"
                   checked={backupEnabled}
-                  onCheckedChange={setBackupEnabled}
+                  onCheckedChange={(v) => setField('backupEnabled', v)}
                   disabled={disabled}
                   descriptionPlacement="inline"
                   description="When off, no scheduled dumps are taken."
@@ -910,7 +856,7 @@ export default function SystemSettingsClient() {
                   min={MIN_BACKUP_HOUR}
                   max={MAX_BACKUP_HOUR}
                   value={backupHour === '' ? '' : String(backupHour)}
-                  setValue={(val) => setBackupHour(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('backupHour', val === '' ? '' : Number(val))}
                   disabled={disabled || !backupEnabled}
                   description={`24-hour clock, server time (UTC). ${MIN_BACKUP_HOUR}–${MAX_BACKUP_HOUR}. e.g. 2 = 2:00 AM.`}
                 />
@@ -923,7 +869,7 @@ export default function SystemSettingsClient() {
                   min={MIN_BACKUP_RETENTION_DAYS}
                   max={MAX_BACKUP_RETENTION_DAYS}
                   value={backupRetentionDays === '' ? '' : String(backupRetentionDays)}
-                  setValue={(val) => setBackupRetentionDays(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('backupRetentionDays', val === '' ? '' : Number(val))}
                   disabled={disabled || !backupEnabled}
                   description={`Older dumps are deleted. ${MIN_BACKUP_RETENTION_DAYS}–${MAX_BACKUP_RETENTION_DAYS} days.`}
                 />
@@ -1030,7 +976,7 @@ export default function SystemSettingsClient() {
                   label="hCaptcha site key"
                   name="hcaptchaSiteKey"
                   value={hcaptchaSiteKey}
-                  setValue={setHcaptchaSiteKey}
+                  setValue={(v) => setField('hcaptchaSiteKey', v)}
                   disabled={disabled}
                   description="Public key. Leave blank to disable."
                 />
