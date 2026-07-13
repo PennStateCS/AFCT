@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (session.user.role !== 'ADMIN') {
+        if (!session.user.isAdmin) {
             await fetch('/api/createActivityLog', {
                 method: 'POST',
                 headers: {
@@ -45,14 +45,14 @@ export async function GET(req: NextRequest) {
 
         // Fetch user accounts
         const userAccounts = await prisma.user.findMany({
-            orderBy: [{ role: 'asc' }, { lastName: 'asc' }],
+            orderBy: [{ isAdmin: 'desc' }, { lastName: 'asc' }],
             select: {
             id: true,
             email: true,
             firstName: true,
             lastName: true,
             temporaryPassword: true,
-            role: true,
+            isAdmin: true,
             avatar: true,
             timezone: true,
             inactive: true,

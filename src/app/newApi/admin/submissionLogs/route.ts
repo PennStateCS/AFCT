@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (session.user.role !== 'ADMIN') {
+        if (!session.user.isAdmin) {
             await fetch('/api/createActivityLog', {
                 method: 'POST',
                 headers: {
