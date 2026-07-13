@@ -39,6 +39,7 @@ import {
 
 // Local
 import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
+import { apiPaths } from '@/lib/api-paths';
 
 const Navbar: React.FC = () => {
   const { theme, setTheme } = useTheme();
@@ -174,9 +175,10 @@ const Navbar: React.FC = () => {
                   </div>
                 </span>
                 <Avatar className="h-11 w-11" aria-label="User avatar">
-                  <AvatarImage 
-                    src={`/api/uploads/pfps/${user.avatar}`}
-                    alt={`${user.firstName} ${user.lastName}`} />
+                  <AvatarImage
+                    src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
+                    alt={user.name}
+                  />
                   <AvatarFallback className="text-sm text-white">
                     {getInitials(user.firstName, user.lastName, user.email)}
                   </AvatarFallback>
