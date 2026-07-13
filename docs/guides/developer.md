@@ -84,9 +84,11 @@ Two gates in [`src/lib/permissions.ts`](../../src/lib/permissions.ts):
   `COURSE_STAFF_ROLES`, which is FACULTY plus TA; pass `COURSE_FACULTY_ROLES`
   to require FACULTY specifically).
 
-Both exclude archived and soft-deleted courses. Archived courses are read-only
-for **everyone, admins included**; the only permitted write is admin
-un-archive.
+Both exclude archived and soft-deleted courses. An archived course is read-only
+for **everyone, admins included**, and **archiving and restoring (un-archiving)
+are both admin-only**. A **soft-deleted** course is inaccessible to everyone —
+the admin short-circuit is overridden for `deletedAt`, so even an admin is
+denied — and `withCourseAuth` masks it as **404** before the role gate runs.
 
 ## API conventions
 
@@ -97,9 +99,10 @@ feature but a hole. Follow them even when the route feels trivial.
   `withAssignmentAuth`
   ([`src/lib/api/with-auth.ts`](../../src/lib/api/with-auth.ts)) rather than
   hand-rolling auth. The wrappers reject a missing or disabled session with
-  401, run the role check, log denials, and (with `blockWhenArchived`) enforce
-  the archive freeze, for admins too. A hand-rolled check will get one of
-  those four things wrong eventually, and the audit log is usually the one
+  401, run the role check, log denials, mask a **soft-deleted** course as 404
+  (for everyone, admins included), and (with `blockWhenArchived`) enforce the
+  archive freeze, for admins too. A hand-rolled check will get one of those
+  things wrong eventually, and the audit log is usually the one
   that gets forgotten. A handful of routes do call `auth()` directly because
   their scoping is self- or entity-based rather than course-param based; that
   is deliberate, not an invitation.

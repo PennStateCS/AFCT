@@ -124,27 +124,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
     dialogStates.setPendingPublish(null);
   }, [dialogStates]);
 
-  const handleArchiveToggle = useCallback(
-    (checked: boolean) => {
-      dialogStates.setPendingArchive(checked);
-      dialogStates.setArchiveConfirmOpen(true);
-    },
-    [dialogStates],
-  );
-
-  const handleArchiveConfirm = useCallback(async () => {
-    if (dialogStates.pendingArchive !== null) {
-      await handlers.handleCourseArchiveToggle(dialogStates.pendingArchive);
-    }
-    dialogStates.setArchiveConfirmOpen(false);
-    dialogStates.setPendingArchive(null);
-  }, [dialogStates, handlers]);
-
-  const handleArchiveCancel = useCallback(() => {
-    dialogStates.setArchiveConfirmOpen(false);
-    dialogStates.setPendingArchive(null);
-  }, [dialogStates]);
-
   const handleEnrollUserWrapper = useCallback(
     async (user: EnrollableUser) => {
       if (!courseId) return;
@@ -214,7 +193,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           onRefreshCourse={refetchCourse}
           onCourseSaved={handleCourseSaved}
           onPublishToggle={handlePublishToggle}
-          onArchiveToggle={handleArchiveToggle}
         />
       )}
 
@@ -245,10 +223,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           pendingPublish={dialogStates.pendingPublish}
           onPublishConfirm={handlePublishConfirm}
           onPublishCancel={handlePublishCancel}
-          archiveConfirmOpen={dialogStates.archiveConfirmOpen}
-          pendingArchive={dialogStates.pendingArchive}
-          onArchiveConfirm={handleArchiveConfirm}
-          onArchiveCancel={handleArchiveCancel}
           enrollOpen={dialogStates.enrollOpen}
           setEnrollOpen={dialogStates.setEnrollOpen}
           allUsers={allUsers}

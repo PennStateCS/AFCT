@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -54,17 +54,33 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 vi.mock('@/components/dialogs/DuplicateCourseDialog', () => ({
   default: ({ open }: { open: boolean }) => (open ? <div>duplicate-dialog-open</div> : null),
 }));
-vi.mock('@/components/dialogs/EditCourseDialog', () => ({ EditCourseDialog: () => null }));
-vi.mock('@/components/dialogs/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
+// When open, expose the confirm action as a button labelled with its confirmText
+// so tests can drive the confirm flow.
+vi.mock('@/components/dialogs/ConfirmDialog', () => ({
+  ConfirmDialog: ({
+    open,
+    onConfirm,
+    confirmText,
+  }: {
+    open: boolean;
+    onConfirm: () => void;
+    confirmText?: string;
+  }) =>
+    open ? (
+      <button type="button" onClick={onConfirm}>
+        {confirmText}
+      </button>
+    ) : null,
+}));
 
 type Row = { id: string; name: string; isArchived: boolean; enrolled: [] };
 const courseRow: Row = { id: 'c1', name: 'Algorithms', isArchived: false, enrolled: [] };
 
-const renderActionsCell = () => {
-  const cols = columns(vi.fn(), vi.fn(), vi.fn(), 'UTC') as ColumnDef<Row>[];
+const renderActionsCell = (row: Row = courseRow) => {
+  const cols = columns(vi.fn(), vi.fn(), 'UTC') as ColumnDef<Row>[];
   const actions = cols.find((c) => c.id === 'actions');
   const cell = (actions as { cell: (ctx: unknown) => React.ReactElement }).cell;
-  return render(<>{cell({ row: { original: courseRow } })}</>);
+  return render(<>{cell({ row: { original: row } })}</>);
 };
 
 beforeEach(() => {
@@ -90,8 +106,8 @@ describe('course actions — Duplicate Course', () => {
     renderActionsCell();
 
     expect(screen.queryByRole('button', { name: 'Duplicate Course' })).toBeNull();
-    // Edit remains available to whoever manages the course.
-    expect(screen.getByRole('button', { name: 'Edit Course' })).toBeInTheDocument();
+    // View Course stays available to whoever manages the course.
+    expect(screen.getByRole('link', { name: 'View Course' })).toBeInTheDocument();
   });
 
   it('hides the Duplicate Course action when there is no session', () => {
@@ -102,9 +118,113 @@ describe('course actions — Duplicate Course', () => {
   });
 });
 
+describe('course actions — Edit Course', () => {
+  it('never offers Edit Course (editing lives on the course Settings tab)', () => {
+    useSessionMock.mockReturnValue({ data: { user: { isAdmin: true } } });
+    renderActionsCell({ ...courseRow, isArchived: false });
+
+    expect(screen.queryByRole('button', { name: 'Edit Course' })).toBeNull();
+  });
+});
+
+const renderActionsCellDirect = (row: Row, onDeleted: () => void) => {
+  const cols = columns(onDeleted, vi.fn(), 'UTC') as ColumnDef<Row>[];
+  const cell = (
+    cols.find((c) => c.id === 'actions') as { cell: (ctx: unknown) => React.ReactElement }
+  ).cell;
+  return render(<>{cell({ row: { original: row } })}</>);
+};
+
+describe('course actions — Archive / Restore (admin-only)', () => {
+  beforeEach(() => {
+    useSessionMock.mockReturnValue({ data: { user: { isAdmin: true } } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
+  });
+
+  it('archives an active course after confirmation', async () => {
+    const onDeleted = vi.fn();
+    renderActionsCellDirect({ ...courseRow, isArchived: false }, onDeleted);
+
+    const user = userEvent.setup();
+    expect(screen.queryByRole('button', { name: 'Restore Course' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Archive Course' }));
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/courses/c1/archive',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ isArchived: true }),
+      }),
+    );
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+  });
+
+  it('restores an archived course after confirmation', async () => {
+    const onDeleted = vi.fn();
+    renderActionsCellDirect({ ...courseRow, isArchived: true }, onDeleted);
+
+    const user = userEvent.setup();
+    expect(screen.queryByRole('button', { name: 'Archive Course' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Restore Course' }));
+    await user.click(screen.getByRole('button', { name: 'Restore' }));
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/courses/c1/archive',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ isArchived: false }),
+      }),
+    );
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+  });
+
+  it('hides Archive/Restore from non-admins', () => {
+    useSessionMock.mockReturnValue({ data: { user: { isAdmin: false } } });
+    renderActionsCell({ ...courseRow, isArchived: false });
+    expect(screen.queryByRole('button', { name: 'Archive Course' })).toBeNull();
+
+    renderActionsCell({ ...courseRow, isArchived: true });
+    expect(screen.queryByRole('button', { name: 'Restore Course' })).toBeNull();
+  });
+});
+
+describe('course actions — Delete Course (admin-only, active courses)', () => {
+  beforeEach(() => {
+    useSessionMock.mockReturnValue({ data: { user: { isAdmin: true } } });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ deleted: 'hard' }) }),
+    );
+  });
+
+  it('deletes an active course after confirmation', async () => {
+    const onDeleted = vi.fn();
+    renderActionsCellDirect({ ...courseRow, isArchived: false }, onDeleted);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Delete Course' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(global.fetch).toHaveBeenCalledWith('/api/courses/c1', { method: 'DELETE' });
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+  });
+
+  it('hides Delete Course from non-admins', () => {
+    useSessionMock.mockReturnValue({ data: { user: { isAdmin: false } } });
+    renderActionsCell({ ...courseRow, isArchived: false });
+    expect(screen.queryByRole('button', { name: 'Delete Course' })).toBeNull();
+  });
+
+  it('hides Delete Course on an archived course (restore it first)', () => {
+    renderActionsCell({ ...courseRow, isArchived: true });
+    expect(screen.queryByRole('button', { name: 'Delete Course' })).toBeNull();
+  });
+});
+
 describe('course-columns display cells', () => {
   const renderCell = (key: string, course: Record<string, unknown>) => {
-    const cols = columns(vi.fn(), vi.fn(), vi.fn(), 'UTC') as ColumnDef<Record<string, unknown>>[];
+    const cols = columns(vi.fn(), vi.fn(), 'UTC') as ColumnDef<Record<string, unknown>>[];
     const col = cols.find(
       (c) =>
         ('accessorKey' in c && c.accessorKey === key) ||

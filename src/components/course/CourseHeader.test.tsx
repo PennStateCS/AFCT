@@ -1,11 +1,14 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CourseHeader } from './CourseHeader';
 import type { FullCourse } from '@/types/course';
+
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('@/lib/toast', () => ({ showToast: toastMock }));
 
 vi.mock('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -81,5 +84,38 @@ describe('CourseHeader', () => {
     // Title and badges still render, but the faculty/TA line does not.
     expect(screen.getByText('Software Engineering')).toBeInTheDocument();
     expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
+  });
+
+  it('omits the TAs label when the course has no TAs', () => {
+    render(<CourseHeader course={mockCourse} isStudent={false} />);
+    expect(screen.queryByText('TAs:')).not.toBeInTheDocument();
+  });
+
+  it('lists TAs when the course has some', () => {
+    const withTa: FullCourse = {
+      ...mockCourse,
+      enrolled: [
+        ...mockCourse.enrolled,
+        { id: 'ta-1', firstName: 'Alan', lastName: 'Turing', role: 'STUDENT', courseRole: 'TA' },
+      ],
+    };
+    render(<CourseHeader course={withTa} isStudent={false} />);
+    expect(screen.getByText('TAs:')).toBeInTheDocument();
+    expect(screen.getByText('Alan Turing')).toBeInTheDocument();
+  });
+
+  it('shows the join code formatted and copies the plain code', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CourseHeader course={mockCourse} isStudent={false} />);
+
+    // Displayed grouped as ABC-123 for readability.
+    expect(screen.getByText('ABC-123')).toBeInTheDocument();
+
+    // Copies the plain 6-character code the join endpoint expects.
+    fireEvent.click(screen.getByRole('button', { name: /copy join code/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('ABC123'));
+    expect(toastMock.success).toHaveBeenCalled();
   });
 });

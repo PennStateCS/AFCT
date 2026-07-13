@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { CourseHeaderContent } from '@/components/course/CourseHeader';
 import { CourseTabBar, CourseTabPanel } from '@/components/course/course-tabs';
 import { CourseSettingsForm } from '@/components/course/CourseSettingsForm';
+import { CourseStatusCard } from '@/components/course/CourseStatusCard';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
@@ -39,7 +40,6 @@ interface AdminCourseViewProps {
   onRefreshCourse: () => void;
   onCourseSaved: (updated: Partial<Course>) => void;
   onPublishToggle: (checked: boolean) => void;
-  onArchiveToggle: (checked: boolean) => void;
 }
 
 export function AdminCourseView({
@@ -61,7 +61,6 @@ export function AdminCourseView({
   onBulkEnroll,
   onCourseSaved,
   onPublishToggle,
-  onArchiveToggle,
 }: AdminCourseViewProps) {
   const { timezone } = useEffectiveTimezone();
   const enrolled = course.enrolled ?? [];
@@ -188,12 +187,16 @@ export function AdminCourseView({
                   This course is archived and read-only. Unarchive it to make changes.
                 </p>
               ) : null}
-              <CourseSettingsForm
-                course={course}
-                onSaved={onCourseSaved}
-                onPublishToggle={onPublishToggle}
-                onArchiveToggle={onArchiveToggle}
-              />
+              {/* Form on the left; the immediate-effect status switches sit in their
+                  own card to the right (stacked below on narrow screens). */}
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                <CourseSettingsForm course={course} onSaved={onCourseSaved} className="w-full" />
+                <CourseStatusCard
+                  course={course}
+                  onPublishToggle={onPublishToggle}
+                  className="w-full lg:w-80 lg:shrink-0"
+                />
+              </div>
             </div>
           </CourseTabPanel>
         </CardContent>

@@ -153,6 +153,11 @@ export default function DashboardSidebarMenu() {
   // viewer's per-course role; here we only drop archived ones (they live on the
   // Archived Courses page), then bucket by date into the sidebar sections.
   const visibleCourses = courses.filter((c) => !c.isArchived);
+  // Admins can view every archived course, so they always get the link. Everyone
+  // else (students, faculty, TAs) only sees it when they're a member of an
+  // archived course — the nav list is already scoped to the viewer's courses, so
+  // an archived entry here means exactly that.
+  const showArchivedCoursesLink = isAdmin || courses.some((c) => c.isArchived);
   const courseSections = COURSE_SECTIONS.map((section) => ({
     ...section,
     courses: visibleCourses
@@ -381,7 +386,9 @@ export default function DashboardSidebarMenu() {
                 </TooltipProvider>
               </SidebarMenuItem>
 
-              {/* Archived Courses */}
+              {/* Archived Courses — always for admins; others only when enrolled
+                  in an archived course */}
+              {showArchivedCoursesLink && (
               <SidebarMenuItem key="features-archived-courses">
                 <TooltipProvider delayDuration={100}>
                   <Tooltip>
@@ -424,6 +431,7 @@ export default function DashboardSidebarMenu() {
                   </Tooltip>
                 </TooltipProvider>
               </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
