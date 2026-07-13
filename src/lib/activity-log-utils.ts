@@ -57,8 +57,13 @@ export interface EnhancedActivityLogData {
   action: string;
   timestamp?: Date;
   category?: ActivityCategory;
-  /** Overrides the severity inferred from the action name. */
-  severity?: LogSeverity;
+  /**
+   * Required and explicit at every call site — the severity of an entry is a
+   * deliberate classification, not something to guess from the action name.
+   * (`inferSeverity` remains available for callers that genuinely want name-based
+   * derivation, but they must opt in by passing `severity: inferSeverity(action)`.)
+   */
+  severity: LogSeverity;
   courseId?: string | null;
   assignmentId?: string | null;
   problemId?: string | null;
@@ -205,7 +210,7 @@ export async function createEnhancedActivityLog(
   data: EnhancedActivityLogData,
 ): Promise<void> {
   const category = data.category || getActivityCategory(data.action);
-  const severity = data.severity ?? inferSeverity(data.action);
+  const severity = data.severity;
   const ipAddress =
     reqOrContext instanceof Request ? getClientIp(reqOrContext) : (reqOrContext.ipAddress ?? null);
   const userAgent =
