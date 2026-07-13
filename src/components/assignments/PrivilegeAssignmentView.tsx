@@ -29,8 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import SelectField from '@/components/ui/SelectField';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
-import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
+import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import {
   Dialog,
@@ -48,7 +47,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
 import type { Problem } from '@prisma/client';
-import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { AssignmentWithDetails } from '@/lib/assignment-details';
@@ -844,33 +842,18 @@ export default function AssignmentDashboardPage({
           />
         </TabsContent>
       </Tabs>
-      {/* JFLAP Viewer Dialog */}
-      {viewerOpen && viewerSrc && ['FA', 'PDA', 'TM'].includes(jffType ?? '') && (
-        <JffViewerDialog
+      {/* Submission viewer dialog, keyed off the problem type. */}
+      {viewerOpen && viewerSrc && (
+        <SubmissionViewerDialog
           open={viewerOpen}
           onOpenChange={setViewerOpen}
+          problemType={jffType}
           src={viewerSrc}
           title={viewerTitle}
+          epsSymbol={epsSymbol}
           width="80vw"
           height="80vh"
           showGridDefault={true}
-          epsSymbol={epsSymbol}
-        />
-      )}
-      {viewerOpen && viewerSrc && 'RE' === jffType && (
-        <RegexViewerDialog
-          src={viewerSrc}
-          open={viewerOpen}
-          onOpenChange={setViewerOpen}
-          title={viewerTitle}
-        />
-      )}
-      {viewerOpen && viewerSrc && 'CFG' === jffType && (
-        <CfgViewerDialog
-          src={viewerSrc}
-          open={viewerOpen}
-          onOpenChange={setViewerOpen}
-          title={viewerTitle}
         />
       )}
       {/* Description dialog */}
