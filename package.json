@@ -2,6 +2,13 @@
   "name": "afct",
   "version": "0.1.0",
   "private": true,
+  "description": "Dashboard for the Automated Feedback for CS Theory (AFCT) system.",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git"
+  },
+  "homepage": "https://github.com/PennStateWilkes-Barre/AFCT-Dashboard#readme",
   "engines": {
     "node": ">=22.0.0"
   },
