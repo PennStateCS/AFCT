@@ -163,6 +163,33 @@ preflight() {
   log "prerequisites OK."
 }
 
+# Make sure the Docker daemon starts on boot, so the stack's `restart:
+# unless-stopped` policy actually brings everything back after a server reboot.
+# Linux/systemd only — best-effort and never fatal. (On macOS/Windows this is
+# governed by Docker Desktop's "start at login" setting instead.)
+ensure_docker_boot() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  systemctl list-unit-files 2>/dev/null | grep -q '^docker\.service' || return 0
+
+  if systemctl is-enabled docker >/dev/null 2>&1; then
+    log "Docker is already set to start on boot."
+    return 0
+  fi
+
+  log "enabling the Docker service to start on boot..."
+  if [ "$(id -u)" = "0" ]; then
+    systemctl enable docker >/dev/null 2>&1 \
+      && log "Docker enabled at boot." \
+      || warn "couldn't enable Docker at boot; run: systemctl enable docker"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo systemctl enable docker >/dev/null 2>&1 \
+      && log "Docker enabled at boot." \
+      || warn "couldn't enable Docker at boot; run: sudo systemctl enable docker"
+  else
+    warn "to survive a reboot, run: sudo systemctl enable docker"
+  fi
+}
+
 # --------------------------------------------------------------------------- #
 # Secret generation
 # --------------------------------------------------------------------------- #
@@ -211,6 +238,7 @@ do_install() {
   [ -f "$ENV_EXAMPLE" ]  || die "${ENV_EXAMPLE} not found next to this script."
 
   preflight
+  ensure_docker_boot
 
   # If a config already exists, don't clobber it silently.
   if [ -f "$ENV_FILE" ]; then
