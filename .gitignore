@@ -67,6 +67,9 @@ next-env.d.ts
 *.crt
 docker/nginx/certs/
 
+# Local-only docs (kept on disk, not published to the repo)
+docs/accessibility-audit.md
+
 # IDE settings
 .vscode/
 .idea/
