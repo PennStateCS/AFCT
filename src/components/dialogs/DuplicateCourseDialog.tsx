@@ -248,7 +248,6 @@ export default function DuplicateCourseDialog({
     const currentTAIds = currentRoster
       .filter((row) => row.role === 'TA')
       .map((row) => row.user.id);
-    console.log('current TA IDs:', currentTAIds);
     if (currentTAIds.length === 0) return;
     const existingIds = new Set(getValues('taIds') ?? []);
     currentTAIds.forEach((id) => existingIds.add(id));
@@ -371,7 +370,7 @@ export default function DuplicateCourseDialog({
                     <InputGroup
                       label="Course Name"
                       name="name"
-                      isValid={!field.value}
+                      isValid={!!field.value}
                       fieldProps={field}
                       error={errors.name?.message as string | undefined}
                     />
@@ -385,7 +384,7 @@ export default function DuplicateCourseDialog({
                     <InputGroup
                       label="Course Code"
                       name="code"
-                      isValid={!field.value}
+                      isValid={!!field.value}
                       fieldProps={field}
                       error={errors.code?.message as string | undefined}
                     />
@@ -400,7 +399,7 @@ export default function DuplicateCourseDialog({
                       <InputGroup
                         label="Semester"
                         name="semester"
-                        isValid={!field.value}
+                        isValid={!!field.value}
                         fieldProps={field}
                         placeholder={`Fall ${new Date().getFullYear()}`}
                         error={errors.semester?.message as string | undefined}
@@ -416,7 +415,7 @@ export default function DuplicateCourseDialog({
                         label="Credits"
                         name="credits"
                         type="number"
-                        isValid={!field.value}
+                        isValid={!!field.value}
                         fieldProps={field}
                         min={1}
                         max={6}
@@ -439,7 +438,7 @@ export default function DuplicateCourseDialog({
                         label="Start Date & Time"
                         name="startDate"
                         type="datetime-local"
-                        isValid={!field.value}
+                        isValid={!!field.value}
                         fieldProps={{ ...field, value: field.value ?? '' }}
                         error={errors.startDate?.message as string | undefined}
                       />
@@ -454,7 +453,7 @@ export default function DuplicateCourseDialog({
                         label="End Date & Time"
                         name="endDate"
                         type="datetime-local"
-                        isValid={!field.value}
+                        isValid={!!field.value}
                         fieldProps={{ ...field, value: field.value ?? '' }}
                         error={errors.endDate?.message as string | undefined}
                         min={startDateStr || undefined}
@@ -472,7 +471,7 @@ export default function DuplicateCourseDialog({
                         label="Self Registration Opens"
                         name="registrationOpenAt"
                         type="datetime-local"
-                        isValid={!field.value}
+                        isValid={!!field.value}
                         fieldProps={{ ...field, value: field.value ?? '' }}
                         error={errors.registrationOpenAt?.message as string | undefined}
                       />
@@ -487,7 +486,7 @@ export default function DuplicateCourseDialog({
                         label="Self Registration Closes"
                         name="registrationCloseAt"
                         type="datetime-local"
-                        isValid={!field.value}
+                        isValid={!!field.value}
                         fieldProps={{ ...field, value: field.value ?? '' }}
                         error={errors.registrationCloseAt?.message as string | undefined}
                         min={registrationOpenAtStr || undefined}

@@ -118,7 +118,6 @@ export function CreateProblemDialog({
 
   // Internal visibility state: only show dialog after groups are loaded (if needed)
   const [internalOpen, setInternalOpen] = useState(false);
-  const [, setInitializing] = useState(false);
 
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
 
@@ -127,7 +126,6 @@ export function CreateProblemDialog({
     const ac = new AbortController();
 
     async function init() {
-      setInitializing(true);
       setInternalOpen(false);
       setSelectedGroupId('ALL');
       setAssignmentIsGroup(false);
@@ -186,7 +184,6 @@ export function CreateProblemDialog({
             keepValues: false,
           });
           setInternalOpen(true);
-          setInitializing(false);
         }
       }
     }
@@ -196,7 +193,6 @@ export function CreateProblemDialog({
     } else {
       // parent closed while we were possibly initializing
       setInternalOpen(false);
-      setInitializing(false);
       reset(defaults, {
         keepDirty: false,
         keepTouched: false,

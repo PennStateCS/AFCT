@@ -410,7 +410,7 @@ export default function StudentAssignmentPage({
                 }
                 courseIsArchived={courseIsArchived}
                 currentGrade={selectedProblemGrade}
-                isPrivledgedUser={false}
+                isPrivilegedUser={false}
                 submissionsLoading={submissionsLoading}
                 commentsLoading={commentsLoading}
               />

@@ -66,7 +66,7 @@ export type ProblemWorkspaceProps = {
   onSaveGrade?: () => void;
   isSavingGrade?: boolean;
   isLoadingGrade?: boolean;
-  isPrivledgedUser: boolean;
+  isPrivilegedUser: boolean;
   submissionsLoading?: boolean;
   commentsLoading?: boolean;
 };
@@ -115,12 +115,11 @@ export default function ProblemWorkspace({
   onSaveGrade,
   isSavingGrade = false,
   isLoadingGrade = false,
-  isPrivledgedUser,
+  isPrivilegedUser,
   submissionsLoading = false,
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
-  const [isRunning, _setIsRunning] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
   const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
 
@@ -205,7 +204,7 @@ export default function ProblemWorkspace({
             autograderEnabled={problem.autograderEnabled ?? undefined}
           />
 
-          {isPrivledgedUser && onGradeInputChange && onSaveGrade ? (
+          {isPrivilegedUser && onGradeInputChange && onSaveGrade ? (
             <ProblemGradeForm
               value={gradeInput}
               currentGrade={currentGrade}
@@ -220,7 +219,7 @@ export default function ProblemWorkspace({
               // compile-only so runtime behavior is unchanged.
               onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined}
             />
-          ) : !isPrivledgedUser ? (
+          ) : !isPrivilegedUser ? (
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-[0.70rem] whitespace-nowrap text-slate-700 dark:border-slate-200 dark:text-slate-200">
               <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
               <span>
@@ -290,8 +289,8 @@ export default function ProblemWorkspace({
                       size="sm"
                       variant="secondary"
                       onClick={() => onRerunVisibleSubmissions?.(visibleSubmissions)}
-                      disabled={visibleSubmissions.length === 0 || isRunning}
-                      hidden={!isPrivledgedUser}
+                      disabled={visibleSubmissions.length === 0}
+                      hidden={!isPrivilegedUser}
                       className="whitespace-nowrap"
                       title="Rerun Visible Submissions"
                     >
@@ -401,7 +400,7 @@ export default function ProblemWorkspace({
                                     title="Rerun submission"
                                     aria-label="Rerun submission"
                                     className="h-8 w-8 p-0"
-                                    hidden={!isPrivledgedUser}
+                                    hidden={!isPrivilegedUser}
                                   >
                                     <RotateCcw className="h-4 w-4" />
                                   </Button>
