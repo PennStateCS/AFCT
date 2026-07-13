@@ -53,6 +53,16 @@ type AssignmentSummary = {
 const EMPTY_GROUPS: { id: string; name: string }[] = [];
 const EMPTY_GROUP_PROBLEMS_MAP: Record<string, string[]> = {};
 
+// The "Add existing problem" picker wants optional (not nullable) description/type, so
+// widen a DB problem row to that shape. Shared by its candidate and used-problem lists.
+function normalizeProblem(p: Problem) {
+  return {
+    ...p,
+    description: p.description ?? undefined,
+    type: typeof p.type === 'string' ? p.type : undefined,
+  };
+}
+
 type PrivilegeAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
   initialAssignments?: AssignmentSummary[];
@@ -342,12 +352,7 @@ export default function AssignmentDashboardPage({
   );
 
   const usedProblems = useMemo(
-    () =>
-      (assignment?.problems ?? []).map((ap) => ({
-        ...ap.problem,
-        description: ap.problem.description ?? undefined,
-        type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
-      })),
+    () => (assignment?.problems ?? []).map((ap) => normalizeProblem(ap.problem)),
     [assignment?.problems],
   );
 
@@ -609,11 +614,7 @@ export default function AssignmentDashboardPage({
         courseId={id}
         assignmentId={aid}
         courseIsArchived={courseIsArchived}
-        allProblems={allProblems.map((p: Problem) => ({
-          ...p,
-          description: p.description ?? undefined,
-          type: typeof p.type === 'string' ? p.type : undefined,
-        }))}
+        allProblems={allProblems.map(normalizeProblem)}
         usedProblems={usedProblems}
         onAddProblems={(selectedProblemIds, groupId, problemSettings) => {
           return handleAddProblems(selectedProblemIds, groupId, problemSettings);
@@ -681,35 +682,16 @@ export default function AssignmentDashboardPage({
           open={editProblemDialogOpen}
           setOpen={setEditProblemDialogOpen}
           assignmentSettings={assignmentSettingsForDialog}
-          problem={
-            problemToEdit
-              ? {
-                  ...problemToEdit,
-                  description: problemToEdit.description ?? null,
-                  // Preserve string type when present so FA/PDA fields render
-                  type: typeof problemToEdit.type === 'string' ? problemToEdit.type : null,
-                  maxStates: problemToEdit.maxStates ?? null,
-                  isDeterministic:
-                    (problemToEdit as Problem & { isDeterministic?: boolean }).isDeterministic ??
-                    null,
-                }
-              : {
-                  id: '',
-                  title: '',
-                  description: null,
-                  maxSubmissions: -1,
-                  maxPoints: 100,
-                  autograderEnabled: true,
-                  fileName: null,
-                  originalFileName: null,
-                  type: null,
-                  maxStates: null,
-                  isDeterministic: null,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                  courseId: '',
-                }
-          }
+          // `problemToEdit` is always set here (guarded by the `&&` above).
+          problem={{
+            ...problemToEdit,
+            description: problemToEdit.description ?? null,
+            // Preserve string type when present so FA/PDA fields render
+            type: typeof problemToEdit.type === 'string' ? problemToEdit.type : null,
+            maxStates: problemToEdit.maxStates ?? null,
+            isDeterministic:
+              (problemToEdit as Problem & { isDeterministic?: boolean }).isDeterministic ?? null,
+          }}
           onSaved={() => {
             void invalidateAssignment();
           }}
