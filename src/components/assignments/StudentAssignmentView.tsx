@@ -9,12 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { ArrowLeft } from 'lucide-react';
-import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
-import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
-import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
+import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDeadlineDual } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
@@ -428,48 +426,22 @@ export default function StudentAssignmentPage({
           </CardContent>
         </Card>
       )}
-      {/* JffViewerDialog for viewing submitted files */}
-      {openDialog.submission &&
-        ['FA', 'PDA', 'TM'].includes(
-          assignment.problems.find((u) => u.problem.id === openDialog?.submission?.problemId)
-            ?.problem?.type ?? '',
-        ) && (
-          <JffViewerDialog
-            open={openDialog.open}
-            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-            src={apiPaths.files.submission(
-              encodeURIComponent(openDialog.submission.fileName ?? ''),
-            )}
-            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
-            width="70vw"
-            height="70vh"
-            epsSymbol={epsSymbol}
-          />
-        )}
-      {openDialog.submission &&
-        assignment.problems.find((u) => u.problem.id === openDialog?.submission?.problemId)?.problem
-          ?.type === 'RE' && (
-          <RegexViewerDialog
-            open={openDialog.open}
-            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-            src={apiPaths.files.submission(
-              encodeURIComponent(openDialog.submission.fileName ?? ''),
-            )}
-            title={`${openDialog.submission.originalFileName || openDialog?.submission?.fileName} - Submission`}
-          />
-        )}
-      {openDialog.submission &&
-        assignment.problems.find((u) => u.problem.id === openDialog?.submission?.problemId)?.problem
-          ?.type === 'CFG' && (
-          <CfgViewerDialog
-            open={openDialog.open}
-            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-            src={apiPaths.files.submission(
-              encodeURIComponent(openDialog.submission.fileName ?? ''),
-            )}
-            title={`${openDialog.submission.originalFileName || openDialog?.submission?.fileName} - Submission`}
-          />
-        )}
+      {/* Viewer dialog for the selected submission, keyed off the problem type. */}
+      {openDialog.submission && (
+        <SubmissionViewerDialog
+          open={openDialog.open}
+          onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+          problemType={
+            assignment.problems.find((u) => u.problem.id === openDialog?.submission?.problemId)
+              ?.problem?.type
+          }
+          src={apiPaths.files.submission(encodeURIComponent(openDialog.submission.fileName ?? ''))}
+          title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          epsSymbol={epsSymbol}
+          width="70vw"
+          height="70vh"
+        />
+      )}
     </div>
   );
 }

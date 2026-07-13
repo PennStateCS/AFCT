@@ -10,6 +10,7 @@ import os from 'os';
 import JavaRunner from '../../lib/java-runner';
 import { getEvaluatorConfig, getQueueSettings, type EvaluatorConfig } from './eval-config';
 import { createEnhancedActivityLog, type LogSeverity } from './activity-log-utils';
+import { errMessage } from './errors';
 import {
   DEFAULT_SUBMISSION_MAX_CONCURRENT,
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
@@ -55,6 +56,13 @@ let maxAttempts = DEFAULT_SUBMISSION_MAX_ATTEMPTS;
 const SETTINGS_REFRESH_MS = 30_000; // how often to re-read the queue settings
 const REAP_INTERVAL_MS = 60_000; // how often to scan for stuck PROCESSING rows
 const STUCK_GRACE_MS = 60_000; // grace beyond the eval timeout before a row is "stuck"
+
+// How long a worker loop waits before checking the queue again, by outcome.
+const LOOP_DELAY_MS = {
+  IDLE: 3_000, // queue was empty — no rush
+  NEXT: 100, // just finished (or lost a claim) — the queue may still be full
+  ERROR: 5_000, // a loop error — back off longer
+};
 
 type SubmissionEvaluationStatus = keyof typeof SubmissionStatus;
 
@@ -189,7 +197,7 @@ async function reapStuckSubmissions() {
   } catch (error) {
     console.error('[SubmissionWorker] Reaper error:', error);
     await logQueueEvent('SUBMISSION_QUEUE_REAPER_ERROR', 'ERROR', {
-      error: error instanceof Error ? error.message : String(error),
+      error: errMessage(error),
     });
   } finally {
     scheduleAsync(reapStuckSubmissions, REAP_INTERVAL_MS);
@@ -226,7 +234,7 @@ async function runWorkerLoop() {
 
     // No work to be done
     if (nextSubmission === null) {
-      scheduleAsync(runWorkerLoop, 3_000); // Larger sleep bececause there is no rush
+      scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.IDLE);
       return;
     }
 
@@ -259,7 +267,7 @@ async function runWorkerLoop() {
           });
         }
       }
-      scheduleAsync(runWorkerLoop, 100);
+      scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
       return;
     }
 
@@ -272,7 +280,7 @@ async function runWorkerLoop() {
 
     // count === 0 means another loop/instance beat us to it. Move on.
     if (claimed.count === 0) {
-      scheduleAsync(runWorkerLoop, 100); // Small sleep because it could be full
+      scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
       return;
     }
 
@@ -281,14 +289,14 @@ async function runWorkerLoop() {
     await evaluateSubmission(nextSubmission.id);
 
     // Move to next check
-    scheduleAsync(runWorkerLoop, 100); // Small sleep as code ran and could be full
+    scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
     return;
   } catch (error) {
     console.error('[SubmissionWorker] Database or loop error:', error);
     await logQueueEvent('SUBMISSION_QUEUE_ERROR', 'ERROR', {
-      error: error instanceof Error ? error.message : String(error),
+      error: errMessage(error),
     });
-    scheduleAsync(runWorkerLoop, 5_000); // Super long sleep due to error
+    scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.ERROR);
     return;
   }
 }
@@ -366,7 +374,7 @@ async function evaluateSubmission(id: string) {
 
     console.log(`[SubmissionWorker] Successfully evaluated submission ${id}`);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errMessage(error);
 
     // This catch only fires on unexpected/transient errors (DB blip, evaluator
     // crash). Known bad-input cases come back as evaluation.status === 'FAILED'
@@ -408,7 +416,16 @@ export const __test__ = {
   runWorkerLoop,
 };
 
-function getJavaRunnerCtor() {
+// The evaluator interface both the constructor and the fallback factory produce —
+// declared once instead of being spelled out at each interop cast site.
+type JavaEvaluator = {
+  execute: (
+    args: string[],
+    options?: { timeout?: number; maxMemoryMb?: number; env?: Record<string, string> },
+  ) => Promise<{ stdout?: string; stderr?: string; exitCode?: number }>;
+};
+
+function getJavaRunnerCtor(): new (jarPath: string) => JavaEvaluator {
   const maybeCtor =
     typeof JavaRunner === 'function'
       ? JavaRunner
@@ -418,246 +435,208 @@ function getJavaRunnerCtor() {
     throw new Error('Java runner constructor is unavailable');
   }
 
-  return maybeCtor as new (jarPath: string) => {
-    execute: (
-      args: string[],
-      options?: { timeout?: number; maxMemoryMb?: number; env?: Record<string, string> },
-    ) => Promise<{
-      stdout?: string;
-      stderr?: string;
-      exitCode?: number;
-    }>;
-  };
+  return maybeCtor as new (jarPath: string) => JavaEvaluator;
 }
 
-function createJavaRunner(jarPath: string) {
+function createJavaRunner(jarPath: string): JavaEvaluator {
   const JavaRunnerCtor = getJavaRunnerCtor();
   try {
     return new JavaRunnerCtor(jarPath);
   } catch {
-    return (
-      JavaRunnerCtor as unknown as (path: string) => {
-        execute: (
-          args: string[],
-          options?: { timeout?: number; maxMemoryMb?: number; env?: Record<string, string> },
-        ) => Promise<{
-          stdout?: string;
-          stderr?: string;
-          exitCode?: number;
-        }>;
-      }
-    )(jarPath) as {
-      execute: (
-        args: string[],
-        options?: { timeout?: number; maxMemoryMb?: number; env?: Record<string, string> },
-      ) => Promise<{
-        stdout?: string;
-        stderr?: string;
-        exitCode?: number;
-      }>;
-    };
+    // Some builds export a plain factory rather than a constructor.
+    return (JavaRunnerCtor as unknown as (path: string) => JavaEvaluator)(jarPath);
   }
+}
+
+/**
+ * Problem-type-specific evaluator CLI args (after the fixed `--json answer upload`):
+ * FA/PDA pass a max-states bound, and FA additionally passes the determinism flag.
+ */
+function buildEvaluatorArgs(problem: WorkerSubmission['assignmentProblem']['problem']): string[] {
+  if (problem.type !== 'FA' && problem.type !== 'PDA') return [];
+  const args = [String(problem.maxStates ?? -1)];
+  if (problem.type === 'FA') {
+    args.push(String(problem.isDeterministic ?? false));
+  }
+  return args;
 }
 
 async function runJavaEvaluator(
   submission: WorkerSubmission,
   config: EvaluatorConfig,
 ): Promise<SubmissionEvaluationResult> {
-  let feedback: string | null = null;
-  let correct: boolean | undefined = undefined;
-  let evaluationRaw: unknown | null = null;
-  let status: SubmissionEvaluationStatus = 'COMPLETED';
+  // The shape every failure guard returns (FAILED, no raw payload).
+  const fail = (feedback: string, correct?: boolean): SubmissionEvaluationResult => ({
+    feedback,
+    correct,
+    evaluationRaw: null,
+    status: 'FAILED',
+  });
 
-  // No file submitted
   if (!submission.fileName) {
-    status = 'FAILED';
     await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
       error: 'No file submitted.',
     });
-
-    return {
-      feedback: 'No file submitted.',
-      correct: false,
-      evaluationRaw: null,
-      status,
-    };
+    return fail('No file submitted.', false);
   }
 
   try {
     const uploadedFilePath = path.join('/private', 'uploads', 'submissions', submission.fileName);
-
-    // Check if uploaded file exists
     if (!fs.existsSync(uploadedFilePath)) {
-      status = 'FAILED';
       await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
         error: 'Uploaded file not found.',
       });
-
-      return {
-        feedback: 'ERROR: Uploaded file not found.',
-        correct: false,
-        evaluationRaw: null,
-        status,
-      };
+      return fail('ERROR: Uploaded file not found.', false);
     }
 
-    // Check if we're running in Docker
+    // Windows local dev (no evaluator JAR): just report the line count as a stand-in.
     const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
-
     if (!isDocker && os.platform() === 'win32') {
-      // Windows local development: Count lines
       const result = execSync(`powershell -Command "(Get-Content '${uploadedFilePath}').Count"`, {
         encoding: 'utf-8',
       });
-      feedback = `File has ${result.trim()} lines (Windows).`;
-    } else {
-      // Docker/Linux: Use afct-evaluator.jar with JavaRunner
-      const answerFileName = submission.assignmentProblem.problem.fileName;
-
-      if (!answerFileName) {
-        status = 'FAILED';
-        feedback = 'ERROR: No answer file configured for this problem.';
-        await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
-          error: 'No answer file configured for this problem.',
-        });
-      } else {
-        const answerFilePath = path.join('/private', 'uploads', 'solutions', answerFileName);
-
-        // Check if answer file exists
-        if (!fs.existsSync(answerFilePath)) {
-          status = 'FAILED';
-          feedback = 'ERROR: Answer file not found on server.';
-          await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
-            error: 'Answer file not found on server.',
-            answerFilePath,
-          });
-        } else {
-          try {
-            // Create JavaRunner instance for afct-evaluator.jar
-            const evaluator = createJavaRunner('./jars/afct-evaluator.jar');
-
-            // Build command arguments
-            const args = ['--json', answerFilePath, uploadedFilePath];
-
-            // Add optional arguments based on problem type
-            if (
-              submission.assignmentProblem.problem.type === 'FA' ||
-              submission.assignmentProblem.problem.type === 'PDA'
-            ) {
-              const maxStates = submission.assignmentProblem.problem.maxStates ?? -1;
-              args.push(maxStates.toString());
-
-              if (submission.assignmentProblem.problem.type === 'FA') {
-                const deterministic = submission.assignmentProblem.problem.isDeterministic ?? false;
-                args.push(deterministic.toString());
-              }
-            }
-
-            // Execute the evaluator with the configured timeout, memory cap, and
-            // analyzer bound (overrides the CFGANALYZER_LIMIT env default).
-            const result = await evaluator.execute(args, {
-              timeout: config.timeoutMs,
-              maxMemoryMb: config.maxMemoryMb,
-              env: { CFGANALYZER_LIMIT: String(config.analyzerLimit) },
-            });
-
-            const stdoutTrimmed = result.stdout?.trim() ?? '';
-            const stderrTrimmed = result.stderr?.trim() ?? '';
-            if (stderrTrimmed) {
-              await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_STDERR', 'WARNING', {
-                stderr: stderrTrimmed.substring(0, 500),
-              });
-
-              console.warn(
-                `[SubmissionWorker] Evaluator stderr for submission ${submission.id}: ${stderrTrimmed.substring(0, 100)}`,
-              );
-            }
-
-            // Parse the JSON response
-            try {
-              const evaluation = JSON.parse(stdoutTrimmed);
-              evaluationRaw = evaluation;
-
-              if (evaluation && typeof evaluation === 'object') {
-                // Extract correct field if present
-                if (typeof evaluation.correct === 'boolean') {
-                  correct = evaluation.correct;
-                }
-
-                // Extract feedback if present
-                if (typeof evaluation.feedback === 'string') {
-                  const isJavaStreamString = /java\.lang\..*Stream@/i.test(evaluation.feedback);
-                  feedback = isJavaStreamString
-                    ? `Evaluation completed - correct: ${correct}`
-                    : evaluation.feedback;
-                } else {
-                  feedback = `Evaluation completed - correct: ${correct}`;
-                }
-
-                await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_SUCCESS', 'INFO', {
-                  correct: correct ?? false,
-                  evaluation,
-                });
-              } else {
-                status = 'FAILED';
-                const errorMessage = `Invalid JSON response from evaluator: ${stdoutTrimmed}`;
-                await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
-                  error: errorMessage,
-                  stdout: stdoutTrimmed,
-                });
-                feedback = `ERROR: ${errorMessage}`;
-              }
-            } catch (parseErr) {
-              status = 'FAILED';
-              evaluationRaw = stdoutTrimmed || null;
-              const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
-              await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
-                error: errorMessage,
-                parseError: parseErr instanceof Error ? parseErr.message : String(parseErr),
-                stdout: stdoutTrimmed,
-              });
-              feedback = `ERROR: ${errorMessage}`;
-              console.error(
-                `[SubmissionWorker] Failed to parse evaluator output for submission ${submission.id}:`,
-                parseErr,
-              );
-            }
-          } catch (evaluatorErr) {
-            status = 'FAILED';
-            const errorMessage =
-              evaluatorErr instanceof Error ? evaluatorErr.message : String(evaluatorErr);
-            await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
-              error: errorMessage,
-            });
-            feedback = `ERROR: Evaluation failed - ${errorMessage}`;
-            console.error(
-              `[SubmissionWorker] Evaluator error for submission ${submission.id}:`,
-              evaluatorErr,
-            );
-          }
-        }
-      }
+      return {
+        feedback: `File has ${result.trim()} lines (Windows).`,
+        correct: undefined,
+        evaluationRaw: null,
+        status: 'COMPLETED',
+      };
     }
 
-    return {
-      feedback,
-      correct,
-      evaluationRaw: evaluationRaw === null ? null : evaluationRaw,
-      status,
-    };
+    // Docker/Linux: run afct-evaluator.jar against the problem's answer key.
+    const answerFileName = submission.assignmentProblem.problem.fileName;
+    if (!answerFileName) {
+      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
+        error: 'No answer file configured for this problem.',
+      });
+      return fail('ERROR: No answer file configured for this problem.');
+    }
+
+    const answerFilePath = path.join('/private', 'uploads', 'solutions', answerFileName);
+    if (!fs.existsSync(answerFilePath)) {
+      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
+        error: 'Answer file not found on server.',
+        answerFilePath,
+      });
+      return fail('ERROR: Answer file not found on server.');
+    }
+
+    return await evaluateWithJar(submission, config, answerFilePath, uploadedFilePath);
   } catch (cmdErr) {
-    status = 'FAILED';
-    feedback = `ERROR: Evaluation failed - ${cmdErr instanceof Error ? cmdErr.message : 'Unknown error'}`;
+    const feedback = `ERROR: Evaluation failed - ${cmdErr instanceof Error ? cmdErr.message : 'Unknown error'}`;
     await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
       error: feedback,
     });
     console.error(`[SubmissionWorker] Command error for submission ${submission.id}:`, cmdErr);
+    return fail(feedback, false);
+  }
+}
 
+/**
+ * Run the evaluator JAR and turn its stdout into a result. Split out of
+ * runJavaEvaluator so the file-resolution guards above stay flat: this owns the
+ * execute → stderr-log → JSON-parse path and all of its failure modes.
+ */
+async function evaluateWithJar(
+  submission: WorkerSubmission,
+  config: EvaluatorConfig,
+  answerFilePath: string,
+  uploadedFilePath: string,
+): Promise<SubmissionEvaluationResult> {
+  try {
+    const evaluator = createJavaRunner('./jars/afct-evaluator.jar');
+    const args = [
+      '--json',
+      answerFilePath,
+      uploadedFilePath,
+      ...buildEvaluatorArgs(submission.assignmentProblem.problem),
+    ];
+
+    // Execute the evaluator with the configured timeout, memory cap, and analyzer
+    // bound (overrides the CFGANALYZER_LIMIT env default).
+    const result = await evaluator.execute(args, {
+      timeout: config.timeoutMs,
+      maxMemoryMb: config.maxMemoryMb,
+      env: { CFGANALYZER_LIMIT: String(config.analyzerLimit) },
+    });
+
+    const stdoutTrimmed = result.stdout?.trim() ?? '';
+    const stderrTrimmed = result.stderr?.trim() ?? '';
+    if (stderrTrimmed) {
+      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_STDERR', 'WARNING', {
+        stderr: stderrTrimmed.substring(0, 500),
+      });
+      console.warn(
+        `[SubmissionWorker] Evaluator stderr for submission ${submission.id}: ${stderrTrimmed.substring(0, 100)}`,
+      );
+    }
+
+    try {
+      const evaluation = JSON.parse(stdoutTrimmed);
+
+      if (!evaluation || typeof evaluation !== 'object') {
+        const errorMessage = `Invalid JSON response from evaluator: ${stdoutTrimmed}`;
+        await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
+          error: errorMessage,
+          stdout: stdoutTrimmed,
+        });
+        return {
+          feedback: `ERROR: ${errorMessage}`,
+          correct: undefined,
+          evaluationRaw: evaluation,
+          status: 'FAILED',
+        };
+      }
+
+      const correct = typeof evaluation.correct === 'boolean' ? evaluation.correct : undefined;
+      let feedback: string;
+      if (typeof evaluation.feedback === 'string') {
+        const isJavaStreamString = /java\.lang\..*Stream@/i.test(evaluation.feedback);
+        feedback = isJavaStreamString
+          ? `Evaluation completed - correct: ${correct}`
+          : evaluation.feedback;
+      } else {
+        feedback = `Evaluation completed - correct: ${correct}`;
+      }
+
+      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_SUCCESS', 'INFO', {
+        correct: correct ?? false,
+        evaluation,
+      });
+
+      return { feedback, correct, evaluationRaw: evaluation, status: 'COMPLETED' };
+    } catch (parseErr) {
+      const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
+      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
+        error: errorMessage,
+        parseError: errMessage(parseErr),
+        stdout: stdoutTrimmed,
+      });
+      console.error(
+        `[SubmissionWorker] Failed to parse evaluator output for submission ${submission.id}:`,
+        parseErr,
+      );
+      return {
+        feedback: `ERROR: ${errorMessage}`,
+        correct: undefined,
+        evaluationRaw: stdoutTrimmed || null,
+        status: 'FAILED',
+      };
+    }
+  } catch (evaluatorErr) {
+    const errorMessage = errMessage(evaluatorErr);
+    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
+      error: errorMessage,
+    });
+    console.error(
+      `[SubmissionWorker] Evaluator error for submission ${submission.id}:`,
+      evaluatorErr,
+    );
     return {
-      feedback,
-      correct: false,
+      feedback: `ERROR: Evaluation failed - ${errorMessage}`,
+      correct: undefined,
       evaluationRaw: null,
-      status,
+      status: 'FAILED',
     };
   }
 }

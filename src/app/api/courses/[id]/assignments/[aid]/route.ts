@@ -48,6 +48,83 @@ interface AssignmentWithProblemsAndCourse {
 }
 
 /**
+ * State-integrity guards shared by the full (PUT) and partial (PATCH) updates: an
+ * assignment can't be unpublished once it has submissions or grades, and its group mode
+ * can't change after any submission exists. Returns a `NextResponse` to short-circuit
+ * the update, or `null` when the change is allowed.
+ */
+async function assertAssignmentMutable(
+  req: Request,
+  params: {
+    userId: string;
+    courseId: string;
+    assignmentId: string | undefined;
+    existing: { isGroup: boolean };
+    data: { isPublished?: boolean; isGroup?: boolean };
+  },
+): Promise<NextResponse | null> {
+  const { userId, courseId, assignmentId, existing, data } = params;
+
+  // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
+  // Block unpublishing an assignment that already has submissions or grades.
+  if (data.isPublished === false) {
+    const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
+      where: { assignmentId, submissions: { some: {} } },
+      select: { assignmentId: true },
+    }));
+    const hasGrade = !!(await prisma.assignmentProblemGrade.findFirst({
+      where: { assignmentId },
+      select: { assignmentId: true },
+    }));
+
+    if (hasSubmission) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId,
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId,
+        assignmentId,
+        metadata: { reason: 'has submissions' },
+      });
+      return NextResponse.json({ error: 'Assignment must not have any submissions' }, { status: 403 });
+    }
+
+    if (hasGrade) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId,
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId,
+        assignmentId,
+        metadata: { reason: 'has grades' },
+      });
+      return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
+    }
+  }
+
+  // Prevent changing the assignment's group mode once submissions exist.
+  if (data.isGroup !== undefined && data.isGroup !== existing.isGroup) {
+    const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId } })) > 0;
+    if (hasAnySubmission) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId,
+        action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
+        severity: 'WARNING',
+        courseId,
+        assignmentId,
+        metadata: { reason: 'has submissions' },
+      });
+      return NextResponse.json(
+        { error: 'Cannot change assignment group mode after submissions exist' },
+        { status: 403 },
+      );
+    }
+  }
+
+  return null;
+}
+
+/**
  * Fetches one assignment (scoped to the course) with its problems and a derived
  * `maxPoints`. This is the single canonical assignment read (it absorbed the former
  * global `GET /api/assignments/[id]`). Access: the caller must be an enrolled member
@@ -255,64 +332,14 @@ export const PUT = withCourseAuth(
     // Deadlines are anchored to the course's timezone, not the actor's.
     const courseTimezone = await resolveCourseTimezone(courseId);
 
-    // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
-    // Block unpublishing an assignment that already has submissions or grades.
-    if (data.isPublished === false) {
-      const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
-        where: { assignmentId: id, submissions: { some: {} } },
-        select: { assignmentId: true },
-      }));
-      const hasGrade = !!(await prisma.assignmentProblemGrade.findFirst({
-        where: { assignmentId: id },
-        select: { assignmentId: true },
-      }));
-
-      if (hasSubmission) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: user.id,
-          action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
-          severity: 'WARNING',
-          courseId,
-          assignmentId: id,
-          metadata: { reason: 'has submissions' },
-        });
-        return NextResponse.json(
-          { error: 'Assignment must not have any submissions' },
-          { status: 403 },
-        );
-      }
-
-      if (hasGrade) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: user.id,
-          action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
-          severity: 'WARNING',
-          courseId,
-          assignmentId: id,
-          metadata: { reason: 'has grades' },
-        });
-        return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
-      }
-    }
-
-    // Prevent changing the assignment's group mode if submissions exist
-    if (data.isGroup !== undefined && data.isGroup !== existing.isGroup) {
-      const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
-      if (hasAnySubmission) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: user.id,
-          action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
-          severity: 'WARNING',
-          courseId,
-          assignmentId: id,
-          metadata: { reason: 'has submissions' },
-        });
-        return NextResponse.json(
-          { error: 'Cannot change assignment group mode after submissions exist' },
-          { status: 403 },
-        );
-      }
-    }
+    const mutationBlock = await assertAssignmentMutable(req, {
+      userId: user.id,
+      courseId,
+      assignmentId: id,
+      existing,
+      data,
+    });
+    if (mutationBlock) return mutationBlock;
 
     try {
       const dueDate = data.dueDate
@@ -431,63 +458,14 @@ export const PATCH = withCourseAuth(
     // Deadlines are anchored to the course's timezone, not the actor's.
     const courseTimezone = await resolveCourseTimezone(courseId);
 
-    // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
-    if (data.isPublished === false) {
-      const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
-        where: { assignmentId: id, submissions: { some: {} } },
-        select: { assignmentId: true },
-      }));
-      const hasGrade = !!(await prisma.assignmentProblemGrade.findFirst({
-        where: { assignmentId: id },
-        select: { assignmentId: true },
-      }));
-
-      if (hasSubmission) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: user.id,
-          action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
-          severity: 'WARNING',
-          courseId,
-          assignmentId: id,
-          metadata: { reason: 'has submissions' },
-        });
-        return NextResponse.json(
-          { error: 'Assignment must not have any submissions' },
-          { status: 403 },
-        );
-      }
-
-      if (hasGrade) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: user.id,
-          action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
-          severity: 'WARNING',
-          courseId,
-          assignmentId: id,
-          metadata: { reason: 'has grades' },
-        });
-        return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
-      }
-    }
-
-    // Prevent changing the assignment's group mode if submissions exist
-    if (data.isGroup !== undefined) {
-      const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
-      if (hasAnySubmission) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: user.id,
-          action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
-          severity: 'WARNING',
-          courseId,
-          assignmentId: id,
-          metadata: { reason: 'has submissions' },
-        });
-        return NextResponse.json(
-          { error: 'Cannot change assignment group mode after submissions exist' },
-          { status: 403 },
-        );
-      }
-    }
+    const mutationBlock = await assertAssignmentMutable(req, {
+      userId: user.id,
+      courseId,
+      assignmentId: id,
+      existing,
+      data,
+    });
+    if (mutationBlock) return mutationBlock;
 
     try {
       const effectiveDueDate =

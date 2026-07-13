@@ -9,6 +9,8 @@ import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import { apiClient } from '@/lib/api/fetch-client';
+import { errMessage } from '@/lib/errors';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
@@ -16,10 +18,8 @@ import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
-import JffViewerDialog from './JffViewerDialog';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
-import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
-import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
+import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
 
@@ -542,21 +542,12 @@ export default function AssignmentSubmissions({
 
       setSavingComments((prev) => ({ ...prev, [problemId]: true }));
       try {
-        const response = await fetch(apiPaths.comments(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content: commentText,
-            assignmentId,
-            problemId,
-            studentId: selectedStudent.id,
-          }),
+        const newComment = await apiClient.post<DiscussionComment>(apiPaths.comments(), {
+          content: commentText,
+          assignmentId,
+          problemId,
+          studentId: selectedStudent.id,
         });
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
-          throw new Error(error?.error || 'Failed to save comment');
-        }
-        const newComment = await response.json();
         setComments((prev) => ({
           ...prev,
           [problemId]: [...(prev[problemId] || []), newComment],
@@ -576,7 +567,7 @@ export default function AssignmentSubmissions({
         showToast.success('Comment saved successfully');
       } catch (err) {
         console.error('Save comment error:', err);
-        showToast.error(err instanceof Error ? err.message : 'Failed to save comment');
+        showToast.error(errMessage(err, 'Failed to save comment'));
       } finally {
         setSavingComments((prev) => ({ ...prev, [problemId]: false }));
       }
@@ -588,13 +579,7 @@ export default function AssignmentSubmissions({
     async (commentId: string, problemId: string) => {
       setDeletingComments((prev) => ({ ...prev, [commentId]: true }));
       try {
-        const response = await fetch(apiPaths.comments({ commentId }), {
-          method: 'DELETE',
-        });
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
-          throw new Error(error?.error || 'Failed to delete comment');
-        }
+        await apiClient.del(apiPaths.comments({ commentId }));
         setComments((prev) => ({
           ...prev,
           [problemId]: prev[problemId]?.filter((c) => c.id !== commentId) || [],
@@ -613,7 +598,7 @@ export default function AssignmentSubmissions({
         showToast.success('Comment deleted successfully');
       } catch (err) {
         console.error('Delete comment error:', err);
-        showToast.error(err instanceof Error ? err.message : 'Failed to delete comment');
+        showToast.error(errMessage(err, 'Failed to delete comment'));
       } finally {
         setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
       }
@@ -666,18 +651,10 @@ export default function AssignmentSubmissions({
       setSavingProblemGrades((prev) => ({ ...prev, [problemId]: true }));
 
       try {
-        const res = await fetch(
+        await apiClient.post(
           apiPaths.assignmentProblemGrade(courseId, assignmentId, problemId, selectedStudent.id),
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ grade: numericValue }),
-          },
+          { grade: numericValue },
         );
-        if (!res.ok) {
-          const error = await res.json().catch(() => ({}));
-          throw new Error(error?.error || 'Failed to save problem grade');
-        }
 
         setProblemGrades((prev) => {
           const updated = { ...prev, [problemId]: numericValue };
@@ -894,44 +871,18 @@ export default function AssignmentSubmissions({
         </Card>
       )}
 
-      {openDialog.submission &&
-        ['FA', 'PDA', 'TM'].includes(
-          visibleProblems.find((p) => p.id === selectedProblemId)?.type ?? '',
-        ) && (
-          <JffViewerDialog
-            open={openDialog.open}
-            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-            src={apiPaths.files.submission(
-              encodeURIComponent(openDialog.submission.fileName ?? ''),
-            )}
-            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
-            width="70vw"
-            height="70vh"
-            epsSymbol={epsSymbol}
-          />
-        )}
-      {openDialog.submission &&
-        (visibleProblems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'RE' && (
-          <RegexViewerDialog
-            open={openDialog.open}
-            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-            src={apiPaths.files.submission(
-              encodeURIComponent(openDialog.submission.fileName ?? ''),
-            )}
-            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
-          />
-        )}
-      {openDialog.submission &&
-        (visibleProblems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'CFG' && (
-          <CfgViewerDialog
-            open={openDialog.open}
-            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-            src={apiPaths.files.submission(
-              encodeURIComponent(openDialog.submission.fileName ?? ''),
-            )}
-            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
-          />
-        )}
+      {openDialog.submission && (
+        <SubmissionViewerDialog
+          open={openDialog.open}
+          onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+          problemType={visibleProblems.find((p) => p.id === selectedProblemId)?.type}
+          src={apiPaths.files.submission(encodeURIComponent(openDialog.submission.fileName ?? ''))}
+          title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          epsSymbol={epsSymbol}
+          width="70vw"
+          height="70vh"
+        />
+      )}
     </div>
   );
 }
