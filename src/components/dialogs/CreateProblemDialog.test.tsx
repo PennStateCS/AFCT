@@ -64,8 +64,10 @@ describe('CreateProblemDialog', () => {
       }
       return Promise.resolve({
         ok: true,
+        status: 200,
         json: async () => ({ id: 'prob-1' }),
-      } as Response);
+        text: async () => JSON.stringify({ id: 'prob-1' }),
+      } as unknown as Response);
     });
 
     render(

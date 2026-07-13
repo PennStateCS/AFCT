@@ -400,3 +400,168 @@ describe('SystemSettingsClient', () => {
     expect((putCalls[0].body as Record<string, unknown>).signupAllowedDomains).toBe('b.edu,a.edu');
   });
 });
+
+// A fetch router for the three GET reads plus the TLS POST/DELETE mutations.
+type TlsRoutes = { post?: () => Resp; del?: () => Resp };
+const makeTlsFetch = (routes: TlsRoutes = {}) => {
+  const postBodies: unknown[] = [];
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/admin/settings' && method === 'GET') {
+      return { ok: true, json: async () => settingsPayload() };
+    }
+    if (url === '/api/admin/settings/tls' && method === 'GET') {
+      return { ok: true, json: async () => tlsPayload() };
+    }
+    if (url === '/api/admin/settings/backups' && method === 'GET') {
+      return { ok: true, json: async () => backupsPayload() };
+    }
+    if (url === '/api/admin/settings/tls' && method === 'POST') {
+      postBodies.push(JSON.parse(String(init?.body ?? '{}')));
+      return routes.post ? routes.post() : { ok: true, json: async () => ({ installed: true }) };
+    }
+    if (url === '/api/admin/settings/tls' && method === 'DELETE') {
+      return routes.del ? routes.del() : { ok: true, json: async () => ({ installed: false }) };
+    }
+    throw new Error(`Unexpected fetch: ${method} ${url}`);
+  });
+  return { fetchMock, postBodies };
+};
+
+type Resp = { ok: boolean; status?: number; json: () => Promise<unknown> };
+
+describe('SystemSettingsClient — TLS certificate', () => {
+  beforeEach(() => {
+    localStorage.setItem('afct.systemSettingsTab', 'tls');
+    URL.createObjectURL = vi.fn(() => 'blob:mock');
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it('reverts to the self-signed certificate on Reset', async () => {
+    const { fetchMock } = makeTlsFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset to self-signed' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/admin/settings/tls',
+        expect.objectContaining({ method: 'DELETE' }),
+      ),
+    );
+    await waitFor(() =>
+      expect(showToast.success).toHaveBeenCalledWith('Reverted to the self-signed certificate.'),
+    );
+  });
+
+  it('toasts the server error when Reset fails', async () => {
+    const { fetchMock } = makeTlsFetch({
+      del: () => ({ ok: false, status: 500, json: async () => ({ error: 'cannot reset' }) }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset to self-signed' }));
+    await waitFor(() => expect(showToast.error).toHaveBeenCalledWith('cannot reset'));
+  });
+
+  it('generates a self-signed certificate for the entered hostname', async () => {
+    const { fetchMock, postBodies } = makeTlsFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create a self-signed certificate' }));
+    fireEvent.change(await screen.findByLabelText(/Hostname \(Common Name\)/), {
+      target: { value: 'afct.test.edu' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate self-signed certificate' }));
+
+    await waitFor(() => expect(postBodies).toHaveLength(1));
+    expect(postBodies[0]).toMatchObject({ action: 'self-signed', commonName: 'afct.test.edu' });
+    await waitFor(() =>
+      expect(showToast.success).toHaveBeenCalledWith(
+        'Self-signed certificate generated and applied for that hostname.',
+      ),
+    );
+  });
+
+  it('generates and downloads a CSR for the entered hostname', async () => {
+    const { fetchMock, postBodies } = makeTlsFetch({
+      post: () => ({ ok: true, json: async () => ({ installed: false, pendingCsr: true, csr: 'CSR-DATA' }) }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Request a CA-signed certificate' }));
+    fireEvent.change(await screen.findByLabelText(/Hostname \(Common Name\)/), {
+      target: { value: 'afct.test.edu' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate key & CSR' }));
+
+    await waitFor(() => expect(postBodies).toHaveLength(1));
+    expect(postBodies[0]).toMatchObject({ action: 'generate-csr', commonName: 'afct.test.edu' });
+    // The signed CSR is offered as a download.
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+  });
+});
+
+describe('SystemSettingsClient — backups', () => {
+  beforeEach(() => {
+    localStorage.setItem('afct.systemSettingsTab', 'backups');
+  });
+
+  const makeBackupFetch = (postResult?: () => Resp) => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (url === '/api/admin/settings' && method === 'GET') {
+        return { ok: true, json: async () => settingsPayload() };
+      }
+      if (url === '/api/admin/settings/tls') return { ok: true, json: async () => tlsPayload() };
+      if (url === '/api/admin/settings/backups' && method === 'GET') {
+        return { ok: true, json: async () => backupsPayload() };
+      }
+      if (url === '/api/admin/settings/backups' && method === 'POST') {
+        return postResult ? postResult() : { ok: true, json: async () => ({ ok: true }) };
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+    return fetchMock;
+  };
+
+  it('requests a backup and toasts success on "Back up now"', async () => {
+    const fetchMock = makeBackupFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+
+    const btn = await screen.findByRole('button', { name: 'Back up now' });
+    await waitFor(() => expect(btn).toBeEnabled());
+    fireEvent.click(btn);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/admin/settings/backups',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    await waitFor(() =>
+      expect(showToast.success).toHaveBeenCalledWith(expect.stringContaining('Backup requested')),
+    );
+  });
+
+  it('toasts when the backup request fails', async () => {
+    const fetchMock = makeBackupFetch(() => ({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'boom' }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+
+    const btn = await screen.findByRole('button', { name: 'Back up now' });
+    await waitFor(() => expect(btn).toBeEnabled());
+    fireEvent.click(btn);
+
+    await waitFor(() => expect(showToast.error).toHaveBeenCalled());
+  });
+});

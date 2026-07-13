@@ -53,6 +53,16 @@ type AssignmentSummary = {
 const EMPTY_GROUPS: { id: string; name: string }[] = [];
 const EMPTY_GROUP_PROBLEMS_MAP: Record<string, string[]> = {};
 
+// The "Add existing problem" picker wants optional (not nullable) description/type, so
+// widen a DB problem row to that shape. Shared by its candidate and used-problem lists.
+function normalizeProblem(p: Problem) {
+  return {
+    ...p,
+    description: p.description ?? undefined,
+    type: typeof p.type === 'string' ? p.type : undefined,
+  };
+}
+
 type PrivilegeAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
   initialAssignments?: AssignmentSummary[];
@@ -112,10 +122,9 @@ export default function AssignmentDashboardPage({
 
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
-  const courseIsArchived = assignment?.course?.isArchived ?? false;
   // This privileged view is only rendered for course staff (admin or the course's
-  // FACULTY/TA), so anyone who reaches it may manage problems.
-  const canManageProblems = true;
+  // FACULTY/TA), so problem-management actions are gated only on the archived state.
+  const courseIsArchived = assignment?.course?.isArchived ?? false;
 
   // JFLAP viewer dialog state
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -157,7 +166,7 @@ export default function AssignmentDashboardPage({
     [searchParams, router],
   );
 
-  // Read 1 â€” all course problems (used by the problems tab and the add/create
+  // Read 1 — all course problems (used by the problems tab and the add/create
   // dialogs). Only fetched when one of those surfaces needs it. On any failure
   // the queryFn returns [] (no toast), matching the previous .catch behavior.
   const problemsEnabled = tab === 'problems' || addProblemDialogOpen || createProblemOpen;
@@ -177,7 +186,7 @@ export default function AssignmentDashboardPage({
   const allProblems = problemsQuery.data?.problems ?? [];
   const problemsLoading = problemsEnabled && problemsQuery.isFetching;
 
-  // Read 2 â€” assignment list for the dropdown. Seeded from the SSR-provided
+  // Read 2 — assignment list for the dropdown. Seeded from the SSR-provided
   // initialAssignments so there's no refetch on mount when the server sent it.
   const assignmentsQuery = useQuery({
     queryKey: ['course', id, 'assignments-list'],
@@ -197,7 +206,7 @@ export default function AssignmentDashboardPage({
   const allAssignments = assignmentsQuery.data ?? [];
   const assignmentsLoading = assignmentsQuery.isFetching;
 
-  // Read 3 â€” for a group assignment, fetch groups and the mapping of
+  // Read 3 — for a group assignment, fetch groups and the mapping of
   // problems -> groups. Only runs for group assignments. TanStack Query cancels
   // in-flight fetches via the AbortSignal, so no manual AbortController plumbing.
   const groupsEnabled = !!id && !!aid && !!assignment?.isGroup;
@@ -244,7 +253,6 @@ export default function AssignmentDashboardPage({
     }[],
   ) {
     if (!id || !aid) return;
-    if (!canManageProblems) return;
     try {
       const payload: {
         problemIds: string[];
@@ -344,12 +352,7 @@ export default function AssignmentDashboardPage({
   );
 
   const usedProblems = useMemo(
-    () =>
-      (assignment?.problems ?? []).map((ap) => ({
-        ...ap.problem,
-        description: ap.problem.description ?? undefined,
-        type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
-      })),
+    () => (assignment?.problems ?? []).map((ap) => normalizeProblem(ap.problem)),
     [assignment?.problems],
   );
 
@@ -528,8 +531,8 @@ export default function AssignmentDashboardPage({
                     variant="default"
                     aria-label="Create Problem"
                     onClick={handleCreateProblem}
-                    disabled={problemsLoading || !canManageProblems}
-                    hidden={courseIsArchived || !canManageProblems}
+                    disabled={problemsLoading}
+                    hidden={courseIsArchived}
                   >
                     <Plus />
                     Create Problem
@@ -538,8 +541,8 @@ export default function AssignmentDashboardPage({
                     variant="default"
                     aria-label="Add Existing Problem"
                     onClick={handleAddExistingProblem}
-                    disabled={problemsLoading || !canManageProblems}
-                    hidden={courseIsArchived || !canManageProblems}
+                    disabled={problemsLoading}
+                    hidden={courseIsArchived}
                   >
                     <Plus />
                     Add Existing Problem
@@ -611,11 +614,7 @@ export default function AssignmentDashboardPage({
         courseId={id}
         assignmentId={aid}
         courseIsArchived={courseIsArchived}
-        allProblems={allProblems.map((p: Problem) => ({
-          ...p,
-          description: p.description ?? undefined,
-          type: typeof p.type === 'string' ? p.type : undefined,
-        }))}
+        allProblems={allProblems.map(normalizeProblem)}
         usedProblems={usedProblems}
         onAddProblems={(selectedProblemIds, groupId, problemSettings) => {
           return handleAddProblems(selectedProblemIds, groupId, problemSettings);
@@ -683,35 +682,16 @@ export default function AssignmentDashboardPage({
           open={editProblemDialogOpen}
           setOpen={setEditProblemDialogOpen}
           assignmentSettings={assignmentSettingsForDialog}
-          problem={
-            problemToEdit
-              ? {
-                  ...problemToEdit,
-                  description: problemToEdit.description ?? null,
-                  // Preserve string type when present so FA/PDA fields render
-                  type: typeof problemToEdit.type === 'string' ? problemToEdit.type : null,
-                  maxStates: problemToEdit.maxStates ?? null,
-                  isDeterministic:
-                    (problemToEdit as Problem & { isDeterministic?: boolean }).isDeterministic ??
-                    null,
-                }
-              : {
-                  id: '',
-                  title: '',
-                  description: null,
-                  maxSubmissions: -1,
-                  maxPoints: 100,
-                  autograderEnabled: true,
-                  fileName: null,
-                  originalFileName: null,
-                  type: null,
-                  maxStates: null,
-                  isDeterministic: null,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                  courseId: '',
-                }
-          }
+          // `problemToEdit` is always set here (guarded by the `&&` above).
+          problem={{
+            ...problemToEdit,
+            description: problemToEdit.description ?? null,
+            // Preserve string type when present so FA/PDA fields render
+            type: typeof problemToEdit.type === 'string' ? problemToEdit.type : null,
+            maxStates: problemToEdit.maxStates ?? null,
+            isDeterministic:
+              (problemToEdit as Problem & { isDeterministic?: boolean }).isDeterministic ?? null,
+          }}
           onSaved={() => {
             void invalidateAssignment();
           }}
