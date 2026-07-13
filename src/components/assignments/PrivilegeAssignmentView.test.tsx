@@ -607,4 +607,12 @@ describe('PrivilegeAssignmentView — assignment switcher', () => {
     fireEvent.change(screen.getByLabelText('Assignment'), { target: { value: 'a2' } });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2');
   });
+
+  it('toasts and does not navigate when the selected assignment is unknown', () => {
+    renderView();
+    // The empty option resolves to no assignment in allAssignments.
+    fireEvent.change(screen.getByLabelText('Assignment'), { target: { value: '' } });
+    expect(toast.error).toHaveBeenCalledWith('Selected assignment not found');
+    expect(nav.push).not.toHaveBeenCalled();
+  });
 });
