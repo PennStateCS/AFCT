@@ -51,9 +51,19 @@ describe('getCourseRole', () => {
 });
 
 describe('canAccessCourse', () => {
-  it('admins may access any course without a roster lookup', async () => {
+  it('admins may access any live course without a roster lookup', async () => {
     await expect(canAccessCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(true);
     expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('denies even an admin on a soft-deleted course', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ deletedAt: new Date() });
+    await expect(canAccessCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(false);
+  });
+
+  it('falls open (allows the admin) when the soft-delete lookup errors', async () => {
+    prismaMock.course.findUnique.mockRejectedValue(new Error('db down'));
+    await expect(canAccessCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(true);
   });
 
   it('a student may access an enrolled PUBLISHED course', async () => {
@@ -105,9 +115,14 @@ describe('canAccessCourse', () => {
 });
 
 describe('canManageCourse', () => {
-  it('admins may manage any course', async () => {
+  it('admins may manage any live course', async () => {
     await expect(canManageCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(true);
     expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('denies even an admin on a soft-deleted course', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ deletedAt: new Date() });
+    await expect(canManageCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(false);
   });
 
   it('faculty and TAs may manage by default', async () => {

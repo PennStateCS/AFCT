@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { auth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import DashboardClient from '../DashboardClient';
-import { toStudentSafeEnrolled } from '@/lib/course-format';
+import { getCoursesListForUser } from '@/lib/courses-list';
+import ArchivedCoursesClient from './ArchivedCoursesClient';
 
 export const metadata: Metadata = {
   title: 'Archived Courses',
@@ -19,81 +18,14 @@ export default async function ArchivedCoursesPage() {
     );
   }
 
-  const { id } = session.user;
-
-  // The caller's archived courses (kept out of the dated sidebar sections).
-  const rosterEntries = await prisma.roster.findMany({
-    where: {
-      userId: id,
-      course: {
-        isArchived: true,
-        deletedAt: null, // a soft-deleted course is archived too — keep it hidden
-      },
-    },
-    select: {
-      role: true,
-      course: {
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          semester: true,
-          credits: true,
-          startDate: true,
-          endDate: true,
-          isPublished: true,
-          isArchived: true,
-          roster: {
-            select: {
-              role: true,
-              user: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                  avatar: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // Map courses and attach the user's role in each. Students never see an
-  // unpublished course they're enrolled in; staff/admin see theirs regardless.
-  const viewerIsAdmin = Boolean(session.user.isAdmin);
-  const courses = rosterEntries
-    .filter(
-      (entry) =>
-        viewerIsAdmin ||
-        entry.role === 'FACULTY' ||
-        entry.role === 'TA' ||
-        entry.course.isPublished,
-    )
-    .map((entry) => {
-      const { course } = entry;
-      // A student must not receive classmate names/emails for an archived course
-      // either; staff keep the full roster, students get staff names + count-only.
-      const isStaffHere = viewerIsAdmin || entry.role === 'FACULTY' || entry.role === 'TA';
-      const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
-
-      return {
-        ...course,
-        userRole: entry.role,
-        enrolled: isStaffHere ? enrolledMembers : toStudentSafeEnrolled(enrolledMembers),
-      };
-    });
+  // Same role-scoped list as the main Courses page — admins see every course,
+  // everyone else only the ones they're on the roster of (published, or any they
+  // staff) — then narrowed to the archived ones for this page.
+  const listRole = session.user.isAdmin ? 'ADMIN' : 'STUDENT';
+  const all = await getCoursesListForUser(session.user.id, listRole);
+  const archived = all.filter((course) => course.isArchived);
 
   return (
-    <div className="h-full w-full flex-col lg:flex-row">
-      <DashboardClient
-        sessionUser={{ id, isAdmin: session.user.isAdmin ?? false }}
-        courses={courses}
-        title={'Archived Courses'}
-      />
-    </div>
+    <ArchivedCoursesClient initialCourses={archived} isAdmin={session.user.isAdmin ?? false} />
   );
 }

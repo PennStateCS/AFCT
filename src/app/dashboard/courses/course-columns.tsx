@@ -12,12 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, BookOpen, ChevronDown, Copy } from 'lucide-react';
+import { Trash2, BookOpen, ChevronDown, Copy, Archive, ArchiveRestore } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { Course } from '@prisma/client';
-import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
 import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
 import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -40,8 +39,7 @@ type CourseWithFaculty = Course & {
 // Cell for course actions (edit/delete)
 type CourseActionsCellProps = {
   course: CourseWithFaculty;
-  onCourseUpdated: (updated: CourseWithFaculty) => void; // Called when a course is updated (edit/save)
-  onCourseDeleted: () => void; // Called after a course is deleted (triggers parent reload)
+  onCourseDeleted: () => void; // Called after a course is deleted/archived/restored (triggers parent reload)
   onCourseDuplicated: () => void; // Called after a course is duplicated (triggers parent reload)
   timeZone: string;
 };
@@ -94,7 +92,6 @@ const getRegistrationStatus = (
 };
 
 export const columns = (
-  onCourseUpdated: (updated: CourseWithFaculty) => void,
   onCourseDeleted: () => void,
   onCourseDuplicated: () => void,
   timeZone: string,
@@ -208,7 +205,6 @@ export const columns = (
       return (
         <CourseActionsCell
           course={course}
-          onCourseUpdated={onCourseUpdated}
           onCourseDeleted={onCourseDeleted}
           onCourseDuplicated={onCourseDuplicated}
           timeZone={timeZone}
@@ -220,77 +216,87 @@ export const columns = (
 
 function CourseActionsCell({
   course,
-  onCourseUpdated,
   onCourseDeleted,
   onCourseDuplicated,
   timeZone,
 }: CourseActionsCellProps) {
   const { data: session } = useSession();
-  // Duplicating a course is a system-admin-only action; the route enforces this too.
+  // Duplicating and archiving/restoring a course are system-admin-only actions; the
+  // routes enforce this too.
   const isAdmin = session?.user?.isAdmin === true;
-  const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+
+  // Archive (active -> archived) or restore (archived -> active). Both move the
+  // course off the current list, so refresh once the change lands. Un-archiving is
+  // admin-only; the API enforces that, and the Restore item only shows on the
+  // archived page (whose actions column is already admin-only).
+  const handleArchiveToggle = async () => {
+    const nextArchived = !course.isArchived;
+    try {
+      const res = await fetch(apiPaths.courseArchive(course.id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived: nextArchived }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.error || 'Failed to update the course');
+      }
+      showToast.success(nextArchived ? 'Course archived' : 'Course restored');
+      setArchiveConfirmOpen(false);
+      onCourseDeleted();
+    } catch (e) {
+      showToast.error(e instanceof Error ? e.message : 'Network error');
+    }
+  };
 
   const handleDelete = async () => {
     try {
-      const res = await fetch(apiPaths.course(course.id), {
-        method: 'DELETE',
-        body: JSON.stringify(course),
-      });
+      const res = await fetch(apiPaths.course(course.id), { method: 'DELETE' });
       if (!res.ok) {
         const json = await res.json().catch(() => null);
         const serverMessage = json?.error || 'Error deleting course';
         throw new Error(serverMessage);
       }
-      showToast.success('Course successfully deleted');
+      // The server decides hard vs soft based on whether the course holds any data.
+      const data = (await res.json().catch(() => ({}))) as { deleted?: 'hard' | 'soft' };
+      showToast.success(
+        data.deleted === 'hard'
+          ? 'Course permanently deleted'
+          : 'Course deleted (its data is retained)',
+      );
       setConfirmOpen(false);
       if (onCourseDeleted) onCourseDeleted();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Network error';
       showToast.error(msg);
-    } finally {
-      setEditOpen(false);
     }
   };
 
   return (
     <>
-      <EditCourseDialog
-        course={course}
-        open={editOpen}
-        setOpen={setEditOpen}
-        timeZone={timeZone}
-        onSave={async (updatedCourse) => {
-          try {
-            const res = await fetch(apiPaths.course(String(updatedCourse.id)), {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updatedCourse),
-            });
-            if (!res.ok) throw new Error('Failed to save course');
-
-            const refreshed = await fetch(apiPaths.course(String(updatedCourse.id))).then((r) =>
-              r.json(),
-            );
-
-            onCourseUpdated(refreshed);
-            showToast.success('Course updated!');
-          } catch {
-            showToast.error('Failed to save course');
-          } finally {
-            setEditOpen(false);
-          }
-        }}
-      />
-
       <ConfirmDialog
         open={confirmOpen}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={handleDelete}
         title="Delete Course"
-        description={`Are you sure you want to delete "${course.name}"? This action cannot be undone.`}
+        description={`Delete "${course.name}"? If it has no assignments, problems, or students, it is removed permanently. Otherwise it is hidden and its data is retained.`}
         confirmText="Delete"
+      />
+
+      <ConfirmDialog
+        open={archiveConfirmOpen}
+        onCancel={() => setArchiveConfirmOpen(false)}
+        onConfirm={() => void handleArchiveToggle()}
+        title={course.isArchived ? 'Restore Course' : 'Archive Course'}
+        description={
+          course.isArchived
+            ? `Restore "${course.name}"? It becomes editable again and returns to the active courses list.`
+            : `Archive "${course.name}"? It becomes read-only for everyone and moves to the Archived Courses page.`
+        }
+        confirmText={course.isArchived ? 'Restore' : 'Archive'}
       />
 
       {isAdmin && (
@@ -324,14 +330,8 @@ function CourseActionsCell({
               View Course
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setEditOpen(true)}
-            className="hover:bg-secondary flex items-center gap-2"
-            disabled={course.isArchived}
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit Course
-          </DropdownMenuItem>
+          {/* Editing a course now lives on the course's Settings tab, so it's not
+              duplicated here. Duplicate and archive/restore are admin-only. */}
           {isAdmin && (
             <DropdownMenuItem
               onClick={() => setDuplicateOpen(true)}
@@ -341,15 +341,38 @@ function CourseActionsCell({
               Duplicate Course
             </DropdownMenuItem>
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => setConfirmOpen(true)}
-            className="hover:bg-secondary flex items-center gap-2 text-red-600 focus:text-red-600"
-            disabled={!course.isArchived}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Archived Course
-          </DropdownMenuItem>
+          {isAdmin &&
+            (course.isArchived ? (
+              <DropdownMenuItem
+                onClick={() => setArchiveConfirmOpen(true)}
+                className="hover:bg-secondary flex items-center gap-2"
+              >
+                <ArchiveRestore className="mr-2 h-4 w-4" />
+                Restore Course
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                onClick={() => setArchiveConfirmOpen(true)}
+                className="hover:bg-secondary flex items-center gap-2"
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                Archive Course
+              </DropdownMenuItem>
+            ))}
+          {/* Deleting is admin-only and lives on the active course list; archived
+              courses must be restored first. */}
+          {isAdmin && !course.isArchived && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setConfirmOpen(true)}
+                className="hover:bg-secondary flex items-center gap-2 text-red-600 focus:text-red-600"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Course
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </>

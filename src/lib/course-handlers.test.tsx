@@ -129,7 +129,7 @@ describe('useCourseHandlers — optimistic state updates', () => {
   });
 });
 
-describe('useCourseHandlers — course publish/archive toggles', () => {
+describe('useCourseHandlers — course publish toggle', () => {
   it('publishes the course and confirms', async () => {
     utils.updateCoursePublishStatus.mockResolvedValue({ isPublished: true });
     const setCourse = vi.fn();
@@ -150,25 +150,6 @@ describe('useCourseHandlers — course publish/archive toggles', () => {
     expect(toastMock.error).toHaveBeenCalled();
   });
 
-  it('archives the course and confirms', async () => {
-    utils.updateCourseArchiveStatus.mockResolvedValue({ isArchived: true });
-    const setCourse = vi.fn();
-    const { result } = renderHook(() => useCourseHandlers(course, setCourse));
-    await act(async () => {
-      await result.current.handleCourseArchiveToggle(true);
-    });
-    expect(utils.updateCourseArchiveStatus).toHaveBeenCalled();
-    expect(toastMock.success).toHaveBeenCalledWith('Course archived');
-  });
-
-  it('toasts when archiving fails', async () => {
-    utils.updateCourseArchiveStatus.mockRejectedValue(new Error('nope'));
-    const { result } = renderHook(() => useCourseHandlers(course, vi.fn()));
-    await act(async () => {
-      await result.current.handleCourseArchiveToggle(true);
-    });
-    expect(toastMock.error).toHaveBeenCalled();
-  });
 });
 
 describe('useCourseHandlers — delete', () => {

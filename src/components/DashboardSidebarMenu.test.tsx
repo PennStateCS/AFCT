@@ -261,9 +261,42 @@ describe('DashboardSidebarMenu', () => {
     expect(screen.queryByText('Past Courses')).toBeNull();
   });
 
-  it('links Archived Courses to the archived page', () => {
+  it('links Archived Courses to the archived page when a non-admin is in an archived course', async () => {
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
+    });
+    setNavCourses([{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: true }]);
     renderWithClient(<DashboardSidebarMenu />);
 
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Archived Courses' })).toHaveAttribute(
+        'href',
+        '/dashboard/archived-courses',
+      );
+    });
+  });
+
+  it('hides the Archived Courses link for a non-admin with no archived courses', async () => {
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
+    });
+    setNavCourses([{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: false }]);
+    renderWithClient(<DashboardSidebarMenu />);
+
+    // Wait for the nav query to resolve, then confirm the link never appears.
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/me/courses?view=nav');
+    });
+    expect(screen.queryByRole('link', { name: 'Archived Courses' })).toBeNull();
+  });
+
+  it('always shows the Archived Courses link for admins, even with none', async () => {
+    // Default session is an admin; no archived courses in the nav list.
+    renderWithClient(<DashboardSidebarMenu />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/me/courses?view=nav');
+    });
     expect(screen.getByRole('link', { name: 'Archived Courses' })).toHaveAttribute(
       'href',
       '/dashboard/archived-courses',
