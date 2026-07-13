@@ -354,3 +354,60 @@ describe('DashboardSidebarMenu', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe('DashboardSidebarMenu — collapsible sections', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('renders each section label as an expanded toggle by default', () => {
+    renderWithClient(<DashboardSidebarMenu />);
+
+    const adminToggle = screen.getByRole('button', { name: /Admin Menu/ });
+    expect(adminToggle).toHaveAttribute('aria-expanded', 'true');
+    // Content is present while expanded.
+    expect(screen.getByRole('link', { name: 'User Accounts' })).toBeInTheDocument();
+  });
+
+  it('collapses a section on click, hiding its content', () => {
+    renderWithClient(<DashboardSidebarMenu />);
+
+    const adminToggle = screen.getByRole('button', { name: /Admin Menu/ });
+    fireEvent.click(adminToggle);
+
+    expect(adminToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('link', { name: 'User Accounts' })).toBeNull();
+  });
+
+  it('persists the collapsed state to localStorage', () => {
+    renderWithClient(<DashboardSidebarMenu />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Admin Menu/ }));
+
+    const stored = JSON.parse(localStorage.getItem('afct.sidebarSections') || '{}');
+    expect(stored.admin).toBe(false);
+  });
+
+  it('restores a persisted collapsed section on mount', () => {
+    localStorage.setItem('afct.sidebarSections', JSON.stringify({ admin: false }));
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    expect(screen.getByRole('button', { name: /Admin Menu/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.queryByRole('link', { name: 'User Accounts' })).toBeNull();
+  });
+
+  it('drops the collapse toggle in the icon-rail (sidebar-collapsed) mode', () => {
+    useSidebarMock.mockReturnValue({ state: 'collapsed' });
+
+    const { container } = renderWithClient(<DashboardSidebarMenu />);
+
+    // No toggle button, but the links still render (icon rail shows everything).
+    // The link mock doesn't forward aria-label, so match by href rather than name.
+    expect(screen.queryByRole('button', { name: /Admin Menu/ })).toBeNull();
+    expect(container.querySelector('a[href="/dashboard/users"]')).not.toBeNull();
+  });
+});

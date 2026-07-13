@@ -6,7 +6,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -54,6 +54,7 @@ import {
   LockKeyhole,
   UserPen,
   ChevronUp,
+  ChevronDown,
   Activity,
   Settings,
   Wrench,
@@ -92,6 +93,97 @@ const adminMenu = [
   { title: 'User Accounts', url: '/dashboard/users', icon: Users },
 ];
 
+// Persisted per-section expand/collapse state. One localStorage entry holds a
+// { sectionId: isOpen } map; a section defaults to open when it has no stored value.
+const SIDEBAR_SECTIONS_KEY = 'afct.sidebarSections';
+
+function useSidebarSections() {
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
+
+  // Load persisted state after mount so the server render (all-open) and the first
+  // client render match — a persisted-collapsed section then settles closed.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SIDEBAR_SECTIONS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') setOpenMap(parsed as Record<string, boolean>);
+      }
+    } catch {
+      // ignore malformed/unavailable storage
+    }
+  }, []);
+
+  const isOpen = useCallback((id: string) => openMap[id] ?? true, [openMap]);
+
+  const toggle = useCallback((id: string) => {
+    setOpenMap((prev) => {
+      const next = { ...prev, [id]: !(prev[id] ?? true) };
+      try {
+        localStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(next));
+      } catch {
+        // ignore storage errors (e.g. private mode)
+      }
+      return next;
+    });
+  }, []);
+
+  return { isOpen, toggle };
+}
+
+// A sidebar section whose label toggles its content open/closed. In the icon-rail
+// (sidebar-collapsed) mode there are no labels to click, so the content always shows
+// and the collapse affordance is dropped.
+function CollapsibleSidebarGroup({
+  sectionId,
+  label,
+  collapsed,
+  open,
+  onToggle,
+  children,
+}: {
+  sectionId: string;
+  label: string;
+  collapsed: boolean;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  const contentId = `sidebar-section-${sectionId}`;
+
+  if (collapsed) {
+    return (
+      <SidebarGroup>
+        <SidebarGroupContent>{children}</SidebarGroupContent>
+      </SidebarGroup>
+    );
+  }
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel asChild>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={contentId}
+          className="text-sidebar-foreground hover:bg-secondary/60 flex w-full items-center gap-1 rounded-md text-sm whitespace-nowrap"
+        >
+          <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              'ml-auto h-4 w-4 shrink-0 transition-transform',
+              open ? '' : '-rotate-90',
+            )}
+          />
+        </button>
+      </SidebarGroupLabel>
+      {open && <SidebarGroupContent id={contentId}>{children}</SidebarGroupContent>}
+    </SidebarGroup>
+  );
+}
+
 export default function DashboardSidebarMenu() {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -111,6 +203,7 @@ export default function DashboardSidebarMenu() {
 
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
+  const { isOpen, toggle } = useSidebarSections();
 
   if (!session?.user) return null;
 
@@ -181,18 +274,13 @@ export default function DashboardSidebarMenu() {
       <SidebarContent>
         {/* Admin menu — system administrators only */}
         {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel
-              aria-hidden={collapsed}
-              className={
-                collapsed
-                  ? 'hidden'
-                  : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
-              }
-            >
-              Admin Menu
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
+          <CollapsibleSidebarGroup
+            sectionId="admin"
+            label="Admin Menu"
+            collapsed={collapsed}
+            open={isOpen('admin')}
+            onToggle={() => toggle('admin')}
+          >
               <SidebarMenu>
                 {resolvedAdminMenu.map(({ title, url, icon: Icon }) => (
                   <SidebarMenuItem key={url}>
@@ -237,8 +325,7 @@ export default function DashboardSidebarMenu() {
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          </CollapsibleSidebarGroup>
         )}
 
         {/* Course sections — bucketed by date; an empty section is omitted. */}
@@ -266,18 +353,14 @@ export default function DashboardSidebarMenu() {
               </SidebarGroup>
             )
           : courseSections.map((section) => (
-              <SidebarGroup key={section.bucket}>
-                <SidebarGroupLabel
-                  aria-hidden={collapsed}
-                  className={
-                    collapsed
-                      ? 'hidden'
-                      : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
-                  }
-                >
-                  {section.label}
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
+              <CollapsibleSidebarGroup
+                key={section.bucket}
+                sectionId={section.bucket}
+                label={section.label}
+                collapsed={collapsed}
+                open={isOpen(section.bucket)}
+                onToggle={() => toggle(section.bucket)}
+              >
                   <SidebarMenu>
                     {section.courses.map((course) => (
                       <SidebarMenuItem key={course.id}>
@@ -326,23 +409,17 @@ export default function DashboardSidebarMenu() {
                       </SidebarMenuItem>
                     ))}
                   </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
+              </CollapsibleSidebarGroup>
             ))}
 
         {/* Features */}
-        <SidebarGroup>
-          <SidebarGroupLabel
-            aria-hidden={collapsed}
-            className={
-              collapsed
-                ? 'hidden'
-                : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
-            }
-          >
-            Other Pages
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
+        <CollapsibleSidebarGroup
+          sectionId="other-pages"
+          label="Other Pages"
+          collapsed={collapsed}
+          open={isOpen('other-pages')}
+          onToggle={() => toggle('other-pages')}
+        >
             <SidebarMenu>
               <SidebarMenuItem key="features-calendar">
                 <TooltipProvider delayDuration={100}>
@@ -432,8 +509,7 @@ export default function DashboardSidebarMenu() {
               </SidebarMenuItem>
               )}
             </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        </CollapsibleSidebarGroup>
       </SidebarContent>
 
       {/* Footer menu for user account actions */}
