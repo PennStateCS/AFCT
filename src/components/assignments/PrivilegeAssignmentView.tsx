@@ -115,7 +115,6 @@ export default function AssignmentDashboardPage({
   const courseIsArchived = assignment?.course?.isArchived ?? false;
   // This privileged view is only rendered for course staff (admin or the course's
   // FACULTY/TA), so anyone who reaches it may manage problems.
-  const canManageProblems = true;
 
   // JFLAP viewer dialog state
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -244,7 +243,6 @@ export default function AssignmentDashboardPage({
     }[],
   ) {
     if (!id || !aid) return;
-    if (!canManageProblems) return;
     try {
       const payload: {
         problemIds: string[];
@@ -528,8 +526,8 @@ export default function AssignmentDashboardPage({
                     variant="default"
                     aria-label="Create Problem"
                     onClick={handleCreateProblem}
-                    disabled={problemsLoading || !canManageProblems}
-                    hidden={courseIsArchived || !canManageProblems}
+                    disabled={problemsLoading}
+                    hidden={courseIsArchived}
                   >
                     <Plus />
                     Create Problem
@@ -538,8 +536,8 @@ export default function AssignmentDashboardPage({
                     variant="default"
                     aria-label="Add Existing Problem"
                     onClick={handleAddExistingProblem}
-                    disabled={problemsLoading || !canManageProblems}
-                    hidden={courseIsArchived || !canManageProblems}
+                    disabled={problemsLoading}
+                    hidden={courseIsArchived}
                   >
                     <Plus />
                     Add Existing Problem
