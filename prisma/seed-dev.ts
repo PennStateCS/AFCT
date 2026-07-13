@@ -7,7 +7,7 @@
  * - Randomized rosters (instructors/TAs/students)
  * - Problems for each course
  */
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 // Seed-only category used to group people and drive roster assignment. Users no
 // longer carry a global role; admins are flagged via `isAdmin`.
@@ -23,6 +23,7 @@ import {
 } from './seed-data';
 import {
   assignCourseRosters,
+  getLifecycleDates,
   getTermDates,
   getTermForDate,
   getTermSequence,
@@ -82,6 +83,56 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
   console.log(`[seed] development: preparing ${userSeeds.length} users`);
 
+  // Give every seeded account a profile photo. prisma/profile_photos holds one image
+  // per character; match it to the user by a normalized name, copy it into the served
+  // pfps upload directory (same staging pattern as solution files below), and record
+  // the stored filename so it goes on the user's `avatar` at creation.
+  const emailToAvatar = new Map<string, string>();
+  try {
+    const photoSourceDir = path.join(process.cwd(), 'prisma', 'profile_photos');
+    const containerPfpDir = path.join(path.sep, 'private', 'uploads', 'pfps');
+    const localPfpDir = path.join(process.cwd(), 'private', 'uploads', 'pfps');
+
+    let pfpDestinationDir = containerPfpDir;
+    try {
+      await fs.mkdir(pfpDestinationDir, { recursive: true });
+    } catch {
+      pfpDestinationDir = localPfpDir;
+      await fs.mkdir(pfpDestinationDir, { recursive: true });
+    }
+
+    // Letters/digits only, lowercased — so "Hope Van Dyne" matches "Hope_VanDyne.png",
+    // "T'Challa" matches "TChalla", "Kurt" matches "kurt", "Remy LeBeau" matches
+    // "RemyLeBeau", etc.
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const photoFiles = await fs.readdir(photoSourceDir);
+    const photoByName = new Map<string, string>();
+    for (const fileName of photoFiles) {
+      photoByName.set(normalize(path.basename(fileName, path.extname(fileName))), fileName);
+    }
+
+    for (const userSeed of userSeeds) {
+      const photoFile = photoByName.get(normalize(`${userSeed.firstName}${userSeed.lastName}`));
+      if (!photoFile) {
+        console.warn(
+          `[seed] development: no profile photo for ${userSeed.firstName} ${userSeed.lastName}`,
+        );
+        continue;
+      }
+      const storedFileName = `${randomUUID()}${path.extname(photoFile)}`;
+      await fs.copyFile(
+        path.join(photoSourceDir, photoFile),
+        path.join(pfpDestinationDir, storedFileName),
+      );
+      emailToAvatar.set(userSeed.email, storedFileName);
+    }
+    console.log(`[seed] development: staged ${emailToAvatar.size} profile photos`);
+  } catch (error) {
+    // Non-fatal: seed users without avatars rather than failing the whole run.
+    console.error('[seed] development: error staging profile photos', error);
+  }
+
   // Store created IDs back into the seed data arrays.
   const setPersonId = (list: Array<{ email: string; id?: string }>, email: string, id: string) => {
     const person = list.find((item) => item.email === email);
@@ -98,7 +149,11 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       firstName: userSeed.firstName,
       lastName: userSeed.lastName,
       password: hashedPassword,
-      isAdmin: userSeed.role === 'ADMIN',
+      avatar: emailToAvatar.get(userSeed.email) ?? null,
+      // Charles Xavier (faculty@example.com) is flagged as a global admin in
+      // addition to teaching his lifecycle courses, so the dev DB has an account
+      // that is both a system admin and course faculty for testing that overlap.
+      isAdmin: userSeed.role === 'ADMIN' || userSeed.email === 'faculty@example.com',
     })),
     skipDuplicates: true,
   });
@@ -135,8 +190,14 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   const termSequence = getTermSequence(currentTerm, currentYear);
 
   // Assign each course to current/next/after term, repeating for extra courses.
-  const courseDates = courseData.map((_, index) => {
-    const term = termSequence[index % termSequence.length];
+  // Lifecycle-pinned courses ignore the term sequence and use dates relative to now.
+  const courseDates = courseData.map((courseSeed, index) => {
+    if (courseSeed.lifecycle) {
+      return getLifecycleDates(courseSeed.lifecycle, now);
+    }
+
+    // Index is taken modulo the length of the self-built sequence, so it is always in range.
+    const term = termSequence[index % termSequence.length]!;
     const dates = getTermDates(term.term, term.year);
 
     // Set times to 11:59 PM EST/EDT (America/New_York)
@@ -153,48 +214,60 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     return { startDate, endDate };
   });
 
-  const courseSemesters = courseData.map((_, index) => {
-    const term = termSequence[index % termSequence.length];
+  const courseSemesters = courseData.map((courseSeed, index) => {
+    if (courseSeed.lifecycle) {
+      const { startDate } = getLifecycleDates(courseSeed.lifecycle, now);
+      return `${getTermForDate(startDate)} ${startDate.getFullYear()}`;
+    }
+    // Index is taken modulo the length of the self-built sequence, so it is always in range.
+    const term = termSequence[index % termSequence.length]!;
     return `${term.term} ${term.year}`;
   });
 
   console.log(`[seed] development: upserting ${courseData.length} courses`);
   // Upsert courses and capture IDs back into seed data.
   const courses = await Promise.all(
-    courseData.map((courseSeed, index) =>
-      prisma.course.upsert({
+    courseData.map((courseSeed, index) => {
+      // courseDates/courseSemesters are built by mapping over courseData, so this index is in range.
+      const dates = courseDates[index]!;
+      const semester = courseSemesters[index]!;
+      return prisma.course.upsert({
         where: { regCode: courseSeed.regCode },
         update: {
           name: courseSeed.title,
           code: courseSeed.code,
-          semester: courseSemesters[index],
+          semester,
           credits: courseSeed.credits,
-          startDate: courseDates[index].startDate,
-          endDate: courseDates[index].endDate,
-          registrationOpenAt: courseDates[index].startDate,
-          registrationCloseAt: courseDates[index].endDate,
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+          registrationOpenAt: dates.startDate,
+          registrationCloseAt: dates.endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
+          timezone: 'America/New_York',
         },
         create: {
           name: courseSeed.title,
           code: courseSeed.code,
           regCode: courseSeed.regCode,
-          semester: courseSemesters[index],
+          semester,
           credits: courseSeed.credits,
-          startDate: courseDates[index].startDate,
-          endDate: courseDates[index].endDate,
-          registrationOpenAt: courseDates[index].startDate,
-          registrationCloseAt: courseDates[index].endDate,
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+          registrationOpenAt: dates.startDate,
+          registrationCloseAt: dates.endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
+          timezone: 'America/New_York',
         },
-      }),
-    ),
+      });
+    }),
   );
 
   courses.forEach((course, index) => {
-    courseData[index].id = course.id;
+    // courses was built by mapping over courseData, so this index is in range.
+    const seedCourse = courseData[index];
+    if (seedCourse) seedCourse.id = course.id;
   });
 
   console.log('[seed] development: preparing rosters');
@@ -224,7 +297,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     prisma,
     courses.map((course, index) => ({
       id: course.id,
-      assignTa: courseData[index].assignTa,
+      // courses was built by mapping over courseData, so this index is in range.
+      assignTa: courseData[index]!.assignTa,
     })),
     facultyUsers,
     taUsers,
@@ -237,12 +311,27 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       await upsertRoster(prisma, charlesCmpen271Course.id, charles.id, 'FACULTY');
     }
 
+    // Roster the marked faculty (Charles) on their lifecycle courses so he always
+    // has a past, current, future, and archived course to test against.
+    for (let index = 0; index < courseData.length; index++) {
+      const seedCourse = courseData[index];
+      const course = courses[index];
+      if (!seedCourse?.facultyEmail || !course) continue;
+      const facultyUser = facultyData.find((faculty) => faculty.email === seedCourse.facultyEmail);
+      if (facultyUser?.id) {
+        await upsertRoster(prisma, course.id, facultyUser.id, 'FACULTY');
+      }
+    }
+
     if (oliver?.id) {
+      // Enroll Oliver in CMPEN 271, CMPSC 131, and Charles's current lifecycle course
+      // so there's a known student sharing a running course with him.
       const targetCourses = courses.filter((course, index) => {
         const seedCourse = courseData[index];
         return (
           course.id === charlesCmpen271Course?.id ||
-          seedCourse?.code === 'CMPSC 131'
+          seedCourse?.code === 'CMPSC 131' ||
+          seedCourse?.regCode === 'CURR01'
         );
       });
 
@@ -333,7 +422,9 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
   console.log('[seed] development: creating assignments for courses');
   // Create assignments for each course without duplicates.
-  const createdAssignments: { [courseId: string]: Array<{ courseId: string, id: string; title: string }> } = {};
+  const createdAssignments: {
+    [courseId: string]: Array<{ courseId: string; id: string; title: string }>;
+  } = {};
 
   try {
     // Prepare all assignment data for batch insertion
@@ -500,51 +591,55 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       });
 
       const oneDayMs = 24 * 60 * 60 * 1000;
-      const submissionsToCreate = await Promise.all(flipFlopsProblems.flatMap(async (assignmentProblem, index) => {
-        const submittedBase = new Date(Date.now() - (flipFlopsProblems.length - index + 2) * oneDayMs);
-        const originalFileName = assignmentProblem.problem.originalFileName ?? 'submission.jff';
-        const extension = path.extname(originalFileName) || '.jff';
+      const submissionsToCreate = await Promise.all(
+        flipFlopsProblems.flatMap(async (assignmentProblem, index) => {
+          const submittedBase = new Date(
+            Date.now() - (flipFlopsProblems.length - index + 2) * oneDayMs,
+          );
+          const originalFileName = assignmentProblem.problem.originalFileName ?? 'submission.jff';
+          const extension = path.extname(originalFileName) || '.jff';
 
-        const createStoredSubmission = async () => {
-          const storedFileName = `${randomUUID()}${extension}`;
-          const sourcePath = path.join(submissionSourceDir, originalFileName);
-          const destinationPath = path.join(submissionDestinationDir, storedFileName);
+          const createStoredSubmission = async () => {
+            const storedFileName = `${randomUUID()}${extension}`;
+            const sourcePath = path.join(submissionSourceDir, originalFileName);
+            const destinationPath = path.join(submissionDestinationDir, storedFileName);
 
-          await fs.copyFile(sourcePath, destinationPath);
-          return {
-            fileName: storedFileName,
-            originalFileName,
+            await fs.copyFile(sourcePath, destinationPath);
+            return {
+              fileName: storedFileName,
+              originalFileName,
+            };
           };
-        };
 
-        const firstStoredSubmission = await createStoredSubmission();
-        const revisedStoredSubmission = await createStoredSubmission();
+          const firstStoredSubmission = await createStoredSubmission();
+          const revisedStoredSubmission = await createStoredSubmission();
 
-        return [
-          {
-            courseId: flipFlopsAssignment.courseId,
-            assignmentId: flipFlopsAssignment.id,
-            problemId: assignmentProblem.problemId,
-            studentId: oliverId,
-            submittedAt: submittedBase,
-            correct: false,
-            feedback: `Initial attempt for ${assignmentProblem.problem.title} needs another revision.`,
-            fileName: firstStoredSubmission.fileName,
-            originalFileName: firstStoredSubmission.originalFileName,
-          },
-          {
-            courseId: flipFlopsAssignment.courseId,
-            assignmentId: flipFlopsAssignment.id,
-            problemId: assignmentProblem.problemId,
-            studentId: oliverId,
-            submittedAt: new Date(submittedBase.getTime() + 6 * 60 * 60 * 1000),
-            correct: true,
-            feedback: `${assignmentProblem.problem.title} submission accepted after revision.`,
-            fileName: revisedStoredSubmission.fileName,
-            originalFileName: revisedStoredSubmission.originalFileName,
-          },
-        ];
-      })).then((submissionGroups) => submissionGroups.flat());
+          return [
+            {
+              courseId: flipFlopsAssignment.courseId,
+              assignmentId: flipFlopsAssignment.id,
+              problemId: assignmentProblem.problemId,
+              studentId: oliverId,
+              submittedAt: submittedBase,
+              correct: false,
+              feedback: `Initial attempt for ${assignmentProblem.problem.title} needs another revision.`,
+              fileName: firstStoredSubmission.fileName,
+              originalFileName: firstStoredSubmission.originalFileName,
+            },
+            {
+              courseId: flipFlopsAssignment.courseId,
+              assignmentId: flipFlopsAssignment.id,
+              problemId: assignmentProblem.problemId,
+              studentId: oliverId,
+              submittedAt: new Date(submittedBase.getTime() + 6 * 60 * 60 * 1000),
+              correct: true,
+              feedback: `${assignmentProblem.problem.title} submission accepted after revision.`,
+              fileName: revisedStoredSubmission.fileName,
+              originalFileName: revisedStoredSubmission.originalFileName,
+            },
+          ];
+        }),
+      ).then((submissionGroups) => submissionGroups.flat());
 
       const createdSubmissions = await prisma.submission.createMany({
         data: submissionsToCreate,
@@ -555,7 +650,10 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       );
     }
   } catch (error) {
-    console.error('[seed] development: error creating Flip Flops submissions for Oliver Green', error);
+    console.error(
+      '[seed] development: error creating Flip Flops submissions for Oliver Green',
+      error,
+    );
     throw error;
   }
 

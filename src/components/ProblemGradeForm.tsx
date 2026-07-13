@@ -1,7 +1,7 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { FormEvent, KeyboardEvent } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 
 type ProblemGradeFormProps = {
   value: string;
@@ -58,28 +58,23 @@ export default function ProblemGradeForm({
 
   return (
     <div className="flex flex-col gap-2">
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
-      <Input
-        type="number"
-        inputMode="decimal"
-        value={gradeValue}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={isLoading ? '-' : sanitizedCurrent === null ? '-' : ''}
-        className="w-28"
-        aria-label="Problem grade"
-        disabled={disabled || isLoading || isSaving}
-      />
-      <Button
-        type="submit"
-        size="sm"
-        className="whitespace-nowrap"
-        disabled={disableButton}
-      >
-        {isSaving ? 'Saving…' : 'Save Grade'}
-      </Button>
-      {error ? <p className="text-destructive text-xs">{error}</p> : null}
-    </form>
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
+        <Input
+          type="number"
+          inputMode="decimal"
+          value={gradeValue}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={isLoading ? '-' : sanitizedCurrent === null ? '-' : ''}
+          className="w-28"
+          aria-label="Problem grade"
+          disabled={disabled || isLoading || isSaving}
+        />
+        <Button type="submit" size="sm" className="whitespace-nowrap" disabled={disableButton}>
+          {isSaving ? 'Saving…' : 'Save Grade'}
+        </Button>
+        {error ? <p className="text-destructive text-xs">{error}</p> : null}
+      </form>
     </div>
   );
 }

@@ -6,6 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   user: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
   assignmentProblemGrade: { groupBy: vi.fn() },
+  course: { findUnique: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -20,6 +21,7 @@ import { GET, POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   activityLogMock.mockResolvedValue(undefined);
 });
 
@@ -212,8 +214,7 @@ describe('GET /api/courses/[id]/grades', () => {
     // Branch 197: `error instanceof Error ? error.message : String(error)`.
     // Branch 201: NODE_ENV === 'development' includes the detail.
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const prevEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.roster.findMany.mockRejectedValue('kaboom');
@@ -225,7 +226,6 @@ describe('GET /api/courses/[id]/grades', () => {
     const body = await res.json();
     expect(body.detail).toBe('kaboom');
 
-    process.env.NODE_ENV = prevEnv;
     consoleSpy.mockRestore();
   });
 });
@@ -354,5 +354,20 @@ describe('POST /api/courses/[id]/grades (export log)', () => {
       }),
     );
     consoleSpy.mockRestore();
+  });
+
+  it('returns 409 and records nothing when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await POST(postReq({}), { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(409);
+    expect(activityLogMock).not.toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'GRADES_EXPORTED' }),
+    );
   });
 });

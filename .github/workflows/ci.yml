@@ -1,0 +1,103 @@
+name: CI
+
+# Every pre-merge check in one place: lint, tests, and the API-docs/spec sync.
+# The three jobs run in parallel. The image-publish workflow (publish-ghcr.yml)
+# waits on this workflow succeeding on main before it builds a release image.
+on:
+  push:
+    branches: ['main']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# The ERD generator (disabled in CI) pulls in puppeteer, whose install would
+# otherwise download a ~150MB Chromium none of these jobs use.
+env:
+  PUPPETEER_SKIP_DOWNLOAD: '1'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # Lint doesn't need the generated Prisma client; skipping keeps CI fast.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        env:
+          SKIP_PRISMA_GENERATE: '1'
+
+      # Hard gate: the codebase is lint-clean (0 errors, 0 warnings). `--max-warnings=0`
+      # makes any new finding — warning or error — fail the job and block the merge.
+      # (`npm run lint` stays warning-tolerant for local dev.)
+      - name: ESLint
+        run: npm run lint -- --max-warnings=0
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # `postinstall` generates the Prisma client (tests import enums/types from
+      # @prisma/client). DISABLE_ERD skips the ERD generator — not needed for
+      # tests. No database is required; the tests mock Prisma at runtime.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        env:
+          DISABLE_ERD: 'true'
+
+      - name: Run tests
+        run: npm test
+
+  docs-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # Doc generation only needs js-yaml + the validators; skip Prisma client gen.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        env:
+          SKIP_PRISMA_GENERATE: '1'
+
+      # `docs` validates the spec (failing on a malformed @openapi block or an
+      # invalid document) and regenerates the typed client.
+      - name: Generate and validate spec + types
+        run: npm run docs
+
+      - name: Ensure generated API types are committed and in sync
+        run: |
+          if ! git diff --quiet -- src/types/api.ts; then
+            echo "::error::src/types/api.ts is out of date. Run 'npm run docs' and commit the result."
+            git --no-pager diff -- src/types/api.ts
+            exit 1
+          fi

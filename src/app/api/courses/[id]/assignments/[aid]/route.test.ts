@@ -8,6 +8,7 @@ const prismaMock = vi.hoisted(() => ({
   comment: { count: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
+  course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
 }));
 
@@ -29,6 +30,7 @@ import { GET, PUT, PATCH, DELETE } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
   toEndOfDayMock.mockReturnValue(new Date('2026-01-01T00:00:00.000Z'));
   toDateTimeMock.mockReturnValue(new Date('2026-01-02T00:00:00.000Z'));
@@ -76,6 +78,61 @@ describe('GET /api/courses/[id]/[aid]', () => {
     );
 
     expect(res.status).toBe(200);
+  });
+
+  const assignmentWithAnswerFile = {
+    id: 'a1',
+    title: 'Assignment',
+    isPublished: true,
+    problems: [
+      {
+        maxPoints: 10,
+        maxSubmissions: 1,
+        autograderEnabled: true,
+        problem: {
+          id: 'p1',
+          title: 'Problem',
+          description: null,
+          type: 'DFA',
+          maxStates: null,
+          isDeterministic: true,
+          fileName: 'stored-uuid.jff',
+          originalFileName: 'solution_answer.jff',
+        },
+      },
+    ],
+    course: { name: 'Course', code: 'C1', isArchived: false },
+  };
+
+  it('withholds problem answer-key filenames from a student', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.assignment.findFirst.mockResolvedValue(assignmentWithAnswerFile);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1?view=problems'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1' }) },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.problems[0].problem.fileName).toBeNull();
+    expect(body.problems[0].problem.originalFileName).toBeNull();
+  });
+
+  it('includes problem answer-key filenames for staff', async () => {
+    // Default auth is an admin (staff); keep it.
+    prismaMock.assignment.findFirst.mockResolvedValue(assignmentWithAnswerFile);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1?view=problems'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1' }) },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.problems[0].problem.fileName).toBe('stored-uuid.jff');
+    expect(body.problems[0].problem.originalFileName).toBe('solution_answer.jff');
   });
 
   it('404-masks an unpublished assignment from a non-staff student', async () => {
@@ -295,6 +352,18 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error).toContain('submissions');
+    // Business-rule block, not an authz denial: WARNING + *_REJECTED with FK context.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has submissions' },
+      }),
+    );
   });
 
   it('blocks unpublishing when grades exist (no submissions)', async () => {
@@ -304,6 +373,17 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     const res = await PUT(putReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('grades');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has grades' },
+      }),
+    );
   });
 
   it('blocks changing group mode once submissions exist', async () => {
@@ -312,6 +392,17 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     const res = await PUT(putReq({ isGroup: true }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('group mode');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has submissions' },
+      }),
+    );
   });
 
   it('returns 400 for an inconsistent late-submission window', async () => {
@@ -330,6 +421,13 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     prismaMock.assignment.update.mockRejectedValue(new Error('db down'));
     const res = await PUT(putReq({ title: 'New', dueDate: '2026-01-01' }), mutationParams);
     expect(res.status).toBe(500);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+    const res = await PUT(putReq({ title: 'New', dueDate: '2026-01-01' }), mutationParams);
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
   });
 });
 
@@ -377,6 +475,17 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
     const res = await PATCH(patchReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('submissions');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has submissions' },
+      }),
+    );
   });
 
   it('blocks unpublishing when grades exist (no submissions)', async () => {
@@ -386,6 +495,17 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
     const res = await PATCH(patchReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('grades');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has grades' },
+      }),
+    );
   });
 
   it('blocks changing group mode once submissions exist', async () => {
@@ -394,6 +514,17 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
     const res = await PATCH(patchReq({ isGroup: true }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('group mode');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has submissions' },
+      }),
+    );
   });
 
   it('returns 400 for an inconsistent late-submission window', async () => {
@@ -411,6 +542,13 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
     prismaMock.assignment.update.mockRejectedValue(new Error('db down'));
     const res = await PATCH(patchReq({ title: 'New' }), mutationParams);
     expect(res.status).toBe(500);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+    const res = await PATCH(patchReq({ title: 'New' }), mutationParams);
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
   });
 });
 
@@ -473,5 +611,12 @@ describe('DELETE /api/courses/[id]/assignments/[aid]', () => {
     prismaMock.assignment.delete.mockRejectedValue(new Error('db down'));
     const res = await DELETE(delReq(), mutationParams);
     expect(res.status).toBe(500);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+    const res = await DELETE(delReq(), mutationParams);
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignment.delete).not.toHaveBeenCalled();
   });
 });

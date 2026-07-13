@@ -78,7 +78,6 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
       <DialogContent
         className="bg-card"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Change Password</DialogTitle>

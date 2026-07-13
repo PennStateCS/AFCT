@@ -2,10 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
+  course: { findUnique: vi.fn() },
+  groupRoster: { findFirst: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
-import { isAdmin, getCourseRole, canAccessCourse, canManageCourse } from './permissions';
+import {
+  isAdmin,
+  getCourseRole,
+  canAccessCourse,
+  canManageCourse,
+  isCourseArchived,
+  staffManagesStudent,
+  usersShareGroupInCourse,
+  canViewStudentData,
+} from './permissions';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -40,15 +51,25 @@ describe('getCourseRole', () => {
 });
 
 describe('canAccessCourse', () => {
-  it('admins may access any course without a roster lookup', async () => {
+  it('admins may access any live course without a roster lookup', async () => {
     await expect(canAccessCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(true);
     expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('denies even an admin on a soft-deleted course', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ deletedAt: new Date() });
+    await expect(canAccessCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(false);
+  });
+
+  it('falls open (allows the admin) when the soft-delete lookup errors', async () => {
+    prismaMock.course.findUnique.mockRejectedValue(new Error('db down'));
+    await expect(canAccessCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(true);
   });
 
   it('a student may access an enrolled PUBLISHED course', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({
       role: 'STUDENT',
-      course: { isPublished: true },
+      course: { isPublished: true, deletedAt: null },
     });
     await expect(canAccessCourse({ id: 'u', isAdmin: false }, 'c')).resolves.toBe(true);
   });
@@ -56,7 +77,7 @@ describe('canAccessCourse', () => {
   it('a student may NOT access an enrolled UNPUBLISHED course', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({
       role: 'STUDENT',
-      course: { isPublished: false },
+      course: { isPublished: false, deletedAt: null },
     });
     await expect(canAccessCourse({ id: 'u', isAdmin: false }, 'c')).resolves.toBe(false);
   });
@@ -64,16 +85,27 @@ describe('canAccessCourse', () => {
   it('staff (FACULTY/TA) may access their course even while unpublished', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({
       role: 'FACULTY',
-      course: { isPublished: false },
+      course: { isPublished: false, deletedAt: null },
     });
     await expect(canAccessCourse({ id: 'u' }, 'c')).resolves.toBe(true);
 
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA', course: { isPublished: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'TA',
+      course: { isPublished: false, deletedAt: null },
+    });
     await expect(canAccessCourse({ id: 'u' }, 'c')).resolves.toBe(true);
   });
 
   it('non-enrolled non-admins may not', async () => {
     prismaMock.roster.findFirst.mockResolvedValue(null);
+    await expect(canAccessCourse({ id: 'u' }, 'c')).resolves.toBe(false);
+  });
+
+  it('a non-admin may NOT access a soft-deleted course, even as staff', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'FACULTY',
+      course: { isPublished: true, deletedAt: new Date() },
+    });
     await expect(canAccessCourse({ id: 'u' }, 'c')).resolves.toBe(false);
   });
 
@@ -83,23 +115,121 @@ describe('canAccessCourse', () => {
 });
 
 describe('canManageCourse', () => {
-  it('admins may manage any course', async () => {
+  it('admins may manage any live course', async () => {
     await expect(canManageCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(true);
     expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
   });
 
+  it('denies even an admin on a soft-deleted course', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ deletedAt: new Date() });
+    await expect(canManageCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(false);
+  });
+
   it('faculty and TAs may manage by default', async () => {
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA', course: { deletedAt: null } });
     await expect(canManageCourse({ id: 'u' }, 'c')).resolves.toBe(true);
   });
 
   it('students may not manage', async () => {
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { deletedAt: null } });
     await expect(canManageCourse({ id: 'u' }, 'c')).resolves.toBe(false);
   });
 
   it('respects a narrower role set (FACULTY only excludes TAs)', async () => {
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA', course: { deletedAt: null } });
     await expect(canManageCourse({ id: 'u' }, 'c', ['FACULTY'])).resolves.toBe(false);
+  });
+
+  it('a non-admin staff member may NOT manage a soft-deleted course', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'FACULTY',
+      course: { deletedAt: new Date() },
+    });
+    await expect(canManageCourse({ id: 'u' }, 'c')).resolves.toBe(false);
+  });
+});
+
+describe('isCourseArchived', () => {
+  it('is true when the course row is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+    await expect(isCourseArchived('c')).resolves.toBe(true);
+  });
+
+  it('is false when not archived or the course is missing', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    await expect(isCourseArchived('c')).resolves.toBe(false);
+    prismaMock.course.findUnique.mockResolvedValue(null);
+    await expect(isCourseArchived('c')).resolves.toBe(false);
+  });
+});
+
+describe('staffManagesStudent', () => {
+  it('admins manage any account without a lookup', async () => {
+    await expect(staffManagesStudent({ id: 'a', isAdmin: true }, 't')).resolves.toBe(true);
+    expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('is true when the target is a STUDENT in a course the caller staffs', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    await expect(staffManagesStudent({ id: 's' }, 't')).resolves.toBe(true);
+    // The query pins the target to a STUDENT roster whose course rosters the caller as staff.
+    expect(prismaMock.roster.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: 't', role: 'STUDENT' }),
+      }),
+    );
+  });
+
+  it('is false when no such relationship exists', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+    await expect(staffManagesStudent({ id: 's' }, 't')).resolves.toBe(false);
+  });
+
+  it('anonymous callers manage no one', async () => {
+    await expect(staffManagesStudent(null, 't')).resolves.toBe(false);
+    expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('usersShareGroupInCourse', () => {
+  it('short-circuits true when both ids are the same', async () => {
+    await expect(usersShareGroupInCourse('c', 'u', 'u')).resolves.toBe(true);
+    expect(prismaMock.groupRoster.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('is true when a shared group exists', async () => {
+    prismaMock.groupRoster.findFirst.mockResolvedValue({ id: 'gr1' });
+    await expect(usersShareGroupInCourse('c', 'a', 'b')).resolves.toBe(true);
+  });
+
+  it('is false when no shared group and when an id is missing', async () => {
+    prismaMock.groupRoster.findFirst.mockResolvedValue(null);
+    await expect(usersShareGroupInCourse('c', 'a', 'b')).resolves.toBe(false);
+    await expect(usersShareGroupInCourse('c', 'a', null)).resolves.toBe(false);
+  });
+});
+
+describe('canViewStudentData', () => {
+  it('admins and staff may view anyone', async () => {
+    await expect(canViewStudentData({ id: 'a', isAdmin: true }, 'c', 't')).resolves.toBe(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' }); // canManageCourse → true
+    await expect(canViewStudentData({ id: 's' }, 'c', 't')).resolves.toBe(true);
+  });
+
+  it('a student may view their own data', async () => {
+    await expect(canViewStudentData({ id: 'u' }, 'c', 'u')).resolves.toBe(true);
+  });
+
+  it('a non-staff student may not view another student on an individual assignment', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
+    await expect(canViewStudentData({ id: 'u' }, 'c', 'other')).resolves.toBe(false);
+  });
+
+  it('a groupmate may view shared work on a group assignment', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
+    prismaMock.groupRoster.findFirst.mockResolvedValue({ id: 'gr1' }); // same group
+    await expect(
+      canViewStudentData({ id: 'u' }, 'c', 'mate', { groupAssignment: true }),
+    ).resolves.toBe(true);
   });
 });

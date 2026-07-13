@@ -2,12 +2,19 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
-import { ProblemType } from '@prisma/client';
+import type { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { readFormData } from '@/lib/api/request';
+import {
+  ProblemCreateApiSchema,
+  ALLOWED_PROBLEM_EXTENSIONS,
+  isAllowedProblemExtension,
+} from '@/schemas/problem';
 
 // Solution files are written here; the URL to serve them is /api/files/solutions/[file].
 const uploadsDir = path.join('/private', 'uploads', 'solutions');
@@ -52,24 +59,24 @@ const uploadsDir = path.join('/private', 'uploads', 'solutions');
 export const POST = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      // Parse multipart form data
-      const formData = await req.formData();
+      // Validate the scalar fields server-side (title, type, coerced numbers/bools).
+      const parsed = await readFormData(req, ProblemCreateApiSchema);
+      if (!parsed.ok) return parsed.response;
+      const data = parsed.data;
+      const { title, type } = data;
+      const file = parsed.form.get('file') as File | null;
 
-      const title = formData.get('title') as string;
-      const description = formData.get('description') as string;
-      const type = formData.get('type') as string;
-      const maxSubmissions = formData.get('maxSubmissions') as string | null;
-      const maxPoints = formData.get('maxPoints') as string;
-      const assignmentId = formData.get('assignmentId') as string;
-      const maxStates = formData.get('maxStates') as string | null;
-      const isDeterministic = formData.get('isDeterministic') === 'true';
-      const autograderEnabled = formData.get('autograderEnabled');
-      const autograderBool = autograderEnabled === 'false' ? false : true;
-      const file = formData.get('file') as File | null;
-
-      // Validate required fields
-      if (!title || !file || !type) {
+      if (!file) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      }
+
+      // Enforce the solution-file extension allow-list server-side (previously only
+      // the browser checked this).
+      if (!isAllowedProblemExtension(file.name)) {
+        return NextResponse.json(
+          { error: `Allowed file types: .${ALLOWED_PROBLEM_EXTENSIONS.join(', .')}` },
+          { status: 400 },
+        );
       }
 
       const { maxBytes, maxMb } = await getSystemUploadLimit();
@@ -85,15 +92,13 @@ export const POST = withCourseAuth(
       if (!validation.isValid) {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+          action: 'PROBLEM_INVALID_FILE_STRUCTURE',
           severity: 'WARNING',
-          category: 'SUBMISSION',
+          category: 'PROBLEM',
           courseId,
-          assignmentId,
           metadata: {
             userId: user.id,
             courseId,
-            assignmentId,
             error: validation.error,
           },
         });
@@ -120,16 +125,16 @@ export const POST = withCourseAuth(
       const problem = await prisma.problem.create({
         data: {
           title,
-          description,
+          description: data.description ?? null,
           type: type as ProblemType,
-          maxSubmissions: parseInt(maxSubmissions || '0', 10),
-          maxPoints: parseInt(maxPoints || '0', 10),
+          maxSubmissions: data.maxSubmissions ?? 0,
+          maxPoints: data.maxPoints ?? 0,
           courseId,
           fileName,
           originalFileName: file.name,
-          autograderEnabled: autograderBool,
-          maxStates: ['FA', 'PDA'].includes(type) ? parseInt(maxStates || '0', 10) || null : null,
-          isDeterministic: type === 'FA' ? isDeterministic : null,
+          autograderEnabled: data.autograderEnabled ?? true,
+          maxStates: ['FA', 'PDA'].includes(type) ? (data.maxStates ?? 0) || null : null,
+          isDeterministic: type === 'FA' ? (data.isDeterministic ?? false) : null,
         },
       });
 
@@ -155,14 +160,14 @@ export const POST = withCourseAuth(
       return NextResponse.json(problem, { status: 201 });
     } catch (error) {
       console.error('Error creating problem:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'PROBLEM_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        courseId,
+        error,
       });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_CREATE_DENIED' },
+  { access: 'manage', deniedAction: 'PROBLEM_CREATE_DENIED', blockWhenArchived: true },
 );

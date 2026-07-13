@@ -1,4 +1,11 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Settings } from 'lucide-react';
+
+import { Tabs } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { CourseHeaderContent } from '@/components/course/CourseHeader';
+import { CourseTabBar, CourseTabPanel } from '@/components/course/course-tabs';
+import { CourseSettingsForm } from '@/components/course/CourseSettingsForm';
+import { CourseStatusCard } from '@/components/course/CourseStatusCard';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
@@ -8,10 +15,9 @@ import GroupsCard from '@/components/GroupsCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
-import { FullCourse, TabType } from '@/types/course';
+import type { FullCourse, TabType } from '@/types/course';
 import { getInstructors } from '@/lib/course-utils';
-import { NotebookText, FileText, GraduationCap, Table, Users, Activity } from 'lucide-react';
-import { Assignment, Problem } from '@prisma/client';
+import type { Assignment, Problem, Course } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMemo } from 'react';
 
@@ -32,6 +38,8 @@ interface AdminCourseViewProps {
   onProblemEdit: (problem: Problem) => void;
   onProblemDelete: (problemId: string) => void;
   onRefreshCourse: () => void;
+  onCourseSaved: (updated: Partial<Course>) => void;
+  onPublishToggle: (checked: boolean) => void;
 }
 
 export function AdminCourseView({
@@ -51,6 +59,8 @@ export function AdminCourseView({
   onProblemDelete,
   onRefreshCourse,
   onBulkEnroll,
+  onCourseSaved,
+  onPublishToggle,
 }: AdminCourseViewProps) {
   const { timezone } = useEffectiveTimezone();
   const enrolled = course.enrolled ?? [];
@@ -99,94 +109,21 @@ export function AdminCourseView({
 
   return (
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
-      <TabsList
-        aria-label="Course content sections"
-        className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm"
-      >
-        <TabsTrigger
-          id="tab-assignments"
-          aria-controls="panel-assignments"
-          aria-label={`Assignments (${assignmentCount})`}
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
-          value="assignments"
-        >
-          <div className="flex items-center gap-2">
-            <NotebookText className="h-4 w-4" />
-            Assignments ({assignmentCount})
-          </div>
-        </TabsTrigger>
+      <Card>
+        <CardHeader className="grid grid-cols-1 gap-3">
+          <CourseHeaderContent course={course} isStudent={false} />
+        </CardHeader>
 
-        <TabsTrigger
-          id="tab-problems"
-          aria-controls="panel-problems"
-          aria-label={`Problems (${problemCount})`}
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
-          value="problems"
-        >
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Problems ({problemCount})
-          </div>
-        </TabsTrigger>
+        <CardContent className="space-y-6">
+          <CourseTabBar
+            counts={{
+              assignments: assignmentCount,
+              problems: problemCount,
+              roster: rosterCount,
+            }}
+          />
 
-        <TabsTrigger
-          id="tab-roster"
-          aria-controls="panel-roster"
-          aria-label={`Roster (${rosterCount})`}
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
-          value="roster"
-        >
-          <div className="flex items-center gap-2">
-            <GraduationCap className="h-4 w-4" />
-            Roster ({rosterCount})
-          </div>
-        </TabsTrigger>
-
-        <TabsTrigger
-          id="tab-grades"
-          aria-controls="panel-grades"
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
-          value="grades"
-        >
-          <div className="flex items-center gap-2">
-            <Table className="h-4 w-4" />
-            Grades
-          </div>
-        </TabsTrigger>
-
-        <TabsTrigger
-          id="tab-groups"
-          aria-controls="panel-groups"
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
-          value="groups"
-        >
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Groups
-          </div>
-        </TabsTrigger>
-
-        <TabsTrigger
-          id="tab-activity"
-          aria-controls="panel-activity"
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
-          value="activity"
-        >
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4" />
-            Activity
-          </div>
-        </TabsTrigger>
-      </TabsList>
-
-      <TabsContent
-        id="panel-assignments"
-        aria-labelledby="tab-assignments"
-        value="assignments"
-        className="animate-fade-in-up transition-opacity duration-300"
-      >
-        {tab === 'assignments' ? (
-          <div className="mb-8 space-y-6">
+          <CourseTabPanel value="assignments" active={tab === 'assignments'}>
             <AssignmentsCard
               courseId={course.id}
               courseIsArchived={course.isArchived}
@@ -195,18 +132,9 @@ export function AdminCourseView({
               onCreateAssignment={onCreateAssignment}
               isLoading={isAssignmentsLoading}
             />
-          </div>
-        ) : null}
-      </TabsContent>
+          </CourseTabPanel>
 
-      <TabsContent
-        id="panel-problems"
-        aria-labelledby="tab-problems"
-        value="problems"
-        className="animate-fade-in-up transition-opacity duration-300"
-      >
-        {tab === 'problems' ? (
-          <div className="mb-8 space-y-6">
+          <CourseTabPanel value="problems" active={tab === 'problems'}>
             <ProblemsCard
               courseId={course.id}
               courseIsArchived={course.isArchived}
@@ -215,20 +143,10 @@ export function AdminCourseView({
               onCreateProblem={onCreateProblem}
               isLoading={isProblemsLoading}
             />
-
             {problemViewDialog}
-          </div>
-        ) : null}
-      </TabsContent>
+          </CourseTabPanel>
 
-      <TabsContent
-        id="panel-roster"
-        aria-labelledby="tab-roster"
-        value="roster"
-        className="animate-fade-in-up transition-opacity duration-300"
-      >
-        {tab === 'roster' ? (
-          <div className="mb-8 space-y-6">
+          <CourseTabPanel value="roster" active={tab === 'roster'}>
             <RosterCard
               courseIsArchived={course.isArchived}
               enrolled={enrolled}
@@ -237,48 +155,52 @@ export function AdminCourseView({
               onBulkEnroll={onBulkEnroll}
               loading={isRosterLoading}
             />
-          </div>
-        ) : null}
-      </TabsContent>
+          </CourseTabPanel>
 
-      <TabsContent
-        id="panel-grades"
-        aria-labelledby="tab-grades"
-        value="grades"
-        className="animate-fade-in-up transition-opacity duration-300"
-      >
-        {tab === 'grades' ? (
-          <div className="mb-8 space-y-6">
+          <CourseTabPanel value="grades" active={tab === 'grades'}>
             <PrivilegeGradesCard courseId={course.id} />
-          </div>
-        ) : null}
-      </TabsContent>
+          </CourseTabPanel>
 
-      <TabsContent
-        id="panel-groups"
-        aria-labelledby="tab-groups"
-        value="groups"
-        className="animate-fade-in-up transition-opacity duration-300"
-      >
-        {tab === 'groups' ? (
-          <div className="mb-8 space-y-6">
+          <CourseTabPanel value="groups" active={tab === 'groups'}>
             <GroupsCard courseId={course.id} />
-          </div>
-        ) : null}
-      </TabsContent>
+          </CourseTabPanel>
 
-      <TabsContent
-        id="panel-activity"
-        aria-labelledby="tab-activity"
-        value="activity"
-        className="animate-fade-in-up transition-opacity duration-300"
-      >
-        {tab === 'activity' ? (
-          <div className="mb-8 space-y-6">
+          <CourseTabPanel value="activity" active={tab === 'activity'}>
             <ActivityCard courseId={course.id} />
-          </div>
-        ) : null}
-      </TabsContent>
+          </CourseTabPanel>
+
+          <CourseTabPanel value="settings" active={tab === 'settings'}>
+            <div className="space-y-4">
+              <h2
+                role="heading"
+                aria-level={2}
+                className="flex items-center gap-2 text-2xl font-semibold"
+              >
+                <Settings className="h-5 w-5" />
+                Course Settings
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Edit the course name, code, dates, timezone, and self-registration settings.
+              </p>
+              {course.isArchived ? (
+                <p className="text-muted-foreground text-xs">
+                  This course is archived and read-only. Unarchive it to make changes.
+                </p>
+              ) : null}
+              {/* Form on the left; the immediate-effect status switches sit in their
+                  own card to the right (stacked below on narrow screens). */}
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                <CourseSettingsForm course={course} onSaved={onCourseSaved} className="w-full" />
+                <CourseStatusCard
+                  course={course}
+                  onPublishToggle={onPublishToggle}
+                  className="w-full lg:w-80 lg:shrink-0"
+                />
+              </div>
+            </div>
+          </CourseTabPanel>
+        </CardContent>
+      </Card>
     </Tabs>
   );
 }

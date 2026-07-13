@@ -229,7 +229,7 @@ describe('POST /api/me', () => {
     expect(unlinkMock).toHaveBeenCalledWith(expect.stringContaining('old.png'));
   });
 
-  it('falls back to a .png extension for an extensionless avatar filename', async () => {
+  it('stores an extensionless avatar under a safe userId-prefixed UUID name', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1' } });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', avatar: null });
     prismaMock.user.update.mockResolvedValue({
@@ -256,7 +256,31 @@ describe('POST /api/me', () => {
     const res = await POST(req);
 
     expect(res.status).toBe(200);
-    expect(writeFileMock).toHaveBeenCalledWith(expect.stringMatching(/\.png$/), expect.anything());
+    // No extension is derived from an unsafe/extensionless name; the stored file is
+    // a random UUID prefixed with the userId (and never client-derived).
+    expect(writeFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/[/\\]user-1_[0-9a-f-]+$/),
+      expect.anything(),
+    );
+  });
+
+  it('rejects a non-image avatar upload', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', avatar: null });
+
+    const file = Object.assign(new File([new Uint8Array(1024)], 'evil.svg', { type: 'text/html' }), {
+      arrayBuffer: async () => new Uint8Array(1024).buffer,
+    });
+    const formData = new FormData();
+    formData.set('firstName', 'A');
+    formData.set('lastName', 'B');
+    formData.set('avatar', file);
+
+    const req = new Request('http://localhost/api/me', { method: 'POST', body: formData });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    expect(writeFileMock).not.toHaveBeenCalled();
   });
 
   it('deletes the current avatar when deleteAvatar is true', async () => {

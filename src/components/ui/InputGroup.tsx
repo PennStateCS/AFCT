@@ -35,6 +35,8 @@ interface InputGroupProps extends Omit<
   showEye?: boolean;
   isPasswordVisible?: boolean;
   togglePasswordVisibility?: () => void;
+  // Accepted for API compatibility, but the required "*" is currently not rendered
+  // (required marking is being reworked). Re-enable the asterisk in the label below.
   requiredMark?: boolean;
   setValue?: (val: string) => void;
   type?: React.HTMLInputTypeAttribute;
@@ -57,7 +59,9 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     showEye,
     isPasswordVisible,
     togglePasswordVisibility,
-    requiredMark,
+    // Destructured (and ignored) so it isn't forwarded onto the DOM input; the
+    // required "*" is intentionally not rendered right now. See the prop comment.
+    requiredMark: _requiredMark,
     className,
     setValue,
     type = 'text',
@@ -135,7 +139,6 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     <div className={cn('flex flex-col', className)}>
       <Label id={labelId} htmlFor={inputId} className={`mb-1.5 text-sm font-medium ${labelClassName}`}>
         {label}
-        {requiredMark ? <span className="text-red-600"> *</span> : null}
       </Label>
 
       <div className="relative">
@@ -152,15 +155,15 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           disabled={disabled}
           aria-labelledby={labelId}
           aria-invalid={!!error || undefined}
+          aria-required={_requiredMark || undefined}
           aria-describedby={describedByAttr || undefined}
           className={cn(
             'h-11 transition-all duration-150',
-            'focus-visible:ring-0',
-			'border-black',
+            'border-black',
             error && 'border-red-500',
             type === 'number' && 'appearance-auto',
             inputPaddingRight,
-			labelClassName,
+            labelClassName,
           )}
         />
 
@@ -228,7 +231,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
       )}
 
       {error && (
-        <p id={`${inputId}-error`} className="mt-1 text-xs text-red-600">
+        <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-red-600">
           {error}
         </p>
       )}
@@ -254,10 +257,17 @@ function StatusAdornment({
 
   if (!hasValue || isValid === undefined) return null;
 
+  // Pair the color/shape-only status icon with a text equivalent for AT.
   return isValid ? (
-    <CheckCircle size={18} className="text-green-500" aria-hidden="true" />
+    <>
+      <CheckCircle size={18} className="text-green-500" aria-hidden="true" />
+      <span className="sr-only">valid</span>
+    </>
   ) : (
-    <XCircle size={18} className="text-red-500" aria-hidden="true" />
+    <>
+      <XCircle size={18} className="text-red-500" aria-hidden="true" />
+      <span className="sr-only">invalid</span>
+    </>
   );
 }
 

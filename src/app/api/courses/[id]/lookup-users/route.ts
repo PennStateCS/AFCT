@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+import { normalizeEmail } from '@/lib/email';
+import { BulkEnrollEmailsSchema } from '@/schemas/bulk';
 
 /**
  * Resolves a list of emails to user records, splitting them into `found` and
@@ -37,12 +40,11 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
-  async (req) => {
+  async (req, _ctx, { user, courseId }) => {
     try {
-      const body = await req.json();
-      const emails: string[] = (body?.emails ?? [])
-        .map((e: string) => String(e).trim().toLowerCase())
-        .filter(Boolean);
+      const parsed = await readJson(req, BulkEnrollEmailsSchema);
+      if (!parsed.ok) return parsed.response;
+      const emails: string[] = parsed.data.emails.map((e) => normalizeEmail(e)).filter(Boolean);
       if (!emails.length) return NextResponse.json({ found: [], notFound: [] });
 
       // Find users whose email matches (case-insensitive)
@@ -60,11 +62,11 @@ export const POST = withCourseAuth(
       return NextResponse.json({ found: users, notFound }, { status: 200 });
     } catch (err) {
       console.error('lookup-users error', err);
-      await createEnhancedActivityLog(prisma, req, {
-        userId: null,
+      await logError(req, {
+        userId: user.id,
         action: 'COURSE_LOOKUP_USERS_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   course: {
     update: vi.fn(),
+    findUnique: vi.fn(),
   },
   roster: {
     findFirst: vi.fn(),
@@ -23,6 +24,8 @@ import { PATCH } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  // Default: the course is not archived, so the wrapper's archive freeze is a no-op.
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
 });
 
 describe('PATCH /api/courses/[id]/publish', () => {
@@ -63,6 +66,11 @@ describe('PATCH /api/courses/[id]/publish', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_UNPUBLISH_REJECTED', severity: 'WARNING' }),
+    );
   });
 
   it('updates publish status and logs activity', async () => {
@@ -87,6 +95,58 @@ describe('PATCH /api/courses/[id]/publish', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.course.update).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('lets a TA publish (TA = faculty)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
+    canUnpublishMock.mockResolvedValue({ canUnpublish: true });
+    prismaMock.course.update.mockResolvedValue({
+      id: 'c1',
+      name: 'Course',
+      code: 'C1',
+      isPublished: true,
+      updatedAt: new Date('2025-01-01T00:00:00.000Z'),
+    });
+
+    const req = new Request('http://localhost/api/courses/c1/publish', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('forbids a student from publishing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+
+    const req = new Request('http://localhost/api/courses/c1/publish', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.course.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 and does not update when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new Request('http://localhost/api/courses/c1/publish', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.course.update).not.toHaveBeenCalled();
   });
 
   it('returns 500 and logs when the update throws', async () => {

@@ -95,7 +95,7 @@ vi.mock('framer-motion', () => {
     {},
     {
       get: (_, element: string) => {
-        const Tag = element as keyof JSX.IntrinsicElements;
+        const Tag = element as keyof React.JSX.IntrinsicElements;
         return ({ children, ...props }: { children?: React.ReactNode }) =>
           React.createElement(Tag, props, children);
       },
@@ -105,6 +105,7 @@ vi.mock('framer-motion', () => {
   return {
     motion: motionProxy,
     AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    useReducedMotion: () => false,
   };
 });
 
@@ -185,7 +186,7 @@ beforeAll(() => {
   originalLocation = window.location;
   originalCaptchaKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
   process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY = 'test-hcaptcha-key';
-  if (typeof performance !== 'undefined' && performance.now) {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
     performanceNowSpy = vi.spyOn(performance, 'now').mockImplementation(getMockTime);
   }
 });

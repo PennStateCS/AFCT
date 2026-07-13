@@ -33,8 +33,10 @@ export default async function AdminCoursePage({ params }: Props) {
   // roster is reduced to staff names + count-only placeholders below.
   const isStaff = viewerIsAdmin || viewerRole === 'FACULTY' || viewerRole === 'TA';
 
-  const course = await prisma.course.findUnique({
-    where: { id },
+  const course = await prisma.course.findFirst({
+    // Exclude soft-deleted courses — they're hidden from the dashboard for everyone
+    // (recovery is out-of-band), so a deleted course 404s here like a missing one.
+    where: { id, deletedAt: null },
     include: {
       _count: {
         select: {
@@ -91,6 +93,8 @@ export default async function AdminCoursePage({ params }: Props) {
     registrationCloseAt: course.registrationCloseAt,
     isPublished: course.isPublished,
     isArchived: course.isArchived,
+    deletedAt: course.deletedAt, // always null here — deleted courses are filtered out
+    timezone: course.timezone,
     emptyStringNotation: course.emptyStringNotation,
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,

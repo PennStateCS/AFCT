@@ -18,22 +18,35 @@ beforeEach(() => {
 const whereArg = () => prismaMock.course.findMany.mock.calls[0][0].where;
 
 describe('getCoursesListForUser — access scoping', () => {
-  it('returns all courses (no roster filter) for an ADMIN', async () => {
+  it('returns all non-deleted courses (no roster filter) for an ADMIN', async () => {
     await getCoursesListForUser('admin-1', 'ADMIN');
-    expect(whereArg()).toEqual({});
+    expect(whereArg()).toEqual({ deletedAt: null });
   });
 
-  it('limits a STUDENT to enrolled AND published courses', async () => {
+  it('limits a non-admin to enrolled courses that are published OR ones they staff', async () => {
     await getCoursesListForUser('stu-1', 'STUDENT');
     expect(whereArg()).toEqual({
+      deletedAt: null,
       roster: { some: { userId: 'stu-1' } },
-      isPublished: true,
+      OR: [
+        { isPublished: true },
+        { roster: { some: { userId: 'stu-1', role: { in: ['FACULTY', 'TA'] } } } },
+      ],
     });
   });
 
-  it('limits FACULTY/TA to enrolled courses without the published filter', async () => {
-    await getCoursesListForUser('fac-1', 'FACULTY');
-    expect(whereArg()).toEqual({ roster: { some: { userId: 'fac-1' } } });
+  it('lets FACULTY/TA see their own unpublished courses via the staff OR branch', async () => {
+    // The page passes 'STUDENT' for every non-admin, so visibility must come from the
+    // per-roster staff branch, not the coarse role argument.
+    await getCoursesListForUser('fac-1', 'STUDENT');
+    expect(whereArg()).toEqual({
+      deletedAt: null,
+      roster: { some: { userId: 'fac-1' } },
+      OR: [
+        { isPublished: true },
+        { roster: { some: { userId: 'fac-1', role: { in: ['FACULTY', 'TA'] } } } },
+      ],
+    });
   });
 });
 

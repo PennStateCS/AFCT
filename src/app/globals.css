@@ -594,3 +594,29 @@ html {
     height: 100% !important;
   }
 }
+
+/* Push the native date/time picker icon to the far right of the field so it
+   sits at the edge instead of directly after the value. Unlayered so it wins
+   over the browser's default calendar-indicator placement. */
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator,
+input[type='month']::-webkit-calendar-picker-indicator,
+input[type='week']::-webkit-calendar-picker-indicator {
+  margin-inline-start: auto;
+}
+
+/* Respect the OS "reduce motion" preference: collapse animations, transitions,
+   and smooth scrolling to near-instant for users who ask for it. Invisible to
+   everyone who has not set the preference. Unlayered so it wins over component
+   animation utilities. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

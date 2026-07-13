@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MaxPointsCell } from './assignment-columns';
 
 // Fresh QueryClient per test (retry off, no lingering cache) so each render starts
-// with a cold ['assignment', id] cache entry.
+// with a cold assignment.shell cache entry.
 const renderWithClient = (ui: React.ReactElement) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);

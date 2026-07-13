@@ -7,13 +7,15 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { SearchableMultiSelect } from './SearchableMultiSelect';
 
-vi.mock('@/components/ui/dropdown-menu', () => {
+// Render the popover panel inline (always open) so the search box and checkbox
+// group are queryable without driving the real Radix open/portal machinery.
+vi.mock('@/components/ui/popover', () => {
   const Stub = ({ children }: { children: React.ReactNode }) => <div>{children}</div>;
   return {
-    DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    DropdownMenuTrigger: Stub,
-    DropdownMenuContent: ({ children }: { children: React.ReactNode }) => (
-      <div data-testid="dropdown-content">{children}</div>
+    Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    PopoverTrigger: Stub,
+    PopoverContent: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="popover-content">{children}</div>
     ),
   };
 });
@@ -116,6 +118,28 @@ describe('SearchableMultiSelect', () => {
 
     const trigger = screen.getByRole('button', { name: 'Faculty' });
     expect(trigger).toHaveTextContent('Ada Lovelace, Alan Turing');
+  });
+
+  it('groups the options as checkboxes rather than a menu', () => {
+    render(
+      <SearchableMultiSelect
+        label="Faculty"
+        items={facultyItems}
+        value={['ada']}
+        onChange={() => {}}
+      />,
+    );
+
+    // The options live in a labelled group of checkboxes, not a menu.
+    const group = screen.getByRole('group', { name: 'Faculty' });
+    expect(group).toBeInTheDocument();
+    expect(screen.queryByRole('menu')).toBeNull();
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(facultyItems.length);
+    // The selected item carries its own checked state.
+    expect(screen.getByRole('checkbox', { name: 'Ada Lovelace' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Alan Turing' })).not.toBeChecked();
   });
 
   it('respects the disabled state', () => {

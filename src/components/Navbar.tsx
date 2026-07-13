@@ -1,20 +1,31 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, UserRound, UserPen, LockKeyhole, LogOut } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { useNavbarBreadcrumbs } from '@/components/navbar/NavbarBreadcrumbContext';
 import type { SessionUser } from '@/types/next-auth';
 
+import { getInitials } from '@/app/utils/initials';
+import { safeSignOut } from '@/lib/safe-signout';
+
+import { ChangePasswordDialog } from '@/components/dialogs/ChangePasswordDialog';
+import { EditProfileDialog } from '@/components/dialogs/EditProfileDialog';
+
 // UI Components
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -30,10 +41,12 @@ import {
 import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
 
 const Navbar: React.FC = () => {
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { data, status } = useSession();
   const pathname = usePathname();
   const { courseLabel, assignmentLabel } = useNavbarBreadcrumbs();
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const crumbs = useMemo(() => {
     const toTitleCase = (value: string) =>
@@ -104,7 +117,8 @@ const Navbar: React.FC = () => {
   const user: SessionUser = data.user;
 
   return (
-    <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-3 text-white shadow-sm sm:p-4">
+    <div>
+      <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-3 text-white shadow-sm sm:p-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
         <EnhancedSidebarTrigger />
         <Breadcrumb aria-label="Breadcrumb">
@@ -143,13 +157,73 @@ const Navbar: React.FC = () => {
       </div>
 
       <div className="ml-2 flex items-center gap-2 text-right sm:gap-4">
-        {user.isAdmin && <Badge role="ADMIN" className="text-xs" />}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="h-auto rounded-md px-1 py-1 hover:bg-white/20 sm:px-2 cursor-pointer"
+              aria-label={`${user.firstName} ${user.lastName} account menu`}
+            >
+              <span className="flex items-center gap-2 sm:gap-3">
+                <span className="hidden flex-col items-end sm:flex">
+                  <span className="max-w-[12rem] truncate font-semibold text-white">
+                    {`${user.firstName} ${user.lastName}`}
+                  </span>
+                  <div className="ml-2 flex items-center gap-2 text-right sm:gap-4">
+                    {user.isAdmin && <Badge role="ADMIN" className="text-xs" />}
+                  </div>
+                </span>
+                <Avatar className="h-11 w-11" aria-label="User avatar">
+                  <AvatarImage 
+                    src={`/api/uploads/pfps/${user.avatar}`}
+                    alt={`${user.firstName} ${user.lastName}`} />
+                  <AvatarFallback className="text-sm text-white">
+                    {getInitials(user.firstName, user.lastName, user.email)}
+                  </AvatarFallback>
+                </Avatar>
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            {/* Section header, not an action. A Label keeps it out of the menu's
+                focus/arrow-key order; overrides preserve the exact resting look. */}
+            <DropdownMenuLabel className="font-normal [&_svg:not([class*='text-'])]:text-muted-foreground">
+              <span className="flex w-full items-center gap-2 text-left">
+                <UserRound className="h-4 w-4" />
+                User Account
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => setEditProfileOpen(true)}
+            >
+              <UserPen className="h-4 w-4" />
+              Edit Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => setChangePasswordOpen(true)}
+            >
+              <LockKeyhole className="h-4 w-4" />
+              Change Password
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => void safeSignOut({ callbackUrl: '/' })}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="hover:text-destructive hover:bg-background bg-card text-foreground border-secondary-foreground/40 border-2"
+              className="hover:bg-background bg-card text-foreground border-card-foreground/10 border-2 cursor-pointer"
             >
               <Sun className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
               <Moon className="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
@@ -157,13 +231,19 @@ const Navbar: React.FC = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setTheme('light')}>Light</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme('dark')}>Dark</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme('system')}>System</DropdownMenuItem>
+            {/* Radio group so the current theme is exposed as the checked option. */}
+            <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+              <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </nav>
+    <ChangePasswordDialog open={changePasswordOpen} setOpen={setChangePasswordOpen} onChangePassword={() => Promise.resolve()} />
+    <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
+  </div>
   );
 };
 

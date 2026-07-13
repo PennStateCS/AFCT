@@ -1,7 +1,21 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
+
+// The export-log body is optional and purely descriptive (it only feeds the audit
+// log), so every field is lenient with a safe fallback and the whole parse can't
+// throw — a missing or malformed body still records the export.
+const GradesExportLogSchema = z
+  .object({
+    platform: z.string().catch('unknown').default('unknown'),
+    wholeGradebook: z.boolean().catch(false).default(false),
+    assignmentCount: z.coerce.number().catch(0).default(0),
+    studentCount: z.coerce.number().catch(0).default(0),
+  })
+  .catch({ platform: 'unknown', wholeGradebook: false, assignmentCount: 0, studentCount: 0 });
 
 /**
  * Records a gradebook export in the audit log. The CSV itself is built and
@@ -31,15 +45,8 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 export const POST = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const body = await req.json().catch(() => ({}));
-      const platform = typeof body?.platform === 'string' ? body.platform : 'unknown';
-      const wholeGradebook = body?.wholeGradebook === true;
-      const assignmentCount = Number.isFinite(Number(body?.assignmentCount))
-        ? Number(body.assignmentCount)
-        : 0;
-      const studentCount = Number.isFinite(Number(body?.studentCount))
-        ? Number(body.studentCount)
-        : 0;
+      const { platform, wholeGradebook, assignmentCount, studentCount } =
+        GradesExportLogSchema.parse(await req.json().catch(() => ({})));
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
@@ -60,17 +67,16 @@ export const POST = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (error) {
       console.error('POST /api/courses/[id]/grades (export log) error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GRADES_EXPORT_ERROR',
-        severity: 'ERROR',
+        error,
         courseId,
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
       });
       return NextResponse.json({ error: 'Failed to record export' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GRADES_EXPORT_DENIED' },
+  { access: 'manage', deniedAction: 'GRADES_EXPORT_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -186,8 +192,9 @@ export const GET = withCourseAuth(
       // Populate with actual grades
       gradeRows.forEach((g) => {
         const sum = g._sum.grade ?? 0;
-        if (grades[g.studentId]) {
-          grades[g.studentId][g.assignmentId] = sum;
+        const studentGrades = grades[g.studentId];
+        if (studentGrades) {
+          studentGrades[g.assignmentId] = sum;
         }
       });
 

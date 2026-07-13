@@ -22,6 +22,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
 import SelectField from '@/components/ui/SelectField';
 import { apiPaths } from '@/lib/api-paths';
+import { CourseRoleChangeSchema } from '@/schemas/user';
 
 type CourseRosterEntry = {
   role?: string | null;
@@ -98,8 +99,8 @@ export default function CourseEditUserDialog({
   // Re-pull the edited roster entry and the course roster list (a role change or
   // removal is reflected there too).
   const invalidateRoster = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.course.roster(courseId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.course.roster(courseId) });
   };
 
   // Blocking spinner: only while we're actually waiting on the network for a
@@ -164,7 +165,14 @@ export default function CourseEditUserDialog({
 
   const handleSave = () => {
     if (!roster) return;
-    saveRoster(roster.role);
+    // Validate the selected role against the shared enum (the same one the route
+    // enforces) before sending the PATCH.
+    const parsed = CourseRoleChangeSchema.safeParse({ role: roster.role });
+    if (!parsed.success) {
+      showToast.error('Please choose a valid course role.');
+      return;
+    }
+    saveRoster(parsed.data.role);
   };
 
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -194,7 +202,7 @@ export default function CourseEditUserDialog({
     },
     onSuccess: () => {
       setRoster((r) => (r ? { ...r, user: { ...r.user, avatar: null } } : r));
-      queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
       showToast.success('Profile photo removed');
       onSaved?.();
     },
@@ -221,7 +229,6 @@ export default function CourseEditUserDialog({
       <DialogContent
         className="bg-card max-w-md"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>

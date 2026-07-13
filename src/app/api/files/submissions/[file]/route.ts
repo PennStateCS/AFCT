@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
 
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    if (!session?.user?.id) {
+    if (!session?.user?.id || session.user.inactive) {
       return apiError(401, 'Unauthorized');
     }
 
@@ -67,6 +67,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       return logDenial(req, {
         userId: session.user.id,
         action: 'SUBMISSION_FILE_DOWNLOAD_DENIED',
+        courseId: submission.courseId,
       });
     }
 
@@ -79,6 +80,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
           action: 'DOWNLOAD_SUBMISSION_FILE',
           severity: 'INFO',
           category: 'SUBMISSION',
+          courseId: submission.courseId,
           assignmentId: submission.assignmentId,
           submissionId: submission.id,
           metadata: {

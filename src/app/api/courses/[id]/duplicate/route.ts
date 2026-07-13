@@ -1,23 +1,54 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { generateUniqueCourseCode } from '@/lib/course-code';
 import { resolveUserTimezone } from '@/lib/user-timezone';
+import { parseValidDate } from '@/lib/date';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
+
+// Permissive body schema: guarantees a well-typed object (and rejects malformed
+// JSON) while the handler keeps its own credits/code/date validation below. Dates
+// stay as strings for the timezone conversion.
+const DuplicateBody = z.object({
+  title: z.string().optional(),
+  code: z.string().optional(),
+  semester: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  registrationOpenAt: z.string().optional(),
+  registrationCloseAt: z.string().optional(),
+  credits: z.union([z.string(), z.number()]).optional(),
+  emptyStringNotation: z.string().optional(),
+  copyAssignments: z.boolean().optional(),
+  copyProblems: z.boolean().optional(),
+  copyMode: z.enum(['assignments', 'problems', 'assignments_with_problems']).optional(),
+  copyFaculty: z.boolean().optional(),
+  copyTAs: z.boolean().optional(),
+  // Additional faculty to seed on the copy (on top of a copied faculty roster).
+  instructorIds: z.array(z.string()).optional(),
+});
 
 const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
 const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase();
 
 /**
  * Creates a new course modeled on an existing one, in a single transaction. The
- * caller becomes faculty on the copy; faculty/TA rosters are copied only when
- * asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects
- * what carries over: assignments only, problems only, or assignments with their
- * problems. The copy always starts unpublished with a fresh registration code.
- * System administrators only. Dates are interpreted in the actor's timezone.
+ * copy's faculty comes from the copied faculty roster and/or an explicit
+ * `instructorIds` list — at least one faculty member is required (the caller is
+ * NOT added automatically). TAs are copied only when asked. `copyMode` (or the
+ * legacy copyAssignments/copyProblems booleans) selects what carries over:
+ * assignments only, problems only, or assignments with their problems. The copy
+ * always starts unpublished with a fresh registration code. System administrators
+ * only. Dates are interpreted in the actor's timezone.
  * @openapi
  * summary: Duplicate a course
  * parameters:
@@ -44,13 +75,14 @@ const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase()
  *           copyProblems: { type: boolean, description: Legacy fallback for copyMode }
  *           copyFaculty: { type: boolean }
  *           copyTAs: { type: boolean }
+ *           instructorIds: { type: array, items: { type: string }, description: "Additional faculty for the copy. Combined with copyFaculty, the result must include at least one faculty member." }
  * responses:
  *   201:
  *     description: The new course id.
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { id: { type: string }, message: { type: string } } }
- *   400: { description: "Missing fields, bad credits, bad code, or invalid dates." }
+ *   400: { description: "Missing fields, bad credits, bad code, invalid dates, or no faculty for the copy." }
  *   401: { description: Not signed in. }
  *   403: { description: System administrators only (logged as a security event). }
  *   500: { description: Server error. }
@@ -61,7 +93,8 @@ export const POST = withAdminAuth(
     const actorId = user.id;
 
     try {
-      const body = await req.json();
+      const parsed = await readJson(req, DuplicateBody);
+      if (!parsed.ok) return parsed.response;
       const {
         title,
         code,
@@ -77,7 +110,8 @@ export const POST = withAdminAuth(
         copyMode,
         copyFaculty = false,
         copyTAs = false,
-      } = body ?? {};
+        instructorIds = [],
+      } = parsed.data;
 
       const parsedCredits = Number(credits);
       if (!Number.isInteger(parsedCredits) || parsedCredits < 1 || parsedCredits > 6) {
@@ -121,15 +155,16 @@ export const POST = withAdminAuth(
         );
       }
 
-      const parsedStartDate = new Date(startDate);
-      const parsedEndDate = new Date(endDate);
-      const parsedRegistrationOpenAt = new Date(registrationOpenAt);
-      const parsedRegistrationCloseAt = new Date(registrationCloseAt);
+      const parsedStartDate = parseValidDate(startDate);
+      const parsedEndDate = parseValidDate(endDate);
+      const parsedRegistrationOpenAt = parseValidDate(registrationOpenAt);
+      const parsedRegistrationCloseAt = parseValidDate(registrationCloseAt);
 
       if (
-        [parsedStartDate, parsedEndDate, parsedRegistrationOpenAt, parsedRegistrationCloseAt].some(
-          (d) => Number.isNaN(d.getTime()),
-        )
+        !parsedStartDate ||
+        !parsedEndDate ||
+        !parsedRegistrationOpenAt ||
+        !parsedRegistrationCloseAt
       ) {
         return NextResponse.json({ error: 'Invalid date/time value.' }, { status: 400 });
       }
@@ -148,10 +183,43 @@ export const POST = withAdminAuth(
         );
       }
 
+      // A course must always have at least one faculty member — from the copied
+      // faculty roster and/or the explicit list. The caller is NOT auto-added.
+      if (!copyFaculty && instructorIds.length === 0) {
+        return NextResponse.json(
+          { error: 'Copy the faculty roster or pick at least one faculty member.' },
+          { status: 400 },
+        );
+      }
+
       const userTimezone = await resolveUserTimezone(actorId);
 
+      // Solution files live here. Duplicated problems get their OWN physical copy so
+      // the two rows don't share one file (a later delete/replace of one problem would
+      // otherwise unlink the file the other still points at). Track the copies so a
+      // rolled-back transaction leaves no orphaned files behind.
+      const solutionsDir = path.join('/private', 'uploads', 'solutions');
+      const copiedSolutionFiles: string[] = [];
+      const copyProblemSolution = async (p: {
+        fileName: string | null;
+        originalFileName: string | null;
+      }): Promise<{ fileName?: string; originalFileName?: string }> => {
+        if (!p.fileName) return {};
+        const src = resolveInsideDir(solutionsDir, p.fileName);
+        // If the source is already missing, the original is broken too — the copy just
+        // has no solution file rather than a dangling pointer.
+        if (!fs.existsSync(src)) return {};
+        const newName = safeStoredFilename(p.originalFileName ?? p.fileName);
+        const dest = resolveInsideDir(solutionsDir, newName);
+        await fs.promises.copyFile(src, dest);
+        copiedSolutionFiles.push(dest);
+        return { fileName: newName, originalFileName: p.originalFileName ?? undefined };
+      };
+
       // Begin transaction
-      const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      let result;
+      try {
+        result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Create new course (default not published)
         const regCode = await generateUniqueCourseCode();
 
@@ -172,33 +240,39 @@ export const POST = withAdminAuth(
           },
         });
 
-        // Assign current user as faculty in roster
-        await tx.roster.create({
-          data: {
-            courseId: newCourse.id,
-            userId: actorId,
-            role: 'FACULTY',
-          },
-        });
+        // Seed the roster: faculty from the copied roster and/or the explicit
+        // list (deduped; faculty wins over a TA row for the same user).
+        const originalRoster =
+          copyFaculty || copyTAs ? await tx.roster.findMany({ where: { courseId } }) : [];
 
-        // Optionally copy faculty/TAs from original roster
-        if (copyFaculty || copyTAs) {
-          const originalRoster = await tx.roster.findMany({ where: { courseId } });
+        const facultyIds = new Set<string>(instructorIds);
+        if (copyFaculty) {
           for (const r of originalRoster) {
-            if (r.userId === actorId) continue; // already added
-            if (
-              ((r.role as string) === 'FACULTY' || (r.role as string) === 'ADMIN') &&
-              copyFaculty
-            ) {
-              await tx.roster.create({
-                data: { courseId: newCourse.id, userId: r.userId, role: r.role },
-              });
-            }
-            if (r.role === 'TA' && copyTAs) {
-              await tx.roster.create({
-                data: { courseId: newCourse.id, userId: r.userId, role: r.role },
-              });
-            }
+            if (r.role === 'FACULTY') facultyIds.add(r.userId);
+          }
+        }
+        if (facultyIds.size > 0) {
+          await tx.roster.createMany({
+            data: Array.from(facultyIds).map((userId) => ({
+              courseId: newCourse.id,
+              userId,
+              role: 'FACULTY' as const,
+            })),
+          });
+        }
+
+        if (copyTAs) {
+          const taRows = originalRoster.filter(
+            (r) => r.role === 'TA' && !facultyIds.has(r.userId),
+          );
+          if (taRows.length > 0) {
+            await tx.roster.createMany({
+              data: taRows.map((r) => ({
+                courseId: newCourse.id,
+                userId: r.userId,
+                role: 'TA' as const,
+              })),
+            });
           }
         }
 
@@ -216,12 +290,12 @@ export const POST = withAdminAuth(
           // copy all problems
           const originalProblems = await tx.problem.findMany({ where: { courseId } });
           for (const p of originalProblems) {
+            const solution = await copyProblemSolution(p);
             const created = await tx.problem.create({
               data: {
                 title: p.title,
                 description: p.description ?? undefined,
-                fileName: p.fileName ?? undefined,
-                originalFileName: p.originalFileName ?? undefined,
+                ...solution,
                 type: p.type ?? undefined,
                 maxStates: p.maxStates ?? undefined,
                 isDeterministic: p.isDeterministic ?? undefined,
@@ -241,12 +315,12 @@ export const POST = withAdminAuth(
               where: { id: { in: Array.from(neededProblemIds) } },
             });
             for (const p of problemsToCopy) {
+              const solution = await copyProblemSolution(p);
               const created = await tx.problem.create({
                 data: {
                   title: p.title,
                   description: p.description ?? undefined,
-                  fileName: p.fileName ?? undefined,
-                  originalFileName: p.originalFileName ?? undefined,
+                  ...solution,
                   type: p.type ?? undefined,
                   maxStates: p.maxStates ?? undefined,
                   isDeterministic: p.isDeterministic ?? undefined,
@@ -285,8 +359,14 @@ export const POST = withAdminAuth(
           }
         }
 
-        return newCourse;
-      });
+          return newCourse;
+        });
+      } catch (txErr) {
+        // The duplication rolled back — remove any solution files we copied so they
+        // don't leak as orphans.
+        await Promise.all(copiedSolutionFiles.map((f) => fs.promises.unlink(f).catch(() => {})));
+        throw txErr;
+      }
 
       await createEnhancedActivityLog(prisma, req, {
         userId: actorId,
@@ -309,11 +389,11 @@ export const POST = withAdminAuth(
       return NextResponse.json({ id: result.id, message: 'Course duplicated' }, { status: 201 });
     } catch (err) {
       console.error('Duplicate course error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: actorId,
         action: 'COURSE_DUPLICATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
+        courseId: courseId,
       });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

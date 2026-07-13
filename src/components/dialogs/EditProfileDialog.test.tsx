@@ -4,8 +4,14 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { EditProfileDialog } from './EditProfileDialog';
+
+const renderWithClient = (ui: React.ReactElement) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+};
 
 vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
 vi.mock('@/components/ui/InputGroup', () =>
@@ -79,7 +85,7 @@ describe('EditProfileDialog', () => {
       } as Response);
     });
 
-    render(<EditProfileDialog user={user} open setOpen={setOpen} onSave={onSave} />);
+    renderWithClient(<EditProfileDialog user={user} open setOpen={setOpen} onSave={onSave} />);
 
     await userEvents.clear(screen.getByLabelText('First Name'));
     await userEvents.type(screen.getByLabelText('First Name'), 'Ada');
@@ -108,5 +114,34 @@ describe('EditProfileDialog', () => {
     });
     expect(setOpen).toHaveBeenCalledWith(false);
     expect(toastSuccess).toHaveBeenCalledWith('Profile updated!');
+  });
+
+  it('clears the timezone override when Automatic is chosen', async () => {
+    const userEvents = userEvent.setup();
+    const setOpen = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ firstName: 'Test', lastName: 'User', avatar: null, timezone: null }),
+    } as Response);
+
+    const zonedUser = { ...user, timezone: 'America/New_York' };
+    renderWithClient(<EditProfileDialog user={zonedUser} open setOpen={setOpen} onSave={onSave} />);
+
+    await userEvents.click(
+      screen.getByRole('button', { name: 'Automatic (detect from browser)' }),
+    );
+    await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const formData = requestInit.body as FormData;
+    // Blank timezone is what tells the server to clear the override.
+    expect(formData.get('timezone')).toBe('');
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ timezone: undefined }),
+    );
   });
 });

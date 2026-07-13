@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { parsePageParams } from '@/lib/api/request';
 import type { Prisma } from '@prisma/client';
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
-
-const clampInt = (value: number, min: number, max: number, fallback: number): number => {
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(min, Math.min(max, Math.trunc(value)));
-};
 
 // Build a display name from the parts we have, falling back to email, then id.
 function displayName(u: {
@@ -54,14 +50,10 @@ export const GET = withAdminAuth(
   async (req: Request) => {
     try {
       const url = new URL(req.url);
-      // A missing param must fall back to the default — Number(null) is 0, which
-      // would otherwise clamp up to the minimum, so guard on the raw value first.
-      const pageRaw = url.searchParams.get('page');
-      const pageSizeRaw = url.searchParams.get('pageSize');
-      const page = pageRaw ? clampInt(Number(pageRaw), 1, Number.MAX_SAFE_INTEGER, 1) : 1;
-      const pageSize = pageSizeRaw
-        ? clampInt(Number(pageSizeRaw), 1, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE)
-        : DEFAULT_PAGE_SIZE;
+      const { page, pageSize, skip, take } = parsePageParams(url.searchParams, {
+        defaultSize: DEFAULT_PAGE_SIZE,
+        maxSize: MAX_PAGE_SIZE,
+      });
       const q = (url.searchParams.get('q') ?? '').trim();
       const severityRaw = (url.searchParams.get('severity') ?? '').trim().toUpperCase();
       const severity = (['INFO', 'WARNING', 'ERROR', 'SECURITY'] as const).find(
@@ -116,8 +108,8 @@ export const GET = withAdminAuth(
         prisma.activityLog.findMany({
           where,
           orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
+          skip,
+          take,
         }),
       ]);
 

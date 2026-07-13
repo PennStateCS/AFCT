@@ -213,9 +213,7 @@ describe('POST /api/me/password', () => {
       expect.objectContaining({
         action: 'CHANGE_PASSWORD',
         metadata: expect.objectContaining({
-          userId: 'u1',
           wasTemporaryPassword: true,
-          clearedTemporaryPassword: true,
         }),
       }),
     );

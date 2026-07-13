@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { queryKeys } from '@/lib/query-keys';
 import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { showToast } from '@/lib/toast';
 import { Loader2 } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
+import { BatchProblemGradesSchema, gradeCellSchema } from '@/schemas/grade';
 
 type Row = {
   // the DataTable needs a stable `id` field (or `_id`) for its row
@@ -125,7 +126,7 @@ export function GradeBreakdownDialog({
   const isDirty = useMemo(() => {
     if (rows.length !== originalRows.length) return true;
     for (let i = 0; i < rows.length; i++) {
-      if (rows[i].grade !== originalRows[i].grade) return true;
+      if (rows[i]?.grade !== originalRows[i]?.grade) return true;
     }
     return false;
   }, [rows, originalRows]);
@@ -156,11 +157,29 @@ export function GradeBreakdownDialog({
   });
 
   const handleSave = useCallback(() => {
+    // Validate each edited grade against its own problem's max before submitting —
+    // catches out-of-range and unparseable (NaN) entries that would otherwise be
+    // serialized to null. The route re-checks the same bounds server-side.
+    for (const r of rows) {
+      const result = gradeCellSchema(r.maxPoints).safeParse(r.grade);
+      if (!result.success) {
+        showToast.error(`${r.title}: ${result.error.issues[0]?.message ?? 'Invalid grade.'}`);
+        return;
+      }
+    }
+
     const gradesPayload = rows.reduce<Record<string, number | null>>((acc, r) => {
       acc[r.problemId] = r.grade;
       return acc;
     }, {});
-    saveGrades(gradesPayload);
+
+    const parsed = BatchProblemGradesSchema.safeParse({ grades: gradesPayload });
+    if (!parsed.success) {
+      showToast.error('Please review the grades and try again.');
+      return;
+    }
+
+    saveGrades(parsed.data.grades);
   }, [rows, saveGrades]);
 
   const columns = useMemo<ColumnDef<Row, unknown>[]>(

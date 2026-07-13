@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { columns } from './course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -13,13 +13,11 @@ import { apiPaths } from '@/lib/api-paths';
 import type { CourseListItem } from '@/lib/courses-list';
 
 type CourseWithRoster = CourseListItem;
-type CourseWithFaculty = CourseListItem;
 
 /** Cache key for the courses list; shared so callers can invalidate consistently. */
 export const coursesListQueryKey = ['courses', 'list'] as const;
 
 export default function CoursesClient({ initialCourses }: { initialCourses: CourseWithRoster[] }) {
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const { timezone } = useEffectiveTimezone();
 
@@ -35,7 +33,9 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
     queryFn: async () => {
       const res = await fetch(apiPaths.myCourses(), { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch courses');
-      return (await res.json()) as CourseWithRoster[];
+      const all = (await res.json()) as CourseWithRoster[];
+      // Archived courses are shown on the Archived Courses page, not here.
+      return all.filter((c) => !c.isArchived);
     },
     initialData: initialCourses,
     staleTime: 30_000,
@@ -46,25 +46,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
     void refetch();
   }, [refetch]);
 
-  // Optimistic single-row merge from a row action, written straight into the cache
-  // so the list reflects the change without a round-trip.
-  const patchCourse = useCallback(
-    (refreshedCourse: CourseWithFaculty) => {
-      queryClient.setQueryData<CourseWithRoster[]>(coursesListQueryKey, (prev) =>
-        (prev ?? []).map((c) =>
-          c.id === refreshedCourse.id
-            ? { ...c, ...refreshedCourse, enrolled: refreshedCourse.enrolled ?? c.enrolled }
-            : c,
-        ),
-      );
-    },
-    [queryClient],
-  );
-
-  const columnsMemo = useMemo(
-    () => columns(patchCourse, refresh, refresh, timezone),
-    [patchCourse, refresh, timezone],
-  );
+  const columnsMemo = useMemo(() => columns(refresh, refresh, timezone), [refresh, timezone]);
 
   return (
     <Card className="p-4" aria-labelledby="courses-title">

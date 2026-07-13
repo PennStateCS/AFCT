@@ -1,6 +1,6 @@
 'use client';
 
-import { Problem } from '@prisma/client';
+import type { Problem } from '@prisma/client';
 import {
   Dialog,
   DialogContent,
@@ -29,10 +29,10 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
+import type { ProblemTypeEnum } from '@/schemas/problem';
 import {
   CreateProblemSchema,
   ProblemFormSchema,
-  ProblemTypeEnum,
   type CreateProblemInput,
   type ProblemFormRaw,
 } from '@/schemas/problem';
@@ -193,7 +193,7 @@ export function CreateProblemDialog({
     }
 
     if (open) {
-      init();
+      void init();
     } else {
       // parent closed while we were possibly initializing
       setInternalOpen(false);
@@ -313,8 +313,8 @@ export function CreateProblemDialog({
         return;
       }
       if (error instanceof z.ZodError) {
-        // Handle Zod validation errors
-        const message = error.errors?.map((e) => e.message).join();
+        // Handle Zod validation errors (Zod 4 renamed `.errors` to `.issues`).
+        const message = error.issues?.map((e) => e.message).join();
         showToast.error(`Error: ${message}`);
       }
     }
@@ -335,7 +335,6 @@ export function CreateProblemDialog({
       <DialogContent
         className="bg-card max-w-lg"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Create Problem</DialogTitle>

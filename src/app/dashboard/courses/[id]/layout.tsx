@@ -17,8 +17,9 @@ export default async function CourseLayout({ children, params }: Props) {
   // and it doesn't rely on Next discarding this layout when the page 404s.
   const session = await auth();
   const course = (await canAccessCourse(session?.user, id))
-    ? await prisma.course.findUnique({
-        where: { id },
+    ? await prisma.course.findFirst({
+        // Exclude soft-deleted courses so the breadcrumb never names one.
+        where: { id, deletedAt: null },
         select: { id: true, name: true },
       })
     : null;

@@ -4,7 +4,7 @@
  * Keeps production seeding minimal and safe by bootstrapping a single admin
  * account only when the database is empty.
  */
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { getProductionAdminCredentials, maybeBootstrapAdmin } from './seed-utils';
 

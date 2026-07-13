@@ -235,9 +235,11 @@ export default function AssignmentSubmissions({
     if (visibleProblems.length === 0) return;
     const params = new URLSearchParams(searchParamsString);
     const paramProblemId = params.get('problemId');
+    const firstProblem = visibleProblems[0];
+    if (!firstProblem) return;
     const validProblemId = visibleProblems.some((p) => p.id === paramProblemId)
       ? (paramProblemId as string)
-      : visibleProblems[0].id;
+      : firstProblem.id;
 
     setSelectedProblemId((currentProblemId) =>
       currentProblemId === validProblemId ? currentProblemId : validProblemId,
@@ -412,10 +414,10 @@ export default function AssignmentSubmissions({
   };
 
   const reviewQuery = useQuery({
-    queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId),
+    queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
     queryFn: async ({ signal }): Promise<ReviewDataResponse> => {
       const res = await fetch(
-        apiPaths.assignmentReviewData(courseId, assignmentId, selectedStudentId),
+        apiPaths.assignmentReviewData(courseId, assignmentId, selectedStudentId ?? ''),
         { signal },
       );
       if (!res.ok) {
@@ -434,7 +436,7 @@ export default function AssignmentSubmissions({
   // Stable refresher used by the rerun helpers (they previously took fetchReviewData).
   const refreshReview = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId),
+      queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
     });
   }, [queryClient, courseId, assignmentId, selectedStudentId]);
 
@@ -561,7 +563,7 @@ export default function AssignmentSubmissions({
         }));
         setCommentTexts((prev) => ({ ...prev, [problemId]: '' }));
         // Keep the cached review data fresh after the optimistic local update.
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: [
             'course',
             courseId,
@@ -598,7 +600,7 @@ export default function AssignmentSubmissions({
           [problemId]: prev[problemId]?.filter((c) => c.id !== commentId) || [],
         }));
         // Keep the cached review data fresh after the optimistic local update.
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: [
             'course',
             courseId,
@@ -703,7 +705,7 @@ export default function AssignmentSubmissions({
         // Keep the cached review data fresh after the optimistic local updates.
         // NOTE: deliberately NOT invalidating the summary query, which would
         // clobber the optimistic studentGradeStatuses update above.
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: [
             'course',
             courseId,
@@ -805,8 +807,14 @@ export default function AssignmentSubmissions({
                 No problems have been added to this assignment yet.
               </div>
             ) : showStudentDataLoading ? (
-              <div className="flex min-h-[320px] flex-col items-center justify-center gap-3">
-                <div className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4" />
+              <div
+                role="status"
+                className="flex min-h-[320px] flex-col items-center justify-center gap-3"
+              >
+                <div
+                  aria-hidden="true"
+                  className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4"
+                />
                 <p className="text-muted-foreground text-sm">Loading submissions...</p>
               </div>
             ) : (

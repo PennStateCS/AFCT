@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CoursesClient from './CoursesClient';
@@ -49,6 +49,9 @@ vi.mock('@/components/dialogs/CreateCourseDialog', () => ({
 const course = (id: string, name: string): CourseListItem =>
   ({ id, name, enrolled: [] }) as unknown as CourseListItem;
 
+const archivedCourse = (id: string, name: string): CourseListItem =>
+  ({ id, name, isArchived: true, enrolled: [] }) as unknown as CourseListItem;
+
 describe('CoursesClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -80,6 +83,23 @@ describe('CoursesClient', () => {
     });
   });
 
+  it('excludes archived courses from the refreshed list', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => [course('c1', 'Active'), archivedCourse('c2', 'Archived')],
+    });
+
+    renderWithClient(<CoursesClient initialCourses={[course('c1', 'Active')]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger Refresh' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Active')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Archived')).not.toBeInTheDocument();
+    expect(screen.getByTestId('table-rows').textContent).toBe('1');
+  });
+
   it('shows an error banner when a refresh fails, then recovers on retry', async () => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) }).mockResolvedValueOnce({
@@ -105,20 +125,4 @@ describe('CoursesClient', () => {
     });
   });
 
-  it('optimistically merges a single-row update into the cached list', async () => {
-    renderWithClient(<CoursesClient initialCourses={[course('c1', 'Before')]} />);
-
-    // The client passes an onCourseUpdated callback into columns(); invoking it
-    // should patch that row in the cache and re-render the table.
-    const onCourseUpdated = columnsMock.mock.calls.at(-1)?.[0] as (c: CourseListItem) => void;
-    await act(async () => {
-      onCourseUpdated(course('c1', 'After'));
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText('After')).toBeInTheDocument();
-      expect(screen.queryByText('Before')).not.toBeInTheDocument();
-    });
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
 });

@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,7 +12,6 @@ export type ProblemListItem = {
   maxSubmissions?: number | null;
 };
 
-
 export type ProblemListCardProps = {
   problems: ProblemListItem[];
   selectedProblemId: string | null;
@@ -23,7 +22,6 @@ export type ProblemListCardProps = {
   className?: string;
   scrollAreaClassName?: string;
 };
-
 
 export function ProblemListCard({
   problems,
@@ -55,29 +53,35 @@ export function ProblemListCard({
                     title="Grade Earned / Max Points"
                     className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
                   >
-                    {(problem.grade !== null && problem.grade !== undefined ? problem.grade : '-')}/{problem.maxGrade}
+                    {problem.grade !== null && problem.grade !== undefined ? problem.grade : '-'}/
+                    {problem.maxGrade}
                   </Badge>
                 ) : null;
               const submissionsCount = problem.submissionsCount ?? 0;
-              const hasMaxSubmissions = problem.maxSubmissions !== undefined && problem.maxSubmissions !== null;
+              const hasMaxSubmissions =
+                problem.maxSubmissions !== undefined && problem.maxSubmissions !== null;
               const submissionLabel = hasMaxSubmissions
                 ? problem.maxSubmissions === -1
                   ? `${submissionsCount}/∞`
                   : `${submissionsCount}/${problem.maxSubmissions}`
                 : `${submissionsCount}/∞`;
-              const usageBadge = hasMaxSubmissions || submissionsCount > 0 ? (
-                <Badge
-                  key="usage"
-                  variant="secondary"
-                  title="Submissions Used / Submissions Allowed"
-                  className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
-                >
-                  {submissionLabel}
-                </Badge>
-              ) : null;
+              const usageBadge =
+                hasMaxSubmissions || submissionsCount > 0 ? (
+                  <Badge
+                    key="usage"
+                    variant="secondary"
+                    title="Submissions Used / Submissions Allowed"
+                    className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
+                  >
+                    {submissionLabel}
+                  </Badge>
+                ) : null;
 
               const content = badgeContent ?? (
-                <div className="flex items-center gap-1">{gradeBadge}{usageBadge}</div>
+                <div className="flex items-center gap-1">
+                  {gradeBadge}
+                  {usageBadge}
+                </div>
               );
 
               return (
@@ -85,6 +89,7 @@ export function ProblemListCard({
                   <button
                     type="button"
                     onClick={() => onSelect(problem.id)}
+                    aria-current={isActive ? 'true' : undefined}
                     className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
                       isActive
                         ? 'bg-secondary text-secondary-foreground'

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   course: {
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
 }));
 const authMock = vi.hoisted(() => vi.fn());
@@ -33,7 +33,7 @@ beforeEach(() => {
 
 describe('CourseLayout', () => {
   it('renders breadcrumb source when course exists', async () => {
-    prismaMock.course.findUnique.mockResolvedValue({ id: 'c1', name: 'Course One' });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1', name: 'Course One' });
 
     const result = await CourseLayout({
       params: Promise.resolve({ id: 'c1' }),
@@ -41,12 +41,12 @@ describe('CourseLayout', () => {
     });
 
     // Basic contract: Prisma queried with awaited route params.
-    expect(prismaMock.course.findUnique).toHaveBeenCalledWith({
-      where: { id: 'c1' },
+    expect(prismaMock.course.findFirst).toHaveBeenCalledWith({
+      where: { id: 'c1', deletedAt: null },
       select: { id: true, name: true },
     });
 
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
     expect(element.props.children).toHaveLength(2);
     const sourceNode = element.props.children[0];
     const childNode = element.props.children[1];
@@ -58,14 +58,14 @@ describe('CourseLayout', () => {
   });
 
   it('renders only children when course is not found', async () => {
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findFirst.mockResolvedValue(null);
 
     const result = await CourseLayout({
       params: Promise.resolve({ id: 'missing' }),
       children: <div data-testid="children">Child</div>,
     });
 
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
     expect(element.props.children[0]).toBeNull();
     expect(element.props.children[1].props['data-testid']).toBe('children');
   });
@@ -81,9 +81,9 @@ describe('CourseLayout', () => {
     });
 
     expect(canAccessCourseMock).toHaveBeenCalledWith({ id: 'u1', isAdmin: false }, 'c1');
-    expect(prismaMock.course.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.course.findFirst).not.toHaveBeenCalled();
 
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
     expect(element.props.children[0]).toBeNull();
     expect(element.props.children[1].props['data-testid']).toBe('children');
   });

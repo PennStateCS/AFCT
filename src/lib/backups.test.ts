@@ -36,7 +36,7 @@ describe('listBackups', () => {
       'afct-20260202-020202.dump',
       'not-a-backup.txt',
       '.last-backup-date',
-    ] as unknown as fs.Dirent[]);
+    ] as unknown as ReturnType<typeof fs.readdirSync>);
     vi.spyOn(fs, 'statSync').mockReturnValue({ size: 100 } as unknown as fs.Stats);
 
     const list = listBackups();

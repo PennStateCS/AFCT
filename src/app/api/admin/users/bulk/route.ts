@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 import { withAdminAuth } from '@/lib/api/with-auth';
-
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+import { readJson } from '@/lib/api/request';
+import { normalizeEmail, isValidEmail } from '@/lib/email';
+import { BulkImportUsersSchema } from '@/schemas/bulk';
 
 type BulkUserRow = {
   rowNumber?: number;
@@ -79,11 +81,12 @@ type CreatedRow = {
 export const POST = withAdminAuth(
   async (req, _ctx, { user }) => {
     try {
-      const body = await req.json();
-      const rows = (body?.rows ?? []) as BulkUserRow[];
-      const temporaryPasswords = body?.temporaryPasswords === true;
+      const parsed = await readJson(req, BulkImportUsersSchema);
+      if (!parsed.ok) return parsed.response;
+      const rows = parsed.data.rows as BulkUserRow[];
+      const temporaryPasswords = parsed.data.temporaryPasswords === true;
 
-      if (!Array.isArray(rows) || rows.length === 0) {
+      if (rows.length === 0) {
         return NextResponse.json({ error: 'No rows provided' }, { status: 400 });
       }
 
@@ -98,7 +101,7 @@ export const POST = withAdminAuth(
       // Pre-fetch which of the submitted emails already exist in ONE query, instead
       // of a findUnique per row (an N+1 that scaled with the CSV size).
       const candidateEmails = Array.from(
-        new Set(rows.map((r) => (r?.email ?? '').trim().toLowerCase()).filter((e) => e.length > 0)),
+        new Set(rows.map((r) => normalizeEmail(r?.email)).filter((e) => e.length > 0)),
       );
       const existingEmails = new Set(
         candidateEmails.length > 0
@@ -117,7 +120,7 @@ export const POST = withAdminAuth(
 
         const firstName = (row.firstName ?? '').trim();
         const lastName = (row.lastName ?? '').trim();
-        const email = (row.email ?? '').trim().toLowerCase();
+        const email = normalizeEmail(row.email);
         const password = String(row.password ?? '').trim();
 
         if (!firstName || !lastName || !email || !password) {
@@ -200,7 +203,6 @@ export const POST = withAdminAuth(
         severity: 'INFO',
         category: 'USER',
         metadata: {
-          userId: user.id,
           totalRows: rows.length,
           createdCount: created.length,
           failedCount: failed.length,
@@ -218,11 +220,10 @@ export const POST = withAdminAuth(
       });
     } catch (error) {
       console.error('[USERS_BULK_POST_ERROR]', error);
-      await createEnhancedActivityLog(prisma, req, {
-        userId: null,
+      await logError(req, {
+        userId: user.id,
         action: 'USER_BULK_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

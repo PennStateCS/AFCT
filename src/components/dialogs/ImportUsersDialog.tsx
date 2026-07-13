@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import SwitchField from '@/components/ui/SwitchField';
 import FileUploadInput from '@/components/FileUploadInput';
 import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 import { apiPaths } from '@/lib/api-paths';
+import { BulkImportUsersSchema, BulkImportRowSchema } from '@/schemas/bulk';
 
 type ImportUsersDialogProps = {
   open: boolean;
@@ -86,7 +87,7 @@ const parseCsvText = (text: string) => {
     return { rows: [] as ParsedCsvRow[], error: 'CSV is empty.' };
   }
 
-  const headerValues = parseCsvLine(lines[headerLineIndex]).map(normalizeHeader);
+  const headerValues = parseCsvLine(lines[headerLineIndex] ?? '').map(normalizeHeader);
 
   const requiredColumns = {
     firstName: ['firstname', 'first'],
@@ -145,6 +146,14 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
   const [temporaryPasswords, setTemporaryPasswords] = useState(false);
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
 
+  // Pre-flag rows the server would reject (same rules it applies per row), so the
+  // admin can fix the CSV before importing. The server remains the authority and
+  // still skips invalid rows — this is just early feedback.
+  const invalidRowCount = useMemo(
+    () => rows.filter((row) => !BulkImportRowSchema.safeParse(row).success).length,
+    [rows],
+  );
+
   useEffect(() => {
     if (!open) {
       setCsvFile(undefined);
@@ -192,7 +201,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
       const res = await fetch(apiPaths.admin.usersBulk(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows, temporaryPasswords }),
+        body: JSON.stringify(BulkImportUsersSchema.parse({ rows, temporaryPasswords })),
       });
 
       const data = (await res.json()) as BulkCreateResult | { error?: string };
@@ -257,6 +266,13 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
 
           {rows.length > 0 ? (
             <p className="text-sm">Parsed {rows.length} row(s). Import will skip invalid rows.</p>
+          ) : null}
+
+          {rows.length > 0 && invalidRowCount > 0 ? (
+            <p className="text-sm text-amber-700">
+              {invalidRowCount} row(s) look invalid (missing fields, invalid email, or weak
+              password) and will be skipped.
+            </p>
           ) : null}
 
           {result ? (

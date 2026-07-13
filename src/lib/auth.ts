@@ -3,17 +3,13 @@ import { headers } from 'next/headers';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcrypt';
-import { inferSeverity } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getClientIpFromHeaders } from '@/lib/ip-utils';
-import {
-  applyBotFriction,
-  evaluateLoginRateLimit,
-  getClientIp,
-  recordLoginSuccess,
-} from '@/lib/security/rate-limiter';
-import { verifyCaptchaToken } from '@/lib/security/captcha';
-import { getLoginLockoutPolicy } from '@/lib/login-policy';
+import { getClientIp } from '@/lib/security/rate-limiter';
+import { verifyCredentials } from '@/lib/credentials';
+import { isSessionIdleExpired } from '@/lib/session-timeout';
+import { getServerIdleTimeoutMs } from '@/lib/session-timeout.server';
+import { requireAuthSecret } from '@/lib/auth-secret';
 import type { Adapter } from 'next-auth/adapters';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -26,102 +22,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials, request) {
-        const emailInput = (credentials?.email as string | undefined)?.trim().toLowerCase();
-        const interactionMs = Number(
-          (credentials as Record<string, unknown> | undefined)?.interactionMs,
-        );
-        const ipAddress = getClientIp(request ?? undefined);
-        const captchaToken = (credentials as Record<string, unknown> | undefined)?.captchaToken as
-          | string
-          | undefined;
-
-        if (!emailInput || !credentials?.password) {
-          void logSecurityEvent('LOGIN_FAILED', {
-            ip: ipAddress,
-            identifier: emailInput,
-            reason: 'missing credentials',
-          });
-          return null;
-        }
-
-        const accountLimit = await getLoginLockoutPolicy();
-        const rateDecision = evaluateLoginRateLimit({
-          ip: ipAddress,
-          identifier: emailInput,
-          interactionMs: Number.isFinite(interactionMs) ? interactionMs : undefined,
-          accountLimit,
+        const raw = credentials as Record<string, unknown> | undefined;
+        const result = await verifyCredentials({
+          email: raw?.email as string | undefined,
+          password: raw?.password as string | undefined,
+          ipAddress: getClientIp(request ?? undefined),
+          interactionMs: Number(raw?.interactionMs),
+          captchaToken: raw?.captchaToken as string | undefined,
         });
 
-        if (rateDecision.status === 'blocked') {
-          void logSecurityEvent('LOGIN_RATE_LIMIT', {
-            ip: ipAddress,
-            identifier: emailInput,
-          });
-          throw new Error('RateLimitExceeded');
-        }
-
-        if (rateDecision.status === 'challenge') {
-          const captchaValid = await verifyCaptchaToken(captchaToken, ipAddress);
-          if (!captchaValid) {
-            void logSecurityEvent('LOGIN_CHALLENGE_REQUIRED', {
-              ip: ipAddress,
-              identifier: emailInput,
-            });
-            throw new Error('BotChallengeRequired');
-          }
-          void logSecurityEvent('LOGIN_CHALLENGE_SOLVED', {
-            ip: ipAddress,
-            identifier: emailInput,
-          });
-        }
-
-        if (rateDecision.status === 'ok' && rateDecision.applyFriction) {
-          await applyBotFriction(rateDecision.frictionDelayMs);
-        }
-
-        const user = await prisma.user.findFirst({
-          where: {
-            email: emailInput,
-            inactive: false,
-          },
-        });
-
-        if (!user) {
-          // No active account matches — unknown email or a disabled account.
-          void logSecurityEvent('LOGIN_FAILED', {
-            ip: ipAddress,
-            identifier: emailInput,
-            reason: 'unknown or inactive account',
-          });
+        if (!result.ok) {
+          // Map the shared result onto the sentinel errors the login UI expects; a
+          // plain `null` is a generic invalid-credentials rejection.
+          if (result.reason === 'rate_limited') throw new Error('RateLimitExceeded');
+          if (result.reason === 'challenge_required') throw new Error('BotChallengeRequired');
           return null;
         }
 
-        const valid = await bcrypt.compare(credentials.password as string, user.password);
-
-        if (!valid) {
-          void logSecurityEvent(
-            'LOGIN_FAILED',
-            { ip: ipAddress, identifier: emailInput, reason: 'invalid password' },
-            user.id,
-          );
-          return null;
-        }
-
-        recordLoginSuccess({ ip: ipAddress, identifier: emailInput });
-
+        const { user } = result;
         return {
           id: user.id,
           email: user.email,
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
           isAdmin: user.isAdmin,
           avatar: user.avatar || undefined,
-          mustChangePassword: user.temporaryPassword,
+          mustChangePassword: user.mustChangePassword,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.isAdmin = user.isAdmin;
         token.id = user.id;
@@ -137,7 +68,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.firstName = fullUser?.firstName || undefined;
           token.lastName = fullUser?.lastName || undefined;
         }
+        // Start the idle clock at sign-in.
+        token.lastActivity = Date.now();
+        token.idleTimeoutMs = await getServerIdleTimeoutMs();
       }
+
+      // Explicit activity heartbeat from the client (`update()`): refresh the idle
+      // clock, but never revive a session that has already gone idle-expired.
+      if (trigger === 'update') {
+        const now = Date.now();
+        if (!isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, now)) {
+          token.lastActivity = now;
+          token.idleTimeoutMs = await getServerIdleTimeoutMs(now);
+        }
+      }
+
+      // Backfill tokens issued before idle tracking existed so a deploy doesn't
+      // instantly sign everyone out; treat them as active as of now.
+      if (typeof token.lastActivity !== 'number') {
+        token.lastActivity = Date.now();
+      }
+      if (typeof token.idleTimeoutMs !== 'number') {
+        token.idleTimeoutMs = await getServerIdleTimeoutMs();
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -145,6 +99,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.isAdmin = Boolean(token.isAdmin);
         session.user.avatar = (token.avatar as string | null) || undefined;
+
+        // Idle-timeout backstop mirroring the edge middleware: a token whose last
+        // activity is older than its idle limit must not grant access. The client
+        // watcher normally signs out first; this covers server-side consumers
+        // (`auth()`, the route wrappers) if it doesn't.
+        if (isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, Date.now())) {
+          session.user.isAdmin = false;
+          session.user.inactive = true;
+          session.user.firstName = token.firstName as string | undefined;
+          session.user.lastName = token.lastName as string | undefined;
+          session.user.mustChangePassword = Boolean(token.mustChangePassword);
+          return session;
+        }
 
         // Always fetch fresh user data to ensure profile updates are reflected —
         // and, critically, to catch an account that has since been deleted or
@@ -184,9 +151,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         } catch (error) {
           console.error('Error fetching fresh user data:', error);
-          // Fall back to token data on a transient DB error (fail-open on
-          // availability grounds — failing closed would sign everyone out during a
-          // blip). isAdmin remains as set from the token above.
+          // On a transient DB error we fail OPEN for availability (keep the user
+          // signed in — a blip shouldn't log everyone out) but CLOSED for
+          // privilege: strip admin. The fresh-user lookup is also the admin-
+          // revocation path, so trusting the token's isAdmin here would let a
+          // just-de-admined user keep elevated access during an outage. `isAdmin`
+          // was set from the token above (line ~171); force it off.
+          session.user.isAdmin = false;
           session.user.firstName = token.firstName as string | undefined;
           session.user.lastName = token.lastName as string | undefined;
           session.user.mustChangePassword = Boolean(token.mustChangePassword);
@@ -203,14 +174,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           (user as { mustChangePassword?: boolean } | undefined)?.mustChangePassword,
         );
 
-        await prisma.activityLog.create({
-          data: {
-            userId: user?.id ?? undefined,
+        await createEnhancedActivityLog(
+          prisma,
+          { ipAddress, userAgent },
+          {
+            userId: user?.id ?? null,
             action: 'LOGIN_SUCCESS',
             category: 'SYSTEM',
-            severity: inferSeverity('LOGIN_SUCCESS'),
-            ipAddress,
-            userAgent,
+            severity: 'INFO',
             metadata: {
               email: user?.email ?? null,
               provider: account?.provider ?? null,
@@ -218,7 +189,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               temporaryPasswordLogin: mustChangePassword,
             },
           },
-        });
+        );
       } catch (e) {
         // don't block sign-in on logging failure
         console.error('Failed to log signIn event:', e);
@@ -230,17 +201,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // JWT strategy: the signed-out user's token is provided.
         const token = (message as { token?: { id?: unknown } | null }).token;
         const userId = typeof token?.id === 'string' ? token.id : null;
-        await prisma.activityLog.create({
-          data: {
-            userId,
-            action: 'LOGOUT',
-            category: 'SYSTEM',
-            severity: inferSeverity('LOGOUT'),
-            ipAddress,
-            userAgent,
-            metadata: {},
-          },
-        });
+        await createEnhancedActivityLog(
+          prisma,
+          { ipAddress, userAgent },
+          { userId, action: 'LOGOUT', category: 'SYSTEM', severity: 'INFO', metadata: {} },
+        );
       } catch (e) {
         // don't block sign-out on logging failure
         console.error('Failed to log signOut event:', e);
@@ -258,14 +223,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   jwt: {
     maxAge: 24 * 60 * 60, // 24 hours
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: requireAuthSecret(),
 });
-
-type SecurityEventAction =
-  | 'LOGIN_RATE_LIMIT'
-  | 'LOGIN_CHALLENGE_REQUIRED'
-  | 'LOGIN_CHALLENGE_SOLVED'
-  | 'LOGIN_FAILED';
 
 /**
  * Best-effort request context for the NextAuth events, which don't receive the
@@ -284,24 +243,3 @@ const getRequestContext = async (): Promise<{
   }
 };
 
-const logSecurityEvent = async (
-  action: SecurityEventAction,
-  metadata: { ip?: string; identifier?: string; reason?: string },
-  userId?: string | null,
-) => {
-  try {
-    await prisma.activityLog.create({
-      data: {
-        userId: userId ?? null,
-        action,
-        category: 'SECURITY',
-        severity: inferSeverity(action),
-        // Promote the known client IP into the column (not just metadata).
-        ipAddress: metadata.ip ?? null,
-        metadata,
-      },
-    });
-  } catch (error) {
-    console.error('[auth] security log failure', error);
-  }
-};

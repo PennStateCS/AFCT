@@ -1,3 +1,21 @@
+export type CourseDateBucket = 'upcoming' | 'current' | 'past';
+
+/**
+ * Bucket a course purely by its date range (publish/archive state ignored),
+ * using the same boundaries as {@link getCourseStatusTag}: "upcoming" before it
+ * starts, "past" once its end has passed, "current" in between.
+ */
+export function getCourseDateBucket(
+  course: { startDate: string | Date; endDate: string | Date },
+  now: Date = new Date(),
+): CourseDateBucket {
+  const start = new Date(course.startDate);
+  const end = new Date(course.endDate);
+  if (start > now) return 'upcoming';
+  if (end <= now) return 'past';
+  return 'current';
+}
+
 export function getCourseStatusTag(course: {
   isArchived: boolean;
   isPublished: boolean;

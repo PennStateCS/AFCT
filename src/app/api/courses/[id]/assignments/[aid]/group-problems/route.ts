@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { withCourseAuth } from '@/lib/api/with-auth';
+import { withAssignmentAuth } from '@/lib/api/with-auth';
+
+// Body for removing group→problem mappings. `groupId` is a specific group or 'ALL'.
+const GroupProblemsBodySchema = z.object({
+  problemIds: z.array(z.string()).default([]),
+  groupId: z.string().optional(),
+});
 
 /**
  * Returns each course group alongside the problem ids mapped to it for this
@@ -26,9 +33,9 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *   403: { description: Not an enrolled member of the course and not a system admin. }
  *   500: { description: Server error. }
  */
-export const GET = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
-    const { aid: assignmentId } = await ctx.params;
+export const GET = withAssignmentAuth(
+  async (req, ctx, { user, courseId, assignment }) => {
+    const assignmentId = assignment.id;
 
     try {
       // Fetch the course's groups and this assignment's group→problem mappings.
@@ -40,8 +47,7 @@ export const GET = withCourseAuth(
 
       const mapByGroup: Record<string, string[]> = {};
       for (const m of mappings) {
-        if (!mapByGroup[m.groupId]) mapByGroup[m.groupId] = [];
-        mapByGroup[m.groupId].push(m.problemId);
+        (mapByGroup[m.groupId] ??= []).push(m.problemId);
       }
 
       const result = groups.map((g) => ({
@@ -103,9 +109,9 @@ export const GET = withCourseAuth(
  *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   500: { description: Server error. }
  */
-export const DELETE = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
-    const { aid: assignmentId } = await ctx.params;
+export const DELETE = withAssignmentAuth(
+  async (req, ctx, { user, courseId, assignment }) => {
+    const assignmentId = assignment.id;
 
     try {
       let body;
@@ -120,9 +126,11 @@ export const DELETE = withCourseAuth(
         return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
       }
 
-      const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
-      const groupId: string | undefined =
-        typeof body.groupId === 'string' ? body.groupId : undefined;
+      const parsedBody = GroupProblemsBodySchema.safeParse(body);
+      if (!parsedBody.success) {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+      }
+      const { problemIds, groupId } = parsedBody.data;
 
       if (problemIds.length === 0) {
         return NextResponse.json({ error: 'No problemIds provided' }, { status: 400 });
@@ -173,5 +181,5 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Failed to delete group problems' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_PROBLEMS_REMOVE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_PROBLEMS_REMOVE_DENIED', blockWhenArchived: true },
 );

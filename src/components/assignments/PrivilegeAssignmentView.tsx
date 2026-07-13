@@ -47,11 +47,11 @@ import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
-import { Problem } from '@prisma/client';
+import type { Problem } from '@prisma/client';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { AssignmentWithDetails } from '@/lib/assignment-details';
+import type { AssignmentWithDetails } from '@/lib/assignment-details';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -932,7 +932,9 @@ export default function AssignmentDashboardPage({
           courseIsArchived={courseIsArchived}
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}
-          timeZone={timezone}
+          // Edit the due date in the COURSE's zone (what the server stores it in), not
+          // the viewer's — otherwise saving would shift the deadline.
+          timeZone={assignment.course?.timezone ?? timezone}
           assignment={{
             ...assignment,
             description: assignment.description ?? null,

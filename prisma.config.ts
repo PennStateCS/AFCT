@@ -16,6 +16,13 @@ export default defineConfig({
   // Where Prisma should find your schema
   schema: path.join('prisma', 'schema.prisma'),
 
+  // Prisma 7 no longer reads the datasource url from schema.prisma. Migrate /
+  // introspection commands read it from here; the app passes a driver adapter to
+  // the PrismaClient constructor (see src/lib/prisma.ts).
+  datasource: {
+    url: process.env.DATABASE_URL,
+  },
+
   // Migrate/seed settings
   migrations: {
     // (Optional) explicit path; defaults to the folder next to your schema anyway
