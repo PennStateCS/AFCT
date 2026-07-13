@@ -105,8 +105,9 @@ afterEach(() => {
 });
 
 // Resolves once load() has instantiated the (mocked) cytoscape engine — i.e. cyRef
-// is set and the toolbar handlers can drive it.
-const waitForEngine = () => waitFor(() => expect(h.ctor).toHaveBeenCalled());
+// is set and the toolbar handlers can drive it. Generous timeout: the load chain
+// (fetch → parse → dynamic import → ctor) can be slow under full-suite CPU contention.
+const waitForEngine = () => waitFor(() => expect(h.ctor).toHaveBeenCalled(), { timeout: 5000 });
 
 /* ────────────────────────────────  tests  ───────────────────────────────── */
 
