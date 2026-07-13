@@ -12,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,6 +24,7 @@ import { z } from 'zod';
 import type { Problem } from '@prisma/client';
 import type { ProblemTypeEnum } from '@/schemas/problem';
 import { ProblemFormSchema, UpdateProblemSchema } from '@/schemas/problem';
+import { ProblemBasicFields } from '@/components/dialogs/ProblemBasicFields';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 
@@ -372,63 +372,7 @@ export function EditProblemDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Title */}
-          <Controller
-            control={control}
-            name="title"
-            render={({ field }) => (
-              <InputGroup
-                label="Title"
-                name="title"
-                fieldProps={field}
-                error={errors.title?.message}
-                showStatus
-              />
-            )}
-          />
-
-          {/* Description */}
-          <Controller
-            control={control}
-            name="description"
-            render={({ field }) => (
-              <div>
-                <Label className="mb-2 block">Description</Label>
-                <Textarea
-                  {...field}
-                  value={field.value ?? ''}
-                  rows={4}
-                  placeholder="Optional description"
-                />
-                {errors.description && (
-                  <p className="mt-1 text-xs text-red-600">{errors.description.message}</p>
-                )}
-              </div>
-            )}
-          />
-
-          {/* Type */}
-          <Controller
-            control={control}
-            name="type"
-            render={({ field }) => (
-              <div>
-                <Label className="mb-2 block">Problem Type</Label>
-                <select
-                  className="w-full rounded border p-2"
-                  value={field.value ?? ''}
-                  onChange={(e) =>
-                    field.onChange(e.target.value as z.infer<typeof ProblemTypeEnum>)
-                  }
-                >
-                  <option value="FA">Finite Automaton</option>
-                  <option value="PDA">Push-Down Automaton</option>
-                  <option value="CFG">Context-Free Grammar</option>
-                  <option value="RE">Regular Expression</option>
-                </select>
-              </div>
-            )}
-          />
+          <ProblemBasicFields control={control} errors={errors} />
 
           {assignmentSettings ? (
             <>
