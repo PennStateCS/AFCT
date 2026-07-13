@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AssignmentSubmissions from './AssignmentSubmissions';
@@ -436,5 +436,111 @@ describe('AssignmentSubmissions — state seeding & edges', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to load students'));
+  });
+
+  it('treats a 403 review-data response as an empty payload without erroring', async () => {
+    const fetchMock = routeFetch({
+      '/students': () => ({ ok: true, json: async () => students }),
+      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/review-data/': () => ({ ok: false, status: 403, json: async () => ({}) }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+
+    // The workspace still renders (empty state), and no error toast fires.
+    await screen.findByTestId('problem-workspace');
+    expect(toastError).not.toHaveBeenCalledWith('Failed to load review data');
+  });
+
+  it('toasts when the review-data read fails with a non-auth error', async () => {
+    const fetchMock = routeFetch({
+      '/students': () => ({ ok: true, json: async () => students }),
+      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/review-data/': () => ({ ok: false, status: 500, json: async () => ({ error: 'boom' }) }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to load review data'));
+  });
+});
+
+describe('AssignmentSubmissions — group problem filtering', () => {
+  // p1 is assignment-level (unmapped); p2 belongs to group g1.
+  const groupProps = {
+    ...baseProps,
+    problems: [
+      { id: 'p1', title: 'Assignment Level', type: 'FA', maxPoints: 10 },
+      { id: 'p2', title: 'Group Only', type: 'FA', maxPoints: 10 },
+    ],
+    assignmentIsGroup: true,
+    groups: [{ id: 'g1', name: 'G1' }],
+    groupProblemsMap: { g1: ['p2'] },
+  };
+
+  const renderWithMemberships = (memberships: Array<{ userId: string; groupId: string }>) => {
+    const fetchMock = routeFetch({
+      '/students': () => ({ ok: true, json: async () => students }),
+      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/group-memberships': () => ({ ok: true, json: async () => ({ memberships }) }),
+      '/review-data/': () => ({ ok: true, json: async () => emptyReviewData }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...groupProps} />);
+  };
+
+  it('shows assignment-level and the student group’s problems for a group member', async () => {
+    renderWithMemberships([{ userId: 's1', groupId: 'g1' }]);
+    const list = await screen.findByTestId('problem-list');
+    await waitFor(() => expect(within(list).getByText('Group Only')).toBeInTheDocument());
+    expect(within(list).getByText('Assignment Level')).toBeInTheDocument();
+  });
+
+  it('shows only assignment-level problems for a student in no group', async () => {
+    renderWithMemberships([]); // s1 is not a member of g1
+    const list = await screen.findByTestId('problem-list');
+    await waitFor(() => expect(within(list).getByText('Assignment Level')).toBeInTheDocument());
+    expect(within(list).queryByText('Group Only')).not.toBeInTheDocument();
+  });
+});
+
+describe('AssignmentSubmissions — student navigation', () => {
+  // Sorted by last name: Lovelace (s1) index 0, Turing (s2) index 1.
+  const twoStudents = [
+    { id: 's1', firstName: 'Ada', lastName: 'Lovelace' },
+    { id: 's2', firstName: 'Alan', lastName: 'Turing' },
+  ];
+
+  const renderTwo = () => {
+    const fetchMock = routeFetch({
+      '/students': () => ({ ok: true, json: async () => twoStudents }),
+      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/review-data/': () => ({ ok: true, json: async () => emptyReviewData }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+  };
+
+  it('advances and wraps with next/prev', async () => {
+    renderTwo();
+    const idx = await screen.findByTestId('selected-index');
+    await waitFor(() => expect(idx).toHaveTextContent('0'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'next-student' }));
+    expect(idx).toHaveTextContent('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'next-student' })); // wraps to first
+    expect(idx).toHaveTextContent('0');
+
+    fireEvent.click(screen.getByRole('button', { name: 'prev-student' })); // wraps to last
+    expect(idx).toHaveTextContent('1');
+  });
+
+  it('selects a specific student by id', async () => {
+    renderTwo();
+    const idx = await screen.findByTestId('selected-index');
+    await waitFor(() => expect(idx).toHaveTextContent('0'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'pick-s2' }));
+    expect(idx).toHaveTextContent('1');
   });
 });
