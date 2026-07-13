@@ -207,10 +207,6 @@ export function useDialogStates() {
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [pendingPublish, setPendingPublish] = useState<boolean | null>(null);
 
-  // Archive confirm
-  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
-  const [pendingArchive, setPendingArchive] = useState<boolean | null>(null);
-
   // Enroll user
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [allUsers, setAllUsers] = useState<EnrollableUser[]>([]);
@@ -241,11 +237,6 @@ export function useDialogStates() {
     setPublishConfirmOpen,
     pendingPublish,
     setPendingPublish,
-
-    archiveConfirmOpen,
-    setArchiveConfirmOpen,
-    pendingArchive,
-    setPendingArchive,
 
     enrollOpen,
     setEnrollOpen,

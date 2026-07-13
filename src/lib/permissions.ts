@@ -46,7 +46,17 @@ export async function getCourseRole(
  * One query (role + the course's published flag); admins short-circuit before it.
  */
 export async function canAccessCourse(user: PermissionUser, courseId: string): Promise<boolean> {
-  if (isAdmin(user)) return true;
+  if (isAdmin(user)) {
+    // A soft-deleted course is inaccessible to everyone — even a system admin.
+    // Best-effort: if the lookup errors, fall through and allow, so a transient DB
+    // fault surfaces from the handler rather than masking as a denial.
+    try {
+      if (await isCourseDeleted(courseId)) return false;
+    } catch {
+      /* fall through */
+    }
+    return true;
+  }
   if (!user?.id) return false;
   const entry = await prisma.roster.findFirst({
     where: { courseId, userId: user.id },
@@ -70,7 +80,15 @@ export async function canManageCourse(
   courseId: string,
   roles: CourseRole[] = COURSE_STAFF_ROLES,
 ): Promise<boolean> {
-  if (isAdmin(user)) return true;
+  if (isAdmin(user)) {
+    // A soft-deleted course can't be managed by anyone — even a system admin.
+    try {
+      if (await isCourseDeleted(courseId)) return false;
+    } catch {
+      /* fall through */
+    }
+    return true;
+  }
   if (!user?.id) return false;
   const entry = await prisma.roster.findFirst({
     where: { courseId, userId: user.id },
@@ -89,6 +107,19 @@ export async function isCourseArchived(courseId: string): Promise<boolean> {
     select: { isArchived: true },
   });
   return Boolean(course?.isArchived);
+}
+
+/**
+ * Is this course soft-deleted? Used to keep deleted courses inaccessible to everyone
+ * (admins included). A `null`/missing course reads as not deleted, so the handler
+ * still runs and returns its own 404.
+ */
+export async function isCourseDeleted(courseId: string): Promise<boolean> {
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { deletedAt: true },
+  });
+  return Boolean(course?.deletedAt);
 }
 
 /**
