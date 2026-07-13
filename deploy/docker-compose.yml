@@ -1,0 +1,181 @@
+# AFCT Dashboard — standalone production stack.
+#
+# This is the deploy bundle's compose file: it references only published images
+# (no repo checkout, no local builds), so `install.sh` — or `docker compose up -d`
+# — works with just this file plus a .env.production.
+#
+# Images are tracked to the `:main` tag (the latest stable build from CI). For a
+# reproducible production pin, replace a tag with an @sha256:... digest from the
+# GitHub Container Registry / a release.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
+services:
+  app:
+    image: ghcr.io/pennstatewilkes-barre/afct-dashboard:main
+    container_name: afct-app
+    restart: unless-stopped
+    logging: *default-logging
+
+    # Cap resources so a runaway (e.g. a stuck Java evaluator) can't take down the
+    # host. Raise the memory limit if you increase evaluator memory/concurrency in
+    # System Settings, or grading will be OOM-killed.
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: afct_user
+      DB_NAME: afct
+      WAIT_FOR_DB: 'true'
+      MIGRATE_ON_START: 'true'
+      SEED_ON_START: 'auto'
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    expose:
+      - '3000'
+
+    volumes:
+      - uploads_data:/app/public/uploads
+      - private_uploads:/private/uploads
+      # App writes the admin TLS cert here; nginx reads it.
+      - tls_certs:/app/certs
+      # Backups: read-only for listing/downloading. The app can only request a
+      # backup by dropping a flag in the writable trigger volume.
+      - db_backups:/backups:ro
+      - backup_triggers:/backup-triggers
+
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:3000/api/health >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  nginx:
+    image: ghcr.io/pennstatewilkes-barre/afct-nginx:main
+    container_name: afct-nginx
+    restart: unless-stopped
+    logging: *default-logging
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+
+    depends_on:
+      app:
+        condition: service_healthy
+
+    ports:
+      - '80:80'
+      - '443:443'
+
+    volumes:
+      - nginx_certs:/etc/nginx/certs
+      - uploads_data:/usr/share/nginx/html/uploads
+      # Admin TLS cert written by the app; nginx reads it.
+      - tls_certs:/etc/nginx/custom-certs:ro
+
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS -o /dev/null http://localhost/ || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  postgres:
+    image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+    container_name: afct-postgres
+    restart: unless-stopped
+    logging: *default-logging
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_DB: afct
+      POSTGRES_USER: afct_user
+
+    command:
+      - postgres
+      - -c
+      - log_min_duration_statement=500
+      - -c
+      - log_connections=on
+      - -c
+      - log_disconnections=on
+      - -c
+      - log_lock_waits=on
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U afct_user -d afct']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  db-backup:
+    # backup.sh is baked into this image (docker/backup/Dockerfile). Daily backup
+    # to the db_backups volume: a matched pair of the DB dump and a tarball of the
+    # upload volumes. Schedule (on/off, hour, retention) comes from System Settings.
+    # Copy the db_backups volume off-host regularly — it protects against bad
+    # data/migrations, not host loss.
+    image: ghcr.io/pennstatewilkes-barre/afct-backup:main
+    container_name: afct-db-backup
+    restart: unless-stopped
+    logging: *default-logging
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    env_file:
+      - .env.production
+    environment:
+      PGHOST: postgres
+      PGUSER: afct_user
+      PGDATABASE: afct
+      # Fallbacks used only if the settings row can't be read; live values come
+      # from System Settings (backupEnabled / backupHour / backupRetentionDays).
+      BACKUP_ENABLED: 'true'
+      BACKUP_HOUR: '2'
+      BACKUP_RETENTION_DAYS: '14'
+
+    volumes:
+      - db_backups:/backups
+      - private_uploads:/snapshot/private-uploads:ro
+      - uploads_data:/snapshot/public-uploads:ro
+      - backup_triggers:/backup-triggers
+
+volumes:
+  postgres_data:
+  uploads_data:
+  private_uploads:
+  nginx_certs:
+  tls_certs:
+  db_backups:
+  backup_triggers:
