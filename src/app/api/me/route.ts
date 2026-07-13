@@ -153,11 +153,11 @@ export async function POST(req: Request) {
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId: session.user.id,
         userFirstName: firstName,
         userLastName: lastName,
-        avatarUpdated: !!avatar,
-        avatarDeleted: deleteAvatar,
+        avatarUpdated: !!(avatar && avatar.size > 0),
+        avatarDeleted: !!(deleteAvatar && currentUser.avatar),
+        timezone: timezoneRaw || null,
       },
     });
 

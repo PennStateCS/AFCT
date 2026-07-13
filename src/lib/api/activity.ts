@@ -18,6 +18,10 @@ export async function logDenial(
     userId?: string | null;
     action: string;
     courseId?: string | null;
+    assignmentId?: string | null;
+    // Pass this when the action name has no domain keyword (e.g. COMMENT_*,
+    // SOLUTION_*, REVIEW_DATA_*), otherwise it mis-infers to SYSTEM.
+    category?: EnhancedActivityLogData['category'];
     metadata?: EnhancedActivityLogData['metadata'];
   },
 ): Promise<NextResponse> {
@@ -25,7 +29,9 @@ export async function logDenial(
     userId: data.userId ?? null,
     action: data.action,
     severity: 'SECURITY',
+    ...(data.category ? { category: data.category } : {}),
     ...(data.courseId ? { courseId: data.courseId } : {}),
+    ...(data.assignmentId ? { assignmentId: data.assignmentId } : {}),
     metadata: data.metadata ?? {},
   });
   return apiError(403, 'Forbidden');
@@ -46,6 +52,7 @@ export async function logError(
     category?: EnhancedActivityLogData['category'];
     courseId?: string | null;
     assignmentId?: string | null;
+    problemId?: string | null;
     metadata?: Record<string, unknown>;
   },
 ): Promise<void> {
@@ -56,6 +63,7 @@ export async function logError(
     ...(data.category ? { category: data.category } : {}),
     ...(data.courseId ? { courseId: data.courseId } : {}),
     ...(data.assignmentId ? { assignmentId: data.assignmentId } : {}),
+    ...(data.problemId ? { problemId: data.problemId } : {}),
     metadata: {
       ...(data.metadata ?? {}),
       error: data.error instanceof Error ? data.error.message : 'unknown error',

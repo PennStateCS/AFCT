@@ -58,7 +58,8 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         userId: session?.user?.id ?? null,
         action: 'SUBMISSION_RERUN_DENIED',
         severity: 'SECURITY',
-        metadata: {},
+        courseId: submission.courseId,
+        metadata: { submissionId: submission.id, studentId: submission.studentId },
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -66,11 +67,6 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     if (!submission.fileName) {
       return NextResponse.json({ error: 'Submission has no file' }, { status: 400 });
     }
-
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: submission.assignmentId },
-      select: { courseId: true },
-    });
 
     const link = await prisma.assignmentProblem.findUnique({
       where: {
@@ -114,7 +110,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       action: 'SUBMISSION_RERUN',
       severity: 'INFO',
       category: 'SUBMISSION',
-      courseId: assignment?.courseId ?? null,
+      courseId: submission.courseId,
       assignmentId: submission.assignmentId,
       problemId: submission.problemId,
       submissionId: submission.id,
@@ -123,6 +119,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         assignmentId: submission.assignmentId,
         problemId: submission.problemId,
         submissionId: submission.id,
+        studentId: submission.studentId,
         status: 'PENDING',
       },
     });
@@ -134,6 +131,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       userId: actorId,
       action: 'SUBMISSION_RERUN_ERROR',
       error,
+      metadata: { submissionId: id },
     });
     return NextResponse.json({ error: 'Failed to rerun submission' }, { status: 500 });
   }

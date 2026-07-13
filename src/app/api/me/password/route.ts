@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
         action: 'CHANGE_PASSWORD_FAILED',
         severity: 'SECURITY',
         category: 'USER',
-        metadata: { userId, reason: 'incorrect current password' },
+        metadata: { reason: 'incorrect current password' },
       });
       return NextResponse.json({ error: 'Incorrect old password' }, { status: 400 });
     }
@@ -116,9 +116,7 @@ export async function POST(req: NextRequest) {
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId,
         wasTemporaryPassword: Boolean(user.temporaryPassword),
-        clearedTemporaryPassword: Boolean(user.temporaryPassword),
       },
     });
 

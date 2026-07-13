@@ -191,6 +191,7 @@ export const POST = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_CREATE_ERROR',
+        courseId,
         error,
       });
       return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500 });

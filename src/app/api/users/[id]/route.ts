@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         userId: session?.user?.id ?? null,
         action: 'USER_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: {},
+        metadata: { targetUserId: userId },
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -189,9 +189,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
             );
             await createEnhancedActivityLog(prisma, req, {
               userId: session?.user?.id ?? null,
-              action: 'USER_UPDATE_DENIED',
-              severity: 'SECURITY',
-              metadata: {},
+              action: 'USER_UPDATE_REJECTED',
+              severity: 'WARNING',
+              metadata: { targetUserId: userId, reason: 'active-course' },
             });
             return NextResponse.json(
               { error: 'Users in an active course cannot be inactive' },
@@ -260,7 +260,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        actorId,
         targetUserId: userId,
         changedFields: Object.keys(changes),
         changes,
@@ -313,7 +312,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'USER_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: {},
+        metadata: { targetUserId: userId },
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -343,9 +342,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        actorId,
         targetUserId: userId,
-        deletedUserId: userId,
         deletedUserEmail: user?.email ?? null,
         deletedUserName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || null,
       },

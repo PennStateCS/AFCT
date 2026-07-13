@@ -80,9 +80,10 @@ export const PATCH = withCourseAuth(
         if (!canArchive) {
           await createEnhancedActivityLog(prisma, req, {
             userId: user.id,
-            action: 'COURSE_ARCHIVE_DENIED',
-            severity: 'SECURITY',
-            metadata: {},
+            action: 'COURSE_ARCHIVE_REJECTED',
+            severity: 'WARNING',
+            courseId,
+            metadata: { reason },
           });
           return NextResponse.json({ error: reason }, { status: 403 });
         }
@@ -102,7 +103,7 @@ export const PATCH = withCourseAuth(
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
-        action: isArchived ? 'COURSE_ARCHIVED' : 'COURSE_NOT_ARCHIVED',
+        action: isArchived ? 'COURSE_ARCHIVED' : 'COURSE_UNARCHIVED',
         severity: 'INFO',
         category: 'COURSE',
         courseId,
@@ -121,6 +122,7 @@ export const PATCH = withCourseAuth(
         userId: user.id,
         action: 'COURSE_ARCHIVE_ERROR',
         error,
+        courseId,
       });
       return NextResponse.json({ error: 'Failed to update archive status' }, { status: 500 });
     }
