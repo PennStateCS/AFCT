@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (session.user.role !== 'ADMIN') {
+        if (!session.user.isAdmin) {
             await fetch('/api/createActivityLog', {
                 method: 'POST',
                 headers: {
@@ -60,17 +60,20 @@ export async function GET(req: NextRequest) {
                 isArchived: true,
                 createdAt: true,
                 updatedAt: true,
+                // Staff (faculty/TA) members of each course. Roster carries the role;
+                // the global User.role was removed, and users have firstName/lastName.
                 roster: {
+                    where: {
+                        role: { in: ['FACULTY', 'TA'] }
+                    },
                     select: {
+                        role: true,
                         user: {
-                            where: {
-                                role: { in: ['INSTRUCTOR', 'TA'] }
-                            },
                             select: {
                                 id: true,
-                                name: true,
-                                email: true,
-                                role: true
+                                firstName: true,
+                                lastName: true,
+                                email: true
                             }
                         }
                     }
