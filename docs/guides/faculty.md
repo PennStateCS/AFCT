@@ -10,7 +10,7 @@ course you're not on, even to peek. The full permission model lives in
 
 An administrator creates courses and assigns you to them; from there the course
 is yours to run. If you need a new course, a course duplicated, a course
-un-archived, or a course deleted, ask an administrator. Those four are
+archived or restored, or a course deleted, ask an administrator. Those are all
 admin-only, and everything else is yours.
 
 ---
@@ -26,11 +26,12 @@ somehow gets the URL just sees "not found." This gives you room to build the
 course in peace. Enroll people, write assignments, get things right, and flip
 the switch when you're ready.
 
-You **archive** a course at the end of a term. Archiving makes the course
-**read-only for everyone**, including you and admins. Settings, dates, roster,
-and grades all freeze. Treat it as closing the books: do it after final grades
-are settled, because if you need it reopened you'll have to ask an
-administrator, and that is by design.
+A course is **archived** at the end of a term — by an administrator, not you.
+Archiving makes the course **read-only for everyone**, including you and admins:
+settings, dates, roster, and grades all freeze. Treat it as closing the books
+once final grades are settled. Archiving and restoring are admin-only, so ask an
+administrator to archive a finished course (or to restore one you need reopened);
+that asymmetry is by design.
 
 ---
 

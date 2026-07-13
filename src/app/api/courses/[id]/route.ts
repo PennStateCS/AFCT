@@ -719,19 +719,26 @@ export const PUT = withCourseAuth(
 );
 
 /**
- * Permanently deletes a course. Course staff (faculty or TAs) or a system admin,
- * and the course must already
- * be archived — a guard against deleting a live course. The archived requirement
- * is enforced both up front and again in the delete's `where` clause.
+ * Deletes a course (system admin only). An **empty** course — no assignments, no
+ * problems, no student enrollments, and no submissions — is removed permanently
+ * (its staff-only roster cascades away; audit logs keep a nulled course pointer).
+ * Any course that holds real work or students is **soft-deleted** instead: the row
+ * and all its data are retained but `deletedAt` is stamped so the access gates and
+ * list queries treat it as gone (recoverable later). The response says which
+ * happened via `{ deleted: 'hard' | 'soft' }`.
  * @openapi
  * summary: Delete a course
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
  * responses:
  *   200:
- *     description: Course deleted.
+ *     description: "Course deleted; body reports whether it was a hard or soft delete."
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { deleted: { type: string, enum: [hard, soft] } } }
  *   401: { description: Not signed in. }
- *   403: { description: "Not course staff (faculty or TAs) or a system admin, or the course is not archived." }
+ *   403: { description: Not a system admin (logged as a security event). }
+ *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */
 export const DELETE = withCourseAuth(
@@ -749,36 +756,41 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Only an admin can delete a course' }, { status: 403 });
     }
 
-    // Make sure the course isArchived
-    const courseIsArchived = await prisma.course.findFirst({
+    const course = await prisma.course.findFirst({
       where: { id },
-      select: { isArchived: true },
+      select: { id: true, name: true, code: true, semester: true },
     });
-
-    if (courseIsArchived === null || courseIsArchived.isArchived === false) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'COURSE_DELETE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
-      });
-      return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
+    if (!course) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
     try {
-      // Soft delete: retain the row (and all its data) for recovery, but stamp
-      // deletedAt so the access gates and list queries treat it as gone. The course
-      // stays archived, so writes remain blocked by the archive freeze.
-      const deletedCourse = await prisma.course.update({
-        where: {
-          id,
-          isArchived: true,
-        },
-        data: { deletedAt: new Date() },
-      });
+      // A course is "empty" only when it holds no work and no students. Such a
+      // course can be dropped permanently; anything with real data is soft-deleted
+      // so grades/submissions/audit survive.
+      const [assignmentCount, problemCount, studentCount, submissionCount] = await Promise.all([
+        prisma.assignment.count({ where: { courseId: id } }),
+        prisma.problem.count({ where: { courseId: id } }),
+        prisma.roster.count({ where: { courseId: id, role: 'STUDENT' } }),
+        prisma.submission.count({ where: { courseId: id } }),
+      ]);
+      const isEmpty =
+        assignmentCount === 0 &&
+        problemCount === 0 &&
+        studentCount === 0 &&
+        submissionCount === 0;
 
-      // Record which course was deleted. The course row is gone, so its id goes in
-      // metadata only (not the log's courseId FK, which would be nulled/rejected).
+      if (isEmpty) {
+        // Hard delete — the schema cascades remove the (staff-only) roster, and the
+        // audit log's courseId is SetNull, so the log survives with a null pointer.
+        await prisma.course.delete({ where: { id } });
+      } else {
+        // Soft delete — retain the row and its data, but hide it everywhere.
+        await prisma.course.update({ where: { id }, data: { deletedAt: new Date() } });
+      }
+
+      // Record which course was deleted (and how). The course row may be gone, so its
+      // id goes in metadata only (not the log's courseId FK).
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'DELETE_COURSE',
@@ -787,12 +799,17 @@ export const DELETE = withCourseAuth(
         metadata: {
           actorId: user.id,
           courseId: id,
-          courseName: deletedCourse.name,
-          courseCode: deletedCourse.code,
-          semester: deletedCourse.semester,
+          courseName: course.name,
+          courseCode: course.code,
+          semester: course.semester,
+          mode: isEmpty ? 'hard' : 'soft',
+          assignmentCount,
+          problemCount,
+          studentCount,
+          submissionCount,
         },
       });
-      return new NextResponse(null, { status: 204 });
+      return NextResponse.json({ deleted: isEmpty ? 'hard' : 'soft' }, { status: 200 });
     } catch (error) {
       console.error('DELETE /api/courses/[id] error:', error);
       await logError(req, {

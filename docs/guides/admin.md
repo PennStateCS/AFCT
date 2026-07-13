@@ -91,8 +91,8 @@ bot hammering the signup form gets progressively less traction.
 ## Courses (the admin's part of the lifecycle)
 
 Faculty run their own courses day to day. A handful of lifecycle actions are
-reserved to you, and the pattern is consistent: anything that creates,
-destroys, or thaws a course is admin-only, while everything in between belongs
+reserved to you, and the pattern is consistent: anything that creates, freezes,
+thaws, or destroys a course is admin-only, while everything in between belongs
 to the people teaching it.
 
 You **create** a course and assign its faculty. New courses start unpublished,
@@ -105,19 +105,25 @@ roster: the copy starts empty and unpublished, waiting for you to staff it.
 Last spring's students have no business appearing in this fall's section, so
 the empty roster is the point, not a limitation.
 
-You **delete** a course. This is a **soft delete**: the course gets a
-`deletedAt` stamp, all of its data is retained and recoverable, and it
-disappears from every list. You keep direct-URL access for recovery. In
-practice this means an accidental delete is an inconvenience, not a disaster.
+You **delete** a course, from the **Manage** menu on the course list. Deletion
+adapts to what the course holds. An **empty** course — no assignments, problems,
+students, or submissions — is removed **permanently**; there is nothing to lose.
+Any course with real content or enrollment is **soft-deleted** instead: it gets
+a `deletedAt` stamp, all of its data is retained, and it disappears from every
+list and becomes **inaccessible to everyone — admins included** (no one can open
+it by direct URL). The confirmation dialog tells you which will happen before you
+commit. Recovery of a soft-deleted course is currently out-of-band (database or
+backup); there is no in-app restore yet. You cannot delete an **archived**
+course directly — restore it first, then delete.
 
-You **un-archive** a course. Archiving freezes a course read-only for
-*everyone*, admins included, and only you can lift the freeze. Faculty can
-archive their own course but cannot reopen it; that asymmetry is deliberate,
-because reopening a finished term's record should require a deliberate act by
-someone outside the course.
+You **archive** and **restore** (un-archive) a course. Archiving freezes a
+course read-only for *everyone*, admins included; restoring lifts that freeze.
+**Both are admin-only.** Faculty cannot archive or restore a course, because a
+finished term's record should be frozen and thawed only by someone outside its
+day-to-day.
 
-Publishing, archiving, editing, and roster changes are ordinary staff actions.
-You can do them too, but nothing about them is reserved to you.
+Publishing, editing, and roster changes are ordinary staff actions. You can do
+them too, but nothing about them is reserved to you.
 
 ---
 
@@ -217,9 +223,12 @@ system needs to see it.
 ## Backups and recovery
 
 Backups run on the schedule you set and can also be triggered on demand, which
-is worth doing right before anything you might regret. Because a course delete
-is a soft delete, most "recovery" is simply un-deleting or un-archiving rather
-than restoring from backup; the backup is the last resort, not the first.
+is worth doing right before anything you might regret. A course delete either
+removes an empty course permanently or soft-deletes a non-empty one (a
+`deletedAt` stamp, data retained). A soft-deleted course still exists in the
+database, so recovering it is a targeted un-delete at the data layer rather than
+a full restore — but there is no in-app restore yet, so treat any delete as
+consequential and take an on-demand backup first when in doubt.
 Size the retention window against how long a mistake can go unnoticed, not how
 long it takes to notice one. A course deleted during finals might not be missed
 until the grade appeal in February.
@@ -230,10 +239,11 @@ until the grade appeal in February.
 
 Archiving freezes a course. Everyone, including administrators, is blocked from
 changing it, while staff and admins can still read it. Students cannot access
-an archived course at all. **Only an administrator can un-archive.** This is
-deliberate: a finished term's record should be protected from casual edits but
-stay readable for grade disputes, accreditation reviews, and the occasional
-"what did I assign in 2024" question.
+an archived course at all. **Archiving and restoring are both admin-only.** This
+is deliberate: a finished term's record should be protected from casual edits
+but stay readable for grade disputes, accreditation reviews, and the occasional
+"what did I assign in 2024" question. Archived courses live on their own
+**Archived Courses** page rather than the main course list.
 
 ---
 

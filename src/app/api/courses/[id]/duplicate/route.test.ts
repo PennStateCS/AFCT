@@ -179,6 +179,13 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     expect(res.status).toBe(201);
     expect(tx.course.create).toHaveBeenCalled();
+    // A copy always starts fresh — never archived and never published — even when
+    // the source course is archived.
+    expect(tx.course.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ isArchived: false, isPublished: false }),
+      }),
+    );
     // The explicit faculty list seeds the roster; the actor is NOT auto-added.
     expect(tx.roster.createMany).toHaveBeenCalledWith({
       data: [{ courseId: 'new-course', userId: 'fac-1', role: 'FACULTY' }],
