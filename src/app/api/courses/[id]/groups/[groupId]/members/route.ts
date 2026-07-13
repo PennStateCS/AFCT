@@ -58,6 +58,7 @@ export const GET = withCourseAuth(
         action: 'VIEW_GROUP_MEMBERS',
         severity: 'INFO',
         category: 'COURSE',
+        courseId,
         metadata: { courseId, groupId },
       });
 
@@ -126,7 +127,8 @@ export const POST = withCourseAuth(
         action: 'ADD_GROUP_MEMBER',
         severity: 'INFO',
         category: 'COURSE',
-        metadata: { courseId, groupId, userId },
+        courseId,
+        metadata: { courseId, groupId, targetUserId: userId },
       });
 
       return NextResponse.json({ success: true }, { status: 201 });
@@ -136,6 +138,7 @@ export const POST = withCourseAuth(
         userId: user.id,
         action: 'GROUP_MEMBER_ADD_ERROR',
         error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
@@ -233,6 +236,7 @@ export const PATCH = withCourseAuth(
         action: 'SET_GROUP_MEMBERS',
         severity: 'INFO',
         category: 'COURSE',
+        courseId,
         metadata: { courseId, groupId, added: toAdd, removed: toRemove },
       });
 
@@ -243,6 +247,7 @@ export const PATCH = withCourseAuth(
         userId: user.id,
         action: 'GROUP_MEMBERS_UPDATE_ERROR',
         error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }

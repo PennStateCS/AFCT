@@ -69,7 +69,9 @@ export async function POST(request: NextRequest) {
       return logDenial(request, {
         userId: user.id,
         action: 'COMMENT_CREATE_DENIED',
+        category: 'ASSIGNMENT',
         courseId: assignment.courseId,
+        assignmentId,
       });
     }
 
@@ -84,7 +86,9 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         action: 'COMMENT_CREATE_DENIED',
         severity: 'SECURITY',
+        category: 'ASSIGNMENT',
         courseId: assignment.courseId,
+        assignmentId,
         metadata: { reason: 'unpublished assignment' },
       });
       return apiError(404, 'Assignment not found');
@@ -97,7 +101,9 @@ export async function POST(request: NextRequest) {
       return logDenial(request, {
         userId: user.id,
         action: 'COMMENT_CREATE_DENIED',
+        category: 'ASSIGNMENT',
         courseId: assignment.courseId,
+        assignmentId,
         metadata: { reason: "another student's thread" },
       });
     }
@@ -192,7 +198,12 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('Error creating comment:', error);
-    await logError(request, { userId: actorId, action: 'COMMENT_CREATE_ERROR', error });
+    await logError(request, {
+      userId: actorId,
+      action: 'COMMENT_CREATE_ERROR',
+      category: 'ASSIGNMENT',
+      error,
+    });
     if (error instanceof z.ZodError) {
       return apiError(400, 'Invalid request data');
     }
@@ -248,7 +259,9 @@ export async function DELETE(request: NextRequest) {
       return logDenial(request, {
         userId: user.id,
         action: 'COMMENT_DELETE_DENIED',
+        category: 'ASSIGNMENT',
         courseId: comment.assignment.courseId,
+        assignmentId: comment.assignmentId,
       });
     }
 
@@ -264,8 +277,6 @@ export async function DELETE(request: NextRequest) {
       problemId: comment.problemId,
       metadata: {
         userId: user.id,
-        action: 'DELETE_COMMENT',
-        category: 'ASSIGNMENT',
         courseId: comment.assignment.courseId,
         assignmentId: comment.assignmentId,
         problemId: comment.problemId,
@@ -278,7 +289,12 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting comment:', error);
-    await logError(request, { userId: actorId, action: 'COMMENT_DELETE_ERROR', error });
+    await logError(request, {
+      userId: actorId,
+      action: 'COMMENT_DELETE_ERROR',
+      category: 'ASSIGNMENT',
+      error,
+    });
     return apiError(500, 'Internal server error');
   }
 }

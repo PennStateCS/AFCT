@@ -37,10 +37,12 @@ const RangeBody = z.object({ start: z.string().min(1), end: z.string().min(1) })
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest) {
+  let userId: string | null = null;
   try {
     const session = await auth();
     if (!session?.user || session.user.inactive)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    userId = session.user.id;
 
     const parsed = await readJson(req, RangeBody);
     if (!parsed.ok) return parsed.response;
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Error fetching assignment range:', error);
     await logError(req, {
-      userId: null,
+      userId,
       action: 'ASSIGNMENT_RANGE_ERROR',
       error,
     });

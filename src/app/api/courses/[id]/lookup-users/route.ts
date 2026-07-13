@@ -40,7 +40,7 @@ import { BulkEnrollEmailsSchema } from '@/schemas/bulk';
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
-  async (req) => {
+  async (req, _ctx, { user, courseId }) => {
     try {
       const parsed = await readJson(req, BulkEnrollEmailsSchema);
       if (!parsed.ok) return parsed.response;
@@ -63,9 +63,10 @@ export const POST = withCourseAuth(
     } catch (err) {
       console.error('lookup-users error', err);
       await logError(req, {
-        userId: null,
+        userId: user.id,
         action: 'COURSE_LOOKUP_USERS_ERROR',
         error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }

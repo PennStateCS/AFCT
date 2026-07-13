@@ -162,6 +162,16 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
     const res = await DELETE(req, params());
 
     expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'PROBLEM_DELETE_ERROR',
+        severity: 'ERROR',
+        courseId: 'c1',
+        problemId: 'p1',
+      }),
+    );
   });
 
   it('returns 409 when the course is archived', async () => {
@@ -273,6 +283,18 @@ describe('PUT /api/courses/[id]/problems/[pid]', () => {
 
     expect(res.status).toBe(400);
     expect(prismaMock.problem.update).not.toHaveBeenCalled();
+    // Problem update, not a student submission: the audit event uses the PROBLEM
+    // action/category.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'PROBLEM_INVALID_FILE_STRUCTURE',
+        category: 'PROBLEM',
+        courseId: 'c1',
+        problemId: 'p1',
+      }),
+    );
   });
 
   it('returns 413 when the replacement file exceeds the upload limit', async () => {
@@ -303,7 +325,12 @@ describe('PUT /api/courses/[id]/problems/[pid]', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      expect.objectContaining({ action: 'PROBLEM_UPDATE_ERROR', severity: 'ERROR' }),
+      expect.objectContaining({
+        action: 'PROBLEM_UPDATE_ERROR',
+        severity: 'ERROR',
+        courseId: 'c1',
+        problemId: 'p1',
+      }),
     );
   });
 

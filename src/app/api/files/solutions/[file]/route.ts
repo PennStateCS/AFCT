@@ -58,6 +58,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
       return logDenial(req, {
         userId: session.user.id,
         action: 'SOLUTION_DOWNLOAD_DENIED',
+        category: 'PROBLEM',
+        courseId: problem.courseId,
       });
     }
 
@@ -88,6 +90,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
       userId: actorId,
       action: 'SOLUTION_DOWNLOAD_ERROR',
       error: err,
+      category: 'PROBLEM',
       metadata: { fileName: fileName ?? null },
     });
     return apiError(500, 'Internal server error');
