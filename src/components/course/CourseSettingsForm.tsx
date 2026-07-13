@@ -10,7 +10,6 @@ import type { Course } from '@prisma/client';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
-import SwitchField from '@/components/ui/SwitchField';
 import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { showToast } from '@/lib/toast';
@@ -49,14 +48,6 @@ type CourseSettingsFormProps = {
   onSaved?: (updated: Partial<Course>) => void;
   /** When provided, renders a Cancel button (e.g. inside the edit dialog). */
   onCancel?: () => void;
-  /**
-   * Immediate publish toggle. When provided, a Published switch is shown that
-   * applies right away (through the page's confirmation dialog) rather than on
-   * save. Omitted in the edit dialog, so no toggle appears there.
-   */
-  onPublishToggle?: (checked: boolean) => void;
-  /** Immediate archive toggle; see {@link onPublishToggle}. */
-  onArchiveToggle?: (checked: boolean) => void;
   className?: string;
 };
 
@@ -68,8 +59,6 @@ export function CourseSettingsForm({
   course,
   onSaved,
   onCancel,
-  onPublishToggle,
-  onArchiveToggle,
   className,
 }: CourseSettingsFormProps) {
   // A course's dates/deadlines are anchored to the course's OWN timezone — display and
@@ -166,37 +155,6 @@ export function CourseSettingsForm({
 
   return (
     <form className={cn('max-w-xl space-y-4', className)} onSubmit={onSubmitWrapper}>
-      {/* Publish / archive apply immediately (through a confirmation dialog),
-          separate from the save-based fields below. */}
-      {(onPublishToggle || onArchiveToggle) && (
-        <div className="space-y-3 rounded-md border border-black p-3">
-          <p className="text-muted-foreground text-xs">
-            These apply immediately after you confirm, not when you save.
-          </p>
-          {onPublishToggle && (
-            <SwitchField
-              label="Published"
-              name="isPublished-toggle"
-              checked={!!course.isPublished}
-              onCheckedChange={(checked) => onPublishToggle(checked)}
-              description="When on, enrolled students can see the course."
-              disabled={course.isArchived}
-              boxClassName="border-black"
-            />
-          )}
-          {onArchiveToggle && (
-            <SwitchField
-              label="Archived"
-              name="isArchived-toggle"
-              checked={!!course.isArchived}
-              onCheckedChange={(checked) => onArchiveToggle(checked)}
-              description="Archiving makes the course read-only for everyone."
-              boxClassName="border-black"
-            />
-          )}
-        </div>
-      )}
-
       {/* NAME */}
       <Controller
         name="name"

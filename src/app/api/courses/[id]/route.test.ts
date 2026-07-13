@@ -12,6 +12,13 @@ const prismaMock = vi.hoisted(() => ({
     findMany: vi.fn(),
     deleteMany: vi.fn(),
     createMany: vi.fn(),
+    count: vi.fn(),
+  },
+  assignment: {
+    count: vi.fn(),
+  },
+  problem: {
+    count: vi.fn(),
   },
   submission: {
     findFirst: vi.fn(),
@@ -82,6 +89,23 @@ describe('GET /api/courses/[id]', () => {
     expect(res.status).toBe(401);
   });
 
+  it('returns 404 for a soft-deleted course, even for an admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      deletedAt: new Date(),
+      _count: { assignments: 0, problems: 0, roster: 0 },
+      roster: [],
+    });
+
+    const res = await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
   it('returns 403 when a non-staff user is not enrolled in the course', async () => {
     authMock.mockResolvedValue({ user: { id: 'stranger', role: 'STUDENT' } });
     prismaMock.course.findUnique.mockResolvedValue({ id: 'course-1' });
@@ -144,7 +168,9 @@ describe('GET /api/courses/[id]', () => {
       params: Promise.resolve({ id: 'course-1' }),
     });
 
-    const include = prismaMock.course.findUnique.mock.calls[0][0].include;
+    // Pick the handler's fetch (the one with `include`), not the wrapper's
+    // soft-delete `select` probe that now runs first.
+    const include = prismaMock.course.findUnique.mock.calls.find((c) => c[0]?.include)?.[0].include;
     // Students only get published assignments, and never the problem bank.
     expect(include.assignments.where).toEqual({ isPublished: true });
     expect(include.problems).toBeUndefined();
@@ -181,7 +207,9 @@ describe('GET /api/courses/[id]', () => {
       params: Promise.resolve({ id: 'course-1' }),
     });
 
-    const include = prismaMock.course.findUnique.mock.calls[0][0].include;
+    // Pick the handler's fetch (the one with `include`), not the wrapper's
+    // soft-delete `select` probe that now runs first.
+    const include = prismaMock.course.findUnique.mock.calls.find((c) => c[0]?.include)?.[0].include;
     expect(include.assignments.where).toEqual({});
     expect(include.problems).toBe(true);
   });
@@ -1013,20 +1041,7 @@ describe('DELETE /api/courses/[id]', () => {
     expect(prismaMock.course.delete).not.toHaveBeenCalled();
   });
 
-  it('returns 403 when course is not archived', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.course.findFirst.mockResolvedValue({ isArchived: false });
-
-    const req = new Request('http://localhost/api/courses/1', {
-      method: 'DELETE',
-      body: JSON.stringify({}),
-    });
-    const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
-
-    expect(res.status).toBe(403);
-  });
-
-  it('returns 403 when course does not exist', async () => {
+  it('returns 404 when course does not exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue(null);
 
@@ -1036,21 +1051,42 @@ describe('DELETE /api/courses/[id]', () => {
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
-  it('soft-deletes an archived course and logs activity', async () => {
+  it('hard-deletes an empty course (no assignments, problems, students, submissions)', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.course.findFirst.mockResolvedValue({ isArchived: true });
-    prismaMock.course.update.mockResolvedValue({ id: 'course-1', name: 'Course 1' });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'course-1', name: 'Course 1', code: 'C1' });
+    prismaMock.assignment.count.mockResolvedValue(0);
+    prismaMock.problem.count.mockResolvedValue(0);
+    prismaMock.roster.count.mockResolvedValue(0);
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.course.delete.mockResolvedValue({ id: 'course-1' });
 
-    const req = new Request('http://localhost/api/courses/1', {
-      method: 'DELETE',
-      body: JSON.stringify({ confirm: true }),
-    });
+    const req = new Request('http://localhost/api/courses/1', { method: 'DELETE' });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
 
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ deleted: 'hard' });
+    expect(prismaMock.course.delete).toHaveBeenCalledWith({ where: { id: 'course-1' } });
+    expect(prismaMock.course.update).not.toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('soft-deletes a course that has students or work', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'course-1', name: 'Course 1', code: 'C1' });
+    prismaMock.assignment.count.mockResolvedValue(0);
+    prismaMock.problem.count.mockResolvedValue(0);
+    prismaMock.roster.count.mockResolvedValue(3); // has students
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.course.update.mockResolvedValue({ id: 'course-1', name: 'Course 1' });
+
+    const req = new Request('http://localhost/api/courses/1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ deleted: 'soft' });
     // Soft delete: stamps deletedAt via update, never a hard delete.
     expect(prismaMock.course.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ deletedAt: expect.any(Date) }) }),
@@ -1059,15 +1095,16 @@ describe('DELETE /api/courses/[id]', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns 500 when the soft-delete update throws', async () => {
+  it('returns 500 when the delete throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.course.findFirst.mockResolvedValue({ isArchived: true });
-    prismaMock.course.update.mockRejectedValue(new Error('delete failed'));
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'course-1', name: 'Course 1', code: 'C1' });
+    prismaMock.assignment.count.mockResolvedValue(0);
+    prismaMock.problem.count.mockResolvedValue(0);
+    prismaMock.roster.count.mockResolvedValue(0);
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.course.delete.mockRejectedValue(new Error('delete failed'));
 
-    const req = new Request('http://localhost/api/courses/1', {
-      method: 'DELETE',
-      body: JSON.stringify({ confirm: true }),
-    });
+    const req = new Request('http://localhost/api/courses/1', { method: 'DELETE' });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
 
     expect(res.status).toBe(500);

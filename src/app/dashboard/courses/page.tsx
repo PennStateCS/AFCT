@@ -15,7 +15,9 @@ export default async function CoursesPage() {
   // resolved inside getCoursesListForUser via the roster filter.
   const listRole = session?.user?.isAdmin ? 'ADMIN' : 'STUDENT';
 
-  const initialCourses = userId ? await getCoursesListForUser(userId, listRole) : [];
+  // Archived courses live on their own Archived Courses page, so keep them out here.
+  const allCourses = userId ? await getCoursesListForUser(userId, listRole) : [];
+  const initialCourses = allCourses.filter((course) => !course.isArchived);
 
   return <CoursesClient initialCourses={initialCourses} />;
 }

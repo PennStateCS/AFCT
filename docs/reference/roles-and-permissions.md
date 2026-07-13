@@ -63,12 +63,17 @@ rule lives; nothing else in the codebase should restate it.
 - **Published course:** visible to its enrolled students.
 - **Archived course:** frozen and **read-only for everyone, admins included**.
   No edits to settings, assignments, problems, grades, or roster. Staff and
-  admins can still *view* it; students cannot access it at all. The only write
-  permitted is **un-archiving, which is admin-only**.
-- **Soft-deleted course:** deleting a course stamps `deletedAt` and retains
-  all data, so deletion is recoverable. The course disappears from every list
-  and is inaccessible to non-admins; admins keep direct-URL access for
-  recovery.
+  admins can still *view* it; students cannot access it at all. **Archiving and
+  restoring (un-archiving) are both admin-only** — staff can no longer do
+  either.
+- **Deleted course:** deletion adapts to the course. An **empty** course (no
+  assignments, problems, students, or submissions) is **hard-deleted**
+  (permanently removed). A course with real content or enrollment is
+  **soft-deleted**: it stamps `deletedAt`, retains all data, and disappears from
+  every list. A soft-deleted course is **inaccessible to everyone, admins
+  included** — no direct-URL access — and is masked as **404** on every
+  course-scoped route. Recovery is out-of-band (data layer / backup); there is
+  no in-app restore yet.
 
 ## Resource matrix
 
@@ -84,18 +89,19 @@ applies.
 | View course | A | S | published only |
 | Create course | A | no | no |
 | Duplicate course (copies settings + assignments + problems, **not** the roster) | A | no | no |
-| Delete course (soft delete) | A | no | no |
+| Delete course (permanent if empty, else soft delete) | A | no | no |
 | Publish / unpublish | A | S (not while archived) | no |
-| Archive | A | S (from active) | no |
-| Un-archive | **A only** | no | no |
+| Archive | **A only** | no | no |
+| Restore (un-archive) | **A only** | no | no |
 | Edit settings / dates | A | S (not while archived) | no |
 | Manage roster / enroll / bulk-enroll | A | S (not while archived) | no |
 | Self-enroll by code | n/a | n/a | published + within the enrollment window + correct code |
 | Un-enroll self | n/a | n/a | **No**; only staff or an admin remove a member |
 
-Course **creation and duplication are admin-only**; faculty work within the
-courses an admin creates and assigns them to. Publish and archive are staff
-actions, open to Faculty *and* TA. Un-archive and delete are admin-only.
+Course **creation, duplication, archiving, restoring, and deletion are
+admin-only**; faculty work within the courses an admin creates and assigns them
+to. Publishing is the staff action here, open to Faculty *and* TA. Freezing a
+course (archive), thawing it (restore), and deleting it are reserved to admins.
 
 ### Assignments and problems
 

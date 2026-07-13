@@ -43,12 +43,6 @@ interface CourseDialogsProps {
   onPublishConfirm: () => void;
   onPublishCancel: () => void;
 
-  // Archive confirm
-  archiveConfirmOpen: boolean;
-  pendingArchive: boolean | null;
-  onArchiveConfirm: () => void;
-  onArchiveCancel: () => void;
-
   // Enroll user
   enrollOpen: boolean;
   setEnrollOpen: (open: boolean) => void;
@@ -88,11 +82,6 @@ export function CourseDialogs({
   pendingPublish,
   onPublishConfirm,
   onPublishCancel,
-
-  archiveConfirmOpen,
-  pendingArchive,
-  onArchiveConfirm,
-  onArchiveCancel,
 
   enrollOpen,
   setEnrollOpen,
@@ -166,19 +155,6 @@ export function CourseDialogs({
         }
         onConfirm={onPublishConfirm}
         onCancel={onPublishCancel}
-      />
-
-      <ConfirmDialog
-        open={archiveConfirmOpen}
-        confirmText={pendingArchive ? 'Archive' : 'Unarchive'}
-        title={pendingArchive ? 'Archive Course?' : 'Unarchive Course?'}
-        description={
-          pendingArchive
-            ? 'This takes effect immediately: the course becomes read-only for everyone as soon as you confirm.'
-            : 'This takes effect immediately: the course becomes editable again as soon as you confirm.'
-        }
-        onConfirm={onArchiveConfirm}
-        onCancel={onArchiveCancel}
       />
 
       <EnrollUserDialog
