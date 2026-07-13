@@ -292,8 +292,9 @@ do_install() {
 }
 
 bring_up() {
-  log "pulling images (this can take a few minutes on first run)..."
-  compose -f "$COMPOSE_FILE" pull 2>&1 | tee -a "$LOG_FILE" || warn "pull had issues; continuing with any cached images."
+  log "pulling images (first run can take a few minutes)..."
+  log "  (if the images are private, log in first: docker login ghcr.io)"
+  compose -f "$COMPOSE_FILE" pull 2>&1 | tee -a "$LOG_FILE" || true
 
   log "starting the stack..."
   compose -f "$COMPOSE_FILE" up -d 2>&1 | tee -a "$LOG_FILE" \
