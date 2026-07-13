@@ -133,6 +133,7 @@ import DashboardSidebarMenu from './DashboardSidebarMenu';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   vi.stubGlobal('fetch', vi.fn());
   useSidebarMock.mockReturnValue({ state: 'expanded' });
   usePathnameMock.mockReturnValue('/dashboard');
@@ -229,6 +230,9 @@ describe('DashboardSidebarMenu', () => {
     });
     expect(screen.getByText('Current Courses')).toBeInTheDocument();
     expect(screen.getByText('Past Courses')).toBeInTheDocument();
+
+    // Past Courses starts collapsed by default; expand it so its course renders.
+    fireEvent.click(screen.getByRole('button', { name: /Past Courses/ }));
 
     const courseLinks = screen
       .getAllByRole('link')
@@ -386,6 +390,20 @@ describe('DashboardSidebarMenu — collapsible sections', () => {
 
     const stored = JSON.parse(localStorage.getItem('afct.sidebarSections') || '{}');
     expect(stored.admin).toBe(false);
+  });
+
+  it('collapses Past Courses by default when there is no stored preference', async () => {
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
+    });
+    setNavCourses([
+      { id: 'past', code: 'CS001', isPublished: true, isArchived: false, startDate: '2000-01-01', endDate: '2000-12-31' },
+    ]);
+    renderWithClient(<DashboardSidebarMenu />);
+
+    const pastToggle = await screen.findByRole('button', { name: /Past Courses/ });
+    expect(pastToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('CS001')).toBeNull();
   });
 
   it('restores a persisted collapsed section on mount', () => {
