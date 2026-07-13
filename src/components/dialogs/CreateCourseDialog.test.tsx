@@ -141,29 +141,35 @@ vi.mock('@/components/ui/dialog', () => {
 });
 
 const originalFetch = global.fetch;
-const fetchMock = vi.fn();
 
-const createJsonResponse = <T,>(data: T, ok = true, status = 200) =>
-  Promise.resolve({
-    ok,
-    status,
-    json: async () => data,
-  } as Response);
+type MockResp = { ok: boolean; status: number; json: () => Promise<unknown> };
+const ok = (data: unknown): MockResp => ({ ok: true, status: 200, json: async () => data });
+const faculty = [
+  { id: 'faculty-1', firstName: 'Ada', lastName: 'Lovelace', role: 'FACULTY' },
+  { id: 'faculty-2', firstName: 'Alan', lastName: 'Turing', role: 'FACULTY' },
+];
+const tas = [
+  { id: 'ta-1', firstName: 'Grace', lastName: 'Hopper', role: 'TA' },
+  { id: 'ta-2', firstName: 'Edsger', lastName: 'Dijkstra', role: 'TA' },
+];
 
-const resolveFacultyRequest = () =>
-  fetchMock.mockResolvedValueOnce(
-    createJsonResponse([
-      { id: 'faculty-1', firstName: 'Ada', lastName: 'Lovelace', role: 'FACULTY' },
-      { id: 'faculty-2', firstName: 'Alan', lastName: 'Turing', role: 'FACULTY' },
-    ]),
-  );
+// Per-test-overridable responses, routed by URL so the faculty/TA fetch order (both fire
+// on mount) doesn't matter.
+let facultyResp: () => MockResp;
+let taResp: () => MockResp;
+let createResp: () => MockResp;
+const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+  const u = String(url);
+  const method = (init?.method ?? 'GET').toUpperCase();
+  if (u.includes('role=FACULTY')) return facultyResp() as unknown as Response;
+  if (u.includes('role=TA')) return taResp() as unknown as Response;
+  if (method === 'POST') return createResp() as unknown as Response;
+  throw new Error(`Unexpected fetch: ${method} ${u}`);
+});
 
-const resolveTaRequest = () =>
-  fetchMock.mockResolvedValueOnce(
-    createJsonResponse([
-      { id: 'ta-1', firstName: 'Grace', lastName: 'Hopper', role: 'TA' },
-      { id: 'ta-2', firstName: 'Edsger', lastName: 'Dijkstra', role: 'TA' },
-    ]),
+const createCourseCall = () =>
+  fetchMock.mock.calls.find(
+    ([, init]) => ((init as RequestInit | undefined)?.method ?? 'GET').toUpperCase() === 'POST',
   );
 
 const clickNext = async (user: ReturnType<typeof userEvent.setup>) => {
@@ -196,8 +202,9 @@ const fillForm = async (user: ReturnType<typeof userEvent.setup>) => {
   });
   await clickNext(user);
 
-  // Step 3: Faculty
+  // Step 3: Faculty & TAs — pick one of each.
   await user.click(await screen.findByLabelText('Ada Lovelace'));
+  await user.click(await screen.findByLabelText('Grace Hopper'));
   await clickNext(user);
 
   // Step 4: Options (notation keeps its default)
@@ -223,7 +230,10 @@ const renderDialog = (props: Partial<React.ComponentProps<typeof CreateCourseDia
 };
 
 beforeEach(() => {
-  fetchMock.mockReset();
+  fetchMock.mockClear();
+  facultyResp = () => ok(faculty);
+  taResp = () => ok(tas);
+  createResp = () => ok({ id: 'course-123' });
   global.fetch = fetchMock as unknown as typeof fetch;
   toastSuccessMock.mockReset();
   toastErrorMock.mockReset();
@@ -236,26 +246,21 @@ afterAll(() => {
 describe('CreateCourseDialog', () => {
   it('submits the form and shows a success toast', async () => {
     const user = userEvent.setup();
-    resolveFacultyRequest();
-    resolveTaRequest();
-    fetchMock.mockResolvedValueOnce(createJsonResponse({ id: 'course-123' }));
-
     const { setOpen, onSuccess } = renderDialog();
 
     await screen.findByLabelText('Course Name');
     await fillForm(user);
 
-    // Reaching the Review step must NOT submit — only the faculty and TA fetches have fired.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Reaching the Review step must NOT submit yet.
+    expect(createCourseCall()).toBeUndefined();
 
     const submitButton = screen.getByRole('button', { name: /create course/i });
     await waitFor(() => expect(submitButton).toBeEnabled());
     await user.click(submitButton);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-
-    const [, , requestInit] = fetchMock.mock.calls[2];
-    const payload = JSON.parse((requestInit as RequestInit).body as string);
+    await waitFor(() => expect(createCourseCall()).toBeTruthy());
+    const [, requestInit] = createCourseCall() as [string, RequestInit];
+    const payload = JSON.parse(requestInit.body as string);
     expect(payload).toMatchObject({
       name: 'Intro to Testing',
       code: 'CMPSC 131',
@@ -273,8 +278,7 @@ describe('CreateCourseDialog', () => {
 
   it('shows an error toast when the API returns an error response', async () => {
     const user = userEvent.setup();
-    resolveFacultyRequest();
-    fetchMock.mockResolvedValueOnce(createJsonResponse({ message: 'Server exploded' }, false, 500));
+    createResp = () => ({ ok: false, status: 500, json: async () => ({ message: 'Server exploded' }) });
 
     renderDialog();
 
@@ -285,13 +289,11 @@ describe('CreateCourseDialog', () => {
     await waitFor(() => expect(submitButton).toBeEnabled());
     await user.click(submitButton);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(toastErrorMock).toHaveBeenCalledWith('Server exploded');
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Server exploded'));
   });
 
   it('holds the step when its fields fail validation', async () => {
     const user = userEvent.setup();
-    resolveFacultyRequest();
     renderDialog();
 
     await screen.findByLabelText('Course Name');
@@ -304,7 +306,6 @@ describe('CreateCourseDialog', () => {
 
   it('lets the user go back to a completed step', async () => {
     const user = userEvent.setup();
-    resolveFacultyRequest();
     renderDialog();
 
     await screen.findByLabelText('Course Name');
@@ -321,7 +322,7 @@ describe('CreateCourseDialog', () => {
   });
 
   it('notifies the user when faculty fetching fails', async () => {
-    fetchMock.mockResolvedValueOnce(createJsonResponse({}, false, 500));
+    facultyResp = () => ({ ok: false, status: 500, json: async () => ({}) });
     renderDialog();
 
     await waitFor(() =>
