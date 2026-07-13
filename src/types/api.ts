@@ -755,7 +755,7 @@ export interface paths {
         head?: never;
         /**
          * Archive or unarchive a course
-         * @description Toggles a course's archived state. **Archiving** is allowed for course staff  (faculty or TA) or a system admin; **un-archiving is admin-only** — reopening a  frozen course to edits is a privileged action. Archiving runs a safety check  (canArchiveCourse) using the course's stored dates rather than any client value, to  avoid timezone drift deciding whether a course has really ended.
+         * @description Toggles a course's archived state. **Both archiving and un-archiving are  admin-only** — freezing a course (or reopening a frozen one to edits) is a  privileged action. Archiving also runs a safety check (canArchiveCourse) using  the course's stored dates rather than any client value, to avoid timezone drift  deciding whether a course has really ended.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/archive/route.ts)
          */
@@ -1442,7 +1442,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a course
-         * @description Permanently deletes a course. Course staff (faculty or TAs) or a system admin,  and the course must already  be archived — a guard against deleting a live course. The archived requirement  is enforced both up front and again in the delete's `where` clause.
+         * @description Deletes a course (system admin only). An **empty** course — no assignments, no  problems, no student enrollments, and no submissions — is removed permanently  (its staff-only roster cascades away; audit logs keep a nulled course pointer).  Any course that holds real work or students is **soft-deleted** instead: the row  and all its data are retained but `deletedAt` is stamped so the access gates and  list queries treat it as gone (recoverable later). The response says which  happened via `{ deleted: 'hard' | 'soft' }`.
          *
          *     **Auth:** requires FACULTY / TA / STUDENT
          *
@@ -4009,7 +4009,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not permitted (staff may archive; only an admin may un-archive), or archiving is blocked by the safety check. */
+            /** @description Not an admin, or archiving is blocked by the safety check. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6987,12 +6987,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Course deleted. */
+            /** @description Course deleted; body reports whether it was a hard or soft delete. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        deleted?: "hard" | "soft";
+                    };
+                };
             };
             /** @description Not signed in. */
             401: {
@@ -7003,8 +7008,17 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not course staff (faculty or TAs) or a system admin, or the course is not archived. */
+            /** @description Not a system admin (logged as a security event). */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
