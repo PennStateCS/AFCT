@@ -28,21 +28,41 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { usePersistentColumnVisibility } from '@/components/ui/use-persistent-column-visibility';
 
-// Define meta type for table columns
-interface ColumnMeta {
-  priority?: number;
-  align?: 'left' | 'center' | 'right';
-}
+type ColumnAlign = 'left' | 'center' | 'right';
 
-// Extend @tanstack/react-table types
+// Extend @tanstack/react-table's ColumnMeta so `columnDef.meta.priority` / `.align`
+// are typed everywhere — this augmentation is the single source of truth (there is no
+// separate local interface to keep in sync).
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData, TValue> {
     priority?: number;
-    align?: 'left' | 'center' | 'right';
+    align?: ColumnAlign;
   }
 }
+
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 75, 100];
+
+/** Tailwind text-alignment class for a column's `align` meta. */
+const alignTextClass = (align: ColumnAlign | undefined): string =>
+  align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : '';
+
+/** Flexbox justification matching a column's `align` meta. */
+const alignFlexClass = (align: ColumnAlign | undefined): string =>
+  align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : '';
+
+/** aria-sort value for a header cell given whether it's sortable and its sort state. */
+const ariaSort = (
+  canSort: boolean,
+  sorted: false | 'asc' | 'desc',
+): 'ascending' | 'descending' | 'none' | undefined => {
+  if (!canSort) return undefined;
+  if (sorted === 'asc') return 'ascending';
+  if (sorted === 'desc') return 'descending';
+  return 'none';
+};
 
 import {
   DropdownMenu,
@@ -52,7 +72,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Filter,
   ArrowUp,
@@ -126,8 +146,10 @@ export function DataTable<TData, TValue>({
   globalFilter: globalFilterProp,
   onGlobalFilterChange,
 }: DataTableProps<TData, TValue>) {
-  const [columnVisibility, setColumnVisibility] =
-    useState<VisibilityState>(defaultColumnVisibility);
+  const { columnVisibility, setColumnVisibility, resetColumns } = usePersistentColumnVisibility(
+    storageKey,
+    defaultColumnVisibility,
+  );
 
   // Each of filtering / sorting / pagination is controlled by the parent when a
   // value is supplied, otherwise held internally (the original client behavior).
@@ -158,32 +180,6 @@ export function DataTable<TData, TValue>({
     const next = typeof updater === 'function' ? updater(globalFilter) : updater;
     setGlobalFilter(next);
   };
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        try {
-          setColumnVisibility({ ...defaultColumnVisibility, ...JSON.parse(saved) });
-        } catch {
-          console.warn('Invalid saved column state, ignoring.');
-        }
-      }
-    } catch {
-      // localStorage may not be available in all environments
-    }
-    // defaultColumnVisibility is only the hydration baseline; re-running when its
-    // object identity changes on a parent re-render would clobber user column choices.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(columnVisibility));
-    } catch {
-      // localStorage may not be available in all environments
-    }
-  }, [columnVisibility, storageKey]);
 
   const table = useReactTable<TData>({
     data,
@@ -222,15 +218,6 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: manualFiltering ? undefined : getFilteredRowModel(),
     getPaginationRowModel: manualPagination ? undefined : getPaginationRowModel(),
   });
-
-  const resetColumns = () => {
-    setColumnVisibility(defaultColumnVisibility);
-    try {
-      localStorage.removeItem(storageKey);
-    } catch {
-      // localStorage may not be available in all environments
-    }
-  };
 
   const exportToCSV = () => {
     const rows = table.getRowModel().rows;
@@ -363,10 +350,10 @@ export function DataTable<TData, TValue>({
                   color: 'var(--table-header-foreground)',
                 }}
               >
-                {headerGroup.headers.map((header, hIndex) => {
+                {headerGroup.headers.map((header) => {
                   const sorted = header.column.getIsSorted();
                   const canSort = header.column.getCanSort();
-                  const priority = (header.column.columnDef.meta as ColumnMeta)?.priority;
+                  const priority = header.column.columnDef.meta?.priority;
 
                   const handleSortClick = () => {
                     if (!canSort) return;
@@ -382,31 +369,20 @@ export function DataTable<TData, TValue>({
                     }
                   };
 
-                  const align = (header.column.columnDef.meta as ColumnMeta)?.align;
-                  const alignHeadClass =
-                    align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : '';
-                  const alignFlexClass =
-                    align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : '';
+                  const align = header.column.columnDef.meta?.align;
+                  const flexClass = alignFlexClass(align);
 
                   return (
                     <TableHead
-                      key={`h-${hIndex}`}
-                      aria-sort={
-                        canSort
-                          ? sorted === 'asc'
-                            ? 'ascending'
-                            : sorted === 'desc'
-                              ? 'descending'
-                              : 'none'
-                          : undefined
-                      }
-                      className={`${getResponsiveClass(priority)} h-12 font-semibold whitespace-nowrap ${alignHeadClass}`}
+                      key={header.id}
+                      aria-sort={ariaSort(canSort, sorted)}
+                      className={`${getResponsiveClass(priority)} h-12 font-semibold whitespace-nowrap ${alignTextClass(align)}`}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
                           type="button"
                           onClick={handleSortClick}
-                          className={`flex w-full cursor-pointer items-center select-none ${alignFlexClass || 'text-left'}`}
+                          className={`flex w-full cursor-pointer items-center select-none ${flexClass || 'text-left'}`}
                           aria-label={`Sort by ${getSortableColumnLabel(header.column)}`}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
@@ -415,7 +391,7 @@ export function DataTable<TData, TValue>({
                           {!sorted && <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />}
                         </button>
                       ) : (
-                        <div className={`flex items-center ${alignFlexClass}`}>
+                        <div className={`flex items-center ${flexClass}`}>
                           {flexRender(header.column.columnDef.header, header.getContext())}
                         </div>
                       )}
@@ -441,28 +417,19 @@ export function DataTable<TData, TValue>({
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row, rIndex) => (
+              table.getRowModel().rows.map((row) => (
                 <TableRow
-                  key={`r-${rIndex}`}
+                  key={row.id}
                   className="bg-[var(--table-background)] hover:bg-[var(--table-highlight)]"
                 >
-                  {row.getVisibleCells().map((cell, cIndex) => {
-                    const cellAlign = cell.column.columnDef.meta?.align;
-                    const cellAlignClass =
-                      cellAlign === 'center'
-                        ? 'text-center'
-                        : cellAlign === 'right'
-                          ? 'text-right'
-                          : '';
-                    return (
-                      <TableCell
-                        key={`c-${cIndex}`}
-                        className={`whitespace-nowrap ${getResponsiveClass(cell.column.columnDef.meta?.priority)} ${cellAlignClass}`}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    );
-                  })}
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      className={`whitespace-nowrap ${getResponsiveClass(cell.column.columnDef.meta?.priority)} ${alignTextClass(cell.column.columnDef.meta?.align)}`}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))
             ) : (
@@ -537,7 +504,7 @@ export function DataTable<TData, TValue>({
                         <SelectValue placeholder="Select rows per page" />
                       </SelectTrigger>
                       <SelectContent>
-                        {[5, 10, 20, 50, 75, 100].map((size) => (
+                        {PAGE_SIZE_OPTIONS.map((size) => (
                           <SelectItem key={size} value={String(size)}>
                             Show {size} Records
                           </SelectItem>
