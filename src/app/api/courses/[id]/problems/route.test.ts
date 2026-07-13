@@ -152,6 +152,23 @@ describe('POST /api/courses/[id]/problems', () => {
 
     expect(res.status).toBe(400);
     expect(prismaMock.problem.create).not.toHaveBeenCalled();
+    // This is problem creation, not a student submission: the audit event uses the
+    // PROBLEM action/category, and carries no assignmentId (problems aren't
+    // assignment-scoped at creation).
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'PROBLEM_INVALID_FILE_STRUCTURE',
+        category: 'PROBLEM',
+        courseId: 'c1',
+      }),
+    );
+    const invalidLog = activityLogMock.mock.calls.find(
+      (c) => c[2]?.action === 'PROBLEM_INVALID_FILE_STRUCTURE',
+    );
+    expect(invalidLog?.[2]).not.toHaveProperty('assignmentId');
+    expect(invalidLog?.[2]?.metadata).not.toHaveProperty('assignmentId');
   });
 
   it('returns 413 when the file exceeds the upload limit', async () => {
@@ -198,7 +215,11 @@ describe('POST /api/courses/[id]/problems', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      expect.objectContaining({ action: 'PROBLEM_CREATE_ERROR', severity: 'ERROR' }),
+      expect.objectContaining({
+        action: 'PROBLEM_CREATE_ERROR',
+        severity: 'ERROR',
+        courseId: 'c1',
+      }),
     );
   });
 });

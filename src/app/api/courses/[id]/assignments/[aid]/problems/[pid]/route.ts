@@ -135,8 +135,11 @@ export const PUT = withCourseAuth(
     } catch (error) {
       console.error('Failed to update assignment problem settings:', error);
       await logError(req, {
-        userId: null,
+        userId: user.id,
         action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_ERROR',
+        courseId,
+        assignmentId,
+        problemId,
         error,
       });
       return NextResponse.json(

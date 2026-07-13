@@ -49,7 +49,6 @@ export async function POST(req: NextRequest) {
       action: 'SUBMISSION_UNAUTHORIZED',
       severity: 'SECURITY',
       category: 'SUBMISSION',
-      metadata: { userId: undefined },
     });
 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

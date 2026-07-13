@@ -75,6 +75,11 @@ describe('PATCH /api/courses/[id]/archive', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_ARCHIVE_REJECTED', severity: 'WARNING' }),
+    );
   });
 
   it('archives course and logs activity for an admin', async () => {
@@ -158,6 +163,11 @@ describe('PATCH /api/courses/[id]/archive', () => {
 
     expect(res.status).toBe(200);
     expect(prismaMock.course.update).toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_UNARCHIVED' }),
+    );
   });
 
   it('returns 500 and logs when the update throws', async () => {

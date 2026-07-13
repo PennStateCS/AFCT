@@ -35,9 +35,7 @@ export const GET = withAdminAuth(
         action: 'VIEW_USERS',
         severity: 'INFO',
         category: 'USER',
-        metadata: {
-          userId: user.id,
-        },
+        metadata: {},
       });
 
       return NextResponse.json(users);
@@ -138,7 +136,6 @@ export const POST = withAdminAuth(
         severity: 'INFO',
         category: 'USER',
         metadata: {
-          userId: user.id,
           createdUserId: newUser.id,
           createdUserEmail: newUser.email,
         },
@@ -148,7 +145,7 @@ export const POST = withAdminAuth(
     } catch (error) {
       console.error('[USERS_POST_ERROR]', error);
       await logError(req, {
-        userId: null,
+        userId: user.id,
         action: 'USER_CREATE_ERROR',
         error,
       });

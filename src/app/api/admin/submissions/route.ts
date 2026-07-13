@@ -36,7 +36,7 @@ const ListSubmissionsBody = z.object({ problemIds: z.array(z.string()).default([
  *   500: { description: Server error. }
  */
 export const POST = withAdminAuth(
-  async (req) => {
+  async (req, _ctx, { user }) => {
     try {
       const parsed = await readJson(req, ListSubmissionsBody);
       if (!parsed.ok) return parsed.response;
@@ -140,7 +140,7 @@ export const POST = withAdminAuth(
     } catch (error) {
       console.error('Error fetching submissions:', error);
       await logError(req, {
-        userId: null,
+        userId: user.id,
         action: 'ADMIN_SUBMISSIONS_ERROR',
         error,
       });

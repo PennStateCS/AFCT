@@ -503,6 +503,11 @@ describe('PUT /api/courses/[id]', () => {
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
     expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_ARCHIVE_REJECTED', severity: 'WARNING' }),
+    );
   });
 
   it('returns 403 when unpublish check fails', async () => {
@@ -529,6 +534,11 @@ describe('PUT /api/courses/[id]', () => {
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
     expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_UNPUBLISH_REJECTED', severity: 'WARNING' }),
+    );
   });
 
   it('returns 400 when registration window is missing', async () => {

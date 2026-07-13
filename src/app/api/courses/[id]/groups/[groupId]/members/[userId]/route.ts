@@ -51,7 +51,8 @@ export const DELETE = withCourseAuth(
         action: 'REMOVE_GROUP_MEMBER',
         severity: 'INFO',
         category: 'COURSE',
-        metadata: { courseId, groupId, userId },
+        courseId,
+        metadata: { courseId, groupId, targetUserId: userId },
       });
 
       return NextResponse.json({ success: true });
@@ -61,6 +62,7 @@ export const DELETE = withCourseAuth(
         userId: user.id,
         action: 'GROUP_MEMBER_REMOVE_ERROR',
         error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
