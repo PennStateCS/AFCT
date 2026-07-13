@@ -331,24 +331,19 @@ function CourseActionsCell({
               Duplicate Course
             </DropdownMenuItem>
           )}
-          {isAdmin &&
-            (course.isArchived ? (
-              <DropdownMenuItem
-                onClick={() => setArchiveConfirmOpen(true)}
-                className="hover:bg-secondary flex items-center gap-2"
-              >
+          {isAdmin && (
+            <DropdownMenuItem
+              onClick={() => setArchiveConfirmOpen(true)}
+              className="hover:bg-secondary flex items-center gap-2"
+            >
+              {course.isArchived ? (
                 <ArchiveRestore className="mr-2 h-4 w-4" />
-                Restore Course
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem
-                onClick={() => setArchiveConfirmOpen(true)}
-                className="hover:bg-secondary flex items-center gap-2"
-              >
+              ) : (
                 <Archive className="mr-2 h-4 w-4" />
-                Archive Course
-              </DropdownMenuItem>
-            ))}
+              )}
+              {course.isArchived ? 'Restore Course' : 'Archive Course'}
+            </DropdownMenuItem>
+          )}
           {/* Deleting is admin-only and lives on the active course list; archived
               courses must be restored first. */}
           {isAdmin && !course.isArchived && (
