@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
-import { isAdmin } from '@/lib/permissions';
+import { isAdmin, canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { apiError } from '@/lib/api/http';
@@ -389,6 +389,24 @@ export const PUT = withCourseAuth(
         return NextResponse.json(
           { error: 'At least one faculty member is required.' },
           { status: 400 },
+        );
+      }
+
+      // Editing the faculty roster is FACULTY/admin-only. The `manage` gate on this
+      // route also admits TAs, so without this check a TA could send their own id as
+      // `instructorIds` to promote themselves to FACULTY and remove every existing
+      // instructor. Every other field above is a normal staff-editable course setting.
+      if (instructorIds && !(await canManageCourse(user, id, ['FACULTY']))) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: user.id,
+          action: 'COURSE_FACULTY_EDIT_DENIED',
+          severity: 'SECURITY',
+          courseId: id,
+          metadata: { reason: 'changing the faculty roster is faculty/admin-only' },
+        });
+        return NextResponse.json(
+          { error: 'Only faculty or an administrator can change the faculty roster.' },
+          { status: 403 },
         );
       }
 
