@@ -144,7 +144,7 @@ You can create new keys anytime at <https://dashboard.hcaptcha.com/sites>. Local
 npm run docker:dev
 ```
 
-This builds the images if needed and brings up the whole stack (Postgres, the app, nginx) in the foreground with logs streaming to your terminal. The first run takes a few minutes because it downloads base images and installs dependencies; later runs reuse the cache and start in seconds. You will know it worked when the log settles into the Next.js dev server banner reporting that it is ready on port 3000. Leave this terminal open; Ctrl+C stops the stack. If you would rather have your terminal back, use the detached variant listed in section 7.
+This builds the images if needed and brings up the whole stack (Postgres, the app, nginx, a db-backup sidecar, and Prisma Studio) in the foreground with logs streaming to your terminal. The first run takes a few minutes because it downloads base images and installs dependencies; later runs reuse the cache and start in seconds. You will know it worked when the log settles into the Next.js dev server banner reporting that it is ready on port 3000. Leave this terminal open; Ctrl+C stops the stack. If you would rather have your terminal back, use the detached variant listed in section 7.
 
 ---
 
