@@ -6,6 +6,11 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import JffViewerDialog, { JffCytoscapeViewer } from './JffViewerDialog';
 
+// The engine tests await an async load chain (fetch, parse, dynamic import, cytoscape
+// ctor). On a CPU-starved CI runner that chain can take a few seconds, so give this
+// file generous headroom instead of racing vitest's 5s default and flaking.
+vi.setConfig({ testTimeout: 20000 });
+
 /* ─────────────────────── cytoscape engine mock (hoisted) ─────────────────── */
 // The viewer sets cyRef.current right after cytoscape() returns and wraps the
 // layout work in try/catch, so a chainable no-throw mock lets load() complete and
@@ -105,9 +110,10 @@ afterEach(() => {
 });
 
 // Resolves once load() has instantiated the (mocked) cytoscape engine, i.e. cyRef
-// is set and the toolbar handlers can drive it. Generous timeout: the load chain
-// (fetch → parse → dynamic import → ctor) can be slow under full-suite CPU contention.
-const waitForEngine = () => waitFor(() => expect(h.ctor).toHaveBeenCalled(), { timeout: 5000 });
+// is set and the toolbar handlers can drive it. Generous timeout, kept well under the
+// file's 20s testTimeout: the load chain (fetch, parse, dynamic import, ctor) can be
+// slow under full-suite CPU contention, and 5s raced vitest's default and flaked.
+const waitForEngine = () => waitFor(() => expect(h.ctor).toHaveBeenCalled(), { timeout: 15000 });
 
 /* ────────────────────────────────  tests  ───────────────────────────────── */
 
