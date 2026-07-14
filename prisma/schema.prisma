@@ -354,6 +354,11 @@ model AssignmentProblemGrade {
   grade    Float
   feedback String?
 
+  // True when a staff member set this grade by hand. The autograder refuses to
+  // overwrite a manually-graded row, so a later (or reran) evaluation can't clobber
+  // a TA's grade.
+  gradedManually Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

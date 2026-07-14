@@ -274,10 +274,12 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
           studentId: defaultParams.studentId,
           grade: 90,
           feedback: 'Great',
+          gradedManually: true,
         },
         update: {
           grade: 90,
           feedback: 'Great',
+          gradedManually: true,
         },
       });
       await expect(res.json()).resolves.toEqual({
