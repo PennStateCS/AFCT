@@ -10,6 +10,7 @@ import { verifyCredentials } from '@/lib/credentials';
 import { isSessionIdleExpired } from '@/lib/session-timeout';
 import { getServerIdleTimeoutMs } from '@/lib/session-timeout.server';
 import { requireAuthSecret } from '@/lib/auth-secret';
+import { passwordChangedSinceToken } from '@/lib/session-password';
 import type { Adapter } from 'next-auth/adapters';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -63,10 +64,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // Fetch the full user data to get firstName/lastName
           const fullUser = await prisma.user.findUnique({
             where: { email: user.email },
-            select: { firstName: true, lastName: true },
+            select: { firstName: true, lastName: true, passwordChangedAt: true },
           });
           token.firstName = fullUser?.firstName || undefined;
           token.lastName = fullUser?.lastName || undefined;
+          // Snapshot the password-change instant so a later change/reset revokes
+          // this token (see the session callback).
+          token.pwChangedAt = fullUser?.passwordChangedAt
+            ? fullUser.passwordChangedAt.getTime()
+            : null;
         }
         // Start the idle clock at sign-in.
         token.lastActivity = Date.now();
@@ -126,10 +132,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               avatar: true,
               temporaryPassword: true,
               inactive: true,
+              passwordChangedAt: true,
             },
           });
 
-          if (freshUser && !freshUser.inactive) {
+          // Revoke a session whose password changed after the token was issued
+          // (a reset/change must terminate existing sessions, not just future ones).
+          if (
+            freshUser &&
+            !freshUser.inactive &&
+            !passwordChangedSinceToken(token.pwChangedAt, freshUser.passwordChangedAt)
+          ) {
             session.user.firstName = freshUser.firstName || undefined;
             session.user.lastName = freshUser.lastName || undefined;
             session.user.isAdmin = freshUser.isAdmin;

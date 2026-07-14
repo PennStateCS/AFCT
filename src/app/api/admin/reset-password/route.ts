@@ -57,7 +57,11 @@ export const POST = withAdminAuth(
 
       await prisma.user.update({
         where: { id: userId },
-        data: { password: hashedPassword, temporaryPassword: Boolean(isTemporary) },
+        data: {
+          password: hashedPassword,
+          temporaryPassword: Boolean(isTemporary),
+          passwordChangedAt: new Date(),
+        },
       });
 
       await createEnhancedActivityLog(prisma, req, {
