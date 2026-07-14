@@ -9,8 +9,15 @@
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 
-/** How long a freshly issued client token is valid. */
+/** How long a freshly issued client token is valid (the sliding window). */
 export const CLIENT_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+/**
+ * Absolute cap on a token's lifetime, measured from issue (`createdAt`). Sliding
+ * expiration keeps an actively-used token alive, but never past this — so a leaked
+ * token that's quietly used forever still dies and forces a fresh login.
+ */
+export const CLIENT_TOKEN_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 /** Bump `lastUsedAt` at most this often, to avoid a write on every request. */
 const LAST_USED_THROTTLE_MS = 5 * 60 * 1000; // 5 minutes
@@ -64,6 +71,7 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
     select: {
       id: true,
       revokedAt: true,
+      createdAt: true,
       expiresAt: true,
       lastUsedAt: true,
       user: {
@@ -83,17 +91,26 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
   const now = Date.now();
   if (row.revokedAt) return null;
   if (row.expiresAt && row.expiresAt.getTime() <= now) return null;
+  // Absolute lifetime cap from issue time: sliding expiration must never keep a token
+  // alive past createdAt + MAX_AGE (defensive `Infinity` if createdAt is somehow
+  // absent, which can't happen for a persisted row).
+  const absoluteExpiry = row.createdAt
+    ? row.createdAt.getTime() + CLIENT_TOKEN_MAX_AGE_MS
+    : Infinity;
+  if (now >= absoluteExpiry) return null;
   if (!row.user || row.user.inactive) return null;
 
   // Sliding expiration: any authenticated request pushes the expiry out to
   // `now + TTL`, so an actively-used token stays valid and only genuine inactivity
-  // (no call for a full TTL window) lets it lapse. Throttled + best-effort so it's at
-  // most one extra write every few minutes and never fails the request.
+  // (no call for a full TTL window) lets it lapse — but never past the absolute cap.
+  // Throttled + best-effort so it's at most one extra write every few minutes and
+  // never fails the request.
   if (!row.lastUsedAt || now - row.lastUsedAt.getTime() > LAST_USED_THROTTLE_MS) {
+    const nextExpiry = Math.min(now + CLIENT_TOKEN_TTL_MS, absoluteExpiry);
     void prisma.clientApiToken
       .update({
         where: { id: row.id },
-        data: { lastUsedAt: new Date(now), expiresAt: new Date(now + CLIENT_TOKEN_TTL_MS) },
+        data: { lastUsedAt: new Date(now), expiresAt: new Date(nextExpiry) },
       })
       .catch(() => {});
   }

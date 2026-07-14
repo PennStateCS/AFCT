@@ -15,6 +15,8 @@ import {
   issueClientToken,
   resolveClientToken,
   revokeClientToken,
+  CLIENT_TOKEN_MAX_AGE_MS,
+  CLIENT_TOKEN_TTL_MS,
 } from './client-auth';
 
 const activeUser = {
@@ -77,6 +79,46 @@ describe('client-auth', () => {
         data: expect.objectContaining({ lastUsedAt: expect.any(Date), expiresAt: expect.any(Date) }),
       }),
     );
+  });
+
+  it('rejects a token past its absolute max age even if expiresAt is still in the future', async () => {
+    // Sliding expiration could push expiresAt out indefinitely; the absolute cap
+    // (createdAt + MAX_AGE) still retires the token.
+    prismaMock.clientApiToken.findUnique.mockResolvedValue({
+      id: 't1',
+      revokedAt: null,
+      createdAt: new Date(Date.now() - CLIENT_TOKEN_MAX_AGE_MS - 1000),
+      expiresAt: new Date(Date.now() + 10_000), // slid forward, still "valid"
+      lastUsedAt: null,
+      user: activeUser,
+    });
+
+    expect(await resolveClientToken('tok')).toBeNull();
+    expect(prismaMock.clientApiToken.update).not.toHaveBeenCalled();
+  });
+
+  it('caps the slid expiresAt at createdAt + MAX_AGE, not now + TTL', async () => {
+    // Created 70 days ago: still under the 90-day cap, so it resolves, but a renewal
+    // must not push expiresAt a full TTL past now (that would exceed the cap).
+    const createdAt = new Date(Date.now() - 70 * 24 * 60 * 60 * 1000);
+    prismaMock.clientApiToken.findUnique.mockResolvedValue({
+      id: 't1',
+      revokedAt: null,
+      createdAt,
+      expiresAt: new Date(Date.now() + 5_000),
+      lastUsedAt: null,
+      user: activeUser,
+    });
+
+    const res = await resolveClientToken('tok');
+    expect(res?.tokenId).toBe('t1');
+
+    const cap = createdAt.getTime() + CLIENT_TOKEN_MAX_AGE_MS;
+    const written = prismaMock.clientApiToken.update.mock.calls[0]![0].data.expiresAt as Date;
+    // Capped at createdAt + MAX_AGE, well short of now + TTL.
+    expect(written.getTime()).toBeLessThanOrEqual(cap);
+    expect(written.getTime()).toBeGreaterThan(Date.now() + 5_000);
+    expect(written.getTime()).toBeLessThan(Date.now() + CLIENT_TOKEN_TTL_MS);
   });
 
   it('does not renew a token used within the throttle window', async () => {
