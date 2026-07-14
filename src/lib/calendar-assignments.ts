@@ -77,17 +77,18 @@ export async function getAssignmentsForUserRange(params: {
   if (assignmentIds.length === 0) return [];
 
   // Student-view data (for courses where the viewer is a student): their own
-  // submissions and grades.
-  const studentSubmissions = await prisma.submission.findMany({
-    where: { studentId: userId, assignmentId: { in: assignmentIds } },
-    select: { assignmentId: true },
-  });
+  // submissions and grades. Independent reads, so fetch them concurrently.
+  const [studentSubmissions, studentGrades] = await Promise.all([
+    prisma.submission.findMany({
+      where: { studentId: userId, assignmentId: { in: assignmentIds } },
+      select: { assignmentId: true },
+    }),
+    prisma.assignmentProblemGrade.findMany({
+      where: { studentId: userId, assignmentId: { in: assignmentIds } },
+      select: { assignmentId: true },
+    }),
+  ]);
   const submissionSet = new Set(studentSubmissions.map((s) => s.assignmentId));
-
-  const studentGrades = await prisma.assignmentProblemGrade.findMany({
-    where: { studentId: userId, assignmentId: { in: assignmentIds } },
-    select: { assignmentId: true },
-  });
   const gradeSet = new Set(studentGrades.map((g) => g.assignmentId));
 
   // Staff-view data (for courses where the viewer is faculty/TA): class-wide

@@ -187,16 +187,18 @@ export const GET = withCourseAuth(
         // Class-wide submission/comment totals are staff-only aggregates; students
         // must not learn peers' activity volume, so skip the queries entirely for
         // non-staff (the counts then default to 0 below).
-        const submissionCountMap = isStaff
-          ? await countByAssignment(submissionDelegate, assignmentIds, (assignmentId) =>
-              prisma.submission.count({ where: { assignmentId } }),
-            )
-          : new Map<string, number>();
-        const commentCountMap = isStaff
-          ? await countByAssignment(commentDelegate, assignmentIds, (assignmentId) =>
-              prisma.comment.count({ where: { assignmentId } }),
-            )
-          : new Map<string, number>();
+        // The two aggregates are independent; run them concurrently on this hot
+        // read path rather than one after the other.
+        const [submissionCountMap, commentCountMap] = isStaff
+          ? await Promise.all([
+              countByAssignment(submissionDelegate, assignmentIds, (assignmentId) =>
+                prisma.submission.count({ where: { assignmentId } }),
+              ),
+              countByAssignment(commentDelegate, assignmentIds, (assignmentId) =>
+                prisma.comment.count({ where: { assignmentId } }),
+              ),
+            ])
+          : [new Map<string, number>(), new Map<string, number>()];
 
         assignmentsWithProblemCount = assignmentRows.map((assignment) => {
           const totalProblemPoints = sumProblemPoints(assignment.problems);
