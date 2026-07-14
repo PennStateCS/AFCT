@@ -9,6 +9,7 @@ export type PublicSystemSettings = {
   allowSignup?: boolean;
   sessionTimeoutMinutes?: number;
   hcaptchaSiteKey?: string;
+  clock24Hour?: boolean;
 };
 
 /**

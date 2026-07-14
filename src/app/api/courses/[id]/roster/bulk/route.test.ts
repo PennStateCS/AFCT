@@ -81,16 +81,10 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     expect(res.status).toBe(400);
   });
 
-  it('bulk enrolls users', async () => {
+  it('bulk enrolls users via upsert on the (courseId, userId) key', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
-    const tx = {
-      roster: {
-        findFirst: vi.fn().mockResolvedValue(null),
-        update: vi.fn(),
-        create: vi.fn(),
-      },
-    };
+    const tx = { roster: { upsert: vi.fn() } };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
     );
@@ -103,27 +97,20 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(200);
-    expect(tx.roster.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ role: 'STUDENT' }) }),
+    expect(tx.roster.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { courseId_userId: { courseId: 'c1', userId: 'u1' } },
+        create: expect.objectContaining({ role: 'STUDENT' }),
+        update: { role: 'STUDENT' },
+      }),
     );
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('sets STUDENT role for both updates and creates', async () => {
+  it('upserts every user to the STUDENT role', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
-    const tx = {
-      roster: {
-        findFirst: vi
-          .fn()
-          .mockResolvedValueOnce({ id: 'r1' })
-          .mockResolvedValueOnce(null)
-          .mockResolvedValueOnce({ id: 'r3' })
-          .mockResolvedValueOnce(null),
-        update: vi.fn(),
-        create: vi.fn(),
-      },
-    };
+    const tx = { roster: { upsert: vi.fn() } };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
     );
@@ -136,17 +123,12 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(200);
-    expect(tx.roster.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { role: 'STUDENT' } }),
-    );
-    expect(tx.roster.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { role: 'STUDENT' } }),
-    );
-    expect(tx.roster.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ role: 'STUDENT' }) }),
-    );
-    expect(tx.roster.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ role: 'STUDENT' }) }),
+    expect(tx.roster.upsert).toHaveBeenCalledTimes(4);
+    expect(tx.roster.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ role: 'STUDENT' }),
+        update: { role: 'STUDENT' },
+      }),
     );
   });
 
