@@ -301,10 +301,10 @@ export default function SystemSettingsClient() {
   const [hcaptchaSecretClear, setHcaptchaSecretClear] = useState(false);
 
   // Baseline of saved values, for unsaved-changes detection. Seeded synchronously
-  // on a warm cache so `loading` (below) is false immediately — no disabled flash.
+  // on a warm cache so `loading` (below) is false immediately: no disabled flash.
   const [baseline, setBaseline] = useState<FormSnapshot | null>(initialSeed);
 
-  // TLS certificate — its cached read, upload/CSR/self-signed flows, and form state
+  // TLS certificate: its cached read, upload/CSR/self-signed flows, and form state
   // live in a dedicated hook so this component owns only the main settings form.
   const {
     tls,
@@ -407,8 +407,8 @@ export default function SystemSettingsClient() {
     // cache after saving matches exactly what the server stores.
     const canonicalDomains = parseDomainList(signupAllowedDomains).domains.join(',');
 
-    // Validate + normalize the whole payload through the shared schema — the same
-    // one the route validates with — before sending. Surfaces any field error
+    // Validate + normalize the whole payload through the shared schema (the same
+    // one the route validates with) before sending. Surfaces any field error
     // (e.g. an invalid timezone) as a toast and makes the schema the single
     // authority for the request shape.
     const parsedSettings = SystemSettingsUpdateSchema.safeParse({

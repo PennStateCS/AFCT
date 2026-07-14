@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let avatarFile: File | null = null;
     let deleteAvatar = false;
     let timezoneRaw: string | undefined;
-    // The global admin flag — only applied when the actor is themselves an admin.
+    // The global admin flag, only applied when the actor is themselves an admin.
     let isAdminFlag: boolean | undefined;
 
     if (contentType.includes('multipart/form-data')) {
@@ -329,13 +329,13 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     }
 
     // Delete user from database. The user's activity logs are intentionally
-    // preserved for the audit trail — the schema's onDelete: SetNull nulls their
+    // preserved for the audit trail: the schema's onDelete: SetNull nulls their
     // userId, and each entry keeps the actor's name/email in metadata.
     await prisma.user.delete({
       where: { id: userId },
     });
 
-    // Log activity — record who was deleted, since the user row is now gone.
+    // Log activity: record who was deleted, since the user row is now gone.
     await createEnhancedActivityLog(prisma, req, {
       userId: actorId,
       action: 'DELETE_USER',

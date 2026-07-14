@@ -2,11 +2,11 @@
  * The single, server-side resolver for "may a submission be accepted right now?".
  *
  * Deadline enforcement is **integrity-critical**: it must be computed on the server
- * from stored **UTC** instants versus the server clock — never from a client-supplied
+ * from stored **UTC** instants versus the server clock, never from a client-supplied
  * time or timezone (a student changing their browser zone or OS clock must not move
  * the deadline). Centralizing it here means every caller (submit route, calendar,
- * reminders) makes the *same* decision, and future work — per-student due-date
- * **overrides** and a **grace period** (see `docs/roadmap.md`) — slots into this one
+ * reminders) makes the *same* decision, and future work (per-student due-date
+ * **overrides** and a **grace period**, see `docs/roadmap.md`) slots into this one
  * function instead of every comparison site.
  *
  * This mirrors the current submit-route logic exactly:
@@ -29,7 +29,7 @@ export type SubmissionWindow =
 
 /**
  * Decide whether a submission is within the assignment's window at `now` (defaults to
- * the server clock). Pure and synchronous — pass the resolved deadline fields.
+ * the server clock). Pure and synchronous; pass the resolved deadline fields.
  */
 export function evaluateSubmissionWindow(
   assignment: DeadlineFields,

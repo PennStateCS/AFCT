@@ -7,7 +7,7 @@ import type { Prisma } from '@prisma/client';
 /**
  * Returns the signed-in user's own started, non-archived courses (id + name),
  * used by pickers that only make sense for courses already underway. Note: the
- * `email` path segment is ignored — results are always scoped to the caller's
+ * `email` path segment is ignored; results are always scoped to the caller's
  * id, so one user can't enumerate another's courses.
  * @openapi
  * summary: List my started courses

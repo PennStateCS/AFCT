@@ -18,7 +18,7 @@ export const COURSE_FACULTY_ROLES: CourseRole[] = ['FACULTY'];
 // Course roles that count as "staff" (may manage a course). Admins bypass this.
 export const COURSE_STAFF_ROLES: CourseRole[] = ['FACULTY', 'TA'];
 
-/** Global system administrator — full access everywhere. */
+/** Global system administrator: full access everywhere. */
 export function isAdmin(user: PermissionUser): boolean {
   return Boolean(user?.isAdmin);
 }
@@ -38,7 +38,7 @@ export async function getCourseRole(
 
 /**
  * May the caller see this course at all? A system admin always may. Otherwise they
- * must be on the roster, AND — for a student — the course must be published; course
+ * must be on the roster, AND, for a student, the course must be published; course
  * staff (FACULTY/TA) may access their course even while it is unpublished. This is
  * the single gate for course-scoped reads, so the "students only see published
  * courses" rule lives here rather than being re-checked in every route.
@@ -47,7 +47,7 @@ export async function getCourseRole(
  */
 export async function canAccessCourse(user: PermissionUser, courseId: string): Promise<boolean> {
   if (isAdmin(user)) {
-    // A soft-deleted course is inaccessible to everyone — even a system admin.
+    // A soft-deleted course is inaccessible to everyone, even a system admin.
     // Best-effort: if the lookup errors, fall through and allow, so a transient DB
     // fault surfaces from the handler rather than masking as a denial.
     try {
@@ -81,7 +81,7 @@ export async function canManageCourse(
   roles: CourseRole[] = COURSE_STAFF_ROLES,
 ): Promise<boolean> {
   if (isAdmin(user)) {
-    // A soft-deleted course can't be managed by anyone — even a system admin.
+    // A soft-deleted course can't be managed by anyone, even a system admin.
     try {
       if (await isCourseDeleted(courseId)) return false;
     } catch {
@@ -127,7 +127,7 @@ export async function isCourseDeleted(courseId: string): Promise<boolean> {
  * caller is a system admin, or is **course staff (FACULTY/TA) of any course in which
  * the target is enrolled as a STUDENT**. This is the gate for a faculty/TA acting on
  * a student's account (e.g. resetting their password): being a STUDENT in one of the
- * caller's courses is sufficient — the target's roles in *other* courses don't matter.
+ * caller's courses is sufficient; the target's roles in *other* courses don't matter.
  */
 export async function staffManagesStudent(
   caller: PermissionUser,

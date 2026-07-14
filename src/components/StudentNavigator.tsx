@@ -52,7 +52,7 @@ export default function StudentNavigator({
   const [studentFilter, setStudentFilter] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Assignment shell — cached and shared with StudentAssignmentView via the same
+  // Assignment shell: cached and shared with StudentAssignmentView via the same
   // key (queryKeys.assignment.shell), so the two dedupe/share this read.
   const assignmentQuery = useQuery<{
     dueDate?: string | Date;

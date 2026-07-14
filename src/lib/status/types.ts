@@ -1,5 +1,5 @@
 /**
- * Shared types for the admin System Status feature — used by both the server
+ * Shared types for the admin System Status feature, used by both the server
  * collectors (`src/lib/status/*`) and the client tab components so the API
  * contract lives in one place. Each per-domain route returns the matching
  * `*StatusResponse` slice; the summary route returns `SummaryStatus`.

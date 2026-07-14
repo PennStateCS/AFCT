@@ -174,7 +174,7 @@ const fetchProblemsForAssignments = async (assignmentIds: string[]): Promise<Pro
 };
 
 // Stable empty arrays so `data ?? EMPTY` keeps a constant identity between
-// renders — the selection-cascade effects depend on `[data]`, and a fresh `[]`
+// renders: the selection-cascade effects depend on `[data]`, and a fresh `[]`
 // each render would retrigger them endlessly.
 const EMPTY_COURSES: CourseItem[] = [];
 const EMPTY_ASSIGNMENTS: AssignmentItem[] = [];

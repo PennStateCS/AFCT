@@ -12,7 +12,7 @@ const ArchiveBody = z.object({ isArchived: z.boolean() });
 
 /**
  * Toggles a course's archived state. **Both archiving and un-archiving are
- * admin-only** — freezing a course (or reopening a frozen one to edits) is a
+ * admin-only**: freezing a course (or reopening a frozen one to edits) is a
  * privileged action. Archiving also runs a safety check (canArchiveCourse) using
  * the course's stored dates rather than any client value, to avoid timezone drift
  * deciding whether a course has really ended.

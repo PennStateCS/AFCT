@@ -3,7 +3,7 @@
 // Validation schema for the system-settings update payload (PUT /api/system-settings).
 // The app deliberately *clamps* numeric settings to safe bounds rather than
 // rejecting out-of-range values (see src/lib/system-settings.ts and its rationale
-// comments), so this schema coerces then clamps via the same helpers — a value
+// comments), so this schema coerces then clamps via the same helpers; a value
 // that's out of range is corrected to the nearest bound, not refused. Timezone and
 // the signup domain list are the fields that genuinely reject bad input.
 //
@@ -32,7 +32,7 @@ import {
 /**
  * Coerce to a number, then clamp to the setting's safe bounds. A value that can't
  * be coerced (e.g. a non-numeric string) falls through to `NaN`, which every clamp
- * helper maps to the field's default — matching the route's original lenient
+ * helper maps to the field's default, matching the route's original lenient
  * `Number(...)`-then-clamp behavior rather than rejecting the whole request.
  */
 const clamped = (clamp: (v: number) => number) =>
@@ -57,7 +57,7 @@ export const SystemSettingsUpdateSchema = z.object({
   // Signup email-domain allow-list (validated + normalized further in the route).
   signupAllowedDomains: z.string().optional(),
 
-  // Submission queue — each optional (partial update) and clamped when present.
+  // Submission queue: each optional (partial update) and clamped when present.
   submissionEvalTimeoutMs: clamped(clampSubmissionEvalTimeoutMs).optional(),
   submissionEvalMaxMemoryMb: clamped(clampSubmissionEvalMaxMemoryMb).optional(),
   submissionResubmitCooldownMs: clamped(clampSubmissionResubmitCooldownMs).optional(),

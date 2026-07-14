@@ -15,7 +15,7 @@ const eslintConfig = [
   {
     ignores: [
       '.next/**',
-      '.claude/**', // scratch git worktrees and agent state, not project source
+      '.claude/**', // local scratch/worktree tooling, not project source
       'node_modules/**',
       'coverage/**',
       'next-env.d.ts',

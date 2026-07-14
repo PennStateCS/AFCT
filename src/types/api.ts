@@ -81,7 +81,7 @@ export interface paths {
         put?: never;
         /**
          * Reset a user's password (admin)
-         * @description Sets another user's password on their behalf (an admin-initiated reset).  System administrators only; the new password still has to meet the strength  policy. Pass `isTemporary` to force a change at next login. The plaintext  password is never logged — only who reset whom.
+         * @description Sets another user's password on their behalf (an admin-initiated reset).  System administrators only; the new password still has to meet the strength  policy. Pass `isTemporary` to force a change at next login. The plaintext  password is never logged, only who reset whom.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/reset-password/route.ts)
          */
@@ -101,7 +101,7 @@ export interface paths {
         };
         /**
          * Download a backup file
-         * @description Streams a single backup file to the caller as an attachment. System administrators only.  A database dump contains the entire database (password hashes and all PII), so  the download is always recorded as a SECURITY audit event. The filename is  checked against a strict allow-list and the resolved path must stay inside the  backup directory — two independent guards against path traversal.
+         * @description Streams a single backup file to the caller as an attachment. System administrators only.  A database dump contains the entire database (password hashes and all PII), so  the download is always recorded as a SECURITY audit event. The filename is  checked against a strict allow-list and the resolved path must stay inside the  backup directory: two independent guards against path traversal.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/download/route.ts)
          */
@@ -131,7 +131,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger a backup now
-         * @description Requests an on-demand backup by dropping a trigger file the db-backup container  polls for. System administrators only. Returns 202 (accepted) — the backup runs  asynchronously in that container, not in this request.
+         * @description Requests an on-demand backup by dropping a trigger file the db-backup container  polls for. System administrators only. Returns 202 (accepted); the backup runs  asynchronously in that container, not in this request.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/route.ts)
          */
@@ -151,7 +151,7 @@ export interface paths {
         };
         /**
          * Get system settings
-         * @description Returns the singleton system settings, falling back to defaults for any unset  field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`  reports whether one is stored. System administrators only.
+         * @description Returns the singleton system settings, falling back to defaults for any unset  field. The hCaptcha secret is never returned; only `hcaptchaSecretConfigured`  reports whether one is stored. System administrators only.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/route.ts)
          */
@@ -257,7 +257,7 @@ export interface paths {
         };
         /**
          * Abandoned-file report
-         * @description Files tab: report of orphaned uploads — files on disk that no DB row  references, by category, with up to 50 samples. System administrators only.
+         * @description Files tab: report of orphaned uploads, files on disk that no DB row  references, by category, with up to 50 samples. System administrators only.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/files/route.ts)
          */
@@ -375,7 +375,7 @@ export interface paths {
         put?: never;
         /**
          * List submissions for problems (admin)
-         * @description Returns every submission across a set of problems, flattened for the admin  grading view — student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.
+         * @description Returns every submission across a set of problems, flattened for the admin  grading view: student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/submissions/route.ts)
          */
@@ -397,7 +397,7 @@ export interface paths {
         put?: never;
         /**
          * Bulk-create users
-         * @description Bulk-creates user accounts from parsed spreadsheet rows (the CSV import flow).  System administrators only. Accounts are created with no global role. Each row  is validated independently — a bad row  is collected in `failed` with a reason rather than aborting the batch — so the  response always reports per-row created/failed outcomes. Duplicate emails are  caught both within the batch and against existing users. `temporaryPasswords`  forces a reset at first login.
+         * @description Bulk-creates user accounts from parsed spreadsheet rows (the CSV import flow).  System administrators only. Accounts are created with no global role. Each row  is validated independently: a bad row  is collected in `failed` with a reason rather than aborting the batch, so the  response always reports per-row created/failed outcomes. Duplicate emails are  caught both within the batch and against existing users. `temporaryPasswords`  forces a reset at first login.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/bulk/route.ts)
          */
@@ -467,7 +467,7 @@ export interface paths {
         };
         /**
          * List an assignment's problems
-         * @description Lists an assignment's problems, tagged with whether the caller has solved each  (a correct submission) and their grade. For group assignments, visibility follows  the caller's group — unassigned problems show to everyone, group-mapped ones only  to that group's members. Course faculty or a system admin (TAs excluded).
+         * @description Lists an assignment's problems, tagged with whether the caller has solved each  (a correct submission) and their grade. For group assignments, visibility follows  the caller's group: unassigned problems show to everyone, group-mapped ones only  to that group's members. Course faculty or a system admin (TAs excluded).
          *
          *     **Auth:** required
          *
@@ -491,7 +491,7 @@ export interface paths {
         };
         /**
          * Check whether an email is registered
-         * @description Reports whether an email is already registered, so the signup form can warn  before submitting. Unauthenticated by design; it therefore leaks account  existence, which is an accepted trade-off for signup UX — but it is IP rate-limited  so it can't be used to bulk-enumerate accounts, and it only ever returns a boolean.
+         * @description Reports whether an email is already registered, so the signup form can warn  before submitting. Unauthenticated by design; it therefore leaks account  existence, which is an accepted trade-off for signup UX, but it is IP rate-limited  so it can't be used to bulk-enumerate accounts, and it only ever returns a boolean.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/auth/check-email/route.ts)
          */
@@ -601,7 +601,7 @@ export interface paths {
         };
         /**
          * List a course's assignments + problems (client)
-         * @description A course's **published** assignments and their problems, for the token's user  (client screen after picking a course). Includes each problem's type, per-assignment  maxPoints/maxSubmissions, the student's grade, attempt count, and latest status —  never the answer-key file. A course the caller can't reach is masked as 404.
+         * @description A course's **published** assignments and their problems, for the token's user  (client screen after picking a course). Includes each problem's type, per-assignment  maxPoints/maxSubmissions, the student's grade, attempt count, and latest status;  never the answer-key file. A course the caller can't reach is masked as 404.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/courses/[courseId]/assignments/route.ts)
          */
@@ -623,7 +623,7 @@ export interface paths {
         };
         /**
          * List my courses (client)
-         * @description The signed-in user's courses (slim shape for the client), scoped to the token's  user — same visibility as the web app: enrolled, non-deleted courses that are  published or where the user is staff.
+         * @description The signed-in user's courses (slim shape for the client), scoped to the token's  user, same visibility as the web app: enrolled, non-deleted courses that are  published or where the user is staff.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/courses/route.ts)
          */
@@ -645,7 +645,7 @@ export interface paths {
         };
         /**
          * Get a submission's result (client)
-         * @description The result of one submission — for polling after a submit. Returns the queue  `status` (PENDING/PROCESSING/COMPLETED/FAILED) and, once evaluated, whether it was  `correct`, the `grade`, and the `feedback` (the witness / counterexample string).  A caller may read their own submission; staff may read anyone's in their course.  Anything else is masked as 404.
+         * @description The result of one submission, for polling after a submit. Returns the queue  `status` (PENDING/PROCESSING/COMPLETED/FAILED) and, once evaluated, whether it was  `correct`, the `grade`, and the `feedback` (the witness / counterexample string).  A caller may read their own submission; staff may read anyone's in their course.  Anything else is masked as 404.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/[submissionId]/route.ts)
          */
@@ -667,7 +667,7 @@ export interface paths {
         };
         /**
          * List my submissions for a problem (client)
-         * @description The caller's own submission history for one problem (attempt list), newest first —  so the client can show past attempts and drill into any one's result via  `GET /submissions/{id}`. Scoped to the token's user, so it never exposes anyone  else's work.
+         * @description The caller's own submission history for one problem (attempt list), newest first,  so the client can show past attempts and drill into any one's result via  `GET /submissions/{id}`. Scoped to the token's user, so it never exposes anyone  else's work.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/route.ts)
          */
@@ -675,7 +675,7 @@ export interface paths {
         put?: never;
         /**
          * Submit a solution (client)
-         * @description Submit a solution file (client). Same multipart body, validation, caps, cooldown,  late policy, storage, and queueing as the web `/api/submissions` — it runs the same  `createSubmission` service — but authenticated by a bearer token. Returns 202 with  the new submission's id + status.
+         * @description Submit a solution file (client). Same multipart body, validation, caps, cooldown,  late policy, storage, and queueing as the web `/api/submissions` (it runs the same  `createSubmission` service) but authenticated by a bearer token. Returns 202 with  the new submission's id + status.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/route.ts)
          */
@@ -706,7 +706,7 @@ export interface paths {
         post: operations["postComments"];
         /**
          * Delete a comment
-         * @description Deletes a comment by id. Comments are immutable to students — **only course staff  (faculty or TAs) or a system admin may delete**, including deleting their own.  A student cannot delete a comment they authored.
+         * @description Deletes a comment by id. Comments are immutable to students: **only course staff  (faculty or TAs) or a system admin may delete**, including deleting their own.  A student cannot delete a comment they authored.
          *
          *     **Auth:** required
          *
@@ -727,7 +727,7 @@ export interface paths {
         };
         /**
          * Get a course's activity feed
-         * @description Returns a paginated activity feed for one course — logs tied directly to the  course plus its assignments, problems, submissions, and recent logins by course  members. Any enrolled member of the course (any role) or a system admin.
+         * @description Returns a paginated activity feed for one course: logs tied directly to the  course plus its assignments, problems, submissions, and recent logins by course  members. Any enrolled member of the course (any role) or a system admin.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/activity/route.ts)
          */
@@ -755,7 +755,7 @@ export interface paths {
         head?: never;
         /**
          * Archive or unarchive a course
-         * @description Toggles a course's archived state. **Both archiving and un-archiving are  admin-only** — freezing a course (or reopening a frozen one to edits) is a  privileged action. Archiving also runs a safety check (canArchiveCourse) using  the course's stored dates rather than any client value, to avoid timezone drift  deciding whether a course has really ended.
+         * @description Toggles a course's archived state. **Both archiving and un-archiving are  admin-only**: freezing a course (or reopening a frozen one to edits) is a  privileged action. Archiving also runs a safety check (canArchiveCourse) using  the course's stored dates rather than any client value, to avoid timezone drift  deciding whether a course has really ended.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/archive/route.ts)
          */
@@ -780,7 +780,7 @@ export interface paths {
         post?: never;
         /**
          * Remove group→problem mappings
-         * @description Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or  a system admin. A `groupId` is required — pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
+         * @description Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or  a system admin. A `groupId` is required: pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/group-problems/route.ts)
          */
@@ -807,7 +807,7 @@ export interface paths {
         put?: never;
         /**
          * Batch set/clear a student's problem grades for an assignment
-         * @description Batch-saves this student's problem grades for the assignment in a single request —  the write counterpart to the GET above (co-located as the same resource). The body  maps problemId → grade (a number within [0, maxPoints], or null to clear). Course  staff (faculty or TAs) or a system admin. Only problems whose grade actually changed  are written: a null for a graded problem deletes it, a number upserts it (existing  feedback is left untouched), and unchanged problems are skipped. Every applied change  is audited with its previous value, mirroring the single-problem grade route.
+         * @description Batch-saves this student's problem grades for the assignment in a single request;  the write counterpart to the GET above (co-located as the same resource). The body  maps problemId → grade (a number within [0, maxPoints], or null to clear). Course  staff (faculty or TAs) or a system admin. Only problems whose grade actually changed  are written: a null for a graded problem deletes it, a number upserts it (existing  feedback is left untouched), and unchanged problems are skipped. Every applied change  is audited with its previous value, mirroring the single-problem grade route.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/[studentId]/route.ts)
          */
@@ -901,7 +901,7 @@ export interface paths {
         put?: never;
         /**
          * Add problems to an assignment
-         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked — existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
+         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked; existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
          */
@@ -973,7 +973,7 @@ export interface paths {
         head?: never;
         /**
          * Update a course assignment (partial)
-         * @description Partial update of an assignment — only the fields present in the body are changed.  Course staff (faculty or TAs) or a system admin, with the same unpublish/group-mode  guards and late-window validation as the full update.
+         * @description Partial update of an assignment: only the fields present in the body are changed.  Course staff (faculty or TAs) or a system admin, with the same unpublish/group-mode  guards and late-window validation as the full update.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
          */
@@ -1041,7 +1041,7 @@ export interface paths {
         put?: never;
         /**
          * Create a course assignment
-         * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the **course's** timezone. Late  submissions and their cutoff must agree — a cutoff is required when late is on,  forbidden when off, and must fall on or after the due date.
+         * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the **course's** timezone. Late  submissions and their cutoff must agree: a cutoff is required when late is on,  forbidden when off, and must fall on or after the due date.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/route.ts)
          */
@@ -1063,7 +1063,7 @@ export interface paths {
         put?: never;
         /**
          * Duplicate a course
-         * @description Creates a new course modeled on an existing one, in a single transaction. The  copy's faculty comes from the copied faculty roster and/or an explicit  `instructorIds` list — at least one faculty member is required (the caller is  NOT added automatically). TAs are copied only when asked. `copyMode` (or the  legacy copyAssignments/copyProblems booleans) selects what carries over:  assignments only, problems only, or assignments with their problems. The copy  always starts unpublished with a fresh registration code. System administrators  only. Dates are interpreted in the actor's timezone.
+         * @description Creates a new course modeled on an existing one, in a single transaction. The  copy's faculty comes from the copied faculty roster and/or an explicit  `instructorIds` list; at least one faculty member is required (the caller is  NOT added automatically). TAs are copied only when asked. `copyMode` (or the  legacy copyAssignments/copyProblems booleans) selects what carries over:  assignments only, problems only, or assignments with their problems. The copy  always starts unpublished with a fresh registration code. System administrators  only. Dates are interpreted in the actor's timezone.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/duplicate/route.ts)
          */
@@ -1111,7 +1111,7 @@ export interface paths {
         };
         /**
          * List all group memberships for a course
-         * @description Lists every group membership for the course in one call — the aggregate that  replaces fetching each group's members separately when resolving which group a  student belongs to. Course staff (faculty or TAs) or a system admin. Returns the  raw (userId, groupId) pairs; callers that need a userId→group map build it in  their own preferred group order.
+         * @description Lists every group membership for the course in one call; the aggregate that  replaces fetching each group's members separately when resolving which group a  student belongs to. Course staff (faculty or TAs) or a system admin. Returns the  raw (userId, groupId) pairs; callers that need a userId→group map build it in  their own preferred group order.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/group-memberships/route.ts)
          */
@@ -1253,7 +1253,7 @@ export interface paths {
         put?: never;
         /**
          * Look up users by email
-         * @description Resolves a list of emails to user records, splitting them into `found` and  `notFound` — used by the roster importer to preview who exists before enrolling.  Matching is case-insensitive regardless of DB collation. Restricted to course  staff (faculty or TAs) or a system admin: only someone who can manage the course  in the path may resolve emails to accounts.
+         * @description Resolves a list of emails to user records, splitting them into `found` and  `notFound`, used by the roster importer to preview who exists before enrolling.  Matching is case-insensitive regardless of DB collation. Restricted to course  staff (faculty or TAs) or a system admin: only someone who can manage the course  in the path may resolve emails to accounts.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/lookup-users/route.ts)
          */
@@ -1274,7 +1274,7 @@ export interface paths {
         get?: never;
         /**
          * Update a course problem
-         * @description Updates a problem within a course (multipart/form-data). Course staff (faculty or  TAs) or a system admin. The problem must belong to the course in the path. Sending a  new file replaces the stored solution — it's structure-validated and size-checked  first, and the previous file is removed. Omitting the file keeps the current one.
+         * @description Updates a problem within a course (multipart/form-data). Course staff (faculty or  TAs) or a system admin. The problem must belong to the course in the path. Sending a  new file replaces the stored solution; it's structure-validated and size-checked  first, and the previous file is removed. Omitting the file keeps the current one.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/[pid]/route.ts)
          */
@@ -1345,7 +1345,7 @@ export interface paths {
         };
         /**
          * Get a roster entry
-         * @description Returns one roster entry (with the user's profile) plus the viewer's own course  role and an `viewerIsAdmin` flag, so the UI can decide which actions to offer.  Access is tiered: the caller must be a member of the course (the wrapper enforces  this), and a non-staff member may only read their OWN entry — course staff  (faculty/TA) and admins may read anyone's. `userId` may be the literal "me" to  target the caller.
+         * @description Returns one roster entry (with the user's profile) plus the viewer's own course  role and an `viewerIsAdmin` flag, so the UI can decide which actions to offer.  Access is tiered: the caller must be a member of the course (the wrapper enforces  this), and a non-staff member may only read their OWN entry; course staff  (faculty/TA) and admins may read anyone's. `userId` may be the literal "me" to  target the caller.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
@@ -1354,7 +1354,7 @@ export interface paths {
         post?: never;
         /**
          * Remove a user from a course
-         * @description Removes a user from a course roster. Permission is tiered: the shared wrapper  admits global admins and course faculty only (TAs and students are rejected up  front); the remaining rule — a faculty member may not remove another faculty  member — is enforced here (a global admin may). Two safety rules block the removal  outright: the user must have no submissions in the course, and a course can't lose  its last faculty member.
+         * @description Removes a user from a course roster. Permission is tiered: the shared wrapper  admits global admins and course faculty only (TAs and students are rejected up  front); the remaining rule (a faculty member may not remove another faculty  member) is enforced here (a global admin may). Two safety rules block the removal  outright: the user must have no submissions in the course, and a course can't lose  its last faculty member.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
@@ -1403,7 +1403,7 @@ export interface paths {
         put?: never;
         /**
          * Enroll a user in a course
-         * @description Adds (or re-roles) a single user on a course roster. Course staff (faculty or  TAs) or a system admin. The user is always added as a STUDENT — callers don't  pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
+         * @description Adds (or re-roles) a single user on a course roster. Course staff (faculty or  TAs) or a system admin. The user is always added as a STUDENT; callers don't  pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/route.ts)
          */
@@ -1442,7 +1442,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a course
-         * @description Deletes a course (system admin only). An **empty** course — no assignments, no  problems, no student enrollments, and no submissions — is removed permanently  (its staff-only roster cascades away; audit logs keep a nulled course pointer).  Any course that holds real work or students is **soft-deleted** instead: the row  and all its data are retained but `deletedAt` is stamped so the access gates and  list queries treat it as gone (recoverable later). The response says which  happened via `{ deleted: 'hard' | 'soft' }`.
+         * @description Deletes a course (system admin only). An **empty** course (no assignments, no  problems, no student enrollments, and no submissions) is removed permanently  (its staff-only roster cascades away; audit logs keep a nulled course pointer).  Any course that holds real work or students is **soft-deleted** instead: the row  and all its data are retained but `deletedAt` is stamped so the access gates and  list queries treat it as gone (recoverable later). The response says which  happened via `{ deleted: 'hard' | 'soft' }`.
          *
          *     **Auth:** requires FACULTY / TA / STUDENT
          *
@@ -1463,7 +1463,7 @@ export interface paths {
         };
         /**
          * Get my grades for a course
-         * @description Returns the signed-in student's own grade breakdown for a course — published  assignments, their problems, and per-problem grade, latest submission status,  and attempt count. Available to enrolled members (viewing their own data) and  to staff.
+         * @description Returns the signed-in student's own grade breakdown for a course: published  assignments, their problems, and per-problem grade, latest submission status,  and attempt count. Available to enrolled members (viewing their own data) and  to staff.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/student-grades/route.ts)
          */
@@ -1509,7 +1509,7 @@ export interface paths {
         put?: never;
         /**
          * Rerun all submissions in a course
-         * @description Re-queues every submission in a course, resetting each to PENDING and clearing its  feedback/result — the bulk counterpart to the single-submission rerun. Course staff  (faculty or TAs) or a system admin. Logs each submission plus one batch-summary  event, and returns the count re-queued.
+         * @description Re-queues every submission in a course, resetting each to PENDING and clearing its  feedback/result: the bulk counterpart to the single-submission rerun. Course staff  (faculty or TAs) or a system admin. Logs each submission plus one batch-summary  event, and returns the count re-queued.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/submissions/rerun/route.ts)
          */
@@ -1553,7 +1553,7 @@ export interface paths {
         };
         /**
          * List all courses
-         * @description Returns every course with its roster and assignment metadata. System administrators only — the payload spans all courses and includes every member's identity and each course's registration code.
+         * @description Returns every course with its roster and assignment metadata. System administrators only; the payload spans all courses and includes every member's identity and each course's registration code.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/route.ts)
          */
@@ -1561,7 +1561,7 @@ export interface paths {
         put?: never;
         /**
          * Create a course
-         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. A new course is  always created unpublished — publishing is a separate action — and requires at  least one faculty member. Datetime-local strings are interpreted in the course's  timezone before being stored as UTC.
+         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. A new course is  always created unpublished (publishing is a separate action) and requires at  least one faculty member. Datetime-local strings are interpreted in the course's  timezone before being stored as UTC.
          *
          *     **Auth:** requires FACULTY / TA
          *
@@ -1583,7 +1583,7 @@ export interface paths {
         };
         /**
          * List my started courses
-         * @description Returns the signed-in user's own started, non-archived courses (id + name),  used by pickers that only make sense for courses already underway. Note: the  `email` path segment is ignored — results are always scoped to the caller's  id, so one user can't enumerate another's courses.
+         * @description Returns the signed-in user's own started, non-archived courses (id + name),  used by pickers that only make sense for courses already underway. Note: the  `email` path segment is ignored; results are always scoped to the caller's  id, so one user can't enumerate another's courses.
          *
          *     **Auth:** required
          *
@@ -1631,7 +1631,7 @@ export interface paths {
         };
         /**
          * Get a problem file
-         * @description Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system  admin only** — a problem file is the autograder's answer/solution key, so a student  must never receive it (same sensitivity as a solution file). The download is audited,  and traversal filenames are rejected.
+         * @description Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system  admin only**: a problem file is the autograder's answer/solution key, so a student  must never receive it (same sensitivity as a solution file). The download is audited,  and traversal filenames are rejected.
          *
          *     **Auth:** required
          *
@@ -1655,7 +1655,7 @@ export interface paths {
         };
         /**
          * Get a solution file
-         * @description Serves a problem's solution file — the most sensitive protected material, so  access is limited to course staff (faculty or TAs) or a system admin, and every  successful serve is audited (both inline and `?download=1`). Traversal filenames  are rejected.
+         * @description Serves a problem's solution file, the most sensitive protected material, so  access is limited to course staff (faculty or TAs) or a system admin, and every  successful serve is audited (both inline and `?download=1`). Traversal filenames  are rejected.
          *
          *     **Auth:** required
          *
@@ -1727,7 +1727,7 @@ export interface paths {
         put?: never;
         /**
          * List my assignments in a date range
-         * @description Returns the assignments visible to the signed-in user whose due dates fall in a  date range — the data behind the calendar view. Role-based visibility is applied  inside getAssignmentsForUserRange. Bare dates are widened to cover the whole day  in the user's timezone.
+         * @description Returns the assignments visible to the signed-in user whose due dates fall in a  date range: the data behind the calendar view. Role-based visibility is applied  inside getAssignmentsForUserRange. Bare dates are widened to cover the whole day  in the user's timezone.
          *
          *     **Auth:** required
          *
@@ -1749,7 +1749,7 @@ export interface paths {
         };
         /**
          * List my courses
-         * @description Lists the courses visible to the signed-in user, in one of two shapes selected by  the `view` query param:    - default: the full role-scoped list (a student sees their published      enrollments; staff/admins see more), shaped by getCoursesListForUser.    - `view=nav`: a compact list for the sidebar navigation — only the caller's      enrolled courses (published-only for students), with just the fields the nav      needs (id, name, code, publish/archive flags), newest first.
+         * @description Lists the courses visible to the signed-in user, in one of two shapes selected by  the `view` query param:    - default: the full role-scoped list (a student sees their published      enrollments; staff/admins see more), shaped by getCoursesListForUser.    - `view=nav`: a compact list for the sidebar navigation, only the caller's      enrolled courses (published-only for students), with just the fields the nav      needs (id, name, code, publish/archive flags), newest first.
          *
          *     **Auth:** requires FACULTY / TA / ADMIN / STUDENT
          *
@@ -1855,7 +1855,7 @@ export interface paths {
         put?: never;
         /**
          * Keep the current session active
-         * @description Records that the signed-in user is still active, resetting the client-side  inactivity timer. This is an audit/telemetry ping — the JWT session lifetime  is managed by NextAuth and is not altered here.
+         * @description Records that the signed-in user is still active, resetting the client-side  inactivity timer. This is an audit/telemetry ping; the JWT session lifetime  is managed by NextAuth and is not altered here.
          *
          *     **Auth:** required
          *
@@ -1925,7 +1925,7 @@ export interface paths {
         };
         /**
          * Get public system settings
-         * @description The safe subset of system settings the login and signup screens need before a  user is authenticated. Deliberately public and limited to non-sensitive values  — notably the hCaptcha *site* key, never the secret.
+         * @description The safe subset of system settings the login and signup screens need before a  user is authenticated. Deliberately public and limited to non-sensitive values  (notably the hCaptcha *site* key, never the secret).
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/public/route.ts)
          */
@@ -2740,7 +2740,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description A DB row still references this file — refused. */
+            /** @description A DB row still references this file; refused. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2990,7 +2990,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Per-row outcome — a summary plus created and failed lists. */
+            /** @description Per-row outcome (a summary plus created and failed lists). */
             200: {
                 headers: {
                     [name: string]: unknown;

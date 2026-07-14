@@ -12,7 +12,7 @@ type Props = {
 export default async function CourseLayout({ children, params }: Props) {
   const { id } = await params;
   // Only expose the course name (via the breadcrumb) to someone who may access
-  // the course — a system admin or an enrolled member. This mirrors the gate on
+  // the course: a system admin or an enrolled member. This mirrors the gate on
   // the page itself so a non-member can't learn a course's name from the URL,
   // and it doesn't rely on Next discarding this layout when the page 404s.
   const session = await auth();

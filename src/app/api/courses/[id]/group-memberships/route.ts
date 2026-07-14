@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
- * Lists every group membership for the course in one call — the aggregate that
+ * Lists every group membership for the course in one call; the aggregate that
  * replaces fetching each group's members separately when resolving which group a
  * student belongs to. Course staff (faculty or TAs) or a system admin. Returns the
  * raw (userId, groupId) pairs; callers that need a userId→group map build it in

@@ -6,7 +6,7 @@ labels: bug
 assignees: ''
 ---
 
-<!-- Do NOT report security vulnerabilities here — see SECURITY.md for private reporting. -->
+<!-- Do NOT report security vulnerabilities here; see SECURITY.md for private reporting. -->
 
 ## Description
 

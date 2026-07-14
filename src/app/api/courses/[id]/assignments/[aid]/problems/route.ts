@@ -42,7 +42,7 @@ interface AssignmentWithProblems {
 // `string | undefined`) under noUncheckedIndexedAccess.
 type RouteCtx = { params: Promise<{ id: string; aid: string }> };
 
-// Envelope for POST (associate problems). Lenient by design — a malformed
+// Envelope for POST (associate problems). Lenient by design: a malformed
 // problemIds/groupId falls back rather than 400ing (`problemSettings` is validated
 // separately so it can return its own specific error). `groupId` is a group id or 'ALL'.
 const AssociateProblemsBodySchema = z
@@ -55,7 +55,7 @@ const AssociateProblemsBodySchema = z
 /**
  * Attaches problems to an assignment with per-problem settings (points, submission
  * cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already
- * linked — existing links, especially those with submissions, are preserved and
+ * linked; existing links, especially those with submissions, are preserved and
  * reported back. For group assignments, an optional `groupId` (or "ALL") maps the
  * given problems to specific groups, even ones already on the assignment. Only
  * problems belonging to this course are accepted.

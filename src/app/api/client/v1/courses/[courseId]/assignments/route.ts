@@ -10,7 +10,7 @@ type RouteCtx = { params: Promise<{ courseId: string }> };
 /**
  * A course's **published** assignments and their problems, for the token's user
  * (client screen after picking a course). Includes each problem's type, per-assignment
- * maxPoints/maxSubmissions, the student's grade, attempt count, and latest status —
+ * maxPoints/maxSubmissions, the student's grade, attempt count, and latest status;
  * never the answer-key file. A course the caller can't reach is masked as 404.
  * @openapi
  * summary: List a course's assignments + problems (client)
@@ -32,7 +32,7 @@ export const GET = withClientAuth(async (_req, ctx: RouteCtx, { user }) => {
   const { courseId } = await ctx.params;
 
   // Hide existence from anyone who can't reach the course (not enrolled, or a student
-  // on an unpublished course) — 404, not 403.
+  // on an unpublished course): 404, not 403.
   if (!(await canAccessCourse(user, courseId))) {
     return apiError(404, 'Course not found');
   }

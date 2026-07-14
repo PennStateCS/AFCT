@@ -92,14 +92,14 @@ export default function AssignmentDashboardPage({
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
   const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
 
-  // Assignment shell — cached and keyed to this course/assignment via the shared
+  // Assignment shell, cached and keyed to this course/assignment via the shared
   // queryKeys.assignment.shell key, so this privileged view and the embedded
   // StudentNavigator (plus StudentAssignmentView / the max-points cell) dedupe onto
   // one read of the same ?view=problems payload instead of fetching it twice.
   // Seeded from the SSR-provided initialAssignment (view=problems shape) so there's
   // no refetch on mount when the server already sent it, and back-navigation is
   // warm. Mutations invalidate this key, triggering a background refetch that does
-  // NOT blank the page — the previous data stays visible until the new payload
+  // NOT blank the page; the previous data stays visible until the new payload
   // arrives.
   const assignmentQuery = useQuery({
     queryKey: queryKeys.assignment.shell(id, aid),
@@ -166,7 +166,7 @@ export default function AssignmentDashboardPage({
     [searchParams, router],
   );
 
-  // Read 1 — all course problems (used by the problems tab and the add/create
+  // Read 1: all course problems (used by the problems tab and the add/create
   // dialogs). Only fetched when one of those surfaces needs it. On any failure
   // the queryFn returns [] (no toast), matching the previous .catch behavior.
   const problemsEnabled = tab === 'problems' || addProblemDialogOpen || createProblemOpen;
@@ -186,7 +186,7 @@ export default function AssignmentDashboardPage({
   const allProblems = problemsQuery.data?.problems ?? [];
   const problemsLoading = problemsEnabled && problemsQuery.isFetching;
 
-  // Read 2 — assignment list for the dropdown. Seeded from the SSR-provided
+  // Read 2: assignment list for the dropdown. Seeded from the SSR-provided
   // initialAssignments so there's no refetch on mount when the server sent it.
   const assignmentsQuery = useQuery({
     queryKey: ['course', id, 'assignments-list'],
@@ -206,7 +206,7 @@ export default function AssignmentDashboardPage({
   const allAssignments = assignmentsQuery.data ?? [];
   const assignmentsLoading = assignmentsQuery.isFetching;
 
-  // Read 3 — for a group assignment, fetch groups and the mapping of
+  // Read 3: for a group assignment, fetch groups and the mapping of
   // problems -> groups. Only runs for group assignments. TanStack Query cancels
   // in-flight fetches via the AbortSignal, so no manual AbortController plumbing.
   const groupsEnabled = !!id && !!aid && !!assignment?.isGroup;
@@ -652,7 +652,7 @@ export default function AssignmentDashboardPage({
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}
           // Edit the due date in the COURSE's zone (what the server stores it in), not
-          // the viewer's — otherwise saving would shift the deadline.
+          // the viewer's, otherwise saving would shift the deadline.
           timeZone={assignment.course?.timezone ?? timezone}
           assignment={{
             ...assignment,

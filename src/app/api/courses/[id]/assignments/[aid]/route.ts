@@ -129,7 +129,7 @@ async function assertAssignmentMutable(
  * `maxPoints`. This is the single canonical assignment read (it absorbed the former
  * global `GET /api/assignments/[id]`). Access: the caller must be an enrolled member
  * of the course or a system admin. Course staff (faculty/TA) and admins see any
- * assignment and — in the `full` view — the course roster; non-staff members see only
+ * assignment and (in the `full` view) the course roster; non-staff members see only
  * published assignments (unpublished are 404-masked) and never receive the roster.
  * @openapi
  * summary: Get a course assignment
@@ -413,7 +413,7 @@ export const PUT = withCourseAuth(
 );
 
 /**
- * Partial update of an assignment — only the fields present in the body are changed.
+ * Partial update of an assignment: only the fields present in the body are changed.
  * Course staff (faculty or TAs) or a system admin, with the same unpublish/group-mode
  * guards and late-window validation as the full update.
  * @openapi

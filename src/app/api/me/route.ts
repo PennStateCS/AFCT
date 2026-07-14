@@ -110,7 +110,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Avatar must be an image file.' }, { status: 400 });
       }
       // Store under a random, non-client-derived name (userId prefix + UUID +
-      // sanitized extension) and write through the traversal-safe resolver —
+      // sanitized extension) and write through the traversal-safe resolver,
       // matching the other upload paths.
       const bytes = await avatar.arrayBuffer();
       const buffer = Buffer.from(bytes);

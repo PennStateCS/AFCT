@@ -165,7 +165,7 @@ export async function collectSystem(): Promise<SystemBlock> {
   };
 }
 
-/** External tool versions — cached, since a `java -version` exec is slow and static. */
+/** External tool versions, cached, since a `java -version` exec is slow and static. */
 async function detectJavaVersion(): Promise<string | undefined> {
   try {
     const out = execSync('java -version 2>&1', {

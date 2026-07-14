@@ -172,7 +172,7 @@ describe('GET /api/courses/[id]/grades', () => {
   });
 
   it('treats null problem maxPoints as 0 when summing assignment points', async () => {
-    // Branch 157: `Number(p.maxPoints ?? 0)` — a problem with null maxPoints.
+    // Branch 157: `Number(p.maxPoints ?? 0)`, a problem with null maxPoints.
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);

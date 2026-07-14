@@ -85,7 +85,7 @@ describe('POST /api/comments', () => {
 
   it('404-masks an unpublished assignment for a student commenter', async () => {
     // An enrolled student may comment on published assignments, but not on an
-    // unpublished one — it stays invisible (404), and no comment is created.
+    // unpublished one: it stays invisible (404), and no comment is created.
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isPublished: false });
     prismaMock.roster.findFirst.mockResolvedValue({
@@ -115,7 +115,7 @@ describe('POST /api/comments', () => {
       content: 'Admin note',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
       author: { id: 'admin-1', firstName: 'Admin', lastName: 'User', avatar: null },
-      roster: null, // no course role — not rostered
+      roster: null, // no course role, not rostered
     });
 
     const req = new NextRequest('http://localhost/api/comments', {

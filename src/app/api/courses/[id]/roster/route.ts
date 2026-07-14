@@ -10,7 +10,7 @@ const EnrollBody = z.object({ userId: z.string().min(1, 'Missing userId') });
 
 /**
  * Adds (or re-roles) a single user on a course roster. Course staff (faculty or
- * TAs) or a system admin. The user is always added as a STUDENT — callers don't
+ * TAs) or a system admin. The user is always added as a STUDENT; callers don't
  * pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
  * @openapi
  * summary: Enroll a user in a course

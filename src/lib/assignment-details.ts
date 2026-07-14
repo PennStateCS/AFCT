@@ -12,7 +12,7 @@ export type AssignmentCourseSummary = {
   name: string;
   code?: string;
   isArchived?: boolean;
-  /** The course's canonical timezone — anchors deadlines; used for dual-zone display. */
+  /** The course's canonical timezone; anchors deadlines; used for dual-zone display. */
   timezone?: string | null;
   roster?: Array<{
     role: CourseRole | null;

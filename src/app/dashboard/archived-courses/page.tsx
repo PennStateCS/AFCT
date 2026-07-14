@@ -18,9 +18,9 @@ export default async function ArchivedCoursesPage() {
     );
   }
 
-  // Same role-scoped list as the main Courses page — admins see every course,
+  // Same role-scoped list as the main Courses page: admins see every course,
   // everyone else only the ones they're on the roster of (published, or any they
-  // staff) — then narrowed to the archived ones for this page.
+  // staff); then narrowed to the archived ones for this page.
   const listRole = session.user.isAdmin ? 'ADMIN' : 'STUDENT';
   const all = await getCoursesListForUser(session.user.id, listRole);
   const archived = all.filter((course) => course.isArchived);

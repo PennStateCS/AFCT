@@ -7,7 +7,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 
 // The export-log body is optional and purely descriptive (it only feeds the audit
 // log), so every field is lenient with a safe fallback and the whole parse can't
-// throw — a missing or malformed body still records the export.
+// throw; a missing or malformed body still records the export.
 const GradesExportLogSchema = z
   .object({
     platform: z.string().catch('unknown').default('unknown'),

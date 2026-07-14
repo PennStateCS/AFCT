@@ -49,7 +49,7 @@ describe('withClientAuth', () => {
     expect(res.status).toBe(401);
     expect(handler).not.toHaveBeenCalled();
     expect(resolveMock).toHaveBeenCalledWith('bad');
-    // Wait a tick — the log is fire-and-forget (void).
+    // Wait a tick; the log is fire-and-forget (void).
     await Promise.resolve();
     expect(logMock).toHaveBeenCalledWith(
       expect.anything(),

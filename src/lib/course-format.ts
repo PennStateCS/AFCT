@@ -38,7 +38,7 @@ type EnrolledMember = {
 
 /**
  * Reduce an `enrolled` list to what a non-staff (student) viewer is allowed to
- * see. Course staff — FACULTY and TAs — keep their name and avatar because the UI
+ * see. Course staff (FACULTY and TAs) keep their name and avatar because the UI
  * labels the course with them, but never their email. Every other member (i.e.
  * fellow students) collapses to a role-only placeholder: this preserves the
  * student *count* the UI derives from the list while exposing no classmate id,
@@ -63,7 +63,7 @@ export function toStudentSafeEnrolled(enrolled: EnrolledMember[]): Array<{
       };
     }
     // Students (and any non-staff role) become count-only placeholders: an empty,
-    // non-identifying id (never rendered — students see no roster list) so the
+    // non-identifying id (never rendered; students see no roster list) so the
     // shape stays valid, and no name/email/real id.
     return { id: '', courseRole: courseRole || 'STUDENT' };
   });

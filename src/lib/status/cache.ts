@@ -1,6 +1,6 @@
 /**
  * Tiny TTL memo for the status collectors. The status dashboard polls every ~15s,
- * but some probes are expensive and rarely change between polls — a blocking
+ * but some probes are expensive and rarely change between polls: a blocking
  * `java -version` / evaluator-jar exec, DNS lookups, a TLS handshake. Wrapping
  * those in `cached(key, ttl, …)` means a poll reuses a recent result instead of
  * re-running the probe every time.
@@ -30,8 +30,8 @@ export function clearStatusCache(): void {
 
 /** Common TTLs, in ms. */
 export const STATUS_TTL = {
-  /** Tool versions (java, evaluator) — effectively static for a running process. */
+  /** Tool versions (java, evaluator): effectively static for a running process. */
   versions: 5 * 60_000,
-  /** DNS resolution + TLS certificate expiry — slow-changing infra facts. */
+  /** DNS resolution + TLS certificate expiry: slow-changing infra facts. */
   network: 60_000,
 } as const;

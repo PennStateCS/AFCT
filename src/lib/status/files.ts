@@ -22,7 +22,7 @@ const readFiles = async (dir: string): Promise<string[]> => {
 };
 
 /**
- * Report of orphaned uploads — files on disk under /private/uploads/<category>
+ * Report of orphaned uploads: files on disk under /private/uploads/<category>
  * that no DB row references. Samples are capped at 50. Any unreadable directory
  * contributes nothing (the whole report degrades to empty on total failure).
  */

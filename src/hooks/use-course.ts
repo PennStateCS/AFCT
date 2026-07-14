@@ -29,12 +29,12 @@ const normalizeCourse = (data: FullCourse): FullCourse => ({
 /**
  * Course data hook backed by the TanStack Query cache. The base view is a real
  * `useQuery`, so mounting, deduping, warm back-navigation, error/loading state,
- * and retries are all handled by Query — there is no mirrored `useState`. The
+ * and retries are all handled by Query; there is no mirrored `useState`. The
  * base cache entry IS the rendered course: `setCourse` writes to it via
  * `setQueryData`, so optimistic updates re-render through the query, and the
  * lazily-loaded section tabs (assignments/problems/roster) merge into the same
  * entry. Because that entry accumulates merged sections, its `staleTime` is
- * `Infinity` — a background refetch would clobber the merge; the course is
+ * `Infinity`: a background refetch would clobber the merge; the course is
  * refreshed only explicitly via `refetchCourse` (or optimistic `setCourse`).
  */
 export function useCourseData(
@@ -69,7 +69,7 @@ export function useCourseData(
     if (isError) showToast.error('Failed to load course');
   }, [isError]);
 
-  // Optimistic updates write straight to the base cache entry — `useQuery` then
+  // Optimistic updates write straight to the base cache entry; `useQuery` then
   // re-renders `course` from it. Same Dispatch signature as the old useState
   // setter, so `course-handlers` and its `updateCourseAfter*` helpers are unchanged.
   const setCourse = useCallback<Dispatch<SetStateAction<FullCourse | null>>>(
@@ -103,7 +103,7 @@ export function useCourseData(
       if (section !== 'assignments' && section !== 'problems' && section !== 'roster') return;
       // Only show the section spinner on a COLD cache. When the entry is already
       // cached, switching to the tab renders instantly (fetchQuery returns the
-      // cached data within staleTime with no refetch) — so flipping the loading
+      // cached data within staleTime with no refetch), so flipping the loading
       // flag would just flash a needless spinner on every tab switch.
       const hasCached = queryClient.getQueryData(courseQueryKey(courseId, section)) !== undefined;
       try {
@@ -148,7 +148,7 @@ export function useCourseData(
   }, [courseId, queryClient]);
 
   // A student whose SSR payload was summary-shaped (no assignments) needs the full
-  // view. staleTime:Infinity won't auto-refetch, so force it once — the ref stops
+  // view. staleTime:Infinity won't auto-refetch, so force it once; the ref stops
   // a genuinely empty course from looping.
   const forcedStudentFull = useRef(false);
   useEffect(() => {
