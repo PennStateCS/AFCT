@@ -2189,6 +2189,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Target user not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Reset failed. */
             500: {
                 headers: {
@@ -6805,7 +6814,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not signed in, or the target user is inactive. */
+            /** @description Not signed in. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -6825,6 +6834,15 @@ export interface operations {
             };
             /** @description Target user not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The target user is inactive. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
