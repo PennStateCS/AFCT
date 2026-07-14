@@ -11,7 +11,7 @@ WORKDIR /app
 # the DB wait in the entrypoint; tini is PID 1; curl is handy for debugging.
 # fontconfig + a base font are required by the Java evaluator: JFLAP's Universe
 # class initializes Swing (a JFileChooser) even in CLI mode, which needs font
-# metrics — without them the JRE throws "Fontconfig head is null".
+# metrics; without them the JRE throws "Fontconfig head is null".
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -38,7 +38,7 @@ RUN mkdir -p /private/uploads/pfps /private/uploads/problems \
     chmod -R 775 /private/uploads
 
 # Install deps first so source edits don't re-run npm ci. Skip the postinstall
-# `prisma generate` here — the schema isn't copied yet; the client is generated
+# `prisma generate` here, the schema isn't copied yet; the client is generated
 # below, after the source is in place.
 COPY --chown=node:node package.json package-lock.json ./
 RUN SKIP_PRISMA_GENERATE=1 npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false

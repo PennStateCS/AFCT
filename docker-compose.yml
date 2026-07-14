@@ -1,7 +1,7 @@
 # Production stack: the app (from the published image), an nginx TLS front, and
 # Postgres. `docker compose up -d` on the host runs all three.
 
-# Bound container log growth — the default json-file driver keeps logs forever
+# Bound container log growth; the default json-file driver keeps logs forever
 # and can fill the host disk. Applied to every service.
 x-logging: &default-logging
   driver: json-file
@@ -151,10 +151,10 @@ services:
 
   db-backup:
     # Same Postgres image so pg_dump matches the server version exactly. Runs a
-    # daily backup to the db_backups volume — a matched pair of the database dump
+    # daily backup to the db_backups volume, a matched pair of the database dump
     # and a tarball of the upload volumes (DB rows reference files by name, so both
     # are needed for a coherent restore). The schedule (on/off, hour, retention)
-    # comes from System Settings — see backup.sh. Copy the db_backups volume
+    # comes from System Settings; see backup.sh. Copy the db_backups volume
     # off-host regularly: it protects against bad data/migrations, but not host loss.
     image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
     container_name: afct-db-backup

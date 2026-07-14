@@ -1,7 +1,7 @@
 name: Publish Docker image to GHCR
 
 # Gated on CI: this runs only after the CI workflow finishes on main, and the
-# job below bails unless CI actually passed — so a lint/test/docs failure never
+# job below bails unless CI actually passed, so a lint/test/docs failure never
 # ships an image. (A direct push trigger would build in parallel with CI and
 # could publish a broken commit.)
 on:
@@ -15,7 +15,7 @@ permissions:
   packages: write
 
 # Serialize publishes: the auto-pin step commits back to main, so overlapping
-# runs would race on the push. Queue rather than cancel — never kill a publish
+# runs would race on the push. Queue rather than cancel; never kill a publish
 # that may be mid-push.
 concurrency:
   group: ghcr-publish
@@ -108,7 +108,7 @@ jobs:
       #
       # continue-on-error: this is an informational scan, and its only failure mode
       # is Trivy's own binary download flaking (findings can't fail it while
-      # exit-code is 0) — a scanner hiccup must not block publishing the image.
+      # exit-code is 0), a scanner hiccup must not block publishing the image.
       - name: Scan image for vulnerabilities (Trivy)
         if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
         continue-on-error: true
@@ -127,7 +127,7 @@ jobs:
       # Race-safe: several quick pushes to main mean this run's checked-out commit
       # can be stale by the time we push, and a plain push would be rejected
       # (non-fast-forward). So each attempt re-fetches the branch tip, re-applies the
-      # pin onto it, and pushes; on rejection it retries. Pinning is bookkeeping — if
+      # pin onto it, and pushes; on rejection it retries. Pinning is bookkeeping, if
       # it still loses the race after a few tries, we warn rather than fail the build
       # (the image is already published; a later run will pin it).
       - name: Auto-pin prod compose to the published digest
@@ -169,7 +169,7 @@ jobs:
           echo "::warning::could not pin docker-compose.yml after 5 attempts; a later publish run will pin it."
 
       # Sidecar images for the standalone deploy bundle (deploy/docker-compose.yml):
-      # publishing nginx + backup — instead of building them on the deployer's host —
+      # publishing nginx + backup (instead of building them on the deployer's host)
       # lets the bundle be a single compose file with no repo checkout. Placed last so
       # a sidecar-build failure can never disrupt the critical app publish + auto-pin
       # above; a failure here still surfaces (red job) without shipping a broken app.

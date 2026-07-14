@@ -1,8 +1,8 @@
-# AFCT Dashboard — standalone production stack.
+# AFCT Dashboard: standalone production stack.
 #
 # This is the deploy bundle's compose file: it references only published images
-# (no repo checkout, no local builds), so `install.sh` — or `docker compose up -d`
-# — works with just this file plus a .env.production.
+# (no repo checkout, no local builds), so `install.sh` (or `docker compose up -d`)
+# works with just this file plus a .env.production.
 #
 # Images are tracked to the `:main` tag (the latest stable build from CI). For a
 # reproducible production pin, replace a tag with an @sha256:... digest from the
@@ -142,7 +142,7 @@ services:
     # backup.sh is baked into this image (docker/backup/Dockerfile). Daily backup
     # to the db_backups volume: a matched pair of the DB dump and a tarball of the
     # upload volumes. Schedule (on/off, hour, retention) comes from System Settings.
-    # Copy the db_backups volume off-host regularly — it protects against bad
+    # Copy the db_backups volume off-host regularly; it protects against bad
     # data/migrations, not host loss.
     image: ghcr.io/pennstatewilkes-barre/afct-backup:main
     container_name: afct-db-backup
