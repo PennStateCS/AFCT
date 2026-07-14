@@ -40,6 +40,7 @@ const ResetPasswordBody = z.object({
  *         schema: { type: object, properties: { success: { type: boolean } } }
  *   400: { description: Missing fields or weak password. }
  *   403: { description: Caller is not a system administrator. }
+ *   404: { description: Target user not found. }
  *   500: { description: Reset failed. }
  */
 export const POST = withAdminAuth(
@@ -77,6 +78,15 @@ export const POST = withAdminAuth(
 
       return NextResponse.json({ success: true });
     } catch (error) {
+      // A missing target user is a client error (404), not a server fault.
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as { code?: string }).code === 'P2025'
+      ) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
       console.error('Reset password error:', error);
       await logError(req, {
         userId: user.id,
