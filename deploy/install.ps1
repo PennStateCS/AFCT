@@ -80,7 +80,7 @@ function Read-Secret([string]$q) {
   finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 }
 
-# Write .env as UTF-8 WITHOUT a BOM — a BOM would corrupt the first variable when
+# Write .env as UTF-8 WITHOUT a BOM; a BOM would corrupt the first variable when
 # Docker Compose reads the env_file.
 function Write-EnvFile([string[]]$lines) {
   $enc = New-Object System.Text.UTF8Encoding($false)
@@ -217,7 +217,7 @@ function Invoke-Install {
     }
   }
 
-  # Auto-generated infrastructure secrets — never prompted.
+  # Auto-generated infrastructure secrets, never prompted.
   $pgPass = New-Secret
   $authSecret = New-Secret
 

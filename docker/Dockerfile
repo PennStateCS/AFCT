@@ -16,10 +16,10 @@ ENV DISABLE_ERD=true
 ENV SKIP_PRISMA_GENERATE=1
 ENV NEXTJS_IGNORE_ESLINT=1
 # The ERD generator pulls in puppeteer (via mermaid-cli), whose install would
-# otherwise download a ~150MB Chromium we never use — the ERD step is disabled here.
+# otherwise download a ~150MB Chromium we never use; the ERD step is disabled here.
 ENV PUPPETEER_SKIP_DOWNLOAD=1
 
-# python3/make/g++ compile native npm modules (bcrypt). No Java here — the build
+# python3/make/g++ compile native npm modules (bcrypt). No Java here; the build
 # never runs the evaluator JAR, so a JRE would just be dead weight.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -42,7 +42,7 @@ WORKDIR /app
 # curl runs the healthcheck; postgres-client + netcat back the DB wait in the
 # entrypoint; tini is PID 1; openssl covers TLS helpers. fontconfig + a base font
 # are required by the Java evaluator (JFLAP initializes Swing even in CLI mode, so
-# the JRE needs font metrics — otherwise it throws "Fontconfig head is null").
+# the JRE needs font metrics; otherwise it throws "Fontconfig head is null").
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -67,7 +67,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PATH="/app/bin:${PATH}"
 
 # Production deps only. SKIP_PRISMA_GENERATE stops the postinstall hook from
-# regenerating the client — the builder already made it and we copy it below.
+# regenerating the client; the builder already made it and we copy it below.
 ENV SKIP_PRISMA_GENERATE=1
 COPY package*.json ./
 COPY --from=builder /app/prisma ./prisma
