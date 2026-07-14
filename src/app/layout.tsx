@@ -1,82 +1,20 @@
-'use client';
-
 import './globals.css';
+import type { Metadata } from 'next';
 import { geistSans, geistMono } from '@/app/fonts';
-import { Toaster } from 'sonner';
-import { SessionProvider } from 'next-auth/react';
-import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { RootProviders } from '@/components/providers/RootProviders';
+
+// Now that the root layout is a Server Component, it can carry app-wide metadata.
+// A plain default title (no template) so pages that set their own title keep it.
+export const metadata: Metadata = {
+  title: 'AFCT Dashboard',
+  description: 'Automata-focused course tooling for building and grading assignments.',
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} flex antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <SessionProvider>
-            <Toaster
-              position="top-center"
-              theme="light"
-              closeButton={false}
-              expand={true}
-              gap={8}
-              visibleToasts={6}
-              offset={20}
-              icons={{
-                success: (
-                  <span aria-hidden="true" className="toast-icon-symbol">
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="24"
-                      height="24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M5 12.5L10 17L19 7.5"
-                        stroke="currentColor"
-                        strokeWidth="2.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                ),
-                error: (
-                  <span aria-hidden="true" className="toast-icon-symbol">
-                    ✕
-                  </span>
-                ),
-                warning: (
-                  <span aria-hidden="true" className="toast-icon-symbol">
-                    ⚠
-                  </span>
-                ),
-                info: (
-                  <span aria-hidden="true" className="toast-icon-symbol">
-                    i
-                  </span>
-                ),
-                loading: (
-                  <span aria-hidden="true" className="toast-icon-symbol">
-                    ↻
-                  </span>
-                ),
-              }}
-              toastOptions={{
-                style: {},
-                className: 'custom-toast',
-                duration: 4000,
-                actionButtonStyle: {},
-                cancelButtonStyle: {},
-              }}
-            />
-            {children}
-          </SessionProvider>
-        </ThemeProvider>
+        <RootProviders>{children}</RootProviders>
       </body>
     </html>
   );
