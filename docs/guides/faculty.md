@@ -26,7 +26,7 @@ somehow gets the URL just sees "not found." This gives you room to build the
 course in peace. Enroll people, write assignments, get things right, and flip
 the switch when you're ready.
 
-A course is **archived** at the end of a term — by an administrator, not you.
+A course is **archived** at the end of a term, by an administrator, not you.
 Archiving makes the course **read-only for everyone**, including you and admins:
 settings, dates, roster, and grades all freeze. Treat it as closing the books
 once final grades are settled. Archiving and restoring are admin-only, so ask an

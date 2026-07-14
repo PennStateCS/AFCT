@@ -106,15 +106,15 @@ Last spring's students have no business appearing in this fall's section, so
 the empty roster is the point, not a limitation.
 
 You **delete** a course, from the **Manage** menu on the course list. Deletion
-adapts to what the course holds. An **empty** course — no assignments, problems,
-students, or submissions — is removed **permanently**; there is nothing to lose.
+adapts to what the course holds. An **empty** course (no assignments, problems,
+students, or submissions) is removed **permanently**; there is nothing to lose.
 Any course with real content or enrollment is **soft-deleted** instead: it gets
 a `deletedAt` stamp, all of its data is retained, and it disappears from every
-list and becomes **inaccessible to everyone — admins included** (no one can open
+list and becomes **inaccessible to everyone, admins included** (no one can open
 it by direct URL). The confirmation dialog tells you which will happen before you
 commit. Recovery of a soft-deleted course is currently out-of-band (database or
 backup); there is no in-app restore yet. You cannot delete an **archived**
-course directly — restore it first, then delete.
+course directly; restore it first, then delete.
 
 You **archive** and **restore** (un-archive) a course. Archiving freezes a
 course read-only for *everyone*, admins included; restoring lifts that freeze.
@@ -227,7 +227,7 @@ is worth doing right before anything you might regret. A course delete either
 removes an empty course permanently or soft-deletes a non-empty one (a
 `deletedAt` stamp, data retained). A soft-deleted course still exists in the
 database, so recovering it is a targeted un-delete at the data layer rather than
-a full restore — but there is no in-app restore yet, so treat any delete as
+a full restore, but there is no in-app restore yet, so treat any delete as
 consequential and take an on-demand backup first when in doubt.
 Size the retention window against how long a mistake can go unnoticed, not how
 long it takes to notice one. A course deleted during finals might not be missed
