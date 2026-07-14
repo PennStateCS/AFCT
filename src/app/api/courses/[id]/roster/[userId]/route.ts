@@ -11,6 +11,9 @@ import { CourseRoleChangeSchema } from '@/schemas/user';
 /** Thrown inside a roster transaction when the change would leave 0 faculty. */
 class LastFacultyError extends Error {}
 
+/** Thrown inside the removal transaction when the target has submissions in the course. */
+class RosterHasSubmissionsError extends Error {}
+
 /**
  * Removes a user from a course roster. Permission is tiered: the shared wrapper
  * admits global admins and course faculty only (TAs and students are rejected up
@@ -55,34 +58,13 @@ export const DELETE = withCourseAuth(
         });
       }
 
-      // Prevent removal if the user has any submissions in this course
-      const assignmentIds = await prisma.assignment.findMany({
-        where: { courseId },
-        select: { id: true },
-      });
-      const assignmentIdList = Array.isArray(assignmentIds)
-        ? assignmentIds.map((a: (typeof assignmentIds)[number]) => a.id)
-        : [];
-
-      if (assignmentIdList.length > 0) {
-        const existingSubmission = await prisma.submission.findFirst({
-          where: {
-            studentId: userId,
-            assignmentId: { in: assignmentIdList },
-          },
-        });
-
-        if (existingSubmission) {
-          return NextResponse.json(
-            { error: 'User has submissions for this course and cannot be removed' },
-            { status: 400 },
-          );
-        }
-      }
-
-      // Delete the user's roster entries. When the target is faculty, re-check the
-      // count *inside* a serializable transaction so two concurrent removals can't
-      // both pass and leave the course with zero faculty (Postgres aborts one).
+      // Both safety checks and the delete run inside one serializable transaction so
+      // they're atomic. The submission check in particular must be here, not before
+      // the transaction: a submission landing between a pre-check and the delete would
+      // otherwise let a user with work be removed. Submissions are created under
+      // Serializable too, so a racing insert conflicts with this read and Postgres
+      // aborts one transaction (P2034 -> 409 retry below). The faculty-count check is
+      // likewise re-read here so concurrent removals can't both leave zero faculty.
       let deleted: { count: number };
       try {
         deleted = await prisma.$transaction(
@@ -95,6 +77,24 @@ export const DELETE = withCourseAuth(
                 throw new LastFacultyError();
               }
             }
+
+            // A user with any submission in the course can't be removed (their work
+            // must stay attributable to an enrolled member).
+            const assignments = await tx.assignment.findMany({
+              where: { courseId },
+              select: { id: true },
+            });
+            const assignmentIdList = assignments.map((a) => a.id);
+            if (assignmentIdList.length > 0) {
+              const existingSubmission = await tx.submission.findFirst({
+                where: { studentId: userId, assignmentId: { in: assignmentIdList } },
+                select: { id: true },
+              });
+              if (existingSubmission) {
+                throw new RosterHasSubmissionsError();
+              }
+            }
+
             return tx.roster.deleteMany({ where: { courseId, userId } });
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -103,6 +103,12 @@ export const DELETE = withCourseAuth(
         if (err instanceof LastFacultyError) {
           return NextResponse.json(
             { error: 'Cannot remove the only faculty member from the course' },
+            { status: 400 },
+          );
+        }
+        if (err instanceof RosterHasSubmissionsError) {
+          return NextResponse.json(
+            { error: 'User has submissions for this course and cannot be removed' },
             { status: 400 },
           );
         }
