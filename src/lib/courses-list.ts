@@ -76,6 +76,14 @@ export async function getCoursesListForUser(
       createdAt: true,
       updatedAt: true,
       roster: {
+        // Only staff (FACULTY/TA) are embedded. A course list only ever renders its
+        // staff (the Faculty column) — never a student roster or count — so pulling
+        // every enrolled student made this payload grow with class size for no
+        // benefit (a large course could ship thousands of rows per course, and an
+        // admin sees every course at once). Roster management lives on the course
+        // page, which queries members on its own. The per-viewer shaping below is
+        // unchanged and still hides staff emails from students.
+        where: { role: { in: ['FACULTY', 'TA'] as CourseRole[] } },
         select: {
           role: true,
           user: {
