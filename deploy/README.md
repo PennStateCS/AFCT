@@ -1,8 +1,9 @@
 # Deploying AFCT Dashboard (Linux, macOS, Windows)
 
 This folder is a **self-contained deploy bundle**: a compose file plus a guided
-installer. You need one thing on the host: **Docker** (with the Compose plugin;
-on Windows/macOS that's Docker Desktop).
+installer. The only thing you need on the host is **Docker** with the Compose
+plugin. On **Linux** the installer will offer to install Docker for you if it's
+missing; on **Windows/macOS** install Docker Desktop first.
 
 Use **`install.sh`** on Linux/macOS and **`install.ps1`** on Windows; they do the
 same thing (prompt for admin details, generate secrets, bring the stack up).
@@ -51,7 +52,8 @@ run it once as `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
 
 The installer will:
 
-1. Check that Docker + Compose are installed and running.
+1. Check that Docker and the Compose plugin are installed and running (on Linux,
+   offer to install Docker for you if it's missing).
 2. Ask for your **administrator email**, a **password** (type your own or let it
    generate a strong one), and the **public URL** of the site.
 3. Generate the remaining secrets automatically (database password, auth secret)
