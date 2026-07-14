@@ -303,6 +303,11 @@ async function runWorkerLoop() {
 
 async function evaluateSubmission(id: string) {
   let submission: WorkerSubmission | null = null;
+  // Fencing token: the `attempts` value the row carried when we claimed it. Every
+  // post-claim write is conditioned on it. If the row is reran/reaped and
+  // re-claimed by another worker mid-evaluation (a re-claim increments attempts),
+  // our now-stale writes match nothing instead of clobbering the new owner's work.
+  let claimedAttempts: number | null = null;
 
   try {
     submission = await prisma.submission.findUnique({
@@ -317,13 +322,14 @@ async function evaluateSubmission(id: string) {
       console.error(`[SubmissionWorker] Submission ${id} not found`);
       return;
     }
+    claimedAttempts = submission.attempts;
 
     // Run Java evaluator with the configured resource limits
     const evalConfig = await getEvaluatorConfig();
     const evaluation = await runJavaEvaluator(submission, evalConfig);
 
-    await prisma.submission.update({
-      where: { id },
+    const written = await prisma.submission.updateMany({
+      where: { id, attempts: claimedAttempts },
       data: {
         feedback: evaluation.feedback,
         correct: evaluation.correct,
@@ -335,30 +341,46 @@ async function evaluateSubmission(id: string) {
       },
     });
 
+    if (written.count === 0) {
+      // The row was reran/reaped and re-claimed by another worker while we
+      // evaluated; discard our stale result rather than overwrite theirs.
+      console.warn(
+        `[SubmissionWorker] Submission ${id} was reclaimed during evaluation; discarding stale result.`,
+      );
+      return;
+    }
+
     // Autograde submission if enabled
     if (submission.assignmentProblem.autograderEnabled === true) {
       const earnedPoints = evaluation.correct ? submission.assignmentProblem.maxPoints : 0;
 
-      await prisma.assignmentProblemGrade.upsert({
+      // Never overwrite a manually-entered grade. Update only a non-manual row;
+      // create one only when none exists (`skipDuplicates` no-ops if a manual row
+      // appeared concurrently). Together this makes autograde skip any row a TA set.
+      const graded = await prisma.assignmentProblemGrade.updateMany({
         where: {
-          assignmentId_problemId_studentId: {
-            assignmentId: submission.assignmentId,
-            problemId: submission.problemId,
-            studentId: submission.studentId,
-          },
-        },
-        create: {
           assignmentId: submission.assignmentId,
           problemId: submission.problemId,
           studentId: submission.studentId,
-          grade: earnedPoints,
-          feedback: evaluation.feedback,
+          gradedManually: false,
         },
-        update: {
-          grade: earnedPoints,
-          feedback: evaluation.feedback,
-        },
+        data: { grade: earnedPoints, feedback: evaluation.feedback },
       });
+      if (graded.count === 0) {
+        await prisma.assignmentProblemGrade.createMany({
+          data: [
+            {
+              assignmentId: submission.assignmentId,
+              problemId: submission.problemId,
+              studentId: submission.studentId,
+              grade: earnedPoints,
+              feedback: evaluation.feedback,
+              gradedManually: false,
+            },
+          ],
+          skipDuplicates: true,
+        });
+      }
 
       await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {
         studentId: submission.studentId,
@@ -394,8 +416,10 @@ async function evaluateSubmission(id: string) {
 
     console.error(`[SubmissionWorker] Failed submission ${id}:`, error);
 
-    await prisma.submission.update({
-      where: { id },
+    await prisma.submission.updateMany({
+      // Fenced on the claim attempts (when known) so a stale worker can't flip a
+      // row another worker has since re-claimed.
+      where: claimedAttempts !== null ? { id, attempts: claimedAttempts } : { id },
       data: giveUp
         ? {
             status: 'FAILED',

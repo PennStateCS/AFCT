@@ -219,10 +219,12 @@ export const POST = withCourseAuth(
           studentId,
           grade,
           feedback,
+          gradedManually: true,
         },
         update: {
           grade,
           feedback,
+          gradedManually: true,
         },
       });
 

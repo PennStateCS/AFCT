@@ -9,7 +9,7 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
     findMany: vi.fn(),
   },
-  assignmentProblemGrade: { upsert: vi.fn() },
+  assignmentProblemGrade: { upsert: vi.fn(), updateMany: vi.fn(), createMany: vi.fn() },
 }));
 const executeMock = vi.hoisted(() => vi.fn());
 const getEvaluatorConfigMock = vi.hoisted(() => vi.fn());
@@ -182,10 +182,17 @@ describe('runJavaEvaluator — evaluator execution', () => {
 });
 
 describe('evaluateSubmission', () => {
+  beforeEach(() => {
+    // Happy-path defaults; individual tests override as needed.
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 1 }); // fenced completion write wins
+    prismaMock.assignmentProblemGrade.updateMany.mockResolvedValue({ count: 0 }); // no existing auto row
+    prismaMock.assignmentProblemGrade.createMany.mockResolvedValue({ count: 1 });
+  });
+
   it('does nothing when the submission no longer exists', async () => {
     prismaMock.submission.findUnique.mockResolvedValue(null);
     await evaluateSubmission('missing');
-    expect(prismaMock.submission.update).not.toHaveBeenCalled();
+    expect(prismaMock.submission.updateMany).not.toHaveBeenCalled();
   });
 
   it('persists the result and autogrades full points when correct', async () => {
@@ -194,11 +201,18 @@ describe('evaluateSubmission', () => {
 
     await evaluateSubmission('sub-1');
 
-    expect(prismaMock.submission.update).toHaveBeenCalledWith(
+    expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ correct: true, status: 'COMPLETED' }) }),
     );
-    expect(prismaMock.assignmentProblemGrade.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ create: expect.objectContaining({ grade: 10 }) }),
+    // Autograde only touches a non-manual row, and creates a non-manual row.
+    expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ gradedManually: false }) }),
+    );
+    expect(prismaMock.assignmentProblemGrade.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [expect.objectContaining({ grade: 10, gradedManually: false })],
+        skipDuplicates: true,
+      }),
     );
     expect(loggedActions()).toContain('SUBMISSION_AUTOGRADED');
   });
@@ -209,9 +223,22 @@ describe('evaluateSubmission', () => {
 
     await evaluateSubmission('sub-1');
 
-    expect(prismaMock.assignmentProblemGrade.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ create: expect.objectContaining({ grade: 0 }) }),
+    expect(prismaMock.assignmentProblemGrade.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: [expect.objectContaining({ grade: 0 })] }),
     );
+  });
+
+  it('updates an existing non-manual grade in place rather than creating', async () => {
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+    prismaMock.assignmentProblemGrade.updateMany.mockResolvedValue({ count: 1 }); // a non-manual row existed
+
+    await evaluateSubmission('sub-1');
+
+    expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ grade: 10 }) }),
+    );
+    expect(prismaMock.assignmentProblemGrade.createMany).not.toHaveBeenCalled();
   });
 
   it('does not autograde when the problem has the autograder disabled', async () => {
@@ -221,18 +248,32 @@ describe('evaluateSubmission', () => {
 
     await evaluateSubmission('sub-1');
 
-    expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.assignmentProblemGrade.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.assignmentProblemGrade.createMany).not.toHaveBeenCalled();
+  });
+
+  it('discards a stale result (and skips autograde) when the row was reclaimed mid-evaluation', async () => {
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+    // The fenced completion write matches nothing: another worker re-claimed the row.
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 0 });
+
+    await evaluateSubmission('sub-1');
+
+    expect(prismaMock.assignmentProblemGrade.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.assignmentProblemGrade.createMany).not.toHaveBeenCalled();
+    expect(loggedActions()).not.toContain('SUBMISSION_AUTOGRADED');
   });
 
   it('returns a transient failure to PENDING for retry when attempts remain', async () => {
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission({ attempts: 0 }));
-    // First update (result persist) blows up → caught as a transient error.
-    prismaMock.submission.update.mockRejectedValueOnce(new Error('db blip'));
+    // The completion write blows up → caught as a transient error.
+    prismaMock.submission.updateMany.mockRejectedValueOnce(new Error('db blip'));
 
     await evaluateSubmission('sub-1');
 
-    // Second update requeues the row.
-    expect(prismaMock.submission.update).toHaveBeenLastCalledWith(
+    // The error path requeues the row (fenced on the claim attempts).
+    expect(prismaMock.submission.updateMany).toHaveBeenLastCalledWith(
       expect.objectContaining({ data: { status: 'PENDING' } }),
     );
     expect(loggedActions()).toContain('SUBMISSION_ERROR');
@@ -240,11 +281,11 @@ describe('evaluateSubmission', () => {
 
   it('permanently fails a submission once the attempt budget is exhausted', async () => {
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission({ attempts: 3 }));
-    prismaMock.submission.update.mockRejectedValueOnce(new Error('db blip'));
+    prismaMock.submission.updateMany.mockRejectedValueOnce(new Error('db blip'));
 
     await evaluateSubmission('sub-1');
 
-    expect(prismaMock.submission.update).toHaveBeenLastCalledWith(
+    expect(prismaMock.submission.updateMany).toHaveBeenLastCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
     );
     expect(loggedActions()).toContain('SUBMISSION_FAILED_PERMANENTLY');
