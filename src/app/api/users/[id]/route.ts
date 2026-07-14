@@ -216,7 +216,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
       // Only admins may change a user's admin flag; self-editors cannot escalate.
       isAdmin: isAdmin(currentUser) ? isAdminFlag : undefined,
-      inactive: inactive,
+      // `inactive` is a privileged account-state field; a self-editor must not be
+      // able to disable (or re-enable) their own account.
+      inactive: isAdmin(currentUser) ? inactive : undefined,
       timezone: timezoneRaw ? timezoneRaw : undefined,
     };
 

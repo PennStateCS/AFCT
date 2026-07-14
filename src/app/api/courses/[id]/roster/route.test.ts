@@ -101,7 +101,7 @@ describe('POST /api/courses/[id]/roster', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 401 when user inactive', async () => {
+  it('returns 409 when the target user is inactive (caller is authorized)', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', inactive: true });
 
@@ -112,7 +112,7 @@ describe('POST /api/courses/[id]/roster', () => {
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(409);
   });
 
   it('enrolls user and logs activity', async () => {
