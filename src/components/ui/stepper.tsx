@@ -11,7 +11,7 @@ type StepperProps = {
   current: number;
   /**
    * Called when a completed step's marker is clicked (going back). Steps ahead
-   * of the current one are never clickable — forward movement goes through the
+   * of the current one are never clickable; forward movement goes through the
    * flow's own Next control so validation can gate it.
    */
   onStepClick?: (index: number) => void;
@@ -20,7 +20,7 @@ type StepperProps = {
 
 /**
  * A horizontal wizard step indicator: numbered circles joined by connector
- * lines, with completed steps showing a check. Purely presentational — the
+ * lines, with completed steps showing a check. Purely presentational; the
  * parent owns the step state and validation.
  */
 export function Stepper({ steps, current, onStepClick, className }: StepperProps) {

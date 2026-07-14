@@ -9,7 +9,7 @@ import { apiError } from './http';
 /**
  * Records a SECURITY entry when a well-formed bearer token is presented but doesn't
  * resolve (unknown, expired, or revoked). Normal expiry is expected, but a stream of
- * such requests is a mild signal — stolen-token replay or a stale client. Throttled
+ * such requests is a mild signal: stolen-token replay or a stale client. Throttled
  * per-IP so a misbehaving client can't flood the log. Best-effort; never blocks 401.
  */
 const REJECT_LOG_WINDOW_MS = 5 * 60 * 1000;
@@ -57,7 +57,7 @@ function extractBearer(req: Request): string | null {
 
 /**
  * Wraps a native-client route handler. Authenticates via `Authorization: Bearer
- * <token>` (a `ClientApiToken`), NOT the browser session cookie — so there's no CSRF
+ * <token>` (a `ClientApiToken`), NOT the browser session cookie, so there's no CSRF
  * and no browser idle-timeout. Returns **401** for a missing, malformed, unknown,
  * expired, or revoked token (or an inactive user). The handler runs only for a valid
  * token and receives `{ user, tokenId }`; per-course authorization
@@ -74,7 +74,7 @@ export function withClientAuth<Ctx = unknown, R extends Response = Response>(
     if (!raw) return apiError(401, 'Unauthorized');
     const resolved = await resolveClientToken(raw);
     if (!resolved) {
-      // A token was presented but didn't resolve — log it (throttled) as a security event.
+      // A token was presented but didn't resolve: log it (throttled) as a security event.
       void logRejectedToken(req);
       return apiError(401, 'Unauthorized');
     }

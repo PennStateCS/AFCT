@@ -142,7 +142,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
   );
 
   // The Settings tab's inline form has already persisted the change and hands us
-  // the server's updated course — just merge it into local state and confirm.
+  // the server's updated course; just merge it into local state and confirm.
   const handleCourseSaved = useCallback(
     (updated: Partial<Course>) => {
       setCourse((prev) => (prev ? { ...prev, ...updated } : prev));

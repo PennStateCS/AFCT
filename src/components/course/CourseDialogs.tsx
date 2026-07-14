@@ -105,7 +105,7 @@ export function CourseDialogs({
           courseIsArchived={course.isArchived}
           assignment={selectedAssignment}
           // Edit due dates in the COURSE's zone (where the server stores them), not the
-          // viewer's — otherwise saving would shift the deadline.
+          // viewer's, otherwise saving would shift the deadline.
           timeZone={course.timezone ?? timeZone}
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}

@@ -3,7 +3,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { getStudentCourseAssignments } from '@/lib/student-assignments';
 
 /**
- * Returns the signed-in student's own grade breakdown for a course — published
+ * Returns the signed-in student's own grade breakdown for a course: published
  * assignments, their problems, and per-problem grade, latest submission status,
  * and attempt count. Available to enrolled members (viewing their own data) and
  * to staff.

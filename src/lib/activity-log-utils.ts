@@ -58,7 +58,7 @@ export interface EnhancedActivityLogData {
   timestamp?: Date;
   category?: ActivityCategory;
   /**
-   * Required and explicit at every call site — the severity of an entry is a
+   * Required and explicit at every call site: the severity of an entry is a
    * deliberate classification, not something to guess from the action name.
    * (`inferSeverity` remains available for callers that genuinely want name-based
    * derivation, but they must opt in by passing `severity: inferSeverity(action)`.)
@@ -269,7 +269,7 @@ async function resolveEntityDisplay(
 }
 
 /**
- * Write the row. Swallows FK races (P2003) and never throws — audit logging must not
+ * Write the row. Swallows FK races (P2003) and never throws; audit logging must not
  * break the request it is recording.
  */
 async function persistLog(
@@ -280,7 +280,7 @@ async function persistLog(
     await prisma.activityLog.create({ data: row });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
-      // Foreign key violation (e.g., race or another stale FK) — log and continue
+      // Foreign key violation (e.g., race or another stale FK); log and continue
       console.warn('[ActivityLog] FK violation skipped (P2003):', err.meta);
       return;
     }
@@ -298,7 +298,7 @@ export async function createEnhancedActivityLog(
   prisma: PrismaClient,
   // Either a Request (API routes) or a pre-resolved client context. NextAuth event
   // callbacks and credential verification run without a Request, so they pass the
-  // IP/UA they already have instead — one write path for every log site.
+  // IP/UA they already have instead; one write path for every log site.
   reqOrContext: Request | { ipAddress?: string | null; userAgent?: string | null },
   data: EnhancedActivityLogData,
 ): Promise<void> {

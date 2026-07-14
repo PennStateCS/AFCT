@@ -12,7 +12,7 @@ export const nonEmptyId = (label = 'Id') =>
 
 /**
  * A `<input type="datetime-local">` value like "2025-08-15T09:30". Not transformed
- * to a Date — the server parses it in the course's timezone, and the client keeps
+ * to a Date; the server parses it in the course's timezone, and the client keeps
  * it as a string for the input. Shared by the course and assignment form schemas.
  */
 export const dateTimeLocalString = z

@@ -27,7 +27,7 @@ import {
  *
  * Everything is driven by wall-clock deadlines (`lastActivity + timeout`), not by
  * decrementing timers, and it re-evaluates on `visibilitychange`/`focus`. So when
- * a machine is locked or the tab is suspended — which freezes JS timers — the
+ * a machine is locked or the tab is suspended (which freezes JS timers) the
  * watcher signs out (or shows the correct remaining time) the instant the tab is
  * visible again, instead of resuming a stale countdown. It also heartbeats the
  * server (via `update()`) on real activity so the server-side idle enforcement in
@@ -67,8 +67,8 @@ export default function SessionWatcher() {
 
   // The server revokes a session by marking it inactive (idle-timeout lapsed, or
   // the account was disabled/deleted). `useSession` still reports "authenticated"
-  // in that case, so without this the user is left on a half-broken page — cleared
-  // query cache, hidden admin menu, background 401s — instead of being redirected.
+  // in that case, so without this the user is left on a half-broken page (cleared
+  // query cache, hidden admin menu, background 401s) instead of being redirected.
   // Sign out the moment a session comes back inactive.
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.inactive) {
@@ -87,7 +87,7 @@ export default function SessionWatcher() {
     setShowModal(false);
     try {
       // Refresh the server's idle clock. If the server already considers us
-      // idle-expired it returns an inactive session — honor that over the UI.
+      // idle-expired it returns an inactive session; honor that over the UI.
       const updated = await updateRef.current({ activity: now });
       const inactive = (updated?.user as { inactive?: boolean } | undefined)?.inactive;
       if (inactive) {
@@ -119,7 +119,7 @@ export default function SessionWatcher() {
     };
 
     const handleActivity = () => {
-      // While the warning is up, passive activity is ignored — the user must
+      // While the warning is up, passive activity is ignored; the user must
       // click "Extend" to prove they're really there.
       if (signingOutRef.current || warningActiveRef.current) return;
       const t = Date.now();
@@ -131,7 +131,7 @@ export default function SessionWatcher() {
       if (signingOutRef.current) return;
       const remaining = lastActivityRef.current + timeoutMs - Date.now();
       if (remaining <= 0) {
-        // Past the hard limit — including the case where timers were frozen by a
+        // Past the hard limit, including the case where timers were frozen by a
         // lock/suspend and we only just became visible again.
         performSignOut();
         return;

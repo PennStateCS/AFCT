@@ -3,7 +3,7 @@
  *
  * All client-side `fetch()` calls should build their URL through `apiPaths` rather than
  * hardcoding a string. That way, when a route is renamed or moved, the change is a single
- * edit here and every caller follows — instead of a sweep across dozens of files.
+ * edit here and every caller follows, instead of a sweep across dozens of files.
  */
 
 type QueryValue = string | number | boolean | null | undefined;

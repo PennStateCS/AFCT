@@ -57,7 +57,7 @@ interface CreateCourseDialogProps {
 export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDialogProps) {
   const [step, setStep] = useState(0);
 
-  // Default the course timezone to the creator's browser zone — a sensible starting
+  // Default the course timezone to the creator's browser zone, a sensible starting
   // point they can change. (The server falls back to the system zone if omitted.)
   const browserTz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', []);
 

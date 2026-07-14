@@ -5,7 +5,7 @@ import { getCoursesListForUser } from '@/lib/courses-list';
 
 /**
  * The signed-in user's courses (slim shape for the client), scoped to the token's
- * user — same visibility as the web app: enrolled, non-deleted courses that are
+ * user, same visibility as the web app: enrolled, non-deleted courses that are
  * published or where the user is staff.
  * @openapi
  * summary: List my courses (client)
@@ -22,7 +22,7 @@ import { getCoursesListForUser } from '@/lib/courses-list';
  */
 export const GET = withClientAuth(async (_req, _ctx, { user }) => {
   // Archived courses are frozen (read-only) and can't be submitted to, so the client
-  // — a submission tool — doesn't list them (the web app shows them separately).
+  // (a submission tool) doesn't list them (the web app shows them separately).
   const courses = (await getCoursesListForUser(user.id, user.isAdmin ? 'ADMIN' : 'STUDENT')).filter(
     (c) => !c.isArchived,
   );
@@ -41,7 +41,7 @@ export const GET = withClientAuth(async (_req, _ctx, { user }) => {
       name: c.name,
       code: c.code,
       semester: c.semester,
-      // IANA zone the course's deadlines are anchored to — the client should render
+      // IANA zone the course's deadlines are anchored to; the client should render
       // due dates in this zone.
       timezone: c.timezone,
       isPublished: c.isPublished,

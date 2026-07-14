@@ -11,7 +11,7 @@ const JFF_PROBLEM_TYPES = ['FA', 'PDA', 'TM'];
 type SubmissionViewerDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The problem's type — selects which viewer to render. */
+  /** The problem's type: selects which viewer to render. */
   problemType: string | null | undefined;
   /** URL of the file to view (submission or solution). */
   src: string;
@@ -24,7 +24,7 @@ type SubmissionViewerDialogProps = {
 };
 
 /**
- * Picks the right viewer dialog for a problem's type — JFLAP for FA/PDA/TM, the regex
+ * Picks the right viewer dialog for a problem's type: JFLAP for FA/PDA/TM, the regex
  * viewer for RE, the grammar viewer for CFG. Replaces the three near-identical
  * type-switch blocks that were copy-pasted across the assignment/submission views.
  * Renders nothing for an unknown type.

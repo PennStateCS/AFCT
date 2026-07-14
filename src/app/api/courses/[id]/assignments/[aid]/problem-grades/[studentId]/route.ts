@@ -95,7 +95,7 @@ export const GET = withCourseAuth(
 );
 
 /**
- * Batch-saves this student's problem grades for the assignment in a single request —
+ * Batch-saves this student's problem grades for the assignment in a single request;
  * the write counterpart to the GET above (co-located as the same resource). The body
  * maps problemId → grade (a number within [0, maxPoints], or null to clear). Course
  * staff (faculty or TAs) or a system admin. Only problems whose grade actually changed
@@ -147,7 +147,7 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
 
-      // The grade target must actually be enrolled in this course — never create
+      // The grade target must actually be enrolled in this course; never create
       // grade rows for an arbitrary user id that isn't on the roster.
       const enrolled = await prisma.roster.findFirst({
         where: { courseId, userId: studentId },
@@ -157,7 +157,7 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
       }
 
-      // maxPoints per problem — used for validation and to reject problem ids that
+      // maxPoints per problem: used for validation and to reject problem ids that
       // don't belong to the assignment.
       const assignmentProblems = await prisma.assignmentProblem.findMany({
         where: { assignmentId },

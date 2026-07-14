@@ -115,7 +115,7 @@ export default function AssignmentSubmissions({
     submission: Submission | ProblemSubmission | null;
   }>({ open: false, submission: null });
 
-  // Students — cached read shared with GroupsCard via the same query key.
+  // Students: cached read shared with GroupsCard via the same query key.
   const studentsQuery = useQuery({
     queryKey: ['course', courseId, 'students'],
     queryFn: async () => {
@@ -298,7 +298,7 @@ export default function AssignmentSubmissions({
   const loadingGroupMemberships = groupMembershipsQuery.isLoading;
 
   // Build the userId→groupId map by iterating groups IN ORDER and assigning the
-  // consolidated memberships that match each group, first-write-wins per user —
+  // consolidated memberships that match each group, first-write-wins per user;
   // this preserves the exact "first group in array order wins" semantics of the
   // previous per-group fan-out. Empty when not a group assignment / no data.
   const groupMembershipByStudent = useMemo<Record<string, string>>(() => {
@@ -364,7 +364,7 @@ export default function AssignmentSubmissions({
     }
   }, [selectedStudentIdParam, selectedStudent, updateStudentQuery]);
 
-  // Grade summary — cached read of which students have all problems graded.
+  // Grade summary: cached read of which students have all problems graded.
   const gradeSummaryQuery = useQuery({
     queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', 'summary'],
     queryFn: async () => {
@@ -404,7 +404,7 @@ export default function AssignmentSubmissions({
     setStudentGradeStatuses(normalized);
   }, [students, gradeSummaryData]);
 
-  // Review data (submissions + comments + problem grades) for the selected student —
+  // Review data (submissions + comments + problem grades) for the selected student:
   // the TanStack Query fetch, its cold-load flag, and refresher live in a hook.
   const { reviewData, reviewQueryIsError, reviewError, reviewFetching, refreshReview } =
     useReviewData(courseId, assignmentId, selectedStudentId);

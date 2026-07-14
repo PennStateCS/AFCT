@@ -76,7 +76,7 @@ describe('CacheResetOnIdentityChange', () => {
 
     useSessionMock.mockReturnValue(authed('u1'));
     rerender();
-    // First settled read just records the baseline — no clear.
+    // First settled read just records the baseline: no clear.
     expect(clear).not.toHaveBeenCalled();
   });
 

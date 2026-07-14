@@ -187,7 +187,7 @@ describe('DashboardSidebarMenu', () => {
       data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
     });
     setNavCourses([
-      // current (now within range) — two of them, out of code order to test sorting
+      // current (now within range): two of them, out of code order to test sorting
       {
         id: 'cur2',
         code: 'CS102',

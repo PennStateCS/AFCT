@@ -106,7 +106,7 @@
   --node-color: #fff59d;
   --grid-color: #edeff2;
   --success: #2d6a1e;
-  /* Badge colors — derived from brand palette (--primary, --tertiary, --destructive, --success) */
+  /* Badge colors: derived from brand palette (--primary, --tertiary, --destructive, --success) */
   --badge-success: #2d5a1b;        /* tint of --success */
   --badge-success-bg: #e8f0e0;
   --badge-success-border: #b8d49a;
@@ -124,7 +124,7 @@
   --badge-neutral-border: #d4d4d4;
 }
 
-/* Cytoscape + ELK JFLAP viewer — tooltip styles (tippy.js) */
+/* Cytoscape + ELK JFLAP viewer: tooltip styles (tippy.js) */
 /* These use the existing CSS variables so they adapt to light/dark themes. */
 .tippy-box[data-theme~='cy'] {
   background: var(--popover);
@@ -243,7 +243,7 @@
   --node-color: #caa22b;
   --grid-color: #1a1814;
   --success: #86c95a;
-  /* Badge dark mode overrides — explicit tints (cannot use brand vars; --tertiary changes to teal in dark) */
+  /* Badge dark mode overrides: explicit tints (cannot use brand vars; --tertiary changes to teal in dark) */
   --badge-success: #86c95a;
   --badge-success-bg: rgba(45, 90, 27, 0.25);
   --badge-success-border: rgba(134, 201, 90, 0.35);

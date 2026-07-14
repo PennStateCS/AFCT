@@ -85,7 +85,7 @@ describe('DayAssignmentsDialog', () => {
       />,
     );
 
-    // Exactly one Draft badge — next to the unpublished assignment only.
+    // Exactly one Draft badge, next to the unpublished assignment only.
     expect(screen.getAllByText('Draft')).toHaveLength(1);
     expect(screen.getByText('CS101 - Draft One')).toBeInTheDocument();
     expect(screen.getByText('CS101 - Published')).toBeInTheDocument();

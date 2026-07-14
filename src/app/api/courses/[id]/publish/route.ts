@@ -96,7 +96,7 @@ export const PATCH = withCourseAuth(
     }
   },
   // Course staff (faculty OR TA) or admin. TAs are the same tier as faculty here,
-  // so publish/unpublish is a staff action — stated explicitly rather than relying
+  // so publish/unpublish is a staff action, stated explicitly rather than relying
   // on the default role set.
   {
     access: 'manage',

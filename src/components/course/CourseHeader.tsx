@@ -58,7 +58,7 @@ function JoinCode({ code }: { code: string }) {
 }
 
 /**
- * The inner header content — title, badges, course status, and (for staff) the
+ * The inner header content: title, badges, course status, and (for staff) the
  * faculty/TA line. Extracted so it can sit either in its own card (student view)
  * or above the tab bar in the admin card.
  */

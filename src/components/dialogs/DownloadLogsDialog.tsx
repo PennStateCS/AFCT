@@ -60,7 +60,7 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
 
   const watchedBegTime = watch('begTime');
 
-  // Available log column names. Fetched lazily via TanStack Query — only when the
+  // Available log column names. Fetched lazily via TanStack Query, only when the
   // dialog is open (enabled: open preserves the original lazy-on-open behavior).
   // Field lists rarely change, so a 5-minute staleTime avoids refetching each open.
   const { data: fields, isError: fieldsError } = useQuery({

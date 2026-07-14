@@ -8,7 +8,7 @@ import { logDenial, logError } from '@/lib/api/activity';
 import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
 
 /**
- * Serves a problem's solution file — the most sensitive protected material, so
+ * Serves a problem's solution file, the most sensitive protected material, so
  * access is limited to course staff (faculty or TAs) or a system admin, and every
  * successful serve is audited (both inline and `?download=1`). Traversal filenames
  * are rejected.

@@ -1,7 +1,7 @@
 // src/lib/client-auth.ts
 //
 // Bearer-token auth for the native submission client (the Java app). The browser
-// uses NextAuth session cookies; native clients get one of these tokens instead —
+// uses NextAuth session cookies; native clients get one of these tokens instead:
 // they avoid CSRF and the browser idle-timeout, and are revocable/expirable.
 //
 // Only the SHA-256 hash of a token is ever stored. The plaintext is returned once,
@@ -15,13 +15,13 @@ export const CLIENT_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 /** Bump `lastUsedAt` at most this often, to avoid a write on every request. */
 const LAST_USED_THROTTLE_MS = 5 * 60 * 1000; // 5 minutes
 
-/** SHA-256 hex of the raw token — the only form persisted. */
+/** SHA-256 hex of the raw token: the only form persisted. */
 export function hashToken(rawToken: string): string {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
 }
 
 export type IssuedClientToken = {
-  /** Plaintext token — returned to the caller exactly once, never stored. */
+  /** Plaintext token, returned to the caller exactly once, never stored. */
   token: string;
   tokenId: string;
   expiresAt: Date;
@@ -55,7 +55,7 @@ export type ResolvedClientToken = { tokenId: string; user: ClientTokenUser };
 /**
  * Resolve a raw bearer token to its active user, or `null` if the token is unknown,
  * expired, revoked, or the user is missing/inactive. Bumps `lastUsedAt` (throttled,
- * best-effort — a write failure never fails the request).
+ * best-effort; a write failure never fails the request).
  */
 export async function resolveClientToken(rawToken: string): Promise<ResolvedClientToken | null> {
   if (!rawToken) return null;
@@ -102,7 +102,7 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
   return { tokenId: row.id, user };
 }
 
-/** Revoke a token by id (idempotent — a no-op if already revoked/gone). */
+/** Revoke a token by id (idempotent; a no-op if already revoked/gone). */
 export async function revokeClientToken(tokenId: string): Promise<void> {
   await prisma.clientApiToken.updateMany({
     where: { id: tokenId, revokedAt: null },

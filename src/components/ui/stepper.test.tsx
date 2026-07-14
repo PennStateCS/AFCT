@@ -32,7 +32,7 @@ describe('Stepper', () => {
     await user.click(screen.getByRole('button', { name: 'Step 1: Basics (completed)' }));
     expect(onStepClick).toHaveBeenCalledWith(0);
 
-    // The current and future steps are disabled — forward movement goes through Next.
+    // The current and future steps are disabled; forward movement goes through Next.
     expect(screen.getByRole('button', { name: 'Step 3: People' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Step 4: Review' })).toBeDisabled();
   });

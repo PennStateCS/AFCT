@@ -811,7 +811,7 @@ describe('DELETE /api/users/[id]', () => {
     const req = new NextRequest('http://localhost/api/users/u1', { method: 'DELETE' });
     await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
 
-    // The user's logs are intentionally NOT wiped — onDelete: SetNull keeps the
+    // The user's logs are intentionally NOT wiped: onDelete: SetNull keeps the
     // audit trail (userId nulled), so their history survives deletion.
     expect(prismaMock.activityLog.deleteMany).not.toHaveBeenCalled();
     expect(prismaMock.user.delete).toHaveBeenCalledWith({ where: { id: 'u1' } });

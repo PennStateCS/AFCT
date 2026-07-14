@@ -50,7 +50,7 @@ const BaseCourseFormObject = z
   .strict();
 
 /**
- * Create form schema — adds instructor selection. A new course is always created
+ * Create form schema: adds instructor selection. A new course is always created
  * unpublished; publishing is a separate, deliberate action afterwards.
  * Uses form-only validation (no transformations)
  */
@@ -217,7 +217,7 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
 /**
  * Server (API) schemas for the course create/update routes. These receive JSON
  * with datetime **strings** (parsed in the course's timezone server-side) and
- * coerce `credits` — distinct from the `*Form` schemas above, which validate the
+ * coerce `credits`; distinct from the `*Form` schemas above, which validate the
  * browser's datetime-local values. Field rules mirror the routes they replaced.
  */
 const courseApiBase = {

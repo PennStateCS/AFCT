@@ -1,4 +1,4 @@
-// Per-course "empty string notation" — how the empty string is rendered in
+// Per-course "empty string notation": how the empty string is rendered in
 // automata/languages (and passed to the JFLAP/JFF viewer as its epsSymbol).
 //
 // Kept free of any @prisma/client runtime import so it is safe to use from

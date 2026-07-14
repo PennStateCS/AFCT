@@ -26,7 +26,7 @@ export default defineConfig({
         'postcss.config.mjs',
         'prisma.config.ts',
         // Root-level lib holds the vendored java-runner.js (not TS, not unit-tested).
-        // Scope this to root lib only — the previous 'lib/**' also excluded src/lib,
+        // Scope this to root lib only; the previous 'lib/**' also excluded src/lib,
         // hiding the app's core logic (auth, security, submission worker) from coverage.
         'lib/*.js',
         'prisma/**',

@@ -4,8 +4,8 @@ import { NextResponse } from 'next/server';
  * Lightweight liveness check used by the container healthcheck. No auth, no DB.
  *
  * Intentionally minimal: this endpoint is unauthenticated, so it returns only a
- * liveness signal — no environment or version, which would give an anonymous
- * caller free recon. Host/version/build detail lives behind the admin-only
+ * liveness signal (no environment or version, which would give an anonymous
+ * caller free recon). Host/version/build detail lives behind the admin-only
  * status routes (`/api/admin/status/*`).
  * @openapi
  * responses:

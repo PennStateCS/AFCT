@@ -38,7 +38,7 @@ describe('TanStack Query cache behavior (app defaults)', () => {
   });
 
   it('serves a remount from cache (no refetch) within staleTime, and refetches once on invalidation', async () => {
-    // One client shared across mounts — exactly like QueryProvider, whose client
+    // One client shared across mounts, exactly like QueryProvider, whose client
     // is created once per browser session and survives route navigation.
     const client = new QueryClient({
       defaultOptions: { queries: { staleTime: 30_000, gcTime: 5 * 60_000, retry: false } },

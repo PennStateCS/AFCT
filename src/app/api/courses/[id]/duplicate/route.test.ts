@@ -179,7 +179,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     expect(res.status).toBe(201);
     expect(tx.course.create).toHaveBeenCalled();
-    // A copy always starts fresh — never archived and never published — even when
+    // A copy always starts fresh (never archived and never published) even when
     // the source course is archived.
     expect(tx.course.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -493,7 +493,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
       roster: {
         create: vi.fn(),
         createMany: vi.fn(),
-        // u2 is both copied (FACULTY on the source) and explicitly selected —
+        // u2 is both copied (FACULTY on the source) and explicitly selected;
         // they must get exactly one roster row.
         findMany: vi.fn().mockResolvedValue([{ userId: 'u2', role: 'FACULTY' }]),
       },

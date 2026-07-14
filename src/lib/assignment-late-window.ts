@@ -20,7 +20,7 @@ export function computeLateSubmissionState(options: {
   existingAllowLate: boolean;
   existingLateCutoff: Date | null;
   dueDate: Date;
-  // The course's timezone — the late cutoff wall-time is interpreted in it.
+  // The course's timezone: the late cutoff wall-time is interpreted in it.
   timezone: string;
 }): LateSubmissionStateResult {
   const {

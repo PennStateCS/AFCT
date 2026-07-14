@@ -7,11 +7,11 @@
 export type RosterMember = { userId: string; role: string };
 
 export type FacultyRosterDiff = {
-  /** Not on the roster at all — insert as FACULTY. */
+  /** Not on the roster at all: insert as FACULTY. */
   toAdd: string[];
-  /** On the roster in another role — promote to FACULTY. */
+  /** On the roster in another role: promote to FACULTY. */
   toPromote: string[];
-  /** Currently FACULTY but no longer desired — remove. */
+  /** Currently FACULTY but no longer desired: remove. */
   toRemove: string[];
 };
 

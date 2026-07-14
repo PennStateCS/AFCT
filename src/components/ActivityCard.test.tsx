@@ -74,7 +74,7 @@ describe('ActivityCard', () => {
   });
 
   it('shows the loading state before the first page resolves', () => {
-    // Never resolves — keeps the query in its initial loading state.
+    // Never resolves, keeps the query in its initial loading state.
     (global.fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
 
     renderWithClient(<ActivityCard courseId="course-1" />);

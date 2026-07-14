@@ -25,7 +25,7 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
   const [onlyActive, setOnlyActive] = useState(false);
   const { timezone } = useEffectiveTimezone();
 
-  // Cached user list — survives navigation and dedupes across the dashboard. The
+  // Cached user list: survives navigation and dedupes across the dashboard. The
   // SSR-provided list seeds the cache and is treated as fresh, so there's no
   // refetch on mount when the server already sent the data.
   const {

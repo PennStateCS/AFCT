@@ -14,7 +14,7 @@ import type { CourseListItem } from '@/lib/courses-list';
 export const archivedCoursesQueryKey = ['courses', 'archived'] as const;
 
 /**
- * The Archived Courses list — the same DataTable + columns as the admin Courses
+ * The Archived Courses list: the same DataTable + columns as the admin Courses
  * page, but scoped to archived courses only. Visibility is decided server-side
  * (admins see every archived course; everyone else only those they're on the
  * roster of), so this just renders and keeps the list fresh after row actions.

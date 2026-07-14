@@ -43,7 +43,7 @@ import { DELETE, GET, PATCH } from './route';
 
 beforeEach(() => {
   // resetAllMocks (not clearAllMocks) so each test's mockResolvedValueOnce queue
-  // starts empty — the roster route makes several findFirst calls and leaked
+  // starts empty; the roster route makes several findFirst calls and leaked
   // queue entries would otherwise cascade between tests.
   vi.resetAllMocks();
   // Sensible defaults; individual tests override. The DELETE/PATCH wrappers gate on
@@ -135,7 +135,7 @@ describe('GET /api/courses/[id]/roster/[userId]', () => {
   });
 
   it('returns null viewerCourseRole when the viewer has no roster entry', async () => {
-    // Branch 171: `viewerRoster?.role ?? null` — admin viewer not on the roster.
+    // Branch 171: `viewerRoster?.role ?? null`, admin viewer not on the roster.
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     isAdminMock.mockReturnValue(true);
     prismaMock.roster.findFirst
@@ -156,7 +156,7 @@ describe('GET /api/courses/[id]/roster/[userId]', () => {
   });
 
   it('handles server errors gracefully', async () => {
-    // Authorized, but the roster lookup throws — the handler's catch returns 500.
+    // Authorized, but the roster lookup throws; the handler's catch returns 500.
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.roster.findFirst.mockRejectedValue(new Error('DB error'));
 
@@ -309,7 +309,7 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
   });
 
   it('handles server errors gracefully', async () => {
-    // Authorized, but the target lookup throws — the handler's catch returns 500.
+    // Authorized, but the target lookup throws; the handler's catch returns 500.
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     isAdminMock.mockReturnValue(true);
     prismaMock.roster.findFirst.mockRejectedValue(new Error('DB error'));

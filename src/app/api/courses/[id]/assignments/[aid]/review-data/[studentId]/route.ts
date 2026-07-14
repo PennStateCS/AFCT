@@ -31,7 +31,7 @@ const submissionSelectWithEvaluation = {
 } as const;
 
 // Deliberately omits `evaluationRaw`: this is the fallback used when that optional
-// column is absent (P2022), so it must NOT select it — otherwise the retry re-runs
+// column is absent (P2022), so it must NOT select it; otherwise the retry re-runs
 // the identical failing query.
 const submissionSelectWithoutEvaluation = {
   id: true,
@@ -95,7 +95,7 @@ export const GET = withCourseAuth(
       const isStaff = await canManageCourse(user, courseId);
 
       // A student must not read review data (which includes problem content) for an
-      // unpublished assignment, even their own — mask it as 404, like the reads.
+      // unpublished assignment, even their own; mask it as 404, like the reads.
       if (!assignment.isPublished && !isStaff) {
         return NextResponse.json(
           { error: 'Assignment not found for this course' },

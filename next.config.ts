@@ -6,7 +6,7 @@ import type { NextConfig } from 'next';
 // `Content-Security-Policy`. hCaptcha's script/frame/style/connect origins are
 // allowlisted so the policy already works once enforced. Dev needs 'unsafe-eval'
 // for React Fast Refresh; production drops it. ('unsafe-inline' on script/style
-// is still required until Next.js nonce-based CSP is wired up — tighten later.)
+// is still required until Next.js nonce-based CSP is wired up (tighten later).)
 const isProd = process.env.NODE_ENV === 'production';
 const HCAPTCHA = 'https://hcaptcha.com https://*.hcaptcha.com';
 const contentSecurityPolicy = [
@@ -41,10 +41,10 @@ const nextConfig: NextConfig = {
 
   // Keep native/server-only deps external so they load from node_modules at
   // runtime instead of being bundled (bcrypt is a native addon). This is
-  // bundler-agnostic — it applies under Turbopack too, unlike webpack externals.
+  // bundler-agnostic; it applies under Turbopack too, unlike webpack externals.
   serverExternalPackages: ['bcrypt'],
 
-  // Baseline security headers on every response. No CSP here — that needs
+  // Baseline security headers on every response. No CSP here; that needs
   // app-specific tuning; these are safe defense-in-depth defaults.
   async headers() {
     return [
@@ -55,7 +55,7 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-DNS-Prefetch-Control', value: 'off' },
-          // Report-only for now — see the note above. HSTS is intentionally left
+          // Report-only for now (see the note above). HSTS is intentionally left
           // to nginx (docker/nginx/default.conf), which only sends it with a real
           // cert to avoid trapping self-signed deployments.
           { key: 'Content-Security-Policy-Report-Only', value: contentSecurityPolicy },

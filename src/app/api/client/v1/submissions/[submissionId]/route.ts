@@ -7,7 +7,7 @@ import { canViewStudentData } from '@/lib/permissions';
 type RouteCtx = { params: Promise<{ submissionId: string }> };
 
 /**
- * The result of one submission — for polling after a submit. Returns the queue
+ * The result of one submission, for polling after a submit. Returns the queue
  * `status` (PENDING/PROCESSING/COMPLETED/FAILED) and, once evaluated, whether it was
  * `correct`, the `grade`, and the `feedback` (the witness / counterexample string).
  * A caller may read their own submission; staff may read anyone's in their course.

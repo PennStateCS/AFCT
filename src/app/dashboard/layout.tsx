@@ -26,8 +26,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Default to open for first-time users (no cookie), otherwise use cookie value
   const defaultOpen = sidebarCookie ? sidebarCookie.value === 'true' : true;
 
-  // Reject a missing session, or one the session callback marked inactive — a
-  // disabled/deleted account or one whose idle-timeout has lapsed — so a stale
+  // Reject a missing session, or one the session callback marked inactive (a
+  // disabled/deleted account or one whose idle-timeout has lapsed) so a stale
   // token can't SSR-render a dashboard page.
   if (!session || !session.user || session.user.inactive) {
     redirect('/login');
