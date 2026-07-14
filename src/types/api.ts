@@ -1509,7 +1509,7 @@ export interface paths {
         put?: never;
         /**
          * Rerun all submissions in a course
-         * @description Re-queues every submission in a course, resetting each to PENDING and clearing its  feedback/result: the bulk counterpart to the single-submission rerun. Course staff  (faculty or TAs) or a system admin. Logs each submission plus one batch-summary  event, and returns the count re-queued.
+         * @description Re-queues every submission in a course, resetting each to PENDING (with a fresh  attempt budget) and clearing its feedback/result: the bulk counterpart to the  single-submission rerun. Course staff (faculty or TAs) or a system admin. Logs one  batch-summary event and returns the count re-queued.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/submissions/rerun/route.ts)
          */
