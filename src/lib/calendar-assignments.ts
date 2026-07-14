@@ -24,7 +24,7 @@ export async function getAssignmentsForUserRange(params: {
 
   // The viewer may be staff in one course and a student in another, so decide the
   // calendar treatment per course from their roster role rather than a global one.
-  // Admins get the staff treatment everywhere — the global flag outranks a STUDENT
+  // Admins get the staff treatment everywhere: the global flag outranks a STUDENT
   // roster row, matching the dashboard and the permission model.
   const isAdmin = Boolean(viewer?.isAdmin);
   const staffCourseIds = new Set(
@@ -43,10 +43,10 @@ export async function getAssignmentsForUserRange(params: {
         gte: startDate,
         lte: endDate,
       },
-      // The calendar never includes archived or soft-deleted courses — for anyone.
+      // The calendar never includes archived or soft-deleted courses, for anyone.
       course: { isArchived: false, deletedAt: null },
       // In courses where the viewer is staff, show every assignment; where they
-      // are a student, show only published assignments from published courses — a
+      // are a student, show only published assignments from published courses; a
       // student enrolled in an unpublished course gets no access to it at all, and
       // an unpublished assignment must not surface (title/due date) before release.
       OR: [

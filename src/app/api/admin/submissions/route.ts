@@ -9,7 +9,7 @@ const ListSubmissionsBody = z.object({ problemIds: z.array(z.string()).default([
 
 /**
  * Returns every submission across a set of problems, flattened for the admin
- * grading view — student, course, assignment/problem titles, status, and the
+ * grading view: student, course, assignment/problem titles, status, and the
  * recorded grade (joined from AssignmentProblemGrade). System administrators only.
  * Takes the problem ids in the body rather than the query string since the list
  * can be long.

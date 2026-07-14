@@ -21,7 +21,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
   const [open, setOpen] = useState(false);
   const { timezone } = useEffectiveTimezone();
 
-  // Cached courses list — the SSR-provided list seeds the cache and is treated as
+  // Cached courses list: the SSR-provided list seeds the cache and is treated as
   // fresh, so navigating back to Courses is instant with no refetch on mount.
   const {
     data: courses = [],

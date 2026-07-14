@@ -84,7 +84,7 @@ export const GET = withCourseAuth(
 /**
  * Creates an assignment in the course. Course staff (faculty or TAs) or a system
  * admin. The due date is interpreted as end-of-day in the **course's** timezone. Late
- * submissions and their cutoff must agree — a cutoff is required when late is on,
+ * submissions and their cutoff must agree: a cutoff is required when late is on,
  * forbidden when off, and must fall on or after the due date.
  * @openapi
  * summary: Create a course assignment

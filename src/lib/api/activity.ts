@@ -40,7 +40,7 @@ export async function logDenial(
 /**
  * Records an operational failure at ERROR severity, normalizing the thrown value
  * into a message string (the `err instanceof Error ? err.message : 'unknown error'`
- * ternary that was repeated 20+ times). Returns nothing — the caller chooses its
+ * ternary that was repeated 20+ times). Returns nothing: the caller chooses its
  * own response (error bodies still vary intentionally by route).
  */
 export async function logError(
@@ -74,7 +74,7 @@ export async function logError(
 /**
  * Deny access while **hiding existence from students**: a caller who is course staff
  * or a system admin gets **403 Forbidden** (they may legitimately know the resource
- * exists), while anyone else gets **404 Not Found** — the same response as a resource
+ * exists), while anyone else gets **404 Not Found**, the same response as a resource
  * that doesn't exist, so a student can't probe for hidden courses/assignments. This is
  * the single home for invariant #6's 404-vs-403 masking. Not logged (it's not a
  * privilege escalation, just a scoped not-found).
@@ -89,8 +89,8 @@ export async function denyExistence(
 /**
  * Record a staff/admin action that **affects a student** (grade override,
  * submit-on-behalf, password reset, un-enroll, account lifecycle). Enforces the audit
- * shape the logging policy requires — actor, action, target, course, and an optional
- * before/after — so these high-value entries can't be logged half-populated. INFO by
+ * shape the logging policy requires: actor, action, target, course, and an optional
+ * before/after, so these high-value entries can't be logged half-populated. INFO by
  * default; pass `severity` to override.
  */
 export async function logStudentImpactAction(

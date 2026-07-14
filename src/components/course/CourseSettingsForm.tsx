@@ -52,7 +52,7 @@ type CourseSettingsFormProps = {
 };
 
 /**
- * The course settings form — every editable course field plus a Save button.
+ * The course settings form: every editable course field plus a Save button.
  * Rendered inline on the course Settings tab and inside {@link EditCourseDialog}.
  */
 export function CourseSettingsForm({
@@ -61,7 +61,7 @@ export function CourseSettingsForm({
   onCancel,
   className,
 }: CourseSettingsFormProps) {
-  // A course's dates/deadlines are anchored to the course's OWN timezone — display and
+  // A course's dates/deadlines are anchored to the course's OWN timezone; display and
   // interpret the datetime-local fields in it (not the viewer's), so what staff see is
   // exactly what the server stores.
   const courseTz = course.timezone || 'UTC';
@@ -221,7 +221,7 @@ export function CourseSettingsForm({
         )}
       />
 
-      {/* COURSE TIMEZONE — anchors all the course's deadlines */}
+      {/* COURSE TIMEZONE: anchors all the course's deadlines */}
       <Controller
         name="timezone"
         control={control}

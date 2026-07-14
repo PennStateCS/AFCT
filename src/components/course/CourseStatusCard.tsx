@@ -13,7 +13,7 @@ type CourseStatusCardProps = {
 
 /**
  * The course's live publish switch. Unlike the settings form's fields, it applies
- * immediately — through the page's confirmation dialog — rather than on Save, so it
+ * immediately (through the page's confirmation dialog) rather than on Save, so it
  * sits in its own card beside the form. Archiving and restoring are admin-only and
  * live on the course list's Manage menu, not here.
  */

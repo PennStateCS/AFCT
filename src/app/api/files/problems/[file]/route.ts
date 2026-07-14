@@ -8,7 +8,7 @@ import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
 
 /**
  * Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system
- * admin only** — a problem file is the autograder's answer/solution key, so a student
+ * admin only**: a problem file is the autograder's answer/solution key, so a student
  * must never receive it (same sensitivity as a solution file). The download is audited,
  * and traversal filenames are rejected.
  * @openapi
@@ -49,7 +49,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     }
 
     // Staff-only: a problem file is the autograder's answer/solution key, so only
-    // course staff (faculty/TA) or a global admin may fetch it — never a student.
+    // course staff (faculty/TA) or a global admin may fetch it, never a student.
     if (!(await canManageCourse(session.user, problem.courseId))) {
       return logDenial(req, {
         userId: session.user.id,

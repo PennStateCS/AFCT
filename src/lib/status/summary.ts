@@ -93,7 +93,7 @@ async function sessionSummary(): Promise<{ total24h: number; uniqueUsers24h: num
 }
 
 /**
- * The cross-cutting numbers for the top status cards — fast by design (a single
+ * The cross-cutting numbers for the top status cards, fast by design (a single
  * ~100ms CPU sample + a handful of light queries), so it can load immediately
  * while the per-tab detail is fetched lazily.
  */

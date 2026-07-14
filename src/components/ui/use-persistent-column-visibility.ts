@@ -6,7 +6,7 @@ import type { VisibilityState } from '@tanstack/react-table';
  * `defaultColumnVisibility` baseline. Returns the state, its setter, and a reset that
  * both restores the defaults and clears the saved value.
  *
- * `defaultColumnVisibility` is only the hydration baseline — it is deliberately NOT a
+ * `defaultColumnVisibility` is only the hydration baseline; it is deliberately NOT a
  * hydration dependency, so a parent passing a fresh object each render can't re-run the
  * load effect and clobber the user's column choices.
  */

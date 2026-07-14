@@ -20,4 +20,4 @@ Other approaches you thought about, if any.
 
 ## Additional context
 
-Anything else — mockups, examples, related issues.
+Anything else: mockups, examples, related issues.

@@ -29,7 +29,7 @@ describe('proxy', () => {
     it('falls through (does not lock out) when the token is missing/undecodable', async () => {
       getTokenMock.mockResolvedValue(null);
       const res = await proxy(req('/api/admin/users'));
-      // Not a 401/redirect — the route's own isAdmin check decides.
+      // Not a 401/redirect: the route's own isAdmin check decides.
       expect(res.status).toBe(200);
     });
   });
@@ -76,7 +76,7 @@ describe('proxy', () => {
 
   describe('deny-by-default (fail-closed)', () => {
     it('401s an unauthenticated request to a route not on the allowlist', async () => {
-      // A brand-new authed route family is gated automatically — no matcher edit.
+      // A brand-new authed route family is gated automatically, no matcher edit.
       getTokenMock.mockResolvedValue(null);
       const res = await proxy(req('/api/reports/monthly'));
       expect(res.status).toBe(401);

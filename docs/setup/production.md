@@ -7,8 +7,8 @@ This guide describes how to deploy **AFCT** in a **production environment** on *
 
 There are **two ways to install**, and both end at the same running stack:
 
-- **Option A — Guided installer (recommended).** One command runs a short wizard that generates your secrets, asks for your admin details, and brings everything up. Best for most people. _(`install.sh` on Linux/macOS, `install.ps1` on Windows.)_
-- **Option B — Manual setup (advanced).** You clone the repository, edit the environment file yourself, and run Docker Compose. Choose this if you want full control, are on Windows, or are scripting your own provisioning.
+- **Option A: Guided installer (recommended).** One command runs a short wizard that generates your secrets, asks for your admin details, and brings everything up. Best for most people. _(`install.sh` on Linux/macOS, `install.ps1` on Windows.)_
+- **Option B: Manual setup (advanced).** You clone the repository, edit the environment file yourself, and run Docker Compose. Choose this if you want full control, are on Windows, or are scripting your own provisioning.
 
 The Docker deployment is four containers (nginx, the app, PostgreSQL, and a backup sidecar) managed by Docker Compose. You do not need to know Docker internals to operate it, but you should be comfortable running a handful of `docker compose` commands.
 
@@ -19,8 +19,8 @@ The Docker deployment is four containers (nginx, the app, PostgreSQL, and a back
 1. [Prerequisites](#1-prerequisites)
 2. [Install Docker](#2-install-docker)
 3. [Install AFCT](#3-install-afct)
-   - [Option A — Guided installer (recommended)](#option-a--guided-installer-recommended)
-   - [Option B — Manual setup (advanced)](#option-b--manual-setup-advanced)
+   - [Option A: Guided installer (recommended)](#option-a-guided-installer-recommended)
+   - [Option B: Manual setup (advanced)](#option-b-manual-setup-advanced)
 4. [TLS / HTTPS Certificates](#4-tls--https-certificates)
 5. [Architecture Overview](#5-architecture-overview)
 6. [Verify Deployment](#6-verify-deployment)
@@ -35,10 +35,10 @@ The Docker deployment is four containers (nginx, the app, PostgreSQL, and a back
 
 Before you begin, make sure you have:
 
-- A server or host with **at least 2 CPU cores and 6 GB RAM** (the app container alone is capped at 4 GB, plus Postgres and the sidecars — 4 GB total is the bare minimum and will be tight)
+- A server or host with **at least 2 CPU cores and 6 GB RAM** (the app container alone is capped at 4 GB, plus Postgres and the sidecars; 4 GB total is the bare minimum and will be tight)
 - A **public DNS record** pointing your domain to the server's IP
 - Firewall ports **80 (HTTP)** and **443 (HTTPS)** open
-- `git` installed **(only needed for Option B — the manual path)**
+- `git` installed **(only needed for Option B, the manual path)**
 
 Get the DNS record in place before you start, not after. The value you put in `NEXTAUTH_URL` must match the domain users actually reach the server on, and authentication misbehaves in confusing ways when it does not. Port 80 stays open even though all real traffic is HTTPS, because nginx uses it to redirect visitors to 443.
 
@@ -51,7 +51,7 @@ That last point simplifies operations: there are no paths on the host to create,
 
 ## 2) Install Docker
 
-You need the Docker engine and the Compose plugin — for **both** install options. The verification commands in each section below confirm both; do not proceed until they succeed.
+You need the Docker engine and the Compose plugin, for **both** install options. The verification commands in each section below confirm both; do not proceed until they succeed.
 
 ### Windows (Windows Server 2022 or Windows 11)
 
@@ -136,7 +136,7 @@ docker compose version
 
 Pick **one** of the two options below. Both produce the same four-container stack; the rest of this guide (TLS, verification, updates, backups) applies either way.
 
-### Option A — Guided installer (recommended)
+### Option A: Guided installer (recommended)
 
 The installer is a small self-contained bundle: a script plus a compose file. It checks your prerequisites, asks a few questions, generates strong secrets, and brings the stack up. Use **`install.sh`** on Linux/macOS or **`install.ps1`** (PowerShell) on Windows.
 
@@ -177,13 +177,13 @@ The wizard will:
 3. Generate the database password and auth secret automatically and write them to `.env.production` (readable only by you).
 4. Pull the images and start the stack, then print your URL and admin login.
 
-If anything goes wrong, the installer drops a **redacted** `afct-diagnostics-<timestamp>.zip` next to the script (you can also run `sh install.sh diagnostics`, or `.\install.ps1 diagnostics` on Windows, any time) — send that to your administrator for help. See `deploy/README.md` for the full reference, including the non-interactive mode.
+If anything goes wrong, the installer drops a **redacted** `afct-diagnostics-<timestamp>.zip` next to the script (you can also run `sh install.sh diagnostics`, or `.\install.ps1 diagnostics` on Windows, any time). Send that to your administrator for help. See `deploy/README.md` for the full reference, including the non-interactive mode.
 
 When it finishes, skip to [section 4 (TLS)](#4-tls--https-certificates).
 
-### Option B — Manual setup (advanced)
+### Option B: Manual setup (advanced)
 
-This is exactly what the installer automates. Use it for full control, on Windows, or when scripting your own provisioning. It runs from a git clone of the repository (which also makes updates a `git pull` away — see section 7).
+This is exactly what the installer automates. Use it for full control, on Windows, or when scripting your own provisioning. It runs from a git clone of the repository (which also makes updates a `git pull` away; see section 7).
 
 **Get the code:**
 
@@ -203,9 +203,9 @@ nano .env.production
 
 The template documents every variable. Most defaults are fine, but these are not optional and getting them wrong is the most common cause of a broken first deployment:
 
-- **POSTGRES_PASSWORD** — pick a long random value, and make sure the same value appears inside **DATABASE_URL**.
-- **ADMIN_EMAIL / ADMIN_PASSWORD** — the initial administrator, seeded on the first run against an empty database.
-- **NEXTAUTH_SECRET** — signs session tokens. Generate a long random value once and treat it like a password:
+- **POSTGRES_PASSWORD**: pick a long random value, and make sure the same value appears inside **DATABASE_URL**.
+- **ADMIN_EMAIL / ADMIN_PASSWORD**: the initial administrator, seeded on the first run against an empty database.
+- **NEXTAUTH_SECRET**: signs session tokens. Generate a long random value once and treat it like a password:
 
   ```bash
   openssl rand -base64 64
@@ -213,7 +213,7 @@ The template documents every variable. Most defaults are fine, but these are not
 
   If it leaks, an attacker can forge sessions; if you change it later, every user gets logged out.
 
-- **NEXTAUTH_URL** — must match your public HTTPS domain exactly (`https://your-domain.com`). A mismatch (http instead of https, a bare IP, the wrong subdomain) produces login redirect loops rather than a clear error, so double-check it now.
+- **NEXTAUTH_URL**: must match your public HTTPS domain exactly (`https://your-domain.com`). A mismatch (http instead of https, a bare IP, the wrong subdomain) produces login redirect loops rather than a clear error, so double-check it now.
 - **hCaptcha** is optional. It only appears as a challenge after repeated failed logins; a fresh install works without it. Configure it later under **System Settings → Security → hCaptcha** (which takes precedence over the env vars), or pre-seed `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY`. Never reuse the public test keys in production.
 
 **Start the stack:**
@@ -311,14 +311,14 @@ You should get the AFCT login page over HTTPS, and be able to sign in with the a
 
 ## 7) Updating AFCT
 
-**Option A (installer bundle)** — from the folder that holds your `docker-compose.yml`:
+**Option A (installer bundle)**, from the folder that holds your `docker-compose.yml`:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-**Option B (git clone)** — also refresh the code/compose first:
+**Option B (git clone)**, also refresh the code/compose first:
 
 ```bash
 git pull
@@ -334,7 +334,7 @@ Compose only restarts containers whose image or configuration actually differs, 
 
 ## 8) Backups
 
-AFCT ships with an **automated backup sidecar** (`afct-db-backup`). On a daily schedule it writes a matched pair — a PostgreSQL dump plus a tarball of the upload volumes (database rows reference files by name, so both are needed for a coherent restore) — to the `db_backups` volume, and prunes old ones.
+AFCT ships with an **automated backup sidecar** (`afct-db-backup`). On a daily schedule it writes a matched pair, a PostgreSQL dump plus a tarball of the upload volumes (database rows reference files by name, so both are needed for a coherent restore), to the `db_backups` volume, and prunes old ones.
 
 - **Schedule, on/off, and retention** are set in the browser under **Admin → System Settings** (`backupEnabled` / `backupHour` / `backupRetentionDays`).
 - **Back up now:** the same System Settings screen has an on-demand button.
@@ -378,7 +378,7 @@ docker compose logs -f app
 
 The app logs are where application-level problems surface: failed migrations, missing environment variables, and database connectivity errors all show up here with reasonably specific messages. Read the first error in a burst, not the last; later errors are often just fallout from the first one.
 
-- **Installer users:** run `sh install.sh diagnostics` (or `.\install.ps1 diagnostics` on Windows) to collect a redacted support bundle (`afct-diagnostics-<timestamp>.zip`) with the install log, container status/logs, and your config with secret values masked — hand that to your administrator.
+- **Installer users:** run `sh install.sh diagnostics` (or `.\install.ps1 diagnostics` on Windows) to collect a redacted support bundle (`afct-diagnostics-<timestamp>.zip`) with the install log, container status/logs, and your config with secret values masked; hand that to your administrator.
 
 - TLS warnings indicate missing or invalid certificates. A browser warning on a fresh install is expected (you are still on the self-signed certificate) and section 4 covers replacing it. A warning appearing on a previously trusted site usually means the certificate has expired and needs renewing through the same admin interface.
 

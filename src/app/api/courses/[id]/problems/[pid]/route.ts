@@ -22,7 +22,7 @@ const uploadsDir = path.join('/private', 'uploads', 'solutions');
 /**
  * Updates a problem within a course (multipart/form-data). Course staff (faculty or
  * TAs) or a system admin. The problem must belong to the course in the path. Sending a
- * new file replaces the stored solution — it's structure-validated and size-checked
+ * new file replaces the stored solution; it's structure-validated and size-checked
  * first, and the previous file is removed. Omitting the file keeps the current one.
  * @openapi
  * summary: Update a course problem

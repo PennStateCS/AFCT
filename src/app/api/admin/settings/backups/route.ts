@@ -27,7 +27,7 @@ export const GET = withAdminAuth(() => NextResponse.json({ backups: listBackups(
 
 /**
  * Requests an on-demand backup by dropping a trigger file the db-backup container
- * polls for. System administrators only. Returns 202 (accepted) — the backup runs
+ * polls for. System administrators only. Returns 202 (accepted); the backup runs
  * asynchronously in that container, not in this request.
  * @openapi
  * summary: Trigger a backup now

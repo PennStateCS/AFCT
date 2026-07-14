@@ -1,7 +1,7 @@
 // Configuration for the submission evaluation queue / worker.
 //
 // Source of truth is the SystemSettings row (editable in the admin UI). When
-// that's unavailable — no row yet, or the DB is unreachable (e.g. unit tests) —
+// that's unavailable (no row yet, or the DB is unreachable, e.g. unit tests),
 // we fall back to the matching env var, then to the built-in default. Every
 // value is clamped to a sane range before it leaves here.
 
@@ -70,7 +70,7 @@ export async function getQueueSettings(): Promise<QueueSettings> {
       },
     });
   } catch {
-    row = null; // DB unavailable — fall back to env/defaults below
+    row = null; // DB unavailable; fall back to env/defaults below
   }
 
   return {

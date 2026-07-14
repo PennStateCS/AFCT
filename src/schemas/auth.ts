@@ -34,7 +34,7 @@ export const SignupSchema = z.object({
 });
 
 /**
- * The login page's signup form — the account fields plus a confirm-password field
+ * The login page's signup form: the account fields plus a confirm-password field
  * that must match. Used client-side to surface per-field errors before submitting.
  */
 export const SignupFormSchema = z

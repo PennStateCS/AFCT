@@ -7,8 +7,8 @@ import { useSession } from 'next-auth/react';
 import { retryUnlessClientError } from '@/lib/query-fetch';
 
 /**
- * Clears the entire query cache whenever the signed-in identity changes — a
- * different user id or a change to their admin flag — and on sign-out. The
+ * Clears the entire query cache whenever the signed-in identity changes (a
+ * different user id or a change to their admin flag) and on sign-out. The
  * cache holds user- and role-specific data (courses, rosters, grades, admin
  * lists), so a stale entry must never survive a user switch or a privilege
  * change and be shown to the next identity. Today a normal logout also hard-
@@ -24,7 +24,7 @@ export function CacheResetOnIdentityChange() {
       ? `${data.user.id}:${data.user.isAdmin ? 1 : 0}`
       : status === 'unauthenticated'
         ? null
-        : undefined; // 'loading' — don't decide yet
+        : undefined; // 'loading', don't decide yet
 
   const prev = useRef<string | null | undefined>(undefined);
   useEffect(() => {
@@ -46,7 +46,7 @@ export function CacheResetOnIdentityChange() {
 
 /**
  * App-level TanStack Query provider for the dashboard. The client is created once
- * per browser session (via useState) so its cache survives route navigation —
+ * per browser session (via useState) so its cache survives route navigation,
  * revisiting a page serves cached data instantly and revalidates in the
  * background. Defaults favor snappy navigation while keeping data reasonably
  * fresh; individual queries can override staleTime as needed.

@@ -2,7 +2,7 @@
 //
 // The whole submission-creation pipeline, extracted so the browser route
 // (`/api/submissions`) and the native-client route (`/api/client/v1/submissions`)
-// create submissions through identical code — same validation, caps, cooldown, late
+// create submissions through identical code: same validation, caps, cooldown, late
 // window, storage, serializable insert, audit logging, and the same PENDING → worker
 // queue. Callers do their own authentication first and pass the resolved user.
 import fs from 'fs';
@@ -32,7 +32,7 @@ export type CreateSubmissionInput = {
   assignmentId?: string;
   problemId?: string;
   file: File | null;
-  /** The originating request — used only for audit-log IP/UA context. */
+  /** The originating request, used only for audit-log IP/UA context. */
   req: Request;
 };
 
@@ -168,7 +168,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     return { ok: false, status: 404, error: 'Assignment not found.' };
   }
 
-  // An archived course is frozen (read-only) for everyone, including staff/admin —
+  // An archived course is frozen (read-only) for everyone, including staff/admin;
   // it accepts no new submissions.
   if (await isCourseArchived(courseId)) {
     await audit('SUBMISSION_REJECTED_ARCHIVED', 'WARNING', { reason: 'Course is archived.' });
@@ -179,7 +179,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     };
   }
 
-  // Per-problem cap (staff exempt; `<= 0` is unlimited). Fast path — the authoritative
+  // Per-problem cap (staff exempt; `<= 0` is unlimited). Fast path; the authoritative
   // check runs again inside the serializable transaction below.
   const isCourseStaff = await canManageCourse(user, courseId);
   if (!isCourseStaff && link.maxSubmissions > 0) {

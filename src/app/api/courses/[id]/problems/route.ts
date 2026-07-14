@@ -112,7 +112,7 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Course not found' }, { status: 404 });
       }
 
-      // Write uploaded file to disk under a random UUID + sanitized extension —
+      // Write uploaded file to disk under a random UUID + sanitized extension:
       // never a path derived from the client-supplied file.name. Written
       // non-executable; the original name is kept only as display metadata below.
       fs.mkdirSync(uploadsDir, { recursive: true });

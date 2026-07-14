@@ -84,7 +84,7 @@ describe('ArchivedCoursesClient', () => {
     });
 
     // A row action's onDeleted callback triggers the refetch; grab it from columns().
-    // columns(onCourseDeleted, onCourseDuplicated, timeZone) — deleted is arg 0.
+    // columns(onCourseDeleted, onCourseDuplicated, timeZone): deleted is arg 0.
     renderWithClient(
       <ArchivedCoursesClient initialCourses={[course('c1', 'Archived One', true)]} isAdmin />,
     );

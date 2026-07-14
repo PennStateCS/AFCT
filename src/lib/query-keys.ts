@@ -8,7 +8,7 @@
  *   - Keys stay consistent, so reads dedupe and invalidations hit the right
  *     entries. Partial keys (e.g. `queryKeys.course.all(id)`) are valid prefixes
  *     for `invalidateQueries`.
- *   - Any variable a `queryFn` reads must appear in the key — the
+ *   - Any variable a `queryFn` reads must appear in the key; the
  *     `@tanstack/query/exhaustive-deps` lint enforces this; building keys here
  *     makes it easy to get right.
  *
@@ -28,7 +28,7 @@ export const queryKeys = {
 
   // --- A single course and its sections ------------------------------------
   course: {
-    /** Prefix for every entry scoped to a course — use to invalidate all of them. */
+    /** Prefix for every entry scoped to a course; use to invalidate all of them. */
     all: (courseId: string) => ['course', courseId] as const,
     view: (courseId: string, view: string) => ['course', courseId, view] as const,
     students: (courseId: string) => ['course', courseId, 'students'] as const,
@@ -59,7 +59,7 @@ export const queryKeys = {
     shell: (courseId: string, assignmentId: string) =>
       ['course', courseId, 'assignment', assignmentId, 'shell'] as const,
     /**
-     * The caller's own submissions/comments/grades for an assignment — the
+     * The caller's own submissions/comments/grades for an assignment; the
      * response is user-specific, so it must never be reused across a user switch
      * (the QueryClient is cleared on identity change; see QueryProvider).
      */
@@ -99,7 +99,7 @@ export const queryKeys = {
     settingsTls: () => ['admin', 'settings', 'tls'] as const,
     logs: <T>(params: T) => ['admin', 'logs', params] as const,
     logsFields: () => ['admin', 'logs', 'fields'] as const,
-    /** Submissions for a set of problems — ids are sorted so key order is stable. */
+    /** Submissions for a set of problems; ids are sorted so key order is stable. */
     submissions: (problemIds: readonly string[]) =>
       ['admin', 'submissions', sortedIds(problemIds)] as const,
     /** Cascading filter lists behind the submissions log (courses → assignments → problems). */

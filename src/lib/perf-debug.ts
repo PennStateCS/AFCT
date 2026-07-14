@@ -3,7 +3,7 @@
  *
  * Everything here is a no-op unless a debug flag is explicitly set, and it logs
  * ONLY safe metadata: HTTP method, request *path* (query string stripped),
- * response status, elapsed milliseconds, and — on the client — a warning when
+ * response status, elapsed milliseconds, and (on the client) a warning when
  * the same request fires twice in quick succession. It never logs request or
  * response bodies, names, emails, grades, submissions, tokens, roster contents,
  * or any query-string parameters.

@@ -259,7 +259,7 @@ export function useTrends(sample: HistoryPoint | null, keepHours = 24) {
   const [windowHours, setWindowHours] = useState(1);
   const setHours = useCallback((h: number) => setWindowHours(h), []);
 
-  // Persist each new sample to history as a side effect — never during render.
+  // Persist each new sample to history as a side effect, never during render.
   // Dedupe by timestamp so a repeated effect run (e.g. StrictMode's double
   // invoke) can't append the same point twice, and any legacy dupes collapse.
   useEffect(() => {

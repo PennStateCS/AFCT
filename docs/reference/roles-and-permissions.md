@@ -64,14 +64,14 @@ rule lives; nothing else in the codebase should restate it.
 - **Archived course:** frozen and **read-only for everyone, admins included**.
   No edits to settings, assignments, problems, grades, or roster. Staff and
   admins can still *view* it; students cannot access it at all. **Archiving and
-  restoring (un-archiving) are both admin-only** — staff can no longer do
+  restoring (un-archiving) are both admin-only**; staff can no longer do
   either.
 - **Deleted course:** deletion adapts to the course. An **empty** course (no
   assignments, problems, students, or submissions) is **hard-deleted**
   (permanently removed). A course with real content or enrollment is
   **soft-deleted**: it stamps `deletedAt`, retains all data, and disappears from
   every list. A soft-deleted course is **inaccessible to everyone, admins
-  included** — no direct-URL access — and is masked as **404** on every
+  included** (no direct-URL access) and is masked as **404** on every
   course-scoped route. Recovery is out-of-band (data layer / backup); there is
   no in-app restore yet.
 

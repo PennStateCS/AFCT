@@ -3,7 +3,7 @@ import { z } from 'zod';
 const groupName = z.string().trim().min(1, 'Name is required');
 
 /**
- * Server body for creating or renaming a group — the name only; the courseId (and
+ * Server body for creating or renaming a group: the name only; the courseId (and
  * groupId, for rename) come from the path. Shared by both group routes.
  */
 export const GroupNameSchema = z.object({ name: groupName });

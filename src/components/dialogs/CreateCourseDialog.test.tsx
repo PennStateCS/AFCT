@@ -213,7 +213,7 @@ const fillForm = async (user: ReturnType<typeof userEvent.setup>) => {
   });
   await clickNext(user);
 
-  // Step 3: Faculty & TAs — pick one of each.
+  // Step 3: Faculty & TAs, pick one of each.
   await user.click(await screen.findByLabelText('Ada Lovelace'));
   await user.click(await screen.findByLabelText('Grace Hopper'));
   await clickNext(user);

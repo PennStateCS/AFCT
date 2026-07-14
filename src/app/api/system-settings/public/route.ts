@@ -11,7 +11,7 @@ import { getHcaptchaSiteKey } from '@/lib/hcaptcha';
 /**
  * The safe subset of system settings the login and signup screens need before a
  * user is authenticated. Deliberately public and limited to non-sensitive values
- * — notably the hCaptcha *site* key, never the secret.
+ * (notably the hCaptcha *site* key, never the secret).
  * @openapi
  * summary: Get public system settings
  * responses:
@@ -39,7 +39,7 @@ export async function GET() {
       hcaptchaSiteKey: await getHcaptchaSiteKey(),
     });
   } catch (error) {
-    // Unauthenticated endpoint loaded on every login/signup screen — a DB blip
+    // Unauthenticated endpoint loaded on every login/signup screen; a DB blip
     // must not escape as an unhandled framework 500.
     console.error('system-settings/public error:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

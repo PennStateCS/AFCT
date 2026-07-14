@@ -56,7 +56,7 @@ export default function SystemStatusClient() {
     }
   };
 
-  // Fast top-card summary — always loaded; the per-tab detail is fetched lazily.
+  // Fast top-card summary, always loaded; the per-tab detail is fetched lazily.
   const {
     data: summary,
     isFetching,

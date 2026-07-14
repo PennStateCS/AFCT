@@ -107,7 +107,7 @@ beforeEach(() => {
   });
   prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
   // Not archived by default (clearAllMocks doesn't reset mockResolvedValue, so set it
-  // each test — the archived-course test overrides this locally).
+  // each test; the archived-course test overrides this locally).
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   prismaMock.submission.findFirst.mockResolvedValue(null);
   prismaMock.submission.count.mockResolvedValue(0);
@@ -223,7 +223,7 @@ describe('POST /api/submissions', () => {
   });
 
   it('does not cap staff test-submissions', async () => {
-    // A faculty member submitting to test — exempt from the cap even at/over the limit.
+    // A faculty member submitting to test, exempt from the cap even at/over the limit.
     prismaMock.roster.findFirst.mockResolvedValue({
       role: 'FACULTY',
       course: { isPublished: true },

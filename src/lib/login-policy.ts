@@ -1,7 +1,7 @@
 // Server-only resolver for the per-account login lockout policy.
 //
 // Source of truth is the SystemSettings row (editable in the admin UI). When
-// that's unavailable — no row yet, or the DB is unreachable — we fall back to
+// that's unavailable (no row yet, or the DB is unreachable), we fall back to
 // the matching env var, then to the built-in default. Values are clamped to
 // safe bounds so the policy can't be set loose enough to disable protection.
 
@@ -32,7 +32,7 @@ export async function getLoginLockoutPolicy(): Promise<LoginLockoutPolicy> {
       select: { loginMaxAttempts: true, loginLockoutMinutes: true },
     });
   } catch {
-    row = null; // DB unavailable — fall back to env/defaults below
+    row = null; // DB unavailable; fall back to env/defaults below
   }
 
   const maxAttempts = clampLoginMaxAttempts(

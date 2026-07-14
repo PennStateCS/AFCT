@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DownloadLogsDialog } from './DownloadLogsDialog';
 
 // Render with a fresh QueryClient per test (retry off, no lingering cache) so the
-// fields query starts clean each time — mirrors the dashboard QueryClientProvider.
+// fields query starts clean each time, mirrors the dashboard QueryClientProvider.
 const renderWithClient = (ui: React.ReactElement) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
@@ -25,7 +25,7 @@ vi.mock('@/components/ui/SearchableMultiSelect', () => ({
   ),
 }));
 
-// Datetime inputs aren't relevant here — stub to a no-op.
+// Datetime inputs aren't relevant here; stub to a no-op.
 vi.mock('@/components/ui/InputGroup', () => ({
   __esModule: true,
   default: () => <div data-testid="input-group" />,

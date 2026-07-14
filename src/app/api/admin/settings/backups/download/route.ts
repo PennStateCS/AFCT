@@ -12,7 +12,7 @@ import { BACKUP_DIR, isValidBackupName } from '@/lib/backups';
  * A database dump contains the entire database (password hashes and all PII), so
  * the download is always recorded as a SECURITY audit event. The filename is
  * checked against a strict allow-list and the resolved path must stay inside the
- * backup directory — two independent guards against path traversal.
+ * backup directory: two independent guards against path traversal.
  * @openapi
  * summary: Download a backup file
  * parameters:
@@ -34,7 +34,7 @@ import { BACKUP_DIR, isValidBackupName } from '@/lib/backups';
 export const GET = withAdminAuth(
   async (req, _ctx, { user }) => {
     const file = new URL(req.url).searchParams.get('file') ?? '';
-    // Strict allow-list of exact backup filenames — also blocks path traversal.
+    // Strict allow-list of exact backup filenames; also blocks path traversal.
     if (!isValidBackupName(file)) {
       return NextResponse.json({ error: 'Invalid backup file' }, { status: 400 });
     }
@@ -52,7 +52,7 @@ export const GET = withAdminAuth(
       return NextResponse.json({ error: 'Backup not found' }, { status: 404 });
     }
 
-    // A dump is the entire database (password hashes, all PII) — always audit it.
+    // A dump is the entire database (password hashes, all PII); always audit it.
     try {
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

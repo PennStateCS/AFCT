@@ -175,7 +175,7 @@ export const GET = withCourseAuth(
       } else if (includeRoster) {
         // Non-staff (students) get a privacy-safe roster: course staff keep their
         // names (the UI labels the course with them) but not their email, and
-        // every classmate collapses to a count-only placeholder — no peer id,
+        // every classmate collapses to a count-only placeholder: no peer id,
         // name, or email is ever sent to a student.
         enrolled = toStudentSafeEnrolled(
           rosterRows.map((r) => ({ ...r.user, courseRole: r.role })),
@@ -507,7 +507,7 @@ export const PUT = withCourseAuth(
 
       // Attach problem counts to assignments. Batch the submission/comment totals
       // across all assignments (one aggregate each) rather than a per-assignment
-      // count() loop — the same approach the GET view uses.
+      // count() loop, the same approach the GET view uses.
       const updatedAssignmentIds = updatedCourse.assignments.map((a) => a.id);
       const submissionCountMap = await countByAssignment(
         prisma.submission as unknown as OptionalCountDelegate,
@@ -632,8 +632,8 @@ export const PUT = withCourseAuth(
 );
 
 /**
- * Deletes a course (system admin only). An **empty** course — no assignments, no
- * problems, no student enrollments, and no submissions — is removed permanently
+ * Deletes a course (system admin only). An **empty** course (no assignments, no
+ * problems, no student enrollments, and no submissions) is removed permanently
  * (its staff-only roster cascades away; audit logs keep a nulled course pointer).
  * Any course that holds real work or students is **soft-deleted** instead: the row
  * and all its data are retained but `deletedAt` is stamped so the access gates and
@@ -657,7 +657,7 @@ export const PUT = withCourseAuth(
 export const DELETE = withCourseAuth(
   async (req, ctx, { session, user, courseId: id }) => {
     // Deleting a course is admin-only. The wrapper admits course staff, so reject a
-    // non-admin (faculty/TA) here — staff may archive a course but never delete it.
+    // non-admin (faculty/TA) here; staff may archive a course but never delete it.
     if (!isAdmin(user)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
@@ -694,11 +694,11 @@ export const DELETE = withCourseAuth(
         submissionCount === 0;
 
       if (isEmpty) {
-        // Hard delete — the schema cascades remove the (staff-only) roster, and the
+        // Hard delete: the schema cascades remove the (staff-only) roster, and the
         // audit log's courseId is SetNull, so the log survives with a null pointer.
         await prisma.course.delete({ where: { id } });
       } else {
-        // Soft delete — retain the row and its data, but hide it everywhere.
+        // Soft delete: retain the row and its data, but hide it everywhere.
         await prisma.course.update({ where: { id }, data: { deletedAt: new Date() } });
       }
 

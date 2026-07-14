@@ -128,7 +128,7 @@ export const UpdateProblemSchema = addProblemValidation(
  * the File itself and the dynamic size limit / XML-structure check stay in the
  * route, but the extension allow-list is enforced there via
  * {@link isAllowedProblemExtension}. This is the server counterpart to the
- * client-only `ProblemFormSchema` — the browser was previously the only validator.
+ * client-only `ProblemFormSchema`; the browser was previously the only validator.
  */
 const problemApiScalars = {
   title: z

@@ -6,7 +6,7 @@
 // sites read as one intent-revealing line and error handling can't drift.
 //
 // Client-only: `mutateWithToast` imports the toast layer. Server route code uses the
-// `lib/api/http` + `lib/api/activity` toolkit instead — nothing server-side imports
+// `lib/api/http` + `lib/api/activity` toolkit instead; nothing server-side imports
 // this module.
 import { showToast } from '@/lib/toast';
 import { errMessage } from '@/lib/errors';
@@ -25,7 +25,7 @@ export class ApiError extends Error {
 }
 
 type ApiFetchInit = Omit<RequestInit, 'body'> & {
-  /** JSON body — stringified, with `Content-Type: application/json` set for you. */
+  /** JSON body: stringified, with `Content-Type: application/json` set for you. */
   json?: unknown;
   /** Raw body (e.g. FormData). The browser sets the multipart boundary itself. */
   form?: BodyInit;
@@ -83,7 +83,7 @@ export type MutateResult<T> = { ok: true; data: T } | { ok: false; error: string
 
 /**
  * Run a mutation, toasting success/failure, and return a discriminated result so the
- * caller can branch (close a dialog, refresh a list) only on success — without its own
+ * caller can branch (close a dialog, refresh a list) only on success, without its own
  * try/catch. Replaces the repeated `try { … showToast.success } catch (e) {
  * showToast.error(e instanceof Error ? e.message : 'Network error') }` block.
  */

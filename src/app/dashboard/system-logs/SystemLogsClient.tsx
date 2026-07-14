@@ -74,7 +74,7 @@ export default function SystemLogsClient() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // Stable, serializable description of the current query — used both as the
+  // Stable, serializable description of the current query, used both as the
   // React Query cache key and to build the request params. Each distinct
   // combination of page/size/search/severity/sort is cached separately.
   const sort = sorting[0];

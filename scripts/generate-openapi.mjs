@@ -27,7 +27,7 @@ const SKIP = new Set([join(API_DIR, 'auth', '[...nextauth]', 'route.ts')]);
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 
-// Rendered as markdown at the top of the docs — the orientation a new consumer needs.
+// Rendered as markdown at the top of the docs: the orientation a new consumer needs.
 const API_DESCRIPTION = [
   'Auto-generated reference for the AFCT Dashboard API. Paths and methods are inferred',
   'from the route files so the docs stay in step with the code; individual endpoints are',
@@ -84,7 +84,7 @@ const REDOC_OPTIONS = {
   pathInMiddlePanel: true, // show the request path in the content panel
   requiredPropsFirst: true, // list required properties before optional ones
   sortPropsAlphabetically: true, // sort object properties A–Z
-  // Branding — uncomment and set to match the app:
+  // Branding: uncomment and set to match the app:
   // theme: { colors: { primary: { main: '#2563eb' } }, sidebar: { width: '280px' } },
 };
 
@@ -268,7 +268,7 @@ function buildSpec(routes) {
         security: authed ? [{ cookieAuth: [] }] : [],
         ...(params.length ? { parameters: params } : {}),
         // Only fall back to a placeholder response when the @openapi block doesn't
-        // declare its own — otherwise the placeholder lingers alongside real ones.
+        // declare its own; otherwise the placeholder lingers alongside real ones.
         ...(operation?.responses ? {} : { responses: { 200: { description: 'Success' } } }),
       };
       const op = operation ? deepMerge(skeleton, operation) : skeleton;
@@ -374,7 +374,7 @@ if (skeletonCount) {
 }
 
 // A malformed @openapi block silently degrades to the skeleton, so treat it as a
-// hard error — the block was meant to say something and isn't.
+// hard error: the block was meant to say something and isn't.
 if (stats.parseErrors.length) {
   console.error(`\n[docs] ERROR: ${stats.parseErrors.length} malformed @openapi block(s):`);
   for (const e of stats.parseErrors) {

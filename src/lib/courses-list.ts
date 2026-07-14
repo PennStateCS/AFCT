@@ -39,7 +39,7 @@ export async function getCoursesListForUser(
   // Soft-deleted courses never appear in any course list (they're retained only for
   // out-of-band recovery), so exclude them for every role.
   // A non-admin only ever sees courses they're enrolled in. Within those, a course
-  // shows if it is published OR the viewer is staff (FACULTY/TA) in it — so staff see
+  // shows if it is published OR the viewer is staff (FACULTY/TA) in it, so staff see
   // their own unpublished courses while students are limited to published ones. This
   // is role-aware per roster entry, not a blanket global-admin-vs-not publish gate
   // (the caller passes 'STUDENT' for every non-admin, which previously hid staff drafts).
@@ -109,7 +109,7 @@ export async function getCoursesListForUser(
       name: course.name,
       code: course.code,
       // The registration code lets someone enroll; only staff/admin need it in a
-      // course list. Students (in that course) don't — hide it.
+      // course list. Students (in that course) don't; hide it.
       regCode: isStaffHere ? course.regCode : null,
       semester: course.semester,
       credits: course.credits,

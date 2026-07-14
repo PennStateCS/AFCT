@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { formBoolean, formBooleanOptional } from './fields';
 import { passwordRules, PASSWORD_MAX_LENGTH } from '@/lib/password-policy';
 
-// App-level role set (no Prisma counterpart — the global User.role was dropped).
+// App-level role set (no Prisma counterpart; the global User.role was dropped).
 export const RoleEnum = z.enum(['ADMIN', 'FACULTY', 'TA', 'STUDENT']);
 // Keep in sync with the Prisma `CourseRole` enum. Kept as string literals (not
 // z.nativeEnum) so this schema stays importable from client components without

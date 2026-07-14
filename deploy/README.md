@@ -1,10 +1,10 @@
 # Deploying AFCT Dashboard (Linux, macOS, Windows)
 
-This folder is a **self-contained deploy bundle** — a compose file plus a guided
+This folder is a **self-contained deploy bundle**: a compose file plus a guided
 installer. You need one thing on the host: **Docker** (with the Compose plugin;
 on Windows/macOS that's Docker Desktop).
 
-Use **`install.sh`** on Linux/macOS and **`install.ps1`** on Windows — they do the
+Use **`install.sh`** on Linux/macOS and **`install.ps1`** on Windows; they do the
 same thing (prompt for admin details, generate secrets, bring the stack up).
 
 ## Quick start (Linux / macOS)
@@ -25,7 +25,7 @@ authentication. On a machine that's logged in:
 
 ```sh
 docker login ghcr.io                 # once, if not already
-# get the deploy/ folder — e.g. clone the repo, or use the GitHub "Code -> Download":
+# get the deploy/ folder, e.g. clone the repo, or use the GitHub "Code -> Download":
 git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
 cd AFCT-Dashboard/deploy
 sh install.sh
@@ -61,7 +61,7 @@ The installer will:
 
 The site starts with a **self-signed certificate**, so your browser will show a
 security warning at first. Install a real certificate later in
-**Admin → System Settings** — no config files to edit.
+**Admin → System Settings**; no config files to edit.
 
 > The whole bundle is just `install.sh`, `docker-compose.yml`, and
 > `.env.production.example`; `wget` all three (or the release archive) into an
@@ -108,7 +108,7 @@ docker compose up -d              # start again
 ## Reboots
 
 Every container uses `restart: unless-stopped`, so the app comes back
-automatically after a server reboot or a crash — as long as the Docker daemon
+automatically after a server reboot or a crash, as long as the Docker daemon
 starts on boot. On Linux the installer enables that for you (`systemctl enable
 docker`); on macOS/Windows, turn on Docker Desktop's "Start when you log in"
 setting. If you deliberately `docker compose down`/`stop`, it stays down until

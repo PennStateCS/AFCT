@@ -101,7 +101,7 @@ function useSidebarSections() {
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
 
   // Load persisted state after mount so the server render (all-open) and the first
-  // client render match — a persisted-collapsed section then settles closed.
+  // client render match; a persisted-collapsed section then settles closed.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SIDEBAR_SECTIONS_KEY);
@@ -167,7 +167,7 @@ function CollapsibleSidebarGroup({
   return (
     <SidebarGroup>
       {/* Color/size go on SidebarGroupLabel's className so tailwind-merge overrides its
-          dimmed `text-sidebar-foreground/70 text-xs` base — matching the submenu items. */}
+          dimmed `text-sidebar-foreground/70 text-xs` base, matching the submenu items. */}
       <SidebarGroupLabel asChild className="text-sidebar-foreground text-sm">
         <button
           type="button"
@@ -254,7 +254,7 @@ export default function DashboardSidebarMenu() {
   const visibleCourses = courses.filter((c) => !c.isArchived);
   // Admins can view every archived course, so they always get the link. Everyone
   // else (students, faculty, TAs) only sees it when they're a member of an
-  // archived course — the nav list is already scoped to the viewer's courses, so
+  // archived course; the nav list is already scoped to the viewer's courses, so
   // an archived entry here means exactly that.
   const showArchivedCoursesLink = isAdmin || courses.some((c) => c.isArchived);
   const courseSections = COURSE_SECTIONS.map((section) => ({
@@ -279,7 +279,7 @@ export default function DashboardSidebarMenu() {
     <>
       {/* Sidebar navigation content */}
       <SidebarContent className="sidebar-scroll">
-        {/* Admin menu — system administrators only */}
+        {/* Admin menu: system administrators only */}
         {isAdmin && (
           <CollapsibleSidebarGroup
             sectionId="admin"
@@ -335,7 +335,7 @@ export default function DashboardSidebarMenu() {
           </CollapsibleSidebarGroup>
         )}
 
-        {/* Course sections — bucketed by date; an empty section is omitted. */}
+        {/* Course sections: bucketed by date; an empty section is omitted. */}
         {courseSections.length === 0
           ? !collapsed && (
               <SidebarGroup>
@@ -469,7 +469,7 @@ export default function DashboardSidebarMenu() {
                 </TooltipProvider>
               </SidebarMenuItem>
 
-              {/* Archived Courses — always for admins; others only when enrolled
+              {/* Archived Courses: always for admins; others only when enrolled
                   in an archived course */}
               {showArchivedCoursesLink && (
               <SidebarMenuItem key="features-archived-courses">

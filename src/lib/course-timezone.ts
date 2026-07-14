@@ -4,8 +4,8 @@ import { DEFAULT_TIMEZONE } from '@/lib/user-timezone';
 /**
  * Resolves the canonical timezone that anchors a course's deadlines: the course's own
  * `timezone`, then the system default, then {@link DEFAULT_TIMEZONE}. Staff-entered
- * wall-times (due dates, late cutoffs) are interpreted in this zone — **not** the
- * actor's — so a deadline is one fixed instant for every student regardless of who
+ * wall-times (due dates, late cutoffs) are interpreted in this zone, **not** the
+ * actor's, so a deadline is one fixed instant for every student regardless of who
  * saved it or where they are.
  */
 export async function resolveCourseTimezone(courseId?: string | null): Promise<string> {

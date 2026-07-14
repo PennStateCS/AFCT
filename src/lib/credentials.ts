@@ -3,7 +3,7 @@
 // Shared email+password verification for both the browser login (the NextAuth
 // credentials `authorize`) and the native-client login endpoint. Keeping it in one
 // place means both paths apply the same rate limiting, account lockout, bot
-// friction, captcha challenge, bcrypt check, and security logging — they can't
+// friction, captcha challenge, bcrypt check, and security logging, so they can't
 // drift apart.
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
@@ -114,7 +114,7 @@ export async function verifyCredentials(params: {
 
   const user = await prisma.user.findFirst({
     where: { email: emailInput, inactive: false },
-    // Only what the check + returned identity need — keep the hash scoped here.
+    // Only what the check + returned identity need; keep the hash scoped here.
     select: {
       id: true,
       email: true,

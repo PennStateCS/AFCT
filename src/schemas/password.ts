@@ -23,7 +23,7 @@ export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 
 /**
  * An admin setting another user's password (AdminResetPasswordDialog). Unlike
- * {@link ChangePasswordSchema} there's no old password to verify — just a strong
+ * {@link ChangePasswordSchema} there's no old password to verify, just a strong
  * new password confirmed twice.
  */
 export const AdminResetPasswordSchema = z

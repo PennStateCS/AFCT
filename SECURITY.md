@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report security issues **privately** — do not open a public issue for a
+Please report security issues **privately**; do not open a public issue for a
 suspected vulnerability.
 
 - Preferred: use GitHub's **[Report a vulnerability](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/security/advisories/new)**
@@ -24,7 +24,7 @@ support branch. Run the latest image to stay current.
 Operators are responsible for a few environment-side settings the application
 cannot enforce on its own:
 
-- Set a strong, unique `NEXTAUTH_SECRET` (at least 32 characters — the app refuses
+- Set a strong, unique `NEXTAUTH_SECRET` (at least 32 characters; the app refuses
   to start without one) and a strong `ADMIN_PASSWORD` for the initial admin. The
   guided installer generates and prompts for these.
 - Terminate TLS with a real certificate (installed in **Admin → System Settings**);

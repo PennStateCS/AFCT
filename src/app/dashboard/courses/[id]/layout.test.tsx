@@ -72,7 +72,7 @@ describe('CourseLayout', () => {
 
   it('does not query or expose the course name to a non-member', async () => {
     // A signed-in user who cannot access the course must not learn its name via
-    // the breadcrumb — and we never even query for it.
+    // the breadcrumb, and we never even query for it.
     canAccessCourseMock.mockResolvedValue(false);
 
     const result = await CourseLayout({

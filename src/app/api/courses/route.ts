@@ -49,7 +49,7 @@ type RosterItem = Prisma.RosterGetPayload<{
  * summary: List all courses
  * description: >-
  *   Returns every course with its roster and assignment metadata. System
- *   administrators only — the payload spans all courses and includes every
+ *   administrators only; the payload spans all courses and includes every
  *   member's identity and each course's registration code.
  * responses:
  *   200:
@@ -80,7 +80,7 @@ export async function GET(req: Request) {
     }
 
     const courses = await prisma.course.findMany({
-      // Soft-deleted courses are retained only for out-of-band recovery — exclude them.
+      // Soft-deleted courses are retained only for out-of-band recovery; exclude them.
       where: { deletedAt: null },
       include: {
         roster: {
@@ -131,7 +131,7 @@ export async function GET(req: Request) {
 /**
  * Creates a course (with a generated registration code) and seeds its faculty
  * roster, all in one transaction. System administrators only. A new course is
- * always created unpublished — publishing is a separate action — and requires at
+ * always created unpublished (publishing is a separate action) and requires at
  * least one faculty member. Datetime-local strings are interpreted in the course's
  * timezone before being stored as UTC.
  * @openapi
@@ -165,7 +165,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   let actorId: string | null = null;
   try {
-    // 1) Authorize first — reject a missing session or a disabled/deleted account
+    // 1) Authorize first: reject a missing session or a disabled/deleted account
     // (inactive) before reading/validating the body. A stale JWT that still says
     // admin must not create courses.
     const session = await auth();
@@ -240,7 +240,7 @@ export async function POST(req: Request) {
           registrationCloseAt: json.registrationCloseAt
             ? toDateTimeInTimezone(json.registrationCloseAt, courseTimezone)
             : null,
-          // A course is never born published — releasing it to students is a
+          // A course is never born published; releasing it to students is a
           // separate, deliberate action after it's staffed and populated.
           isPublished: false,
           isArchived: false,

@@ -45,7 +45,7 @@ describe('getAssignmentsForUserRange', () => {
 
     const where = prismaMock.assignment.findMany.mock.calls[0][0].where;
     // Staff/TA courses: every assignment. Student course: gated on the assignment
-    // AND the course being published — a student in an unpublished course must not
+    // AND the course being published: a student in an unpublished course must not
     // see anything from it, even a published assignment.
     expect(where.OR).toEqual([
       { courseId: { in: ['staff-course', 'ta-course'] } },

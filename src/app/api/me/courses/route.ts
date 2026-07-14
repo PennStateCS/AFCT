@@ -9,7 +9,7 @@ import { isAdmin } from '@/lib/permissions';
  * the `view` query param:
  *   - default: the full role-scoped list (a student sees their published
  *     enrollments; staff/admins see more), shaped by getCoursesListForUser.
- *   - `view=nav`: a compact list for the sidebar navigation — only the caller's
+ *   - `view=nav`: a compact list for the sidebar navigation, only the caller's
  *     enrolled courses (published-only for students), with just the fields the nav
  *     needs (id, name, code, publish/archive flags), newest first.
  * @openapi

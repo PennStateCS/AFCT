@@ -203,7 +203,7 @@ describe('GradeBreakdownDialog', () => {
     expect(postCalls).toHaveLength(1);
 
     const body = JSON.parse((postCalls[0][1] as RequestInit).body as string);
-    // studentId is no longer in the body — it lives in the URL path.
+    // studentId is no longer in the body; it lives in the URL path.
     expect(body).not.toHaveProperty('studentId');
     expect(body.grades).toMatchObject({ p1: 9 });
 

@@ -18,7 +18,7 @@ export const runProductionSeed = async (prisma: PrismaClient) => {
   try {
     // Only bootstrap on an empty database. Resolving (and requiring) admin
     // credentials only when there are no users means a healthy deployment's
-    // restarts never need ADMIN_EMAIL/ADMIN_PASSWORD present — while a first-time
+    // restarts never need ADMIN_EMAIL/ADMIN_PASSWORD present, while a first-time
     // bootstrap still fails loudly rather than seeding a default login.
     const existingUsers = await prisma.user.count();
     if (existingUsers > 0) {

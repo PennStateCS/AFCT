@@ -52,7 +52,7 @@ export default function StudentAssignmentPage({
 
   const queryClient = useQueryClient();
 
-  // Assignment shell — cached; the SSR-provided assignment seeds it so there's no
+  // Assignment shell: cached; the SSR-provided assignment seeds it so there's no
   // refetch on mount when the server already sent it, and back-navigation is warm.
   const assignmentQuery = useQuery({
     queryKey: queryKeys.assignment.shell(params.id, assignmentId),
@@ -74,7 +74,7 @@ export default function StudentAssignmentPage({
   const loading = assignmentQuery.isPending;
   const epsSymbol = useEmptyStringSymbol(assignment?.courseId);
 
-  // Per-student submissions, comments, and grades — cached, and re-pulled (via
+  // Per-student submissions, comments, and grades: cached, and re-pulled (via
   // invalidation) after the student adds or deletes a comment.
   const contextQuery = useQuery({
     queryKey: queryKeys.assignment.studentContext(params.id, assignmentId),
@@ -166,7 +166,7 @@ export default function StudentAssignmentPage({
     [refreshContext],
   );
 
-  // A 404 means the assignment is missing or forbidden — bounce to the dashboard;
+  // A 404 means the assignment is missing or forbidden; bounce to the dashboard;
   // any other failure just surfaces a toast.
   useEffect(() => {
     const err = assignmentQuery.error as (Error & { status?: number }) | null;

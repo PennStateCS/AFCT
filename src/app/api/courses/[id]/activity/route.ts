@@ -5,7 +5,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { parseLimitOffset } from '@/lib/api/request';
 
 /**
- * Returns a paginated activity feed for one course — logs tied directly to the
+ * Returns a paginated activity feed for one course: logs tied directly to the
  * course plus its assignments, problems, submissions, and recent logins by course
  * members. Any enrolled member of the course (any role) or a system admin.
  * @openapi

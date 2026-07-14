@@ -10,7 +10,7 @@ import {
 /**
  * Reports whether an email is already registered, so the signup form can warn
  * before submitting. Unauthenticated by design; it therefore leaks account
- * existence, which is an accepted trade-off for signup UX — but it is IP rate-limited
+ * existence, which is an accepted trade-off for signup UX, but it is IP rate-limited
  * so it can't be used to bulk-enumerate accounts, and it only ever returns a boolean.
  * @openapi
  * summary: Check whether an email is registered
@@ -29,7 +29,7 @@ import {
  *   429: { description: Too many checks from this IP; retry after the Retry-After header. }
  */
 export async function GET(request: Request) {
-  // Rate-limit by IP before touching the DB — caps bulk account enumeration.
+  // Rate-limit by IP before touching the DB; caps bulk account enumeration.
   const decision = evaluateCheckEmailRateLimit({ ip: getClientIp(request) });
   if (decision.status === 'blocked') {
     return NextResponse.json(
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Existence check only — never select anything sensitive here.
+    // Existence check only; never select anything sensitive here.
     const existingUser = await prisma.user.findUnique({
       where: { email },
       select: { id: true },
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ exists: !!existingUser });
   } catch (error) {
-    // Unauthenticated endpoint hit on every signup screen — a DB blip must not
+    // Unauthenticated endpoint hit on every signup screen; a DB blip must not
     // escape as an unhandled framework 500.
     console.error('check-email error:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

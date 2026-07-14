@@ -43,7 +43,7 @@ const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase()
 /**
  * Creates a new course modeled on an existing one, in a single transaction. The
  * copy's faculty comes from the copied faculty roster and/or an explicit
- * `instructorIds` list — at least one faculty member is required (the caller is
+ * `instructorIds` list; at least one faculty member is required (the caller is
  * NOT added automatically). TAs are copied only when asked. `copyMode` (or the
  * legacy copyAssignments/copyProblems booleans) selects what carries over:
  * assignments only, problems only, or assignments with their problems. The copy
@@ -184,7 +184,7 @@ export const POST = withAdminAuth(
         );
       }
 
-      // A course must always have at least one faculty member — from the copied
+      // A course must always have at least one faculty member: from the copied
       // faculty roster and/or the explicit list. The caller is NOT auto-added.
       if (!copyFaculty && instructorIds.length === 0) {
         return NextResponse.json(
@@ -207,7 +207,7 @@ export const POST = withAdminAuth(
       }): Promise<{ fileName?: string; originalFileName?: string }> => {
         if (!p.fileName) return {};
         const src = resolveInsideDir(solutionsDir, p.fileName);
-        // If the source is already missing, the original is broken too — the copy just
+        // If the source is already missing, the original is broken too; the copy just
         // has no solution file rather than a dangling pointer.
         if (!fs.existsSync(src)) return {};
         const newName = safeStoredFilename(p.originalFileName ?? p.fileName);
@@ -371,7 +371,7 @@ export const POST = withAdminAuth(
           return newCourse;
         });
       } catch (txErr) {
-        // The duplication rolled back — remove any solution files we copied so they
+        // The duplication rolled back; remove any solution files we copied so they
         // don't leak as orphans.
         await Promise.all(copiedSolutionFiles.map((f) => fs.promises.unlink(f).catch(() => {})));
         throw txErr;

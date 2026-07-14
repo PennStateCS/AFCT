@@ -11,8 +11,8 @@ export function normalizeEmail(value: unknown): string {
 
 /**
  * Lightweight "looks like an email" check (a single `@` with non-empty local and
- * dotted domain parts). Intentionally permissive — real delivery is the only true
- * validation — but enough to reject obvious junk in forms and API bodies.
+ * dotted domain parts). Intentionally permissive; real delivery is the only true
+ * validation, but enough to reject obvious junk in forms and API bodies.
  */
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -36,8 +36,8 @@ export function isValidDomain(domain: string): boolean {
 }
 
 /**
- * Parse an admin-entered allow-list — domains separated by commas, semicolons, or
- * whitespace/newlines — into normalized, de-duplicated domains. A leading `@` on a
+ * Parse an admin-entered allow-list (domains separated by commas, semicolons, or
+ * whitespace/newlines) into normalized, de-duplicated domains. A leading `@` on a
  * token is stripped (`@psu.edu` → `psu.edu`). Tokens that fail {@link isValidDomain}
  * are returned separately so the caller can reject the save with a helpful message.
  */
@@ -58,7 +58,7 @@ export function parseDomainList(raw: string): { domains: string[]; invalid: stri
 /**
  * Is `email` permitted to sign up given the configured allow-list (the canonical
  * comma-separated `SystemSettings.signupAllowedDomains`)? An **empty** list means no
- * restriction — every domain is allowed. Otherwise the email's domain must match one
+ * restriction; every domain is allowed. Otherwise the email's domain must match one
  * of the listed domains exactly (case-insensitive).
  */
 export function isEmailDomainAllowed(email: string, allowedDomainsCsv: string): boolean {

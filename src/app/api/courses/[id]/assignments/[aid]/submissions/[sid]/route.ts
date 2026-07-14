@@ -85,7 +85,7 @@ export const GET = withCourseAuth(
       const isStaff = await canManageCourse(user, courseId);
 
       // A student must not read submissions (which include problem content) for an
-      // unpublished assignment, even their own — mask it as 404, like the reads.
+      // unpublished assignment, even their own; mask it as 404, like the reads.
       if (!assignment.isPublished && !isStaff) {
         return NextResponse.json(
           { error: 'Assignment not found for this course' },

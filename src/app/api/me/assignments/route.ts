@@ -11,7 +11,7 @@ const RangeBody = z.object({ start: z.string().min(1), end: z.string().min(1) })
 
 /**
  * Returns the assignments visible to the signed-in user whose due dates fall in a
- * date range — the data behind the calendar view. Role-based visibility is applied
+ * date range: the data behind the calendar view. Role-based visibility is applied
  * inside getAssignmentsForUserRange. Bare dates are widened to cover the whole day
  * in the user's timezone.
  * @openapi

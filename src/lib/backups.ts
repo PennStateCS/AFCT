@@ -7,7 +7,7 @@ export const BACKUP_DIR = process.env.BACKUP_DIR || '/backups';
 export const BACKUP_TRIGGER_DIR = process.env.BACKUP_TRIGGER_DIR || '/backup-triggers';
 export const BACKUP_TRIGGER_FILE = path.join(BACKUP_TRIGGER_DIR, 'backup-now');
 
-// The exact names backup.sh writes. Also the allow-list for downloads — a request
+// The exact names backup.sh writes. Also the allow-list for downloads: a request
 // must match one of these, which blocks path traversal and any other filename.
 const DUMP_RE = /^afct-(\d{8}-\d{6})\.dump$/;
 const FILES_RE = /^afct-files-(\d{8}-\d{6})\.tgz$/;

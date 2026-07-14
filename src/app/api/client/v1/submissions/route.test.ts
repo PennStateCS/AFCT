@@ -99,7 +99,7 @@ describe('GET /api/client/v1/submissions (history)', () => {
     const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
     expect(res.status).toBe(200);
     const body = await res.json();
-    // Scoped to the caller — never someone else's studentId.
+    // Scoped to the caller, never someone else's studentId.
     expect(prismaMock.submission.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { assignmentId: 'a1', problemId: 'p1', studentId: 'u1' },

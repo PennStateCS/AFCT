@@ -5,7 +5,7 @@ export const PASSWORD_MAX_LENGTH = 72;
 
 // The single source of truth for password-strength requirements. Consumed by the
 // live checklist UI, the `isStrongPassword` predicate, and the Zod `StrongPassword`
-// schema — so all three stay in lockstep.
+// schema, so all three stay in lockstep.
 export const passwordRules = [
   { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
   { label: 'At least one uppercase letter', test: (pw: string) => /[A-Z]/.test(pw) },
