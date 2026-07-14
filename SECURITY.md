@@ -30,3 +30,6 @@ cannot enforce on its own:
 - Terminate TLS with a real certificate (installed in **Admin → System Settings**);
   the self-signed default is only a first-boot placeholder.
 - Keep the database and its backups on storage only the operator can reach.
+- Run a **single app instance** (the supported topology). The login/signup rate
+  limiting and account lockout are in-process; scaling to multiple instances
+  without a shared store (e.g. Redis) would weaken those protections.

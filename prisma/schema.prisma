@@ -55,6 +55,11 @@ model User {
   timezone  String?
   inactive  Boolean @default(false)
 
+  // Stamped on every password change/reset. A JWT issued before this instant is
+  // rejected in the session callback, so a reset actually terminates existing
+  // sessions (e.g. an attacker's) rather than leaving them valid until expiry.
+  passwordChangedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
