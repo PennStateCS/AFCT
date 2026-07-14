@@ -86,9 +86,9 @@ Two gates in [`src/lib/permissions.ts`](../../src/lib/permissions.ts):
 
 Both exclude archived and soft-deleted courses. An archived course is read-only
 for **everyone, admins included**, and **archiving and restoring (un-archiving)
-are both admin-only**. A **soft-deleted** course is inaccessible to everyone —
-the admin short-circuit is overridden for `deletedAt`, so even an admin is
-denied — and `withCourseAuth` masks it as **404** before the role gate runs.
+are both admin-only**. A **soft-deleted** course is inaccessible to everyone
+(the admin short-circuit is overridden for `deletedAt`, so even an admin is
+denied) and `withCourseAuth` masks it as **404** before the role gate runs.
 
 ## API conventions
 
