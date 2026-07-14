@@ -1702,8 +1702,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Lightweight liveness check used by the container healthcheck. No auth, no DB.
-         * @description Lightweight liveness check used by the container healthcheck. No auth, no DB.
+         * status routes (`/api/admin/status/*`).
+         * @description status routes (`/api/admin/status/*`).
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/health/route.ts)
          */
@@ -7705,9 +7705,9 @@ export interface operations {
                     "application/json": {
                         /** @example ok */
                         status?: string;
+                        /** Format: date-time */
+                        timestamp?: string;
                         uptime?: number;
-                        environment?: string;
-                        version?: string;
                     };
                 };
             };

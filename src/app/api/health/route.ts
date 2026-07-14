@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 
 /**
  * Lightweight liveness check used by the container healthcheck. No auth, no DB.
+ *
+ * Intentionally minimal: this endpoint is unauthenticated, so it returns only a
+ * liveness signal — no environment or version, which would give an anonymous
+ * caller free recon. Host/version/build detail lives behind the admin-only
+ * status routes (`/api/admin/status/*`).
  * @openapi
  * responses:
  *   200:
@@ -12,21 +17,17 @@ import { NextResponse } from 'next/server';
  *           type: object
  *           properties:
  *             status: { type: string, example: ok }
+ *             timestamp: { type: string, format: date-time }
  *             uptime: { type: number }
- *             environment: { type: string }
- *             version: { type: string }
  *   503:
  *     description: Health check failed.
  */
 export async function GET() {
   try {
-    // Basic health check - you can add more checks here like DB connectivity
     const health = {
       status: 'ok',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'unknown',
-      version: process.env.npm_package_version || '0.1.0'
     };
 
     return NextResponse.json(health, { status: 200 });
