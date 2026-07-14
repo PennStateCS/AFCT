@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 
 const prismaMock = vi.hoisted(() => ({
   roster: {
@@ -293,6 +294,29 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
 
     expect(res.status).toBe(200);
     expect(prismaMock.roster.deleteMany).toHaveBeenCalled();
+  });
+
+  it('returns 409 when the removal transaction hits a serialization conflict', async () => {
+    // The submission check and delete run in one serializable transaction; a racing
+    // submission insert (created under Serializable too) makes Postgres abort one
+    // transaction with P2034, which the handler surfaces as a 409 retry. This is the
+    // TOCTOU guard: a submission can't slip in between the check and the delete.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    isAdminMock.mockReturnValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // target
+    prismaMock.$transaction.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('write conflict', {
+        code: 'P2034',
+        clientVersion: 'test',
+      }),
+    );
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toContain('conflict');
   });
 
   it('returns 409 when the course is archived', async () => {
