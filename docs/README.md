@@ -1,45 +1,57 @@
-# AFCT Dashboard documentation
+```markdown
+# AFCT Dashboard Documentation
 
-Everything here supports one of three jobs: using the app, understanding how it works, or
-standing up a server. Start with whichever section matches what you are doing.
+The AFCT documentation is organized around three common goals:
 
-## Using the app
+1. **Using the application**
+2. **Understanding the system**
+3. **Running an AFCT server**
 
-Role guides, one per job. Read yours through once; after that, treat it as a lookup.
+Start with the section that best matches what you are trying to do.
 
-- [Administrator guide](guides/admin.md). Accounts, signup control, the course lifecycle,
-  system settings, the submission queue, status, audit, and backups.
-- [Faculty and TA guide](guides/faculty.md). Running a course, assignments and problems,
-  the roster, grading and feedback, and groups.
-- [Student guide](guides/student.md). Joining a course, submitting work, and reading your
-  grades and feedback.
+## Use the application
 
-## Understanding how it works
+These guides explain how to use AFCT based on your role. Read your guide once to become familiar with the main workflows, then return to it whenever you need instructions for a specific task.
 
-Reference material for engineers. You consult these; you do not read them cover to cover.
+- [Administrator guide](guides/admin.md)  
+  Manage user accounts, signup settings, courses, system settings, the submission queue, system status, audit records, and backups.
 
-- [Developer guide](guides/developer.md). The stack, repository layout, the authorization
-  model, API and data conventions, logging, time handling, testing, and CI/CD.
-- [Roles and permissions](reference/roles-and-permissions.md). The single precise statement
-  of who can do what: the global `isAdmin` flag, the per-course roles, and the full
-  resource matrix. Every guide above defers to this page on any question of access.
-- [Client API](reference/client-api.md). The token-authenticated `/api/client/v1` contract
-  the native submission client speaks.
+- [Faculty and TA guide](guides/faculty.md)  
+  Manage courses, assignments, problems, rosters, groups, grading, and student feedback.
 
-The live HTTP API reference is generated from the route handlers and published to
-[GitHub Pages](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/). The raw
-[OpenAPI spec](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/openapi.json) imports
-straight into Postman, Insomnia, or a client generator.
+- [Student guide](guides/student.md)  
+  Join a course, submit work, and review grades and feedback.
 
-## Running a server
+## Understand the system
 
-- [Development setup](setup/development.md). The Docker dev stack, ports, common commands,
-  and troubleshooting.
-- [Production setup](setup/production.md). Deploying the GHCR image behind nginx with TLS.
+These pages provide technical reference material for developers and system maintainers. They are designed to be consulted as needed rather than read from beginning to end.
 
-## Keeping the docs honest
+- [Developer guide](guides/developer.md)  
+  Learn about the technology stack, repository structure, authorization model, API and data conventions, logging, date and time handling, testing, and CI/CD workflows.
 
-These are living documents. When a feature changes, update the matching page in the same
-commit, so the docs never drift from the product. Access control has exactly one home,
-[Roles and permissions](reference/roles-and-permissions.md); link to it rather than
-restate a rule that could later change underneath the copy.
+- [Roles and permissions](reference/roles-and-permissions.md)  
+  Review the authoritative definition of AFCT access control, including the global `isAdmin` flag, course-level roles, and the complete resource permission matrix. All other guides defer to this page when describing who can perform an action.
+
+- [Client API](reference/client-api.md)  
+  Review the token-authenticated `/api/client/v1` API used by the native AFCT submission client.
+
+### HTTP API reference
+
+The interactive HTTP API documentation is generated directly from the application’s route handlers and published through [GitHub Pages](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/).
+
+The raw [OpenAPI specification](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/openapi.json) can be imported into tools such as Postman or Insomnia, or used with an OpenAPI client generator.
+
+## Run an AFCT server
+
+- [Development setup](setup/development.md)  
+  Configure the Docker development environment, review exposed ports and common commands, and troubleshoot common setup problems.
+
+- [Production setup](setup/production.md)  
+  Deploy the AFCT container image from GitHub Container Registry behind nginx with TLS enabled.
+
+## Keep the documentation accurate
+
+The AFCT documentation should change whenever the application changes. When a feature is added or modified, update the corresponding documentation in the same commit. This helps prevent the documentation from drifting away from the actual behavior of the system.
+
+Access-control rules have one authoritative location: [Roles and permissions](reference/roles-and-permissions.md). Other pages should link to that reference rather than repeat permission rules that may later change.
+```
