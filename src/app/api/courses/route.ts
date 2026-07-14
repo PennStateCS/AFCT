@@ -21,7 +21,7 @@ import { isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { resolveSystemTimezone } from '@/lib/course-timezone';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
-import { generateUniqueCourseCode } from '@/lib/course-code';
+import { createWithUniqueCourseCode } from '@/lib/course-code';
 import { sumProblemPoints, toEnrolled } from '@/lib/course-format';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
@@ -37,7 +37,6 @@ type RosterItem = Prisma.RosterGetPayload<{
     user: { select: { id: true; firstName: true; lastName: true } };
   };
 }>;
-
 
 // ----------------------------------------
 // GET /api/courses
@@ -219,77 +218,78 @@ export async function POST(req: Request) {
       );
     }
 
-    // 5) Generate a unique registration code
-    const regCode = await generateUniqueCourseCode();
+    // 5+6) Create the course (and faculty/TA roster) in a transaction, minting a
+    // unique registration code. The code is chosen before the insert, so retry with a
+    // fresh one on the rare P2002 where a concurrent create claimed it first.
+    const created = await createWithUniqueCourseCode((regCode) =>
+      prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const course = await tx.course.create({
+          data: {
+            name: json.name,
+            code: json.code,
+            regCode,
+            semester: json.semester,
+            credits: json.credits,
+            timezone: courseTimezone,
+            startDate: toDateTimeInTimezone(json.startDate, courseTimezone),
+            endDate: toDateTimeInTimezone(json.endDate, courseTimezone),
+            registrationOpenAt: json.registrationOpenAt
+              ? toDateTimeInTimezone(json.registrationOpenAt, courseTimezone)
+              : null,
+            registrationCloseAt: json.registrationCloseAt
+              ? toDateTimeInTimezone(json.registrationCloseAt, courseTimezone)
+              : null,
+            // A course is never born published; releasing it to students is a
+            // separate, deliberate action after it's staffed and populated.
+            isPublished: false,
+            isArchived: false,
+            emptyStringNotation: toEmptyStringNotation(json.emptyStringNotation),
+          },
+        });
 
-    // 6) Create course (and roster rows for faculty) in a transaction for consistency
-    const created = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const course = await tx.course.create({
-        data: {
-          name: json.name,
-          code: json.code,
-          regCode,
-          semester: json.semester,
-          credits: json.credits,
-          timezone: courseTimezone,
-          startDate: toDateTimeInTimezone(json.startDate, courseTimezone),
-          endDate: toDateTimeInTimezone(json.endDate, courseTimezone),
-          registrationOpenAt: json.registrationOpenAt
-            ? toDateTimeInTimezone(json.registrationOpenAt, courseTimezone)
-            : null,
-          registrationCloseAt: json.registrationCloseAt
-            ? toDateTimeInTimezone(json.registrationCloseAt, courseTimezone)
-            : null,
-          // A course is never born published; releasing it to students is a
-          // separate, deliberate action after it's staffed and populated.
-          isPublished: false,
-          isArchived: false,
-          emptyStringNotation: toEmptyStringNotation(json.emptyStringNotation),
-        },
-      });
-
-      // Seed the faculty roster (the schema guarantees at least one). TAs and
-      // students are added later through the roster.
-      await tx.roster.createMany({
-        data: json.instructorIds.map((userId: string) => ({
-          userId,
-          courseId: course.id,
-          role: 'FACULTY',
-        })),
-      });
-
-      const taIds = Array.isArray(json.taIds)
-        ? Array.from(new Set(json.taIds.filter((id) => !json.instructorIds.includes(id))))
-        : [];
-      if (taIds.length) {
+        // Seed the faculty roster (the schema guarantees at least one). TAs and
+        // students are added later through the roster.
         await tx.roster.createMany({
-          data: taIds.map((userId: string) => ({
+          data: json.instructorIds.map((userId: string) => ({
             userId,
             courseId: course.id,
-            role: 'TA' as const,
+            role: 'FACULTY',
           })),
         });
-      }
 
-      // Re-read with faculty populated for response
-      const withRoster = await tx.course.findUnique({
-        where: { id: course.id },
-        include: {
-          roster: {
-            include: {
-              user: { select: { id: true, firstName: true, lastName: true } },
+        const taIds = Array.isArray(json.taIds)
+          ? Array.from(new Set(json.taIds.filter((id) => !json.instructorIds.includes(id))))
+          : [];
+        if (taIds.length) {
+          await tx.roster.createMany({
+            data: taIds.map((userId: string) => ({
+              userId,
+              courseId: course.id,
+              role: 'TA' as const,
+            })),
+          });
+        }
+
+        // Re-read with faculty populated for response
+        const withRoster = await tx.course.findUnique({
+          where: { id: course.id },
+          include: {
+            roster: {
+              include: {
+                user: { select: { id: true, firstName: true, lastName: true } },
+              },
             },
           },
-        },
-      });
+        });
 
-      const faculty =
-        withRoster?.roster
-          .filter((r: RosterItem) => r.role === 'FACULTY')
-          .map((r: RosterItem) => r.user) ?? [];
+        const faculty =
+          withRoster?.roster
+            .filter((r: RosterItem) => r.role === 'FACULTY')
+            .map((r: RosterItem) => r.user) ?? [];
 
-      return { course, faculty, withRoster };
-    });
+        return { course, faculty, withRoster };
+      }),
+    );
 
     if (session?.user?.id) {
       await createEnhancedActivityLog(prisma, req, {
