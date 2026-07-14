@@ -96,7 +96,7 @@ elapsed="$SETTINGS_EVERY"  # force a settings/schedule check on the first iterat
 
 while true; do
   # On-demand backup requested from the dashboard. Runs regardless of the on/off
-  # setting — it's an explicit admin action.
+  # setting; it's an explicit admin action.
   if [ -f "$TRIGGER_FILE" ]; then
     rm -f "$TRIGGER_FILE"
     log "on-demand backup requested"

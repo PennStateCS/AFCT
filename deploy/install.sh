@@ -1,5 +1,5 @@
 #!/bin/sh
-# AFCT Dashboard — Linux / macOS installer.
+# AFCT Dashboard: Linux / macOS installer.
 #
 # Usage:
 #   sh install.sh              Run the guided install (default).
@@ -278,7 +278,7 @@ preflight() {
 
 # Make sure the Docker daemon starts on boot, so the stack's `restart:
 # unless-stopped` policy actually brings everything back after a server reboot.
-# Linux/systemd only — best-effort and never fatal. (On macOS/Windows this is
+# Linux/systemd only; best-effort and never fatal. (On macOS/Windows this is
 # governed by Docker Desktop's "start at login" setting instead.)
 ensure_docker_boot() {
   command -v systemctl >/dev/null 2>&1 || return 0
@@ -393,7 +393,7 @@ do_install() {
     esac
   fi
 
-  # Auto-generated infrastructure secrets — never prompted.
+  # Auto-generated infrastructure secrets, never prompted.
   POSTGRES_PASSWORD_IN=$(gen_secret)
   NEXTAUTH_SECRET_IN=$(gen_secret)
 
