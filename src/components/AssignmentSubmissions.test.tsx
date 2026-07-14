@@ -61,6 +61,7 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
     onSaveComment,
     onDeleteComment,
     comments,
+    submissions,
   }: {
     onGradeInputChange: (value: string) => void;
     onSaveGrade: () => void;
@@ -72,8 +73,10 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
     onSaveComment: () => void;
     onDeleteComment: (commentId: string) => void;
     comments?: Array<{ id: string; content?: string }>;
+    submissions?: Array<{ id: string }>;
   }) => (
     <div data-testid="problem-workspace">
+      <span data-testid="submission-count">{(submissions ?? []).length}</span>
       <input
         data-testid="grade-input"
         value={gradeInput}
@@ -542,5 +545,118 @@ describe('AssignmentSubmissions — student navigation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'pick-s2' }));
     expect(idx).toHaveTextContent('1');
+  });
+});
+
+// Safety net for the planned M12 refactor, which will turn the ~6 useState slices
+// that mirror `reviewData` (submissions, comments, problemGrades, gradeInputs,
+// problemGradeErrors, studentGradeStatuses) into derived state. These lock in the
+// per-student seeding/derivation behavior those slices produce today.
+describe('AssignmentSubmissions — reviewData seeding safety net (M12)', () => {
+  const twoStudents = [
+    { id: 's1', firstName: 'Ada', lastName: 'Lovelace' }, // sorted index 0
+    { id: 's2', firstName: 'Alan', lastName: 'Turing' }, // sorted index 1
+  ];
+
+  it('re-seeds the grade and comments when navigating to another student', async () => {
+    const fetchMock = routeFetch({
+      '/students': () => ({ ok: true, json: async () => twoStudents }),
+      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/review-data/s1': () => ({
+        ok: true,
+        json: async () => ({
+          submissions: {},
+          comments: [{ id: 'cs1', content: 'S1 note', problemId: 'p1' }],
+          problemGrades: { p1: { grade: 8, feedback: null } },
+        }),
+      }),
+      '/review-data/s2': () => ({
+        ok: true,
+        json: async () => ({
+          submissions: {},
+          comments: [{ id: 'cs2', content: 'S2 note', problemId: 'p1' }],
+          problemGrades: { p1: { grade: 3, feedback: null } },
+        }),
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+
+    // s1 is selected via the URL: its grade and comment seed the editable state.
+    await waitFor(() => expect(screen.getByTestId('current-grade')).toHaveTextContent('8'));
+    expect(screen.getByText('S1 note')).toBeInTheDocument();
+
+    // Advancing to s2 must re-seed everything from s2's review-data.
+    fireEvent.click(screen.getByRole('button', { name: 'next-student' }));
+    await waitFor(() => expect(screen.getByTestId('current-grade')).toHaveTextContent('3'));
+    expect(screen.getByText('S2 note')).toBeInTheDocument();
+    expect(screen.queryByText('S1 note')).not.toBeInTheDocument();
+  });
+
+  it('seeds the selected problem’s submissions from review-data', async () => {
+    const fetchMock = routeFetch({
+      '/students': () => ({ ok: true, json: async () => students }),
+      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/review-data/': () => ({
+        ok: true,
+        json: async () => ({
+          submissions: { p1: [{ id: 'sub-1' }, { id: 'sub-2' }] },
+          comments: [],
+          problemGrades: {},
+        }),
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await waitFor(() => expect(screen.getByTestId('submission-count')).toHaveTextContent('2'));
+  });
+
+  it('seeds the grade input field (string) from the review-data grade', async () => {
+    const fetchMock = routeFetch({
+      '/students': () => ({ ok: true, json: async () => students }),
+      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/review-data/': () => ({ ok: true, json: async () => seededReviewData }), // p1 grade 8
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await waitFor(() => expect(screen.getByTestId('grade-input')).toHaveValue('8'));
+  });
+
+  it('marks the student all-graded once review-data shows every problem graded', async () => {
+    const fetchMock = routeFetch({
+      '/students': () => ({ ok: true, json: async () => students }),
+      // Summary reports nothing, so the status must come from the review-data seeding.
+      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/review-data/': () => ({ ok: true, json: async () => seededReviewData }), // p1 graded
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await waitFor(() => expect(screen.getByTestId('grade-status')).toHaveTextContent('true'));
+  });
+
+  it('keeps the student not-all-graded when a problem grade is missing', async () => {
+    const fetchMock = routeFetch(baseRoutes()); // emptyReviewData -> p1 grade null
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await screen.findByTestId('problem-workspace');
+    await waitFor(() => expect(screen.getByTestId('grade-status')).toHaveTextContent('false'));
+  });
+
+  it('clears the grade error when the input changes', async () => {
+    const fetchMock = routeFetch(baseRoutes());
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await screen.findByTestId('problem-workspace');
+    await waitFor(() => expect(screen.getByTestId('current-grade')).toHaveTextContent('null'));
+
+    fireEvent.change(screen.getByTestId('grade-input'), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('grade-error')).toHaveTextContent('Grade must be a number'),
+    );
+
+    // Editing the field clears the per-problem error.
+    fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '5' } });
+    await waitFor(() => expect(screen.queryByTestId('grade-error')).not.toBeInTheDocument());
   });
 });
