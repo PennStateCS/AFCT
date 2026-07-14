@@ -36,7 +36,7 @@ export type ServeFileOptions = {
   /** Response Content-Type; defaults to `application/octet-stream`. */
   contentType?: string;
   /**
-   * Runs after a successful read but before the response is built — the place to
+   * Runs after a successful read but before the response is built: the place to
    * record a download in the audit log, so it only fires when the file truly served.
    */
   onServe?: () => Promise<void> | void;
@@ -47,7 +47,7 @@ export type ServeFileOptions = {
  * and returns it as a response. Returns 404 when the file is absent on disk; lets
  * read errors throw so the caller's try/catch can log and return 500.
  *
- * Authentication and authorization stay in the calling route — those rules differ
+ * Authentication and authorization stay in the calling route; those rules differ
  * per file kind (avatars vs. problems vs. submissions vs. solutions) and are the
  * whole point. This helper only owns the shared path-resolve / read / response
  * mechanics that every file route had copy-pasted. The filename must already have

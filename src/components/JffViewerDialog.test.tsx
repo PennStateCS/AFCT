@@ -62,7 +62,7 @@ vi.mock('cytoscape', () => ({ default: h.ctor }));
 vi.mock('cytoscape-elk', () => ({ default: {} }));
 vi.mock('cytoscape-svg', () => ({ default: {} }));
 
-// Keep the Dialog wrapper light (no Radix portal / a11y noise) — it renders children.
+// Keep the Dialog wrapper light (no Radix portal / a11y noise); it renders children.
 vi.mock('@/components/ui/dialog', () =>
   import('@/test/mocks/ui').then((mod) => mod.dialogMock),
 );
@@ -104,7 +104,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// Resolves once load() has instantiated the (mocked) cytoscape engine — i.e. cyRef
+// Resolves once load() has instantiated the (mocked) cytoscape engine, i.e. cyRef
 // is set and the toolbar handlers can drive it. Generous timeout: the load chain
 // (fetch → parse → dynamic import → ctor) can be slow under full-suite CPU contention.
 const waitForEngine = () => waitFor(() => expect(h.ctor).toHaveBeenCalled(), { timeout: 5000 });

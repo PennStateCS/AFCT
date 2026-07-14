@@ -7,7 +7,7 @@ import { auth } from '@/lib/auth';
 
 /**
  * Records that the signed-in user is still active, resetting the client-side
- * inactivity timer. This is an audit/telemetry ping — the JWT session lifetime
+ * inactivity timer. This is an audit/telemetry ping; the JWT session lifetime
  * is managed by NextAuth and is not altered here.
  * @openapi
  * summary: Keep the current session active

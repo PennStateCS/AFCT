@@ -32,7 +32,7 @@ import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { apiPaths } from '@/lib/api-paths';
 
 // Sentinel for the "follow my device/system" choice. Radix Select forbids an
-// empty-string item value, so we use a token and translate it to '' on submit —
+// empty-string item value, so we use a token and translate it to '' on submit;
 // the server stores that as null, which makes the display-timezone resolver fall
 // through to the system default, then the browser.
 const AUTO_TIMEZONE = '__auto__';
@@ -51,7 +51,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
-  // What "Automatic" would resolve to on this device — shown for reassurance.
+  // What "Automatic" would resolve to on this device, shown for reassurance.
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
   // RHF defaults – email is read-only so it isn't in the schema

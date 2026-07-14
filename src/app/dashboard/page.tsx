@@ -101,14 +101,14 @@ export default async function DashboardPage() {
 
   const courseIds = courses.map((c) => c.id);
 
-  // The dashboard cards show only in-progress courses — matching the sidebar's
+  // The dashboard cards show only in-progress courses, matching the sidebar's
   // "Current Courses" bucket. Upcoming courses live in the sidebar's Upcoming
   // section; they still feed the (cross-course) Upcoming Assignments list above.
   const currentCourses = courses.filter((c) => getCourseDateBucket(c) === 'current');
 
   // NOTE: the "pending grading" module was removed. Its map was never populated
   // (nothing ever inserted a first entry), so it always rendered empty while still
-  // running two unbounded submission/grade queries on this — the most-visited —
+  // running two unbounded submission/grade queries on this (the most-visited)
   // page. The feature can be rebuilt properly later; until then it does no work.
 
   // Get upcoming assignments for all user's courses

@@ -1,6 +1,6 @@
 /**
- * Small helpers for pulling typed values out of an incoming request — a validated
- * JSON body, query-param pagination, and multipart-form flags — plus the
+ * Small helpers for pulling typed values out of an incoming request: a validated
+ * JSON body, query-param pagination, and multipart-form flags, plus the
  * bounded-integer coercion they build on. Centralizes idioms that had been
  * re-implemented (and occasionally mis-implemented) across route handlers.
  */
@@ -12,7 +12,7 @@ import { apiError } from './http';
 /**
  * Parse and validate a JSON request body against a Zod schema. Returns a discriminated
  * result: `{ ok: true, data }` with the typed, validated body, or `{ ok: false,
- * response }` — a ready-to-return **400** for malformed JSON or a schema mismatch.
+ * response }` (a ready-to-return **400** for malformed JSON or a schema mismatch).
  * Never throws, so a handler can `if (!parsed.ok) return parsed.response;` and move on.
  */
 export async function readJson<T>(
@@ -41,7 +41,7 @@ export async function readJson<T>(
  * it into a plain object of `string | File` values, and validates it against a Zod
  * schema (use the coercing primitives in `@/schemas/fields` for booleans/ints).
  * Returns the validated data plus the raw `FormData` (handlers still need it for
- * files and repeated keys). Never throws — a bad body yields a ready 400.
+ * files and repeated keys). Never throws; a bad body yields a ready 400.
  */
 export async function readFormData<T>(
   req: Request,

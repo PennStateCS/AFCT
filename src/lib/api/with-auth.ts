@@ -44,7 +44,7 @@ export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
     const session = await auth();
     // Reject a missing session or a disabled/deleted account (the session callback
     // marks the user inactive when the DB row is gone or disabled) before any
-    // privilege check — a stale JWT must not keep granting admin access.
+    // privilege check; a stale JWT must not keep granting admin access.
     if (!session?.user || session.user.inactive) {
       return apiError(401, 'Unauthorized');
     }
@@ -84,7 +84,7 @@ type CourseParams = { params: Promise<Record<string, string>> };
  * `ctx.params` for other params (e.g. `aid`).
  *
  * `blockWhenArchived: true` rejects the action with **409** when the course is
- * archived — **for everyone, admins included** (the archive freeze is not bypassed by
+ * archived, **for everyone, admins included** (the archive freeze is not bypassed by
  * the admin short-circuit). Set it on every mutating course route *except* un-archive.
  */
 export function withCourseAuth<Ctx extends CourseParams, R extends Response = Response>(
@@ -100,7 +100,7 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
   return async (req: Request, ctx: Ctx) => {
     const session = await auth();
     // Reject a missing session or a disabled/deleted account before any course
-    // check (see withAdminAuth) — a stale JWT must not keep granting access.
+    // check (see withAdminAuth); a stale JWT must not keep granting access.
     if (!session?.user || session.user.inactive) {
       return apiError(401, 'Unauthorized');
     }
@@ -111,7 +111,7 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
       return apiError(400, 'Missing course id');
     }
 
-    // A soft-deleted course is inaccessible to everyone — admins included — since it's
+    // A soft-deleted course is inaccessible to everyone (admins included) since it's
     // retained only for out-of-band recovery. Mask it as 404 before the role gate so
     // its existence and data are never served through any course-scoped route (this
     // is the choke point the admin short-circuit in canAccessCourse would otherwise
@@ -122,7 +122,7 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
         return apiError(404, 'Not found');
       }
     } catch {
-      // Ignore — proceed to the normal flow; the handler will hit (and report) any
+      // Ignore; proceed to the normal flow; the handler will hit (and report) any
       // real DB fault.
     }
 
@@ -170,7 +170,7 @@ export type AssignmentAuthContext = CourseAuthContext & { assignment: ResolvedAs
  * assignment-level rules in one place:
  *   - the assignment must exist **and belong to the resolved course** (else 404);
  *   - for `access: 'read'`, a non-staff caller may only reach a **published**
- *     assignment — an unpublished one is masked as **404** (hide existence), matching
+ *     assignment: an unpublished one is masked as **404** (hide existence), matching
  *     the course publish gate for students.
  *
  * Builds on {@link withCourseAuth} (same 401 / 403+SECURITY / archive behavior). The
@@ -207,7 +207,7 @@ export function withAssignmentAuth<Ctx extends CourseParams, R extends Response 
       }
 
       // Student publish gate: a non-staff reader may only see a published assignment;
-      // otherwise mask as 404. (Staff/admin — canManageCourse — see drafts.)
+      // otherwise mask as 404. (Staff/admin, canManageCourse, see drafts.)
       if (opts.access === 'read' && !assignment.isPublished) {
         const isStaff = await canManageCourse(courseAuth.user, courseAuth.courseId, opts.roles);
         if (!isStaff) {

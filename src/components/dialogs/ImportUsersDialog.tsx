@@ -148,7 +148,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
 
   // Pre-flag rows the server would reject (same rules it applies per row), so the
   // admin can fix the CSV before importing. The server remains the authority and
-  // still skips invalid rows — this is just early feedback.
+  // still skips invalid rows; this is just early feedback.
   const invalidRowCount = useMemo(
     () => rows.filter((row) => !BulkImportRowSchema.safeParse(row).success).length,
     [rows],

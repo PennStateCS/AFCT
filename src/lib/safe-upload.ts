@@ -49,13 +49,13 @@ export function resolveInsideDir(dir: string, filename: string): string {
 
 /**
  * Best-effort delete of a stored upload: resolves the name inside `dir` (so a
- * legacy/unsafe stored name can't escape) and swallows any error — a missing file
+ * legacy/unsafe stored name can't escape) and swallows any error; a missing file
  * or an unsafe name must never turn cleanup into a fatal request error.
  */
 export async function safeUnlinkInDir(dir: string, filename: string): Promise<void> {
   try {
     await unlink(resolveInsideDir(dir, filename));
   } catch {
-    // ignore — cleanup is best-effort
+    // ignore; cleanup is best-effort
   }
 }

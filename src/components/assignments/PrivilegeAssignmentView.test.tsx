@@ -35,7 +35,7 @@ vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
 
-// Capture the params (real handlers) and return a trivial column set — the cell
+// Capture the params (real handlers) and return a trivial column set; the cell
 // rendering itself is covered by problem-columns.test.tsx.
 vi.mock('./problem-columns', () => ({
   buildProblemColumns: (params: Record<string, (arg: unknown) => void>) => {

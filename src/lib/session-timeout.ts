@@ -1,7 +1,7 @@
 /**
  * Idle-session-timeout math, shared by the edge middleware, the auth callbacks,
  * and the client-side watcher. Everything here is PURE and dependency-free so it
- * is safe to import from the edge runtime (`src/proxy.ts`) — do not add a
+ * is safe to import from the edge runtime (`src/proxy.ts`); do not add a
  * Prisma or Node import to this file. The cached settings reader that touches the
  * database lives in `session-timeout.server.ts`.
  *

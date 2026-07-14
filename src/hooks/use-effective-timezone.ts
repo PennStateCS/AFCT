@@ -36,7 +36,7 @@ export function useEffectiveTimezone() {
   const userTz = profileQuery.data?.timezone || '';
   const serverTz = publicSettingsQuery.data?.timezone || '';
   // Before either resolves (or on error) both are empty, so we fall back to the
-  // browser timezone — matching the previous hook's default.
+  // browser timezone, matching the previous hook's default.
   const timezone = userTz || serverTz || browserTz || 'UTC';
   // App-wide clock preference (admin System Settings). Defaults to 12-hour until it
   // resolves. `hour12` is what the date formatters take.

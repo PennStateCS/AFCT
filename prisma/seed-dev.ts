@@ -101,7 +101,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       await fs.mkdir(pfpDestinationDir, { recursive: true });
     }
 
-    // Letters/digits only, lowercased — so "Hope Van Dyne" matches "Hope_VanDyne.png",
+    // Letters/digits only, lowercased, so "Hope Van Dyne" matches "Hope_VanDyne.png",
     // "T'Challa" matches "TChalla", "Kurt" matches "kurt", "Remy LeBeau" matches
     // "RemyLeBeau", etc.
     const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');

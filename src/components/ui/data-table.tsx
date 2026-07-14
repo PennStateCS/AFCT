@@ -63,7 +63,7 @@ import { usePersistentColumnVisibility } from '@/components/ui/use-persistent-co
 type ColumnAlign = 'left' | 'center' | 'right';
 
 // Extend @tanstack/react-table's ColumnMeta so `columnDef.meta.priority` / `.align`
-// are typed everywhere — this augmentation is the single source of truth (there is no
+// are typed everywhere; this augmentation is the single source of truth (there is no
 // separate local interface to keep in sync).
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -278,7 +278,7 @@ interface DataTableProps<TData, TValue> {
   actionButtons?: React.ReactNode;
   defaultColumnVisibility?: VisibilityState;
 
-  // ---- Server-side ("manual") mode — all optional; omit for client-side. ----
+  // ---- Server-side ("manual") mode: all optional; omit for client-side. ----
   // When a controlled value + handler is provided, the table hands that concern
   // (pagination / sorting / filtering) to the parent instead of computing it
   // over `data`. Existing callers pass none of these and keep client behavior.

@@ -30,7 +30,7 @@ export const BulkImportUsersSchema = z.object({
 
 /**
  * Strict shape of a single import row, used *client-side* to pre-flag rows that
- * the server would reject — the same rules the route applies per row (non-empty
+ * the server would reject: the same rules the route applies per row (non-empty
  * name, valid email, strong password). Not used to gate the request.
  */
 export const BulkImportRowSchema = z.object({

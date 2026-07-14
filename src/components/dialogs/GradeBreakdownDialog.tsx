@@ -57,7 +57,7 @@ export function GradeBreakdownDialog({
   const [originalRows, setOriginalRows] = useState<Row[]>([]);
 
   // Assignment problem links (with maxPoints) and the student's current per-problem
-  // grades — both cached and fetched only while the dialog is open, so reopening the
+  // grades: both cached and fetched only while the dialog is open, so reopening the
   // same breakdown is served warm instead of refetching every time.
   const assignmentQuery = useQuery({
     queryKey: queryKeys.assignment.gradeBreakdown(courseId, assignmentId),
@@ -73,7 +73,7 @@ export function GradeBreakdownDialog({
     queryKey: queryKeys.assignment.problemGrades(courseId, assignmentId, studentId),
     queryFn: async () => {
       const res = await fetch(apiPaths.assignmentProblemGrades(courseId, assignmentId, studentId));
-      // 204 means nothing graded yet — treat as an empty map.
+      // 204 means nothing graded yet; treat as an empty map.
       if (res.status === 204) return {} as Record<string, { grade: number | null }>;
       if (!res.ok) throw new Error('Failed to fetch problem grades');
       return (await res.json()) as Record<string, { grade: number | null }>;
@@ -157,7 +157,7 @@ export function GradeBreakdownDialog({
   });
 
   const handleSave = useCallback(() => {
-    // Validate each edited grade against its own problem's max before submitting —
+    // Validate each edited grade against its own problem's max before submitting;
     // catches out-of-range and unparseable (NaN) entries that would otherwise be
     // serialized to null. The route re-checks the same bounds server-side.
     for (const r of rows) {

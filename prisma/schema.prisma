@@ -74,12 +74,12 @@ model User {
 
 // Bearer token for the native submission client (the Java app). Cookie/NextAuth is
 // for the browser; native clients authenticate with one of these instead. Only the
-// SHA-256 hash of the token is stored — the plaintext is shown once at issue time.
+// SHA-256 hash of the token is stored; the plaintext is shown once at issue time.
 // Tokens are revocable (revokedAt) and expire (expiresAt), so a lost device or a
 // stale client can be cut off without touching the user's password.
 model ClientApiToken {
   id        String @id @default(cuid())
-  tokenHash String @unique // sha256(token) — never the plaintext
+  tokenHash String @unique // sha256(token), never the plaintext
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
@@ -382,8 +382,8 @@ model Comment {
   problemId String
 
   // The author is always a User. `roster` is only the author's role WITHIN this
-  // course (for the role badge) and is null when the author isn't rostered — e.g. a
-  // system admin commenting on a course they aren't enrolled in. We never fabricate a
+  // course (for the role badge) and is null when the author isn't rostered (e.g. a
+  // system admin commenting on a course they aren't enrolled in). We never fabricate a
   // roster row just to attribute a comment.
   author   User   @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   authorId String
@@ -455,7 +455,7 @@ model SystemSettings {
   sessionTimeoutMinutes Int @default(60)
 
   // App-wide date/time display preference. When true, times render on a 24-hour clock
-  // (e.g. 23:59); otherwise 12-hour with AM/PM. Display-only — never affects stored
+  // (e.g. 23:59); otherwise 12-hour with AM/PM. Display-only, never affects stored
   // UTC instants or deadline enforcement.
   clock24Hour Boolean @default(false)
 

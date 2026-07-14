@@ -3,7 +3,7 @@
  *
  * `fetchJson` throws an {@link HttpError} carrying the HTTP status on a non-2xx
  * response, so the shared retry policy ({@link retryUnlessClientError}) can skip
- * client errors (4xx) — a 401/403/404 will never succeed on retry, so retrying
+ * client errors (4xx): a 401/403/404 will never succeed on retry, so retrying
  * just delays the error and wastes a request. Pass the query's `AbortSignal`
  * through `init.signal` to get cancellation for free.
  *
@@ -32,7 +32,7 @@ export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> 
   let statusForLog = 0;
   try {
     // Only pass `init` when present so the call reads as `fetch(url)` (no trailing
-    // undefined) — matches callers that pass no options.
+    // undefined); matches callers that pass no options.
     const res = await (init ? fetch(url, init) : fetch(url));
     statusForLog = res.status;
     if (!res.ok) {
@@ -44,7 +44,7 @@ export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> 
         const detail = parsed?.error ?? parsed?.message;
         if (detail) message = detail;
       } catch {
-        // Non-JSON error body — keep the status-based message.
+        // Non-JSON error body; keep the status-based message.
       }
       throw new HttpError(res.status, message, body);
     }

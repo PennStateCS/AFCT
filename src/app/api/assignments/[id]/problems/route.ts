@@ -33,7 +33,7 @@ interface AssignmentProblemResult {
 /**
  * Lists an assignment's problems, tagged with whether the caller has solved each
  * (a correct submission) and their grade. For group assignments, visibility follows
- * the caller's group — unassigned problems show to everyone, group-mapped ones only
+ * the caller's group: unassigned problems show to everyone, group-mapped ones only
  * to that group's members. Course faculty or a system admin (TAs excluded).
  * @openapi
  * summary: List an assignment's problems
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Course staff (FACULTY + TA) or admin — matching the other assignment routes.
+    // Course staff (FACULTY + TA) or admin, matching the other assignment routes.
     // Authenticated but under-privileged → 403 + a SECURITY denial log.
     if (!(await canManageCourse(session.user, assignment.courseId))) {
       await createEnhancedActivityLog(prisma, req, {

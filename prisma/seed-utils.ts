@@ -102,7 +102,7 @@ const isStrongEnoughAdminPassword = (pw: string) =>
 /**
  * Resolve production admin credentials from the environment and hash the password.
  *
- * There is deliberately **no default** — a missing `ADMIN_EMAIL`/`ADMIN_PASSWORD`
+ * There is deliberately **no default**: a missing `ADMIN_EMAIL`/`ADMIN_PASSWORD`
  * throws rather than silently bootstrapping a well-known login. With the source
  * public, a hardcoded fallback would be a known admin credential for any
  * deployment that skipped the variable. Callers resolve credentials only when the

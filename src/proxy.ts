@@ -10,12 +10,12 @@ import { requireAuthSecret } from '@/lib/auth-secret';
  * This is defense-in-depth, NOT the source of truth: every route and page still runs
  * its own authoritative check (route handlers use `withAdminAuth`/`withCourseAuth` or
  * call `auth()` + the permission helpers; the dashboard layout redirects
- * unauthenticated users). Here we only read the signed JWT — no DB, since this runs on
- * the edge — and reject early.
+ * unauthenticated users). Here we only read the signed JWT (no DB, since this runs on
+ * the edge) and reject early.
  *
  * Deny-by-default: the matcher covers ALL of `/api/*` and `/dashboard/*`, and only the
  * small, stable {@link PUBLIC_API_PREFIXES} allowlist is let through unauthenticated.
- * This means a newly added authed API route is gated automatically (fail-closed) — the
+ * This means a newly added authed API route is gated automatically (fail-closed); the
  * matcher never needs editing when routes move or are added.
  *
  *  - Public API routes: bypass the net (no token read).
@@ -32,7 +32,7 @@ const PUBLIC_API_PREFIXES = [
   '/api/system-settings/public',
   // Native (Java) client API: authenticated by its own bearer-token wrapper
   // (`withClientAuth`), not the browser session cookie. Bypassing the edge net here
-  // is intentional — the cookie/idle-timeout logic doesn't apply to token clients,
+  // is intentional: the cookie/idle-timeout logic doesn't apply to token clients,
   // and every /api/client route enforces its own token auth.
   '/api/client',
 ] as const;
@@ -58,7 +58,7 @@ export async function proxy(req: NextRequest) {
   });
 
   // Idle-timeout backstop: reject a signed-in token whose activity window has
-  // lapsed, from the token alone (no DB — this runs on the edge). The client
+  // lapsed, from the token alone (no DB; this runs on the edge). The client
   // watcher normally signs the user out gracefully first; this catches clients
   // that aren't running (locked, suspended, JS disabled, tampered). Sign-out and
   // the activity heartbeat go through `/api/auth/*`, which is allowlisted above,

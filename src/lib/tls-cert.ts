@@ -61,7 +61,7 @@ export class CertValidationError extends Error {}
 /**
  * Validate an uploaded cert + key (+ optional chain) and write them for nginx.
  * The leaf cert and any chain are concatenated into server.crt (fullchain).
- * Throws CertValidationError on any validation failure — nothing is written.
+ * Throws CertValidationError on any validation failure; nothing is written.
  */
 export function installCert(certPem: string, keyPem: string, chainPem?: string): CertInfo {
   const cert = (certPem ?? '').trim();

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 
-// No SystemSettings row, so the getter falls back to env/defaults — the behavior
+// No SystemSettings row, so the getter falls back to env/defaults; the behavior
 // these tests exercise.
 const prismaMock = vi.hoisted(() => ({
   systemSettings: { findUnique: vi.fn().mockResolvedValue(null) },

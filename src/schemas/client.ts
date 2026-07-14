@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { isValidEmail } from '@/lib/email';
 
 /**
- * Client login body. Unlike signup this does not enforce the strength policy — it
- * verifies an existing password — so `password` only needs to be present.
+ * Client login body. Unlike signup this does not enforce the strength policy; it
+ * verifies an existing password, so `password` only needs to be present.
  */
 export const ClientLoginSchema = z.object({
   email: z

@@ -23,7 +23,7 @@ type Props = {
   assignments: DueDateAssignment[];
 };
 
-// Keep the module skimmable — the calendar is the place for the full term.
+// Keep the module skimmable: the calendar is the place for the full term.
 const MAX_VISIBLE = 5;
 const DUE_SOON_MS = 48 * 60 * 60 * 1000;
 

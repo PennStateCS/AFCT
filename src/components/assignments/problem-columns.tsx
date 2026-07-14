@@ -21,7 +21,7 @@ export const problemTypeLabels: Record<string, string> = {
 };
 
 export type ProblemColumnsParams = {
-  /** Whether this is a group assignment — controls the Group column's presence. */
+  /** Whether this is a group assignment; controls the Group column's presence. */
   isGroup: boolean;
   /** Group display names per problem id (empty = "All students"). */
   groupNamesByProblemId: Record<string, string[]>;

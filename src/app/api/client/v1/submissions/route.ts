@@ -7,7 +7,7 @@ import { SubmissionCreateApiSchema } from '@/schemas/submission';
 import { createSubmission } from '@/lib/create-submission';
 
 /**
- * The caller's own submission history for one problem (attempt list), newest first —
+ * The caller's own submission history for one problem (attempt list), newest first,
  * so the client can show past attempts and drill into any one's result via
  * `GET /submissions/{id}`. Scoped to the token's user, so it never exposes anyone
  * else's work.
@@ -54,8 +54,8 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
 
 /**
  * Submit a solution file (client). Same multipart body, validation, caps, cooldown,
- * late policy, storage, and queueing as the web `/api/submissions` — it runs the same
- * `createSubmission` service — but authenticated by a bearer token. Returns 202 with
+ * late policy, storage, and queueing as the web `/api/submissions` (it runs the same
+ * `createSubmission` service) but authenticated by a bearer token. Returns 202 with
  * the new submission's id + status.
  * @openapi
  * summary: Submit a solution (client)

@@ -18,7 +18,7 @@ const ResetPasswordBody = z.object({
  * Sets another user's password on their behalf (an admin-initiated reset).
  * System administrators only; the new password still has to meet the strength
  * policy. Pass `isTemporary` to force a change at next login. The plaintext
- * password is never logged — only who reset whom.
+ * password is never logged, only who reset whom.
  * @openapi
  * summary: Reset a user's password (admin)
  * requestBody:

@@ -113,7 +113,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return session;
         }
 
-        // Always fetch fresh user data to ensure profile updates are reflected —
+        // Always fetch fresh user data to ensure profile updates are reflected,
         // and, critically, to catch an account that has since been deleted or
         // disabled so a stale JWT can't keep granting access (especially admin).
         try {
@@ -152,7 +152,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         } catch (error) {
           console.error('Error fetching fresh user data:', error);
           // On a transient DB error we fail OPEN for availability (keep the user
-          // signed in — a blip shouldn't log everyone out) but CLOSED for
+          // signed in, a blip shouldn't log everyone out) but CLOSED for
           // privilege: strip admin. The fresh-user lookup is also the admin-
           // revocation path, so trusting the token's isAdmin here would let a
           // just-de-admined user keep elevated access during an outage. `isAdmin`

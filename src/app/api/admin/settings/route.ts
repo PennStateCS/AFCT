@@ -27,7 +27,7 @@ import {
 } from '@/lib/system-settings';
 
 // Settings whose changes are safe to record verbatim in the audit log. The
-// hCaptcha secret is deliberately excluded — we only log whether it was
+// hCaptcha secret is deliberately excluded; we only log whether it was
 // set/cleared, never its value.
 const AUDITED_FIELDS = [
   'timezone',
@@ -80,7 +80,7 @@ async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promis
 
 /**
  * Returns the singleton system settings, falling back to defaults for any unset
- * field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`
+ * field. The hCaptcha secret is never returned; only `hcaptchaSecretConfigured`
  * reports whether one is stored. System administrators only.
  * @openapi
  * summary: Get system settings
@@ -237,13 +237,13 @@ export const PUT = withAdminAuth(
     if (body.submissionAnalyzerLimit !== undefined)
       queueData.submissionAnalyzerLimit = body.submissionAnalyzerLimit;
 
-    // Login lockout policy — only persist the fields provided, clamped to safe bounds.
+    // Login lockout policy: only persist the fields provided, clamped to safe bounds.
     const loginData: Record<string, number> = {};
     if (body.loginMaxAttempts !== undefined) loginData.loginMaxAttempts = body.loginMaxAttempts;
     if (body.loginLockoutMinutes !== undefined)
       loginData.loginLockoutMinutes = body.loginLockoutMinutes;
 
-    // Backup schedule — only persist provided fields, clamped to safe bounds.
+    // Backup schedule: only persist provided fields, clamped to safe bounds.
     const backupData: Record<string, number | boolean> = {};
     if (body.backupEnabled !== undefined) backupData.backupEnabled = body.backupEnabled;
     if (body.backupHour !== undefined) backupData.backupHour = body.backupHour;
@@ -325,7 +325,7 @@ export const PUT = withAdminAuth(
     }
 
     // Audit the change: which fields moved (with before/after), plus whether the
-    // hCaptcha secret was set or cleared — never its value. Skip a no-op save.
+    // hCaptcha secret was set or cleared, never its value. Skip a no-op save.
     const changes = diffSettings(
       existing as Record<string, unknown> | null,
       settings as unknown as Record<string, unknown>,

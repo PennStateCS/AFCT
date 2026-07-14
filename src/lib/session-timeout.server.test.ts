@@ -36,9 +36,9 @@ describe('getServerIdleTimeoutMs', () => {
   it('caches within the TTL and re-reads after it lapses', async () => {
     prismaMock.systemSettings.findUnique.mockResolvedValue({ sessionTimeoutMinutes: 20 });
     await getServerIdleTimeoutMs(1000);
-    await getServerIdleTimeoutMs(5000); // within 30s TTL — cached
+    await getServerIdleTimeoutMs(5000); // within 30s TTL, cached
     expect(prismaMock.systemSettings.findUnique).toHaveBeenCalledTimes(1);
-    await getServerIdleTimeoutMs(1000 + 31_000); // past TTL — re-reads
+    await getServerIdleTimeoutMs(1000 + 31_000); // past TTL, re-reads
     expect(prismaMock.systemSettings.findUnique).toHaveBeenCalledTimes(2);
   });
 });

@@ -6,7 +6,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
  * Re-queues every submission in a course, resetting each to PENDING and clearing its
- * feedback/result — the bulk counterpart to the single-submission rerun. Course staff
+ * feedback/result: the bulk counterpart to the single-submission rerun. Course staff
  * (faculty or TAs) or a system admin. Logs each submission plus one batch-summary
  * event, and returns the count re-queued.
  * @openapi

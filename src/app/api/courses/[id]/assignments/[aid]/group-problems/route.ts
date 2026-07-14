@@ -85,7 +85,7 @@ export const GET = withAssignmentAuth(
 
 /**
  * Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or
- * a system admin. A `groupId` is required — pass a specific group id, or "ALL" to clear the given
+ * a system admin. A `groupId` is required: pass a specific group id, or "ALL" to clear the given
  * problems from every group. The problems themselves stay on the assignment.
  * @openapi
  * summary: Remove group→problem mappings

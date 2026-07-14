@@ -23,7 +23,7 @@ type DashboardCourse = {
   isArchived: boolean;
   enrolled?: EnrolledUser[];
   // The viewer's role in THIS course (from their roster entry). Drives per-course
-  // visibility and privileged display — a global role can't, since a user may be
+  // visibility and privileged display; a global role can't, since a user may be
   // faculty in one course and a student in another.
   userRole?: 'FACULTY' | 'TA' | 'STUDENT';
 };

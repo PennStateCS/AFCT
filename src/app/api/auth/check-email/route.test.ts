@@ -58,7 +58,7 @@ describe('GET /api/auth/check-email', () => {
 
     expect(blocked).not.toBeNull();
     expect(blocked!.headers.get('Retry-After')).toBeTruthy();
-    // Never leaks account details — only the error message.
+    // Never leaks account details, only the error message.
     await expect(blocked!.json()).resolves.toHaveProperty('error');
   });
 });

@@ -37,7 +37,7 @@ vi.mock('@/components/ui/data-table', () => ({
   ),
 }));
 
-// Heavy dialogs — expose their success callback via a button so we can trigger
+// Heavy dialogs: expose their success callback via a button so we can trigger
 // the post-mutation invalidation path.
 vi.mock('@/components/dialogs/CreateGroupsDialog', () => ({
   CreateGroupDialog: ({ onSuccess }: { onSuccess: () => void }) => (
@@ -66,7 +66,7 @@ const jsonResponse = (body: unknown, ok = true) => ({
   json: async () => body,
 });
 
-// URL/method router — both the groups and students endpoints are plain GETs, so
+// URL/method router: both the groups and students endpoints are plain GETs, so
 // we branch on both method and path.
 const routeFetch = (opts: {
   groups?: unknown;
@@ -138,7 +138,7 @@ describe('GroupsCard', () => {
       expect(screen.getByText('Team Alpha')).toBeInTheDocument();
     });
 
-    // Groups still fetched, but students came from the seed — no GET /students.
+    // Groups still fetched, but students came from the seed: no GET /students.
     expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups');
     expect(fetchMock).not.toHaveBeenCalledWith('/api/courses/c1/students');
 

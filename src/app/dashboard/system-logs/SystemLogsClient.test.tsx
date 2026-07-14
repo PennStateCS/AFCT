@@ -32,7 +32,7 @@ type LogRow = {
 
 // Lightweight DataTable mock: renders each row's rendered cells so we can assert
 // on real column output, and exposes buttons/inputs to drive pagination and the
-// global (search) filter — the two callbacks the component wires up.
+// global (search) filter: the two callbacks the component wires up.
 vi.mock('@/components/ui/data-table', () => ({
   DataTable: ({
     columns,
@@ -93,7 +93,7 @@ vi.mock('@/components/ui/data-table', () => ({
   ),
 }));
 
-// Dialogs are irrelevant to fetch/render behavior — stub them out.
+// Dialogs are irrelevant to fetch/render behavior; stub them out.
 vi.mock('@/components/dialogs/LogViewerDialog', () => ({
   LogViewerDialog: () => null,
 }));

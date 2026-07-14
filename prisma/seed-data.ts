@@ -116,7 +116,7 @@ export const courseData: CourseSeed[] = [
     isArchived: false,
     assignTa: false,
   },
-  // Charles Xavier's lifecycle set — one course in each state so the dev DB can
+  // Charles Xavier's lifecycle set: one course in each state so the dev DB can
   // always exercise past / current / future / archived. Dates are pinned relative
   // to now (see getLifecycleDates), not the rolling term.
   {

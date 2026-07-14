@@ -6,7 +6,7 @@ import type { paths } from '@/types/api';
  * params, request bodies, and responses are all type-checked against the spec, so
  * a route-shape change surfaces as a compile error here rather than at runtime.
  *
- * Same-origin by default. Opt-in — existing hand-written `fetch` calls keep working.
+ * Same-origin by default. Opt-in: existing hand-written `fetch` calls keep working.
  *
  * Example:
  *   const { data, error } = await api.GET('/api/courses/{id}', {

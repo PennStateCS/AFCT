@@ -250,7 +250,7 @@ function CourseActionsCell({
 
   const handleDelete = async () => {
     // The server decides hard vs soft based on whether the course holds any data, so
-    // the success message depends on the response body — toast it manually on success.
+    // the success message depends on the response body; toast it manually on success.
     const result = await mutateWithToast(
       () => apiClient.del<{ deleted?: 'hard' | 'soft' }>(apiPaths.course(course.id)),
       { error: 'Error deleting course' },

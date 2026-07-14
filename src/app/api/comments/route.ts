@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // The author's roster row supplies only their course-role badge and may be absent
     // (e.g. a system admin commenting on a course they aren't enrolled in). We do NOT
-    // fabricate a roster row — the comment is attributed to the author (User) directly.
+    // fabricate a roster row; the comment is attributed to the author (User) directly.
     const rosterEntry = await prisma.roster.findFirst({
       where: { courseId: assignment.courseId, userId: user.id },
       select: { id: true },
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the problem is actually linked to THIS assignment (not merely present
-    // in the course) — otherwise a comment could be created against an
+    // in the course); otherwise a comment could be created against an
     // assignment/problem pair that doesn't exist.
     const link = await prisma.assignmentProblem.findUnique({
       where: { assignmentId_problemId: { assignmentId, problemId } },
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create comment — attributed to the author (User); roster (role badge) optional.
+    // Create comment, attributed to the author (User); roster (role badge) optional.
     const comment = await prisma.comment.create({
       data: {
         content,
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Deletes a comment by id. Comments are immutable to students — **only course staff
+ * Deletes a comment by id. Comments are immutable to students: **only course staff
  * (faculty or TAs) or a system admin may delete**, including deleting their own.
  * A student cannot delete a comment they authored.
  * @openapi
@@ -254,7 +254,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Comments are immutable to students: only course staff (faculty/TA) or a system
-    // admin may delete — including their own. A student cannot delete their comment.
+    // admin may delete, including their own. A student cannot delete their comment.
     if (!(await canManageCourse(user, comment.assignment.courseId))) {
       return logDenial(request, {
         userId: user.id,

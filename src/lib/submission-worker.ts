@@ -48,7 +48,7 @@ let workerStarted = false;
 
 // Concurrency is the number of live worker loops (each handles one submission at
 // a time). desiredWorkers and maxAttempts are refreshed from SystemSettings, so
-// an admin can retune the queue without a restart — see refreshQueueSettings().
+// an admin can retune the queue without a restart; see refreshQueueSettings().
 let loopCount = 0;
 let desiredWorkers = DEFAULT_SUBMISSION_MAX_CONCURRENT;
 let maxAttempts = DEFAULT_SUBMISSION_MAX_ATTEMPTS;
@@ -59,9 +59,9 @@ const STUCK_GRACE_MS = 60_000; // grace beyond the eval timeout before a row is 
 
 // How long a worker loop waits before checking the queue again, by outcome.
 const LOOP_DELAY_MS = {
-  IDLE: 3_000, // queue was empty — no rush
-  NEXT: 100, // just finished (or lost a claim) — the queue may still be full
-  ERROR: 5_000, // a loop error — back off longer
+  IDLE: 3_000, // queue was empty; no rush
+  NEXT: 100, // just finished (or lost a claim); the queue may still be full
+  ERROR: 5_000, // a loop error; back off longer
 };
 
 type SubmissionEvaluationStatus = keyof typeof SubmissionStatus;
@@ -82,7 +82,7 @@ async function logSubmissionActivity(
   severity: LogSeverity,
   metadata: Record<string, string | number | boolean | null>,
 ) {
-  // Write straight to the DB — we're in the same process, so there's no reason
+  // Write straight to the DB; we're in the same process, so there's no reason
   // to go back out over HTTP. Only scalar ids are pulled off the submission;
   // never the full student record.
   try {
@@ -225,7 +225,7 @@ async function runWorkerLoop() {
     const nextSubmission = await prisma.submission.findFirst({
       where: {
         status: 'PENDING',
-        // Only add the filter when we have ids — an empty notIn is a Prisma footgun.
+        // Only add the filter when we have ids; an empty notIn is a Prisma footgun.
         ...(busyStudentIds.length ? { studentId: { notIn: busyStudentIds } } : {}),
       },
       orderBy: [{ assignmentProblem: { assignment: { dueDate: 'asc' } } }, { submittedAt: 'asc' }],
@@ -239,7 +239,7 @@ async function runWorkerLoop() {
     }
 
     // Poison-pill guard: a submission that has been claimed too many times keeps
-    // failing (or keeps getting reaped) — fail it rather than retry forever.
+    // failing (or keeps getting reaped); fail it rather than retry forever.
     if (nextSubmission.attempts >= maxAttempts) {
       const failed = await prisma.submission.updateMany({
         where: { id: nextSubmission.id, status: 'PENDING' },
@@ -248,7 +248,7 @@ async function runWorkerLoop() {
           feedback: 'Autograder gave up after too many failed attempts.',
         },
       });
-      // A student's submission can no longer be graded — surface it for staff.
+      // A student's submission can no longer be graded; surface it for staff.
       if (failed.count > 0) {
         const info = await prisma.submission.findUnique({
           where: { id: nextSubmission.id },
@@ -284,7 +284,7 @@ async function runWorkerLoop() {
       return;
     }
 
-    // Hold this loop until the evaluation finishes — one loop, one submission,
+    // Hold this loop until the evaluation finishes: one loop, one submission,
     // so the live loop count is the real concurrency limit.
     await evaluateSubmission(nextSubmission.id);
 
@@ -307,7 +307,7 @@ async function evaluateSubmission(id: string) {
   try {
     submission = await prisma.submission.findUnique({
       where: { id },
-      // Intentionally no `student: true` — the worker only needs the scalar
+      // Intentionally no `student: true`; the worker only needs the scalar
       // studentId (already on the row), and including the User pulls its
       // password hash into memory and into logs.
       include: submissionEvalInclude,
@@ -408,7 +408,7 @@ async function evaluateSubmission(id: string) {
 }
 
 // Internal worker steps, exposed for unit tests only. Not part of the module's
-// public API — production code drives the queue via startSubmissionWorker().
+// public API; production code drives the queue via startSubmissionWorker().
 export const __test__ = {
   evaluateSubmission,
   runJavaEvaluator,
@@ -416,7 +416,7 @@ export const __test__ = {
   runWorkerLoop,
 };
 
-// The evaluator interface both the constructor and the fallback factory produce —
+// The evaluator interface both the constructor and the fallback factory produce,
 // declared once instead of being spelled out at each interop cast site.
 type JavaEvaluator = {
   execute: (

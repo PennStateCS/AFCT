@@ -47,7 +47,7 @@ const SIGNUP_IDENTIFIER_CONFIG: BucketConfig = {
 };
 
 // Email-availability checks are a legitimate signup-form affordance, so the limit is
-// generous — but it caps bulk account enumeration from one IP. Only "ok" or "blocked"
+// generous, but it caps bulk account enumeration from one IP. Only "ok" or "blocked"
 // (thresholds above maxAttempts disable friction/challenge for this background call).
 const CHECK_EMAIL_IP_CONFIG: BucketConfig = {
   windowMs: 10 * 60 * 1000,
@@ -256,7 +256,7 @@ export const evaluateSignupRateLimit = (params: {
 /**
  * IP-based limit for the unauthenticated email-availability check. Returns `blocked`
  * once an IP exceeds the (generous) window budget, so the endpoint can't be used to
- * bulk-enumerate registered accounts. Never challenges — it's a background form check.
+ * bulk-enumerate registered accounts. Never challenges; it's a background form check.
  */
 export const evaluateCheckEmailRateLimit = (params: { ip?: string }): RateLimitDecision =>
   ensureEvaluations([

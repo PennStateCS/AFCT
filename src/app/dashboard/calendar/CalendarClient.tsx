@@ -58,7 +58,7 @@ export default function CalendarClient({
   );
 
   // The SSR-provided range, captured once, so `initialAssignments` seed only the
-  // month they belong to — not every month the user later navigates to.
+  // month they belong to, not every month the user later navigates to.
   const [initialRange] = useState(() =>
     getMonthRangeIso(initialMonth ? new Date(initialMonth) : new Date(), timezone),
   );

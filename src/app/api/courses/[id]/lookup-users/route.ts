@@ -8,7 +8,7 @@ import { BulkEnrollEmailsSchema } from '@/schemas/bulk';
 
 /**
  * Resolves a list of emails to user records, splitting them into `found` and
- * `notFound` — used by the roster importer to preview who exists before enrolling.
+ * `notFound`, used by the roster importer to preview who exists before enrolling.
  * Matching is case-insensitive regardless of DB collation. Restricted to course
  * staff (faculty or TAs) or a system admin: only someone who can manage the course
  * in the path may resolve emails to accounts.

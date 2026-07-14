@@ -11,7 +11,7 @@ export const NODE_DIAMETER = 58;
 
 /**
  * Choose where to place the start-arrow stub for an initial node: try 8 compass
- * directions at 1.5× the node diameter and pick the least-cluttered one — penalizing
+ * directions at 1.5× the node diameter and pick the least-cluttered one, penalizing
  * overlap with other nodes and alignment with incoming edges. Returns the chosen point.
  */
 export function bestStartNodePosition(
