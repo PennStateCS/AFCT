@@ -45,7 +45,7 @@ prisma/dev.db*
 .vscode
 .idea
 
-# Local tooling & secrets — never bake into the image
+# Local tooling & secrets, never bake into the image
 .claude
 *.key
 *.crt

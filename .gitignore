@@ -61,7 +61,7 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 
-# TLS keys/certs (never commit these — nginx generates its own at runtime)
+# TLS keys/certs (never commit these; nginx generates its own at runtime)
 *.pem
 *.key
 *.crt
