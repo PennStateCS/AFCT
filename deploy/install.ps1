@@ -58,6 +58,35 @@ function New-Secret([int]$Length = 40) {
   if ($s.Length -lt $Length) { $s } else { $s.Substring(0, $Length) }
 }
 
+# Password policy, mirroring src/lib/password-policy.ts and the production seed:
+# 8-72 chars with an upper, a lower, a digit, and a special (non-alphanumeric)
+# char. (-cmatch is case-sensitive; plain -match is not.)
+function Test-StrongPassword([string]$pw) {
+  return ($pw.Length -ge 8 -and $pw.Length -le 72 -and
+          $pw -cmatch '[A-Z]' -and $pw -cmatch '[a-z]' -and
+          $pw -match '[0-9]' -and $pw -match '[^A-Za-z0-9]')
+}
+
+# Generate an admin password that satisfies Test-StrongPassword: a random
+# alphanumeric core (New-Secret strips punctuation) plus one char from each
+# required class. The admin must change it at first login, so the fixed policy
+# suffix on a random core is harmless.
+function New-AdminPassword { (New-Secret) + 'Aa1_' }
+
+# Warn (never block) if the public URL will cause auth problems: a non-https URL
+# or a bare IP produces NEXTAUTH_URL mismatches and silent login redirect loops.
+function Test-AppUrl([string]$url) {
+  if ($url -notmatch '^https://') {
+    Write-WarnLog "the public URL should start with https:// (got '$url'); http or a bare IP causes login redirect loops."
+    return
+  }
+  $h = (($url -replace '^https://', '') -split '/')[0]
+  $h = ($h -split ':')[0]
+  if ($h -match '^[0-9]+(\.[0-9]+){3}$') {
+    Write-WarnLog "the public URL uses a bare IP ('$h'); a real hostname with a matching TLS certificate is recommended."
+  }
+}
+
 # --------------------------------------------------------------------------- #
 # Prompt helpers
 # --------------------------------------------------------------------------- #
@@ -148,7 +177,34 @@ function Test-Prereqs {
   docker compose version *> $null
   if ($LASTEXITCODE -ne 0) { Stop-WithError 'Docker Compose not found. Update Docker Desktop (it includes Compose).' }
 
+  # Best-effort disk check: the container images total a few GB.
+  try {
+    $free = (Get-Item -LiteralPath $PSScriptRoot).PSDrive.Free
+    if ($free -and $free -lt 5GB) { Write-WarnLog 'less than ~5 GB free on this drive; the images need a few GB.' }
+  } catch {}
+
   Write-Log 'prerequisites OK.'
+}
+
+# Best-effort end-to-end check that nginx serves the app, not just that the
+# container reports healthy. Self-signed cert on first boot, so bypass cert
+# validation for this one localhost call (restored afterward).
+function Invoke-SmokeTest {
+  try {
+    $prev = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    try {
+      Invoke-WebRequest -Uri 'https://localhost/api/health' -TimeoutSec 10 -UseBasicParsing | Out-Null
+      Write-Log 'web front is responding at /api/health.'
+    }
+    catch {
+      Write-WarnLog "the app is healthy but the web front didn't answer /api/health yet; nginx may still be warming up."
+    }
+    finally {
+      [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $prev
+    }
+  }
+  catch {}
 }
 
 # --------------------------------------------------------------------------- #
@@ -156,21 +212,23 @@ function Test-Prereqs {
 # --------------------------------------------------------------------------- #
 function Start-Stack {
   Write-Log 'pulling images (first run can take a few minutes)...'
-  Write-Log '  (if the images are private, log in first: docker login ghcr.io)'
   # Capture without a pipe so $LASTEXITCODE reflects docker, not a downstream cmdlet.
   $pullOut = docker compose -f $ComposeFile pull 2>&1
   $pullOut | ForEach-Object { Write-Log $_ }
+  if (($pullOut | Out-String) -match 'unauthorized|denied|authentication required|forbidden') {
+    Write-WarnLog "some images could not be pulled. If they are private, run 'docker login ghcr.io' and re-run."
+  }
 
   Write-Log 'starting the stack...'
   $upOut = docker compose -f $ComposeFile up -d 2>&1
   $upCode = $LASTEXITCODE
   $upOut | ForEach-Object { Write-Log $_ }
-  if ($upCode -ne 0) { Stop-WithError 'the stack failed to start.' }
+  if ($upCode -ne 0) { Stop-WithError 'the stack failed to start. Run: .\install.ps1 diagnostics' }
 
   Write-Log 'waiting for the app to become healthy...'
   for ($i = 0; $i -lt 60; $i++) {
     $state = (docker inspect -f '{{ .State.Health.Status }}' afct-app 2>$null)
-    if ($state -eq 'healthy') { Write-Log 'app is healthy.'; return }
+    if ($state -eq 'healthy') { Write-Log 'app is healthy.'; Invoke-SmokeTest; return }
     if ($state -eq 'unhealthy') { Stop-WithError 'app reported unhealthy; run: .\install.ps1 diagnostics' }
     Start-Sleep -Seconds 5
   }
@@ -196,24 +254,32 @@ function Invoke-Install {
 
   $defaultUrl = "https://$([System.Net.Dns]::GetHostName())"
   if ($env:APP_URL) { $appUrl = $env:APP_URL } else { $appUrl = Read-Default 'Public URL (how people reach the site)' $defaultUrl }
+  Test-AppUrl $appUrl
 
   if ($env:ADMIN_EMAIL) { $adminEmail = $env:ADMIN_EMAIL }
   elseif ($Yes) { Stop-WithError 'ADMIN_EMAIL is required in -Yes (non-interactive) mode.' }
   else { $adminEmail = Read-Required 'Administrator email' }
+  if ($adminEmail -notmatch '.+@.+\..+') { Write-WarnLog "administrator email '$adminEmail' doesn't look like an email address." }
 
+  # Enforce the app's password policy so a weak value can't fail the first-run seed.
+  $pwPolicyMsg = 'password must be 8-72 characters with an upper, a lower, a number, and a special character.'
   $genPass = $false
   if ($env:ADMIN_PASSWORD) {
     $adminPass = $env:ADMIN_PASSWORD
+    if (-not (Test-StrongPassword $adminPass)) { Stop-WithError "ADMIN_PASSWORD is too weak: $pwPolicyMsg" }
   }
   elseif ($Yes) {
-    $adminPass = New-Secret; $genPass = $true
+    $adminPass = New-AdminPassword; $genPass = $true
   }
   else {
     $choice = Read-Default 'Set the admin password yourself (t) or auto-generate one (g)?' 't'
-    if ($choice -match '^(g|G)') { $adminPass = New-Secret; $genPass = $true }
+    if ($choice -match '^(g|G)') { $adminPass = New-AdminPassword; $genPass = $true }
     else {
-      $adminPass = Read-Secret 'Administrator password'
-      if ([string]::IsNullOrWhiteSpace($adminPass)) { Stop-WithError 'admin password cannot be empty.' }
+      while ($true) {
+        $adminPass = Read-Secret 'Administrator password'
+        if (Test-StrongPassword $adminPass) { break }
+        Write-WarnLog $pwPolicyMsg
+      }
     }
   }
 

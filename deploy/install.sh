@@ -273,6 +273,15 @@ preflight() {
     fi
   done
 
+  # Best-effort disk check: the container images total a few GB.
+  if command -v df >/dev/null 2>&1; then
+    avail_kb=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+    case "$avail_kb" in
+      ''|*[!0-9]*) : ;;
+      *) [ "$avail_kb" -lt 5242880 ] && warn "less than ~5 GB free here; the images need a few GB." || true ;;
+    esac
+  fi
+
   log "prerequisites OK."
 }
 
@@ -314,6 +323,46 @@ gen_secret() {
   else
     head -c 48 /dev/urandom | base64 | tr -d '\n=+/' | cut -c1-40
   fi
+}
+
+# Password policy, mirroring src/lib/password-policy.ts and the production seed:
+# 8-72 characters with an upper, a lower, a digit, and a special (non-alphanumeric)
+# character. The app rejects a weak admin password at first-run seeding, so the
+# installer enforces the same rule up front.
+is_strong_password() {
+  pw=$1
+  [ "${#pw}" -ge 8 ] && [ "${#pw}" -le 72 ]  || return 1
+  printf '%s' "$pw" | grep -q '[A-Z]'        || return 1
+  printf '%s' "$pw" | grep -q '[a-z]'        || return 1
+  printf '%s' "$pw" | grep -q '[0-9]'        || return 1
+  printf '%s' "$pw" | grep -q '[^A-Za-z0-9]' || return 1
+  return 0
+}
+
+# Generate an admin password that satisfies is_strong_password: a high-entropy
+# alphanumeric core (gen_secret strips punctuation) plus one char from each
+# required class. The bootstrapped admin must change it at first login, so the
+# fixed policy suffix on a random core is harmless.
+gen_admin_password() {
+  printf '%sAa1_' "$(gen_secret)"
+}
+
+# Warn (never block) if the public URL will cause auth problems: a non-https URL
+# or a bare IP produces NEXTAUTH_URL mismatches and silent login redirect loops.
+validate_app_url() {
+  case "$1" in
+    https://*) ;;
+    *) warn "the public URL should start with https:// (got '$1'); http or a bare IP causes login redirect loops."; return ;;
+  esac
+  host=${1#https://}; host=${host%%/*}; host=${host%%:*}
+  if printf '%s' "$host" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
+    warn "the public URL uses a bare IP ('$host'); a real hostname with a matching TLS certificate is recommended."
+  fi
+}
+
+# Loose email sanity check (something@something.tld). Warn-only.
+looks_like_email() {
+  case "$1" in ?*@?*.?*) return 0 ;; *) return 1 ;; esac
 }
 
 # --------------------------------------------------------------------------- #
@@ -372,22 +421,31 @@ do_install() {
 
   default_url="https://$(hostname 2>/dev/null || echo localhost)"
   APP_URL_IN=${APP_URL:-$(prompt_default "Public URL (how people reach the site)" "$default_url")}
+  validate_app_url "$APP_URL_IN"
   ADMIN_EMAIL_IN=${ADMIN_EMAIL:-$(prompt_required "Administrator email")}
+  looks_like_email "$ADMIN_EMAIL_IN" || warn "administrator email '${ADMIN_EMAIL_IN}' doesn't look like an email address."
 
-  # Admin password: use provided, or offer to type one / auto-generate.
+  # Admin password: use provided, or offer to type one / auto-generate. Enforce
+  # the app's policy either way, so a weak value can't slip through and fail the
+  # first-run seed with a confusing container error.
+  PW_POLICY_MSG="password must be 8-72 characters with an upper, a lower, a number, and a special character."
   if [ -n "${ADMIN_PASSWORD:-}" ]; then
     ADMIN_PASSWORD_IN=$ADMIN_PASSWORD
+    is_strong_password "$ADMIN_PASSWORD_IN" || die "ADMIN_PASSWORD is too weak: ${PW_POLICY_MSG}"
     ADMIN_PW_GENERATED="false"
   else
     choice=$(prompt_default "Set the admin password yourself (t) or auto-generate one (g)?" "t")
     case "$choice" in
       g|G|generate)
-        ADMIN_PASSWORD_IN=$(gen_secret)
+        ADMIN_PASSWORD_IN=$(gen_admin_password)
         ADMIN_PW_GENERATED="true"
         ;;
       *)
-        ADMIN_PASSWORD_IN=$(prompt_secret "Administrator password")
-        [ -n "$ADMIN_PASSWORD_IN" ] || die "admin password cannot be empty."
+        while :; do
+          ADMIN_PASSWORD_IN=$(prompt_secret "Administrator password")
+          is_strong_password "$ADMIN_PASSWORD_IN" && break
+          warn "$PW_POLICY_MSG"
+        done
         ADMIN_PW_GENERATED="false"
         ;;
     esac
@@ -439,24 +497,47 @@ do_install() {
 
 bring_up() {
   log "pulling images (first run can take a few minutes)..."
-  log "  (if the images are private, log in first: docker login ghcr.io)"
-  compose -f "$COMPOSE_FILE" pull 2>&1 | tee -a "$LOG_FILE" || true
+  # Capture the pull output so we can show it live AND detect an auth failure:
+  # the pipe's exit status is tee's, so a private-registry 401 wouldn't otherwise
+  # surface until 'up' failed more cryptically.
+  pull_out="${LOG_FILE}.pull"
+  compose -f "$COMPOSE_FILE" pull 2>&1 | tee "$pull_out"
+  cat "$pull_out" >> "$LOG_FILE" 2>/dev/null || true
+  if grep -qiE 'unauthorized|denied|authentication required|forbidden' "$pull_out" 2>/dev/null; then
+    warn "some images could not be pulled. If they are private, run 'docker login ghcr.io' and re-run."
+  fi
+  rm -f "$pull_out" 2>/dev/null || true
 
   log "starting the stack..."
-  compose -f "$COMPOSE_FILE" up -d 2>&1 | tee -a "$LOG_FILE" \
-    || die "the stack failed to start."
+  # Redirect to the log (not a pipe) so we get compose's real exit status; a
+  # piped 'up | tee' would always look successful (tee's exit), masking failures.
+  if ! compose -f "$COMPOSE_FILE" up -d >> "$LOG_FILE" 2>&1; then
+    die "the stack failed to start. See ${LOG_FILE}, or run: sh install.sh diagnostics"
+  fi
 
   log "waiting for the app to become healthy..."
   i=0
   while [ "$i" -lt 60 ]; do
     state=$($DOCKER_SUDO docker inspect -f '{{ .State.Health.Status }}' afct-app 2>/dev/null || echo "starting")
     case "$state" in
-      healthy) log "app is healthy."; return ;;
-      unhealthy) die "app reported unhealthy; check logs (./install.sh diagnostics)." ;;
+      healthy) log "app is healthy."; smoke_test; return ;;
+      unhealthy) die "app reported unhealthy; check logs (sh install.sh diagnostics)." ;;
     esac
     i=$((i + 1)); sleep 5
   done
   warn "app did not report healthy within ~5 min; it may still be migrating. Check: docker compose logs -f app"
+}
+
+# Best-effort end-to-end check that nginx actually serves the app, not just that
+# the container reports healthy. Self-signed cert on first boot, so -k.
+smoke_test() {
+  command -v curl >/dev/null 2>&1 || return 0
+  if curl -kfsS --max-time 10 https://localhost/api/health >/dev/null 2>&1 \
+     || curl -kfsS --max-time 10 http://localhost/api/health  >/dev/null 2>&1; then
+    log "web front is responding at /api/health."
+  else
+    warn "the app is healthy but the web front didn't answer /api/health yet; nginx may still be warming up."
+  fi
 }
 
 # --------------------------------------------------------------------------- #
