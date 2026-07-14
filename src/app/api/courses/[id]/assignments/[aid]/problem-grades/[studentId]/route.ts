@@ -232,8 +232,9 @@ export const POST = withCourseAuth(
                   studentId,
                   grade: change.grade,
                   feedback: null,
+                  gradedManually: true,
                 },
-                update: { grade: change.grade },
+                update: { grade: change.grade, gradedManually: true },
               }),
         ),
       );
