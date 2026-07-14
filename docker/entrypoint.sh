@@ -58,9 +58,17 @@ else
 fi
 
 # --- Prisma client ---
-# The client is baked into the image, but regenerate it if it's somehow missing.
+# The client is baked into the image. In dev, node_modules is a named volume that
+# outlives image rebuilds, so a schema change (e.g. adding a column) leaves a stale
+# client that no longer matches the schema/DB — and the app then crashes with
+# "Unknown field ... for select statement". Regenerate every start in dev to keep the
+# volume's client in sync with the bind-mounted schema. In prod the baked client is
+# authoritative and node_modules isn't a mounted volume, so only generate if missing.
 if [ "${ENSURE_PRISMA_CLIENT:-true}" = "true" ]; then
-  if [ ! -d node_modules/@prisma/client ] || [ ! -f node_modules/.prisma/client/index.js ]; then
+  if [ "${NODE_ENV:-}" = "development" ]; then
+    log "regenerating Prisma client (dev; schema may have changed)"
+    npx prisma generate || true
+  elif [ ! -d node_modules/@prisma/client ] || [ ! -f node_modules/.prisma/client/index.js ]; then
     log "Prisma client missing; generating"
     npx prisma generate || true
   fi
