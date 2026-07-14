@@ -75,18 +75,27 @@ export default function LoginPage() {
     process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY,
   );
 
+  // One fetch of the public settings on mount, reading every field the login page
+  // needs: the hCaptcha site key and whether signup is enabled system-wide.
+  // (Previously two separate effects each fetched this same endpoint.)
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
         const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
         if (!res.ok) return;
-        const data = (await res.json()) as { hcaptchaSiteKey?: string | null };
-        if (active && typeof data.hcaptchaSiteKey === 'string' && data.hcaptchaSiteKey) {
+        const data = (await res.json()) as {
+          hcaptchaSiteKey?: string | null;
+          allowSignup?: boolean;
+        };
+        if (!active) return;
+        if (typeof data.hcaptchaSiteKey === 'string' && data.hcaptchaSiteKey) {
           setCaptchaSiteKey(data.hcaptchaSiteKey);
         }
+        setAllowSignup(data.allowSignup ?? true);
       } catch {
-        // keep env fallback
+        // keep the env fallback for the captcha key; default signup to allowed
+        if (active) setAllowSignup(true);
       }
     })();
     return () => {
@@ -117,30 +126,6 @@ export default function LoginPage() {
     document.getElementById(mode === 'login' ? 'login-email' : 'signup-first')?.focus();
     interactionStartRef.current = getMonotonicNow();
   }, [mode]);
-
-  // Read public settings so the login page can hide signup when it is disabled system-wide.
-  useEffect(() => {
-    let active = true;
-
-    const loadPublicSettings = async () => {
-      try {
-        const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = (await res.json()) as { allowSignup?: boolean };
-        if (!active) return;
-        setAllowSignup(data.allowSignup ?? true);
-      } catch {
-        if (!active) return;
-        setAllowSignup(true);
-      }
-    };
-
-    void loadPublicSettings();
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (allowSignup === false && mode === 'signup') {

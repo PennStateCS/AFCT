@@ -115,75 +115,99 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
             : 0;
 
       dbStats.pg = {};
-      try {
-        const mc = (await prisma.$queryRaw`
-          SELECT setting::int as max_connections FROM pg_settings WHERE name='max_connections'
-        `) as Array<{ max_connections?: number }>;
-        dbStats.pg.max_connections = getNum(mc?.[0] ?? {}, 'max_connections') ?? null;
-      } catch {}
-      try {
-        const nb = (await prisma.$queryRaw`
-          SELECT numbackends::int as num_backends, pg_database_size(current_database())::bigint as dbsize
-          FROM pg_stat_database WHERE datname = current_database()
-        `) as Array<{ num_backends?: number; dbsize?: number }>;
-        dbStats.pg.num_backends = getNum(nb?.[0] ?? {}, 'num_backends') ?? null;
-        const dbsize = getNum(nb?.[0] ?? {}, 'dbsize');
-        dbDetails.pg_database_size_bytes = dbsize ?? null;
-        dbStats.pg.db_size_mb =
-          typeof dbsize === 'number' ? Math.round(dbsize / 1024 / 1024) : null;
-      } catch {}
-      try {
-        const hit = (await prisma.$queryRaw`
-          SELECT CASE WHEN (blks_hit + blks_read) = 0 THEN 0
-                      ELSE (blks_hit::float / (blks_hit + blks_read)) * 100 END AS ratio
-          FROM pg_stat_database WHERE datname = current_database()
-        `) as Array<{ ratio?: number }>;
-        const ratio = hit?.[0]?.ratio;
-        dbStats.pg.cache_hit_ratio =
-          typeof ratio === 'number' && Number.isFinite(ratio) ? Number(ratio.toFixed(1)) : null;
-      } catch {}
-      try {
-        const scans = (await prisma.$queryRaw`
-          SELECT COALESCE(SUM(seq_scan),0)::bigint AS seq_scans,
-                 COALESCE(SUM(idx_scan),0)::bigint AS idx_scans
-          FROM pg_stat_user_tables
-        `) as Array<{ seq_scans?: number; idx_scans?: number }>;
-        dbStats.pg.seq_scans = getNum(scans?.[0] ?? {}, 'seq_scans') ?? null;
-        dbStats.pg.idx_scans = getNum(scans?.[0] ?? {}, 'idx_scans') ?? null;
-      } catch {}
-      try {
-        const tps = (await prisma.$queryRaw`
-          SELECT CASE WHEN EXTRACT(EPOCH FROM (now() - stats_reset)) <= 0 THEN NULL
-                      ELSE ROUND(((xact_commit + xact_rollback) / EXTRACT(EPOCH FROM (now() - stats_reset)))::numeric, 2)
-                 END AS tps
-          FROM pg_stat_database WHERE datname = current_database()
-        `) as Array<{ tps?: number | null }>;
-        const val = tps?.[0]?.tps;
-        dbStats.pg.transactions_per_sec =
-          typeof val === 'number' && Number.isFinite(val) ? val : null;
-      } catch {}
-      try {
-        const slow = (await prisma.$queryRaw`
-          SELECT count(*)::int AS cnt FROM pg_stat_activity
-          WHERE state = 'active' AND now() - query_start > interval '5 seconds'
-        `) as Array<{ cnt?: number }>;
-        dbStats.pg.slow_query_count = getNum(slow?.[0] ?? {}, 'cnt') ?? null;
-      } catch {}
-      try {
-        const cs = (await prisma.$queryRaw`
-          SELECT coalesce(state,'unknown') as state, count(*)::int AS cnt
-          FROM pg_stat_activity GROUP BY state
-        `) as Array<{ state?: string; cnt?: number }>;
-        dbStats.pg.connections_by_state = Object.fromEntries(
-          cs.map((r) => [r.state ?? 'unknown', r.cnt ?? 0]),
-        );
-      } catch {}
-      try {
-        const idleX = (await prisma.$queryRaw`
-          SELECT count(*)::int AS cnt FROM pg_stat_activity WHERE state='idle in transaction'
-        `) as Array<{ cnt?: number }>;
-        dbStats.pg.connections_idle_in_xact = getNum(idleX?.[0] ?? {}, 'cnt') ?? null;
-      } catch {}
+      // Local non-optional handle: control-flow narrowing of `dbStats.pg` doesn't
+      // cross the async closures below, so capture the object once here.
+      const pg = dbStats.pg;
+      // These stat probes are independent and each write different keys, so run
+      // them concurrently instead of serially (this tab was ~8 back-to-back
+      // round-trips). Each keeps its own try/catch so one failure stays isolated.
+      await Promise.all([
+        (async () => {
+          try {
+            const mc = (await prisma.$queryRaw`
+              SELECT setting::int as max_connections FROM pg_settings WHERE name='max_connections'
+            `) as Array<{ max_connections?: number }>;
+            pg.max_connections = getNum(mc?.[0] ?? {}, 'max_connections') ?? null;
+          } catch {}
+        })(),
+        (async () => {
+          try {
+            const nb = (await prisma.$queryRaw`
+              SELECT numbackends::int as num_backends, pg_database_size(current_database())::bigint as dbsize
+              FROM pg_stat_database WHERE datname = current_database()
+            `) as Array<{ num_backends?: number; dbsize?: number }>;
+            pg.num_backends = getNum(nb?.[0] ?? {}, 'num_backends') ?? null;
+            const dbsize = getNum(nb?.[0] ?? {}, 'dbsize');
+            dbDetails.pg_database_size_bytes = dbsize ?? null;
+            pg.db_size_mb =
+              typeof dbsize === 'number' ? Math.round(dbsize / 1024 / 1024) : null;
+          } catch {}
+        })(),
+        (async () => {
+          try {
+            const hit = (await prisma.$queryRaw`
+              SELECT CASE WHEN (blks_hit + blks_read) = 0 THEN 0
+                          ELSE (blks_hit::float / (blks_hit + blks_read)) * 100 END AS ratio
+              FROM pg_stat_database WHERE datname = current_database()
+            `) as Array<{ ratio?: number }>;
+            const ratio = hit?.[0]?.ratio;
+            pg.cache_hit_ratio =
+              typeof ratio === 'number' && Number.isFinite(ratio) ? Number(ratio.toFixed(1)) : null;
+          } catch {}
+        })(),
+        (async () => {
+          try {
+            const scans = (await prisma.$queryRaw`
+              SELECT COALESCE(SUM(seq_scan),0)::bigint AS seq_scans,
+                     COALESCE(SUM(idx_scan),0)::bigint AS idx_scans
+              FROM pg_stat_user_tables
+            `) as Array<{ seq_scans?: number; idx_scans?: number }>;
+            pg.seq_scans = getNum(scans?.[0] ?? {}, 'seq_scans') ?? null;
+            pg.idx_scans = getNum(scans?.[0] ?? {}, 'idx_scans') ?? null;
+          } catch {}
+        })(),
+        (async () => {
+          try {
+            const tps = (await prisma.$queryRaw`
+              SELECT CASE WHEN EXTRACT(EPOCH FROM (now() - stats_reset)) <= 0 THEN NULL
+                          ELSE ROUND(((xact_commit + xact_rollback) / EXTRACT(EPOCH FROM (now() - stats_reset)))::numeric, 2)
+                     END AS tps
+              FROM pg_stat_database WHERE datname = current_database()
+            `) as Array<{ tps?: number | null }>;
+            const val = tps?.[0]?.tps;
+            pg.transactions_per_sec =
+              typeof val === 'number' && Number.isFinite(val) ? val : null;
+          } catch {}
+        })(),
+        (async () => {
+          try {
+            const slow = (await prisma.$queryRaw`
+              SELECT count(*)::int AS cnt FROM pg_stat_activity
+              WHERE state = 'active' AND now() - query_start > interval '5 seconds'
+            `) as Array<{ cnt?: number }>;
+            pg.slow_query_count = getNum(slow?.[0] ?? {}, 'cnt') ?? null;
+          } catch {}
+        })(),
+        (async () => {
+          try {
+            const cs = (await prisma.$queryRaw`
+              SELECT coalesce(state,'unknown') as state, count(*)::int AS cnt
+              FROM pg_stat_activity GROUP BY state
+            `) as Array<{ state?: string; cnt?: number }>;
+            pg.connections_by_state = Object.fromEntries(
+              cs.map((r) => [r.state ?? 'unknown', r.cnt ?? 0]),
+            );
+          } catch {}
+        })(),
+        (async () => {
+          try {
+            const idleX = (await prisma.$queryRaw`
+              SELECT count(*)::int AS cnt FROM pg_stat_activity WHERE state='idle in transaction'
+            `) as Array<{ cnt?: number }>;
+            pg.connections_idle_in_xact = getNum(idleX?.[0] ?? {}, 'cnt') ?? null;
+          } catch {}
+        })(),
+      ]);
     }
 
     // ---------- SQLite ----------

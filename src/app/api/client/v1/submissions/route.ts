@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withClientAuth } from '@/lib/api/with-client-auth';
 import { apiError } from '@/lib/api/http';
+import { logError } from '@/lib/api/activity';
 import { readFormData } from '@/lib/api/request';
 import { SubmissionCreateApiSchema } from '@/schemas/submission';
 import { createSubmission } from '@/lib/create-submission';
@@ -27,6 +28,7 @@ import { createSubmission } from '@/lib/create-submission';
  *             submissions: { type: array, items: { type: object } }
  *   400: { description: Missing assignmentId or problemId. }
  *   401: { description: Missing or invalid token. }
+ *   500: { description: Server error. }
  */
 export const GET = withClientAuth(async (req, _ctx, { user }) => {
   const { searchParams } = new URL(req.url);
@@ -36,20 +38,25 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
     return apiError(400, 'assignmentId and problemId are required');
   }
 
-  const submissions = await prisma.submission.findMany({
-    where: { assignmentId, problemId, studentId: user.id },
-    orderBy: { submittedAt: 'desc' },
-    select: { id: true, status: true, correct: true, submittedAt: true },
-  });
+  try {
+    const submissions = await prisma.submission.findMany({
+      where: { assignmentId, problemId, studentId: user.id },
+      orderBy: { submittedAt: 'desc' },
+      select: { id: true, status: true, correct: true, submittedAt: true },
+    });
 
-  return NextResponse.json({
-    submissions: submissions.map((s) => ({
-      id: s.id,
-      status: s.status,
-      correct: s.correct,
-      submittedAt: s.submittedAt.toISOString(),
-    })),
-  });
+    return NextResponse.json({
+      submissions: submissions.map((s) => ({
+        id: s.id,
+        status: s.status,
+        correct: s.correct,
+        submittedAt: s.submittedAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    await logError(req, { userId: user.id, action: 'CLIENT_SUBMISSIONS_LIST_ERROR', error });
+    return apiError(500, 'Server error');
+  }
 });
 
 /**
@@ -85,23 +92,28 @@ export const POST = withClientAuth(async (req, _ctx, { user }) => {
   const parsed = await readFormData(req, SubmissionCreateApiSchema);
   if (!parsed.ok) return parsed.response;
 
-  const result = await createSubmission({
-    user,
-    courseId: parsed.data.courseId,
-    assignmentId: parsed.data.assignmentId,
-    problemId: parsed.data.problemId,
-    file: parsed.form.get('file') as File | null,
-    req,
-  });
+  try {
+    const result = await createSubmission({
+      user,
+      courseId: parsed.data.courseId,
+      assignmentId: parsed.data.assignmentId,
+      problemId: parsed.data.problemId,
+      file: parsed.form.get('file') as File | null,
+      req,
+    });
 
-  if (!result.ok) {
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status, headers: result.headers },
+      );
+    }
     return NextResponse.json(
-      { error: result.error },
-      { status: result.status, headers: result.headers },
+      { submissionId: result.submission.id, status: result.submission.status },
+      { status: 202 },
     );
+  } catch (error) {
+    await logError(req, { userId: user.id, action: 'CLIENT_SUBMISSION_CREATE_ERROR', error });
+    return apiError(500, 'Server error');
   }
-  return NextResponse.json(
-    { submissionId: result.submission.id, status: result.submission.status },
-    { status: 202 },
-  );
 });
