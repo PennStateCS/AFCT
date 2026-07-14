@@ -5,6 +5,11 @@ const prismaMock = vi.hoisted(() => ({
   course: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
+  // Source reads now happen on the base client, before the transaction, so the
+  // file copies don't run while the transaction holds row locks.
+  assignment: { findMany: vi.fn() },
+  roster: { findMany: vi.fn() },
+  problem: { findMany: vi.fn() },
   $transaction: vi.fn(),
 }));
 
@@ -20,6 +25,11 @@ import { POST } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Sensible empty defaults; clearAllMocks doesn't remove implementations, so set
+  // them each run to avoid one test's data bleeding into the next.
+  prismaMock.assignment.findMany.mockResolvedValue([]);
+  prismaMock.roster.findMany.mockResolvedValue([]);
+  prismaMock.problem.findMany.mockResolvedValue([]);
 });
 
 describe('POST /api/courses/[id]/duplicate', () => {
@@ -161,10 +171,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-      assignment: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
-      assignmentProblem: { create: vi.fn() },
-      problem: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      assignment: { create: vi.fn() },
+      assignmentProblem: { createMany: vi.fn() },
+      problem: { create: vi.fn() },
     };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
@@ -215,17 +225,14 @@ describe('POST /api/courses/[id]/duplicate', () => {
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.problem.findMany.mockResolvedValue([
+      { id: 'p1', title: 'Problem 1', courseId: 'c1', type: 'FA' },
+    ]);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-      assignment: { findMany: vi.fn().mockResolvedValue([]) },
-      problem: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([{ id: 'p1', title: 'Problem 1', courseId: 'c1', type: 'FA' }]),
-        create: vi.fn().mockResolvedValue({ id: 'new-p1' }),
-      },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      problem: { create: vi.fn().mockResolvedValue({ id: 'new-p1' }) },
     };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
@@ -247,26 +254,22 @@ describe('POST /api/courses/[id]/duplicate', () => {
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'Assignment 1',
+        dueDate: new Date(),
+        problems: [{ problemId: 'p1', problem: { id: 'p1', title: 'P1' } }],
+      },
+    ]);
+    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1', title: 'Problem 1' }]);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-      assignment: {
-        findMany: vi.fn().mockResolvedValue([
-          {
-            id: 'a1',
-            title: 'Assignment 1',
-            dueDate: new Date(),
-            problems: [{ problemId: 'p1', problem: { id: 'p1', title: 'P1' } }],
-          },
-        ]),
-        create: vi.fn().mockResolvedValue({ id: 'new-a1' }),
-      },
-      assignmentProblem: { create: vi.fn() },
-      problem: {
-        findMany: vi.fn().mockResolvedValue([{ id: 'p1', title: 'Problem 1' }]),
-        create: vi.fn().mockResolvedValue({ id: 'new-p1' }),
-      },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      assignment: { create: vi.fn().mockResolvedValue({ id: 'new-a1' }) },
+      assignmentProblem: { createMany: vi.fn() },
+      problem: { create: vi.fn().mockResolvedValue({ id: 'new-p1' }) },
     };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
@@ -281,7 +284,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     expect(res.status).toBe(201);
     expect(tx.assignment.create).toHaveBeenCalled();
-    expect(tx.assignmentProblem.create).toHaveBeenCalled();
+    // The assignment->problem links go in one batched insert.
+    expect(tx.assignmentProblem.createMany).toHaveBeenCalledWith({
+      data: [{ assignmentId: 'new-a1', problemId: 'new-p1' }],
+    });
   });
 
   it('copies faculty and TAs when requested', async () => {
@@ -289,20 +295,18 @@ describe('POST /api/courses/[id]/duplicate', () => {
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 'u2', role: 'FACULTY' },
+      { userId: 'u3', role: 'TA' },
+      { userId: 'u4', role: 'STUDENT' },
+    ]);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: {
-        create: vi.fn(),
-        createMany: vi.fn(),
-        findMany: vi.fn().mockResolvedValue([
-          { userId: 'u2', role: 'FACULTY' },
-          { userId: 'u3', role: 'TA' },
-          { userId: 'u4', role: 'STUDENT' },
-        ]),
-      },
-      assignment: { findMany: vi.fn().mockResolvedValue([]) },
-      problem: { findMany: vi.fn().mockResolvedValue([]) },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      assignment: { create: vi.fn() },
+      assignmentProblem: { createMany: vi.fn() },
+      problem: { create: vi.fn() },
     };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
@@ -336,9 +340,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-      assignment: { findMany: vi.fn().mockResolvedValue([]) },
-      problem: { findMany: vi.fn().mockResolvedValue([]) },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      assignment: { create: vi.fn() },
+      assignmentProblem: { createMany: vi.fn() },
+      problem: { create: vi.fn() },
     };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
@@ -359,17 +364,16 @@ describe('POST /api/courses/[id]/duplicate', () => {
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      { id: 'a1', title: 'A1', dueDate: new Date(), problems: [] },
+    ]);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-      assignment: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([{ id: 'a1', title: 'A1', dueDate: new Date(), problems: [] }]),
-        create: vi.fn(),
-      },
-      problem: { findMany: vi.fn().mockResolvedValue([{ id: 'p1' }]), create: vi.fn() },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      assignment: { create: vi.fn().mockResolvedValue({ id: 'new-a1' }) },
+      assignmentProblem: { createMany: vi.fn() },
+      problem: { create: vi.fn() },
     };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
@@ -420,18 +424,16 @@ describe('POST /api/courses/[id]/duplicate', () => {
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      { id: 'a1', title: 'A1', dueDate: new Date(), problems: [] },
+    ]);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-      assignment: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([{ id: 'a1', title: 'A1', dueDate: new Date(), problems: [] }]),
-        create: vi.fn().mockResolvedValue({ id: 'new-a1' }),
-      },
-      assignmentProblem: { create: vi.fn() },
-      problem: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      assignment: { create: vi.fn().mockResolvedValue({ id: 'new-a1' }) },
+      assignmentProblem: { createMany: vi.fn() },
+      problem: { create: vi.fn() },
     };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
@@ -448,7 +450,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     // assignments mode: assignment copied, no problem copies, no link rows.
     expect(tx.assignment.create).toHaveBeenCalled();
     expect(tx.problem.create).not.toHaveBeenCalled();
-    expect(tx.assignmentProblem.create).not.toHaveBeenCalled();
+    expect(tx.assignmentProblem.createMany).not.toHaveBeenCalled();
   });
 
   it('uses legacy copyProblems-only flag (problems mode)', async () => {
@@ -456,13 +458,13 @@ describe('POST /api/courses/[id]/duplicate', () => {
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1', title: 'Problem 1' }]);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
-      assignment: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      assignment: { create: vi.fn() },
       problem: {
-        findMany: vi.fn().mockResolvedValue([{ id: 'p1', title: 'Problem 1' }]),
         create: vi.fn().mockResolvedValue({ id: 'new-p1' }),
       },
     };
@@ -487,34 +489,27 @@ describe('POST /api/courses/[id]/duplicate', () => {
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
+    // u2 is both copied (FACULTY on the source) and explicitly selected; they must
+    // get exactly one roster row.
+    prismaMock.roster.findMany.mockResolvedValue([{ userId: 'u2', role: 'FACULTY' }]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'A1',
+        dueDate: new Date(),
+        // p-missing was never copied (not in problemIdMap) -> link is skipped.
+        problems: [{ problemId: 'p-missing' }],
+      },
+    ]);
+    // No problems attached to the needed set are found, so problemIdMap stays empty.
+    prismaMock.problem.findMany.mockResolvedValue([]);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
-      roster: {
-        create: vi.fn(),
-        createMany: vi.fn(),
-        // u2 is both copied (FACULTY on the source) and explicitly selected;
-        // they must get exactly one roster row.
-        findMany: vi.fn().mockResolvedValue([{ userId: 'u2', role: 'FACULTY' }]),
-      },
-      assignment: {
-        findMany: vi.fn().mockResolvedValue([
-          {
-            id: 'a1',
-            title: 'A1',
-            dueDate: new Date(),
-            // p-missing was never copied (not in problemIdMap) -> link is skipped.
-            problems: [{ problemId: 'p-missing' }],
-          },
-        ]),
-        create: vi.fn().mockResolvedValue({ id: 'new-a1' }),
-      },
-      assignmentProblem: { create: vi.fn() },
-      problem: {
-        // No problems attached to needed set are found, so problemIdMap stays empty.
-        findMany: vi.fn().mockResolvedValue([]),
-        create: vi.fn(),
-      },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      assignment: { create: vi.fn().mockResolvedValue({ id: 'new-a1' }) },
+      assignmentProblem: { createMany: vi.fn() },
+      problem: { create: vi.fn() },
     };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
@@ -539,8 +534,8 @@ describe('POST /api/courses/[id]/duplicate', () => {
     const created = tx.roster.createMany.mock.calls[0][0].data;
     expect(created).toHaveLength(2);
     expect(created.map((r: { userId: string }) => r.userId).sort()).toEqual(['u2', 'u9']);
-    // The unmapped problem link must be skipped.
-    expect(tx.assignmentProblem.create).not.toHaveBeenCalled();
+    // The unmapped problem link must be skipped, so no links are inserted.
+    expect(tx.assignmentProblem.createMany).not.toHaveBeenCalled();
   });
 
   it('returns 500 when the transaction throws', async () => {
