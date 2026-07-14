@@ -204,7 +204,9 @@ export async function POST(request: NextRequest) {
       category: 'ASSIGNMENT',
       error,
     });
-    if (error instanceof z.ZodError) {
+    // A ZodError is a validation failure; a SyntaxError is malformed JSON in the
+    // request body. Both are client input errors (400), not server faults (500).
+    if (error instanceof z.ZodError || error instanceof SyntaxError) {
       return apiError(400, 'Invalid request data');
     }
     return apiError(500, 'Internal server error');

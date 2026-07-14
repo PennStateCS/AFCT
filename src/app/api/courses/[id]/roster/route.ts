@@ -32,9 +32,10 @@ const EnrollBody = z.object({ userId: z.string().min(1, 'Missing userId') });
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean } } }
  *   400: { description: Missing userId. }
- *   401: { description: "Not signed in, or the target user is inactive." }
+ *   401: { description: Not signed in. }
  *   403: { description: Not course staff (faculty or TAs) or a system admin. }
  *   404: { description: Target user not found. }
+ *   409: { description: The target user is inactive. }
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
@@ -54,7 +55,9 @@ export const POST = withCourseAuth(
       }
 
       if (targetUser.inactive == true) {
-        return NextResponse.json({ error: 'User is inactive' }, { status: 401 });
+        // The caller is authorized; it's the enrollment target that's disabled.
+        // 409 (conflict), not 401, which would look like the caller is signed out.
+        return NextResponse.json({ error: 'User is inactive' }, { status: 409 });
       }
 
       const roleToAssign = 'STUDENT';

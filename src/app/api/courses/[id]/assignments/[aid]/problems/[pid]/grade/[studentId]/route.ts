@@ -7,7 +7,10 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
 
-const GradeBody = z.object({ grade: z.number().nullish(), feedback: z.string().nullish() });
+const GradeBody = z.object({
+  grade: z.number().nullish(),
+  feedback: z.string().max(5000).nullish(),
+});
 
 // Concrete path params for this route. Next guarantees each dynamic segment is
 // present, so typing them keeps the destructured values `string` (rather than
