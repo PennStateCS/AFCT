@@ -8,14 +8,20 @@ import { z } from 'zod';
 import { isValidEmail } from '@/lib/email';
 import { StrongPassword } from '@/schemas/user';
 
+// Hard caps on bulk arrays. Without them a single request could hold a DB
+// transaction open over thousands of rows or block the event loop on serial
+// bcrypt hashing — an availability DoS reachable by course staff.
+const MAX_BULK_USERS = 500;
+const MAX_IMPORT_ROWS = 1000;
+
 /** Emails pasted into the enroll dialog, resolved to accounts by lookup-users. */
 export const BulkEnrollEmailsSchema = z.object({
-  emails: z.array(z.string()).default([]),
+  emails: z.array(z.string()).max(MAX_BULK_USERS).default([]),
 });
 
 /** The resolved account ids the enroll dialog submits to roster/bulk. */
 export const BulkEnrollUserIdsSchema = z.object({
-  userIds: z.array(z.string()).default([]),
+  userIds: z.array(z.string()).max(MAX_BULK_USERS).default([]),
 });
 
 /**
@@ -24,7 +30,7 @@ export const BulkEnrollUserIdsSchema = z.object({
  * rejecting the whole batch, so a single malformed row must not fail the request.
  */
 export const BulkImportUsersSchema = z.object({
-  rows: z.array(z.unknown()).default([]),
+  rows: z.array(z.unknown()).max(MAX_IMPORT_ROWS).default([]),
   temporaryPasswords: z.boolean().optional(),
 });
 
