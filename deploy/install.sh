@@ -11,8 +11,10 @@
 #   ADMIN_EMAIL=admin@x.edu ADMIN_PASSWORD=... APP_URL=https://afct.x.edu \
 #     sh install.sh --yes
 #
-# The script is self-contained: it only needs Docker (with the Compose plugin)
-# and this folder's docker-compose.yml + .env.production.example.
+# The script is self-contained: on Linux it installs Docker for you if it's
+# missing (via the official get.docker.com script); otherwise it just needs
+# Docker with the Compose plugin, plus this folder's docker-compose.yml and
+# .env.production.example.
 
 set -eu
 
@@ -30,6 +32,8 @@ DIAG_PREFIX="afct-diagnostics"
 
 ASSUME_YES="false"
 MODE="install"
+DOCKER_SUDO=""                              # set to "sudo" at preflight if the daemon needs it
+OS=$(uname -s 2>/dev/null || echo unknown)  # Linux / Darwin
 
 for arg in "$@"; do
   case "$arg" in
@@ -53,10 +57,10 @@ ask()  { printf '%s' "$1" >&2; }
 # Compose wrapper (support both `docker compose` and legacy `docker-compose`)
 # --------------------------------------------------------------------------- #
 compose() {
-  if docker compose version >/dev/null 2>&1; then
-    docker compose "$@"
+  if $DOCKER_SUDO docker compose version >/dev/null 2>&1; then
+    $DOCKER_SUDO docker compose "$@"
   elif command -v docker-compose >/dev/null 2>&1; then
-    docker-compose "$@"
+    $DOCKER_SUDO docker-compose "$@"
   else
     return 127
   fi
@@ -76,8 +80,8 @@ collect_diagnostics() {
 
   # Host + Docker environment
   { uname -a; echo; cat /etc/os-release 2>/dev/null; } > "$work/system.txt" 2>&1 || true
-  docker version > "$work/docker-version.txt" 2>&1 || true
-  docker info    > "$work/docker-info.txt"    2>&1 || true
+  $DOCKER_SUDO docker version > "$work/docker-version.txt" 2>&1 || true
+  $DOCKER_SUDO docker info    > "$work/docker-info.txt"    2>&1 || true
 
   # Compose state + per-service logs (tail only)
   compose -f "$COMPOSE_FILE" ps    > "$work/compose-ps.txt"   2>&1 || true
@@ -131,29 +135,138 @@ trap on_exit EXIT
 die() { errln "$*"; exit 1; }
 
 # --------------------------------------------------------------------------- #
+# Install Docker automatically when it's missing.
+#
+# Linux: use Docker's official convenience script (https://get.docker.com),
+# which covers the common distros and also installs the Compose plugin. macOS
+# can't be scripted this way, so we point the user at Docker Desktop.
+# --------------------------------------------------------------------------- #
+maybe_install_docker() {
+  command -v docker >/dev/null 2>&1 && return 0
+
+  if [ "$OS" != "Linux" ]; then
+    errln "Docker isn't installed."
+    errln "On macOS, install Docker Desktop and re-run:"
+    errln "  https://www.docker.com/products/docker-desktop/"
+    die "missing Docker"
+  fi
+
+  log "Docker isn't installed."
+  if [ "$ASSUME_YES" != "true" ]; then
+    ans=$(prompt_default "Install Docker now via the official get.docker.com script?" "y")
+    case "$ans" in
+      y|Y|yes|Yes) : ;;
+      *) die "Docker is required. Install it (https://docs.docker.com/engine/install/) and re-run." ;;
+    esac
+  fi
+
+  # Installing Docker needs root; use sudo when we aren't already root.
+  ins_sudo=""
+  if [ "$(id -u)" != "0" ]; then
+    if command -v sudo >/dev/null 2>&1; then
+      ins_sudo="sudo"
+    else
+      die "installing Docker needs root. Re-run as root (or install sudo) and try again."
+    fi
+  fi
+
+  log "installing Docker (this can take a few minutes)..."
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL https://get.docker.com | $ins_sudo sh 2>&1 | tee -a "$LOG_FILE"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- https://get.docker.com | $ins_sudo sh 2>&1 | tee -a "$LOG_FILE"
+  else
+    die "need curl or wget to download the Docker installer. Install one and re-run."
+  fi
+
+  # The pipe's success is tee's, not the installer's, so verify explicitly.
+  command -v docker >/dev/null 2>&1 || die "Docker installation did not complete; see ${LOG_FILE}."
+
+  # Start the daemon now and on boot.
+  if command -v systemctl >/dev/null 2>&1; then
+    $ins_sudo systemctl enable --now docker >/dev/null 2>&1 \
+      || warn "couldn't start Docker via systemctl; start it manually if the next step fails."
+  fi
+
+  # Let the invoking user run Docker without sudo after their next login. For THIS
+  # run the group isn't active yet, so preflight falls back to sudo below.
+  if [ "$(id -u)" != "0" ]; then
+    $ins_sudo usermod -aG docker "$(id -un)" 2>/dev/null \
+      && log "added $(id -un) to the 'docker' group (effective after your next login)." || true
+  fi
+
+  log "Docker installed."
+}
+
+# --------------------------------------------------------------------------- #
+# Install the Docker Compose plugin if it's missing (e.g. a pre-existing Docker
+# that didn't include it). A fresh get.docker.com install already bundles it.
+# Package names differ by distro; the legacy standalone `docker-compose` counts.
+# --------------------------------------------------------------------------- #
+ensure_compose_plugin() {
+  compose version >/dev/null 2>&1 && return 0
+  command -v docker-compose >/dev/null 2>&1 && return 0
+
+  [ "$OS" = "Linux" ] || die "the Docker Compose plugin is required. Install it and re-run."
+
+  log "the Docker Compose plugin isn't installed."
+  if [ "$ASSUME_YES" != "true" ]; then
+    ans=$(prompt_default "Install the Docker Compose plugin now?" "y")
+    case "$ans" in
+      y|Y|yes|Yes) : ;;
+      *) die "the Compose plugin is required. Install it and re-run." ;;
+    esac
+  fi
+
+  pm_sudo=""
+  if [ "$(id -u)" != "0" ]; then
+    if command -v sudo >/dev/null 2>&1; then pm_sudo="sudo"; else
+      die "installing the Compose plugin needs root. Re-run as root (or install sudo)."
+    fi
+  fi
+
+  log "installing the Docker Compose plugin..."
+  if command -v apt-get >/dev/null 2>&1; then
+    $pm_sudo apt-get update -y >/dev/null 2>&1 || true
+    $pm_sudo apt-get install -y docker-compose-plugin 2>&1 | tee -a "$LOG_FILE"
+  elif command -v dnf >/dev/null 2>&1; then
+    $pm_sudo dnf install -y docker-compose-plugin 2>&1 | tee -a "$LOG_FILE"
+  elif command -v yum >/dev/null 2>&1; then
+    $pm_sudo yum install -y docker-compose-plugin 2>&1 | tee -a "$LOG_FILE"
+  elif command -v apk >/dev/null 2>&1; then
+    $pm_sudo apk add --no-cache docker-cli-compose 2>&1 | tee -a "$LOG_FILE"
+  else
+    die "couldn't find a package manager to install the Compose plugin. Install 'docker compose' and re-run."
+  fi
+
+  compose version >/dev/null 2>&1 || die "Compose plugin install did not complete; see ${LOG_FILE}."
+  log "Docker Compose plugin installed."
+}
+
+# --------------------------------------------------------------------------- #
 # Preflight
 # --------------------------------------------------------------------------- #
 preflight() {
   log "checking prerequisites..."
 
-  if ! command -v docker >/dev/null 2>&1; then
-    errln "Docker is not installed."
-    errln "Install it first: https://docs.docker.com/engine/install/ (Linux) or Docker Desktop (macOS)."
-    die "missing Docker"
-  fi
+  # Install Docker automatically on Linux if it's missing.
+  maybe_install_docker
 
-  if ! docker info >/dev/null 2>&1; then
+  # Decide whether we need sudo to reach the daemon. Right after a fresh install
+  # the current shell isn't in the 'docker' group yet, so fall back to sudo.
+  if docker info >/dev/null 2>&1; then
+    DOCKER_SUDO=""
+  elif [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
+    DOCKER_SUDO="sudo"
+    log "talking to the Docker daemon with sudo for this run."
+  else
     die "Docker is installed but the daemon isn't reachable. Start Docker and re-run."
   fi
 
-  if ! compose version >/dev/null 2>&1; then
-    die "Docker Compose plugin not found. Install the 'docker compose' plugin and re-run."
-  fi
+  # Install the Compose plugin if a pre-existing Docker didn't include it.
+  ensure_compose_plugin
 
-  # openssl backs the generated secrets.
-  command -v openssl >/dev/null 2>&1 || die "openssl is required to generate secrets."
-
-  # Best-effort port check (warn only — the user may intend to change ports).
+  # Best-effort port check (warn only; the user may intend to change ports).
   for port in 80 443; do
     if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":${port} "; then
       warn "port ${port} looks busy; the web front may fail to bind it."
@@ -194,8 +307,13 @@ ensure_docker_boot() {
 # Secret generation
 # --------------------------------------------------------------------------- #
 gen_secret() {
-  # url-safe-ish token of ~40 chars
-  openssl rand -base64 48 | tr -d '\n=+/' | cut -c1-40
+  # url-safe-ish token of ~40 chars. Prefer openssl; fall back to the kernel
+  # CSPRNG so the installer never hard-depends on openssl being present.
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 48 | tr -d '\n=+/' | cut -c1-40
+  else
+    head -c 48 /dev/urandom | base64 | tr -d '\n=+/' | cut -c1-40
+  fi
 }
 
 # --------------------------------------------------------------------------- #
@@ -331,7 +449,7 @@ bring_up() {
   log "waiting for the app to become healthy..."
   i=0
   while [ "$i" -lt 60 ]; do
-    state=$(docker inspect -f '{{ .State.Health.Status }}' afct-app 2>/dev/null || echo "starting")
+    state=$($DOCKER_SUDO docker inspect -f '{{ .State.Health.Status }}' afct-app 2>/dev/null || echo "starting")
     case "$state" in
       healthy) log "app is healthy."; return ;;
       unhealthy) die "app reported unhealthy; check logs (./install.sh diagnostics)." ;;
