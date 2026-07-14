@@ -176,6 +176,61 @@ describe('SubmissionsClient', () => {
     expect(body).toEqual({ problemIds: ['prob-1'] });
   });
 
+  it('seeds selectedProblems only from the loaded problem list (single POST on load)', async () => {
+    // The assignment lists its problems in one order; the problems endpoint returns
+    // them in another. Previously the assignments effect ALSO seeded selectedProblems
+    // (from the assignment's problem ids), so on load the query key was written twice
+    // with different orders and the submissions POST fired twice. Now only the problems
+    // effect seeds it, so exactly one POST goes out and its ids follow the problem list.
+    const problem = (id: string, title: string) => ({
+      id,
+      title,
+      description: null,
+      type: 'DFA',
+      maxPoints: 10,
+      maxStates: null,
+      isDeterministic: true,
+      solved: false,
+      grade: null,
+    });
+    const capturedBodies: string[] = [];
+    const fetchMock = global.fetch as FetchMock;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/courses') return jsonResponse(COURSES);
+      if (url === '/api/courses/course-1/assignments')
+        return jsonResponse([
+          {
+            id: 'assign-1',
+            title: 'Assignment One',
+            dueDate: '2026-02-01T00:00:00.000Z',
+            problems: [
+              { problemId: 'prob-1', maxPoints: 10 },
+              { problemId: 'prob-2', maxPoints: 10 },
+            ],
+          },
+        ]);
+      if (url === '/api/assignments/assign-1/problems')
+        // Reverse order relative to the assignment's problem list.
+        return jsonResponse([problem('prob-2', 'Problem Two'), problem('prob-1', 'Problem One')]);
+      if (url === '/api/admin/submissions' && init?.method === 'POST') {
+        capturedBodies.push(String(init?.body));
+        return jsonResponse(SUBMISSIONS);
+      }
+      throw new Error(`Unexpected fetch: ${String(url)}`);
+    });
+
+    renderWithClient(<SubmissionsClient />);
+
+    // Wait until the row renders (the submissions POST resolved).
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    const posts = submissionsPostCalls(fetchMock);
+    expect(posts).toHaveLength(1);
+    // The one POST follows the problem list's order, not the assignment's — proof it
+    // was seeded by the problems effect alone.
+    expect(JSON.parse(capturedBodies[0])).toEqual({ problemIds: ['prob-2', 'prob-1'] });
+  });
+
   it('shows the loading text while the submissions query is in flight', async () => {
     let releaseSubmissions: (() => void) | undefined;
     const submissionsGate = new Promise<void>((resolve) => {
