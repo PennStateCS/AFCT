@@ -687,6 +687,44 @@ describe('PUT /api/courses/[id]', () => {
     expect(body.error).toBe('At least one faculty member is required.');
   });
 
+  it('forbids a TA from changing the faculty roster (instructorIds) and logs a SECURITY event', async () => {
+    // A TA passes the route's `manage` gate but must NOT be able to edit the faculty
+    // set — otherwise they could promote themselves and remove every instructor.
+    authMock.mockResolvedValue({ user: { id: 'ta-1', isAdmin: false } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
+
+    const req = new Request('http://localhost/api/courses/1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-07-01T09:00',
+        registrationCloseAt: '2026-09-01T09:00',
+        isPublished: true,
+        isArchived: false,
+        instructorIds: ['ta-1'],
+      }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toMatch(/faculty or an administrator/i);
+    // Blocked before any write.
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_FACULTY_EDIT_DENIED', severity: 'SECURITY' }),
+    );
+  });
+
   it('falls back to the system timezone and groups TA/student roster rows', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     // No personal timezone -> system settings fallback path.
