@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     // Clearing temporaryPassword retires any admin-issued reset.
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword, temporaryPassword: false },
+      data: { password: hashedPassword, temporaryPassword: false, passwordChangedAt: new Date() },
     });
 
     await createEnhancedActivityLog(prisma, req, {

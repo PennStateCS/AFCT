@@ -2,6 +2,13 @@
 // it here so existing importers (auth, signup) keep working.
 export { getClientIp } from '@/lib/ip-utils';
 
+// In-process, per-instance state. This is correct for the supported deployment
+// (a single app container, per docs/setup/production.md). It is deliberately NOT
+// shared across instances: horizontal scaling would give each instance its own
+// counters, multiplying the effective login/signup/enumeration budget and making
+// per-account lockout non-global. If the app is ever run multi-instance, back
+// these buckets with a shared store (e.g. Redis) or front auth with a platform
+// rate limiter. State also resets on restart/deploy, which is acceptable here.
 const buckets = new Map<string, RateLimiterBucket>();
 
 const randomBetween = (min: number, max: number) => Math.random() * (max - min) + min;
