@@ -76,9 +76,6 @@ docs/deployment-plan.md
 .idea/
 *.sw?
 
-# Claude Code
-.claude/
-
 # Uploads and user content
 public/uploads/*
 !public/uploads/.gitkeep
