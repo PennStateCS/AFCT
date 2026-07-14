@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
 import { errMessage } from '@/lib/errors';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
@@ -19,7 +20,7 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
-import { useReviewData } from './useReviewData';
+import { useReviewData, type ReviewDataResponse } from './useReviewData';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
 
@@ -89,8 +90,6 @@ export default function AssignmentSubmissions({
   const searchParamsString = searchParams.toString();
   const selectedStudentIdParam = searchParams.get('studentId');
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
-  const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>({});
-  const [comments, setComments] = useState<Record<string, DiscussionComment[]>>({});
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
@@ -215,19 +214,6 @@ export default function AssignmentSubmissions({
   const limitText = useCallback((value: string, max = 80) => {
     return value.length > max ? `${value.slice(0, max - 1)}…` : value;
   }, []);
-
-  const problemListItems = useMemo(
-    () =>
-      visibleProblems.map((problem, index) => ({
-        id: problem.id,
-        title: problem.title ? limitText(problem.title, 25) : `Problem ${index + 1}`,
-        grade: problemGrades[problem.id] ?? null,
-        maxGrade: problem.maxPoints ?? null,
-        submissionsCount: extractSubs(submissions[problem.id]).length,
-        maxSubmissions: problem.maxSubmissions ?? null,
-      })),
-    [visibleProblems, limitText, problemGrades, submissions],
-  );
 
   // Initialize selected problem from the URL, but only from the set of
   // currently visible problems (handles group assignment filtering).
@@ -414,13 +400,47 @@ export default function AssignmentSubmissions({
   const loadingComments = reviewFetching;
   const loadingProblemGrades = reviewFetching;
 
-  // Seed the local editable state from the cached review data. This carries the
-  // EXACT seeding logic from the old fetchReviewData success block. When there is
-  // no selected student, clear the local state (the old null-branch behavior).
+  // Read-only review data derived straight from the query cache instead of being
+  // mirrored into state by an effect. Empty for no selected student or a failed load
+  // (the query data is then undefined).
+  const submissions = useMemo<Record<string, SubmissionData>>(
+    () => (selectedStudentId ? (reviewData?.submissions ?? {}) : {}),
+    [selectedStudentId, reviewData],
+  );
+
+  // Comments grouped by problem id (every visible problem gets an entry, even if
+  // empty). Optimistic add/delete update the review-data cache (see saveComment /
+  // deleteComment), so this memo stays the single source of truth.
+  const comments = useMemo<Record<string, DiscussionComment[]>>(() => {
+    const grouped = Object.fromEntries(
+      assignmentProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
+    ) as Record<string, DiscussionComment[]>;
+    if (!selectedStudentId || !reviewData) return grouped;
+    for (const comment of reviewData.comments ?? []) {
+      const problemId = comment.problemId;
+      if (problemId && grouped[problemId]) grouped[problemId].push(comment);
+    }
+    return grouped;
+  }, [assignmentProblems, reviewData, selectedStudentId]);
+
+  const problemListItems = useMemo(
+    () =>
+      visibleProblems.map((problem, index) => ({
+        id: problem.id,
+        title: problem.title ? limitText(problem.title, 25) : `Problem ${index + 1}`,
+        grade: problemGrades[problem.id] ?? null,
+        maxGrade: problem.maxPoints ?? null,
+        submissionsCount: extractSubs(submissions[problem.id]).length,
+        maxSubmissions: problem.maxSubmissions ?? null,
+      })),
+    [visibleProblems, limitText, problemGrades, submissions],
+  );
+
+  // Seed the local editable GRADE state from the cached review data. Submissions and
+  // comments are derived above; only the editable grade fields still live in state.
+  // When there is no selected student, clear it (the old null-branch behavior).
   useEffect(() => {
     if (!selectedStudentId) {
-      setSubmissions({});
-      setComments({});
       setProblemGrades({});
       setGradeInputs({});
       setProblemGradeErrors({});
@@ -430,28 +450,12 @@ export default function AssignmentSubmissions({
     if (reviewQueryIsError) {
       console.error('Fetch review data error:', reviewError);
       showToast.error('Failed to load review data');
-      setSubmissions({});
-      setComments({});
       setProblemGrades({});
       setGradeInputs({});
       return;
     }
 
     if (reviewData === undefined) return;
-
-    setSubmissions(reviewData.submissions || {});
-
-    const groupedComments = Object.fromEntries(
-      assignmentProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
-    ) as Record<string, DiscussionComment[]>;
-
-    for (const comment of reviewData.comments ?? []) {
-      const problemId = comment.problemId;
-      if (problemId && groupedComments[problemId]) {
-        groupedComments[problemId].push(comment);
-      }
-    }
-    setComments(groupedComments);
 
     const gradeData = reviewData.problemGrades ?? {};
     const normalizedGrades: Record<string, number | null> = {};
@@ -511,21 +515,18 @@ export default function AssignmentSubmissions({
           problemId,
           studentId: selectedStudent.id,
         });
-        setComments((prev) => ({
-          ...prev,
-          [problemId]: [...(prev[problemId] || []), newComment],
-        }));
+        // Optimistically add the comment to the review-data cache (the derived
+        // `comments` reads from it), then invalidate so the server copy replaces it.
+        queryClient.setQueryData<ReviewDataResponse>(
+          queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
+          (old) => ({
+            ...old,
+            comments: [...(old?.comments ?? []), { ...newComment, problemId }],
+          }),
+        );
         setCommentTexts((prev) => ({ ...prev, [problemId]: '' }));
-        // Keep the cached review data fresh after the optimistic local update.
         void queryClient.invalidateQueries({
-          queryKey: [
-            'course',
-            courseId,
-            'assignment',
-            assignmentId,
-            'review-data',
-            selectedStudentId,
-          ],
+          queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
         });
         showToast.success('Comment saved successfully');
       } catch (err) {
@@ -535,28 +536,25 @@ export default function AssignmentSubmissions({
         setSavingComments((prev) => ({ ...prev, [problemId]: false }));
       }
     },
-    [commentTexts, selectedStudent, assignmentId, courseId, selectedStudentId, queryClient],
+    [commentTexts, selectedStudent, assignmentId, courseId, queryClient],
   );
 
   const deleteComment = useCallback(
-    async (commentId: string, problemId: string) => {
+    async (commentId: string) => {
       setDeletingComments((prev) => ({ ...prev, [commentId]: true }));
       try {
         await apiClient.del(apiPaths.comments({ commentId }));
-        setComments((prev) => ({
-          ...prev,
-          [problemId]: prev[problemId]?.filter((c) => c.id !== commentId) || [],
-        }));
-        // Keep the cached review data fresh after the optimistic local update.
+        // Optimistically drop the comment from the review-data cache (the derived
+        // `comments` reads from it), then invalidate to reconcile with the server.
+        queryClient.setQueryData<ReviewDataResponse>(
+          queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
+          (old) =>
+            old
+              ? { ...old, comments: (old.comments ?? []).filter((c) => c.id !== commentId) }
+              : old,
+        );
         void queryClient.invalidateQueries({
-          queryKey: [
-            'course',
-            courseId,
-            'assignment',
-            assignmentId,
-            'review-data',
-            selectedStudentId,
-          ],
+          queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
         });
         showToast.success('Comment deleted successfully');
       } catch (err) {
@@ -795,7 +793,7 @@ export default function AssignmentSubmissions({
                         }
                         onSaveComment={() => selectedProblem && saveComment(selectedProblem.id)}
                         onDeleteComment={(commentId: string) =>
-                          selectedProblem && deleteComment(commentId, selectedProblem.id)
+                          selectedProblem && deleteComment(commentId)
                         }
                         isSaving={selectedProblem ? savingComments[selectedProblem.id] : false}
                         deletingComments={deletingComments}
