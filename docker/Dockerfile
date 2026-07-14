@@ -71,6 +71,10 @@ ENV PATH="/app/bin:${PATH}"
 ENV SKIP_PRISMA_GENERATE=1
 COPY package*.json ./
 COPY --from=builder /app/prisma ./prisma
+# Prisma 7 reads the datasource url (and the seed command) from prisma.config.ts, not
+# schema.prisma, so the runtime needs it or `prisma migrate deploy`/`db seed` fail with
+# "The datasource.url property is required in your Prisma config file".
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 RUN npm ci --omit=dev --legacy-peer-deps --prefer-offline --no-audit --progress=false
 
 # Prisma client generated in the builder stage.
