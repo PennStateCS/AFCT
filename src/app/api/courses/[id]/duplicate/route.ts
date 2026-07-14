@@ -217,162 +217,169 @@ export const POST = withAdminAuth(
         return { fileName: newName, originalFileName: p.originalFileName ?? undefined };
       };
 
-      // Begin transaction
+      // Everything that isn't a DB write happens BEFORE the transaction. Prisma's
+      // interactive transactions have a ~5s timeout and hold row locks for their
+      // whole duration; copying solution files (slow filesystem I/O) inside one risks
+      // blowing the timeout and rolling back the entire duplication on a course with
+      // many problems. So read the source data and copy the files first, then keep the
+      // transaction to pure DB writes. If a copy or the transaction fails, the catch
+      // unlinks whatever we copied so nothing leaks.
       let result;
       try {
-        result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        // Create new course (default not published)
-        const regCode = await generateUniqueCourseCode();
-
-        const newCourse = await tx.course.create({
-          data: {
-            name: title,
-            code: normalizeCode(code),
-            semester,
-            credits: parsedCredits,
-            startDate: toDateTimeInTimezone(startDate, userTimezone),
-            endDate: toDateTimeInTimezone(endDate, userTimezone),
-            registrationOpenAt: toDateTimeInTimezone(registrationOpenAt, userTimezone),
-            registrationCloseAt: toDateTimeInTimezone(registrationCloseAt, userTimezone),
-            isPublished: false,
-            isArchived: false,
-            emptyStringNotation: toEmptyStringNotation(emptyStringNotation),
-            regCode,
-          },
-        });
-
-        // Seed the roster: faculty from the copied roster and/or the explicit
-        // list (deduped; faculty wins over a TA row for the same user).
-        const originalRoster =
-          copyFaculty || copyTAs ? await tx.roster.findMany({ where: { courseId } }) : [];
-
-        const facultyIds = new Set<string>(instructorIds);
-        if (copyFaculty) {
-          for (const r of originalRoster) {
-            if (r.role === 'FACULTY') facultyIds.add(r.userId);
-          }
-        }
-        if (facultyIds.size > 0) {
-          await tx.roster.createMany({
-            data: Array.from(facultyIds).map((userId) => ({
-              courseId: newCourse.id,
-              userId,
-              role: 'FACULTY' as const,
-            })),
-          });
-        }
-
-        if (copyTAs || taIds.length > 0) {
-          const taSet = new Set<string>();
-
-          if (copyTAs) {
-            for (const r of originalRoster) {
-              if (r.role === 'TA' && !facultyIds.has(r.userId)) {
-                taSet.add(r.userId);
-              }
-            }
-          }
-
-          for (const userId of taIds) {
-            if (!facultyIds.has(userId)) {
-              taSet.add(userId);
-            }
-          }
-
-          if (taSet.size > 0) {
-            await tx.roster.createMany({
-              data: Array.from(taSet).map((userId) => ({
-                courseId: newCourse.id,
-                userId,
-                role: 'TA' as const,
-              })),
-            });
-          }
-        }
-
-        // Fetch original assignments (with their linked problems)
-        const originalAssignments = await tx.assignment.findMany({
+        // Source assignments (with their linked problems) and roster.
+        const originalAssignments = await prisma.assignment.findMany({
           where: { courseId },
           include: { problems: { include: { problem: true } } },
         });
+        const originalRoster =
+          copyFaculty || copyTAs ? await prisma.roster.findMany({ where: { courseId } }) : [];
 
-        // Map for problem id translation
-        const problemIdMap: Record<string, string> = {};
-
-        // Clone one problem into the new course (with its own solution-file copy) and
-        // return the new id. Shared by the problems-only and assignments-with-problems
-        // modes so the copy logic lives in one place.
-        const cloneProblem = async (p: Problem): Promise<string> => {
-          const solution = await copyProblemSolution(p);
-          const created = await tx.problem.create({
-            data: {
-              title: p.title,
-              description: p.description ?? undefined,
-              ...solution,
-              type: p.type ?? undefined,
-              maxStates: p.maxStates ?? undefined,
-              isDeterministic: p.isDeterministic ?? undefined,
-              courseId: newCourse.id,
-            },
-          });
-          return created.id;
-        };
-
-        // Depending on mode, fetch and copy problems:
+        // Which problems carry over depends on the mode: all of them, only those
+        // attached to assignments, or none.
+        let problemsToCopy: Problem[] = [];
         if (mode === 'problems') {
-          // copy all problems
-          const originalProblems = await tx.problem.findMany({ where: { courseId } });
-          for (const p of originalProblems) {
-            problemIdMap[p.id] = await cloneProblem(p);
-          }
+          problemsToCopy = await prisma.problem.findMany({ where: { courseId } });
         } else if (mode === 'assignments_with_problems') {
-          // copy only problems that are attached to assignments, and map them
           const neededProblemIds = new Set<string>();
           for (const a of originalAssignments) {
             for (const ap of a.problems) neededProblemIds.add(ap.problemId);
           }
           if (neededProblemIds.size > 0) {
-            const problemsToCopy = await tx.problem.findMany({
+            problemsToCopy = await prisma.problem.findMany({
               where: { id: { in: Array.from(neededProblemIds) } },
             });
-            for (const p of problemsToCopy) {
-              problemIdMap[p.id] = await cloneProblem(p);
-            }
           }
         }
 
-        // If mode is 'assignments', we will copy assignments but NOT create any assignmentProblem links.
-        if (mode === 'assignments' || mode === 'assignments_with_problems') {
-          for (const a of originalAssignments) {
-            const createdA = await tx.assignment.create({
+        // Copy each problem's solution file up front, keyed by the source problem id;
+        // the transaction reuses these instead of doing I/O while holding locks.
+        const solutionByProblemId = new Map<
+          string,
+          { fileName?: string; originalFileName?: string }
+        >();
+        for (const p of problemsToCopy) {
+          solutionByProblemId.set(p.id, await copyProblemSolution(p));
+        }
+
+        result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          // Create new course (default not published)
+          const regCode = await generateUniqueCourseCode();
+
+          const newCourse = await tx.course.create({
+            data: {
+              name: title,
+              code: normalizeCode(code),
+              semester,
+              credits: parsedCredits,
+              startDate: toDateTimeInTimezone(startDate, userTimezone),
+              endDate: toDateTimeInTimezone(endDate, userTimezone),
+              registrationOpenAt: toDateTimeInTimezone(registrationOpenAt, userTimezone),
+              registrationCloseAt: toDateTimeInTimezone(registrationCloseAt, userTimezone),
+              isPublished: false,
+              isArchived: false,
+              emptyStringNotation: toEmptyStringNotation(emptyStringNotation),
+              regCode,
+            },
+          });
+
+          // Seed the roster: faculty from the copied roster and/or the explicit
+          // list (deduped; faculty wins over a TA row for the same user).
+          const facultyIds = new Set<string>(instructorIds);
+          if (copyFaculty) {
+            for (const r of originalRoster) {
+              if (r.role === 'FACULTY') facultyIds.add(r.userId);
+            }
+          }
+          if (facultyIds.size > 0) {
+            await tx.roster.createMany({
+              data: Array.from(facultyIds).map((userId) => ({
+                courseId: newCourse.id,
+                userId,
+                role: 'FACULTY' as const,
+              })),
+            });
+          }
+
+          if (copyTAs || taIds.length > 0) {
+            const taSet = new Set<string>();
+
+            if (copyTAs) {
+              for (const r of originalRoster) {
+                if (r.role === 'TA' && !facultyIds.has(r.userId)) {
+                  taSet.add(r.userId);
+                }
+              }
+            }
+
+            for (const userId of taIds) {
+              if (!facultyIds.has(userId)) {
+                taSet.add(userId);
+              }
+            }
+
+            if (taSet.size > 0) {
+              await tx.roster.createMany({
+                data: Array.from(taSet).map((userId) => ({
+                  courseId: newCourse.id,
+                  userId,
+                  role: 'TA' as const,
+                })),
+              });
+            }
+          }
+
+          // Clone the problems (each needs its own id for the link map, so these
+          // stay individual creates), reusing the solution files copied above.
+          const problemIdMap: Record<string, string> = {};
+          for (const p of problemsToCopy) {
+            const created = await tx.problem.create({
               data: {
-                title: a.title,
-                description: a.description ?? undefined,
-                dueDate: a.dueDate,
-                isPublished: false,
+                title: p.title,
+                description: p.description ?? undefined,
+                ...(solutionByProblemId.get(p.id) ?? {}),
+                type: p.type ?? undefined,
+                maxStates: p.maxStates ?? undefined,
+                isDeterministic: p.isDeterministic ?? undefined,
                 courseId: newCourse.id,
               },
             });
+            problemIdMap[p.id] = created.id;
+          }
 
-            if (mode === 'assignments_with_problems') {
-              // Link copied problems (only) to this new assignment according to original assignment mapping
-              for (const ap of a.problems) {
-                const oldProblemId = ap.problemId;
-                const newProblemId = problemIdMap[oldProblemId];
-                if (!newProblemId) continue; // skip if problem wasn't copied for some reason
-                await tx.assignmentProblem.create({
-                  data: { assignmentId: createdA.id, problemId: newProblemId },
-                });
+          // Copy assignments (individual creates, for their ids) and collect the
+          // assignment->problem links; the links then go in one batched insert.
+          // In 'assignments' mode no links are created.
+          if (mode === 'assignments' || mode === 'assignments_with_problems') {
+            const links: { assignmentId: string; problemId: string }[] = [];
+            for (const a of originalAssignments) {
+              const createdA = await tx.assignment.create({
+                data: {
+                  title: a.title,
+                  description: a.description ?? undefined,
+                  dueDate: a.dueDate,
+                  isPublished: false,
+                  courseId: newCourse.id,
+                },
+              });
+
+              if (mode === 'assignments_with_problems') {
+                for (const ap of a.problems) {
+                  const newProblemId = problemIdMap[ap.problemId];
+                  if (!newProblemId) continue; // skip if the problem wasn't copied
+                  links.push({ assignmentId: createdA.id, problemId: newProblemId });
+                }
               }
             }
+            if (links.length > 0) {
+              await tx.assignmentProblem.createMany({ data: links });
+            }
           }
-        }
 
           return newCourse;
         });
       } catch (txErr) {
-        // The duplication rolled back; remove any solution files we copied so they
-        // don't leak as orphans.
+        // A read, a file copy, or the transaction failed; remove any solution files
+        // we copied so they don't leak as orphans.
         await Promise.all(copiedSolutionFiles.map((f) => fs.promises.unlink(f).catch(() => {})));
         throw txErr;
       }
