@@ -76,6 +76,9 @@ export const maybeBootstrapAdmin = async (
       lastName: adminLastName,
       password: hashedPassword,
       isAdmin: true,
+      // Force a password change at first login, so even a shared/temporary
+      // bootstrap password can't remain the standing admin credential.
+      temporaryPassword: true,
     },
   });
 
@@ -84,15 +87,46 @@ export const maybeBootstrapAdmin = async (
 };
 
 /**
- * Resolve production admin credentials from env and hash the password.
+ * Minimum admin-password strength for the production bootstrap. Mirrors
+ * `src/lib/password-policy.ts` (kept inline so the seed pulls in no app-side
+ * import at container runtime, where `src/` may not be present).
+ */
+const isStrongEnoughAdminPassword = (pw: string) =>
+  pw.length >= 8 &&
+  pw.length <= 72 &&
+  /[A-Z]/.test(pw) &&
+  /[a-z]/.test(pw) &&
+  /\d/.test(pw) &&
+  /[^A-Za-z0-9]/.test(pw);
+
+/**
+ * Resolve production admin credentials from the environment and hash the password.
+ *
+ * There is deliberately **no default** — a missing `ADMIN_EMAIL`/`ADMIN_PASSWORD`
+ * throws rather than silently bootstrapping a well-known login. With the source
+ * public, a hardcoded fallback would be a known admin credential for any
+ * deployment that skipped the variable. Callers resolve credentials only when the
+ * database is actually empty (see `runProductionSeed`), so a healthy deployment's
+ * restarts never require these to be present.
  */
 export const getProductionAdminCredentials = async () => {
-  const adminEmail =
-    process.env.ADMIN_EMAIL || process.env.DEFAULT_ADMIN_EMAIL || 'admin@example.com';
-  const adminPassword =
-    process.env.ADMIN_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || 'Password123!';
+  const adminEmail = (process.env.ADMIN_EMAIL || process.env.DEFAULT_ADMIN_EMAIL || '').trim();
+  const adminPassword = process.env.ADMIN_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || '';
   const adminFirstName = process.env.DEFAULT_ADMIN_FIRST_NAME || 'Admin';
   const adminLastName = process.env.DEFAULT_ADMIN_LAST_NAME || 'User';
+
+  if (!adminEmail || !adminPassword) {
+    throw new Error(
+      '[seed] production: ADMIN_EMAIL and ADMIN_PASSWORD must be set to bootstrap the initial ' +
+        'admin. Set them in .env.production (the guided installer does this for you) and retry.',
+    );
+  }
+  if (!isStrongEnoughAdminPassword(adminPassword)) {
+    throw new Error(
+      '[seed] production: ADMIN_PASSWORD is too weak — use at least 8 characters with uppercase, ' +
+        'lowercase, a number, and a special character.',
+    );
+  }
 
   return {
     adminEmail,
