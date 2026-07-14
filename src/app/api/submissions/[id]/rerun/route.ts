@@ -101,6 +101,9 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         feedback: null,
         correct: null,
         evaluationRaw: Prisma.DbNull,
+        // Fresh attempt budget, and fences any worker mid-processing this row (its
+        // claimed attempts value no longer matches, so its stale write no-ops).
+        attempts: 0,
         updatedAt: new Date(),
       },
     });

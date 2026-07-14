@@ -5,7 +5,7 @@ import { NextRequest } from 'next/server';
 // resetting it to PENDING and logging a rerun for each one.
 
 const prismaMock = vi.hoisted(() => ({
-  submission: { findMany: vi.fn(), update: vi.fn() },
+  submission: { updateMany: vi.fn() },
   roster: { findFirst: vi.fn() },
   course: { findUnique: vi.fn() },
 }));
@@ -38,7 +38,7 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(401);
-    expect(prismaMock.submission.update).not.toHaveBeenCalled();
+    expect(prismaMock.submission.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns 403 when the user is not course staff', async () => {
@@ -47,39 +47,40 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(403);
-    expect(prismaMock.submission.update).not.toHaveBeenCalled();
+    expect(prismaMock.submission.updateMany).not.toHaveBeenCalled();
   });
 
-  it('requeues every submission in the course and returns the count', async () => {
+  it('requeues all submissions in one statement and returns the count', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.submission.findMany.mockResolvedValue([
-      { id: 's1', courseId: 'c1', assignmentId: 'a1', problemId: 'p1', studentId: 'u2' },
-      { id: 's2', courseId: 'c1', assignmentId: 'a1', problemId: 'p2', studentId: 'u3' },
-    ]);
-    prismaMock.submission.update.mockResolvedValue({});
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 2 });
 
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(202);
-    const body = await res.json();
-    expect(body).toEqual({ success: true, count: 2 });
+    expect(await res.json()).toEqual({ success: true, count: 2 });
 
-    expect(prismaMock.submission.update).toHaveBeenCalledTimes(2);
-    expect(prismaMock.submission.update).toHaveBeenCalledWith(
+    // A single updateMany, resetting attempts (fresh budget + fences in-flight workers).
+    expect(prismaMock.submission.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 's1' },
-        data: expect.objectContaining({ status: 'PENDING', feedback: null, correct: null }),
+        where: { courseId: 'c1' },
+        data: expect.objectContaining({
+          status: 'PENDING',
+          feedback: null,
+          correct: null,
+          attempts: 0,
+        }),
       }),
     );
 
-    const rerunLogs = activityLogMock.mock.calls.filter(
-      (call) => call[2]?.action === 'SUBMISSION_RERUN',
+    // Exactly one batch-summary event, and no per-submission N+1 logging.
+    const summary = activityLogMock.mock.calls.filter(
+      (call) => call[2]?.action === 'COURSE_SUBMISSIONS_RERUN',
     );
-    expect(rerunLogs).toHaveLength(2);
-    // Each per-submission rerun records the affected student.
-    expect(rerunLogs[0]?.[2]?.metadata?.studentId).toBe('u2');
-    expect(rerunLogs[1]?.[2]?.metadata?.studentId).toBe('u3');
+    expect(summary).toHaveLength(1);
+    expect(summary[0]?.[2]?.metadata?.count).toBe(2);
+    expect(activityLogMock.mock.calls.some((c) => c[2]?.action === 'SUBMISSION_RERUN')).toBe(false);
   });
 
   it('returns 409 and does not requeue when the course is archived', async () => {
@@ -90,44 +91,34 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(409);
-    expect(prismaMock.submission.update).not.toHaveBeenCalled();
-    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.submission.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns 202 with a count of 0 when the course has no submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.submission.findMany.mockResolvedValue([]);
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(202);
-    const body = await res.json();
-    expect(body).toEqual({ success: true, count: 0 });
-    expect(prismaMock.submission.update).not.toHaveBeenCalled();
+    expect(await res.json()).toEqual({ success: true, count: 0 });
   });
 
-  it('returns 500 when a submission update fails', async () => {
+  it('returns 500 when the requeue fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
-    prismaMock.submission.findMany.mockResolvedValue([
-      { id: 's1', courseId: 'c1', assignmentId: 'a1', problemId: 'p1' },
-    ]);
-    prismaMock.submission.update.mockRejectedValue(new Error('update failed'));
+    prismaMock.submission.updateMany.mockRejectedValue(new Error('update failed'));
 
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(500);
   });
 
-  // Covers the false side of `error instanceof Error` in the catch log (branch 89):
-  // a thrown non-Error is recorded as the 'unknown error' message.
+  // A thrown non-Error is recorded as the 'unknown error' message by logError.
   it('returns 500 and logs unknown error when a non-Error is thrown', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
-    prismaMock.submission.findMany.mockResolvedValue([
-      { id: 's1', courseId: 'c1', assignmentId: 'a1', problemId: 'p1' },
-    ]);
-    prismaMock.submission.update.mockRejectedValueOnce('boom');
+    prismaMock.submission.updateMany.mockRejectedValueOnce('boom');
 
     const res = await POST(makeRequest(), params());
 
