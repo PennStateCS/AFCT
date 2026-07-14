@@ -242,11 +242,17 @@ export default function SubmissionsClient() {
     }
   }, [courses]);
 
+  // When a new assignment list loads (the course selection changed), select all of
+  // them. Seeding selectedProblems is deliberately left to the problems effect below:
+  // doing it here as well meant both effects wrote selectedProblems (the submissions
+  // query key) on load, firing the submissions POST twice.
   useEffect(() => {
     setSelectedAssignments(assignments.map((assignment) => assignment.id));
-    setSelectedProblems(assignments.flatMap((assignment) => assignment.problems));
   }, [assignments]);
 
+  // Sole seeder of selectedProblems — the deduped, canonical problem list for the
+  // current assignment set (the same list the problem filter shows). Being the only
+  // writer keeps the submissions query keyed on selectedProblems firing exactly once.
   useEffect(() => {
     setSelectedProblems(problems.map((problem) => problem.id));
   }, [problems]);
