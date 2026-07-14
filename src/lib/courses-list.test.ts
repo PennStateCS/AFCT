@@ -23,6 +23,14 @@ describe('getCoursesListForUser — access scoping', () => {
     expect(whereArg()).toEqual({ deletedAt: null });
   });
 
+  it('embeds only staff (FACULTY/TA) roster rows, not students', async () => {
+    // The list renders staff only, so the roster relation is filtered server-side to
+    // keep the payload from growing with class size.
+    await getCoursesListForUser('admin-1', 'ADMIN');
+    const select = prismaMock.course.findMany.mock.calls[0][0].select;
+    expect(select.roster.where).toEqual({ role: { in: ['FACULTY', 'TA'] } });
+  });
+
   it('limits a non-admin to enrolled courses that are published OR ones they staff', async () => {
     await getCoursesListForUser('stu-1', 'STUDENT');
     expect(whereArg()).toEqual({
@@ -126,7 +134,10 @@ describe('getCoursesListForUser — roster shaping by the viewer’s per-course 
     roster,
   });
 
-  it('gives a student staff names only — no classmate emails, no reg code', async () => {
+  it('gives a student staff names only — no staff emails, no reg code', async () => {
+    // Only staff are embedded now (students are filtered out server-side), so this
+    // checks that a student viewer still gets staff names but never their emails or
+    // the reg code.
     prismaMock.course.findMany.mockResolvedValue([
       courseWith([
         {
@@ -134,12 +145,8 @@ describe('getCoursesListForUser — roster shaping by the viewer’s per-course 
           user: { id: 'fac', firstName: 'Fay', lastName: 'F', email: 'fay@x.edu', avatar: null },
         },
         {
-          role: 'STUDENT',
-          user: { id: 'me', firstName: 'Me', lastName: 'S', email: 'me@x.edu', avatar: null },
-        },
-        {
-          role: 'STUDENT',
-          user: { id: 'peer', firstName: 'Peer', lastName: 'P', email: 'peer@x.edu', avatar: null },
+          role: 'TA',
+          user: { id: 'ta', firstName: 'Tam', lastName: 'T', email: 'ta@x.edu', avatar: null },
         },
       ]),
     ]);
@@ -148,16 +155,16 @@ describe('getCoursesListForUser — roster shaping by the viewer’s per-course 
 
     expect(course.regCode).toBeNull();
     const serialized = JSON.stringify(course.enrolled);
-    expect(serialized).not.toContain('@x.edu'); // no emails
-    expect(serialized).not.toContain('Peer'); // no classmate name
+    expect(serialized).not.toContain('@x.edu'); // no staff emails
     expect(course.enrolled).toContainEqual(
       expect.objectContaining({ firstName: 'Fay', courseRole: 'FACULTY' }),
     );
-    // Both students survive as count-only placeholders.
-    expect(course.enrolled?.filter((m) => m.courseRole === 'STUDENT')).toHaveLength(2);
+    expect(course.enrolled).toContainEqual(
+      expect.objectContaining({ firstName: 'Tam', courseRole: 'TA' }),
+    );
   });
 
-  it('gives a faculty member the full roster + reg code for their own course', async () => {
+  it('gives a staff member the staff roster + reg code for their own course', async () => {
     prismaMock.course.findMany.mockResolvedValue([
       courseWith([
         {
@@ -165,18 +172,18 @@ describe('getCoursesListForUser — roster shaping by the viewer’s per-course 
           user: { id: 'me', firstName: 'Me', lastName: 'F', email: 'me@x.edu', avatar: null },
         },
         {
-          role: 'STUDENT',
-          user: { id: 'stu', firstName: 'Stu', lastName: 'S', email: 'stu@x.edu', avatar: null },
+          role: 'TA',
+          user: { id: 'ta', firstName: 'Ta', lastName: 'A', email: 'ta@x.edu', avatar: null },
         },
       ]),
     ]);
 
-    // Non-admin caller, but FACULTY in this course -> full data (per-course role).
+    // Non-admin caller, but FACULTY in this course -> unshaped staff data + reg code.
     const [course] = await getCoursesListForUser('me', 'STUDENT');
 
     expect(course.regCode).toBe('SECRET');
     expect(course.enrolled).toContainEqual(
-      expect.objectContaining({ id: 'stu', email: 'stu@x.edu' }),
+      expect.objectContaining({ id: 'ta', email: 'ta@x.edu', courseRole: 'TA' }),
     );
   });
 });
