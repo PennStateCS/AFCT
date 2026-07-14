@@ -69,6 +69,7 @@ docker/nginx/certs/
 
 # Local-only docs (kept on disk, not published to the repo)
 docs/accessibility-audit.md
+docs/deployment-plan.md
 
 # IDE settings
 .vscode/

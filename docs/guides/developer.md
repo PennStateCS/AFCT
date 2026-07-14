@@ -39,8 +39,8 @@ this guide has to account for.
 ## Local development
 
 The stack runs in Docker; there is no supported bare-metal dev mode.
-`npm run docker:dev` builds and starts the app, database, nginx, and Prisma
-Studio. The app entrypoint applies migrations on start, so a fresh start is
+`npm run docker:dev` builds and starts the app, database, nginx, a db-backup
+sidecar, and Prisma Studio. The app entrypoint applies migrations on start, so a fresh start is
 always up to date with the schema. To apply a new migration to an
 already-running stack without bouncing the dev server, run
 `npm run docker:dev:migrate:deploy`, then `npm run docker:dev:generate` if the
