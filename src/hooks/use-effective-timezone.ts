@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiPaths } from '@/lib/api-paths';
+import { usePublicSystemSettings } from '@/hooks/use-public-system-settings';
 
 /**
  * Resolves the timezone to display dates in: the user's own profile timezone,
@@ -23,25 +24,19 @@ export function useEffectiveTimezone() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const publicSettingsQuery = useQuery({
-    queryKey: ['system-settings', 'public'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load public settings');
-      return (await res.json()) as { timezone?: string | null; clock24Hour?: boolean };
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  // Share the single ['system-settings','public'] query (one queryFn and type)
+  // rather than registering a second queryFn for the same cache key.
+  const publicSettings = usePublicSystemSettings();
 
   const userTz = profileQuery.data?.timezone || '';
-  const serverTz = publicSettingsQuery.data?.timezone || '';
+  const serverTz = publicSettings.data?.timezone || '';
   // Before either resolves (or on error) both are empty, so we fall back to the
   // browser timezone, matching the previous hook's default.
   const timezone = userTz || serverTz || browserTz || 'UTC';
   // App-wide clock preference (admin System Settings). Defaults to 12-hour until it
   // resolves. `hour12` is what the date formatters take.
-  const hour12 = !(publicSettingsQuery.data?.clock24Hour ?? false);
-  const loading = profileQuery.isLoading || publicSettingsQuery.isLoading;
+  const hour12 = !(publicSettings.data?.clock24Hour ?? false);
+  const loading = profileQuery.isLoading || publicSettings.isLoading;
 
   return { timezone, hour12, loading };
 }

@@ -45,15 +45,17 @@ export const POST = withCourseAuth(
       if (!userIds.length)
         return NextResponse.json({ error: 'No users provided' }, { status: 400 });
 
-      // Enroll all users in a transaction as STUDENT course role.
+      // Enroll all users as STUDENT. Upsert on the (courseId, userId) unique key is
+      // atomic against the constraint, so a concurrent self-join creating the same
+      // row no longer aborts the whole batch with a P2002 (the old findFirst+create
+      // was a check-then-act race).
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         for (const uid of userIds) {
-          const existing = await tx.roster.findFirst({ where: { courseId, userId: uid } });
-          if (existing) {
-            await tx.roster.update({ where: { id: existing.id }, data: { role: 'STUDENT' } });
-          } else {
-            await tx.roster.create({ data: { courseId, userId: uid, role: 'STUDENT' } });
-          }
+          await tx.roster.upsert({
+            where: { courseId_userId: { courseId, userId: uid } },
+            create: { courseId, userId: uid, role: 'STUDENT' },
+            update: { role: 'STUDENT' },
+          });
         }
       });
 
