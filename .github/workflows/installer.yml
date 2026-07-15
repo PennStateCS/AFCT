@@ -8,9 +8,9 @@ name: Installer
 on:
   push:
     branches: ['main']
-    paths: ['deploy/**', '.github/workflows/installer.yml']
+    paths: ['deploy/**', 'docker/updater/**', '.github/workflows/installer.yml']
   pull_request:
-    paths: ['deploy/**', '.github/workflows/installer.yml']
+    paths: ['deploy/**', 'docker/updater/**', '.github/workflows/installer.yml']
 
 permissions:
   contents: read
@@ -23,16 +23,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Install bats + shellcheck
-        run: sudo apt-get update && sudo apt-get install -y bats shellcheck
+      - name: Install bats + shellcheck + jq
+        run: sudo apt-get update && sudo apt-get install -y bats shellcheck jq
 
       - name: Syntax check
-        run: sh -n deploy/install.sh
+        run: |
+          sh -n deploy/install.sh
+          sh -n docker/updater/updater.sh
 
-      # Advisory for now (the script predates shellcheck); surfaces issues without
+      # Advisory for now (the scripts predate shellcheck); surfaces issues without
       # blocking. Tighten to a hard gate once the existing findings are cleared.
       - name: Shellcheck (advisory)
-        run: shellcheck -s sh deploy/install.sh || true
+        run: |
+          shellcheck -s sh deploy/install.sh || true
+          shellcheck -s sh docker/updater/updater.sh || true
 
-      - name: Run installer tests
-        run: bats deploy/test/install.bats
+      - name: Run installer + updater tests
+        run: bats deploy/test/install.bats deploy/test/updater.bats

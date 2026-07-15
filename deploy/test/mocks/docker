@@ -46,6 +46,8 @@ case "$cmd" in
     case "$_tmpl" in
       *State.Status*) printf '%s|%s\n' "${MOCK_STATE:-running}" "${MOCK_HEALTH:-healthy}" ;;
       *State.Health*) printf '%s\n' "${MOCK_HEALTH:-healthy}" ;;
+      # Compose project discovery (updater): empty when MOCK_NO_PROJECT is set.
+      *Labels*) [ -n "${MOCK_NO_PROJECT:-}" ] && printf '\n' || printf '%s\n' "${MOCK_PROJECT:-afct}" ;;
       *Config.Image*) printf 'ghcr.io/example/afct:latest\n' ;;
       *.Image*) printf 'sha256:mockimageid\n' ;;
       *) printf '\n' ;;
