@@ -12,6 +12,9 @@
 #   MOCK_HEALTH           container .State.Health.Status       (default healthy)
 #   MOCK_VOLUMES          names `docker volume ls` prints      (default: none)
 #   MOCK_CONFIG_VOLUMES   names `compose config --volumes`     (default afct_data)
+#   MOCK_ARGS_LOG         if set, append every invocation's args to this file
+
+[ -n "${MOCK_ARGS_LOG:-}" ] && printf '%s\n' "$*" >> "$MOCK_ARGS_LOG" 2>/dev/null
 
 cmd=${1:-}
 [ "$#" -gt 0 ] && shift

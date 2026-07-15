@@ -39,6 +39,7 @@ ENV_FILE=${AFCT_ENV_FILE:-.env.production}
 ENV_EXAMPLE=${AFCT_ENV_EXAMPLE:-.env.production.example}
 LOG_FILE=${AFCT_LOG_FILE:-install.log}
 APP_SERVICE=${AFCT_APP_SERVICE:-app}
+UPDATER_SERVICE=${AFCT_UPDATER_SERVICE:-updater}
 HEALTH_PATH=${AFCT_HEALTH_PATH:-/api/health}
 HEALTH_TIMEOUT=${AFCT_HEALTH_TIMEOUT:-300}
 HEALTH_INTERVAL=${AFCT_HEALTH_INTERVAL:-5}
@@ -88,6 +89,9 @@ Commands:
   update        Pull the latest images, recreate the stack, and verify health.
   restart       Recreate the stack without pulling new images.
   stop          Stop the stack without deleting its data volumes.
+  enable-updater  Enable the in-app updater sidecar (in-app upgrades/downgrades).
+                  It holds the Docker socket, so it is off by default.
+  disable-updater Stop and remove the updater sidecar.
   doctor        Run a comprehensive, read-only system check.
   recover       Restore the newest protected .env.production backup.
   diagnostics   Create a support archive with known secrets redacted.
@@ -148,6 +152,8 @@ while [ "$#" -gt 0 ]; do
     update|--update) set_mode "update" ;;
     restart|--restart) set_mode "restart" ;;
     stop|--stop) set_mode "stop" ;;
+    enable-updater|--enable-updater) set_mode "enable-updater" ;;
+    disable-updater|--disable-updater) set_mode "disable-updater" ;;
     doctor|--doctor) set_mode "doctor" ;;
     recover|--recover) set_mode "recover" ;;
     diagnostics|--diagnostics) set_mode "diagnostics" ;;
@@ -394,6 +400,14 @@ compose_raw() {
   esac
 }
 
+# Emits `--profile updater` (as two words) when the in-app updater sidecar has been
+# enabled, so every compose action — pull/up/ps/config/stop — includes it. Empty
+# otherwise, keeping the profiled service dormant on a default install.
+updater_profile_args() {
+  [ "$(read_env_value AFCT_UPDATER_ENABLED "$ENV_FILE" 2>/dev/null)" = "true" ] \
+    && printf '%s' '--profile updater'
+}
+
 # Use the production env file explicitly and prevent exported managed variables in
 # the invoking shell from unexpectedly overriding the saved installation config.
 compose_project() {
@@ -401,10 +415,12 @@ compose_project() {
     unset NODE_ENV POSTGRES_PASSWORD DATABASE_URL ADMIN_EMAIL ADMIN_PASSWORD \
       NEXTAUTH_SECRET NEXTAUTH_URL AUTH_TRUST_HOST
 
+    # Unquoted on purpose: expands to `--profile updater` or to nothing.
+    _profile=$(updater_profile_args)
     if [ -f "$ENV_FILE" ]; then
-      compose_raw --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+      compose_raw $_profile --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
     else
-      compose_raw -f "$COMPOSE_FILE" "$@"
+      compose_raw $_profile -f "$COMPOSE_FILE" "$@"
     fi
   )
 }
@@ -706,6 +722,24 @@ read_env_value() {
   esac
 
   printf '%s' "$_raw"
+}
+
+# Set or replace a single unmanaged KEY=VALUE line in the env file, in place and
+# atomically, preserving everything else. Used for the AFCT_UPDATER_ENABLED toggle.
+set_env_flag() {
+  _key=$1
+  _val=$2
+  [ -f "$ENV_FILE" ] || die "${ENV_FILE} not found. Run the installer first."
+  _tmp=$(mktemp "${ENV_FILE}.tmp.XXXXXX" 2>/dev/null) || die "could not create a temporary file in ${SCRIPT_DIR}."
+  if grep -qE "^${_key}=" "$ENV_FILE" 2>/dev/null; then
+    awk -v k="$_key" -v v="$_val" '$0 ~ ("^" k "=") { print k "=" v; next } { print }' \
+      "$ENV_FILE" > "$_tmp" || { rm -f "$_tmp"; die "could not update ${ENV_FILE}."; }
+  else
+    { cat "$ENV_FILE" && printf '%s=%s\n' "$_key" "$_val"; } > "$_tmp" \
+      || { rm -f "$_tmp"; die "could not update ${ENV_FILE}."; }
+  fi
+  chmod 600 "$_tmp" 2>/dev/null || true
+  mv "$_tmp" "$ENV_FILE" || { rm -f "$_tmp"; die "could not replace ${ENV_FILE}."; }
 }
 
 write_env_assignment() {
@@ -1748,6 +1782,45 @@ do_restart() {
   DIAG_ON_EXIT="false"
 }
 
+# Turn on the privileged updater sidecar (in-app upgrades/downgrades). Off by
+# default because it holds the Docker socket. Once enabled, the AFCT_UPDATER_ENABLED
+# flag makes update/restart/status/diagnostics include it automatically.
+do_enable_updater() {
+  acquire_lock
+  prepare_existing_stack
+
+  heading "Enabling the in-app updater"
+  warn "the updater container holds the Docker socket, which is root-equivalent on this host. Enable it only if you want to run upgrades and downgrades from Admin -> System Settings."
+  if ! confirm "Enable the in-app updater now?" "y"; then
+    die "left the updater disabled."
+  fi
+
+  set_env_flag AFCT_UPDATER_ENABLED true
+  DIAG_ON_EXIT="true"
+  info "pulling and starting the updater..."
+  if [ "$LOG_ENABLED" = "true" ]; then
+    compose_project pull "$UPDATER_SERVICE" >> "$LOG_FILE" 2>&1 || die "could not pull the updater image. Review ${LOG_FILE}."
+    compose_project up -d "$UPDATER_SERVICE" >> "$LOG_FILE" 2>&1 || die "could not start the updater. Review ${LOG_FILE}."
+  else
+    compose_project pull "$UPDATER_SERVICE" || die "could not pull the updater image."
+    compose_project up -d "$UPDATER_SERVICE" || die "could not start the updater."
+  fi
+  DIAG_ON_EXIT="false"
+  success "in-app updater enabled. Manage versions in Admin -> System Settings -> Updates."
+}
+
+# Stop and remove the updater sidecar, and clear the flag so it stays off.
+do_disable_updater() {
+  acquire_lock
+  prepare_existing_stack
+  info "disabling the in-app updater..."
+  # The profile must be active for compose to see the service, so remove it before
+  # clearing the flag.
+  compose_project rm -sf "$UPDATER_SERVICE" >/dev/null 2>&1 || true
+  set_env_flag AFCT_UPDATER_ENABLED false
+  success "in-app updater disabled and its container removed."
+}
+
 do_stop() {
   acquire_lock
   prepare_existing_stack
@@ -1896,6 +1969,14 @@ case "$MODE" in
   stop)
     init_log
     do_stop
+    ;;
+  enable-updater)
+    init_log
+    do_enable_updater
+    ;;
+  disable-updater)
+    init_log
+    do_disable_updater
     ;;
   install)
     init_log

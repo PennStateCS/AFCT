@@ -248,3 +248,41 @@ EOF
   [ -f .env.production ]
   [[ "$output" == *"restored"* ]]
 }
+
+# --- updater sidecar enable/disable --------------------------------------------
+
+@test "--help lists the updater commands" {
+  run sh install.sh --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"enable-updater"* ]]
+  [[ "$output" == *"disable-updater"* ]]
+}
+
+@test "enable-updater sets the flag and starts the sidecar" {
+  write_complete_env
+  run sh install.sh enable-updater --yes
+  [ "$status" -eq 0 ]
+  run grep -q '^AFCT_UPDATER_ENABLED=true$' .env.production; [ "$status" -eq 0 ]
+}
+
+@test "disable-updater clears the flag" {
+  write_complete_env
+  printf 'AFCT_UPDATER_ENABLED=true\n' >> .env.production
+  run sh install.sh disable-updater
+  [ "$status" -eq 0 ]
+  run grep -q '^AFCT_UPDATER_ENABLED=false$' .env.production; [ "$status" -eq 0 ]
+}
+
+@test "operations include the updater profile only once enabled" {
+  write_complete_env
+  # Disabled by default: no profile flag passed.
+  export MOCK_ARGS_LOG="$TESTDIR/args-off.log"
+  run sh install.sh status
+  run grep -q -- '--profile updater' "$TESTDIR/args-off.log"; [ "$status" -ne 0 ]
+
+  # Enabled: every compose call carries the profile.
+  printf 'AFCT_UPDATER_ENABLED=true\n' >> .env.production
+  export MOCK_ARGS_LOG="$TESTDIR/args-on.log"
+  run sh install.sh status
+  run grep -q -- '--profile updater' "$TESTDIR/args-on.log"; [ "$status" -eq 0 ]
+}
