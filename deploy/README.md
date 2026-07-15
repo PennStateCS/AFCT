@@ -5,8 +5,10 @@ installer. The only thing you need on the host is **Docker** with the Compose
 plugin. On **Linux** the installer will offer to install Docker for you if it's
 missing; on **Windows/macOS** install Docker Desktop first.
 
-Use **`install.sh`** on Linux/macOS and **`install.ps1`** on Windows; they do the
-same thing (prompt for admin details, generate secrets, bring the stack up).
+Use **`install.sh`** on Linux/macOS and **`install.ps1`** on Windows. Both perform
+the guided install (prompt for admin details, generate secrets, bring the stack
+up). On Linux/macOS, `install.sh` also doubles as an operations helper for a
+running deployment (see [Everyday commands](#everyday-commands)).
 
 ## Quick start (Linux / macOS)
 
@@ -85,20 +87,42 @@ redacted**. Send that file to your administrator so they can help.
 
 ## Advanced
 
-- **Non-interactive install:** set the values as environment variables and pass
-  `--yes`:
+- **Unattended install:** provide the values as environment variables and pass
+  `--non-interactive` (never prompts; Docker and the Compose plugin must already
+  be installed). Use `ADMIN_PASSWORD_FILE` to keep the password off the command
+  line:
   ```sh
-  ADMIN_EMAIL=admin@x.edu ADMIN_PASSWORD='…' APP_URL=https://afct.x.edu \
-    sh install.sh --yes
+  ADMIN_EMAIL=admin@x.edu ADMIN_PASSWORD_FILE=/run/secrets/afct-admin \
+  APP_URL=https://afct.x.edu sh install.sh --non-interactive
   ```
+  `--yes` is a lighter option that only auto-accepts confirmation prompts; it
+  still asks for any value not supplied in the environment.
+- **Reconfigure:** re-run `sh install.sh` (or `sh install.sh --reconfigure`) to
+  change the public URL or bootstrap settings. Database and authentication
+  secrets are preserved.
 - **Manual setup:** copy `.env.production.example` to `.env.production`, fill it
   in, and run `docker compose up -d` yourself.
 - **Reproducible pins:** the compose file tracks the `:main` image tag. For a
   fixed production version, replace a tag with an `@sha256:…` digest.
-- **Updating:** `docker compose pull && docker compose up -d`. (One-click in-app
-  updates are planned for a future release.)
+- **Updating:** `sh install.sh update` pulls, recreates, verifies health, and
+  rolls back automatically on failure. The manual equivalent is
+  `docker compose pull && docker compose up -d`.
 
 ## Everyday commands
+
+On Linux/macOS the installer wraps the common operations:
+
+```sh
+sh install.sh status              # container and application health
+sh install.sh logs                # follow app logs
+sh install.sh update              # update to the latest images (with rollback)
+sh install.sh restart             # recreate the stack
+sh install.sh stop                # stop (data preserved in named volumes)
+sh install.sh doctor              # read-only system checks
+sh install.sh recover             # restore the newest .env.production backup
+```
+
+The underlying Docker commands work on every platform:
 
 ```sh
 docker compose ps                 # status

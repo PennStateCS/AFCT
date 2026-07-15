@@ -77,13 +77,24 @@ sh install.sh
 
 ### What the installer asks for
 
-The installer requests:
+The installer prompts for:
 
+- The public AFCT URL, used as `NEXTAUTH_URL`
 - The initial administrator email address
-- The initial administrator password
-- The public AFCT URL
+- The initial administrator password, or it can generate a strong one for you
 
-It then verifies Docker, generates the PostgreSQL password and authentication secret, creates `.env.production`, restricts the file permissions, downloads the images, and starts AFCT.
+It then verifies Docker, generates the PostgreSQL password and authentication secret, writes `.env.production` with restricted permissions, shows a short review, downloads the images, and starts AFCT. A generated administrator password is printed once at the end and is never written to the log, so save it before closing the terminal.
+
+Re-running `sh install.sh` on a configured host detects the existing installation and offers a menu: start or repair it, update it, reconfigure the public URL or bootstrap settings, run system checks, or create a diagnostics archive. Existing database and authentication secrets are preserved during reconfiguration.
+
+For unattended installs, supply the values as environment variables and pass `--non-interactive`. Docker and the Compose plugin must already be installed:
+
+```bash
+ADMIN_EMAIL=admin@example.edu \
+ADMIN_PASSWORD_FILE=/run/secrets/afct-admin-password \
+APP_URL=https://afct.example.edu \
+  sh install.sh --non-interactive
+```
 
 ### Installer diagnostics
 
@@ -159,4 +170,22 @@ Press `Control+C` to stop following the log. AFCT will continue running.
 
 Open the public URL and confirm that the login page loads over HTTPS, the administrator can sign in, and the administration pages open.
 
-A certificate warning is expected until you replace the default self-signed certificate. Continue with [TLS and HTTPS](../../operations/tls.md).
+A certificate warning is expected until you replace the default self-signed certificate.
+
+## Manage a running deployment
+
+The installer also serves as an operations helper. Run these from the directory that contains `docker-compose.yml`:
+
+```bash
+sh install.sh status      # container and application health
+sh install.sh logs        # follow the application log (Control+C to stop)
+sh install.sh doctor      # read-only system and configuration checks
+sh install.sh update      # pull the latest images, recreate, and verify health
+sh install.sh restart     # recreate the stack without pulling images
+sh install.sh stop        # stop the stack without deleting data volumes
+sh install.sh diagnostics # create a redacted support archive
+```
+
+`sh install.sh update` records the running image versions before pulling and automatically rolls back if the new version fails its health check.
+
+Continue with [TLS and HTTPS](../../operations/tls.md), then review [updates](../../operations/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
