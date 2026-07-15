@@ -112,13 +112,15 @@ init_log() {
 # Print a secret to the user's terminal ONLY — never through log(), which writes to
 # install.log (and that file is copied into the "redacted" diagnostics bundle).
 show_secret() {
-  if { : > /dev/tty; } 2>/dev/null; then
-    printf '%s\n' "$*" > /dev/tty 2>/dev/null || true
-  else
-    printf '%s\n' "$*" >&2 || true
+  # Show the secret on the controlling terminal when there is one (so it's visible
+  # even if stdout is redirected), else on stderr. Never through log()/install.log.
+  # Uses only regular builtins: a redirect error on ':' (a special builtin) would
+  # exit a non-interactive sh outright — which aborted the install after the stack
+  # was already up. Also never fatal under `set -e`.
+  if [ -c /dev/tty ] && printf '%s\n' "$*" > /dev/tty 2>/dev/null; then
+    return 0
   fi
-  # Always succeed: a write failure here must never abort the install under `set -e`
-  # (this runs after the stack is already up).
+  printf '%s\n' "$*" >&2 || true
   return 0
 }
 
