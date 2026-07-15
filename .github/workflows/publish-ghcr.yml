@@ -196,3 +196,15 @@ jobs:
           tags: |
             ghcr.io/pennstatewilkes-barre/afct-backup:main
             ghcr.io/pennstatewilkes-barre/afct-backup:sha-${{ github.event.workflow_run.head_sha }}
+
+      - name: Build and push updater image
+        if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/updater
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/pennstatewilkes-barre/afct-updater:main
+            ghcr.io/pennstatewilkes-barre/afct-updater:sha-${{ github.event.workflow_run.head_sha }}
