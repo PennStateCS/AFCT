@@ -1,3 +1,8 @@
 # Shell scripts must stay LF so they run correctly inside Linux containers,
 # even when checked out on Windows.
 *.sh text eol=lf
+
+# The installer test harness: extensionless shell mocks (invoked via a #!/bin/sh
+# shebang on Linux CI) and bats files must also stay LF, or CRLF would break them.
+deploy/test/mocks/* text eol=lf
+*.bats text eol=lf
