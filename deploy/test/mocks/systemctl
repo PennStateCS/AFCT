@@ -1,0 +1,4 @@
+#!/bin/sh
+# No-op systemctl so ensure_docker_boot() (best-effort "enable Docker on boot")
+# doesn't touch the host's init system during tests.
+exit 0

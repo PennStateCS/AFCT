@@ -1,0 +1,5 @@
+#!/bin/sh
+# Mock curl for the smoke test (`/api/health`). MOCK_CURL_RC controls the result
+# (default 0 = the web front answered). The installer never reaches the Docker
+# convenience-script download in these tests, so no network work is simulated.
+exit "${MOCK_CURL_RC:-0}"
