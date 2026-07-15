@@ -404,8 +404,12 @@ compose_raw() {
 # enabled, so every compose action — pull/up/ps/config/stop — includes it. Empty
 # otherwise, keeping the profiled service dormant on a default install.
 updater_profile_args() {
-  [ "$(read_env_value AFCT_UPDATER_ENABLED "$ENV_FILE" 2>/dev/null)" = "true" ] \
-    && printf '%s' '--profile updater'
+  if [ "$(read_env_value AFCT_UPDATER_ENABLED "$ENV_FILE" 2>/dev/null)" = "true" ]; then
+    printf '%s' '--profile updater'
+  fi
+  # Always succeed: `_profile=$(updater_profile_args)` under `set -e` must not abort
+  # when the updater is disabled (the bare test would otherwise return non-zero).
+  return 0
 }
 
 # Use the production env file explicitly and prevent exported managed variables in
