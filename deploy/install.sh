@@ -25,6 +25,10 @@
 
 set -eu
 
+# Restrictive perms for everything we create: the install log and .env.production
+# both hold secrets. Set before the first file is written.
+umask 077
+
 # --------------------------------------------------------------------------- #
 # Config
 # --------------------------------------------------------------------------- #
@@ -43,24 +47,74 @@ MODE="install"
 DOCKER_SUDO=""                              # set to "sudo" at preflight if the daemon needs it
 OS=$(uname -s 2>/dev/null || echo unknown)  # Linux / Darwin
 
-for arg in "$@"; do
-  case "$arg" in
+usage() {
+  cat <<'EOF'
+AFCT Dashboard installer
+
+Usage:
+  sh install.sh                Run the guided install (default).
+  sh install.sh diagnostics    Collect a redacted support bundle and exit.
+  sh install.sh --help
+
+Options:
+  -y, --yes           Auto-answer confirmation prompts with their default. Value
+                      prompts (e.g. a missing admin email) are still asked, so this
+                      needs a terminal for anything not supplied via env vars.
+  --non-interactive   Never prompt: use env vars and defaults, and fail immediately
+                      if a required value (e.g. ADMIN_EMAIL/ADMIN_PASSWORD) is missing.
+  -h, --help          Show this help.
+
+Unattended install: supply the prompted values as env vars, e.g.
+  ADMIN_EMAIL=admin@x.edu ADMIN_PASSWORD=... APP_URL=https://afct.x.edu \
+    sh install.sh --non-interactive
+EOF
+}
+
+# Reject unknown options rather than silently starting an install (so a typo like
+# `--diagnositcs` fails loudly instead of running the wrong thing).
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     diagnostics|--diagnostics) MODE="diagnostics" ;;
     -y|--yes) ASSUME_YES="true" ;;
     --non-interactive|--noninteractive) NON_INTERACTIVE="true" ;;
     -h|--help) MODE="help" ;;
-    *) ;;
+    *)
+      printf '[afct] ERROR: unknown option: %s\n' "$1" >&2
+      printf '[afct] Run: sh install.sh --help\n' >&2
+      exit 2
+      ;;
   esac
+  shift
 done
 
 # --------------------------------------------------------------------------- #
 # Output helpers (everything is teed to the install log)
 # --------------------------------------------------------------------------- #
-: > "$LOG_FILE" 2>/dev/null || true
+# NOTE: the log is APPENDED to, never truncated — truncating here (before the mode
+# is dispatched) would wipe the very log that `diagnostics` collects.
 log()  { printf '[afct] %s\n' "$*" | tee -a "$LOG_FILE"; }
 warn() { printf '[afct] WARNING: %s\n' "$*" | tee -a "$LOG_FILE" >&2; }
 errln(){ printf '[afct] ERROR: %s\n' "$*" | tee -a "$LOG_FILE" >&2; }
 ask()  { printf '%s' "$1" >&2; }
+
+# Start a fresh run in the appended log (install mode only; diagnostics/help leave
+# the existing log untouched so it can be collected/inspected intact).
+init_log() {
+  touch "$LOG_FILE" 2>/dev/null || true
+  chmod 600 "$LOG_FILE" 2>/dev/null || true
+  {
+    printf '\n============================================================\n'
+    printf 'AFCT installer run: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo unknown)"
+    printf 'Mode: %s\n' "$MODE"
+  } >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# Print a secret to the user's terminal ONLY — never through log(), which writes to
+# install.log (and that file is copied into the "redacted" diagnostics bundle).
+show_secret() {
+  if { : > /dev/tty; } 2>/dev/null; then printf '%s\n' "$*" > /dev/tty
+  else printf '%s\n' "$*" >&2; fi
+}
 
 # --------------------------------------------------------------------------- #
 # Compose wrapper (support both `docker compose` and legacy `docker-compose`)
@@ -86,6 +140,14 @@ env_file_complete() {
     grep -qE "^${_k}=.+" "$_envf" 2>/dev/null || return 1
   done
   return 0
+}
+
+# Echo the value of KEY from an env file (empty if absent). Values we write are
+# unquoted, so this takes everything after the first '='. Used to preserve infra
+# secrets across a reconfigure.
+read_env_value() { # read_env_value KEY FILE
+  [ -f "$2" ] || return 0
+  awk -v k="$1" 'index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }' "$2" 2>/dev/null || true
 }
 
 # --------------------------------------------------------------------------- #
@@ -139,7 +201,9 @@ collect_diagnostics() {
 
   log ""
   log "Diagnostics saved to: ${SCRIPT_DIR}/${out}"
-  log "Secret values were redacted. Send this file to your administrator for help."
+  log "Known configuration secrets were redacted, but container logs, the compose file,"
+  log "and application errors can still contain sensitive data — review the archive"
+  log "before sharing it."
 }
 
 # On any unexpected failure during install, auto-collect diagnostics.
@@ -427,9 +491,13 @@ prompt_secret() { # prompt_secret "Question" -> echoes typed value (no echo to s
   q=$1
   can_prompt || { warn "internal: cannot prompt for '$q' (no terminal)."; return 1; }
   ask "$q: "
+  # Turn off echo while typing, but make sure it's restored even if the user hits
+  # Ctrl+C mid-entry, so the terminal isn't left silently swallowing input.
+  trap 'stty echo 2>/dev/null || true; printf "\n" >&2; exit 130' INT TERM HUP
   stty -echo 2>/dev/null || true
   IFS= read -r ans || ans=""
   stty echo 2>/dev/null || true
+  trap - INT TERM HUP
   printf '\n' >&2
   printf '%s' "$ans"
 }
@@ -527,12 +595,25 @@ do_install() {
     esac
   fi
 
-  # Auto-generated infrastructure secrets, never prompted.
-  POSTGRES_PASSWORD_IN=$(gen_secret)
-  NEXTAUTH_SECRET_IN=$(gen_secret)
+  # Infrastructure secrets. On a RECONFIGURE, preserve the existing values instead of
+  # rotating them: Postgres only reads POSTGRES_PASSWORD when it first initializes its
+  # data directory, so a new password would leave the app unable to authenticate to
+  # the existing database volume; and a new NEXTAUTH_SECRET would invalidate every
+  # active session. Generate fresh ones only when there's no existing value.
+  # (Rotating credentials for real is a separate operation that must also change the
+  # password inside the running database.)
+  POSTGRES_PASSWORD_IN=$(read_env_value POSTGRES_PASSWORD "$ENV_FILE")
+  NEXTAUTH_SECRET_IN=$(read_env_value NEXTAUTH_SECRET "$ENV_FILE")
+  [ -n "$POSTGRES_PASSWORD_IN" ] || POSTGRES_PASSWORD_IN=$(gen_secret)
+  [ -n "$NEXTAUTH_SECRET_IN" ] || NEXTAUTH_SECRET_IN=$(gen_secret)
 
   log "writing ${ENV_FILE} ..."
-  umask 077
+  # Back up any existing config, then write to a temp file and rename it into place so
+  # an interrupted write can't leave a truncated/partial .env.production behind.
+  if [ -f "$ENV_FILE" ]; then
+    cp "$ENV_FILE" "${ENV_FILE}.backup.$(date +%Y%m%d-%H%M%S 2>/dev/null || echo prev)" 2>/dev/null || true
+  fi
+  tmp_env=$(mktemp "${ENV_FILE}.tmp.XXXXXX" 2>/dev/null) || die "could not create a temporary configuration file."
   {
     echo "# Generated by install.sh on $(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo unknown)."
     echo "# Keep this file secret. Regenerate secrets by re-running the installer with (r)."
@@ -551,8 +632,9 @@ do_install() {
     echo "NEXTAUTH_SECRET=${NEXTAUTH_SECRET_IN}"
     echo "NEXTAUTH_URL=${APP_URL_IN}"
     echo "AUTH_TRUST_HOST=true"
-  } > "$ENV_FILE"
-  chmod 600 "$ENV_FILE" 2>/dev/null || true
+  } > "$tmp_env"
+  chmod 600 "$tmp_env" 2>/dev/null || true
+  mv "$tmp_env" "$ENV_FILE"
 
   bring_up
 
@@ -562,7 +644,9 @@ do_install() {
   log "   URL:        ${APP_URL_IN}"
   log "   Admin user: ${ADMIN_EMAIL_IN}"
   if [ "${ADMIN_PW_GENERATED:-false}" = "true" ]; then
-    log "   Admin pass: ${ADMIN_PASSWORD_IN}   <-- save this now; it won't be shown again"
+    # Show the generated password on the terminal only — sending it through log()
+    # would write it to install.log and into the diagnostics bundle.
+    show_secret "   Admin pass: ${ADMIN_PASSWORD_IN}   <-- save this now; it won't be shown again"
   fi
   log ""
   log " The site uses a self-signed certificate at first, so your browser will"
@@ -572,29 +656,36 @@ do_install() {
 }
 
 bring_up() {
+  # Fail fast on a broken compose file (missing vars, bad interpolation, invalid YAML)
+  # before we touch images or containers.
+  if ! compose -f "$COMPOSE_FILE" config >/dev/null 2>>"$LOG_FILE"; then
+    die "the Docker Compose configuration is invalid. See ${LOG_FILE}."
+  fi
+
   log "pulling images (first run can take a few minutes)..."
-  # On a terminal, let Compose render its tidy, in-place progress UI. The old code
-  # piped the pull through `tee`, which makes Compose think it's not a TTY and fall
-  # back to *plain* output — thousands of per-layer "Downloading" lines that flood
-  # the screen and the log. So only capture the pull when output is redirected
-  # (logged/CI), and use --quiet there to keep the log readable. Either branch keeps
-  # Compose's real exit status (not tee's), so a private-registry 401 still surfaces.
+  # On a terminal, let Compose render its tidy, in-place progress UI. Piping the pull
+  # (as the old code did) makes Compose think it's not a TTY and print thousands of
+  # per-layer "Downloading" lines. So only capture the pull when output is redirected
+  # (logged/CI), with --quiet to keep the log readable.
+  #
+  # NOTE: `cmd; rc=$?` does NOT work under `set -e` — a failing cmd exits before the
+  # assignment runs — so capture the status with an `if`.
   pull_out="${LOG_FILE}.pull"
   : > "$pull_out"
   if [ -t 1 ]; then
-    compose -f "$COMPOSE_FILE" pull
-    pull_rc=$?
+    if compose -f "$COMPOSE_FILE" pull; then pull_rc=0; else pull_rc=$?; fi
   else
-    compose -f "$COMPOSE_FILE" pull --quiet > "$pull_out" 2>&1
-    pull_rc=$?
+    if compose -f "$COMPOSE_FILE" pull --quiet > "$pull_out" 2>&1; then pull_rc=0; else pull_rc=$?; fi
     cat "$pull_out" >> "$LOG_FILE" 2>/dev/null || true
   fi
+  # A failed pull is fatal: silently continuing would start the stack on stale images
+  # (an unexpected version), or with images missing entirely.
   if [ "$pull_rc" -ne 0 ] || \
      grep -qiE 'unauthorized|denied|authentication required|forbidden' "$pull_out" 2>/dev/null; then
-    warn "some images could not be pulled. Check your network; if they are private, run 'docker login ghcr.io' and re-run."
-  else
-    log "images pulled."
+    rm -f "$pull_out" 2>/dev/null || true
+    die "could not download the application images. Check your network; if they are private, run 'docker login ghcr.io' and re-run."
   fi
+  log "images pulled."
   rm -f "$pull_out" 2>/dev/null || true
 
   log "starting the stack..."
@@ -605,16 +696,24 @@ bring_up() {
   fi
 
   log "waiting for the app to become healthy..."
+  # Resolve the app container by its Compose service, not a hard-coded name, so this
+  # survives a different project/name and won't collide with another AFCT install.
+  app_id=$(compose -f "$COMPOSE_FILE" ps -q app 2>/dev/null || true)
+  [ -n "$app_id" ] || die "the application container was not created. See ${LOG_FILE}, or run: sh install.sh diagnostics"
   i=0
   while [ "$i" -lt 60 ]; do
-    state=$($DOCKER_SUDO docker inspect -f '{{ .State.Health.Status }}' afct-app 2>/dev/null || echo "starting")
+    state=$($DOCKER_SUDO docker inspect \
+      -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' \
+      "$app_id" 2>/dev/null || echo missing)
     case "$state" in
       healthy) log "app is healthy."; smoke_test; return ;;
-      unhealthy) die "app reported unhealthy; check logs (sh install.sh diagnostics)." ;;
+      unhealthy) die "the app reported unhealthy. Collect logs with: sh install.sh diagnostics" ;;
     esac
     i=$((i + 1)); sleep 5
   done
-  warn "app did not report healthy within ~5 min; it may still be migrating. Check: docker compose logs -f app"
+  # Timed out: do NOT fall through and print "AFCT is starting" as if it succeeded.
+  # die triggers the EXIT trap, which collects a diagnostics bundle.
+  die "the app did not pass its health check within ~5 minutes. It may still be starting — check 'docker compose logs -f app'; a diagnostics bundle is being collected."
 }
 
 # Best-effort end-to-end check that nginx actually serves the app, not just that
@@ -634,14 +733,13 @@ smoke_test() {
 # --------------------------------------------------------------------------- #
 case "$MODE" in
   help)
-    # Print the leading comment block (everything from line 2 up to the first
-    # non-comment line), stripping the leading "# ".
-    awk 'NR==1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+    usage
     ;;
   diagnostics)
     collect_diagnostics
     ;;
   install)
+    init_log
     do_install
     ;;
 esac
