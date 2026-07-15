@@ -298,13 +298,23 @@ export default function SystemSettingsClient() {
     info: upgradeInfo,
     loading: upgradeLoading,
     upgradeBusy,
+    downgradeBusy,
     startUpgrade,
+    startDowngrade,
   } = useUpgrade(tab === 'updates');
   const [selectedVersion, setSelectedVersion] = useState('');
   const [confirmUpgradeOpen, setConfirmUpgradeOpen] = useState(false);
   const upgradeInProgress = isUpgradeInProgress(upgradeInfo?.status);
   const upgradeableVersions = (upgradeInfo?.versions ?? []).filter(
     (v) => v.tag !== upgradeInfo?.current,
+  );
+  // Downgrade (restore) confirm: destructive, so gated behind a type-the-version box.
+  const [restoreTarget, setRestoreTarget] = useState<{ version: string; backup: string } | null>(
+    null,
+  );
+  const [restoreConfirmText, setRestoreConfirmText] = useState('');
+  const restorePoints = (upgradeInfo?.restorePoints ?? []).filter(
+    (r) => r.version !== upgradeInfo?.current,
   );
 
   // hCaptcha keys. The site key is part of the main form object above; the secret is
@@ -1085,6 +1095,119 @@ export default function SystemSettingsClient() {
                       }}
                     >
                       Upgrade
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Restore / downgrade — destructive, so kept visually separate. */}
+              {restorePoints.length > 0 && (
+                <div className="mt-8 max-w-2xl space-y-3 border-t pt-6">
+                  <h3 className="text-destructive text-sm font-semibold">
+                    Restore a previous version
+                  </h3>
+                  <p className="text-muted-foreground text-sm">
+                    Downgrading restores the database backup taken before that version was
+                    replaced. It{' '}
+                    <span className="text-destructive font-medium">
+                      permanently discards everything created since that backup
+                    </span>{' '}
+                    — submissions, grades, and accounts. Use this only for recovery.
+                  </p>
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm" aria-label="Restore points">
+                      <thead className="bg-muted/30 text-left">
+                        <tr>
+                          <th scope="col" className="p-2 font-medium">
+                            Version
+                          </th>
+                          <th scope="col" className="p-2 font-medium">
+                            Backup taken
+                          </th>
+                          <th scope="col" className="p-2 font-medium" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {restorePoints.map((r) => (
+                          <tr key={r.backup} className="border-t">
+                            <td className="p-2 font-mono whitespace-nowrap">{r.version}</td>
+                            <td className="p-2 whitespace-nowrap">{formatBackupTs(r.backup)}</td>
+                            <td className="p-2 text-right">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                disabled={disabled || downgradeBusy || upgradeInProgress}
+                                onClick={() => {
+                                  setRestoreTarget({ version: r.version, backup: r.backup });
+                                  setRestoreConfirmText('');
+                                }}
+                              >
+                                Restore
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <Dialog
+                open={restoreTarget !== null}
+                onOpenChange={(open) => {
+                  if (!open) setRestoreTarget(null);
+                }}
+              >
+                <DialogContent className="bg-card sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle className="text-destructive">
+                      Restore and downgrade to {restoreTarget?.version}?
+                    </DialogTitle>
+                    <DialogDescription>
+                      This restores the database backup from{' '}
+                      <span className="font-mono">
+                        {restoreTarget ? formatBackupTs(restoreTarget.backup) : ''}
+                      </span>{' '}
+                      and runs{' '}
+                      <span className="font-mono">{restoreTarget?.version}</span>. Everything
+                      created since that backup — submissions, grades, accounts — is{' '}
+                      <span className="text-destructive font-medium">permanently lost</span>.
+                      A safety backup of the current state is taken first. Type{' '}
+                      <span className="font-mono">{restoreTarget?.version}</span> to confirm.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <InputGroup
+                    label="Confirm version"
+                    name="restoreConfirm"
+                    value={restoreConfirmText}
+                    setValue={(v) => setRestoreConfirmText(v)}
+                    disabled={downgradeBusy}
+                  />
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setRestoreTarget(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={downgradeBusy || restoreConfirmText !== restoreTarget?.version}
+                      onClick={() => {
+                        if (restoreTarget) {
+                          startDowngrade({
+                            tag: restoreTarget.version,
+                            restorePoint: restoreTarget.backup,
+                          });
+                        }
+                        setRestoreTarget(null);
+                      }}
+                    >
+                      Restore and downgrade
                     </Button>
                   </DialogFooter>
                 </DialogContent>

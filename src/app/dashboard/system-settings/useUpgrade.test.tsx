@@ -106,4 +106,36 @@ describe('useUpgrade', () => {
       expect(showToast.error).toHaveBeenCalledWith('Version v9.9.9 is not an available release'),
     );
   });
+
+  it('POSTs a downgrade with the restore point and toasts success', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          current: 'v1.0.0',
+          versions: [],
+          status: null,
+          manifestError: false,
+          restorePoints: [{ version: 'v0.9.0', backup: '20260101-000000' }],
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: 'd1' }) })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ current: 'v1.0.0', versions: [], status: null, manifestError: false }),
+      });
+
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info).toBeTruthy());
+
+    result.current.startDowngrade({ tag: 'v0.9.0', restorePoint: '20260101-000000' });
+
+    await waitFor(() => expect(showToast.success).toHaveBeenCalled());
+    const postCall = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST');
+    expect(JSON.parse(postCall![1].body as string)).toEqual({
+      action: 'downgrade',
+      tag: 'v0.9.0',
+      restorePoint: '20260101-000000',
+    });
+  });
 });
