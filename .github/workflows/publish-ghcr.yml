@@ -112,7 +112,7 @@ jobs:
       - name: Scan image for vulnerabilities (Trivy)
         if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
         continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/pennstatewilkes-barre/afct-dashboard@${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
           format: table
