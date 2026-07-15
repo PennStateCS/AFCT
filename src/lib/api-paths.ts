@@ -114,6 +114,7 @@ export const apiPaths = {
     settings: () => '/api/admin/settings',
     settingsTls: () => '/api/admin/settings/tls',
     backups: () => '/api/admin/settings/backups',
+    upgrade: () => '/api/admin/settings/upgrade',
     backupDownload: (opts?: { file?: string }) =>
       `/api/admin/settings/backups/download${qs({ file: opts?.file })}`,
     // Per-domain status endpoints (tabbed status dashboard).

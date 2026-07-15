@@ -80,6 +80,7 @@ import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import FileUploadInput from '@/components/FileUploadInput';
 import { useTlsCertificate } from './useTlsCertificate';
 import { useBackups } from './useBackups';
+import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
 
 type SystemSettingsResponse = {
   timezone: string;
@@ -150,7 +151,7 @@ const formatBackupTs = (ts: string) => {
 };
 
 const SETTINGS_TAB_KEY = 'afct.systemSettingsTab';
-const SETTINGS_TABS = ['general', 'queue', 'backups', 'captcha', 'tls'];
+const SETTINGS_TABS = ['general', 'queue', 'backups', 'captcha', 'tls', 'updates'];
 
 // Normalize a raw settings response into the editable form snapshot (defaults,
 // clamping, ms→sec conversions). Shared so the form can be seeded both
@@ -291,6 +292,20 @@ export default function SystemSettingsClient() {
   // Available backups + the "Back up now" action (managed independently of the
   // settings form's Save) live in a dedicated hook.
   const { backups, backupsLoading, backupNowBusy, handleBackupNow } = useBackups();
+
+  // Upgrade panel (Updates tab). Query only runs while that tab is open.
+  const {
+    info: upgradeInfo,
+    loading: upgradeLoading,
+    upgradeBusy,
+    startUpgrade,
+  } = useUpgrade(tab === 'updates');
+  const [selectedVersion, setSelectedVersion] = useState('');
+  const [confirmUpgradeOpen, setConfirmUpgradeOpen] = useState(false);
+  const upgradeInProgress = isUpgradeInProgress(upgradeInfo?.status);
+  const upgradeableVersions = (upgradeInfo?.versions ?? []).filter(
+    (v) => v.tag !== upgradeInfo?.current,
+  );
 
   // hCaptcha keys. The site key is part of the main form object above; the secret is
   // write-only (we only know whether one is set), so it stays local.
@@ -624,6 +639,12 @@ export default function SystemSettingsClient() {
               >
                 TLS Certificate
               </TabsTrigger>
+              <TabsTrigger
+                value="updates"
+                className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
+              >
+                Updates
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="general">
@@ -949,6 +970,125 @@ export default function SystemSettingsClient() {
                   restorable copy off-host.
                 </p>
               </div>
+            </TabsContent>
+
+            <TabsContent value="updates">
+              <p className="text-muted-foreground mb-4 text-sm">
+                Upgrade AFCT to a newer published release. The stack backs up the
+                database first, downloads the new version, and restarts; if the new
+                version fails its health check it is rolled back automatically.
+              </p>
+
+              <div className="max-w-2xl space-y-5">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Current version</h3>
+                  <Badge variant="secondary" className="w-fit font-mono">
+                    {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
+                  </Badge>
+                </div>
+
+                {upgradeInfo?.status?.phase && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium">Update status</h3>
+                    <div className="bg-muted/10 w-fit max-w-xl space-y-2 rounded-md border p-3 text-sm">
+                      <Badge
+                        variant={
+                          upgradeInfo.status.phase === 'healthy'
+                            ? 'success'
+                            : upgradeInfo.status.phase === 'failed'
+                              ? 'destructive'
+                              : upgradeInfo.status.phase === 'rolled_back'
+                                ? 'warning'
+                                : 'secondary'
+                        }
+                        className="w-fit"
+                      >
+                        {upgradeInfo.status.phase}
+                      </Badge>
+                      {upgradeInfo.status.message && (
+                        <p className="text-muted-foreground">{upgradeInfo.status.message}</p>
+                      )}
+                      {upgradeInProgress && (
+                        <p className="text-muted-foreground text-xs">
+                          This can take a few minutes; the site may briefly restart.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {upgradeInfo?.manifestError ? (
+                  <p className="text-muted-foreground text-sm">
+                    The list of available versions could not be loaded. Check the
+                    server’s network access and reopen this tab to retry.
+                  </p>
+                ) : upgradeableVersions.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    {upgradeLoading
+                      ? 'Loading available versions…'
+                      : 'AFCT is on the latest available version.'}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    <SelectField
+                      label="Upgrade to"
+                      name="upgradeVersion"
+                      id="upgradeVersion"
+                      placeholder="Select a version"
+                      value={selectedVersion}
+                      onValueChange={setSelectedVersion}
+                      disabled={disabled || upgradeBusy || upgradeInProgress}
+                      options={upgradeableVersions.map((v) => ({
+                        value: v.tag,
+                        label: v.label ? `${v.label} (${v.tag})` : v.tag,
+                      }))}
+                      triggerClassName="border-black"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setConfirmUpgradeOpen(true)}
+                      disabled={disabled || upgradeBusy || upgradeInProgress || !selectedVersion}
+                    >
+                      {upgradeBusy || upgradeInProgress ? 'Upgrading…' : 'Upgrade…'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <Dialog open={confirmUpgradeOpen} onOpenChange={setConfirmUpgradeOpen}>
+                <DialogContent className="bg-card sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Upgrade AFCT?</DialogTitle>
+                    <DialogDescription>
+                      AFCT will upgrade from{' '}
+                      <span className="font-mono">{upgradeInfo?.current}</span> to{' '}
+                      <span className="font-mono">{selectedVersion}</span>. It backs up
+                      the database first, downloads the new version, and restarts. This
+                      may take a few minutes, during which the site may be briefly
+                      unavailable. A failed upgrade is rolled back automatically.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setConfirmUpgradeOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        startUpgrade(selectedVersion);
+                        setConfirmUpgradeOpen(false);
+                      }}
+                    >
+                      Upgrade
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             <TabsContent value="captcha">
