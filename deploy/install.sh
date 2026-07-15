@@ -1,91 +1,172 @@
 #!/bin/sh
-# AFCT Dashboard: Linux / macOS installer.
+# AFCT Dashboard installer and operations helper.
 #
-# Usage:
-#   sh install.sh                  Run the guided install (default).
-#   sh install.sh diagnostics      Collect a support zip (redacted) and exit.
-#   sh install.sh --help
+# This script intentionally targets POSIX /bin/sh so it works with dash, ash,
+# Bash in POSIX mode, and the default shell supplied by common Linux systems.
 #
-# Flags:
-#   -y, --yes          Auto-answer confirmation prompts with their default. Value
-#                      prompts (e.g. a missing admin email) are STILL asked, so this
-#                      needs a terminal for anything not supplied via env vars.
-#   --non-interactive  Never prompt: use env vars and defaults, and fail immediately
-#                      if a required value (e.g. ADMIN_EMAIL/ADMIN_PASSWORD) is
-#                      missing. Use this for automated / unattended installs.
+# Guided installation:
+#   sh install.sh
 #
-# Unattended install: supply the prompted values as env vars, e.g.
-#   ADMIN_EMAIL=admin@x.edu ADMIN_PASSWORD=... APP_URL=https://afct.x.edu \
+# Unattended installation:
+#   ADMIN_EMAIL=admin@example.edu \
+#   ADMIN_PASSWORD_FILE=/run/secrets/afct-admin-password \
+#   APP_URL=https://afct.example.edu \
 #     sh install.sh --non-interactive
 #
-# The script is self-contained: on Linux it installs Docker for you if it's
-# missing (via the official get.docker.com script); otherwise it just needs
-# Docker with the Compose plugin, plus this folder's docker-compose.yml and
-# .env.production.example.
+# Operational commands:
+#   sh install.sh status
+#   sh install.sh logs
+#   sh install.sh update
+#   sh install.sh restart
+#   sh install.sh stop
+#   sh install.sh doctor
+#   sh install.sh diagnostics
 
 set -eu
-
-# Restrictive perms for everything we create: the install log and .env.production
-# both hold secrets. Set before the first file is written.
 umask 077
 
 # --------------------------------------------------------------------------- #
-# Config
+# Installer configuration
 # --------------------------------------------------------------------------- #
+INSTALLER_VERSION="2.1.1"
+
+INVOCATION_DIR=$(pwd -P 2>/dev/null || pwd)
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$SCRIPT_DIR"
 
-COMPOSE_FILE="docker-compose.yml"
-ENV_FILE=".env.production"
-ENV_EXAMPLE=".env.production.example"
-LOG_FILE="install.log"
+COMPOSE_FILE=${AFCT_COMPOSE_FILE:-docker-compose.yml}
+ENV_FILE=${AFCT_ENV_FILE:-.env.production}
+ENV_EXAMPLE=${AFCT_ENV_EXAMPLE:-.env.production.example}
+LOG_FILE=${AFCT_LOG_FILE:-install.log}
+APP_SERVICE=${AFCT_APP_SERVICE:-app}
+HEALTH_PATH=${AFCT_HEALTH_PATH:-/api/health}
+HEALTH_TIMEOUT=${AFCT_HEALTH_TIMEOUT:-300}
+HEALTH_INTERVAL=${AFCT_HEALTH_INTERVAL:-5}
 DIAG_PREFIX="afct-diagnostics"
+LOCK_KEY=$(printf '%s' "$SCRIPT_DIR" | cksum 2>/dev/null | awk '{ print $1 }')
+[ -n "$LOCK_KEY" ] || LOCK_KEY="default"
+LOCK_DIR="${TMPDIR:-/tmp}/afct-installer-${LOCK_KEY}.lock"
 
-ASSUME_YES="false"        # --yes: auto-answer confirmation prompts with their default
-NON_INTERACTIVE="false"   # --non-interactive: never prompt; fail on missing required input
 MODE="install"
-DOCKER_SUDO=""                              # set to "sudo" at preflight if the daemon needs it
-OS=$(uname -s 2>/dev/null || echo unknown)  # Linux / Darwin
+MODE_SET="false"
+ASSUME_YES="false"
+NON_INTERACTIVE="false"
+FORCE_RECONFIGURE="false"
+COLOR_ENABLED="false"
+COLOR_FORCED_OFF="false"
+LOG_ENABLED="false"
+DOCKER_SUDO=""
+COMPOSE_KIND=""
+OS=$(uname -s 2>/dev/null || printf 'unknown')
 
+DIAG_ON_EXIT="false"
+DIAG_IN_PROGRESS="false"
+TTY_ECHO_DISABLED="false"
+LOCK_HELD="false"
+
+TMP_ENV=""
+DOCKER_INSTALL_SCRIPT=""
+DOCKER_INSTALL_OUTPUT=""
+PULL_OUTPUT=""
+UPDATE_IMAGE_SNAPSHOT=""
+DIAG_WORK=""
+
+# --------------------------------------------------------------------------- #
+# Usage and argument parsing
+# --------------------------------------------------------------------------- #
 usage() {
   cat <<'EOF'
 AFCT Dashboard installer
 
 Usage:
-  sh install.sh                Run the guided install (default).
-  sh install.sh status         Show the stack's container + health status.
-  sh install.sh logs           Follow the application logs (Ctrl+C to stop).
-  sh install.sh update         Pull the latest images and restart the stack.
-  sh install.sh diagnostics    Collect a redacted support bundle and exit.
-  sh install.sh --help
+  sh install.sh [command] [options]
+
+Commands:
+  install       Run the guided installer. This is the default command.
+  status        Show container and application health status.
+  logs          Follow application logs. Press Ctrl+C to stop.
+  update        Pull the latest images, recreate the stack, and verify health.
+  restart       Recreate the stack without pulling new images.
+  stop          Stop the stack without deleting its data volumes.
+  doctor        Run a comprehensive, read-only system check.
+  recover       Restore the newest protected .env.production backup.
+  diagnostics   Create a support archive with known secrets redacted.
+  version       Show installer and deployed application version information.
+  help          Show this help.
 
 Options:
-  -y, --yes           Auto-answer confirmation prompts with their default. Value
-                      prompts (e.g. a missing admin email) are still asked, so this
-                      needs a terminal for anything not supplied via env vars.
-  --non-interactive   Never prompt: use env vars and defaults, and fail immediately
-                      if a required value (e.g. ADMIN_EMAIL/ADMIN_PASSWORD) is missing.
-  -h, --help          Show this help.
+  -y, --yes
+      Accept confirmation prompts using their default answers. Missing values
+      such as the administrator email are still requested interactively.
 
-Unattended install: supply the prompted values as env vars, e.g.
-  ADMIN_EMAIL=admin@x.edu ADMIN_PASSWORD=... APP_URL=https://afct.x.edu \
-    sh install.sh --non-interactive
+  --non-interactive
+      Never prompt. Required values must be supplied through environment
+      variables or password files. Docker and Docker Compose must already be installed.
+
+  --reconfigure
+      Rebuild .env.production even when a complete configuration already exists.
+      Infrastructure credentials are preserved; this does not rotate the active
+      PostgreSQL password or change an existing administrator account password.
+
+  --no-color
+      Disable colored terminal output.
+
+Environment variables:
+  APP_URL                 Public URL, such as https://afct.example.edu
+  ADMIN_EMAIL             Initial administrator email
+  ADMIN_PASSWORD          Initial administrator password
+  ADMIN_PASSWORD_FILE     File containing the initial administrator password
+
+Advanced overrides:
+  AFCT_COMPOSE_FILE       Compose file name
+  AFCT_ENV_FILE           Production environment file name
+  AFCT_ENV_EXAMPLE        Environment template file name
+  AFCT_LOG_FILE           Installer log file name
+  AFCT_APP_SERVICE        Compose service name for the application (default: app)
+  AFCT_HEALTH_PATH        HTTP health endpoint (default: /api/health)
+  AFCT_HEALTH_TIMEOUT     Health timeout in seconds (default: 300)
+  AFCT_HEALTH_INTERVAL    Health polling interval in seconds (default: 5)
 EOF
 }
 
-# Reject unknown options rather than silently starting an install (so a typo like
-# `--diagnositcs` fails loudly instead of running the wrong thing).
+set_mode() {
+  _new_mode=$1
+  if [ "$MODE_SET" = "true" ] && [ "$MODE" != "$_new_mode" ]; then
+    printf '[afct] ERROR: choose only one command (%s and %s were supplied).\n' \
+      "$MODE" "$_new_mode" >&2
+    exit 2
+  fi
+  MODE=$_new_mode
+  MODE_SET="true"
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    diagnostics|--diagnostics) MODE="diagnostics" ;;
-    status|--status) MODE="status" ;;
-    logs|--logs) MODE="logs" ;;
-    update|--update) MODE="update" ;;
+    install) set_mode "install" ;;
+    status|--status) set_mode "status" ;;
+    logs|--logs) set_mode "logs" ;;
+    update|--update) set_mode "update" ;;
+    restart|--restart) set_mode "restart" ;;
+    stop|--stop) set_mode "stop" ;;
+    doctor|--doctor) set_mode "doctor" ;;
+    recover|--recover) set_mode "recover" ;;
+    diagnostics|--diagnostics) set_mode "diagnostics" ;;
+    version|--version) set_mode "version" ;;
+    help|-h|--help) set_mode "help" ;;
     -y|--yes) ASSUME_YES="true" ;;
     --non-interactive|--noninteractive) NON_INTERACTIVE="true" ;;
-    -h|--help) MODE="help" ;;
+    --reconfigure) FORCE_RECONFIGURE="true" ;;
+    --no-color) COLOR_FORCED_OFF="true" ;;
+    --)
+      shift
+      [ "$#" -eq 0 ] || {
+        printf '[afct] ERROR: unexpected argument after --: %s\n' "$1" >&2
+        exit 2
+      }
+      break
+      ;;
     *)
-      printf '[afct] ERROR: unknown option: %s\n' "$1" >&2
+      printf '[afct] ERROR: unknown option or command: %s\n' "$1" >&2
       printf '[afct] Run: sh install.sh --help\n' >&2
       exit 2
       ;;
@@ -93,770 +174,1710 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-# --------------------------------------------------------------------------- #
-# Output helpers (everything is teed to the install log)
-# --------------------------------------------------------------------------- #
-# NOTE: the log is APPENDED to, never truncated — truncating here (before the mode
-# is dispatched) would wipe the very log that `diagnostics` collects.
-log()  { printf '[afct] %s\n' "$*" | tee -a "$LOG_FILE"; }
-warn() { printf '[afct] WARNING: %s\n' "$*" | tee -a "$LOG_FILE" >&2; }
-errln(){ printf '[afct] ERROR: %s\n' "$*" | tee -a "$LOG_FILE" >&2; }
-ask()  { printf '%s' "$1" >&2; }
+if [ "$COLOR_FORCED_OFF" != "true" ] && [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  COLOR_ENABLED="true"
+fi
 
-# Start a fresh run in the appended log (install mode only; diagnostics/help leave
-# the existing log untouched so it can be collected/inspected intact).
-init_log() {
-  touch "$LOG_FILE" 2>/dev/null || true
-  chmod 600 "$LOG_FILE" 2>/dev/null || true
-  {
-    printf '\n============================================================\n'
-    printf 'AFCT installer run: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo unknown)"
-    printf 'Mode: %s\n' "$MODE"
-  } >> "$LOG_FILE" 2>/dev/null || true
+# --------------------------------------------------------------------------- #
+# Output and logging
+# --------------------------------------------------------------------------- #
+if [ "$COLOR_ENABLED" = "true" ]; then
+  C_RESET=$(printf '\033[0m')
+  C_BOLD=$(printf '\033[1m')
+  C_BLUE=$(printf '\033[34m')
+  C_GREEN=$(printf '\033[32m')
+  C_YELLOW=$(printf '\033[33m')
+  C_RED=$(printf '\033[31m')
+else
+  C_RESET=""
+  C_BOLD=""
+  C_BLUE=""
+  C_GREEN=""
+  C_YELLOW=""
+  C_RED=""
+fi
+
+append_log() {
+  [ "$LOG_ENABLED" = "true" ] || return 0
+  printf '%s\n' "$1" >> "$LOG_FILE" 2>/dev/null || LOG_ENABLED="false"
+  return 0
 }
 
-# Print a secret to the user's terminal ONLY — never through log(), which writes to
-# install.log (and that file is copied into the "redacted" diagnostics bundle).
+info() {
+  _line="[afct] $*"
+  printf '%s\n' "$_line"
+  append_log "$_line"
+}
+
+success() {
+  _plain="[afct] OK: $*"
+  printf '%s%s%s\n' "$C_GREEN" "$_plain" "$C_RESET"
+  append_log "$_plain"
+}
+
+warn() {
+  _plain="[afct] WARNING: $*"
+  printf '%s%s%s\n' "$C_YELLOW" "$_plain" "$C_RESET" >&2
+  append_log "$_plain"
+}
+
+error() {
+  _plain="[afct] ERROR: $*"
+  printf '%s%s%s\n' "$C_RED" "$_plain" "$C_RESET" >&2
+  append_log "$_plain"
+}
+
+heading() {
+  printf '\n%s%s%s\n' "$C_BOLD$C_BLUE" "$*" "$C_RESET"
+  append_log ""
+  append_log "$*"
+}
+
+ask() {
+  printf '%s' "$1" >&2
+}
+
 show_secret() {
-  # Show the secret on the controlling terminal when there is one (so it's visible
-  # even if stdout is redirected), else on stderr. Never through log()/install.log.
-  # Uses only regular builtins: a redirect error on ':' (a special builtin) would
-  # exit a non-interactive sh outright — which aborted the install after the stack
-  # was already up. Also never fatal under `set -e`.
+  # Never route secrets through the installer log.
   if [ -c /dev/tty ] && printf '%s\n' "$*" > /dev/tty 2>/dev/null; then
     return 0
   fi
   printf '%s\n' "$*" >&2 || true
-  return 0
 }
 
-# --------------------------------------------------------------------------- #
-# Compose wrapper (support both `docker compose` and legacy `docker-compose`)
-# --------------------------------------------------------------------------- #
-compose() {
-  if $DOCKER_SUDO docker compose version >/dev/null 2>&1; then
-    $DOCKER_SUDO docker compose "$@"
-  elif command -v docker-compose >/dev/null 2>&1; then
-    $DOCKER_SUDO docker-compose "$@"
-  else
-    return 127
-  fi
-}
+rotate_installer_log() {
+  [ -f "$LOG_FILE" ] || return 0
+  _size=$(wc -c < "$LOG_FILE" 2>/dev/null || printf '0')
+  case "$_size" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_size" -lt 5242880 ] && return 0
 
-# True only if the env file has non-empty values for the settings the stack cannot
-# start without. Guards against silently keeping an empty or truncated
-# .env.production (e.g. from an interrupted run), which otherwise surfaces as a
-# cryptic "Database is uninitialized and superuser password is not specified".
-env_file_complete() {
-  _envf="$1"
-  [ -s "$_envf" ] || return 1
-  for _k in POSTGRES_PASSWORD DATABASE_URL NEXTAUTH_SECRET; do
-    grep -qE "^${_k}=.+" "$_envf" 2>/dev/null || return 1
+  rm -f "${LOG_FILE}.5" 2>/dev/null || true
+  _n=4
+  while [ "$_n" -ge 1 ]; do
+    [ -f "${LOG_FILE}.${_n}" ] && mv "${LOG_FILE}.${_n}" "${LOG_FILE}.$((_n + 1))" 2>/dev/null || true
+    _n=$((_n - 1))
   done
-  return 0
+  mv "$LOG_FILE" "${LOG_FILE}.1" 2>/dev/null || return 0
+  chmod 600 "${LOG_FILE}.1" 2>/dev/null || true
 }
 
-# Echo the value of KEY from an env file (empty if absent). Values we write are
-# unquoted, so this takes everything after the first '='. Used to preserve infra
-# secrets across a reconfigure.
-read_env_value() { # read_env_value KEY FILE
-  [ -f "$2" ] || return 0
-  awk -v k="$1" 'index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }' "$2" 2>/dev/null || true
-}
-
-# --------------------------------------------------------------------------- #
-# Diagnostics: a redacted support bundle the user can send to the maintainer.
-# Secret VALUES are masked; only keys are shown.
-# --------------------------------------------------------------------------- #
-collect_diagnostics() {
-  ts=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)
-  work="${DIAG_PREFIX}-${ts}"
-  rm -rf "$work"
-  mkdir -p "$work"
-
-  log "collecting diagnostics into ${work}/ ..."
-
-  # Host + Docker environment
-  { uname -a; echo; cat /etc/os-release 2>/dev/null; } > "$work/system.txt" 2>&1 || true
-  $DOCKER_SUDO docker version > "$work/docker-version.txt" 2>&1 || true
-  $DOCKER_SUDO docker info    > "$work/docker-info.txt"    2>&1 || true
-
-  # Compose state + per-service logs (tail only)
-  compose -f "$COMPOSE_FILE" ps    > "$work/compose-ps.txt"   2>&1 || true
-  compose -f "$COMPOSE_FILE" logs --no-color --tail 400 \
-                                   > "$work/compose-logs.txt" 2>&1 || true
-
-  # The compose file and the install log
-  cp "$COMPOSE_FILE" "$work/docker-compose.yml" 2>/dev/null || true
-  cp "$LOG_FILE"     "$work/install.log"        2>/dev/null || true
-
-  # Redacted env: keep keys, mask any value whose key looks secret.
-  if [ -f "$ENV_FILE" ]; then
-    awk '
-      /^[[:space:]]*#/ || /^[[:space:]]*$/ { print; next }
-      /=/ {
-        key = $0; sub(/=.*/, "", key)
-        up = toupper(key)
-        if (up ~ /PASSWORD|SECRET|KEY|TOKEN|DATABASE_URL/) print key "=***REDACTED***"
-        else print
-        next
-      }
-      { print }
-    ' "$ENV_FILE" > "$work/env.redacted.txt" 2>/dev/null || true
-  fi
-
-  # Zip it (fall back to tar.gz when zip is unavailable).
-  if command -v zip >/dev/null 2>&1; then
-    zip -qr "${work}.zip" "$work" && out="${work}.zip"
+init_log() {
+  rotate_installer_log
+  if touch "$LOG_FILE" 2>/dev/null && chmod 600 "$LOG_FILE" 2>/dev/null; then
+    LOG_ENABLED="true"
+    {
+      printf '\n============================================================\n'
+      printf 'AFCT installer run: %s\n' \
+        "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'unknown')"
+      printf 'Installer version: %s\n' "$INSTALLER_VERSION"
+      printf 'Mode: %s\n' "$MODE"
+    } >> "$LOG_FILE" 2>/dev/null || LOG_ENABLED="false"
   else
-    tar czf "${work}.tar.gz" "$work" && out="${work}.tar.gz"
+    LOG_ENABLED="false"
+    warn "the installer log cannot be written at ${SCRIPT_DIR}/${LOG_FILE}; continuing without file logging."
   fi
-  rm -rf "$work"
-
-  log ""
-  log "Diagnostics saved to: ${SCRIPT_DIR}/${out}"
-  log "Known configuration secrets were redacted, but container logs, the compose file,"
-  log "and application errors can still contain sensitive data — review the archive"
-  log "before sharing it."
 }
 
-# On any unexpected failure during install, auto-collect diagnostics.
-DIAG_ON_EXIT="false"
+die() {
+  error "$*"
+  exit 1
+}
+
+# --------------------------------------------------------------------------- #
+# Cleanup, signals, and failure diagnostics
+# --------------------------------------------------------------------------- #
+restore_terminal() {
+  if [ "$TTY_ECHO_DISABLED" = "true" ]; then
+    stty echo 2>/dev/null || true
+    TTY_ECHO_DISABLED="false"
+    printf '\n' >&2
+  fi
+}
+
+release_lock() {
+  if [ "$LOCK_HELD" = "true" ]; then
+    rm -rf "$LOCK_DIR" 2>/dev/null || true
+    LOCK_HELD="false"
+  fi
+}
+
+cleanup_temporary_files() {
+  [ -n "$TMP_ENV" ] && rm -f "$TMP_ENV" 2>/dev/null || true
+  [ -n "$DOCKER_INSTALL_SCRIPT" ] && rm -f "$DOCKER_INSTALL_SCRIPT" 2>/dev/null || true
+  [ -n "$DOCKER_INSTALL_OUTPUT" ] && rm -f "$DOCKER_INSTALL_OUTPUT" 2>/dev/null || true
+  [ -n "$PULL_OUTPUT" ] && rm -f "$PULL_OUTPUT" 2>/dev/null || true
+  [ -n "$UPDATE_IMAGE_SNAPSHOT" ] && rm -f "$UPDATE_IMAGE_SNAPSHOT" 2>/dev/null || true
+  [ -n "$DIAG_WORK" ] && rm -rf "$DIAG_WORK" 2>/dev/null || true
+}
+
+on_signal() {
+  _signal_status=$1
+  # A user-initiated interrupt is not a crash: don't auto-collect diagnostics for it.
+  DIAG_ON_EXIT="false"
+  restore_terminal
+  exit "$_signal_status"
+}
+
 on_exit() {
-  code=$?
-  if [ "$code" -ne 0 ] && [ "$DIAG_ON_EXIT" = "true" ]; then
-    errln "install failed (exit ${code}); collecting a support bundle..."
-    collect_diagnostics || true
+  _status=$?
+  trap - 0
+  restore_terminal
+  release_lock
+
+  if [ "$_status" -ne 0 ] && [ "$DIAG_ON_EXIT" = "true" ] && \
+     [ "$DIAG_IN_PROGRESS" != "true" ]; then
+    DIAG_IN_PROGRESS="true"
+    error "operation failed with exit status ${_status}; creating a support archive..."
+    collect_diagnostics "automatic" || true
   fi
-  return 0
+
+  cleanup_temporary_files
+  exit "$_status"
 }
-trap on_exit EXIT
 
-die() { errln "$*"; exit 1; }
+trap 'on_signal 130' INT
+trap 'on_signal 143' TERM
+trap 'on_signal 129' HUP
+trap 'on_exit' 0
+
+acquire_lock() {
+  # Reentrant within a single run: a command reached from the interactive menu
+  # (for example "update") must not deadlock against the lock this process holds.
+  [ "$LOCK_HELD" = "true" ] && return 0
+
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    LOCK_HELD="true"
+    printf '%s\n' "$$" > "$LOCK_DIR/pid" 2>/dev/null || true
+    return 0
+  fi
+
+  _lock_pid=""
+  [ -f "$LOCK_DIR/pid" ] && _lock_pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
+  case "$_lock_pid" in
+    ''|*[!0-9]*) ;;
+    *)
+      if kill -0 "$_lock_pid" 2>/dev/null; then
+        die "another AFCT installer operation is already running (PID ${_lock_pid})."
+      fi
+      ;;
+  esac
+
+  warn "removing a stale installer lock."
+  rm -rf "$LOCK_DIR" 2>/dev/null || die "could not remove the stale lock at ${LOCK_DIR}."
+  mkdir "$LOCK_DIR" 2>/dev/null || die "could not acquire the installer lock at ${LOCK_DIR}."
+  LOCK_HELD="true"
+  printf '%s\n' "$$" > "$LOCK_DIR/pid" 2>/dev/null || true
+}
 
 # --------------------------------------------------------------------------- #
-# Install Docker automatically when it's missing.
-#
-# Linux: use Docker's official convenience script (https://get.docker.com),
-# which covers the common distros and also installs the Compose plugin. macOS
-# can't be scripted this way, so we point the user at Docker Desktop.
+# Docker and Compose wrappers
 # --------------------------------------------------------------------------- #
-maybe_install_docker() {
-  command -v docker >/dev/null 2>&1 && return 0
-
-  if [ "$OS" != "Linux" ]; then
-    errln "Docker isn't installed."
-    errln "On macOS, install Docker Desktop and re-run:"
-    errln "  https://www.docker.com/products/docker-desktop/"
-    die "missing Docker"
-  fi
-
-  log "Docker isn't installed. AFCT needs Docker Engine and the Compose plugin."
-  log "  1) Recommended for a production server: install via Docker's official,"
-  log "     distro-specific instructions: https://docs.docker.com/engine/install/"
-  log "  2) Or let this installer run Docker's convenience script (get.docker.com),"
-  log "     which adds Docker's official repo and installs the latest stable Engine +"
-  log "     Compose. Docker documents that script as aimed at dev/eval, and it may do a"
-  log "     major-version upgrade on a machine that already has Docker."
-
-  # Don't silently run a network install script in a hands-off run: --non-interactive
-  # requires Docker to be installed already (option 1).
-  if [ "$NON_INTERACTIVE" = "true" ]; then
-    die "Docker is not installed. Install it (https://docs.docker.com/engine/install/) and re-run, or run interactively to use the convenience script."
-  fi
-  if [ "$ASSUME_YES" != "true" ]; then
-    ans=$(prompt_default "Install Docker now via the get.docker.com convenience script?" "y")
-    case "$ans" in
-      y|Y|yes|Yes) : ;;
-      *) die "Docker is required. Install it (https://docs.docker.com/engine/install/) and re-run." ;;
-    esac
-  fi
-
-  # Installing Docker needs root; use sudo when we aren't already root.
-  ins_sudo=""
-  if [ "$(id -u)" != "0" ]; then
-    if command -v sudo >/dev/null 2>&1; then
-      ins_sudo="sudo"
-    else
-      die "installing Docker needs root. Re-run as root (or install sudo) and try again."
-    fi
-  fi
-
-  # Download the script to a temp file and run it from there, rather than piping the
-  # network straight into a root shell — so a truncated download can't half-run and
-  # the pinned commit can be recorded for the log.
-  get_script=$(mktemp 2>/dev/null) || die "could not create a temp file for the Docker install script."
-  log "downloading the Docker install script (get.docker.com)..."
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL https://get.docker.com -o "$get_script" \
-      || { rm -f "$get_script"; die "failed to download the Docker install script."; }
-  elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$get_script" https://get.docker.com \
-      || { rm -f "$get_script"; die "failed to download the Docker install script."; }
+docker_cmd() {
+  if [ -n "$DOCKER_SUDO" ]; then
+    sudo docker "$@"
   else
-    rm -f "$get_script"
-    die "need curl or wget to download the Docker installer. Install one and re-run."
+    docker "$@"
   fi
-  script_commit=$(sed -n 's/^SCRIPT_COMMIT_SHA=[\"'\'']\{0,1\}\([0-9a-f]\{7,\}\).*/\1/p' "$get_script" 2>/dev/null | head -n 1)
-  [ -n "$script_commit" ] && log "Docker install script commit: ${script_commit}"
-  log "installing Docker (this can take a few minutes)..."
-  $ins_sudo sh "$get_script" 2>&1 | tee -a "$LOG_FILE"
-  rm -f "$get_script"
-
-  # The pipe's success is tee's, not the installer's, so verify explicitly.
-  command -v docker >/dev/null 2>&1 || die "Docker installation did not complete; see ${LOG_FILE}."
-
-  # Start the daemon now and on boot.
-  if command -v systemctl >/dev/null 2>&1; then
-    $ins_sudo systemctl enable --now docker >/dev/null 2>&1 \
-      || warn "couldn't start Docker via systemctl; start it manually if the next step fails."
-  fi
-
-  # Let the invoking user run Docker without sudo after their next login. For THIS
-  # run the group isn't active yet, so preflight falls back to sudo below.
-  if [ "$(id -u)" != "0" ]; then
-    warn "membership in the 'docker' group grants root-equivalent control of this host (a group member can start privileged containers). Adding $(id -un) to it."
-    $ins_sudo usermod -aG docker "$(id -un)" 2>/dev/null \
-      && log "added $(id -un) to the 'docker' group (effective after your next login)." || true
-  fi
-
-  log "Docker installed."
 }
 
-# --------------------------------------------------------------------------- #
-# Install the Docker Compose plugin if it's missing (e.g. a pre-existing Docker
-# that didn't include it). A fresh get.docker.com install already bundles it.
-# Package names differ by distro; the legacy standalone `docker-compose` counts.
-# --------------------------------------------------------------------------- #
-ensure_compose_plugin() {
-  # Prefer the Compose v2 plugin ('docker compose'). Check it directly rather than via
-  # compose(), which would silently accept the legacy standalone and hide the choice.
-  if $DOCKER_SUDO docker compose version >/dev/null 2>&1; then
+compose_raw() {
+  case "$COMPOSE_KIND" in
+    v2) docker_cmd compose "$@" ;;
+    v1)
+      if [ -n "$DOCKER_SUDO" ]; then
+        sudo docker-compose "$@"
+      else
+        docker-compose "$@"
+      fi
+      ;;
+    *) return 127 ;;
+  esac
+}
+
+# Use the production env file explicitly and prevent exported managed variables in
+# the invoking shell from unexpectedly overriding the saved installation config.
+compose_project() {
+  (
+    unset NODE_ENV POSTGRES_PASSWORD DATABASE_URL ADMIN_EMAIL ADMIN_PASSWORD \
+      NEXTAUTH_SECRET NEXTAUTH_URL AUTH_TRUST_HOST
+
+    if [ -f "$ENV_FILE" ]; then
+      compose_raw --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+    else
+      compose_raw -f "$COMPOSE_FILE" "$@"
+    fi
+  )
+}
+
+detect_compose() {
+  if docker_cmd compose version >/dev/null 2>&1; then
+    COMPOSE_KIND="v2"
     return 0
   fi
   if command -v docker-compose >/dev/null 2>&1; then
-    warn "only the legacy standalone 'docker-compose' (v1) is available. Docker considers it end-of-life; install the Compose plugin ('docker compose') when you can."
+    COMPOSE_KIND="v1"
     return 0
   fi
-
-  [ "$OS" = "Linux" ] || die "the Docker Compose plugin is required. Install it and re-run."
-
-  log "the Docker Compose plugin isn't installed."
-  if [ "$ASSUME_YES" != "true" ]; then
-    ans=$(prompt_default "Install the Docker Compose plugin now?" "y")
-    case "$ans" in
-      y|Y|yes|Yes) : ;;
-      *) die "the Compose plugin is required. Install it and re-run." ;;
-    esac
-  fi
-
-  pm_sudo=""
-  if [ "$(id -u)" != "0" ]; then
-    if command -v sudo >/dev/null 2>&1; then pm_sudo="sudo"; else
-      die "installing the Compose plugin needs root. Re-run as root (or install sudo)."
-    fi
-  fi
-
-  log "installing the Docker Compose plugin..."
-  if command -v apt-get >/dev/null 2>&1; then
-    $pm_sudo apt-get update -y >/dev/null 2>&1 || true
-    $pm_sudo apt-get install -y docker-compose-plugin 2>&1 | tee -a "$LOG_FILE"
-  elif command -v dnf >/dev/null 2>&1; then
-    $pm_sudo dnf install -y docker-compose-plugin 2>&1 | tee -a "$LOG_FILE"
-  elif command -v yum >/dev/null 2>&1; then
-    $pm_sudo yum install -y docker-compose-plugin 2>&1 | tee -a "$LOG_FILE"
-  elif command -v apk >/dev/null 2>&1; then
-    $pm_sudo apk add --no-cache docker-cli-compose 2>&1 | tee -a "$LOG_FILE"
-  else
-    die "couldn't find a package manager to install the Compose plugin. Install 'docker compose' and re-run."
-  fi
-
-  compose version >/dev/null 2>&1 || die "Compose plugin install did not complete; see ${LOG_FILE}."
-  log "Docker Compose plugin installed."
+  COMPOSE_KIND=""
+  return 1
 }
 
-# --------------------------------------------------------------------------- #
-# Preflight
-# --------------------------------------------------------------------------- #
-preflight() {
-  log "checking prerequisites..."
+resolve_docker_access() {
+  command -v docker >/dev/null 2>&1 || die "Docker is not installed. Run: sh install.sh"
 
-  # Install Docker automatically on Linux if it's missing.
-  maybe_install_docker
-
-  # Decide whether we need sudo to reach the daemon. Right after a fresh install
-  # the current shell isn't in the 'docker' group yet, so fall back to sudo.
   if docker info >/dev/null 2>&1; then
     DOCKER_SUDO=""
-  elif [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
-    DOCKER_SUDO="sudo"
-    log "talking to the Docker daemon with sudo for this run."
-  else
-    die "Docker is installed but the daemon isn't reachable. Start Docker and re-run."
-  fi
-
-  # Install the Compose plugin if a pre-existing Docker didn't include it.
-  ensure_compose_plugin
-
-  # Best-effort port check (warn only; the user may intend to change ports).
-  for port in 80 443; do
-    if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | grep -q ":${port} "; then
-      warn "port ${port} looks busy; the web front may fail to bind it."
+  elif [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1; then
+    if [ "$NON_INTERACTIVE" = "true" ]; then
+      if sudo -n docker info >/dev/null 2>&1; then
+        DOCKER_SUDO="sudo"
+      else
+        die "Docker requires elevated access, but passwordless sudo is unavailable in non-interactive mode."
+      fi
+    else
+      info "Docker requires elevated access; sudo may ask for your password."
+      if sudo docker info >/dev/null 2>&1; then
+        DOCKER_SUDO="sudo"
+      else
+        die "Docker is installed, but its daemon is not reachable. Start Docker and try again."
+      fi
     fi
-  done
-
-  # Best-effort disk check: the container images total a few GB.
-  if command -v df >/dev/null 2>&1; then
-    avail_kb=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
-    case "$avail_kb" in
-      ''|*[!0-9]*) : ;;
-      *) [ "$avail_kb" -lt 5242880 ] && warn "less than ~5 GB free here; the images need a few GB." || true ;;
-    esac
+  else
+    die "Docker is installed, but its daemon is not reachable. Start Docker and try again."
   fi
 
-  log "prerequisites OK."
+  detect_compose || return 1
+  return 0
 }
 
-# Make sure the Docker daemon starts on boot, so the stack's `restart:
-# unless-stopped` policy actually brings everything back after a server reboot.
-# Linux/systemd only; best-effort and never fatal. (On macOS/Windows this is
-# governed by Docker Desktop's "start at login" setting instead.)
-ensure_docker_boot() {
-  command -v systemctl >/dev/null 2>&1 || return 0
-  systemctl list-unit-files 2>/dev/null | grep -q '^docker\.service' || return 0
+# Diagnostics must remain useful even when Docker is broken. This variant never
+# prompts and never fails the caller.
+resolve_docker_access_soft() {
+  command -v docker >/dev/null 2>&1 || return 1
 
-  if systemctl is-enabled docker >/dev/null 2>&1; then
-    log "Docker is already set to start on boot."
+  # Resolve into a local first and only publish the globals on success. Failing
+  # here must NOT clobber access that a prior resolve_docker_access already
+  # established (e.g. sudo obtained interactively, where sudo -n now fails).
+  _soft_sudo=""
+  if docker info >/dev/null 2>&1; then
+    _soft_sudo=""
+  elif [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && \
+       sudo -n docker info >/dev/null 2>&1; then
+    _soft_sudo="sudo"
+  else
+    return 1
+  fi
+
+  DOCKER_SUDO=$_soft_sudo
+  COMPOSE_KIND=""
+  detect_compose || true
+  return 0
+}
+
+# --------------------------------------------------------------------------- #
+# Prompt helpers and validation
+# --------------------------------------------------------------------------- #
+can_prompt() {
+  [ "$NON_INTERACTIVE" != "true" ] && [ -t 0 ]
+}
+
+prompt_default() {
+  _question=$1
+  _default=$2
+
+  if ! can_prompt; then
+    printf '%s' "$_default"
     return 0
   fi
 
-  log "enabling the Docker service to start on boot..."
-  if [ "$(id -u)" = "0" ]; then
-    systemctl enable docker >/dev/null 2>&1 \
-      && log "Docker enabled at boot." \
-      || warn "couldn't enable Docker at boot; run: systemctl enable docker"
-  elif command -v sudo >/dev/null 2>&1; then
-    sudo systemctl enable docker >/dev/null 2>&1 \
-      && log "Docker enabled at boot." \
-      || warn "couldn't enable Docker at boot; run: sudo systemctl enable docker"
-  else
-    warn "to survive a reboot, run: sudo systemctl enable docker"
+  ask "${_question} [${_default}]: "
+  IFS= read -r _answer || _answer=""
+  [ -n "$_answer" ] && printf '%s' "$_answer" || printf '%s' "$_default"
+}
+
+prompt_required() {
+  _question=$1
+  can_prompt || return 1
+
+  while :; do
+    ask "${_question}: "
+    if ! IFS= read -r _answer; then
+      return 1
+    fi
+    [ -n "$_answer" ] && {
+      printf '%s' "$_answer"
+      return 0
+    }
+    warn "a value is required."
+  done
+}
+
+prompt_secret() {
+  _question=$1
+  can_prompt || return 1
+
+  ask "${_question}: "
+  if stty -echo 2>/dev/null; then
+    TTY_ECHO_DISABLED="true"
   fi
+
+  if ! IFS= read -r _answer; then
+    restore_terminal
+    return 1
+  fi
+
+  restore_terminal
+  printf '%s' "$_answer"
+}
+
+confirm() {
+  _question=$1
+  _default=${2:-y}
+
+  if [ "$ASSUME_YES" = "true" ]; then
+    _answer=$_default
+  else
+    _answer=$(prompt_default "$_question" "$_default")
+  fi
+
+  case "$_answer" in
+    y|Y|yes|YES|Yes) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+require_value() {
+  [ -n "$1" ] || die "$2"
+}
+
+is_positive_integer() {
+  case "$1" in
+    ''|*[!0-9]*|0) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+is_email() {
+  case "$1" in
+    *[[:space:]]*|*@*@*) return 1 ;;
+    ?*@?*.?*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+normalize_app_url() {
+  _url=$1
+
+  case "$_url" in
+    *[[:space:]]*) return 1 ;;
+    http://*) _scheme="http" ;;
+    https://*) _scheme="https" ;;
+    *) return 1 ;;
+  esac
+
+  _authority=${_url#*://}
+  while [ "${_authority%/}" != "$_authority" ]; do
+    _authority=${_authority%/}
+  done
+
+  [ -n "$_authority" ] || return 1
+  case "$_authority" in
+    */*|*\?*|*\#*|*@*) return 1 ;;
+  esac
+
+  case "$_authority" in
+    \[*\]*) _host=$_authority ;;
+    *) _host=${_authority%%:*} ;;
+  esac
+  [ -n "$_host" ] || return 1
+
+  printf '%s://%s' "$_scheme" "$_authority"
+}
+
+warn_for_app_url() {
+  _url=$1
+  _without_scheme=${_url#*://}
+  _hostport=${_without_scheme%%/*}
+  _host=${_hostport%%:*}
+
+  case "$_url" in
+    https://*) ;;
+    http://localhost*|http://127.0.0.1*|http://\[::1\]*) ;;
+    *) warn "the public URL is not HTTPS. Authentication cookies and redirects may not work safely in production." ;;
+  esac
+
+  if printf '%s' "$_host" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
+    warn "the public URL uses a bare IPv4 address. A hostname with a matching TLS certificate is strongly recommended."
+  fi
+}
+
+is_strong_password() {
+  _password=$1
+  [ "${#_password}" -ge 8 ] && [ "${#_password}" -le 72 ] || return 1
+  printf '%s' "$_password" | grep -q '[A-Z]' || return 1
+  printf '%s' "$_password" | grep -q '[a-z]' || return 1
+  printf '%s' "$_password" | grep -q '[0-9]' || return 1
+  printf '%s' "$_password" | grep -q '[^A-Za-z0-9]' || return 1
+  return 0
+}
+
+# Values are written unquoted into the env file (see write_env_assignment), which
+# both legacy docker-compose v1 and modern Compose v2 read literally to end-of-line.
+# Reject the inputs that would be reinterpreted rather than stored verbatim:
+# quotes/backslashes (ambiguous quoting), line breaks, tabs, leading/trailing
+# spaces (v2 trims them), and a space before '#' (v2 treats it as an inline comment).
+is_env_value_safe() {
+  _cr=$(printf '\r')
+  _tab=$(printf '\t')
+  case "$1" in
+    *"'"*) return 1 ;;
+    *'"'*) return 1 ;;
+    *\\*) return 1 ;;
+    *"$_cr"*) return 1 ;;
+    *"$_tab"*) return 1 ;;
+  esac
+  case "$1" in
+    *"
+"*) return 1 ;;
+  esac
+  case "$1" in
+    ' '*|*' ') return 1 ;;
+    *' #'*) return 1 ;;
+  esac
+  return 0
+}
+
+read_password_source() {
+  if [ -n "${ADMIN_PASSWORD:-}" ] && [ -n "${ADMIN_PASSWORD_FILE:-}" ]; then
+    die "set only one of ADMIN_PASSWORD or ADMIN_PASSWORD_FILE."
+  fi
+
+  if [ -n "${ADMIN_PASSWORD_FILE:-}" ]; then
+    case "$ADMIN_PASSWORD_FILE" in
+      /*) _password_file=$ADMIN_PASSWORD_FILE ;;
+      *) _password_file=${INVOCATION_DIR}/${ADMIN_PASSWORD_FILE} ;;
+    esac
+    [ -f "$_password_file" ] || die "ADMIN_PASSWORD_FILE does not exist: ${ADMIN_PASSWORD_FILE}"
+    [ -r "$_password_file" ] || die "ADMIN_PASSWORD_FILE is not readable: ${ADMIN_PASSWORD_FILE}"
+    _password_from_file=$(cat "$_password_file")
+    printf '%s' "$_password_from_file"
+    return 0
+  fi
+
+  printf '%s' "${ADMIN_PASSWORD:-}"
+}
+
+# --------------------------------------------------------------------------- #
+# Environment-file helpers
+# --------------------------------------------------------------------------- #
+env_file_complete() {
+  _file=$1
+  [ -s "$_file" ] || return 1
+
+  for _key in POSTGRES_PASSWORD DATABASE_URL NEXTAUTH_SECRET NEXTAUTH_URL; do
+    grep -qE "^[[:space:]]*${_key}=.+" "$_file" 2>/dev/null || return 1
+  done
+  return 0
+}
+
+read_env_value() {
+  _key=$1
+  _file=$2
+  [ -f "$_file" ] || return 0
+
+  _raw=$(awk -v key="$_key" '
+    {
+      line = $0
+      sub(/^[[:space:]]*/, "", line)
+      if (index(line, key "=") == 1) {
+        print substr(line, length(key) + 2)
+        exit
+      }
+    }
+  ' "$_file" 2>/dev/null || true)
+
+  case "$_raw" in
+    \'*)
+      case "$_raw" in *\') _raw=${_raw#\'}; _raw=${_raw%\'} ;; esac
+      ;;
+    \"*)
+      case "$_raw" in *\") _raw=${_raw#\"}; _raw=${_raw%\"} ;; esac
+      ;;
+  esac
+
+  printf '%s' "$_raw"
+}
+
+write_env_assignment() {
+  _key=$1
+  _value=$2
+  is_env_value_safe "$_value" || die "${_key} contains characters that cannot be stored safely in ${ENV_FILE} (line breaks, quotes, backslashes, tabs, leading or trailing spaces, or a space before '#')."
+  # Unquoted, end-of-line value: read identically by docker-compose v1 and Compose
+  # v2. Quoting here would be stripped by v2 but taken literally by v1.
+  printf '%s=%s\n' "$_key" "$_value"
+}
+
+backup_env_file() {
+  [ -f "$ENV_FILE" ] || return 0
+  _stamp=$(date +%Y%m%d-%H%M%S 2>/dev/null || printf 'previous')
+  _backup="${ENV_FILE}.backup.${_stamp}.$$"
+  cp "$ENV_FILE" "$_backup" || die "could not back up ${ENV_FILE}."
+  chmod 600 "$_backup" 2>/dev/null || true
+  info "saved the previous configuration as ${_backup}."
+}
+
+write_environment_file() {
+  _base_file=""
+  if [ -f "$ENV_FILE" ]; then
+    _base_file=$ENV_FILE
+  elif [ -f "$ENV_EXAMPLE" ]; then
+    _base_file=$ENV_EXAMPLE
+  fi
+
+  TMP_ENV=$(mktemp "${ENV_FILE}.tmp.XXXXXX" 2>/dev/null) || \
+    die "could not create a temporary configuration file in ${SCRIPT_DIR}."
+
+  if [ -n "$_base_file" ]; then
+    # Preserve comments and application-specific settings, but remove every key
+    # managed by this installer so each appears exactly once in the final file.
+    awk '
+      BEGIN {
+        in_managed_block = 0
+        managed["NODE_ENV"] = 1
+        managed["POSTGRES_PASSWORD"] = 1
+        managed["DATABASE_URL"] = 1
+        managed["ADMIN_EMAIL"] = 1
+        managed["ADMIN_PASSWORD"] = 1
+        managed["NEXTAUTH_SECRET"] = 1
+        managed["NEXTAUTH_URL"] = 1
+        managed["AUTH_TRUST_HOST"] = 1
+      }
+      /^# BEGIN AFCT INSTALLER MANAGED SETTINGS$/ {
+        in_managed_block = 1
+        next
+      }
+      /^# END AFCT INSTALLER MANAGED SETTINGS$/ {
+        in_managed_block = 0
+        next
+      }
+      in_managed_block { next }
+      {
+        line = $0
+        sub(/^[[:space:]]*/, "", line)
+        key = line
+        sub(/[=:].*/, "", key)
+        gsub(/[[:space:]]+$/, "", key)
+        if (key in managed) next
+        print
+      }
+    ' "$_base_file" > "$TMP_ENV"
+  else
+    : > "$TMP_ENV"
+  fi
+
+  {
+    printf '\n# BEGIN AFCT INSTALLER MANAGED SETTINGS\n'
+    printf '# Managed by AFCT install.sh %s\n' "$INSTALLER_VERSION"
+    printf '# Updated: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'unknown')"
+    printf '# Keep this file private. Reconfiguration preserves infrastructure secrets.\n'
+    printf '# Change an existing administrator password from inside AFCT, not here.\n'
+    write_env_assignment NODE_ENV production
+    write_env_assignment POSTGRES_PASSWORD "$POSTGRES_PASSWORD_IN"
+    write_env_assignment DATABASE_URL "$DATABASE_URL_IN"
+    write_env_assignment ADMIN_EMAIL "$ADMIN_EMAIL_IN"
+    write_env_assignment ADMIN_PASSWORD "$ADMIN_PASSWORD_IN"
+    write_env_assignment NEXTAUTH_SECRET "$NEXTAUTH_SECRET_IN"
+    write_env_assignment NEXTAUTH_URL "$APP_URL_IN"
+    write_env_assignment AUTH_TRUST_HOST true
+    printf '# END AFCT INSTALLER MANAGED SETTINGS\n'
+  } >> "$TMP_ENV"
+
+  chmod 600 "$TMP_ENV" 2>/dev/null || true
+  mv "$TMP_ENV" "$ENV_FILE" || die "could not replace ${ENV_FILE}."
+  TMP_ENV=""
+  chmod 600 "$ENV_FILE" 2>/dev/null || true
 }
 
 # --------------------------------------------------------------------------- #
 # Secret generation
 # --------------------------------------------------------------------------- #
 gen_secret() {
-  # url-safe-ish token of ~40 chars. Prefer openssl; fall back to the kernel
-  # CSPRNG so the installer never hard-depends on openssl being present.
+  _secret=""
+
   if command -v openssl >/dev/null 2>&1; then
-    openssl rand -base64 48 | tr -d '\n=+/' | cut -c1-40
+    _secret=$(openssl rand -hex 32 2>/dev/null || true)
+  elif [ -r /dev/urandom ] && command -v od >/dev/null 2>&1; then
+    _secret=$(dd if=/dev/urandom bs=32 count=1 2>/dev/null | \
+      od -An -tx1 2>/dev/null | tr -d ' \n' || true)
+  fi
+
+  [ "${#_secret}" -ge 48 ] || return 1
+  printf '%.48s' "$_secret"
+}
+
+gen_admin_password() {
+  _core=$(gen_secret) || return 1
+  printf '%sAa1!' "$_core"
+}
+
+# --------------------------------------------------------------------------- #
+# Docker installation and prerequisite checks
+# --------------------------------------------------------------------------- #
+maybe_install_docker() {
+  command -v docker >/dev/null 2>&1 && return 0
+
+  if [ "$OS" != "Linux" ]; then
+    error "Docker is not installed."
+    if [ "$OS" = "Darwin" ]; then
+      info "Install Docker Desktop, start it, and rerun this installer:"
+      info "https://www.docker.com/products/docker-desktop/"
+    fi
+    die "Docker is required."
+  fi
+
+  heading "Docker is required"
+  info "Docker is not installed on this host."
+  info "For production, Docker's distro-specific repository instructions are recommended:"
+  info "https://docs.docker.com/engine/install/"
+  info "This installer can alternatively run Docker's get.docker.com convenience script."
+
+  if [ "$NON_INTERACTIVE" = "true" ]; then
+    die "Docker must be installed before a non-interactive AFCT installation."
+  fi
+
+  confirm "Install Docker using the get.docker.com convenience script?" "y" || \
+    die "install Docker and rerun this script."
+
+  _install_sudo=""
+  if [ "$(id -u)" != "0" ]; then
+    command -v sudo >/dev/null 2>&1 || die "installing Docker requires root or sudo."
+    _install_sudo="sudo"
+  fi
+
+  DOCKER_INSTALL_SCRIPT=$(mktemp "${TMPDIR:-/tmp}/afct-get-docker.XXXXXX") || \
+    die "could not create a temporary Docker installer file."
+  DOCKER_INSTALL_OUTPUT=$(mktemp "${TMPDIR:-/tmp}/afct-get-docker-output.XXXXXX") || \
+    die "could not create a temporary Docker installer output file."
+
+  info "downloading Docker's installer..."
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL https://get.docker.com -o "$DOCKER_INSTALL_SCRIPT" || \
+      die "could not download Docker's installer."
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$DOCKER_INSTALL_SCRIPT" https://get.docker.com || \
+      die "could not download Docker's installer."
   else
-    head -c 48 /dev/urandom | base64 | tr -d '\n=+/' | cut -c1-40
+    die "curl or wget is required to download Docker."
+  fi
+
+  sh -n "$DOCKER_INSTALL_SCRIPT" || die "the downloaded Docker installer is not valid shell code."
+  _commit=$(sed -n 's/^SCRIPT_COMMIT_SHA=["'"'"']\{0,1\}\([0-9a-f]\{7,\}\).*/\1/p' \
+    "$DOCKER_INSTALL_SCRIPT" 2>/dev/null | head -n 1)
+  [ -n "$_commit" ] && info "Docker installer commit: ${_commit}"
+
+  info "installing Docker..."
+  if [ -n "$_install_sudo" ]; then
+    if sudo sh "$DOCKER_INSTALL_SCRIPT" > "$DOCKER_INSTALL_OUTPUT" 2>&1; then
+      _install_status=0
+    else
+      _install_status=$?
+    fi
+  else
+    if sh "$DOCKER_INSTALL_SCRIPT" > "$DOCKER_INSTALL_OUTPUT" 2>&1; then
+      _install_status=0
+    else
+      _install_status=$?
+    fi
+  fi
+
+  cat "$DOCKER_INSTALL_OUTPUT" >> "$LOG_FILE" 2>/dev/null || true
+  if [ "$_install_status" -ne 0 ]; then
+    cat "$DOCKER_INSTALL_OUTPUT" >&2 2>/dev/null || true
+    die "Docker installation failed with exit status ${_install_status}."
+  fi
+
+  command -v docker >/dev/null 2>&1 || die "Docker installation completed without installing the docker command."
+
+  if command -v systemctl >/dev/null 2>&1; then
+    if [ -n "$_install_sudo" ]; then
+      sudo systemctl enable --now docker >/dev/null 2>&1 || \
+        warn "Docker was installed, but its system service could not be enabled automatically."
+    else
+      systemctl enable --now docker >/dev/null 2>&1 || \
+        warn "Docker was installed, but its system service could not be enabled automatically."
+    fi
+  fi
+
+  if [ "$(id -u)" != "0" ]; then
+    warn "membership in the docker group grants root-equivalent control of this host."
+    if confirm "Add $(id -un) to the docker group?" "y"; then
+      sudo usermod -aG docker "$(id -un)" || warn "could not add $(id -un) to the docker group."
+      info "docker-group membership becomes active after the next login. This run will use sudo."
+    fi
+  fi
+
+  success "Docker installed."
+}
+
+install_compose_plugin() {
+  [ "$OS" = "Linux" ] || die "install the Docker Compose plugin and rerun this script."
+
+  if [ "$NON_INTERACTIVE" = "true" ]; then
+    die "the Docker Compose plugin must be installed before a non-interactive installation."
+  fi
+
+  confirm "Install the Docker Compose plugin now?" "y" || \
+    die "the Docker Compose plugin is required."
+
+  _package_sudo=""
+  if [ "$(id -u)" != "0" ]; then
+    command -v sudo >/dev/null 2>&1 || die "installing Docker Compose requires root or sudo."
+    _package_sudo="sudo"
+  fi
+
+  info "installing the Docker Compose plugin..."
+  if command -v apt-get >/dev/null 2>&1; then
+    if [ -n "$_package_sudo" ]; then
+      sudo apt-get update -y
+      sudo apt-get install -y docker-compose-plugin
+    else
+      apt-get update -y
+      apt-get install -y docker-compose-plugin
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    if [ -n "$_package_sudo" ]; then
+      sudo dnf install -y docker-compose-plugin
+    else
+      dnf install -y docker-compose-plugin
+    fi
+  elif command -v yum >/dev/null 2>&1; then
+    if [ -n "$_package_sudo" ]; then
+      sudo yum install -y docker-compose-plugin
+    else
+      yum install -y docker-compose-plugin
+    fi
+  elif command -v apk >/dev/null 2>&1; then
+    if [ -n "$_package_sudo" ]; then
+      sudo apk add --no-cache docker-cli-compose
+    else
+      apk add --no-cache docker-cli-compose
+    fi
+  else
+    die "no supported package manager was found; install 'docker compose' manually."
+  fi
+
+  detect_compose || die "Docker Compose installation did not complete successfully."
+  success "Docker Compose installed."
+}
+
+ensure_compose() {
+  if detect_compose; then
+    if [ "$COMPOSE_KIND" = "v1" ]; then
+      warn "legacy docker-compose v1 is being used. Install the current 'docker compose' plugin when practical."
+    fi
+    return 0
+  fi
+
+  install_compose_plugin
+}
+
+ensure_docker_boot() {
+  [ "$OS" = "Linux" ] || return 0
+  command -v systemctl >/dev/null 2>&1 || return 0
+
+  if docker_cmd info --format '{{json .SecurityOptions}}' 2>/dev/null | grep -q 'rootless'; then
+    if systemctl --user is-enabled docker >/dev/null 2>&1; then
+      return 0
+    fi
+    systemctl --user enable docker >/dev/null 2>&1 || \
+      warn "rootless Docker is running, but its user service could not be enabled at login."
+    return 0
+  fi
+
+  systemctl list-unit-files 2>/dev/null | grep -q '^docker\.service' || return 0
+  systemctl is-enabled docker >/dev/null 2>&1 && return 0
+
+  info "enabling Docker to start automatically after a reboot..."
+  if [ "$(id -u)" = "0" ]; then
+    systemctl enable docker >/dev/null 2>&1 || \
+      warn "run 'systemctl enable docker' to start Docker automatically after reboot."
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo systemctl enable docker >/dev/null 2>&1 || \
+      warn "run 'sudo systemctl enable docker' to start Docker automatically after reboot."
   fi
 }
 
-# Password policy, mirroring src/lib/password-policy.ts and the production seed:
-# 8-72 characters with an upper, a lower, a digit, and a special (non-alphanumeric)
-# character. The app rejects a weak admin password at first-run seeding, so the
-# installer enforces the same rule up front.
-is_strong_password() {
-  pw=$1
-  [ "${#pw}" -ge 8 ] && [ "${#pw}" -le 72 ]  || return 1
-  printf '%s' "$pw" | grep -q '[A-Z]'        || return 1
-  printf '%s' "$pw" | grep -q '[a-z]'        || return 1
-  printf '%s' "$pw" | grep -q '[0-9]'        || return 1
-  printf '%s' "$pw" | grep -q '[^A-Za-z0-9]' || return 1
+port_in_use() {
+  _port=$1
+
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn 2>/dev/null | awk -v port="$_port" '
+      NR > 1 {
+        address = $4
+        sub(/.*:/, "", address)
+        if (address == port) found = 1
+      }
+      END { exit(found ? 0 : 1) }
+    '
+    return $?
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$_port" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+
+  return 1
+}
+
+check_disk_space() {
+  command -v df >/dev/null 2>&1 || return 0
+  _available=$(df -Pk . 2>/dev/null | awk 'NR == 2 { print $4 }')
+  case "$_available" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+
+  if [ "$_available" -lt 5242880 ]; then
+    warn "less than approximately 5 GB is free in ${SCRIPT_DIR}. Docker images may exhaust the disk."
+  fi
+}
+
+check_sensitive_permissions() {
+  _file=$1
+  [ -f "$_file" ] || return 0
+  if command -v stat >/dev/null 2>&1; then
+    _mode=$(stat -c '%a' "$_file" 2>/dev/null || stat -f '%Lp' "$_file" 2>/dev/null || printf '')
+    case "$_mode" in
+      ''|*[!0-9]*) return 0 ;;
+    esac
+    _group=$(((_mode / 10) % 10))
+    _other=$((_mode % 10))
+    if [ "$_group" -ne 0 ] || [ "$_other" -ne 0 ]; then
+      warn "${_file} is readable or writable by group/other users (mode ${_mode}); expected 600."
+      return 1
+    fi
+  fi
   return 0
 }
 
-# Generate an admin password that satisfies is_strong_password: a high-entropy
-# alphanumeric core (gen_secret strips punctuation) plus one char from each
-# required class. The bootstrapped admin must change it at first login, so the
-# fixed policy suffix on a random core is harmless.
-gen_admin_password() {
-  printf '%sAa1_' "$(gen_secret)"
-}
-
-# Warn (never block) if the public URL will cause auth problems: a non-https URL
-# or a bare IP produces NEXTAUTH_URL mismatches and silent login redirect loops.
-validate_app_url() {
-  case "$1" in
-    https://*) ;;
-    *) warn "the public URL should start with https:// (got '$1'); http or a bare IP causes login redirect loops."; return ;;
+check_clock_sync() {
+  command -v timedatectl >/dev/null 2>&1 || return 0
+  _sync=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || printf '')
+  case "$_sync" in
+    yes) return 0 ;;
+    no) warn "the system clock is not synchronized. Incorrect time can break TLS and authentication."; return 1 ;;
   esac
-  host=${1#https://}; host=${host%%/*}; host=${host%%:*}
-  if printf '%s' "$host" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
-    warn "the public URL uses a bare IP ('$host'); a real hostname with a matching TLS certificate is recommended."
-  fi
+  return 0
 }
 
-# Loose email sanity check (something@something.tld). Warn-only.
-looks_like_email() {
-  case "$1" in ?*@?*.?*) return 0 ;; *) return 1 ;; esac
+compose_volume_names() {
+  compose_project config --volumes 2>/dev/null || true
 }
 
-# --------------------------------------------------------------------------- #
-# Prompt helpers
-# --------------------------------------------------------------------------- #
-# True only when we may block for human input: interactive mode (not
-# --non-interactive) AND a real terminal on stdin. Everything that could otherwise
-# spin forever on EOF is gated on this.
-can_prompt() { [ "$NON_INTERACTIVE" != "true" ] && [ -t 0 ]; }
-
-prompt_default() { # prompt_default "Question" "default" -> echoes answer
-  q=$1; d=$2
-  # A defaulted question always has a safe answer: --yes auto-answers with it, and
-  # when we can't prompt (no terminal / --non-interactive) we fall back to it too.
-  if [ "$ASSUME_YES" = "true" ] || ! can_prompt; then printf '%s' "$d"; return; fi
-  ask "$q [$d]: "
-  IFS= read -r ans || ans=""
-  [ -n "$ans" ] && printf '%s' "$ans" || printf '%s' "$d"
-}
-
-prompt_required() { # prompt_required "Question" -> echoes non-empty answer
-  q=$1
-  # No default exists here. Required values must be supplied via env when we can't
-  # prompt; callers validate that up front (require_or_die), so reaching this without
-  # a terminal is a bug — bail instead of looping forever on EOF. --yes does NOT skip
-  # this: it only auto-answers confirmations, not missing required values.
-  can_prompt || { warn "internal: cannot prompt for '$q' (no terminal)."; return 1; }
-  while :; do
-    ask "$q: "
-    if ! IFS= read -r ans; then
-      warn "no input (end of file) while reading '$q'."
-      return 1
-    fi
-    [ -n "$ans" ] && { printf '%s' "$ans"; return 0; }
-    warn "a value is required."
+existing_data_without_config() {
+  [ -f "$ENV_FILE" ] && env_file_complete "$ENV_FILE" && return 1
+  resolve_docker_access_soft || return 1
+  [ -n "$COMPOSE_KIND" ] || return 1
+  _volumes=$(compose_volume_names)
+  [ -n "$_volumes" ] || return 1
+  for _volume in $_volumes; do
+    docker_cmd volume ls --format '{{.Name}}' 2>/dev/null | grep -Eq "(^|_)${_volume}$" && return 0
   done
+  return 1
 }
 
-prompt_secret() { # prompt_secret "Question" -> echoes typed value (no echo to screen)
-  q=$1
-  can_prompt || { warn "internal: cannot prompt for '$q' (no terminal)."; return 1; }
-  ask "$q: "
-  # Turn off echo while typing, but make sure it's restored even if the user hits
-  # Ctrl+C mid-entry, so the terminal isn't left silently swallowing input.
-  trap 'stty echo 2>/dev/null || true; printf "\n" >&2; exit 130' INT TERM HUP
-  stty -echo 2>/dev/null || true
-  IFS= read -r ans || ans=""
-  stty echo 2>/dev/null || true
-  trap - INT TERM HUP
-  printf '\n' >&2
-  printf '%s' "$ans"
+show_deployed_versions() {
+  info "installer version: ${INSTALLER_VERSION}"
+  resolve_docker_access_soft || return 0
+  [ -n "$COMPOSE_KIND" ] || return 0
+  [ -f "$COMPOSE_FILE" ] || return 0
+  _app_id=$(compose_project ps -q "$APP_SERVICE" 2>/dev/null || true)
+  [ -n "$_app_id" ] || return 0
+  _image=$(docker_cmd inspect -f '{{.Config.Image}}' "$_app_id" 2>/dev/null || true)
+  _image_id=$(docker_cmd inspect -f '{{.Image}}' "$_app_id" 2>/dev/null || true)
+  [ -n "$_image" ] && info "application image: ${_image}"
+  [ -n "$_image_id" ] && info "application image ID: ${_image_id}"
 }
 
-# Fail with a clear, actionable message when a required value is missing and we
-# can't ask for it. Called in the MAIN shell (not a $(...) subshell) so die exits.
-require_or_die() { # require_or_die VALUE "NAME" "hint"
-  [ -n "$1" ] && return 0
-  die "$2 is required but was not provided. $3"
-}
 
-# --------------------------------------------------------------------------- #
-# Install
-# --------------------------------------------------------------------------- #
-do_install() {
-  DIAG_ON_EXIT="true"
-  [ -f "$COMPOSE_FILE" ] || die "docker-compose.yml not found next to this script."
-  [ -f "$ENV_EXAMPLE" ]  || die "${ENV_EXAMPLE} not found next to this script."
+preflight() {
+  heading "Step 1 of 4: System checks"
 
-  preflight
+  [ -f "$COMPOSE_FILE" ] || die "${COMPOSE_FILE} was not found next to this script."
+  [ -f "$ENV_EXAMPLE" ] || warn "${ENV_EXAMPLE} was not found; the installer will create a minimal production configuration."
+
+  is_positive_integer "$HEALTH_TIMEOUT" || die "AFCT_HEALTH_TIMEOUT must be a positive integer."
+  is_positive_integer "$HEALTH_INTERVAL" || die "AFCT_HEALTH_INTERVAL must be a positive integer."
+
+  maybe_install_docker
+  resolve_docker_access || true
+  ensure_compose
   ensure_docker_boot
 
-  # If a COMPLETE config already exists, don't clobber it silently. An existing but
-  # empty/truncated file (missing required keys) must NOT be kept — that leaves the
-  # stack without a DB password and fails cryptically — so fall through and rewrite it.
-  if [ -f "$ENV_FILE" ] && env_file_complete "$ENV_FILE"; then
-    keep=$(prompt_default "Existing ${ENV_FILE} found. Keep it (k) or reconfigure (r)?" "k")
-    case "$keep" in
-      r|R|reconfigure) : ;;   # fall through and regenerate
-      *) log "keeping existing ${ENV_FILE}."; bring_up; return ;;
-    esac
-  elif [ -f "$ENV_FILE" ]; then
-    warn "existing ${ENV_FILE} is missing required settings (POSTGRES_PASSWORD / DATABASE_URL / NEXTAUTH_SECRET); regenerating it."
+  _docker_version=$(docker_cmd version --format '{{.Server.Version}}' 2>/dev/null || printf 'unknown')
+  _compose_version=$(compose_raw version --short 2>/dev/null || compose_raw version 2>/dev/null | head -n 1 || printf 'unknown')
+  success "Docker ${_docker_version} is available."
+  success "Docker Compose ${_compose_version} is available."
+
+  if ! env_file_complete "$ENV_FILE"; then
+    for _port in 80 443; do
+      if port_in_use "$_port"; then
+        warn "TCP port ${_port} is already in use. The AFCT web service may be unable to bind it."
+      fi
+    done
   fi
 
-  log ""
-  log "Let's configure your AFCT Dashboard."
+  check_disk_space
+  check_clock_sync || true
+  check_sensitive_permissions "$ENV_FILE" || true
+  check_sensitive_permissions "$LOG_FILE" || true
+}
 
-  # When we can't prompt (no terminal, or --non-interactive), every required value
-  # must come from the environment; validate that here, in the main shell, so we fail
-  # with a clear message instead of spinning on an unanswerable prompt. APP_URL has a
-  # safe default (the hostname), so it isn't required. ADMIN_PASSWORD may be
-  # auto-generated below unless --non-interactive asked for a strict, reproducible run.
-  if ! can_prompt; then
-    require_or_die "${ADMIN_EMAIL:-}" "ADMIN_EMAIL" \
-      "Set it as an environment variable, or run on a terminal without --non-interactive."
-    if [ "$NON_INTERACTIVE" = "true" ]; then
-      require_or_die "${ADMIN_PASSWORD:-}" "ADMIN_PASSWORD" \
-        "Set it as an environment variable (or drop --non-interactive to auto-generate one)."
+# --------------------------------------------------------------------------- #
+# Compose deployment and health checks
+# --------------------------------------------------------------------------- #
+validate_compose() {
+  if [ "$LOG_ENABLED" = "true" ]; then
+    if ! compose_project config >/dev/null 2>> "$LOG_FILE"; then
+      die "the Docker Compose configuration is invalid. Review ${LOG_FILE}."
+    fi
+  else
+    if ! compose_project config >/dev/null; then
+      die "the Docker Compose configuration is invalid."
+    fi
+  fi
+}
+
+pull_images() {
+  info "downloading AFCT container images..."
+  PULL_OUTPUT=$(mktemp "${TMPDIR:-/tmp}/afct-pull.XXXXXX") || \
+    die "could not create temporary pull output."
+
+  if [ -t 1 ]; then
+    if compose_project pull; then
+      _pull_status=0
+    else
+      _pull_status=$?
+    fi
+  else
+    if [ "$COMPOSE_KIND" = "v2" ]; then
+      if compose_project pull --quiet > "$PULL_OUTPUT" 2>&1; then
+        _pull_status=0
+      else
+        _pull_status=$?
+      fi
+    else
+      if compose_project pull > "$PULL_OUTPUT" 2>&1; then
+        _pull_status=0
+      else
+        _pull_status=$?
+      fi
+    fi
+    cat "$PULL_OUTPUT" >> "$LOG_FILE" 2>/dev/null || true
+  fi
+
+  if [ "$_pull_status" -ne 0 ]; then
+    [ -s "$PULL_OUTPUT" ] && cat "$PULL_OUTPUT" >&2 2>/dev/null || true
+    die "container images could not be downloaded. Check the network and registry authentication."
+  fi
+
+  rm -f "$PULL_OUTPUT" 2>/dev/null || true
+  PULL_OUTPUT=""
+  success "Container images downloaded."
+}
+
+start_stack() {
+  info "starting the AFCT stack..."
+  if [ "$LOG_ENABLED" = "true" ]; then
+    if ! compose_project up -d >> "$LOG_FILE" 2>&1; then
+      die "the AFCT stack could not be started. Review ${LOG_FILE}."
+    fi
+  else
+    if ! compose_project up -d; then
+      die "the AFCT stack could not be started."
+    fi
+  fi
+}
+
+http_health_responding() {
+  command -v curl >/dev/null 2>&1 || return 1
+  curl -kfsS --max-time 10 "https://localhost${HEALTH_PATH}" >/dev/null 2>&1 || \
+    curl -kfsS --max-time 10 "http://localhost${HEALTH_PATH}" >/dev/null 2>&1
+}
+
+wait_for_health() {
+  info "waiting for the application health check..."
+
+  _elapsed=0
+  while [ "$_elapsed" -lt "$HEALTH_TIMEOUT" ]; do
+    _app_id=$(compose_project ps -q "$APP_SERVICE" 2>/dev/null || true)
+
+    if [ -n "$_app_id" ]; then
+      _state=$(docker_cmd inspect \
+        -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+        "$_app_id" 2>/dev/null || printf 'missing|none')
+      _container_state=${_state%%|*}
+      _health_state=${_state#*|}
+
+      case "${_container_state}|${_health_state}" in
+        running\|healthy)
+          success "The AFCT application is healthy."
+          if http_health_responding; then
+            success "The web service is responding at ${HEALTH_PATH}."
+          else
+            warn "the container is healthy, but the local web endpoint did not respond yet."
+          fi
+          return 0
+          ;;
+        running\|unhealthy)
+          die "the application container reported an unhealthy state."
+          ;;
+        exited\|*|dead\|*)
+          die "the application container stopped before becoming healthy."
+          ;;
+        running\|none)
+          die "the ${APP_SERVICE} service has no Docker health check configured."
+          ;;
+      esac
+    fi
+
+    sleep "$HEALTH_INTERVAL"
+    _elapsed=$((_elapsed + HEALTH_INTERVAL))
+  done
+
+  die "the application did not become healthy within ${HEALTH_TIMEOUT} seconds."
+}
+
+deploy_stack() {
+  validate_compose
+  pull_images
+  start_stack
+  wait_for_health
+}
+
+restart_stack() {
+  validate_compose
+  start_stack
+  wait_for_health
+}
+
+# --------------------------------------------------------------------------- #
+# Diagnostics
+# --------------------------------------------------------------------------- #
+diagnostics_output_dir() {
+  for _candidate in "$SCRIPT_DIR" "${HOME:-}" "${TMPDIR:-/tmp}"; do
+    [ -n "$_candidate" ] || continue
+    [ -d "$_candidate" ] || continue
+    [ -w "$_candidate" ] || continue
+    printf '%s' "$_candidate"
+    return 0
+  done
+  return 1
+}
+
+redact_env_file() {
+  _source=$1
+  _destination=$2
+
+  awk '
+    /^[[:space:]]*#/ || /^[[:space:]]*$/ { print; next }
+    /=/ {
+      key = $0
+      sub(/=.*/, "", key)
+      clean = key
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", clean)
+      upper = toupper(clean)
+      if (upper ~ /PASSWORD|SECRET|TOKEN|PRIVATE|CREDENTIAL|DATABASE_URL|API_KEY/) {
+        print key "=***REDACTED***"
+      } else {
+        print
+      }
+      next
+    }
+    { print }
+  ' "$_source" > "$_destination" 2>/dev/null || true
+}
+
+redact_exact_secrets_in_tree() {
+  _root=$1
+  [ -d "$_root" ] || return 0
+  [ -f "$ENV_FILE" ] || return 0
+
+  _secret_file=$(mktemp "${TMPDIR:-/tmp}/afct-secrets.XXXXXX") || return 0
+  chmod 600 "$_secret_file" 2>/dev/null || true
+  for _key in POSTGRES_PASSWORD DATABASE_URL NEXTAUTH_SECRET ADMIN_PASSWORD; do
+    _value=$(read_env_value "$_key" "$ENV_FILE")
+    [ -n "$_value" ] && printf '%s\n' "$_value" >> "$_secret_file"
+  done
+
+  find "$_root" -type f 2>/dev/null | while IFS= read -r _file; do
+    [ -f "$_file" ] || continue
+    _tmp="${_file}.redacting.$$"
+    cp "$_file" "$_tmp" 2>/dev/null || continue
+    while IFS= read -r _secret; do
+      [ -n "$_secret" ] || continue
+      awk -v secret="$_secret" '{ gsub(secret, "***REDACTED***"); print }' "$_tmp" > "${_tmp}.next" 2>/dev/null || continue
+      mv "${_tmp}.next" "$_tmp"
+    done < "$_secret_file"
+    mv "$_tmp" "$_file" 2>/dev/null || rm -f "$_tmp"
+  done
+  rm -f "$_secret_file" 2>/dev/null || true
+}
+
+
+collect_diagnostics() {
+  _reason=${1:-manual}
+  DIAG_IN_PROGRESS="true"
+
+  _timestamp=$(date +%Y%m%d-%H%M%S 2>/dev/null || printf 'now')
+  DIAG_WORK=$(mktemp -d "${TMPDIR:-/tmp}/${DIAG_PREFIX}.XXXXXX") || {
+    error "could not create a temporary diagnostics directory."
+    return 1
+  }
+  _bundle_name="${DIAG_PREFIX}-${_timestamp}-$$"
+  _bundle_dir="${DIAG_WORK}/${_bundle_name}"
+  _output_dir=$(diagnostics_output_dir) || {
+    error "no writable directory is available for the diagnostics archive."
+    return 1
+  }
+  mkdir -p "$_bundle_dir" || return 1
+
+  info "collecting AFCT diagnostics..."
+
+  {
+    printf 'AFCT installer version: %s\n' "$INSTALLER_VERSION"
+    printf 'Collection reason: %s\n' "$_reason"
+    printf 'Collected: %s\n\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'unknown')"
+    uname -a 2>/dev/null || true
+    printf '\n'
+    cat /etc/os-release 2>/dev/null || true
+    sw_vers 2>/dev/null || true
+  } > "$_bundle_dir/system.txt" 2>&1
+
+  if resolve_docker_access_soft; then
+    docker_cmd version > "$_bundle_dir/docker-version.txt" 2>&1 || true
+    docker_cmd info > "$_bundle_dir/docker-info.txt" 2>&1 || true
+
+    if [ -n "$COMPOSE_KIND" ] && [ -f "$COMPOSE_FILE" ]; then
+      compose_project ps > "$_bundle_dir/compose-ps.txt" 2>&1 || true
+      compose_project logs --no-color --tail 400 > "$_bundle_dir/compose-logs.txt" 2>&1 || true
+    fi
+  else
+    printf 'Docker was unavailable or its daemon could not be reached without prompting.\n' \
+      > "$_bundle_dir/docker-unavailable.txt"
+  fi
+
+  [ -f "$COMPOSE_FILE" ] && cp "$COMPOSE_FILE" "$_bundle_dir/docker-compose.yml" 2>/dev/null || true
+  [ -f "$LOG_FILE" ] && cp "$LOG_FILE" "$_bundle_dir/install.log" 2>/dev/null || true
+  [ -f "$ENV_FILE" ] && redact_env_file "$ENV_FILE" "$_bundle_dir/env.redacted.txt"
+  [ -n "$PULL_OUTPUT" ] && [ -f "$PULL_OUTPUT" ] && \
+    cp "$PULL_OUTPUT" "$_bundle_dir/image-pull.txt" 2>/dev/null || true
+  [ -n "$DOCKER_INSTALL_OUTPUT" ] && [ -f "$DOCKER_INSTALL_OUTPUT" ] && \
+    cp "$DOCKER_INSTALL_OUTPUT" "$_bundle_dir/docker-install.txt" 2>/dev/null || true
+
+  {
+    printf 'Installer version: %s\n' "$INSTALLER_VERSION"
+    printf 'Files included:\n'
+    find "$_bundle_dir" -type f -maxdepth 1 -print 2>/dev/null | sed 's#^.*/#  - #' || true
+    printf '\nKnown configuration values were redacted by key and by exact value.\n'
+  } > "$_bundle_dir/manifest.txt"
+
+  redact_exact_secrets_in_tree "$_bundle_dir"
+
+  _archive=""
+  if command -v zip >/dev/null 2>&1; then
+    _archive="${_output_dir}/${_bundle_name}.zip"
+    if ! (cd "$DIAG_WORK" && zip -qr "$_archive" "$_bundle_name"); then
+      _archive=""
     fi
   fi
 
-  default_url="https://$(hostname 2>/dev/null || echo localhost)"
-  APP_URL_IN=${APP_URL:-$(prompt_default "Public URL (how people reach the site)" "$default_url")}
-  validate_app_url "$APP_URL_IN"
-  ADMIN_EMAIL_IN=${ADMIN_EMAIL:-$(prompt_required "Administrator email")}
-  looks_like_email "$ADMIN_EMAIL_IN" || warn "administrator email '${ADMIN_EMAIL_IN}' doesn't look like an email address."
+  if [ -z "$_archive" ]; then
+    _archive="${_output_dir}/${_bundle_name}.tar.gz"
+    if ! tar -C "$DIAG_WORK" -czf "$_archive" "$_bundle_name"; then
+      rm -rf "$DIAG_WORK" 2>/dev/null || true
+      DIAG_WORK=""
+      error "could not create the diagnostics archive."
+      return 1
+    fi
+  fi
 
-  # Admin password: use provided, or offer to type one / auto-generate. Enforce
-  # the app's policy either way, so a weak value can't slip through and fail the
-  # first-run seed with a confusing container error.
-  PW_POLICY_MSG="password must be 8-72 characters with an upper, a lower, a number, and a special character."
-  if [ -n "${ADMIN_PASSWORD:-}" ]; then
-    ADMIN_PASSWORD_IN=$ADMIN_PASSWORD
-    is_strong_password "$ADMIN_PASSWORD_IN" || die "ADMIN_PASSWORD is too weak: ${PW_POLICY_MSG}"
-    ADMIN_PW_GENERATED="false"
+  rm -rf "$DIAG_WORK" 2>/dev/null || true
+  DIAG_WORK=""
+
+  success "Diagnostics saved to ${_archive}"
+  warn "known configuration secrets were redacted, but logs and Compose files can still contain sensitive information. Review the archive before sharing it."
+  DIAG_IN_PROGRESS="false"
+  return 0
+}
+
+# --------------------------------------------------------------------------- #
+# Installation configuration flow
+# --------------------------------------------------------------------------- #
+configure_new_install() {
+  heading "Step 2 of 4: AFCT configuration"
+
+  _default_url="https://$(hostname 2>/dev/null || printf 'localhost')"
+  _requested_url=${APP_URL:-}
+  if [ -z "$_requested_url" ]; then
+    _requested_url=$(prompt_default "Public URL" "$_default_url")
+  fi
+  APP_URL_IN=$(normalize_app_url "$_requested_url") || \
+    die "APP_URL must be a valid http:// or https:// origin without spaces, paths, queries, or fragments."
+  is_env_value_safe "$APP_URL_IN" || die "APP_URL contains unsupported characters."
+  warn_for_app_url "$APP_URL_IN"
+
+  ADMIN_EMAIL_IN=${ADMIN_EMAIL:-}
+  if [ -z "$ADMIN_EMAIL_IN" ]; then
+    ADMIN_EMAIL_IN=$(prompt_required "Administrator email") || \
+      die "ADMIN_EMAIL is required. Set it as an environment variable or run interactively."
+  fi
+  is_email "$ADMIN_EMAIL_IN" || die "the administrator email does not appear valid: ${ADMIN_EMAIL_IN}"
+  is_env_value_safe "$ADMIN_EMAIL_IN" || die "ADMIN_EMAIL contains unsupported characters."
+
+  _provided_password=$(read_password_source)
+  _password_generated="false"
+
+  if [ -n "$_provided_password" ]; then
+    ADMIN_PASSWORD_IN=$_provided_password
   elif ! can_prompt; then
-    # No terminal to type one, and no ADMIN_PASSWORD supplied (a --non-interactive run
-    # already failed above): auto-generate a strong password and show it at the end.
-    ADMIN_PASSWORD_IN=$(gen_admin_password)
-    ADMIN_PW_GENERATED="true"
+    if [ "$NON_INTERACTIVE" = "true" ]; then
+      die "ADMIN_PASSWORD or ADMIN_PASSWORD_FILE is required in non-interactive mode."
+    fi
+    ADMIN_PASSWORD_IN=$(gen_admin_password) || die "could not generate a secure administrator password."
+    _password_generated="true"
   else
-    choice=$(prompt_default "Set the admin password yourself (t) or auto-generate one (g)?" "t")
-    case "$choice" in
+    _choice=$(prompt_default "Set the administrator password yourself (t) or generate one (g)?" "g")
+    case "$_choice" in
       g|G|generate)
-        ADMIN_PASSWORD_IN=$(gen_admin_password)
-        ADMIN_PW_GENERATED="true"
+        ADMIN_PASSWORD_IN=$(gen_admin_password) || die "could not generate a secure administrator password."
+        _password_generated="true"
         ;;
       *)
-        # Read the password, enforce the policy, then re-enter to confirm so a typo
-        # can't lock the admin out of the account it's about to seed.
         while :; do
-          ADMIN_PASSWORD_IN=$(prompt_secret "Administrator password")
+          ADMIN_PASSWORD_IN=$(prompt_secret "Administrator password") || die "could not read the password."
           if ! is_strong_password "$ADMIN_PASSWORD_IN"; then
-            warn "$PW_POLICY_MSG"
+            warn "the password must be 8-72 characters and include uppercase, lowercase, a number, and a special character."
             continue
           fi
-          _admin_pw_confirm=$(prompt_secret "Confirm administrator password")
-          [ "$ADMIN_PASSWORD_IN" = "$_admin_pw_confirm" ] && break
-          warn "passwords did not match; please try again."
+          if ! is_env_value_safe "$ADMIN_PASSWORD_IN"; then
+            warn "the password cannot contain line breaks, quotes, backslashes, tabs, leading or trailing spaces, or a space before '#'."
+            continue
+          fi
+          _confirmation=$(prompt_secret "Confirm administrator password") || die "could not read the password confirmation."
+          if [ "$ADMIN_PASSWORD_IN" = "$_confirmation" ]; then
+            break
+          fi
+          warn "the passwords did not match."
         done
-        unset _admin_pw_confirm
-        ADMIN_PW_GENERATED="false"
         ;;
     esac
   fi
 
-  # Let the operator confirm the choices before we write config and pull images. Only
-  # when there's a terminal and they didn't pass --yes; a hands-off run just proceeds.
-  if can_prompt && [ "$ASSUME_YES" != "true" ]; then
-    log ""
-    log "Review:"
-    log "   URL:        ${APP_URL_IN}"
-    log "   Admin user: ${ADMIN_EMAIL_IN}"
-    ans=$(prompt_default "Proceed with this configuration?" "y")
-    case "$ans" in
-      y|Y|yes|Yes) : ;;
-      *) die "aborted at your request; re-run to reconfigure." ;;
-    esac
-  fi
+  is_strong_password "$ADMIN_PASSWORD_IN" || \
+    die "the administrator password must be 8-72 characters and include uppercase, lowercase, a number, and a special character."
+  is_env_value_safe "$ADMIN_PASSWORD_IN" || \
+    die "the administrator password cannot contain line breaks, quotes, backslashes, tabs, leading or trailing spaces, or a space before '#'."
 
-  # Infrastructure secrets. On a RECONFIGURE, preserve the existing values instead of
-  # rotating them: Postgres only reads POSTGRES_PASSWORD when it first initializes its
-  # data directory, so a new password would leave the app unable to authenticate to
-  # the existing database volume; and a new NEXTAUTH_SECRET would invalidate every
-  # active session. Generate fresh ones only when there's no existing value.
-  # (Rotating credentials for real is a separate operation that must also change the
-  # password inside the running database.)
+  POSTGRES_PASSWORD_IN=$(gen_secret) || die "could not generate a PostgreSQL password."
+  NEXTAUTH_SECRET_IN=$(gen_secret) || die "could not generate an authentication secret."
+  DATABASE_URL_IN="postgresql://afct_user:${POSTGRES_PASSWORD_IN}@postgres:5432/afct"
+  ADMIN_PASSWORD_GENERATED=$_password_generated
+}
+
+configure_existing_install() {
+  heading "Step 2 of 4: Reconfiguration"
+
+  _existing_url=$(read_env_value NEXTAUTH_URL "$ENV_FILE")
+  _existing_email=$(read_env_value ADMIN_EMAIL "$ENV_FILE")
+  _existing_password=$(read_env_value ADMIN_PASSWORD "$ENV_FILE")
+
+  _default_url=${_existing_url:-"https://$(hostname 2>/dev/null || printf 'localhost')"}
+  _requested_url=${APP_URL:-}
+  if [ -z "$_requested_url" ]; then
+    _requested_url=$(prompt_default "Public URL" "$_default_url")
+  fi
+  APP_URL_IN=$(normalize_app_url "$_requested_url") || \
+    die "APP_URL must be a valid http:// or https:// origin without spaces, paths, queries, or fragments."
+  is_env_value_safe "$APP_URL_IN" || die "APP_URL contains unsupported characters."
+  warn_for_app_url "$APP_URL_IN"
+
+  ADMIN_EMAIL_IN=${ADMIN_EMAIL:-$_existing_email}
+  [ -n "$ADMIN_EMAIL_IN" ] || die "ADMIN_EMAIL is missing from the existing configuration."
+  is_email "$ADMIN_EMAIL_IN" || die "the administrator email does not appear valid: ${ADMIN_EMAIL_IN}"
+
+  _provided_password=$(read_password_source)
+  if [ -n "$_provided_password" ]; then
+    ADMIN_PASSWORD_IN=$_provided_password
+    warn "updating ADMIN_PASSWORD only changes the bootstrap setting; it does not change an already-created AFCT account password."
+  else
+    ADMIN_PASSWORD_IN=$_existing_password
+  fi
+  [ -n "$ADMIN_PASSWORD_IN" ] || die "ADMIN_PASSWORD is missing from the existing configuration."
+  # The saved value only seeds the bootstrap admin on first run; the live account
+  # password lives in the database. Don't block a reconfigure on it — just warn.
+  is_strong_password "$ADMIN_PASSWORD_IN" || \
+    warn "the saved administrator bootstrap password does not meet the current strength policy; keeping it unchanged (it only affects first-run seeding)."
+  is_env_value_safe "$ADMIN_PASSWORD_IN" || die "the saved administrator password contains characters this installer cannot rewrite safely; edit ${ENV_FILE} manually."
+
   POSTGRES_PASSWORD_IN=$(read_env_value POSTGRES_PASSWORD "$ENV_FILE")
+  DATABASE_URL_IN=$(read_env_value DATABASE_URL "$ENV_FILE")
   NEXTAUTH_SECRET_IN=$(read_env_value NEXTAUTH_SECRET "$ENV_FILE")
-  [ -n "$POSTGRES_PASSWORD_IN" ] || POSTGRES_PASSWORD_IN=$(gen_secret)
-  [ -n "$NEXTAUTH_SECRET_IN" ] || NEXTAUTH_SECRET_IN=$(gen_secret)
 
-  log "writing ${ENV_FILE} ..."
-  # Back up any existing config, then write to a temp file and rename it into place so
-  # an interrupted write can't leave a truncated/partial .env.production behind.
-  if [ -f "$ENV_FILE" ]; then
-    cp "$ENV_FILE" "${ENV_FILE}.backup.$(date +%Y%m%d-%H%M%S 2>/dev/null || echo prev)" 2>/dev/null || true
+  require_value "$POSTGRES_PASSWORD_IN" "POSTGRES_PASSWORD is missing from ${ENV_FILE}."
+  require_value "$DATABASE_URL_IN" "DATABASE_URL is missing from ${ENV_FILE}."
+  require_value "$NEXTAUTH_SECRET_IN" "NEXTAUTH_SECRET is missing from ${ENV_FILE}."
+
+  if [ -n "${POSTGRES_PASSWORD:-}${DATABASE_URL:-}${NEXTAUTH_SECRET:-}" ]; then
+    warn "exported infrastructure credentials were ignored during reconfiguration to avoid breaking the existing database or invalidating sessions."
   fi
-  tmp_env=$(mktemp "${ENV_FILE}.tmp.XXXXXX" 2>/dev/null) || die "could not create a temporary configuration file."
-  {
-    echo "# Generated by install.sh on $(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo unknown)."
-    echo "# Keep this file secret. Regenerate secrets by re-running the installer with (r)."
-    echo
-    echo "NODE_ENV=production"
-    echo
-    echo "# --- Database (auto-generated) ---"
-    echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD_IN}"
-    echo "DATABASE_URL=postgresql://afct_user:${POSTGRES_PASSWORD_IN}@postgres:5432/afct"
-    echo
-    echo "# --- Initial admin (seeded on first run) ---"
-    echo "ADMIN_EMAIL=${ADMIN_EMAIL_IN}"
-    echo "ADMIN_PASSWORD=${ADMIN_PASSWORD_IN}"
-    echo
-    echo "# --- Auth (auto-generated) ---"
-    echo "NEXTAUTH_SECRET=${NEXTAUTH_SECRET_IN}"
-    echo "NEXTAUTH_URL=${APP_URL_IN}"
-    echo "AUTH_TRUST_HOST=true"
-  } > "$tmp_env"
-  chmod 600 "$tmp_env" 2>/dev/null || true
-  mv "$tmp_env" "$ENV_FILE"
 
-  bring_up
+  ADMIN_PASSWORD_GENERATED="false"
+}
 
-  log ""
-  log "==================================================================="
-  log " AFCT Dashboard is starting."
-  log "   URL:        ${APP_URL_IN}"
-  log "   Admin user: ${ADMIN_EMAIL_IN}"
-  if [ "${ADMIN_PW_GENERATED:-false}" = "true" ]; then
-    # Show the generated password on the terminal only — sending it through log()
-    # would write it to install.log and into the diagnostics bundle.
-    show_secret "   Admin pass: ${ADMIN_PASSWORD_IN}   <-- save this now; it won't be shown again"
+review_configuration() {
+  heading "Step 3 of 4: Review"
+  info "Public URL:        ${APP_URL_IN}"
+  info "Administrator:     ${ADMIN_EMAIL_IN}"
+  info "Compose file:      ${COMPOSE_FILE}"
+  info "Environment file:  ${ENV_FILE}"
+
+  if [ "$RECONFIGURING" = "true" ]; then
+    info "Database and authentication secrets will be preserved."
   fi
-  log ""
-  log " The site uses a self-signed certificate at first, so your browser will"
-  log " warn you. Install a real certificate later in Admin -> System Settings."
-  log ""
-  log " Handy commands (run from this directory):"
-  log "   sh install.sh status     # container + health status"
-  log "   sh install.sh logs       # follow the application logs"
-  log "   sh install.sh update     # pull the latest images and restart"
-  log "==================================================================="
+
+  if can_prompt && [ "$ASSUME_YES" != "true" ]; then
+    confirm "Continue with this configuration?" "y" || die "installation cancelled."
+  fi
+}
+
+do_install() {
+  DIAG_ON_EXIT="false"
+  acquire_lock
+  preflight
+
+  if existing_data_without_config; then
+    die "existing AFCT data volumes were detected, but ${ENV_FILE} is missing or incomplete. Restore a protected configuration backup with 'sh install.sh recover' instead of generating new database credentials."
+  fi
+
+  RECONFIGURING="false"
+  _existing_complete="false"
+  if [ -f "$ENV_FILE" ] && env_file_complete "$ENV_FILE"; then
+    _existing_complete="true"
+  fi
+
+  if [ "$_existing_complete" = "true" ] && [ "$FORCE_RECONFIGURE" != "true" ]; then
+    if can_prompt; then
+      existing_install_menu
+      if [ "$RECONFIGURING" != "true" ]; then
+        info "using the existing ${ENV_FILE}."
+        heading "Step 4 of 4: Deploy"
+        DIAG_ON_EXIT="true"
+        deploy_stack
+        print_completion
+        DIAG_ON_EXIT="false"
+        return 0
+      fi
+    else
+      info "using the existing ${ENV_FILE}. Pass --reconfigure to replace managed settings."
+      heading "Step 4 of 4: Deploy"
+      DIAG_ON_EXIT="true"
+      deploy_stack
+      print_completion
+      DIAG_ON_EXIT="false"
+      return 0
+    fi
+  elif [ "$_existing_complete" = "true" ]; then
+    RECONFIGURING="true"
+  elif [ -f "$ENV_FILE" ]; then
+    warn "${ENV_FILE} is incomplete and will be rebuilt after a backup is created."
+  fi
+
+  if [ "$RECONFIGURING" = "true" ]; then
+    configure_existing_install
+  else
+    configure_new_install
+  fi
+
+  review_configuration
+  backup_env_file
+  write_environment_file
+  success "Configuration written to ${ENV_FILE}."
+
+  heading "Step 4 of 4: Deploy"
+  DIAG_ON_EXIT="true"
+  deploy_stack
+  print_completion
   DIAG_ON_EXIT="false"
 }
 
-bring_up() {
-  # Fail fast on a broken compose file (missing vars, bad interpolation, invalid YAML)
-  # before we touch images or containers.
-  if ! compose -f "$COMPOSE_FILE" config >/dev/null 2>>"$LOG_FILE"; then
-    die "the Docker Compose configuration is invalid. See ${LOG_FILE}."
+print_completion() {
+  heading "AFCT Dashboard is ready"
+  info "Open:          ${APP_URL_IN:-$(read_env_value NEXTAUTH_URL "$ENV_FILE")}"
+  info "Administrator: ${ADMIN_EMAIL_IN:-$(read_env_value ADMIN_EMAIL "$ENV_FILE")}"
+
+  if [ "${ADMIN_PASSWORD_GENERATED:-false}" = "true" ]; then
+    show_secret ""
+    show_secret "Generated administrator password: ${ADMIN_PASSWORD_IN}"
+    show_secret "Save this password now. It is intentionally not written to install.log."
   fi
 
-  log "pulling images (first run can take a few minutes)..."
-  # On a terminal, let Compose render its tidy, in-place progress UI. Piping the pull
-  # (as the old code did) makes Compose think it's not a TTY and print thousands of
-  # per-layer "Downloading" lines. So only capture the pull when output is redirected
-  # (logged/CI), with --quiet to keep the log readable.
-  #
-  # NOTE: `cmd; rc=$?` does NOT work under `set -e` — a failing cmd exits before the
-  # assignment runs — so capture the status with an `if`.
-  pull_out="${LOG_FILE}.pull"
-  : > "$pull_out"
-  if [ -t 1 ]; then
-    if compose -f "$COMPOSE_FILE" pull; then pull_rc=0; else pull_rc=$?; fi
-  else
-    if compose -f "$COMPOSE_FILE" pull --quiet > "$pull_out" 2>&1; then pull_rc=0; else pull_rc=$?; fi
-    cat "$pull_out" >> "$LOG_FILE" 2>/dev/null || true
-  fi
-  # A failed pull is fatal: silently continuing would start the stack on stale images
-  # (an unexpected version), or with images missing entirely.
-  if [ "$pull_rc" -ne 0 ] || \
-     grep -qiE 'unauthorized|denied|authentication required|forbidden' "$pull_out" 2>/dev/null; then
-    rm -f "$pull_out" 2>/dev/null || true
-    die "could not download the application images. Check your network; if they are private, run 'docker login ghcr.io' and re-run."
-  fi
-  log "images pulled."
-  rm -f "$pull_out" 2>/dev/null || true
-
-  log "starting the stack..."
-  # Redirect to the log (not a pipe) so we get compose's real exit status; a
-  # piped 'up | tee' would always look successful (tee's exit), masking failures.
-  if ! compose -f "$COMPOSE_FILE" up -d >> "$LOG_FILE" 2>&1; then
-    die "the stack failed to start. See ${LOG_FILE}, or run: sh install.sh diagnostics"
-  fi
-
-  log "waiting for the app to become healthy..."
-  # Resolve the app container by its Compose service, not a hard-coded name, so this
-  # survives a different project/name and won't collide with another AFCT install.
-  app_id=$(compose -f "$COMPOSE_FILE" ps -q app 2>/dev/null || true)
-  [ -n "$app_id" ] || die "the application container was not created. See ${LOG_FILE}, or run: sh install.sh diagnostics"
-  i=0
-  while [ "$i" -lt 60 ]; do
-    state=$($DOCKER_SUDO docker inspect \
-      -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' \
-      "$app_id" 2>/dev/null || echo missing)
-    case "$state" in
-      healthy) log "app is healthy."; smoke_test; return ;;
-      unhealthy) die "the app reported unhealthy. Collect logs with: sh install.sh diagnostics" ;;
-    esac
-    i=$((i + 1)); sleep 5
-  done
-  # Timed out: do NOT fall through and print "AFCT is starting" as if it succeeded.
-  # die triggers the EXIT trap, which collects a diagnostics bundle.
-  die "the app did not pass its health check within ~5 minutes. It may still be starting — check 'docker compose logs -f app'; a diagnostics bundle is being collected."
+  info ""
+  info "Useful commands:"
+  info "  sh install.sh status"
+  info "  sh install.sh doctor"
+  info "  sh install.sh logs"
+  info "  sh install.sh update"
+  info "  sh install.sh diagnostics"
+  info ""
+  info "A self-signed certificate may trigger a browser warning until a trusted certificate is configured."
 }
 
-# Best-effort end-to-end check that nginx actually serves the app, not just that
-# the container reports healthy. Self-signed cert on first boot, so -k.
-smoke_test() {
-  command -v curl >/dev/null 2>&1 || return 0
-  if curl -kfsS --max-time 10 https://localhost/api/health >/dev/null 2>&1 \
-     || curl -kfsS --max-time 10 http://localhost/api/health  >/dev/null 2>&1; then
-    log "web front is responding at /api/health."
+
+capture_running_images() {
+  UPDATE_IMAGE_SNAPSHOT=$(mktemp "${TMPDIR:-/tmp}/afct-images.XXXXXX") || \
+    die "could not create an update rollback snapshot."
+  : > "$UPDATE_IMAGE_SNAPSHOT"
+
+  compose_project config --images 2>/dev/null | while IFS= read -r _reference; do
+    [ -n "$_reference" ] || continue
+    _id=$(docker_cmd image inspect -f '{{.Id}}' "$_reference" 2>/dev/null || true)
+    [ -n "$_id" ] && printf '%s|%s\n' "$_reference" "$_id"
+  done > "$UPDATE_IMAGE_SNAPSHOT"
+
+  if [ -s "$UPDATE_IMAGE_SNAPSHOT" ]; then
+    info "recorded the currently deployed image IDs for automatic rollback."
   else
-    warn "the app is healthy but the web front didn't answer /api/health yet; nginx may still be warming up."
+    warn "no existing image snapshot could be recorded; automatic rollback may be unavailable."
   fi
 }
 
-# --------------------------------------------------------------------------- #
-# Operational subcommands (status / logs / update). These act on an already
-# installed stack, so they only need the daemon reachable — not the full install
-# preflight (Docker install, port/disk checks).
-# --------------------------------------------------------------------------- #
-# Determine whether we can talk to the Docker daemon directly or need sudo, and set
-# DOCKER_SUDO accordingly (same resolution preflight uses, minus the install steps).
-resolve_docker_sudo() {
-  command -v docker >/dev/null 2>&1 || die "Docker isn't installed. Run: sh install.sh"
-  if docker info >/dev/null 2>&1; then
-    DOCKER_SUDO=""
-  elif [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
-    DOCKER_SUDO="sudo"
+rollback_update_images() {
+  [ -n "${UPDATE_IMAGE_SNAPSHOT:-}" ] && [ -s "$UPDATE_IMAGE_SNAPSHOT" ] || return 1
+
+  warn "restoring the previously deployed container images..."
+  while IFS='|' read -r _reference _id; do
+    [ -n "$_reference" ] && [ -n "$_id" ] || continue
+    docker_cmd image tag "$_id" "$_reference" >/dev/null 2>&1 || return 1
+  done < "$UPDATE_IMAGE_SNAPSHOT"
+
+  if [ "$LOG_ENABLED" = "true" ]; then
+    compose_project up -d >> "$LOG_FILE" 2>&1 || return 1
   else
-    die "the Docker daemon isn't reachable. Start Docker and try again."
+    compose_project up -d || return 1
   fi
+
+  if ( wait_for_health ); then
+    success "The previous AFCT images were restored successfully."
+    return 0
+  fi
+  return 1
+}
+
+# --------------------------------------------------------------------------- #
+# Operational commands
+# --------------------------------------------------------------------------- #
+prepare_existing_stack() {
+  [ -f "$COMPOSE_FILE" ] || die "${COMPOSE_FILE} was not found next to this script."
+  [ -f "$ENV_FILE" ] || die "${ENV_FILE} was not found. Run the installer first."
+  # Operational commands act on an already-installed stack: require Docker and
+  # Compose to be present, but never install or prompt to install them here.
+  resolve_docker_access || die "Docker Compose is not available. Install it and rerun."
 }
 
 show_status() {
-  [ -f "$COMPOSE_FILE" ] || die "docker-compose.yml not found next to this script."
-  resolve_docker_sudo
-  log "container status:"
-  compose -f "$COMPOSE_FILE" ps
-  app_id=$(compose -f "$COMPOSE_FILE" ps -q app 2>/dev/null || true)
-  if [ -n "$app_id" ]; then
-    state=$($DOCKER_SUDO docker inspect \
-      -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' \
-      "$app_id" 2>/dev/null || echo unknown)
-    log "app health: ${state}"
-  else
-    log "app container: not running (run: sh install.sh)"
+  prepare_existing_stack
+  compose_project ps
+
+  _app_id=$(compose_project ps -q "$APP_SERVICE" 2>/dev/null || true)
+  if [ -z "$_app_id" ]; then
+    warn "the ${APP_SERVICE} container is not running."
+    return 1
   fi
+
+  _state=$(docker_cmd inspect \
+    -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+    "$_app_id" 2>/dev/null || printf 'unknown|unknown')
+  info "application state: ${_state%%|*}"
+  info "application health: ${_state#*|}"
 }
 
 show_logs() {
-  [ -f "$COMPOSE_FILE" ] || die "docker-compose.yml not found next to this script."
-  resolve_docker_sudo
-  log "following app logs (Ctrl+C to stop)..."
-  compose -f "$COMPOSE_FILE" logs -f --tail=200 app
+  prepare_existing_stack
+  info "following ${APP_SERVICE} logs; press Ctrl+C to stop..."
+  compose_project logs -f --tail 200 "$APP_SERVICE"
 }
 
-# Pull the latest published images and recreate the stack. Reuses bring_up (the same
-# config-validate / pull / start / health-wait the installer runs), so a bad image or
-# an unhealthy start is fatal here too and a diagnostics bundle is collected.
 do_update() {
-  [ -f "$COMPOSE_FILE" ] || die "docker-compose.yml not found next to this script."
-  [ -f "$ENV_FILE" ] || die "${ENV_FILE} not found; run the installer first: sh install.sh"
-  resolve_docker_sudo
+  acquire_lock
+  prepare_existing_stack
   DIAG_ON_EXIT="true"
-  log "updating AFCT to the latest images..."
-  bring_up
+  info "updating AFCT to the latest published images..."
+
+  validate_compose
+  capture_running_images
+  pull_images
+
+  if ( start_stack; wait_for_health ); then
+    success "AFCT update completed."
+    DIAG_ON_EXIT="false"
+    return 0
+  fi
+
+  error "the newly downloaded AFCT version did not pass its health check."
+  collect_diagnostics "failed-update-before-rollback" || true
+  # A bundle was just created above; don't let the exit trap collect a second one.
   DIAG_ON_EXIT="false"
-  log "update complete."
+
+  if rollback_update_images; then
+    warn "the update failed, but AFCT was returned to the previously deployed images."
+    DIAG_ON_EXIT="false"
+    return 1
+  fi
+
+  die "the update failed and automatic rollback was unsuccessful. Review the diagnostics archive."
+}
+
+do_restart() {
+  acquire_lock
+  prepare_existing_stack
+  DIAG_ON_EXIT="true"
+  info "recreating the AFCT stack..."
+  restart_stack
+  success "AFCT restart completed."
+  DIAG_ON_EXIT="false"
+}
+
+do_stop() {
+  acquire_lock
+  prepare_existing_stack
+  info "stopping the AFCT stack..."
+  compose_project stop
+  success "AFCT stopped. Persistent data volumes were not deleted."
+}
+
+
+doctor_check() {
+  _label=$1
+  shift
+  if "$@"; then
+    success "$_label"
+    DOCTOR_OK=$((DOCTOR_OK + 1))
+  else
+    warn "$_label"
+    DOCTOR_WARN=$((DOCTOR_WARN + 1))
+  fi
+}
+
+doctor_file_exists() { [ -f "$1" ]; }
+doctor_env_complete() { env_file_complete "$ENV_FILE"; }
+doctor_compose_valid() { compose_project config >/dev/null 2>&1; }
+doctor_disk() {
+  command -v df >/dev/null 2>&1 || return 0
+  _available=$(df -Pk . 2>/dev/null | awk 'NR == 2 { print $4 }')
+  case "$_available" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$_available" -ge 5242880 ]
+}
+doctor_web() { http_health_responding; }
+doctor_app_healthy() {
+  _id=$(compose_project ps -q "$APP_SERVICE" 2>/dev/null || true)
+  [ -n "$_id" ] || return 1
+  [ "$(docker_cmd inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$_id" 2>/dev/null || true)" = "healthy" ]
+}
+
+do_doctor() {
+  heading "AFCT system check"
+  DOCTOR_OK=0
+  DOCTOR_WARN=0
+
+  doctor_check "Compose file exists" doctor_file_exists "$COMPOSE_FILE"
+  doctor_check "Environment file exists" doctor_file_exists "$ENV_FILE"
+  doctor_check "Environment configuration is complete" doctor_env_complete
+  check_sensitive_permissions "$ENV_FILE" && success "Environment file permissions are private" && DOCTOR_OK=$((DOCTOR_OK + 1)) || DOCTOR_WARN=$((DOCTOR_WARN + 1))
+  doctor_check "At least 5 GB of disk space is available" doctor_disk
+  check_clock_sync && success "System clock synchronization is enabled" && DOCTOR_OK=$((DOCTOR_OK + 1)) || DOCTOR_WARN=$((DOCTOR_WARN + 1))
+
+  if resolve_docker_access_soft && [ -n "$COMPOSE_KIND" ]; then
+    success "Docker daemon is reachable"
+    DOCTOR_OK=$((DOCTOR_OK + 1))
+    doctor_check "Docker Compose configuration is valid" doctor_compose_valid
+    doctor_check "Application container is healthy" doctor_app_healthy
+    if command -v curl >/dev/null 2>&1; then
+      doctor_check "Local AFCT health endpoint responds" doctor_web
+    else
+      warn "curl is unavailable; the local HTTP health check was skipped."
+      DOCTOR_WARN=$((DOCTOR_WARN + 1))
+    fi
+    show_deployed_versions
+  else
+    warn "Docker or Docker Compose is unavailable."
+    DOCTOR_WARN=$((DOCTOR_WARN + 1))
+  fi
+
+  info ""
+  info "Doctor result: ${DOCTOR_OK} checks passed; ${DOCTOR_WARN} warnings or failures."
+  [ "$DOCTOR_WARN" -eq 0 ]
+}
+
+do_recover() {
+  acquire_lock
+  [ ! -f "$ENV_FILE" ] || die "${ENV_FILE} already exists. Recovery is intended for a missing configuration."
+  set -- "${ENV_FILE}.backup."*
+  [ -e "$1" ] || die "no protected ${ENV_FILE}.backup.* files were found."
+  _latest=$(ls -1t "${ENV_FILE}.backup."* 2>/dev/null | head -n 1)
+  [ -n "$_latest" ] || die "no recoverable environment backup was found."
+  info "newest configuration backup: ${_latest}"
+  if can_prompt && [ "$ASSUME_YES" != "true" ]; then
+    confirm "Restore this configuration backup?" "y" || die "recovery cancelled."
+  fi
+  cp "$_latest" "$ENV_FILE" || die "could not restore ${ENV_FILE}."
+  chmod 600 "$ENV_FILE" 2>/dev/null || true
+  env_file_complete "$ENV_FILE" || die "the restored environment file is incomplete."
+  success "Configuration restored from ${_latest}."
+  info "Run: sh install.sh doctor"
+  info "Then run: sh install.sh restart"
+}
+
+existing_install_menu() {
+  heading "Existing AFCT installation detected"
+  info "1. Start or repair the installation"
+  info "2. Update to the latest published images"
+  info "3. Reconfigure the public URL or bootstrap settings"
+  info "4. Run system checks"
+  info "5. Create a diagnostics archive"
+  info "6. Exit"
+  _choice=$(prompt_default "Choose an action" "1")
+  case "$_choice" in
+    1|"") return 0 ;;
+    2) do_update; exit $? ;;
+    3) RECONFIGURING="true"; return 0 ;;
+    4) do_doctor; exit $? ;;
+    5) collect_diagnostics "manual"; exit $? ;;
+    6) info "no changes were made."; exit 0 ;;
+    *) die "unknown menu choice: ${_choice}" ;;
+  esac
 }
 
 # --------------------------------------------------------------------------- #
-# Entry
+# Entry point
 # --------------------------------------------------------------------------- #
 case "$MODE" in
   help)
     usage
     ;;
+  version)
+    show_deployed_versions
+    ;;
+  doctor)
+    do_doctor
+    ;;
+  recover)
+    init_log
+    do_recover
+    ;;
   diagnostics)
-    collect_diagnostics
+    LOG_ENABLED="false"
+    collect_diagnostics "manual"
     ;;
   status)
     show_status
@@ -868,8 +1889,20 @@ case "$MODE" in
     init_log
     do_update
     ;;
+  restart)
+    init_log
+    do_restart
+    ;;
+  stop)
+    init_log
+    do_stop
+    ;;
   install)
     init_log
     do_install
+    ;;
+  *)
+    printf '[afct] ERROR: unsupported mode: %s\n' "$MODE" >&2
+    exit 2
     ;;
 esac

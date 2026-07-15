@@ -2,8 +2,8 @@
 #
 # Release-gate tests for deploy/install.sh. Docker is mocked (deploy/test/mocks),
 # so these exercise the installer's own logic — argument parsing, the interactive /
-# non-interactive split, config writing, and the failure paths — without a daemon.
-# Run: bats deploy/test/install.bats
+# non-interactive split, config writing, the operational commands, and the failure
+# paths — without a daemon. Run: bats deploy/test/install.bats
 
 setup() {
   DEPLOY_DIR="$BATS_TEST_DIRNAME/.."
@@ -12,24 +12,41 @@ setup() {
   # A compose file must exist for `-f docker-compose.yml`; the mock ignores contents.
   cp "$DEPLOY_DIR/docker-compose.yml" "$TESTDIR/docker-compose.yml" 2>/dev/null \
     || printf 'services: {}\n' > "$TESTDIR/docker-compose.yml"
-  # do_install requires the example env file to sit next to the script.
+  # A fresh install reads the example env file when present.
   cp "$DEPLOY_DIR/.env.production.example" "$TESTDIR/.env.production.example" 2>/dev/null \
     || printf '# example\n' > "$TESTDIR/.env.production.example"
 
-  # Mocks first on PATH so `docker`, `sleep`, `curl`, `systemctl` are the fakes.
+  # Mocks first on PATH so docker/sleep/curl/systemctl are the fakes.
   chmod +x "$BATS_TEST_DIRNAME/mocks/"* 2>/dev/null || true
   PATH="$BATS_TEST_DIRNAME/mocks:$PATH"
   export PATH
 
-  # A sane default scenario; individual tests override.
   export MOCK_HEALTH="healthy"
   export APP_URL="https://afct.test"
+  # Keep the health-wait loop short so timeout cases finish quickly (sleep is mocked).
+  export AFCT_HEALTH_TIMEOUT=10
+  export AFCT_HEALTH_INTERVAL=1
 
   cd "$TESTDIR"
 }
 
 teardown() {
   [ -n "${TESTDIR:-}" ] && rm -rf "$TESTDIR"
+}
+
+# A complete managed configuration, as the installer would have written it.
+write_complete_env() {
+  cat > .env.production <<'EOF'
+NODE_ENV=production
+POSTGRES_PASSWORD=abc123abc123abc123
+DATABASE_URL=postgresql://afct_user:abc123abc123abc123@postgres:5432/afct
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=Str0ng!Pass1
+NEXTAUTH_SECRET=secretsecretsecretsecretsecret12
+NEXTAUTH_URL=https://afct.test
+AUTH_TRUST_HOST=true
+EOF
+  chmod 600 .env.production
 }
 
 # --- CLI surface ---------------------------------------------------------------
@@ -47,6 +64,12 @@ teardown() {
   [[ "$output" == *"unknown option"* ]]
 }
 
+@test "supplying two commands is rejected (exit 2)" {
+  run sh install.sh status update
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"only one command"* ]]
+}
+
 # --- non-interactive required-value handling -----------------------------------
 
 @test "--non-interactive without ADMIN_EMAIL fails fast (no prompt loop)" {
@@ -61,10 +84,12 @@ teardown() {
   unset ADMIN_PASSWORD
   run sh install.sh --non-interactive < /dev/null
   [ "$status" -ne 0 ]
-  [[ "$output" == *"ADMIN_PASSWORD is required"* ]]
+  [[ "$output" == *"ADMIN_PASSWORD or ADMIN_PASSWORD_FILE is required"* ]]
 }
 
-@test "--non-interactive with all values writes a complete .env.production and succeeds" {
+# --- config writing ------------------------------------------------------------
+
+@test "--non-interactive writes a complete, unquoted .env.production" {
   export ADMIN_EMAIL="admin@example.com"
   export ADMIN_PASSWORD="Str0ng!Pass1"
   run sh install.sh --non-interactive < /dev/null
@@ -73,9 +98,21 @@ teardown() {
   run grep -Eq '^DATABASE_URL=postgresql://' .env.production; [ "$status" -eq 0 ]
   run grep -Eq '^ADMIN_EMAIL=admin@example.com$' .env.production; [ "$status" -eq 0 ]
   run grep -Eq '^NEXTAUTH_SECRET=.+' .env.production; [ "$status" -eq 0 ]
+  # Values are stored UNQUOTED so Compose v1 and v2 read them identically.
+  run grep -q "ADMIN_PASSWORD='" .env.production; [ "$status" -ne 0 ]
+  run grep -Eq '^ADMIN_PASSWORD=Str0ng!Pass1$' .env.production; [ "$status" -eq 0 ]
 }
 
-# --- security: the generated admin password must not leak into the log ----------
+@test "a password containing an unsupported character is rejected before writing" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Bad'Pass1A"
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot"* ]]
+  [ ! -f .env.production ]
+}
+
+# --- security: the generated admin password must not leak into the log ---------
 
 @test "a generated admin password never lands in install.log" {
   export ADMIN_EMAIL="admin@example.com"
@@ -97,7 +134,7 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-# --- failure paths are fatal ---------------------------------------------------
+# --- deploy failure paths are fatal --------------------------------------------
 
 @test "a failed image pull is fatal" {
   export ADMIN_EMAIL="admin@example.com"
@@ -105,7 +142,7 @@ teardown() {
   export MOCK_PULL_RC=42
   run sh install.sh --non-interactive < /dev/null
   [ "$status" -ne 0 ]
-  [[ "$output" == *"could not download"* ]]
+  [[ "$output" == *"could not be downloaded"* ]]
 }
 
 @test "an invalid compose configuration is fatal (before pulling)" {
@@ -123,8 +160,8 @@ teardown() {
   export MOCK_HEALTH="starting"               # never reaches healthy -> timeout
   run sh install.sh --non-interactive < /dev/null
   [ "$status" -ne 0 ]
-  [[ "$output" == *"health check"* ]]
-  [[ "$output" != *"AFCT Dashboard is starting."* ]]
+  [[ "$output" == *"did not become healthy"* ]]
+  [[ "$output" != *"AFCT Dashboard is ready"* ]]
 }
 
 @test "an unhealthy app container is fatal" {
@@ -142,47 +179,72 @@ teardown() {
   export MOCK_PS_EMPTY=1
   run sh install.sh --non-interactive < /dev/null
   [ "$status" -ne 0 ]
-  [[ "$output" == *"application container was not created"* ]]
+  [[ "$output" == *"did not become healthy"* ]]
 }
 
-# --- operational subcommands ---------------------------------------------------
+# --- operational commands ------------------------------------------------------
 
-@test "status reports the app's health" {
+@test "status reports the application's health" {
+  write_complete_env
   run sh install.sh status
   [ "$status" -eq 0 ]
-  [[ "$output" == *"app health: healthy"* ]]
+  [[ "$output" == *"application health: healthy"* ]]
 }
 
-@test "status reports when the app container isn't running" {
+@test "status reports when the app container is not running" {
+  write_complete_env
   export MOCK_PS_EMPTY=1
   run sh install.sh status
-  [ "$status" -eq 0 ]
+  [ "$status" -ne 0 ]
   [[ "$output" == *"not running"* ]]
 }
 
 @test "logs exits cleanly" {
+  write_complete_env
   run sh install.sh logs
   [ "$status" -eq 0 ]
 }
 
-@test "update without a config file is refused" {
-  rm -f .env.production
-  run sh install.sh update
+@test "update without a configuration is refused (and collects no bundle)" {
+  run sh install.sh update < /dev/null
   [ "$status" -ne 0 ]
-  [[ "$output" == *"run the installer first"* ]]
+  [[ "$output" == *"Run the installer first"* ]]
+  [[ "$output" != *"collecting AFCT diagnostics"* ]]
 }
 
 @test "update pulls, restarts, and reports completion" {
-  printf 'POSTGRES_PASSWORD=x\n' > .env.production
-  run sh install.sh update
+  write_complete_env
+  run sh install.sh update < /dev/null
   [ "$status" -eq 0 ]
-  [[ "$output" == *"update complete"* ]]
+  [[ "$output" == *"update completed"* ]]
 }
 
-@test "update is fatal if the app comes back unhealthy" {
-  printf 'POSTGRES_PASSWORD=x\n' > .env.production
+@test "update that comes up unhealthy fails after attempting rollback" {
+  write_complete_env
   export MOCK_HEALTH="unhealthy"
-  run sh install.sh update
+  run sh install.sh update < /dev/null
   [ "$status" -ne 0 ]
-  [[ "$output" == *"unhealthy"* ]]
+  [[ "$output" == *"rollback"* ]]
+}
+
+@test "doctor runs read-only and prints a result summary" {
+  write_complete_env
+  run sh install.sh doctor
+  [[ "$output" == *"Doctor result:"* ]]
+}
+
+@test "version reports the installer version" {
+  run sh install.sh version
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"installer version: 2.1.1"* ]]
+}
+
+@test "recover restores the newest protected env backup" {
+  write_complete_env
+  cp .env.production .env.production.backup.20260101-000000.111
+  rm .env.production
+  run sh install.sh recover --yes
+  [ "$status" -eq 0 ]
+  [ -f .env.production ]
+  [[ "$output" == *"restored"* ]]
 }

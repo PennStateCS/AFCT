@@ -1,55 +1,113 @@
 #!/bin/sh
-# Mock `docker` for the installer test harness. It answers only the invocations
-# install.sh makes, and its behavior is steered by MOCK_* environment variables so a
-# test can simulate failures without a real daemon:
-#   MOCK_DOCKER_INFO_RC   `docker info` exit code            (default 0 = daemon up)
-#   MOCK_CONFIG_RC        `docker compose config` exit code  (default 0)
-#   MOCK_PULL_RC          `docker compose pull` exit code     (default 0)
-#   MOCK_UP_RC            `docker compose up` exit code        (default 0)
-#   MOCK_PS_EMPTY         if set, `compose ps -q app` prints nothing (no container)
-#   MOCK_PS_ID            container id `compose ps -q app` prints (default mockappid)
-#   MOCK_HEALTH           health state `docker inspect` reports (default healthy)
+# Mock `docker` for the installer test harness. It answers the invocations
+# install.sh makes and is steered by MOCK_* environment variables so a test can
+# simulate failures without a real daemon:
+#   MOCK_DOCKER_INFO_RC   `docker info` exit code             (default 0 = daemon up)
+#   MOCK_CONFIG_RC        `compose config` exit code          (default 0)
+#   MOCK_PULL_RC          `compose pull` exit code            (default 0)
+#   MOCK_UP_RC            `compose up` exit code              (default 0)
+#   MOCK_PS_EMPTY         if set, `compose ps -q` prints nothing (no container)
+#   MOCK_PS_ID            container id `compose ps -q` prints  (default mockappid)
+#   MOCK_STATE            container .State.Status              (default running)
+#   MOCK_HEALTH           container .State.Health.Status       (default healthy)
+#   MOCK_VOLUMES          names `docker volume ls` prints      (default: none)
+#   MOCK_CONFIG_VOLUMES   names `compose config --volumes`     (default afct_data)
 
-cmd=$1
+cmd=${1:-}
 [ "$#" -gt 0 ] && shift
 
 case "$cmd" in
   info)
+    # `docker info` or `docker info --format {{json .SecurityOptions}}`.
+    case "$*" in
+      *--format*) printf '[]\n'; exit 0 ;;
+    esac
     exit "${MOCK_DOCKER_INFO_RC:-0}"
     ;;
+
   version)
-    echo "Docker version 99.9.9 (mock)"
+    # `docker version` or `docker version --format {{.Server.Version}}`.
+    case "$*" in
+      *Server.Version*) printf '99.9.9\n' ;;
+      *) printf 'Docker version 99.9.9 (mock)\n' ;;
+    esac
     exit 0
     ;;
+
   inspect)
-    # install.sh inspects the app container's health; report the mocked state.
-    echo "${MOCK_HEALTH:-healthy}"
-    exit 0
-    ;;
-  compose)
-    # Skip global flags (-f FILE, -p NAME, ...) to find the subcommand.
-    sub=""
+    # Return a value shaped to the requested -f/--format template.
+    _tmpl=""
     while [ "$#" -gt 0 ]; do
       case "$1" in
-        -f|-p|--project-name|--project-directory|--profile) shift 2 ;;
-        --*|-*) shift ;;
-        *) sub="$1"; break ;;
+        -f|--format) _tmpl=${2:-}; shift 2 ;;
+        *) shift ;;
       esac
     done
-    case "$sub" in
-      version) echo "Docker Compose version v99.9.9 (mock)"; exit 0 ;;
-      config)  exit "${MOCK_CONFIG_RC:-0}" ;;
-      pull)    exit "${MOCK_PULL_RC:-0}" ;;
-      up)      exit "${MOCK_UP_RC:-0}" ;;
-      ps)
-        [ -n "${MOCK_PS_EMPTY:-}" ] && exit 0
-        echo "${MOCK_PS_ID:-mockappid}"
-        exit 0
-        ;;
-      logs|down|stop|rm) exit 0 ;;
+    case "$_tmpl" in
+      *State.Status*) printf '%s|%s\n' "${MOCK_STATE:-running}" "${MOCK_HEALTH:-healthy}" ;;
+      *State.Health*) printf '%s\n' "${MOCK_HEALTH:-healthy}" ;;
+      *Config.Image*) printf 'ghcr.io/example/afct:latest\n' ;;
+      *.Image*) printf 'sha256:mockimageid\n' ;;
+      *) printf '\n' ;;
+    esac
+    exit 0
+    ;;
+
+  image)
+    # `docker image inspect -f {{.Id}} REF` or `docker image tag ID REF`.
+    _sub=${1:-}
+    [ "$#" -gt 0 ] && shift
+    case "$_sub" in
+      inspect) printf 'sha256:mockimageid\n'; exit 0 ;;
       *) exit 0 ;;
     esac
     ;;
+
+  volume)
+    # `docker volume ls --format {{.Name}}`.
+    if [ -n "${MOCK_VOLUMES:-}" ]; then
+      printf '%s\n' "$MOCK_VOLUMES"
+    fi
+    exit 0
+    ;;
+
+  compose)
+    # Skip global flags (including --env-file FILE and -f FILE) to find the
+    # subcommand, then keep the remaining args in $* for sub-flag matching.
+    sub=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --env-file|-f|-p|--project-name|--project-directory|--profile) shift 2 ;;
+        --*|-*) shift ;;
+        *) sub="$1"; shift; break ;;
+      esac
+    done
+    case "$sub" in
+      version) printf 'Docker Compose version v99.9.9 (mock)\n'; exit 0 ;;
+      config)
+        case "$*" in
+          *--images*) printf 'ghcr.io/example/afct:latest\n'; exit "${MOCK_CONFIG_RC:-0}" ;;
+          *--volumes*) printf '%s\n' "${MOCK_CONFIG_VOLUMES:-afct_data}"; exit 0 ;;
+          *) exit "${MOCK_CONFIG_RC:-0}" ;;
+        esac
+        ;;
+      pull) exit "${MOCK_PULL_RC:-0}" ;;
+      up) exit "${MOCK_UP_RC:-0}" ;;
+      ps)
+        case "$*" in
+          *-q*)
+            [ -n "${MOCK_PS_EMPTY:-}" ] && exit 0
+            printf '%s\n' "${MOCK_PS_ID:-mockappid}"
+            ;;
+          *) printf 'NAME       STATUS\nafct-app   running\n' ;;
+        esac
+        exit 0
+        ;;
+      logs|stop|down|rm) exit 0 ;;
+      *) exit 0 ;;
+    esac
+    ;;
+
   *)
     exit 0
     ;;
