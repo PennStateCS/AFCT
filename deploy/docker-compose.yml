@@ -64,6 +64,9 @@ services:
       # backup by dropping a flag in the writable trigger volume.
       - db_backups:/backups:ro
       - backup_triggers:/backup-triggers
+      # Upgrades: same request/response pattern. The app writes an upgrade request
+      # here and reads status; the privileged `updater` service performs the swap.
+      - update_triggers:/update-triggers
 
     healthcheck:
       test: ['CMD-SHELL', 'curl -fsS http://localhost:3000/api/health >/dev/null || exit 1']
@@ -177,6 +180,41 @@ services:
       - uploads_data:/snapshot/public-uploads:ro
       - backup_triggers:/backup-triggers
 
+  updater:
+    # Privileged helper that performs admin-requested app upgrades. It holds the
+    # Docker socket so the app never has to: the app can only drop a request file
+    # in update_triggers, which this service validates (strict tag allowlist +
+    # curated release manifest) and acts on. It only ever recreates the `app`
+    # service, backing up first and rolling back to the previous image on failure.
+    image: ghcr.io/pennstatewilkes-barre/afct-updater:main
+    container_name: afct-updater
+    restart: unless-stopped
+    logging: *default-logging
+
+    # Dormant until explicitly enabled: a plain `docker compose up -d` neither
+    # pulls nor starts profiled services, so existing installs are unaffected and
+    # this doesn't depend on the afct-updater image being published yet. Enable the
+    # in-app updater with `docker compose --profile updater up -d` once the feature
+    # is complete. Keeping the Docker-socket container off by default is deliberate.
+    profiles: ['updater']
+
+    environment:
+      AFCT_APP_SERVICE: app
+      AFCT_APP_CONTAINER: afct-app
+
+    volumes:
+      # The Docker socket: the whole reason this service exists. Keep it OFF the
+      # app container.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The deploy directory (this compose file + .env.production, which the
+      # updater rewrites to select the version). Mounting the directory, not the
+      # single file, keeps the env rewrite atomic and visible on the host.
+      - .:/afct
+      - update_triggers:/update-triggers
+      # Request a pre-upgrade backup and confirm it landed before swapping images.
+      - backup_triggers:/backup-triggers
+      - db_backups:/backups:ro
+
 volumes:
   postgres_data:
   uploads_data:
@@ -185,3 +223,4 @@ volumes:
   tls_certs:
   db_backups:
   backup_triggers:
+  update_triggers:
