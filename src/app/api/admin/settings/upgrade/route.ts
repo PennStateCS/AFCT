@@ -9,7 +9,10 @@ import {
   currentVersion,
   fetchManifest,
   isValidTag,
+  isValidRestorePoint,
+  readRestorePoints,
   readStatus,
+  writeDowngradeRequest,
   writeUpdateRequest,
   type ReleaseVersion,
 } from '@/lib/updates';
@@ -49,19 +52,26 @@ export const GET = withAdminAuth(
       status: readStatus(),
       versions,
       manifestError,
+      restorePoints: readRestorePoints(),
     });
   },
   { deniedAction: 'ADMIN_UPGRADE_VIEW_DENIED' },
 );
 
-const UpgradeBody = z.object({ tag: z.string().min(1) });
+const UpgradeBody = z.object({
+  action: z.enum(['upgrade', 'downgrade']).optional(),
+  tag: z.string().min(1),
+  restorePoint: z.string().optional(),
+});
 
 /**
  * Requests an application upgrade to a curated release by dropping a validated
  * request for the updater sidecar to perform. System administrators only. Returns
  * 202; the swap, health check, and rollback happen asynchronously in the sidecar.
+ * Upgrade to a curated release, or DOWNGRADE by restoring a recorded pre-upgrade
+ * backup (which permanently discards everything created since it). Returns 202.
  * @openapi
- * summary: Request an application upgrade
+ * summary: Request an application upgrade or downgrade
  * requestBody:
  *   required: true
  *   content:
@@ -69,16 +79,19 @@ const UpgradeBody = z.object({ tag: z.string().min(1) });
  *       schema:
  *         type: object
  *         required: [tag]
- *         properties: { tag: { type: string } }
+ *         properties:
+ *           action: { type: string, enum: [upgrade, downgrade] }
+ *           tag: { type: string }
+ *           restorePoint: { type: string }
  * responses:
  *   202:
- *     description: Upgrade requested; it will run asynchronously.
+ *     description: Requested; it will run asynchronously.
  *     content:
  *       application/json:
  *         schema:
  *           type: object
  *           properties: { ok: { type: boolean }, requestId: { type: string } }
- *   400: { description: "Invalid tag, an unknown release, or the current version." }
+ *   400: { description: "Invalid tag/restore point, an unknown release, or the current version." }
  *   403: { description: Caller is not a system administrator. }
  *   503: { description: The release list or the updater service is unavailable. }
  */
@@ -86,14 +99,49 @@ export const POST = withAdminAuth(
   async (req, _ctx, { user }) => {
     const parsed = await readJson(req, UpgradeBody);
     if (!parsed.ok) return parsed.response;
-    const { tag } = parsed.data;
+    const { action = 'upgrade', tag, restorePoint } = parsed.data;
 
     if (!isValidTag(tag)) {
       return apiError(400, 'Invalid version tag');
     }
 
-    // The requested version must be a curated release (the updater independently
-    // re-checks this; the app does not get to name an arbitrary image).
+    const requestId = crypto.randomUUID();
+
+    // ---- Downgrade: restore a recorded pre-upgrade backup and run the old image.
+    if (action === 'downgrade') {
+      if (!restorePoint || !isValidRestorePoint(restorePoint)) {
+        return apiError(400, 'A valid restore point is required to downgrade');
+      }
+      // The (version, restorePoint) pair must be one the updater actually recorded.
+      const match = readRestorePoints().find(
+        (r) => r.version === tag && r.backup === restorePoint,
+      );
+      if (!match) {
+        return apiError(400, `No restore point ${restorePoint} for ${tag}`);
+      }
+      if (tag === currentVersion()) {
+        return apiError(400, `AFCT is already running ${tag}`);
+      }
+      try {
+        writeDowngradeRequest({ tag, restorePoint, requestedBy: user.id, requestId });
+      } catch {
+        return apiError(503, 'The updater service is not available');
+      }
+      try {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: user.id,
+          action: 'SYSTEM_DOWNGRADE_REQUESTED',
+          severity: 'WARNING',
+          category: 'SYSTEM',
+          metadata: { tag, restorePoint, requestId, fromTag: currentVersion() },
+        });
+      } catch (err) {
+        console.error('[updates] audit log failed:', err);
+      }
+      return NextResponse.json({ ok: true, requestId }, { status: 202 });
+    }
+
+    // ---- Upgrade: the target must be a curated release (the updater re-checks this).
     let versions: ReleaseVersion[];
     try {
       versions = (await fetchManifest()).versions;
@@ -108,7 +156,6 @@ export const POST = withAdminAuth(
       return apiError(400, `AFCT is already running ${tag}`);
     }
 
-    const requestId = crypto.randomUUID();
     try {
       writeUpdateRequest({ tag, requestedBy: user.id, requestId });
     } catch {
