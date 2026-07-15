@@ -2,14 +2,21 @@
 # AFCT Dashboard: Linux / macOS installer.
 #
 # Usage:
-#   sh install.sh              Run the guided install (default).
-#   sh install.sh diagnostics  Collect a support zip (redacted) and exit.
+#   sh install.sh                  Run the guided install (default).
+#   sh install.sh diagnostics      Collect a support zip (redacted) and exit.
 #   sh install.sh --help
 #
-# Non-interactive install (advanced): set the prompted values as env vars and
-# pass --yes, e.g.
+# Flags:
+#   -y, --yes          Auto-answer confirmation prompts with their default. Value
+#                      prompts (e.g. a missing admin email) are STILL asked, so this
+#                      needs a terminal for anything not supplied via env vars.
+#   --non-interactive  Never prompt: use env vars and defaults, and fail immediately
+#                      if a required value (e.g. ADMIN_EMAIL/ADMIN_PASSWORD) is
+#                      missing. Use this for automated / unattended installs.
+#
+# Unattended install: supply the prompted values as env vars, e.g.
 #   ADMIN_EMAIL=admin@x.edu ADMIN_PASSWORD=... APP_URL=https://afct.x.edu \
-#     sh install.sh --yes
+#     sh install.sh --non-interactive
 #
 # The script is self-contained: on Linux it installs Docker for you if it's
 # missing (via the official get.docker.com script); otherwise it just needs
@@ -30,7 +37,8 @@ ENV_EXAMPLE=".env.production.example"
 LOG_FILE="install.log"
 DIAG_PREFIX="afct-diagnostics"
 
-ASSUME_YES="false"
+ASSUME_YES="false"        # --yes: auto-answer confirmation prompts with their default
+NON_INTERACTIVE="false"   # --non-interactive: never prompt; fail on missing required input
 MODE="install"
 DOCKER_SUDO=""                              # set to "sudo" at preflight if the daemon needs it
 OS=$(uname -s 2>/dev/null || echo unknown)  # Linux / Darwin
@@ -39,6 +47,7 @@ for arg in "$@"; do
   case "$arg" in
     diagnostics|--diagnostics) MODE="diagnostics" ;;
     -y|--yes) ASSUME_YES="true" ;;
+    --non-interactive|--noninteractive) NON_INTERACTIVE="true" ;;
     -h|--help) MODE="help" ;;
     *) ;;
   esac
@@ -381,9 +390,16 @@ looks_like_email() {
 # --------------------------------------------------------------------------- #
 # Prompt helpers
 # --------------------------------------------------------------------------- #
+# True only when we may block for human input: interactive mode (not
+# --non-interactive) AND a real terminal on stdin. Everything that could otherwise
+# spin forever on EOF is gated on this.
+can_prompt() { [ "$NON_INTERACTIVE" != "true" ] && [ -t 0 ]; }
+
 prompt_default() { # prompt_default "Question" "default" -> echoes answer
   q=$1; d=$2
-  if [ "$ASSUME_YES" = "true" ]; then printf '%s' "$d"; return; fi
+  # A defaulted question always has a safe answer: --yes auto-answers with it, and
+  # when we can't prompt (no terminal / --non-interactive) we fall back to it too.
+  if [ "$ASSUME_YES" = "true" ] || ! can_prompt; then printf '%s' "$d"; return; fi
   ask "$q [$d]: "
   IFS= read -r ans || ans=""
   [ -n "$ans" ] && printf '%s' "$ans" || printf '%s' "$d"
@@ -391,22 +407,38 @@ prompt_default() { # prompt_default "Question" "default" -> echoes answer
 
 prompt_required() { # prompt_required "Question" -> echoes non-empty answer
   q=$1
+  # No default exists here. Required values must be supplied via env when we can't
+  # prompt; callers validate that up front (require_or_die), so reaching this without
+  # a terminal is a bug — bail instead of looping forever on EOF. --yes does NOT skip
+  # this: it only auto-answers confirmations, not missing required values.
+  can_prompt || { warn "internal: cannot prompt for '$q' (no terminal)."; return 1; }
   while :; do
     ask "$q: "
-    IFS= read -r ans || ans=""
-    [ -n "$ans" ] && { printf '%s' "$ans"; return; }
+    if ! IFS= read -r ans; then
+      warn "no input (end of file) while reading '$q'."
+      return 1
+    fi
+    [ -n "$ans" ] && { printf '%s' "$ans"; return 0; }
     warn "a value is required."
   done
 }
 
 prompt_secret() { # prompt_secret "Question" -> echoes typed value (no echo to screen)
   q=$1
+  can_prompt || { warn "internal: cannot prompt for '$q' (no terminal)."; return 1; }
   ask "$q: "
   stty -echo 2>/dev/null || true
   IFS= read -r ans || ans=""
   stty echo 2>/dev/null || true
   printf '\n' >&2
   printf '%s' "$ans"
+}
+
+# Fail with a clear, actionable message when a required value is missing and we
+# can't ask for it. Called in the MAIN shell (not a $(...) subshell) so die exits.
+require_or_die() { # require_or_die VALUE "NAME" "hint"
+  [ -n "$1" ] && return 0
+  die "$2 is required but was not provided. $3"
 }
 
 # --------------------------------------------------------------------------- #
@@ -436,6 +468,20 @@ do_install() {
   log ""
   log "Let's configure your AFCT Dashboard."
 
+  # When we can't prompt (no terminal, or --non-interactive), every required value
+  # must come from the environment; validate that here, in the main shell, so we fail
+  # with a clear message instead of spinning on an unanswerable prompt. APP_URL has a
+  # safe default (the hostname), so it isn't required. ADMIN_PASSWORD may be
+  # auto-generated below unless --non-interactive asked for a strict, reproducible run.
+  if ! can_prompt; then
+    require_or_die "${ADMIN_EMAIL:-}" "ADMIN_EMAIL" \
+      "Set it as an environment variable, or run on a terminal without --non-interactive."
+    if [ "$NON_INTERACTIVE" = "true" ]; then
+      require_or_die "${ADMIN_PASSWORD:-}" "ADMIN_PASSWORD" \
+        "Set it as an environment variable (or drop --non-interactive to auto-generate one)."
+    fi
+  fi
+
   default_url="https://$(hostname 2>/dev/null || echo localhost)"
   APP_URL_IN=${APP_URL:-$(prompt_default "Public URL (how people reach the site)" "$default_url")}
   validate_app_url "$APP_URL_IN"
@@ -450,6 +496,11 @@ do_install() {
     ADMIN_PASSWORD_IN=$ADMIN_PASSWORD
     is_strong_password "$ADMIN_PASSWORD_IN" || die "ADMIN_PASSWORD is too weak: ${PW_POLICY_MSG}"
     ADMIN_PW_GENERATED="false"
+  elif ! can_prompt; then
+    # No terminal to type one, and no ADMIN_PASSWORD supplied (a --non-interactive run
+    # already failed above): auto-generate a strong password and show it at the end.
+    ADMIN_PASSWORD_IN=$(gen_admin_password)
+    ADMIN_PW_GENERATED="true"
   else
     choice=$(prompt_default "Set the admin password yourself (t) or auto-generate one (g)?" "t")
     case "$choice" in
@@ -583,7 +634,9 @@ smoke_test() {
 # --------------------------------------------------------------------------- #
 case "$MODE" in
   help)
-    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    # Print the leading comment block (everything from line 2 up to the first
+    # non-comment line), stripping the leading "# ".
+    awk 'NR==1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
     ;;
   diagnostics)
     collect_diagnostics
