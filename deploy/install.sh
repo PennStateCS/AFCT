@@ -66,6 +66,19 @@ compose() {
   fi
 }
 
+# True only if the env file has non-empty values for the settings the stack cannot
+# start without. Guards against silently keeping an empty or truncated
+# .env.production (e.g. from an interrupted run), which otherwise surfaces as a
+# cryptic "Database is uninitialized and superuser password is not specified".
+env_file_complete() {
+  _envf="$1"
+  [ -s "$_envf" ] || return 1
+  for _k in POSTGRES_PASSWORD DATABASE_URL NEXTAUTH_SECRET; do
+    grep -qE "^${_k}=.+" "$_envf" 2>/dev/null || return 1
+  done
+  return 0
+}
+
 # --------------------------------------------------------------------------- #
 # Diagnostics: a redacted support bundle the user can send to the maintainer.
 # Secret VALUES are masked; only keys are shown.
@@ -407,13 +420,17 @@ do_install() {
   preflight
   ensure_docker_boot
 
-  # If a config already exists, don't clobber it silently.
-  if [ -f "$ENV_FILE" ]; then
+  # If a COMPLETE config already exists, don't clobber it silently. An existing but
+  # empty/truncated file (missing required keys) must NOT be kept — that leaves the
+  # stack without a DB password and fails cryptically — so fall through and rewrite it.
+  if [ -f "$ENV_FILE" ] && env_file_complete "$ENV_FILE"; then
     keep=$(prompt_default "Existing ${ENV_FILE} found. Keep it (k) or reconfigure (r)?" "k")
     case "$keep" in
       r|R|reconfigure) : ;;   # fall through and regenerate
       *) log "keeping existing ${ENV_FILE}."; bring_up; return ;;
     esac
+  elif [ -f "$ENV_FILE" ]; then
+    warn "existing ${ENV_FILE} is missing required settings (POSTGRES_PASSWORD / DATABASE_URL / NEXTAUTH_SECRET); regenerating it."
   fi
 
   log ""
