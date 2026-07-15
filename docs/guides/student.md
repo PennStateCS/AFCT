@@ -1,118 +1,84 @@
 # Student guide
 
-**Audience:** students.
+**Audience:** students
 
-You see **your own courses and your own work**, and nothing else. You never see
-another student's submissions, grades, or comments. Rosters show your
-instructors and TAs, and your classmates stay private, so nobody in your
-section can browse your grades either. For the complete picture of who can see
-what, see [Roles and permissions](../reference/roles-and-permissions.md).
+AFCT shows your courses, submissions, grades, and comments. You cannot view another student's work or grades.
 
----
+See [Roles and permissions](../reference/roles-and-permissions.md) for the complete access model.
 
-## Joining a course
+## Join a course
 
-You get into a course one of two ways. Either your **instructor enrolls you**
-directly, or they **share an enroll code** that you enter yourself.
-Self-enrollment has three conditions: the course must be published, its
-**enrollment window** must be open, and the code must be correct. If the code
-your instructor gave you isn't working, the window has probably closed; ask
-them to enroll you directly, which they can do at any time.
+You can join a course in either of these ways:
 
-A course appears to you only **after the instructor publishes it**. Before
-that, or after it has been archived, it simply won't show up, even by a direct
-link. So if you enrolled but see nothing, the course likely isn't published
-yet. That's normal early in a term; give it a day before you worry.
+- Your instructor enrolls you.
+- Your instructor gives you an enrollment code.
 
-You cannot remove yourself from a course. If you need to be un-enrolled, ask
-your instructor.
+Enrollment codes work only when the course is published, the enrollment window is open, and the code is correct.
 
----
+A course does not appear until it is published. When you have been enrolled but cannot see the course, ask the instructor whether it has been published.
 
-## Finding your work
+Students cannot remove themselves from a course. Contact the instructor when your enrollment should be removed.
 
-Your **dashboard** and the **calendar** show assignments from your published
-courses, bucketed by date. Each assignment lists its problems and its due date.
+## Find assignments
 
-Deadlines appear in **both your local time and the course's timezone** (for
-example, "Nov 5, 11:59 PM EST, course zone US/Eastern"). If you're traveling,
-or you live in a different zone than the campus, the two times will differ, and
-the pair tells you exactly when the real cutoff is without any mental
-arithmetic. Only published assignments from published courses appear; drafts
-your instructor is still preparing stay hidden until they're released, so an
-empty calendar means nothing is due, not that something is missing.
+The dashboard and calendar show published assignments from published courses.
 
----
+Each deadline is displayed in your local timezone and the course timezone. These may differ when you are traveling or when the course is hosted in another region.
 
-## Submitting
+Draft assignments are not visible to students.
 
-Open a problem and submit your file. Before you do, a few things are worth
-knowing, because some of them cannot be undone.
+## Submit work
 
-**Submission limits.** A problem may cap how many times you can submit. When it
-does, you can see the limit, and a submission that would go past it is refused.
-Some problems allow unlimited attempts. When there's a cap, treat your early
-attempts as precious: test your automaton yourself before spending one.
+Open the problem and upload the required file.
 
-**Submissions are final.** You can't edit or delete a submission. If you want
-to change something, you submit again, and that new submission is a **new
-attempt** that counts toward any limit. There is no "just fix one small thing"
-that doesn't cost an attempt, so check your file before you upload it.
+### Submission limits
 
-**Deadlines.** After the due date, your work is accepted only if the assignment
-allows late submissions, and only up to the late cutoff your instructor set.
-Whether something is late is decided by the server, not by your machine, so
-changing your device clock or timezone does nothing except change what you see
-on screen. If the deadline has passed on the server, it has passed.
+A problem may allow unlimited attempts or set a maximum number. AFCT shows the limit when one applies.
 
-**Resubmit cooldown.** There may be a short minimum wait between resubmissions
-to the same problem. Submit again too quickly and you'll be asked to wait a
-moment. This is not the site being slow; it's intentional, and the practical
-lesson is that rapid-fire guessing against the grader is a losing strategy
-anyway.
+Each accepted upload counts as a new attempt.
 
----
+### Submissions cannot be edited or deleted
 
-## Feedback and grades
+A submitted attempt is permanent. To correct it, upload a new attempt. The new upload counts toward the submission limit.
 
-When **autograding** is on, your result appears once the grader finishes; there
-is no waiting for a manual release. You can view the **feedback and score for
-your own work**, and the feedback is usually the fastest way to figure out what
-your automaton got wrong before your next attempt. If an instructor leaves a
-**comment** on your work, you'll see it in your own thread and can reply, so
-comments work fine as a back-and-forth about a specific submission.
+Check the file before submitting.
 
-You only ever see **your own** grades and feedback, and the same wall protects
-your work from everyone else in the class.
+### Deadlines and late work
 
----
+After the due date, AFCT accepts a submission only when late work is enabled and the late cutoff has not passed.
+
+The server determines whether the attempt is on time. Changing the device clock or timezone does not change the result.
+
+### Resubmission cooldown
+
+AFCT may require a short wait between submissions to the same problem. When the cooldown is active, the page tells you when to try again.
+
+## Review feedback and grades
+
+When autograding is enabled, the score and feedback appear after evaluation finishes.
+
+Use the feedback to revise the next attempt. An instructor may also leave a comment on the submission, and you can reply in the same thread.
+
+Only you, your course staff, and administrators can view your individual work.
 
 ## Group assignments
 
-Some assignments are done as a **group**. Your group shares **one submission**:
-any member can submit on the group's behalf, and everyone in the group sees the
-submission, its grade, and its feedback, along with the group's shared comment
-thread. Since one member's upload is the whole group's attempt, agree on who
-submits and when before anyone clicks the button. You never see another group's
-work, and they never see yours.
+A group shares one submission record. Any group member can submit, and every member sees the submission, grade, feedback, and shared comment thread.
 
----
+Coordinate with the group before submitting because one member's upload becomes the group's attempt.
 
-## Your profile
+You cannot view another group's work.
 
-From your profile you can update your **name, avatar, and timezone**. Set your
-timezone to **Automatic** to follow your device, which is the right choice if
-you move around, or pick a fixed zone if you'd rather times never shift under
-you. Your **email is your account name and cannot be changed**; if it's wrong,
-contact an administrator.
+## Update your profile
 
----
+You can update your name, avatar, and timezone.
 
-## Trouble signing in
+Choose **Automatic** timezone to follow the current device, or select a fixed timezone when you want the display to remain consistent.
 
-Too many failed login attempts will **lock your account** for a while. This is
-a security measure, not a judgment; wait for the lockout to pass and try again.
-If you're still locked out, or you've forgotten your password, contact an
-administrator, who can unlock the account or reset your password. If your
-password was reset for you, you'll be asked to choose a new one the next time
-you sign in, so the temporary password never becomes your real one.
+Your account email address cannot be changed. Contact an administrator when it is incorrect.
+
+## Sign-in problems
+
+Too many failed attempts can temporarily lock the account. Wait for the lockout to end or contact an administrator.
+
+An administrator can unlock the account or reset the password. When the reset password is temporary, AFCT asks you to choose a new password at the next sign-in.

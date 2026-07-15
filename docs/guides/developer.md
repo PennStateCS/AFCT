@@ -1,308 +1,312 @@
 # Developer guide
 
-**Audience:** engineers working on the AFCT Dashboard.
+**Audience:** engineers working on the AFCT Dashboard
 
-## Stack
+This guide covers the conventions that affect correctness, security, and maintainability. Use [Development setup](../setup/development.md) for installation and daily Docker commands.
 
-The versions here matter; several of them changed behavior in ways the rest of
-this guide has to account for.
+## Technology stack
 
-- **Next.js 16** (App Router): server components and route handlers, Turbopack.
-- **React 19**.
-- **NextAuth v5** (beta) with JWT sessions.
-- **Prisma 7** against PostgreSQL, using the **`@prisma/adapter-pg` driver
-  adapter**. Prisma 7 has no bundled query engine and no `datasource.url` in the
-  schema; the connection comes from the adapter, which has consequences for any
-  code that constructs its own client (see [Data layer](#data-layer)).
-- **Zod 4** for validation.
-- **TanStack Query v5** on the client.
-- **Tailwind CSS 4**.
-- **Vitest 4** for tests.
-- **Docker** for local and production; images published to GHCR.
-- **Node 22** (Docker images and CI).
+- Next.js 16 with the App Router and Turbopack
+- React 19
+- NextAuth v5 beta with JWT sessions
+- Prisma 7 with PostgreSQL and `@prisma/adapter-pg`
+- Zod 4
+- TanStack Query v5
+- Tailwind CSS 4
+- Vitest 4
+- Node.js 22
+- Docker for development and production
+- GitHub Container Registry for published images
 
-## Repository layout
+Prisma 7 does not use a bundled query engine or `datasource.url` in the schema. Every Prisma client, including clients created by standalone scripts, must use the PostgreSQL driver adapter.
 
-- `src/app/api/**/route.ts` is the API surface: HTTP route handlers, one file
-  per resource path.
-- `src/app/**` holds pages and client components.
-- `src/lib/` is where server logic lives: `permissions.ts` (the two course
-  gates), `api/` (shared route helpers), `prisma.ts` (the client), auth, the
-  submission worker, and the rest.
-- `src/schemas/` holds the Zod schemas for forms and routes, plus `fields.ts`
-  for the reusable field primitives (see [Validation](#validation-zod)).
-- `prisma/` holds the schema, migrations, and the seed (`seed.ts` dispatches to
-  `seed-dev.ts` or `seed-prod.ts`).
-- `docs/` holds the guides, the `reference/` pages (roles and permissions,
-  client API), and the `setup/` deployment guides.
+## Repository map
 
-## Local development
+| Path | Purpose |
+|---|---|
+| `src/app/api/**/route.ts` | HTTP route handlers |
+| `src/app/**` | Pages, layouts, and client components |
+| `src/lib/` | Server logic, authorization, API helpers, auth, Prisma, workers, and shared utilities |
+| `src/schemas/` | Zod form and API schemas |
+| `prisma/` | Schema, migrations, and seed files |
+| `docs/` | User, developer, setup, operations, and reference documentation |
 
-The stack runs in Docker; there is no supported bare-metal dev mode.
-`npm run docker:dev` builds and starts the app, database, nginx, a db-backup
-sidecar, and Prisma Studio. The app entrypoint applies migrations on start, so a fresh start is
-always up to date with the schema. To apply a new migration to an
-already-running stack without bouncing the dev server, run
-`npm run docker:dev:migrate:deploy`, then `npm run docker:dev:generate` if the
-Prisma client changed.
+Important shared files include:
 
-> **Stale dependencies gotcha.** The dev image keeps `node_modules` in a named
-> volume, and that volume survives `--build`. So after a dependency change (a
-> Prisma major, for example) a rebuild can quietly hand you the old packages.
-> Clear the volume: `npm run docker:dev:down:volumes`, then `npm run docker:dev`,
-> and confirm the versions in the startup log rather than assuming.
+- `src/lib/permissions.ts`
+- `src/lib/api/with-auth.ts`
+- `src/lib/api/request.ts`
+- `src/lib/api/http.ts`
+- `src/lib/prisma.ts`
+- `src/schemas/fields.ts`
 
-Full setup lives in [`setup/development.md`](../setup/development.md) and
-[`setup/production.md`](../setup/production.md).
+## Development workflow
+
+Docker is the supported development path.
+
+Start the stack with:
+
+```bash
+npm run docker:dev
+```
+
+The startup sequence applies migrations and starts PostgreSQL, the application, nginx, the backup service, and Prisma Studio.
+
+When a migration must be applied to a running stack:
+
+```bash
+npm run docker:dev:migrate:deploy
+npm run docker:dev:generate
+```
+
+Run the generate command when the Prisma client changed.
+
+### Stale dependency volume
+
+Development uses a named `node_modules` volume. Rebuilding the image does not replace the contents of that volume.
+
+After changing dependencies, use:
+
+```bash
+npm run docker:dev:down:volumes
+npm run docker:dev
+```
+
+This removes development volumes, including the database and uploads. For a less destructive package-only repair, follow the instructions in [Development troubleshooting](../setup/development-troubleshooting.md#module-not-found-after-adding-a-package).
 
 ## Authorization model
 
-Authorization is a **global admin flag plus a per-course role**. That is the
-whole model; anything more elaborate you think you remember is from an earlier
-version and is gone. This section is the short form for people writing code.
-The full matrix is in
-[Roles and permissions](../reference/roles-and-permissions.md), and when the
-two disagree, that page wins.
+AFCT uses:
 
-- `isAdmin` is global. An admin may act anywhere and bypasses course rosters.
-- Every other permission comes from the caller's `Roster.role` in the specific
-  course: `FACULTY`, `TA`, or `STUDENT`. **Staff** means `FACULTY` or `TA`,
-  which are currently equivalent. Roles resolve fresh from the database on
-  every request and never leak across courses. There is no global non-admin
-  role, so "is this user a faculty member" is not a well-formed question
-  without a course in hand.
+- A global `isAdmin` flag
+- A per-course `Roster.role` of `FACULTY`, `TA`, or `STUDENT`
 
-Two gates in [`src/lib/permissions.ts`](../../src/lib/permissions.ts):
+There is no global non-administrator role. Ask which course is involved before checking whether a user is Faculty, a TA, or a Student.
 
-- `canAccessCourse(user, courseId)` covers reads: admin, or rostered and
-  (staff or the course is published). This is the single home of the
-  "students only see published courses" rule. Do not re-derive that rule
-  inline in a handler; the moment two copies exist, they drift, and the drift
-  is a security bug.
-- `canManageCourse(user, courseId, roles?)` covers writes and staff-only
-  reads: admin, or rostered with a role in `roles` (default
-  `COURSE_STAFF_ROLES`, which is FACULTY plus TA; pass `COURSE_FACULTY_ROLES`
-  to require FACULTY specifically).
+Faculty and TAs currently share the same permissions. `COURSE_STAFF_ROLES` contains both roles.
 
-Both exclude archived and soft-deleted courses. An archived course is read-only
-for **everyone, admins included**, and **archiving and restoring (un-archiving)
-are both admin-only**. A **soft-deleted** course is inaccessible to everyone
-(the admin short-circuit is overridden for `deletedAt`, so even an admin is
-denied) and `withCourseAuth` masks it as **404** before the role gate runs.
+The complete model is in [Roles and permissions](../reference/roles-and-permissions.md). That page is authoritative.
 
-## API conventions
+### Course access helpers
 
-These conventions exist because the failure mode for each is not a broken
-feature but a hole. Follow them even when the route feels trivial.
+Use the helpers in `src/lib/permissions.ts`.
 
-- **Wrap handlers** with `withAdminAuth`, `withCourseAuth`, or
-  `withAssignmentAuth`
-  ([`src/lib/api/with-auth.ts`](../../src/lib/api/with-auth.ts)) rather than
-  hand-rolling auth. The wrappers reject a missing or disabled session with
-  401, run the role check, log denials, mask a **soft-deleted** course as 404
-  (for everyone, admins included), and (with `blockWhenArchived`) enforce the
-  archive freeze, for admins too. A hand-rolled check will get one of those
-  things wrong eventually, and the audit log is usually the one
-  that gets forgotten. A handful of routes do call `auth()` directly because
-  their scoping is self- or entity-based rather than course-param based; that
-  is deliberate, not an invitation.
-- **Validate bodies** against a Zod schema with `readJson(req, schema)` for
-  JSON or `readFormData(req, schema)` for multipart; see
-  [Validation](#validation-zod). For date fields a route interprets in a
-  specific timezone, use a string-preserving schema. If you let Zod transform
-  the datetime to a `Date`, the timezone decision has already been made by the
-  time your handler runs, and it was made wrong.
-- **Error responses** use `apiError(status, message)`
-  ([`src/lib/api/http.ts`](../../src/lib/api/http.ts)), which returns
-  `{ error }`. Keep that shape everywhere; the client and the generated API
-  types both assume it.
-- **Status codes:** 400 for validation, 401 for no or disabled session, 403
-  for forbidden, 404 for hidden or missing, 409 for conflict, 413 for too
-  large, 429 for rate-limited, and 202 for async (submission and rerun) work.
-- **Hide existence from students.** A student hitting a course or assignment
-  they cannot reach gets **404**, not 403. A 403 says "this exists and you
-  may not have it," which is itself information. Reserve 403 for a rostered
-  user who lacks the privilege for a specific action.
-- **Never trust client-supplied identity or scope.** Derive the course from
-  the assignment or the database, not from the request body, and re-check the
-  per-course role in the handler. A body that names its own `courseId` is a
-  body that can name someone else's.
+`canAccessCourse(user, courseId)` handles course reads. It allows:
 
-## Validation (Zod)
+- Administrators
+- Course staff on the roster
+- Enrolled students when the course is published
 
-Every form **and** every mutating route validates its input against a **Zod 4**
-schema. The "and" is the point: the form schema is a courtesy to the user, the
-route schema is the actual gate, and a request from curl never saw the form.
+`canManageCourse(user, courseId, roles?)` handles writes and staff-only reads. It allows:
 
-Schemas live in `src/schemas/`, one file per domain (`course.ts`,
-`assignment.ts`, `problem.ts`, `user.ts`, `auth.ts`, `bulk.ts`, `grade.ts`,
-`group.ts`, `profile.ts`, `password.ts`, `systemSettings.ts`, `log.ts`) plus
-[`fields.ts`](../../src/schemas/fields.ts) for reusable field primitives.
-There is no barrel; import the specific file.
+- Administrators
+- Rostered users with one of the requested roles
 
-### Form schema vs API schema
+The default role set is `COURSE_STAFF_ROLES`. Pass `COURSE_FACULTY_ROLES` when an action must require Faculty.
 
-A form and its route deliberately use **different** schemas that share their
-field constraints. This looks like duplication until you notice they validate
-different shapes:
+Both helpers enforce course lifecycle rules. Archived courses are read-only for everyone. Soft-deleted courses are inaccessible to everyone.
 
-- **`...FormSchema`** is client-side. It is wired into react-hook-form with
-  `zodResolver(schema)` (a few non-RHF dialogs call `schema.safeParse(...)`
-  and map the issues onto their own error state). It validates the browser's
-  raw input: `datetime-local` **strings**, a confirm-password field, coerced
-  number strings.
-- **`...ApiSchema`** is server-side, in the route. It validates the wire shape
-  the handler actually receives and must avoid browser-only transforms. In
-  particular it keeps dates as **strings** so the route can parse them in the
-  course timezone (see [Time and deadlines](#time-and-deadlines)).
+Do not repeat publication and roster rules inside route handlers. Centralized checks reduce authorization drift.
 
-Both draw their scalar rules from the shared primitives in `fields.ts`
-(`dateTimeLocalString`, `formBoolean`, `formBooleanOptional`,
-`formIntOptional`, and so on), so the two sides cannot drift on what a valid
-value is, only on shape. Do not re-declare a body schema inline in a route
-when a domain file exists; import it, or add it there. An inline schema is
-invisible to the next person tightening a field constraint, and the API
-quietly stops matching the form.
+## Route authorization
 
-### Validating a route body
+Use the wrappers in [`src/lib/api/with-auth.ts`](../../src/lib/api/with-auth.ts):
 
-Use the helpers in
-[`src/lib/api/request.ts`](../../src/lib/api/request.ts):
+- `withAdminAuth`
+- `withCourseAuth`
+- `withAssignmentAuth`
 
-- `readJson(req, schema)` for JSON bodies.
-- `readFormData(req, schema)` for `multipart/form-data` (file uploads). It
-  returns the validated scalar fields **and** the raw `FormData`, so the
-  handler can still pull the `File`. Multipart values arrive as strings, so
-  use the coercing primitives (`formBoolean`, `formIntOptional`) in the
-  schema.
+The wrappers handle the session, disabled users, role checks, audit logging, archived-course restrictions, and soft-deleted resource hiding.
 
-Both return a discriminated result and **never throw**: `{ ok: true, data }`
-with the typed body, or `{ ok: false, response }`, a ready 400 for malformed
-input. The handler stays two lines:
+Some self-scoped or entity-scoped routes call `auth()` directly. Treat those as exceptions that require an explicit reason.
+
+## Request validation
+
+Every mutating route must validate its input with Zod.
+
+Use the helpers in [`src/lib/api/request.ts`](../../src/lib/api/request.ts):
+
+- `readJson(req, schema)` for JSON
+- `readFormData(req, schema)` for multipart data
+
+Both return a discriminated result:
 
 ```ts
 const parsed = await readJson(req, CourseCreateApiSchema);
 if (!parsed.ok) return parsed.response;
-const body = parsed.data; // fully typed
+
+const body = parsed.data;
 ```
 
-Every route that reads a body runs it through a schema. A couple keep a custom
-raw read for a specific reason (a distinct empty-body message, or an audit-log
-entry on a missing field) but still `safeParse` the parsed object against a
-schema afterward. The invariant to preserve is that no handler acts on an
-unvalidated body, ever.
+The helpers return a ready `400` response instead of throwing.
 
-### Conventions
+### Form schemas and API schemas
 
-- **Enums** are `z.enum([...])` literals kept in sync with the Prisma enum by
-  a comment. This is deliberately *not* `z.nativeEnum(PrismaEnum)`: these
-  schemas are imported by client components, and `z.nativeEnum` would pull
-  `@prisma/client` into the browser bundle. The comment is the price of
-  keeping Prisma out of the client.
-- **Passwords** use the shared `StrongPassword`
-  ([`src/schemas/user.ts`](../../src/schemas/user.ts)), which derives its
-  rules from `passwordRules` in
-  [`src/lib/password-policy.ts`](../../src/lib/password-policy.ts). That file
-  is the one source feeding the checklist UI, the `isStrongPassword`
-  predicate, and the schema, so a policy change lands in all three at once.
-  Length is capped at 72, the bcrypt limit; bytes past it would be silently
-  ignored at hash time, which is worse than a validation error.
-- **Bound free-text** with `.trim()` and `.max(...)` (names, titles, code).
-  Unbounded text fields are a storage and rendering liability.
-- Validation is defense in depth. A `...FormSchema` catching bad input in the
-  browser does **not** excuse the route; the `...ApiSchema` is the real gate,
-  since a non-browser client skips the form entirely.
+Forms and routes validate different input shapes.
 
-## Data layer
+- `...FormSchema` validates browser input such as `datetime-local` strings, number fields, and confirmation fields.
+- `...ApiSchema` validates the wire format received by the route.
 
-- The Prisma client ([`src/lib/prisma.ts`](../../src/lib/prisma.ts)) is
-  constructed with the pg driver adapter and cached as a dev singleton.
-  Standalone scripts (the seed, for example) must build their own client
-  **with the adapter**. A bare `new PrismaClient()` cannot connect under
-  Prisma 7; there is no engine for it to fall back on.
-- **Prefer `select`** to avoid over-fetching, especially on list and hot
-  paths, and anywhere a `User` row is loaded. The concrete risk with `User`
-  is that a default fetch includes the password hash, and a hash that reaches
-  a response object is one careless spread away from a client. Never let one
-  get that far.
-- **Check-then-act needs a transaction.** A `count` or `findUnique` followed
-  by a `create` or `delete` in separate awaits is a race; two concurrent
-  requests both pass the check and both write. Where an invariant must hold
-  (submission caps, "at least one faculty"), wrap the re-check plus the write
-  in a `prisma.$transaction(..., { isolationLevel: Serializable })` and handle
-  the serialization conflict (map `P2034` to a 409), or lean on a unique
-  constraint plus `upsert` where one exists. See the submission and roster
-  routes for the pattern.
-- **Batch reads.** Use `findMany({ where: { id: { in: [...] } } })`,
-  `include`, or `groupBy` instead of a query per row. N+1 loops are invisible
-  on a seed database and painful on a real roster. The calendar, course-list,
-  and grade-matrix code are the models to copy.
+Both should reuse field constraints from `src/schemas/fields.ts`.
 
-## Logging
+Keep route date values as strings until the handler parses them in the course timezone. Transforming them to `Date` inside the schema can apply the wrong timezone too early.
 
-All audit writes go through `createEnhancedActivityLog`. Severity is `INFO`,
-`WARNING`, `ERROR`, or `SECURITY`, inferred from the action-name suffix:
-`_DENIED` and `_FORBIDDEN` map to `SECURITY`; `_ERROR` to `ERROR`;
-`_REJECTED`, `_INVALID`, and `_RATE_LIMIT` to `WARNING`; everything else is
-`INFO`. Name your actions accordingly and the severity takes care of itself.
+Do not define an inline route schema when the domain already has a schema file.
 
-Log every write and every privileged action taken on a student (actor, action,
-target, course). Do **not** log a user reading their own routine data; that is
-noise, and noise in an audit log is what buries the entry you actually need
-during an incident. The log is append-only: no route edits or deletes an
-entry, and retention pruning runs as a scheduled job.
+### Schema conventions
 
-## Time and deadlines
+- Use `z.enum([...])` literals for enums imported by client code. Do not pull Prisma enums into the browser bundle.
+- Use the shared `StrongPassword` schema and password policy.
+- Cap passwords at 72 characters because bcrypt ignores bytes beyond that limit.
+- Use `.trim()` and `.max(...)` for free-text fields.
+- Treat client validation as usability. Server validation remains the security boundary.
 
-Time bugs in an LMS are grade disputes, so the rules here are strict. Store
-every timestamp as a **UTC instant**. A course deadline is entered in the
-course timezone and converted at save time; store IANA zone names, never fixed
-offsets, because a fixed offset is wrong for half the year anywhere with DST.
-**Lateness is always computed on the server, UTC against UTC.** The display
-zone is the viewer's, resolved as profile override, then browser, then system
-default, and it is a display preference only. Never trust a client-supplied
-time or timezone for enforcement; a client that controls the clock controls
-the deadline.
+## API responses
 
-## Environment
+Use `apiError(status, message)` from `src/lib/api/http.ts`. Error bodies must keep this shape:
 
-- **`NEXTAUTH_SECRET`** is the JWT signing secret, validated at runtime by
-  `requireAuthSecret` (at least 32 chars). The check is skipped during
-  `next build`, since there is no secret at build time, but enforced at server
-  start and on every edge-proxy request, so a misconfigured deployment fails
-  immediately rather than issuing forgeable tokens.
-- **`DATABASE_URL`** is the Postgres connection for the app, migrations, and
-  seed (read via `prisma.config.ts`).
+```json
+{ "error": "Message" }
+```
 
-## Testing and checks
+Use status codes consistently:
 
-Run before pushing:
+| Status | Meaning |
+|---:|---|
+| `400` | Invalid request |
+| `401` | Missing, expired, or disabled session |
+| `403` | Authenticated user lacks permission for a known resource |
+| `404` | Missing or intentionally hidden resource |
+| `409` | State conflict |
+| `413` | Request or file too large |
+| `429` | Rate limited |
+| `202` | Asynchronous work accepted |
 
-- `npx vitest run` runs the full suite. It mocks Prisma; no database needed.
-- `npm run typecheck` covers the source, which must stay at **zero errors**;
-  `npm run typecheck:test` covers the test files.
-- `npm run lint` runs ESLint 9 flat config with type-aware rules, plus the
-  TanStack Query key-hygiene plugin. CI runs it with `--max-warnings=0`, so a
-  warning locally is a failure remotely.
-- `npm run docs` regenerates the OpenAPI spec and the typed API client
-  (`src/types/api.ts`); CI fails if the committed types drift, so run it after
-  any route change.
+Students should receive `404` for courses and assignments they cannot access. This prevents the API from confirming that a hidden resource exists.
 
-> One asymmetry to know about: `next build` does stricter type-checking than
-> `tsc` (against Next's generated route types) and only runs in the
-> Docker/GHCR publish, not in CI's test job. A build-time-only breakage can
-> therefore pass CI and fail the image build. The publish is gated on CI, so
-> it fails loudly rather than shipping a broken image, but you find out later
-> than you would like.
+Never trust identity or scope from the request body. Derive the course from the assignment or another authoritative database relation.
 
-## CI/CD
+## Data access
 
-- **`ci.yml`** runs on every push to `main` and every PR: `lint`, `test`, and
-  `docs-check` in parallel.
-- **`docs.yml`** publishes the API reference to GitHub Pages on `main`.
-- **`publish-ghcr.yml`** builds and publishes the Docker image to GHCR. It is
-  triggered by `workflow_run` **after CI succeeds** on `main`, so a failing
-  check never ships an image. It also pins `docker-compose.yml` to the
-  published digest, which is why production deploys are reproducible.
+The shared Prisma client in [`src/lib/prisma.ts`](../../src/lib/prisma.ts) uses the PostgreSQL driver adapter and a development singleton.
 
-Required status-check names are `CI / lint`, `CI / test`, and `CI / docs-check`.
+Standalone scripts must create their Prisma client with the same adapter. A bare `new PrismaClient()` cannot connect under Prisma 7.
+
+### Select only needed fields
+
+Prefer `select`, especially on list routes and any query that loads a `User`.
+
+A full `User` query includes the password hash. Keep that field out of response-shaped objects entirely.
+
+### Protect check-then-write operations
+
+A read followed by a write can race with another request.
+
+When an invariant must hold, place the final check and write in a serializable transaction:
+
+```ts
+await prisma.$transaction(
+  async (tx) => {
+    // Re-check the invariant and write using tx.
+  },
+  { isolationLevel: "Serializable" },
+);
+```
+
+Handle Prisma `P2034` as a conflict, usually `409`.
+
+Use database uniqueness and `upsert` when the data model already provides the necessary constraint.
+
+### Avoid N+1 queries
+
+Use:
+
+- `findMany` with `in`
+- `include`
+- `groupBy`
+- Batched lookup maps
+
+Do not run a query for each row in a loop.
+
+## Audit logging
+
+Use `createEnhancedActivityLog` for audit entries.
+
+Severity is inferred from action suffixes:
+
+| Suffix | Severity |
+|---|---|
+| `_DENIED`, `_FORBIDDEN` | `SECURITY` |
+| `_ERROR` | `ERROR` |
+| `_REJECTED`, `_INVALID`, `_RATE_LIMIT` | `WARNING` |
+| Other | `INFO` |
+
+Log writes, privileged student actions, and security denials. Include the actor, action, target, and course when available.
+
+Do not log routine reads of a user's own data. Excessive audit noise makes real incidents harder to investigate.
+
+The audit log is append-only. Retention pruning is handled by a scheduled job.
+
+## Dates and deadlines
+
+Store timestamps as UTC instants.
+
+Interpret a course deadline in the course's IANA timezone, convert it once, and store the UTC result. Do not store a fixed offset in place of an IANA timezone because daylight saving rules can change the offset.
+
+The server compares UTC to UTC when determining lateness.
+
+The display timezone is resolved from:
+
+1. User profile setting
+2. Browser timezone
+3. System default
+
+A display timezone must never affect deadline enforcement.
+
+## Environment variables
+
+### `NEXTAUTH_SECRET`
+
+`requireAuthSecret` validates the secret at runtime. It must contain at least 32 characters.
+
+The build step skips the runtime check because production secrets are not available during `next build`. Server startup and edge requests enforce it.
+
+Changing the secret invalidates existing sessions.
+
+### `DATABASE_URL`
+
+This connection string is used by the application, Prisma migrations, and the seed process through `prisma.config.ts`.
+
+## Tests and checks
+
+Run these before pushing:
+
+```bash
+npx vitest run
+npm run typecheck
+npm run typecheck:test
+npm run lint
+npm run docs
+```
+
+- Vitest uses mocked Prisma and does not require a database.
+- Source and test type checks should have zero errors.
+- CI runs ESLint with `--max-warnings=0`.
+- `npm run docs` regenerates the OpenAPI specification and `src/types/api.ts`.
+
+Run `npm run docs` after changing a route. CI fails when generated API artifacts do not match the committed files.
+
+`next build` checks generated Next.js route types more strictly than plain `tsc`. The Docker image build can therefore catch errors that pass the regular type-check job.
+
+## CI and publishing
+
+- `ci.yml` runs lint, tests, and documentation checks on pull requests and pushes to `main`.
+- `docs.yml` publishes the generated API reference to GitHub Pages.
+- `publish-ghcr.yml` builds and publishes the GHCR image after CI succeeds on `main`.
+- The publish workflow pins the production Compose file to the published image digest.
+
+Required status checks are:
+
+- `CI / lint`
+- `CI / test`
+- `CI / docs-check`

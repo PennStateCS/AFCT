@@ -1,259 +1,214 @@
 # Administrator guide
 
-**Audience:** system administrators.
+**Audience:** AFCT system administrators
 
-Administrator is a **global** capability: the `isAdmin` flag on your account. It
-is not a course role, and it is not tied to any course. You can act anywhere in
-the system, but the division of labor matters. Course *content* belongs to
-faculty (see the [faculty and TA guide](faculty.md)). You own the things faculty
-cannot or should not touch: accounts, platform settings, the course lifecycle,
-and the health of the server. The precise permission model is spelled out in
-[Roles and permissions](../reference/roles-and-permissions.md).
+Administrator access is controlled by the global `isAdmin` flag. It is separate from course roles. An administrator can also be enrolled as Faculty or a TA in a course, and both sets of permissions apply.
 
-Because the admin flag is independent of course roles, you can also be enrolled
-in a course as faculty. Both powers apply at once. Plenty of small departments
-run this way, with one person wearing both hats.
+Administrators manage the platform, accounts, course lifecycle, server settings, and operational health. Faculty and TAs manage the day-to-day work inside their courses.
 
----
+See [Roles and permissions](../reference/roles-and-permissions.md) for the complete authorization model.
 
 ## Accounts
 
-The **Users** page is where every account gets managed. The operations are what
-you would expect, but a few carry consequences worth thinking through before you
-click.
+Use the **Users** page to manage accounts.
 
-You can **create** a user with a name, email, and password. A freshly created
-account has no privileges and no enrollments; it can do nothing until you enroll
-it in a course or the user joins one by code.
+### Create an account
 
-You can **disable** and **enable** accounts. Disabling signs the user out
-everywhere immediately and blocks further sign-in; re-enabling restores access.
-When you need to cut someone off, disable, don't delete. Disabling is
-reversible, and it keeps the door open for the "wait, that was a mistake"
-conversation that happens more often than you'd think.
+A new account requires a name, email address, and password. The account has no course access until it is added to a roster or the user joins a course with an enrollment code.
 
-You can **delete** an account, which removes it. For a user with any history,
-disabling is the better call: their submissions and audit trail stay
-attributable to a real account instead of pointing at a ghost. Deletion is for
-accounts created in error, test accounts, and the like.
+### Disable or enable an account
 
-You can **toggle the administrator flag** to grant or revoke `isAdmin`. One
-guard applies: you cannot remove your *own* admin flag. Without that rule, a
-distracted afternoon could leave the system with no admin at all.
+Disabling an account signs the user out and blocks future sign-ins. The account, submissions, and audit history remain in the system.
 
-You can **unlock** an account that repeated failed logins have locked, rather
-than making the user wait out the lockout. Useful the morning after a password
-change, when someone has burned through their attempts before coffee.
+Use disable instead of delete when the account has real activity or may need to be restored later.
 
-You can **reset a password** on any user's behalf. If you mark it **temporary**,
-the user is forced to choose a new one at their next login, which is the right
-setting almost every time: you should not know a password the user will keep.
-The plaintext is never stored, logged, or shown back to you.
+### Delete an account
 
-One rule stands above the rest: **email is permanent.** Nobody can change an
-account's email once it exists. Not the user, not staff, not you. The email is
-the account identifier, and everything hangs off it. If someone was created
-with the wrong address, the fix is a new account, not an edit.
+Delete accounts that were created by mistake or used only for testing. For accounts with meaningful history, disabling is safer because it preserves attribution.
+
+### Grant administrator access
+
+You can add or remove the `isAdmin` flag. You cannot remove your own administrator flag.
+
+### Unlock an account
+
+Repeated failed sign-in attempts can temporarily lock an account. Use **Unlock** when the user should not have to wait for the lockout period to end.
+
+### Reset a password
+
+Administrators can reset any user's password. Mark the password as temporary so the user must choose a new one at the next sign-in.
+
+AFCT does not store or display the plaintext password after the reset.
+
+### Email addresses cannot be changed
+
+The email address is the permanent account identifier. It cannot be changed by the user, course staff, or an administrator.
+
+When an account has the wrong email address, create a new account with the correct address.
 
 ### Bulk account creation
 
-At the start of a term you rarely create accounts one at a time; you import them
-from a roster spreadsheet. The import validates each row independently. Valid
-rows are created, and rows that fail (a missing field, a malformed email, a
-password that doesn't meet the strength policy, or an email already in use) are
-reported back per row. You fix the bad rows and re-import; the rows that already
-succeeded don't block you. You can also force temporary passwords for the whole
-batch, which you should, for the same reason as above: nobody but the user
-should hold a password that lasts.
+Use bulk import to create accounts from a roster file. Each row is validated independently. Valid rows are created, and invalid rows are reported with a reason.
 
----
+Common errors include:
+
+- Missing required fields
+- Invalid email addresses
+- Passwords that do not meet the policy
+- Email addresses already in use
+
+Fix the failed rows and import them again. Rows that succeeded do not need to be repeated.
+
+For shared or initial passwords, require a temporary password change.
 
 ## Signup and access control
 
-Under **System Settings** you decide whether people can create their own
-accounts at all.
+Signup settings are under **System Settings**.
 
-**Allow user signup** turns public self-registration on or off. With it off,
-you are the only source of accounts, which suits a small deployment where you
-import every roster yourself.
+### Allow user signup
 
-**Allowed signup email domains** restricts self-registration to an approved
-list, typically your institution's domains. Leave it blank to allow any domain.
-A signup attempt from a non-approved domain is refused even when signup is on,
-so you can leave signup open without opening it to the whole internet.
+Turn this off when all accounts will be created by administrators or roster imports.
 
-Signup is also protected by rate limiting (escalating friction, then a captcha
-challenge, then a temporary block) and by the password strength policy, so a
-bot hammering the signup form gets progressively less traction.
+### Allowed signup email domains
 
----
+Enter the domains that may create accounts through public signup. Leave the list empty to allow any domain.
 
-## Courses (the admin's part of the lifecycle)
+Domain restrictions apply even when public signup is enabled.
 
-Faculty run their own courses day to day. A handful of lifecycle actions are
-reserved to you, and the pattern is consistent: anything that creates, freezes,
-thaws, or destroys a course is admin-only, while everything in between belongs
-to the people teaching it.
+### Signup protection
 
-You **create** a course and assign its faculty. New courses start unpublished,
-so nothing is visible to students until the faculty are ready.
+AFCT protects signup with password rules, rate limiting, captcha challenges, and temporary blocks. hCaptcha keys are configured under the security settings.
 
-You **duplicate** a course, which is the fast way to roll a course into a new
-term. The copy carries over settings, assignments, and problems, including
-answer files, points, caps, and autograde flags. It does **not** copy the
-roster: the copy starts empty and unpublished, waiting for you to staff it.
-Last spring's students have no business appearing in this fall's section, so
-the empty roster is the point, not a limitation.
+## Course lifecycle
 
-You **delete** a course, from the **Manage** menu on the course list. Deletion
-adapts to what the course holds. An **empty** course (no assignments, problems,
-students, or submissions) is removed **permanently**; there is nothing to lose.
-Any course with real content or enrollment is **soft-deleted** instead: it gets
-a `deletedAt` stamp, all of its data is retained, and it disappears from every
-list and becomes **inaccessible to everyone, admins included** (no one can open
-it by direct URL). The confirmation dialog tells you which will happen before you
-commit. Recovery of a soft-deleted course is currently out-of-band (database or
-backup); there is no in-app restore yet. You cannot delete an **archived**
-course directly; restore it first, then delete.
+Administrators own the actions that create, copy, freeze, restore, or delete a course. Faculty and TAs handle normal course operations after the course is created.
 
-You **archive** and **restore** (un-archive) a course. Archiving freezes a
-course read-only for *everyone*, admins included; restoring lifts that freeze.
-**Both are admin-only.** Faculty cannot archive or restore a course, because a
-finished term's record should be frozen and thawed only by someone outside its
-day-to-day.
+### Create a course
 
-Publishing, editing, and roster changes are ordinary staff actions. You can do
-them too, but nothing about them is reserved to you.
+Create the course and assign its initial Faculty member. New courses begin unpublished.
 
----
+### Duplicate a course
+
+Duplication copies course settings, assignments, problems, answer files, points, submission limits, and autograding settings.
+
+The roster is not copied. The new course starts unpublished with an empty roster so students from the earlier course are not carried into the new term.
+
+### Archive a course
+
+Archiving makes the course read-only for everyone, including administrators. Faculty and administrators can still view it, but students cannot access it.
+
+Archiving and restoring are administrator-only actions.
+
+### Restore an archived course
+
+Restoring removes the archive freeze and returns the course to normal operation.
+
+### Delete a course
+
+Deletion depends on the course contents:
+
+- An empty course is permanently deleted.
+- A course with content, enrollment, or submissions is soft-deleted.
+
+A soft-deleted course keeps its data but disappears from all lists and cannot be opened by anyone, including administrators. There is currently no in-app restore. Recovery requires database work or a backup.
+
+An archived course must be restored before it can be deleted.
 
 ## System settings
 
-Everything below lives under **System Settings**, grouped as follows.
+Use **System Settings** to manage platform-wide behavior.
 
-**General**
+### General settings
 
-- **Timezone** is the server default zone. New courses inherit it as their
-  deadline zone, and faculty can override it per course. Set it to wherever
-  most of your courses actually meet.
-- **Maximum upload size** caps submission and avatar files.
-- **Allow user signup** and **Allowed signup email domains** are covered above.
-- **24-hour clock** is a display preference for times across the app. It never
-  changes stored times or deadline enforcement; it only changes what people
-  read on screen.
+| Setting | Purpose |
+|---|---|
+| **Timezone** | Default timezone inherited by new courses |
+| **Maximum upload size** | File-size limit for submissions and avatars |
+| **Allow user signup** | Enables or disables public registration |
+| **Allowed signup email domains** | Restricts public registration by domain |
+| **24-hour clock** | Changes how times are displayed |
 
-**Sessions and lockout**
+The display format does not change stored timestamps or deadline enforcement.
 
-- **Idle session timeout** (default 60 min, range 5-1440) is how long an
-  inactive session stays valid. Enforcement is server-side: an active client
-  gets a warning and a graceful sign-out first, and the server rejects a stale
-  session as a backstop. A closed laptop lid does not keep a session alive
-  past the window.
-- **Login max attempts** (default 10, range 3-50) and **Lockout duration**
-  (default 45 min, range 1-1440) are the brute-force protection. When a locked
-  student emails you mid-exam-week, you can unlock early from the Users page
-  instead of telling them to wait.
+### Sessions and account lockout
 
-**Submission queue**
+| Setting | Default | Allowed range |
+|---|---:|---:|
+| **Idle session timeout** | 60 minutes | 5 to 1,440 minutes |
+| **Login max attempts** | 10 | 3 to 50 |
+| **Lockout duration** | 45 minutes | 1 to 1,440 minutes |
 
-These govern how the autograder processes submissions. The defaults are sound;
-change them only when you can articulate why. If the queue is keeping up and
-students are getting results, leave it alone.
+The server enforces the session timeout. Changing or closing the browser does not extend an expired session.
 
-- **Concurrency** (default 5, range 1-20) is how many submissions evaluate at
-  once. Raising it trades server load for throughput; the only time it matters
-  is the hour before a deadline.
-- **Retry attempts** (default 3, range 1-10) is the poison-pill guard. A
-  submission that keeps failing is given up on after this many tries, so one
-  pathological submission cannot wedge the queue forever.
-- **Resubmit cooldown** (default 10 s, range 0-3,600,000 ms) is the minimum gap
-  between a student's resubmissions to the same problem. It stops the
-  guess-and-resubmit loop from becoming a denial of service.
-- **Evaluation timeout** (default 30 s, range 1-600) and **memory limit**
-  (default 256 MB, range 64-8192) are the per-run wall-clock and JVM heap caps.
-- **Analyzer bound** (default 15, range 1-100) is the CFG-analyzer limit.
+### Submission queue
 
-The pool re-reads these every 30 seconds, so changes take effect without a
-restart. You can tune the queue during a deadline crunch without kicking anyone
-off.
+Change queue settings only when the current workload requires it.
 
-**Backups**
+| Setting | Default | Allowed range | Purpose |
+|---|---:|---:|---|
+| **Concurrency** | 5 | 1 to 20 | Number of evaluations that run at once |
+| **Retry attempts** | 3 | 1 to 10 | Maximum attempts for a failed evaluation |
+| **Resubmit cooldown** | 10 seconds | 0 to 3,600,000 ms | Minimum delay between attempts on the same problem |
+| **Evaluation timeout** | 30 seconds | 1 to 600 seconds | Maximum run time for one evaluation |
+| **Memory limit** | 256 MB | 64 to 8,192 MB | JVM heap limit for one evaluation |
+| **Analyzer bound** | 15 | 1 to 100 | CFG analyzer limit |
 
-Enable daily backups, set the hour they run, and choose how many days to keep.
+The worker pool reloads these settings every 30 seconds. A restart is not required.
 
-**Audit log retention**
+### Backups
 
-How long audit entries are kept before automatic pruning.
+Enable or disable daily backups, choose the run hour, and set the retention period.
 
-**Security keys**
+See [Backups and recovery](../operations/backups.md) for host-level backup instructions.
 
-- **hCaptcha** site and secret keys for signup protection. The secret is
-  write-only; once saved it is never shown back, so keep your own record of it.
-- **TLS certificate management** lets you generate a CSR, install a signed
-  certificate, or fall back to a self-signed one.
+### Audit retention
 
----
+Set how long audit entries are retained before automatic pruning.
+
+### Security keys and certificates
+
+Use the security settings to manage:
+
+- hCaptcha site and secret keys
+- TLS certificate, private key, and certificate chain
+- Certificate signing requests
+- Reset to the self-signed certificate
+
+The hCaptcha secret is write-only after it is saved.
 
 ## System status
 
-The **System Status** page reports server, database, container, network,
-session, and file health across per-domain tabs. Glance at it now and then, not
-just when something breaks; the point is catching problems before a student
-does. The **Files** tab reports orphaned uploads, meaning files on disk with no
-database row, and lets you clean them up safely.
+The **System Status** page reports application, database, container, network, session, and file health.
 
----
+Check it periodically, not only after a failure. The **Files** tab identifies orphaned uploads, which are files on disk without a matching database record, and provides a safe cleanup action.
 
 ## Audit log
 
-Every significant action is recorded: logins, course and roster changes, grade
-overrides, submit-on-behalf, password resets, account lifecycle changes, and
-every security denial. Entries carry a severity (`INFO`, `WARNING`, `ERROR`,
-`SECURITY`) and, for actions on a student, both the actor and the target, so a
-grade dispute months later has a paper trail with names on it.
+AFCT records important activity, including:
 
-The log is **append-only**. No one, including you, can edit or delete an entry.
-That is what makes it worth anything: an audit log an admin can rewrite is just
-a diary. Retention pruning runs automatically on the schedule you set. You can
-view and filter the log and export a slice to CSV when someone outside the
-system needs to see it.
+- Sign-ins and security denials
+- Course and roster changes
+- Grade overrides
+- Submit-on-behalf actions
+- Password resets
+- Account lifecycle changes
 
----
+Entries include a severity of `INFO`, `WARNING`, `ERROR`, or `SECURITY`. Actions involving another user record both the actor and the target.
+
+The audit log is append-only. Entries cannot be edited or deleted through the application. Retention pruning follows the system setting.
+
+Administrators can filter the log and export results to CSV.
 
 ## Backups and recovery
 
-Backups run on the schedule you set and can also be triggered on demand, which
-is worth doing right before anything you might regret. A course delete either
-removes an empty course permanently or soft-deletes a non-empty one (a
-`deletedAt` stamp, data retained). A soft-deleted course still exists in the
-database, so recovering it is a targeted un-delete at the data layer rather than
-a full restore, but there is no in-app restore yet, so treat any delete as
-consequential and take an on-demand backup first when in doubt.
-Size the retention window against how long a mistake can go unnoticed, not how
-long it takes to notice one. A course deleted during finals might not be missed
-until the grade appeal in February.
+Create an on-demand backup before a risky maintenance action.
 
----
+Soft-deleted course data remains in PostgreSQL, but there is no application screen for restoring it. Recovery may involve a targeted database update or a full backup restoration.
 
-## Archived courses
+Choose a retention period based on how long a mistake might go unnoticed. Keep copies off the AFCT host.
 
-Archiving freezes a course. Everyone, including administrators, is blocked from
-changing it, while staff and admins can still read it. Students cannot access
-an archived course at all. **Archiving and restoring are both admin-only.** This
-is deliberate: a finished term's record should be protected from casual edits
-but stay readable for grade disputes, accreditation reviews, and the occasional
-"what did I assign in 2024" question. Archived courses live on their own
-**Archived Courses** page rather than the main course list.
+## Operational environment
 
----
-
-## Operational notes
-
-- **`NEXTAUTH_SECRET`** must be set to a strong value (at least 32 characters)
-  in the environment; the app refuses to start at runtime without it. Generate
-  one with `openssl rand -base64 32`. Know before you rotate it: rotating signs
-  everyone out, so do it between terms or announce it, not silently on a
-  Tuesday.
-- **`DATABASE_URL`** points the app (and migrations/seed) at Postgres.
-- Deployment, TLS, and the reverse proxy are covered in
-  [`production.md`](../setup/production.md).
+- `NEXTAUTH_SECRET` must be at least 32 characters. Changing it signs every user out.
+- `DATABASE_URL` connects the application, migrations, and seed process to PostgreSQL.
+- Production setup and maintenance are documented under [Production deployment](../setup/production.md).
