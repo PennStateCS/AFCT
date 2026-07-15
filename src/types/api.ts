@@ -204,6 +204,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/settings/upgrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get upgrade status and available versions
+         * @description Reports the deployed version, the available curated releases, and the latest  progress of any in-flight upgrade. System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/upgrade/route.ts)
+         */
+        get: operations["getAdminSettingsUpgrade"];
+        put?: never;
+        /**
+         * Request an application upgrade
+         * @description Requests an application upgrade to a curated release by dropping a validated  request for the updater sidecar to perform. System administrators only. Returns  202; the swap, health check, and rollback happen asynchronously in the sidecar.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/upgrade/route.ts)
+         */
+        post: operations["postAdminSettingsUpgrade"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/status/database": {
         parameters: {
             query?: never;
@@ -2571,6 +2599,96 @@ export interface operations {
             };
             /** @description Caller is not an admin. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminSettingsUpgrade: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current version, available releases, and updater status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        current?: string;
+                        status?: Record<string, never> | null;
+                        versions?: Record<string, never>[];
+                        manifestError?: boolean;
+                    };
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminSettingsUpgrade: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    tag: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Upgrade requested; it will run asynchronously. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: boolean;
+                        requestId?: string;
+                    };
+                };
+            };
+            /** @description Invalid tag, an unknown release, or the current version. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The release list or the updater service is unavailable. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
