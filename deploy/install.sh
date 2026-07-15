@@ -497,14 +497,27 @@ do_install() {
 
 bring_up() {
   log "pulling images (first run can take a few minutes)..."
-  # Capture the pull output so we can show it live AND detect an auth failure:
-  # the pipe's exit status is tee's, so a private-registry 401 wouldn't otherwise
-  # surface until 'up' failed more cryptically.
+  # On a terminal, let Compose render its tidy, in-place progress UI. The old code
+  # piped the pull through `tee`, which makes Compose think it's not a TTY and fall
+  # back to *plain* output — thousands of per-layer "Downloading" lines that flood
+  # the screen and the log. So only capture the pull when output is redirected
+  # (logged/CI), and use --quiet there to keep the log readable. Either branch keeps
+  # Compose's real exit status (not tee's), so a private-registry 401 still surfaces.
   pull_out="${LOG_FILE}.pull"
-  compose -f "$COMPOSE_FILE" pull 2>&1 | tee "$pull_out"
-  cat "$pull_out" >> "$LOG_FILE" 2>/dev/null || true
-  if grep -qiE 'unauthorized|denied|authentication required|forbidden' "$pull_out" 2>/dev/null; then
-    warn "some images could not be pulled. If they are private, run 'docker login ghcr.io' and re-run."
+  : > "$pull_out"
+  if [ -t 1 ]; then
+    compose -f "$COMPOSE_FILE" pull
+    pull_rc=$?
+  else
+    compose -f "$COMPOSE_FILE" pull --quiet > "$pull_out" 2>&1
+    pull_rc=$?
+    cat "$pull_out" >> "$LOG_FILE" 2>/dev/null || true
+  fi
+  if [ "$pull_rc" -ne 0 ] || \
+     grep -qiE 'unauthorized|denied|authentication required|forbidden' "$pull_out" 2>/dev/null; then
+    warn "some images could not be pulled. Check your network; if they are private, run 'docker login ghcr.io' and re-run."
+  else
+    log "images pulled."
   fi
   rm -f "$pull_out" 2>/dev/null || true
 
