@@ -53,6 +53,9 @@ AFCT Dashboard installer
 
 Usage:
   sh install.sh                Run the guided install (default).
+  sh install.sh status         Show the stack's container + health status.
+  sh install.sh logs           Follow the application logs (Ctrl+C to stop).
+  sh install.sh update         Pull the latest images and restart the stack.
   sh install.sh diagnostics    Collect a redacted support bundle and exit.
   sh install.sh --help
 
@@ -75,6 +78,9 @@ EOF
 while [ "$#" -gt 0 ]; do
   case "$1" in
     diagnostics|--diagnostics) MODE="diagnostics" ;;
+    status|--status) MODE="status" ;;
+    logs|--logs) MODE="logs" ;;
+    update|--update) MODE="update" ;;
     -y|--yes) ASSUME_YES="true" ;;
     --non-interactive|--noninteractive) NON_INTERACTIVE="true" ;;
     -h|--help) MODE="help" ;;
@@ -635,6 +641,20 @@ do_install() {
     esac
   fi
 
+  # Let the operator confirm the choices before we write config and pull images. Only
+  # when there's a terminal and they didn't pass --yes; a hands-off run just proceeds.
+  if can_prompt && [ "$ASSUME_YES" != "true" ]; then
+    log ""
+    log "Review:"
+    log "   URL:        ${APP_URL_IN}"
+    log "   Admin user: ${ADMIN_EMAIL_IN}"
+    ans=$(prompt_default "Proceed with this configuration?" "y")
+    case "$ans" in
+      y|Y|yes|Yes) : ;;
+      *) die "aborted at your request; re-run to reconfigure." ;;
+    esac
+  fi
+
   # Infrastructure secrets. On a RECONFIGURE, preserve the existing values instead of
   # rotating them: Postgres only reads POSTGRES_PASSWORD when it first initializes its
   # data directory, so a new password would leave the app unable to authenticate to
@@ -691,6 +711,11 @@ do_install() {
   log ""
   log " The site uses a self-signed certificate at first, so your browser will"
   log " warn you. Install a real certificate later in Admin -> System Settings."
+  log ""
+  log " Handy commands (run from this directory):"
+  log "   sh install.sh status     # container + health status"
+  log "   sh install.sh logs       # follow the application logs"
+  log "   sh install.sh update     # pull the latest images and restart"
   log "==================================================================="
   DIAG_ON_EXIT="false"
 }
@@ -769,6 +794,61 @@ smoke_test() {
 }
 
 # --------------------------------------------------------------------------- #
+# Operational subcommands (status / logs / update). These act on an already
+# installed stack, so they only need the daemon reachable — not the full install
+# preflight (Docker install, port/disk checks).
+# --------------------------------------------------------------------------- #
+# Determine whether we can talk to the Docker daemon directly or need sudo, and set
+# DOCKER_SUDO accordingly (same resolution preflight uses, minus the install steps).
+resolve_docker_sudo() {
+  command -v docker >/dev/null 2>&1 || die "Docker isn't installed. Run: sh install.sh"
+  if docker info >/dev/null 2>&1; then
+    DOCKER_SUDO=""
+  elif [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
+    DOCKER_SUDO="sudo"
+  else
+    die "the Docker daemon isn't reachable. Start Docker and try again."
+  fi
+}
+
+show_status() {
+  [ -f "$COMPOSE_FILE" ] || die "docker-compose.yml not found next to this script."
+  resolve_docker_sudo
+  log "container status:"
+  compose -f "$COMPOSE_FILE" ps
+  app_id=$(compose -f "$COMPOSE_FILE" ps -q app 2>/dev/null || true)
+  if [ -n "$app_id" ]; then
+    state=$($DOCKER_SUDO docker inspect \
+      -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' \
+      "$app_id" 2>/dev/null || echo unknown)
+    log "app health: ${state}"
+  else
+    log "app container: not running (run: sh install.sh)"
+  fi
+}
+
+show_logs() {
+  [ -f "$COMPOSE_FILE" ] || die "docker-compose.yml not found next to this script."
+  resolve_docker_sudo
+  log "following app logs (Ctrl+C to stop)..."
+  compose -f "$COMPOSE_FILE" logs -f --tail=200 app
+}
+
+# Pull the latest published images and recreate the stack. Reuses bring_up (the same
+# config-validate / pull / start / health-wait the installer runs), so a bad image or
+# an unhealthy start is fatal here too and a diagnostics bundle is collected.
+do_update() {
+  [ -f "$COMPOSE_FILE" ] || die "docker-compose.yml not found next to this script."
+  [ -f "$ENV_FILE" ] || die "${ENV_FILE} not found; run the installer first: sh install.sh"
+  resolve_docker_sudo
+  DIAG_ON_EXIT="true"
+  log "updating AFCT to the latest images..."
+  bring_up
+  DIAG_ON_EXIT="false"
+  log "update complete."
+}
+
+# --------------------------------------------------------------------------- #
 # Entry
 # --------------------------------------------------------------------------- #
 case "$MODE" in
@@ -777,6 +857,16 @@ case "$MODE" in
     ;;
   diagnostics)
     collect_diagnostics
+    ;;
+  status)
+    show_status
+    ;;
+  logs)
+    show_logs
+    ;;
+  update)
+    init_log
+    do_update
     ;;
   install)
     init_log

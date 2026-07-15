@@ -144,3 +144,45 @@ teardown() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"application container was not created"* ]]
 }
+
+# --- operational subcommands ---------------------------------------------------
+
+@test "status reports the app's health" {
+  run sh install.sh status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"app health: healthy"* ]]
+}
+
+@test "status reports when the app container isn't running" {
+  export MOCK_PS_EMPTY=1
+  run sh install.sh status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not running"* ]]
+}
+
+@test "logs exits cleanly" {
+  run sh install.sh logs
+  [ "$status" -eq 0 ]
+}
+
+@test "update without a config file is refused" {
+  rm -f .env.production
+  run sh install.sh update
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"run the installer first"* ]]
+}
+
+@test "update pulls, restarts, and reports completion" {
+  printf 'POSTGRES_PASSWORD=x\n' > .env.production
+  run sh install.sh update
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"update complete"* ]]
+}
+
+@test "update is fatal if the app comes back unhealthy" {
+  printf 'POSTGRES_PASSWORD=x\n' > .env.production
+  export MOCK_HEALTH="unhealthy"
+  run sh install.sh update
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unhealthy"* ]]
+}
