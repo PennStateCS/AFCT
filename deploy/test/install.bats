@@ -81,6 +81,8 @@ teardown() {
   export ADMIN_EMAIL="admin@example.com"
   unset ADMIN_PASSWORD                       # no TTY + --yes => auto-generate
   run sh install.sh --yes < /dev/null
+  echo "DEBUG status=$status" >&3
+  echo "DEBUG output<<<$output>>>" >&3
   [ "$status" -eq 0 ]
   pw="$(sed -n 's/^ADMIN_PASSWORD=//p' .env.production)"
   [ -n "$pw" ]
