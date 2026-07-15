@@ -1,159 +1,264 @@
-# Client API (`/api/client/v1`)
+# Client API
 
-This is the API the native submission client (the Java app) talks to. It authenticates
-with a bearer token instead of the browser session cookie, so there's no CSRF, no
-cookie handling, and no idle timeout that logs the client out. The `v1` contract is
-stable: a deployed client won't break underneath you, and any breaking change ships as
-`v2`.
+The native AFCT submission client uses the stable `/api/client/v1` API. It authenticates with a bearer token instead of the browser session cookie.
 
-- **Base URL:** the server origin, for example `https://<host>`.
-- **Auth:** send `Authorization: Bearer <token>` on every request except login.
-- **Errors:** any non-2xx response is `{ "error": "<message>" }`. A `429` also carries a
-  `Retry-After` header, in seconds.
+Breaking contract changes must use a new version prefix, such as `/api/client/v2`.
 
-Paths below are written in full. Every one lives under `/api/client/v1` except
-`/api/health`, which is the general server health check.
+## General rules
 
-## Typical flow
+- **Base URL:** The AFCT server origin, such as `https://afct.example.edu`
+- **Authentication:** `Authorization: Bearer <token>`
+- **Errors:** Non-success responses use `{ "error": "<message>" }`
+- **Rate limits:** A `429` response includes `Retry-After` in seconds
+- **Health check:** `/api/health` is outside the versioned client prefix
 
-1. `POST /api/client/v1/auth/login` with the user's email and password. You get back a
-   token.
-2. Store the token and send it as `Authorization: Bearer <token>` on every later call.
-3. `GET /api/client/v1/courses` and let the user pick a course.
-4. `GET /api/client/v1/courses/{courseId}/assignments` and let them pick an assignment
-   and a problem.
-5. `POST /api/client/v1/submissions` (multipart) to upload the solution file. You get
-   back a `submissionId`.
-6. Poll `GET /api/client/v1/submissions/{submissionId}` until `status` is `COMPLETED` or
-   `FAILED`, then show `correct` and `feedback`.
-7. `POST /api/client/v1/auth/logout` when the user signs out. This is optional; it
-   revokes the token.
+## Typical client flow
 
-A token has a sliding 30-day expiry. Every authenticated call pushes the expiry out
-again, so a token in regular use stays valid indefinitely and only lapses after about 30
-days of inactivity. If any call returns `401`, have the user log in again.
+1. Sign in with `POST /api/client/v1/auth/login`.
+2. Store the returned token.
+3. Validate a stored token with `GET /api/client/v1/auth/me`.
+4. Load courses with `GET /api/client/v1/courses`.
+5. Load assignments and problems for the selected course.
+6. Upload a file with `POST /api/client/v1/submissions`.
+7. Poll the submission by ID until it reaches `COMPLETED` or `FAILED`.
+8. Revoke the token with `POST /api/client/v1/auth/logout` when the user signs out.
 
-## Endpoints
+Tokens use a sliding 30-day expiration. Each authenticated request extends the expiration. A token expires after about 30 days without use.
+
+When an authenticated request returns `401`, stop retrying and ask the user to sign in again.
+
+## Authentication
 
 ### `POST /api/client/v1/auth/login`
-No auth header. JSON body:
+
+No authentication header is required.
+
+Request:
+
 ```json
-{ "email": "student@psu.edu", "password": "...", "deviceName": "lab-pc" }
+{
+  "email": "student@example.edu",
+  "password": "...",
+  "deviceName": "lab-pc"
+}
 ```
-`deviceName` is optional. It's just a label that helps identify the token later. On
-success (200):
+
+`deviceName` is optional.
+
+Success response:
+
 ```json
-{ "token": "...", "expiresAt": "2026-08-10T12:00:00.000Z",
-  "user": { "id": "...", "email": "...", "firstName": "...", "lastName": "..." } }
+{
+  "token": "...",
+  "expiresAt": "2026-08-10T12:00:00.000Z",
+  "user": {
+    "id": "...",
+    "email": "student@example.edu",
+    "firstName": "...",
+    "lastName": "..."
+  }
+}
 ```
-Failures: `400` if the body is missing fields, `401` for bad credentials, `429` if there
-have been too many attempts (respect `Retry-After`).
+
+Common failures:
+
+- `400`: Missing or invalid fields
+- `401`: Invalid credentials
+- `429`: Too many attempts
 
 ### `POST /api/client/v1/auth/logout`
-Bearer auth. Revokes the token you sent. Returns `{ "success": true }`.
+
+Bearer authentication is required. The endpoint revokes the current token.
+
+```json
+{ "success": true }
+```
+
+Logout is optional, but clients should use it when the user explicitly signs out.
 
 ### `GET /api/client/v1/auth/me`
-Bearer auth. Doubles as a token check. When the token is valid you get `200` with the
-user and the token's expiry:
+
+Bearer authentication is required.
+
+Use this endpoint during startup to validate a stored token.
+
 ```json
-{ "user": { "id": "...", "email": "...", "firstName": "...", "lastName": "..." },
-  "expiresAt": "2026-08-10T12:00:00.000Z" }
+{
+  "user": {
+    "id": "...",
+    "email": "student@example.edu",
+    "firstName": "...",
+    "lastName": "..."
+  },
+  "expiresAt": "2026-08-10T12:00:00.000Z"
+}
 ```
-A missing, expired, or revoked token returns `401`. Call this on startup to find out
-whether a stored token is still good.
+
+Missing, expired, or revoked tokens return `401`.
+
+## Health
 
 ### `GET /api/health`
-No auth. A plain liveness check:
+
+No authentication is required.
+
 ```json
-{ "status": "ok", "uptime": 1234, "environment": "production", "version": "1.0.0" }
+{
+  "status": "ok",
+  "uptime": 1234,
+  "environment": "production",
+  "version": "1.0.0"
+}
 ```
-Use it to confirm the server is reachable before you try to log in. Note that this one
-lives at `/api/health`, not under the `/api/client/v1` prefix.
+
+Use this endpoint to confirm that the server is reachable before attempting login.
+
+## Courses and assignments
 
 ### `GET /api/client/v1/courses`
-Bearer auth. The courses the signed-in user can see. Students get only published
-courses; staff also see their own unpublished ones. Archived courses are left out
-entirely, since they're read-only and can't be submitted to.
+
+Returns courses visible to the signed-in user.
+
+Students receive published courses in which they are enrolled. Course staff also receive their unpublished courses. Archived courses are omitted.
+
 ```json
-{ "courses": [ { "id": "...", "name": "Automata Theory", "code": "CMPEN 331",
-                 "semester": "Fall 2025", "timezone": "America/New_York",
-                 "isPublished": true, "isArchived": false, "role": "STUDENT" } ] }
+{
+  "courses": [
+    {
+      "id": "...",
+      "name": "Automata Theory",
+      "code": "CMPEN 331",
+      "semester": "Fall 2026",
+      "timezone": "America/New_York",
+      "isPublished": true,
+      "isArchived": false,
+      "role": "STUDENT"
+    }
+  ]
+}
 ```
-`timezone` is the IANA zone the course's deadlines are anchored to. Render its due dates
-in this zone.
+
+`timezone` is an IANA timezone name.
 
 ### `GET /api/client/v1/courses/{courseId}/assignments`
-Bearer auth. The course's published assignments and their problems, scoped to this
-student. The answer-key file is never included.
+
+Returns published assignments and their problems for the selected course. Answer files are never included.
+
 ```json
-{ "timezone": "America/New_York",
+{
+  "timezone": "America/New_York",
   "serverTime": "2026-01-10T15:04:05.000Z",
-  "assignments": [ {
-    "id": "...", "title": "HW 1", "description": "...",
-    "dueDate": "2026-01-15T04:59:00.000Z",
-    "allowLateSubmissions": false, "lateCutoff": null,
-    "problems": [ { "id": "...", "title": "DFA for even-length strings", "type": "FA",
-                    "maxPoints": 10, "maxSubmissions": 3,
-                    "submissionCount": 1, "grade": 8, "status": "COMPLETED" } ]
-  } ] }
+  "assignments": [
+    {
+      "id": "...",
+      "title": "Homework 1",
+      "description": "...",
+      "dueDate": "2026-01-15T04:59:00.000Z",
+      "allowLateSubmissions": false,
+      "lateCutoff": null,
+      "problems": [
+        {
+          "id": "...",
+          "title": "DFA for even-length strings",
+          "type": "FA",
+          "maxPoints": 10,
+          "maxSubmissions": 3,
+          "submissionCount": 1,
+          "grade": 8,
+          "status": "COMPLETED"
+        }
+      ]
+    }
+  ]
+}
 ```
-`dueDate` and `lateCutoff` are UTC, so convert them into `timezone` for display.
-`serverTime` is the server's current clock (also UTC), which lets you run an accurate
-countdown without trusting the client machine's clock. Returns `404` if the course
-doesn't exist or the caller can't access it.
+
+`dueDate`, `lateCutoff`, and `serverTime` are UTC timestamps. Convert deadlines to the returned course timezone for display.
+
+`serverTime` allows the client to display an accurate countdown without trusting the local device clock.
+
+A missing or inaccessible course returns `404`.
+
+## Submissions
 
 ### `POST /api/client/v1/submissions`
-Bearer auth, `multipart/form-data`:
 
-| field | required | notes |
+Bearer authentication and `multipart/form-data` are required.
+
+| Field | Required | Description |
 |---|---|---|
-| `assignmentId` | yes | |
-| `problemId` | yes | |
-| `file` | yes | the solution file (XML) |
+| `assignmentId` | Yes | Assignment identifier |
+| `problemId` | Yes | Problem identifier |
+| `file` | Yes | XML solution file |
 
-On success you get `202`, and the server evaluates the file in the background:
+Success returns `202 Accepted`:
+
 ```json
-{ "submissionId": "...", "status": "PENDING" }
+{
+  "submissionId": "...",
+  "status": "PENDING"
+}
 ```
-Things that can go wrong:
-- `400` a field is missing, the problem isn't linked to the assignment, or the XML
-  doesn't parse.
-- `403` the student isn't enrolled, or the late policy rejects the submission.
-- `404` the assignment doesn't exist.
-- `409` the per-problem submission limit is reached, or the course is archived.
-- `413` the file is too large.
-- `429` the resubmit cooldown is still active (respect `Retry-After`).
+
+Common failures:
+
+- `400`: Missing field, assignment and problem mismatch, or invalid XML
+- `403`: Enrollment or date policy rejects the submission
+- `404`: Assignment is missing or hidden
+- `409`: Submission limit reached or course archived
+- `413`: File too large
+- `429`: Resubmission cooldown active
 
 ### `GET /api/client/v1/submissions?assignmentId=...&problemId=...`
-Bearer auth. The caller's own attempts at one problem, newest first. Both query params
-are required.
+
+Both query parameters are required.
+
+Returns the caller's attempts for one problem, newest first:
+
 ```json
-{ "submissions": [ { "id": "...", "status": "COMPLETED", "correct": true,
-                     "submittedAt": "2026-01-10T15:00:00.000Z" } ] }
+{
+  "submissions": [
+    {
+      "id": "...",
+      "status": "COMPLETED",
+      "correct": true,
+      "submittedAt": "2026-01-10T15:00:00.000Z"
+    }
+  ]
+}
 ```
-This only ever returns the caller's own work. To get the full result for a single
-attempt (grade and witness), use the by-id endpoint below. Returns `400` if either query
-param is missing.
+
+This endpoint never returns another student's work.
 
 ### `GET /api/client/v1/submissions/{submissionId}`
-Bearer auth. The result of one submission. A student can read their own; staff can read
-anyone's in a course they run.
+
+Returns one submission result.
+
+A student can read their own submission. Course staff can read submissions in courses they manage.
+
 ```json
-{ "id": "...", "status": "COMPLETED", "correct": false, "grade": 6,
-  "feedback": "accepts \"01\" but should reject it" }
+{
+  "id": "...",
+  "status": "COMPLETED",
+  "correct": false,
+  "grade": 6,
+  "feedback": "accepts \"01\" but should reject it"
+}
 ```
-- `status` moves through `PENDING`, then `PROCESSING`, then `COMPLETED` or `FAILED`.
-- `correct`, `grade`, and `feedback` are `null` until evaluation finishes.
-- `feedback` is the witness string, a counterexample the grader found.
-- `404` if the submission doesn't exist or isn't yours to see.
 
-## Notes
+Status values progress through:
 
-- The course a submission belongs to is derived from the assignment. If you send a
-  `courseId` form field, it's ignored.
-- Every authorization check (enrollment, publish state, submission caps, late policy)
-  runs server-side and matches the web app exactly. The client can't relax any of it.
-- Requests that carry an invalid bearer token are logged as a security event, so don't
-  retry a rejected token in a loop. Have the user log in again instead.
-- The client's auto-updater at `https://www.cs.rit.edu/~afct/client/` is a separate
-  thing and has nothing to do with this API.
+1. `PENDING`
+2. `PROCESSING`
+3. `COMPLETED` or `FAILED`
+
+`correct`, `grade`, and `feedback` remain `null` until evaluation finishes. `feedback` contains the witness string or other evaluator result.
+
+A missing or unauthorized submission returns `404`.
+
+## Implementation notes
+
+- The server derives the course from the assignment. A client-supplied `courseId` is ignored.
+- Enrollment, publication, submission limits, cooldowns, and date rules are enforced by the server.
+- Invalid bearer tokens are logged as security events. Do not retry them in a loop.
+- The native client's update service is separate from this API.
