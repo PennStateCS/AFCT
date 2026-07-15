@@ -12,6 +12,9 @@ setup() {
   # A compose file must exist for `-f docker-compose.yml`; the mock ignores contents.
   cp "$DEPLOY_DIR/docker-compose.yml" "$TESTDIR/docker-compose.yml" 2>/dev/null \
     || printf 'services: {}\n' > "$TESTDIR/docker-compose.yml"
+  # do_install requires the example env file to sit next to the script.
+  cp "$DEPLOY_DIR/.env.production.example" "$TESTDIR/.env.production.example" 2>/dev/null \
+    || printf '# example\n' > "$TESTDIR/.env.production.example"
 
   # Mocks first on PATH so `docker`, `sleep`, `curl`, `systemctl` are the fakes.
   chmod +x "$BATS_TEST_DIRNAME/mocks/"* 2>/dev/null || true
