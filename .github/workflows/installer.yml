@@ -8,9 +8,9 @@ name: Installer
 on:
   push:
     branches: ['main']
-    paths: ['deploy/**', 'docker/updater/**', '.github/workflows/installer.yml']
+    paths: ['deploy/**', 'docker/updater/**', 'docker/backup/**', '.github/workflows/installer.yml']
   pull_request:
-    paths: ['deploy/**', 'docker/updater/**', '.github/workflows/installer.yml']
+    paths: ['deploy/**', 'docker/updater/**', 'docker/backup/**', '.github/workflows/installer.yml']
 
 permissions:
   contents: read
@@ -30,6 +30,7 @@ jobs:
         run: |
           sh -n deploy/install.sh
           sh -n docker/updater/updater.sh
+          sh -n docker/backup/backup.sh
 
       # Advisory for now (the scripts predate shellcheck); surfaces issues without
       # blocking. Tighten to a hard gate once the existing findings are cleared.
