@@ -1,0 +1,31 @@
+# Dependabot configuration.
+#
+# We want SECURITY updates only (driven by the repo-level "Dependabot security
+# updates" toggle), batched into a single PR per ecosystem instead of a stack of
+# one-per-package PRs. `open-pull-requests-limit: 0` disables routine version-bump
+# PRs; the `groups` blocks (applies-to: security-updates) collapse the security
+# fixes into one grouped PR each. `schedule` is required syntactically but does not
+# drive security updates (those trigger on alerts).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      actions-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
