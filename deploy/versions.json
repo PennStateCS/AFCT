@@ -1,0 +1,9 @@
+{
+  "versions": [
+    {
+      "tag": "main",
+      "label": "Latest stable",
+      "notes": "Tracks the newest build from the main branch."
+    }
+  ]
+}
