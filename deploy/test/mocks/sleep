@@ -1,0 +1,4 @@
+#!/bin/sh
+# No-op sleep so the installer's health-poll loop (up to 60 * 5s) runs instantly
+# under test. Ignores its argument on purpose.
+exit 0

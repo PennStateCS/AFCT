@@ -1,0 +1,56 @@
+#!/bin/sh
+# Mock `docker` for the installer test harness. It answers only the invocations
+# install.sh makes, and its behavior is steered by MOCK_* environment variables so a
+# test can simulate failures without a real daemon:
+#   MOCK_DOCKER_INFO_RC   `docker info` exit code            (default 0 = daemon up)
+#   MOCK_CONFIG_RC        `docker compose config` exit code  (default 0)
+#   MOCK_PULL_RC          `docker compose pull` exit code     (default 0)
+#   MOCK_UP_RC            `docker compose up` exit code        (default 0)
+#   MOCK_PS_EMPTY         if set, `compose ps -q app` prints nothing (no container)
+#   MOCK_PS_ID            container id `compose ps -q app` prints (default mockappid)
+#   MOCK_HEALTH           health state `docker inspect` reports (default healthy)
+
+cmd=$1
+[ "$#" -gt 0 ] && shift
+
+case "$cmd" in
+  info)
+    exit "${MOCK_DOCKER_INFO_RC:-0}"
+    ;;
+  version)
+    echo "Docker version 99.9.9 (mock)"
+    exit 0
+    ;;
+  inspect)
+    # install.sh inspects the app container's health; report the mocked state.
+    echo "${MOCK_HEALTH:-healthy}"
+    exit 0
+    ;;
+  compose)
+    # Skip global flags (-f FILE, -p NAME, ...) to find the subcommand.
+    sub=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -f|-p|--project-name|--project-directory|--profile) shift 2 ;;
+        --*|-*) shift ;;
+        *) sub="$1"; break ;;
+      esac
+    done
+    case "$sub" in
+      version) echo "Docker Compose version v99.9.9 (mock)"; exit 0 ;;
+      config)  exit "${MOCK_CONFIG_RC:-0}" ;;
+      pull)    exit "${MOCK_PULL_RC:-0}" ;;
+      up)      exit "${MOCK_UP_RC:-0}" ;;
+      ps)
+        [ -n "${MOCK_PS_EMPTY:-}" ] && exit 0
+        echo "${MOCK_PS_ID:-mockappid}"
+        exit 0
+        ;;
+      logs|down|stop|rm) exit 0 ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  *)
+    exit 0
+    ;;
+esac
