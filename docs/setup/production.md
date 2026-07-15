@@ -20,7 +20,7 @@ Each guide includes two paths.
 
 ### Guided installer
 
-The guided installer is recommended for most installations. It checks Docker, collects the required settings, generates secrets, creates `.env.production`, starts the stack, and can create a redacted diagnostics archive.
+The guided installer is recommended for most installations. It checks Docker, collects the required settings, generates secrets, creates `.env.production`, and starts the stack. On Linux and macOS it also serves as an operations helper for a running deployment, with `status`, `logs`, `update` (with automatic rollback), `restart`, `stop`, `doctor`, `recover`, and `diagnostics` commands.
 
 ### Manual installation
 

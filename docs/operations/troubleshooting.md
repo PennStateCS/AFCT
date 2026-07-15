@@ -7,6 +7,16 @@ Start by identifying the failing layer:
 - PostgreSQL: The application reports database or migration errors
 - Backup service: Scheduled or on-demand backups fail
 
+## Start with the built-in checks
+
+On Linux or macOS, the installer runs a read-only system and configuration check that is the fastest way to triage a deployment:
+
+```bash
+sh install.sh doctor
+```
+
+It reports on the Compose file, `.env.production` completeness and permissions, disk space, clock sync, Docker reachability, Compose validity, container health, and the local HTTP health endpoint. `sh install.sh status` and `sh install.sh logs` give a quick health snapshot and a live log tail.
+
 ## Check service status
 
 ```bash
@@ -89,6 +99,8 @@ After changing `.env.production`, apply the configuration:
 ```bash
 docker compose up -d
 ```
+
+On Linux or macOS, `sh install.sh restart` recreates the stack and verifies health after a configuration change.
 
 ## AFCT cannot connect to PostgreSQL
 

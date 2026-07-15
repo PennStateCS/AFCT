@@ -4,16 +4,22 @@ Create or confirm a current backup before applying an update.
 
 ## Guided-installer deployment
 
-Open the directory that contains `docker-compose.yml`, then run:
+On Linux or macOS, open the directory that contains `docker-compose.yml` and run:
+
+```bash
+sh install.sh update
+```
+
+This records the currently deployed image versions, pulls the latest images, recreates the stack, and waits for the health check. If the new version does not become healthy, it automatically rolls back to the previous images and restores service.
+
+The equivalent Docker commands work on any platform, including Windows PowerShell:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-The same commands work in Windows PowerShell.
-
-`docker compose pull` downloads the images named in the Compose file. `docker compose up -d` recreates only the services whose image or configuration changed.
+`docker compose pull` downloads the images named in the Compose file. `docker compose up -d` recreates only the services whose image or configuration changed. Unlike `sh install.sh update`, these commands do not verify health or roll back automatically.
 
 ## Git-based manual deployment
 
@@ -30,6 +36,14 @@ The commands are the same on Linux, macOS, and Windows PowerShell.
 Named volumes preserve the database, uploaded files, backups, and certificates while containers are replaced.
 
 ## Verify the update
+
+`sh install.sh update` already waits for the health check, but you can confirm at any time:
+
+```bash
+sh install.sh status
+```
+
+Or with Docker directly:
 
 ```bash
 docker compose ps
