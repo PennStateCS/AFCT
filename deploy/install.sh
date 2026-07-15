@@ -112,8 +112,14 @@ init_log() {
 # Print a secret to the user's terminal ONLY — never through log(), which writes to
 # install.log (and that file is copied into the "redacted" diagnostics bundle).
 show_secret() {
-  if { : > /dev/tty; } 2>/dev/null; then printf '%s\n' "$*" > /dev/tty
-  else printf '%s\n' "$*" >&2; fi
+  if { : > /dev/tty; } 2>/dev/null; then
+    printf '%s\n' "$*" > /dev/tty 2>/dev/null || true
+  else
+    printf '%s\n' "$*" >&2 || true
+  fi
+  # Always succeed: a write failure here must never abort the install under `set -e`
+  # (this runs after the stack is already up).
+  return 0
 }
 
 # --------------------------------------------------------------------------- #
