@@ -6,8 +6,11 @@ const updatesMock = vi.hoisted(() => ({
   currentVersion: vi.fn(() => 'v1.0.0'),
   fetchManifest: vi.fn(),
   isValidTag: vi.fn(() => true),
+  isValidRestorePoint: vi.fn(() => true),
   readStatus: vi.fn(() => null),
+  readRestorePoints: vi.fn(() => []),
   writeUpdateRequest: vi.fn(),
+  writeDowngradeRequest: vi.fn(),
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -32,10 +35,13 @@ beforeEach(() => {
   // clearAllMocks clears call history but NOT implementations, so reset the fns a
   // test may have stubbed to throw (writeUpdateRequest, fetchManifest below).
   updatesMock.writeUpdateRequest.mockReset();
+  updatesMock.writeDowngradeRequest.mockReset();
   authMock.mockResolvedValue(admin);
   updatesMock.currentVersion.mockReturnValue('v1.0.0');
   updatesMock.isValidTag.mockReturnValue(true);
+  updatesMock.isValidRestorePoint.mockReturnValue(true);
   updatesMock.readStatus.mockReturnValue(null);
+  updatesMock.readRestorePoints.mockReturnValue([]);
   updatesMock.fetchManifest.mockResolvedValue({
     versions: [{ tag: 'v1.0.0' }, { tag: 'v1.1.0' }],
   });
@@ -122,5 +128,51 @@ describe('POST /api/admin/settings/upgrade', () => {
       expect.anything(),
       expect.objectContaining({ action: 'SYSTEM_UPDATE_REQUESTED' }),
     );
+  });
+});
+
+describe('POST downgrade', () => {
+  const downgrade = (body: Record<string, unknown>) =>
+    POST(req('POST', { action: 'downgrade', ...body }), routeCtx());
+
+  it('rejects a downgrade with no/invalid restore point', async () => {
+    updatesMock.isValidRestorePoint.mockReturnValue(false);
+    const res = await downgrade({ tag: 'v0.9.0', restorePoint: 'bad' });
+    expect(res.status).toBe(400);
+    expect(updatesMock.writeDowngradeRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects a restore point that is not recorded for that version', async () => {
+    updatesMock.readRestorePoints.mockReturnValue([
+      { version: 'v0.8.0', backup: '20260101-000000' },
+    ]);
+    const res = await downgrade({ tag: 'v0.9.0', restorePoint: '20260101-000000' });
+    expect(res.status).toBe(400);
+    expect(updatesMock.writeDowngradeRequest).not.toHaveBeenCalled();
+  });
+
+  it('writes a downgrade request and audit-logs it (WARNING) on a valid restore point', async () => {
+    updatesMock.readRestorePoints.mockReturnValue([
+      { version: 'v0.9.0', backup: '20260101-000000' },
+    ]);
+    const res = await downgrade({ tag: 'v0.9.0', restorePoint: '20260101-000000' });
+    expect(res.status).toBe(202);
+    expect(updatesMock.writeDowngradeRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ tag: 'v0.9.0', restorePoint: '20260101-000000', requestedBy: 'a1' }),
+    );
+    // A downgrade does NOT go through the release manifest.
+    expect(updatesMock.fetchManifest).not.toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      {},
+      expect.anything(),
+      expect.objectContaining({ action: 'SYSTEM_DOWNGRADE_REQUESTED', severity: 'WARNING' }),
+    );
+  });
+
+  it('403 for a non-admin, and no request is written', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u', isAdmin: false } });
+    const res = await downgrade({ tag: 'v0.9.0', restorePoint: '20260101-000000' });
+    expect(res.status).toBe(403);
+    expect(updatesMock.writeDowngradeRequest).not.toHaveBeenCalled();
   });
 });
