@@ -124,3 +124,66 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   # The updater still asked the backup sidecar for a backup.
   [ -f backup-triggers/backup-now ]
 }
+
+# --- downgrade-by-restore ------------------------------------------------------
+# The backup sidecar is mocked by a tiny background watcher that fulfills the
+# updater's trigger files (a fresh dump for a backup, an "ok"/"failed" result for a
+# restore) the moment they appear.
+
+# Fulfill a backup request: create a new dump when backup-now shows up.
+serve_backup() {
+  ( for _ in $(seq 1 100); do
+      [ -f backup-triggers/backup-now ] && { : > "backups/afct-$1.dump"; break; }
+      sleep 0.1
+    done ) &
+}
+# Fulfill a restore request with the given result word (ok|failed).
+serve_restore() {
+  ( for _ in $(seq 1 100); do
+      [ -f backup-triggers/restore-now ] && { printf '%s\n' "$1" > backup-triggers/restore-result; break; }
+      sleep 0.1
+    done ) &
+}
+
+@test "a successful upgrade records a restore point for the version left behind" {
+  export UPDATER_BACKUP_TIMEOUT=8
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"u1","backupFirst":true}'
+  serve_backup "20260202-000000"; watcher=$!
+  run sh updater.sh
+  kill "$watcher" 2>/dev/null || true
+  [ "$(phase)" = "healthy" ]
+  run jq -e '.[] | select(.version=="v1.0.0" and .backup=="20260202-000000")' triggers/restore-points.json
+  [ "$status" -eq 0 ]
+}
+
+@test "downgrade restores the database and switches to the old version" {
+  printf '[{"version":"v0.9.0","backup":"20260101-000000","createdAt":"x"}]\n' > triggers/restore-points.json
+  : > backups/afct-20260101-000000.dump
+  export UPDATER_BACKUP_TIMEOUT=2 UPDATER_RESTORE_TIMEOUT=8
+  request '{"action":"downgrade","tag":"v0.9.0","requestId":"d1","restorePoint":"20260101-000000"}'
+  serve_restore "ok 20260101-000000"; watcher=$!
+  run sh updater.sh
+  kill "$watcher" 2>/dev/null || true
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v0.9.0" ]
+}
+
+@test "downgrade rejects a restore point that is not recorded" {
+  printf '[]\n' > triggers/restore-points.json
+  request '{"action":"downgrade","tag":"v0.9.0","requestId":"d2","restorePoint":"20260101-000000"}'
+  run sh updater.sh
+  [ "$(phase)" = "failed" ]
+  [ "$(tag_now)" = "v1.0.0" ]     # unchanged
+}
+
+@test "downgrade fails cleanly if the restore does not succeed" {
+  printf '[{"version":"v0.9.0","backup":"20260101-000000","createdAt":"x"}]\n' > triggers/restore-points.json
+  : > backups/afct-20260101-000000.dump
+  export UPDATER_BACKUP_TIMEOUT=2 UPDATER_RESTORE_TIMEOUT=8
+  request '{"action":"downgrade","tag":"v0.9.0","requestId":"d3","restorePoint":"20260101-000000"}'
+  serve_restore "failed restore-error"; watcher=$!
+  run sh updater.sh
+  kill "$watcher" 2>/dev/null || true
+  [ "$(phase)" = "failed" ]
+  [ "$(tag_now)" = "v1.0.0" ]     # tag not switched when the restore fails
+}
