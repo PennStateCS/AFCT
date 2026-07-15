@@ -31,6 +31,10 @@ BACKUP_DIR="${BACKUP_DIR:-/backups}"
 FILES_ROOT="${BACKUP_FILES_ROOT:-/snapshot}"       # upload volumes mounted here
 TRIGGER_DIR="${BACKUP_TRIGGER_DIR:-/backup-triggers}"
 TRIGGER_FILE="${TRIGGER_DIR}/backup-now"
+# Restore (downgrade) request from the updater: the file holds the backup timestamp
+# to restore; we write the outcome to the result file for the updater to read.
+RESTORE_TRIGGER_FILE="${TRIGGER_DIR}/restore-now"
+RESTORE_RESULT_FILE="${TRIGGER_DIR}/restore-result"
 LAST_RUN_FILE="${BACKUP_DIR}/.last-backup-date"
 TICK="${BACKUP_TICK_SECONDS:-10}"                  # trigger poll cadence
 SETTINGS_EVERY="${BACKUP_CHECK_SECONDS:-900}"      # settings/schedule cadence
@@ -90,11 +94,55 @@ run_backup() {
     -mtime "+${retention}" -exec rm -f {} + 2>/dev/null || true
 }
 
+# Restore the database from a chosen backup, on request from the updater during a
+# downgrade. The updater stops the app FIRST so pg_restore --clean can drop and
+# recreate objects without live connections. Database only: a downgrade needs the
+# schema + data the old app version expects; uploaded files are left untouched (any
+# created since the backup simply become orphaned, which is harmless).
+write_restore_result() {
+  printf '%s %s\n' "$1" "${2:-}" > "${RESTORE_RESULT_FILE}.tmp" 2>/dev/null || return 0
+  mv "${RESTORE_RESULT_FILE}.tmp" "$RESTORE_RESULT_FILE" 2>/dev/null || true
+}
+
+run_restore() {
+  target="$1"
+  # Timestamp only (YYYYMMDD-HHMMSS shape); reject anything else so the path can't
+  # be steered outside BACKUP_DIR.
+  case "$target" in
+    '' | *[!0-9-]*) log "restore: invalid target"; write_restore_result "failed" "invalid-target"; return ;;
+  esac
+  db_file="${BACKUP_DIR}/afct-${target}.dump"
+  if [ ! -f "$db_file" ]; then
+    log "restore: backup ${target} not found"
+    write_restore_result "failed" "backup-not-found"
+    return
+  fi
+
+  log "restoring database from ${db_file} (the app must already be stopped)"
+  if pg_restore -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+       --clean --if-exists --no-owner "$db_file"; then
+    log "database restore from ${target} complete"
+    write_restore_result "ok" "$target"
+  else
+    log "database restore from ${target} FAILED"
+    write_restore_result "failed" "restore-error"
+  fi
+}
+
 # Cached retention for on-demand pruning; refreshed on each scheduled check.
 cached_retention="$FALLBACK_RETENTION"
 elapsed="$SETTINGS_EVERY"  # force a settings/schedule check on the first iteration
 
 while true; do
+  # Restore requested by the updater (downgrade). Handled before the backup check so
+  # a restore is never delayed behind a scheduled backup.
+  if [ -f "$RESTORE_TRIGGER_FILE" ]; then
+    restore_target="$(tr -cd '0-9-' < "$RESTORE_TRIGGER_FILE" 2>/dev/null || echo '')"
+    rm -f "$RESTORE_TRIGGER_FILE"
+    log "restore requested: ${restore_target}"
+    run_restore "$restore_target"
+  fi
+
   # On-demand backup requested from the dashboard. Runs regardless of the on/off
   # setting; it's an explicit admin action.
   if [ -f "$TRIGGER_FILE" ]; then

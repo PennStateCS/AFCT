@@ -34,11 +34,18 @@ DEFAULT_TAG="${UPDATER_DEFAULT_TAG:-main}"
 
 BACKUP_TRIGGER_DIR="${BACKUP_TRIGGER_DIR:-/backup-triggers}"
 BACKUP_TRIGGER_FILE="${BACKUP_TRIGGER_DIR}/backup-now"
+# Downgrade restore: signal the backup sidecar and read its result (shared volume).
+RESTORE_TRIGGER_FILE="${BACKUP_TRIGGER_DIR}/restore-now"
+RESTORE_RESULT_FILE="${BACKUP_TRIGGER_DIR}/restore-result"
 BACKUP_DIR="${UPDATER_BACKUP_DIR:-/backups}"
+# The version<->backup map, so a downgrade knows which backup to restore. Written
+# here (the app reads it to offer downgrade options).
+RESTORE_POINTS_FILE="${TRIGGER_DIR}/restore-points.json"
 
 HEALTH_TIMEOUT="${UPDATER_HEALTH_TIMEOUT:-300}"
 HEALTH_INTERVAL="${UPDATER_HEALTH_INTERVAL:-5}"
 BACKUP_TIMEOUT="${UPDATER_BACKUP_TIMEOUT:-600}"
+RESTORE_TIMEOUT="${UPDATER_RESTORE_TIMEOUT:-600}"
 POLL_INTERVAL="${UPDATER_POLL_INTERVAL:-5}"
 REQUIRE_BACKUP="${UPDATER_REQUIRE_BACKUP:-false}"
 ONCE="${UPDATER_ONCE:-false}"
@@ -138,7 +145,8 @@ wait_for_health() {
 }
 
 # Ask the existing backup sidecar for a fresh backup and wait for a new dump to
-# appear. Best-effort by default: the image rollback still protects the upgrade.
+# appear. On success, echoes the new backup's timestamp (so the caller can record a
+# restore point). Best-effort: the image rollback still protects an upgrade.
 backup_and_wait() {
   _before=$(ls -1t "$BACKUP_DIR"/afct-*.dump 2>/dev/null | head -n 1 || true)
   mkdir -p "$BACKUP_TRIGGER_DIR" 2>/dev/null || return 1
@@ -147,7 +155,43 @@ backup_and_wait() {
   while [ "$_elapsed" -lt "$BACKUP_TIMEOUT" ]; do
     _now=$(ls -1t "$BACKUP_DIR"/afct-*.dump 2>/dev/null | head -n 1 || true)
     if [ -n "$_now" ] && [ "$_now" != "$_before" ]; then
+      basename "$_now" | sed -n 's/^afct-\(.*\)\.dump$/\1/p'
       return 0
+    fi
+    sleep "$HEALTH_INTERVAL"
+    _elapsed=$((_elapsed + HEALTH_INTERVAL))
+  done
+  return 1
+}
+
+# Append (version -> backup timestamp) to the restore-points map, de-duplicated by
+# backup. The app reads this to offer downgrade targets.
+record_restore_point() {
+  _ver=$1
+  _bts=$2
+  [ -n "$_ver" ] && [ -n "$_bts" ] || return 0
+  _rts=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'unknown')
+  _tmp="${RESTORE_POINTS_FILE}.tmp.$$"
+  if [ -f "$RESTORE_POINTS_FILE" ] && jq -e . "$RESTORE_POINTS_FILE" >/dev/null 2>&1; then
+    jq --arg v "$_ver" --arg b "$_bts" --arg t "$_rts" \
+      '(map(select(.backup != $b))) + [{version: $v, backup: $b, createdAt: $t}]' \
+      "$RESTORE_POINTS_FILE" > "$_tmp" 2>/dev/null || return 0
+  else
+    jq -n --arg v "$_ver" --arg b "$_bts" --arg t "$_rts" \
+      '[{version: $v, backup: $b, createdAt: $t}]' > "$_tmp" 2>/dev/null || return 0
+  fi
+  mv "$_tmp" "$RESTORE_POINTS_FILE" 2>/dev/null || true
+}
+
+# Wait for the backup sidecar to report the outcome of a restore.
+wait_for_restore() {
+  _elapsed=0
+  while [ "$_elapsed" -lt "$RESTORE_TIMEOUT" ]; do
+    if [ -f "$RESTORE_RESULT_FILE" ]; then
+      case "$(cat "$RESTORE_RESULT_FILE" 2>/dev/null || printf '')" in
+        ok*) return 0 ;;
+        failed*) return 1 ;;
+      esac
     fi
     sleep "$HEALTH_INTERVAL"
     _elapsed=$((_elapsed + HEALTH_INTERVAL))
@@ -182,16 +226,21 @@ process_request() {
   _tag=$(jq -r '.tag // ""' "$CLAIM_FILE" 2>/dev/null || printf '')
   _rid=$(jq -r '.requestId // ""' "$CLAIM_FILE" 2>/dev/null || printf '')
   _backup=$(jq -r 'if .backupFirst == false then "false" else "true" end' "$CLAIM_FILE" 2>/dev/null || printf 'true')
+  _restore_point=$(jq -r '.restorePoint // ""' "$CLAIM_FILE" 2>/dev/null || printf '')
   printf '%s' "$_rid" | grep -Eq "$ID_REGEX" || _rid="unknown"
 
-  if [ "$_action" != "upgrade" ]; then
-    write_status "failed" "unsupported action: ${_action}" "" "" "$_rid"
-    rm -f "$CLAIM_FILE"
-    return 0
-  fi
+  case "$_action" in
+    upgrade | downgrade) : ;;
+    *)
+      write_status "failed" "unsupported action: ${_action}" "" "" "$_rid"
+      rm -f "$CLAIM_FILE"
+      return 0
+      ;;
+  esac
 
-  if ! tag_allowed "$_tag"; then
-    write_status "failed" "version is not an allowed release" "" "$_tag" "$_rid"
+  # Tag character-safety applies to both actions (it's written to the env file).
+  if ! printf '%s' "$_tag" | grep -Eq "$TAG_REGEX"; then
+    write_status "failed" "invalid version tag" "" "$_tag" "$_rid"
     rm -f "$CLAIM_FILE"
     return 0
   fi
@@ -200,6 +249,21 @@ process_request() {
   _proj=$(compose_project)
   if [ -z "$_proj" ]; then
     write_status "failed" "could not find the running app container (${APP_CONTAINER})" "$_from" "$_tag" "$_rid"
+    rm -f "$CLAIM_FILE"
+    return 0
+  fi
+
+  if [ "$_action" = "downgrade" ]; then
+    process_downgrade "$_tag" "$_rid" "$_from" "$_proj" "$_restore_point"
+    rm -f "$CLAIM_FILE"
+    return 0
+  fi
+
+  # ---- upgrade ----
+  # The target must be a curated release (downgrade targets are validated against
+  # the recorded restore points instead, in process_downgrade).
+  if ! tag_allowed "$_tag"; then
+    write_status "failed" "version is not an allowed release" "$_from" "$_tag" "$_rid"
     rm -f "$CLAIM_FILE"
     return 0
   fi
@@ -214,12 +278,15 @@ process_request() {
 
   if [ "$_backup" = "true" ]; then
     write_status "backing_up" "creating a pre-upgrade backup" "$_from" "$_tag" "$_rid"
-    if ! backup_and_wait; then
-      if [ "$REQUIRE_BACKUP" = "true" ]; then
-        write_status "failed" "a pre-upgrade backup could not be confirmed" "$_from" "$_tag" "$_rid"
-        rm -f "$CLAIM_FILE"
-        return 0
-      fi
+    _bts=$(backup_and_wait) || _bts=""
+    if [ -n "$_bts" ]; then
+      # Remember this backup as the restore point for the version we're leaving.
+      record_restore_point "$_from" "$_bts"
+    elif [ "$REQUIRE_BACKUP" = "true" ]; then
+      write_status "failed" "a pre-upgrade backup could not be confirmed" "$_from" "$_tag" "$_rid"
+      rm -f "$CLAIM_FILE"
+      return 0
+    else
       log "pre-upgrade backup not confirmed; continuing (image rollback still protects this upgrade)"
     fi
   fi
@@ -250,6 +317,73 @@ process_request() {
     write_status "failed" "the upgrade and the rollback both failed; manual recovery is required" "$_from" "$_tag" "$_rid"
   fi
   rm -f "$CLAIM_FILE"
+  return 0
+}
+
+# Downgrade = restore a recorded pre-upgrade database backup and run the older
+# image. DESTRUCTIVE: it discards everything created since that backup. The app is
+# stopped, the backup sidecar restores the DB, then the old image is started.
+process_downgrade() {
+  _tag=$1
+  _rid=$2
+  _from=$3
+  _proj=$4
+  _rp=$5
+
+  # The restore point is a backup timestamp; it must be a recorded restore point
+  # for exactly this version (the app never gets to name an arbitrary backup).
+  case "$_rp" in
+    '' | *[!0-9-]*)
+      write_status "failed" "invalid restore point" "$_from" "$_tag" "$_rid"
+      return 0
+      ;;
+  esac
+  if ! { [ -f "$RESTORE_POINTS_FILE" ] && jq -e --arg t "$_tag" --arg b "$_rp" \
+       'any(.[]?; .version == $t and .backup == $b)' "$RESTORE_POINTS_FILE" >/dev/null 2>&1; }; then
+    write_status "failed" "no recorded restore point ${_rp} for ${_tag}" "$_from" "$_tag" "$_rid"
+    return 0
+  fi
+
+  log "downgrade requested: ${_from} -> ${_tag} via restore ${_rp} (request ${_rid})"
+
+  # 1) Snapshot the CURRENT state first, so this downgrade is itself reversible.
+  write_status "backing_up" "backing up the current state before downgrading" "$_from" "$_tag" "$_rid"
+  _sbts=$(backup_and_wait) || _sbts=""
+  if [ -n "$_sbts" ]; then
+    record_restore_point "$_from" "$_sbts"
+  else
+    log "safety backup before downgrade not confirmed; continuing"
+  fi
+
+  # 2) Stop the app so pg_restore --clean has no live database connections.
+  write_status "stopping" "stopping the application for the restore" "$_from" "$_tag" "$_rid"
+  dc "$_proj" stop "$APP_SERVICE" >/dev/null 2>&1 || true
+
+  # 3) Ask the backup sidecar to restore the chosen database, and wait for it.
+  write_status "restoring" "restoring the database from ${_rp}" "$_from" "$_tag" "$_rid"
+  rm -f "$RESTORE_RESULT_FILE" 2>/dev/null || true
+  mkdir -p "$BACKUP_TRIGGER_DIR" 2>/dev/null || true
+  if ! printf '%s\n' "$_rp" > "$RESTORE_TRIGGER_FILE" 2>/dev/null; then
+    write_status "failed" "could not signal the backup service to restore" "$_from" "$_tag" "$_rid"
+    return 0
+  fi
+  if ! wait_for_restore; then
+    write_status "failed" "the database restore did not complete; the app is stopped. Recover from a restore point." "$_from" "$_tag" "$_rid"
+    return 0
+  fi
+
+  # 4) Set the old version and bring the app back on it.
+  write_status "pulling" "starting ${_tag}" "$_from" "$_tag" "$_rid"
+  if ! set_app_tag "$_tag"; then
+    write_status "failed" "restored the database but could not set the version" "$_from" "$_tag" "$_rid"
+    return 0
+  fi
+  if recreate_app "$_proj" && wait_for_health "$_proj"; then
+    write_status "healthy" "downgraded to ${_tag}" "$_from" "$_tag" "$_rid"
+    log "downgrade to ${_tag} complete"
+  else
+    write_status "failed" "restored the database, but ${_tag} did not become healthy; recover from a restore point" "$_from" "$_tag" "$_rid"
+  fi
   return 0
 }
 
