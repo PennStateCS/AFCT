@@ -10,10 +10,13 @@ vi.mock('fs', () => ({ default: fsMock, ...fsMock }));
 
 import {
   isValidTag,
+  isValidRestorePoint,
   currentVersion,
   fetchManifest,
   readStatus,
+  readRestorePoints,
   writeUpdateRequest,
+  writeDowngradeRequest,
   UPDATE_REQUEST_FILE,
 } from '@/lib/updates';
 
@@ -103,5 +106,55 @@ describe('writeUpdateRequest', () => {
     writeUpdateRequest({ tag: 'v1.1.0', requestedBy: 'a', requestId: 'r', backupFirst: false });
     const written = JSON.parse(fsMock.writeFileSync.mock.calls[0][1] as string);
     expect(written.backupFirst).toBe(false);
+  });
+});
+
+describe('isValidRestorePoint', () => {
+  it('accepts a backup timestamp and rejects anything else', () => {
+    expect(isValidRestorePoint('20260101-000000')).toBe(true);
+    expect(isValidRestorePoint('2026-01-01')).toBe(false);
+    expect(isValidRestorePoint('../etc/passwd')).toBe(false);
+    expect(isValidRestorePoint('')).toBe(false);
+  });
+});
+
+describe('readRestorePoints', () => {
+  it('returns well-formed points, newest first, dropping malformed ones', () => {
+    fsMock.readFileSync.mockReturnValue(
+      JSON.stringify([
+        { version: 'v0.9.0', backup: '20260101-000000' },
+        { version: 'v1.0.0', backup: '20260202-000000' },
+        { version: 'bad tag', backup: '20260303-000000' }, // bad version
+        { version: 'v1.1.0', backup: 'nope' }, // bad backup
+      ]),
+    );
+    const rp = readRestorePoints();
+    expect(rp.map((r) => r.backup)).toEqual(['20260202-000000', '20260101-000000']);
+  });
+  it('returns [] when the file is missing', () => {
+    fsMock.readFileSync.mockImplementation(() => {
+      throw new Error('ENOENT');
+    });
+    expect(readRestorePoints()).toEqual([]);
+  });
+});
+
+describe('writeDowngradeRequest', () => {
+  it('writes a downgrade payload with the restore point', () => {
+    writeDowngradeRequest({
+      tag: 'v0.9.0',
+      restorePoint: '20260101-000000',
+      requestedBy: 'admin1',
+      requestId: 'd1',
+    });
+    const written = JSON.parse(fsMock.writeFileSync.mock.calls[0][1] as string);
+    expect(written).toMatchObject({
+      action: 'downgrade',
+      tag: 'v0.9.0',
+      restorePoint: '20260101-000000',
+      requestedBy: 'admin1',
+      requestId: 'd1',
+    });
+    expect(fsMock.renameSync).toHaveBeenCalledWith(expect.any(String), UPDATE_REQUEST_FILE);
   });
 });

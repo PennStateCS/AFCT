@@ -220,8 +220,8 @@ export interface paths {
         get: operations["getAdminSettingsUpgrade"];
         put?: never;
         /**
-         * Request an application upgrade
-         * @description Requests an application upgrade to a curated release by dropping a validated  request for the updater sidecar to perform. System administrators only. Returns  202; the swap, health check, and rollback happen asynchronously in the sidecar.
+         * Request an application upgrade or downgrade
+         * @description Requests an application upgrade to a curated release by dropping a validated  request for the updater sidecar to perform. System administrators only. Returns  202; the swap, health check, and rollback happen asynchronously in the sidecar.  Upgrade to a curated release, or DOWNGRADE by restoring a recorded pre-upgrade  backup (which permanently discards everything created since it). Returns 202.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/upgrade/route.ts)
          */
@@ -2652,12 +2652,15 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @enum {string} */
+                    action?: "upgrade" | "downgrade";
                     tag: string;
+                    restorePoint?: string;
                 };
             };
         };
         responses: {
-            /** @description Upgrade requested; it will run asynchronously. */
+            /** @description Requested; it will run asynchronously. */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -2669,7 +2672,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Invalid tag, an unknown release, or the current version. */
+            /** @description Invalid tag/restore point, an unknown release, or the current version. */
             400: {
                 headers: {
                     [name: string]: unknown;

@@ -7,6 +7,8 @@ import path from 'path';
 export const UPDATE_TRIGGER_DIR = process.env.UPDATE_TRIGGER_DIR || '/update-triggers';
 export const UPDATE_REQUEST_FILE = path.join(UPDATE_TRIGGER_DIR, 'request.json');
 export const UPDATE_STATUS_FILE = path.join(UPDATE_TRIGGER_DIR, 'status.json');
+// The version -> pre-upgrade-backup map the updater records; drives downgrade.
+export const UPDATE_RESTORE_POINTS_FILE = path.join(UPDATE_TRIGGER_DIR, 'restore-points.json');
 
 // The curated release manifest: the list of versions an admin may upgrade to.
 // Fetched from the repo by default so it isn't frozen to the running image's own
@@ -23,6 +25,12 @@ export function isValidTag(tag: string): boolean {
   return typeof tag === 'string' && TAG_RE.test(tag);
 }
 
+// A restore point is a backup timestamp (YYYYMMDD-HHMMSS), matching backup.sh.
+const RESTORE_POINT_RE = /^[0-9]{8}-[0-9]{6}$/;
+export function isValidRestorePoint(ts: string): boolean {
+  return typeof ts === 'string' && RESTORE_POINT_RE.test(ts);
+}
+
 export type ReleaseVersion = {
   tag: string;
   label?: string;
@@ -31,6 +39,14 @@ export type ReleaseVersion = {
 };
 
 export type ReleaseManifest = { versions: ReleaseVersion[] };
+
+// A recorded pre-upgrade snapshot: the version that was running and the backup taken
+// before it was replaced. Downgrading restores this backup and runs that version.
+export type RestorePoint = {
+  version: string;
+  backup: string;
+  createdAt?: string;
+};
 
 export type UpdateStatus = {
   requestId?: string;
@@ -87,6 +103,41 @@ export function writeUpdateRequest(request: {
     requestedBy: request.requestedBy,
     requestId: request.requestId,
     backupFirst: request.backupFirst !== false,
+  };
+  const tmp = path.join(UPDATE_TRIGGER_DIR, `.request.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, JSON.stringify(payload));
+  fs.renameSync(tmp, UPDATE_REQUEST_FILE);
+}
+
+// Restore points recorded by the updater (newest first). Only well-formed entries
+// are returned; missing file / unmounted volume yields an empty list.
+export function readRestorePoints(): RestorePoint[] {
+  try {
+    const data: unknown = JSON.parse(fs.readFileSync(UPDATE_RESTORE_POINTS_FILE, 'utf8'));
+    if (!Array.isArray(data)) return [];
+    return (data as RestorePoint[])
+      .filter((r) => !!r && isValidTag(r.version) && isValidRestorePoint(r.backup))
+      .sort((a, b) => b.backup.localeCompare(a.backup));
+  } catch {
+    return [];
+  }
+}
+
+// Drop a validated DOWNGRADE request for the sidecar (destructive: it restores the
+// backup, discarding everything since). Atomic write, like the upgrade request.
+export function writeDowngradeRequest(request: {
+  tag: string;
+  restorePoint: string;
+  requestedBy: string;
+  requestId: string;
+}): void {
+  fs.mkdirSync(UPDATE_TRIGGER_DIR, { recursive: true });
+  const payload = {
+    action: 'downgrade',
+    tag: request.tag,
+    restorePoint: request.restorePoint,
+    requestedBy: request.requestedBy,
+    requestId: request.requestId,
   };
   const tmp = path.join(UPDATE_TRIGGER_DIR, `.request.${process.pid}.tmp`);
   fs.writeFileSync(tmp, JSON.stringify(payload));

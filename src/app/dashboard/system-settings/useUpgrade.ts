@@ -19,11 +19,18 @@ export type UpdateStatus = {
   updatedAt?: string;
 };
 
+export type RestorePoint = {
+  version: string;
+  backup: string;
+  createdAt?: string;
+};
+
 export type UpgradeInfo = {
   current: string;
   status: UpdateStatus | null;
   versions: ReleaseVersion[];
   manifestError: boolean;
+  restorePoints: RestorePoint[];
 };
 
 const UPGRADE_QUERY_KEY = ['admin', 'settings', 'upgrade'] as const;
@@ -70,11 +77,29 @@ export function useUpgrade(enabled: boolean) {
     },
   });
 
+  const { mutate: startDowngrade, isPending: downgradeBusy } = useMutation({
+    mutationFn: (v: { tag: string; restorePoint: string }) =>
+      fetchJson(apiPaths.admin.upgrade(), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'downgrade', tag: v.tag, restorePoint: v.restorePoint }),
+      }),
+    onSuccess: () => {
+      showToast.success('Downgrade requested — AFCT will restore and restart shortly.');
+      void refetch();
+    },
+    onError: (err) => {
+      showToast.error(err instanceof Error ? err.message : 'Failed to start the downgrade');
+    },
+  });
+
   return {
     info: data,
     loading: isLoading,
     upgradeBusy,
+    downgradeBusy,
     startUpgrade,
+    startDowngrade,
     refetch,
   };
 }
