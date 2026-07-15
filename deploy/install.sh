@@ -458,11 +458,19 @@ do_install() {
         ADMIN_PW_GENERATED="true"
         ;;
       *)
+        # Read the password, enforce the policy, then re-enter to confirm so a typo
+        # can't lock the admin out of the account it's about to seed.
         while :; do
           ADMIN_PASSWORD_IN=$(prompt_secret "Administrator password")
-          is_strong_password "$ADMIN_PASSWORD_IN" && break
-          warn "$PW_POLICY_MSG"
+          if ! is_strong_password "$ADMIN_PASSWORD_IN"; then
+            warn "$PW_POLICY_MSG"
+            continue
+          fi
+          _admin_pw_confirm=$(prompt_secret "Confirm administrator password")
+          [ "$ADMIN_PASSWORD_IN" = "$_admin_pw_confirm" ] && break
+          warn "passwords did not match; please try again."
         done
+        unset _admin_pw_confirm
         ADMIN_PW_GENERATED="false"
         ;;
     esac
