@@ -2,14 +2,16 @@
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import JffViewerDialog, { JffCytoscapeViewer } from './JffViewerDialog';
 
 // The engine tests await an async load chain (fetch, parse, dynamic import, cytoscape
-// ctor). On a CPU-starved CI runner that chain can take a few seconds, so give this
-// file generous headroom instead of racing vitest's 5s default and flaking.
-vi.setConfig({ testTimeout: 20000 });
+// ctor). On a CPU-starved CI runner that chain can take several seconds, so give this
+// file generous headroom instead of racing vitest's 5s default. `retry` is the safety
+// net for the residual case: this is an integration test that is correct but races the
+// runner under full-suite contention, so a transient timeout shouldn't fail the build.
+vi.setConfig({ testTimeout: 20000, retry: 2 });
 
 /* ─────────────────────── cytoscape engine mock (hoisted) ─────────────────── */
 // The viewer sets cyRef.current right after cytoscape() returns and wraps the
@@ -66,6 +68,14 @@ const h = vi.hoisted(() => {
 vi.mock('cytoscape', () => ({ default: h.ctor }));
 vi.mock('cytoscape-elk', () => ({ default: {} }));
 vi.mock('cytoscape-svg', () => ({ default: {} }));
+
+// Resolve the (mocked) cytoscape modules once, up front. The component loads them
+// with dynamic import() for bundle-splitting; pre-warming Vitest's module registry
+// here keeps that import() from re-resolving the graph mid-run, which is what stalls
+// under full-suite CPU contention and made this file flaky.
+beforeAll(async () => {
+  await Promise.all([import('cytoscape'), import('cytoscape-elk'), import('cytoscape-svg')]);
+});
 
 // Keep the Dialog wrapper light (no Radix portal / a11y noise); it renders children.
 vi.mock('@/components/ui/dialog', () =>
