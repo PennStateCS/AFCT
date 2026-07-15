@@ -16,7 +16,10 @@ x-logging: &default-logging
 
 services:
   app:
-    image: ghcr.io/pennstatewilkes-barre/afct-dashboard:main
+    # The deployed app version. AFCT_APP_TAG (in .env.production) selects the image
+    # tag; it defaults to `main` when unset. The in-app updater sets this to perform
+    # an upgrade. nginx and the backup image track their own `:main` tag.
+    image: ghcr.io/pennstatewilkes-barre/afct-dashboard:${AFCT_APP_TAG:-main}
     container_name: afct-app
     restart: unless-stopped
     logging: *default-logging
@@ -41,6 +44,9 @@ services:
       WAIT_FOR_DB: 'true'
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'auto'
+      # Surfaces the deployed version in Admin -> System Status. Mirrors the image
+      # tag selected above so the app knows which version it is running.
+      IMAGE_TAG: ${AFCT_APP_TAG:-main}
 
     depends_on:
       postgres:
