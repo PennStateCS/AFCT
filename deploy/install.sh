@@ -245,9 +245,21 @@ maybe_install_docker() {
     die "missing Docker"
   fi
 
-  log "Docker isn't installed."
+  log "Docker isn't installed. AFCT needs Docker Engine and the Compose plugin."
+  log "  1) Recommended for a production server: install via Docker's official,"
+  log "     distro-specific instructions: https://docs.docker.com/engine/install/"
+  log "  2) Or let this installer run Docker's convenience script (get.docker.com),"
+  log "     which adds Docker's official repo and installs the latest stable Engine +"
+  log "     Compose. Docker documents that script as aimed at dev/eval, and it may do a"
+  log "     major-version upgrade on a machine that already has Docker."
+
+  # Don't silently run a network install script in a hands-off run: --non-interactive
+  # requires Docker to be installed already (option 1).
+  if [ "$NON_INTERACTIVE" = "true" ]; then
+    die "Docker is not installed. Install it (https://docs.docker.com/engine/install/) and re-run, or run interactively to use the convenience script."
+  fi
   if [ "$ASSUME_YES" != "true" ]; then
-    ans=$(prompt_default "Install Docker now via the official get.docker.com script?" "y")
+    ans=$(prompt_default "Install Docker now via the get.docker.com convenience script?" "y")
     case "$ans" in
       y|Y|yes|Yes) : ;;
       *) die "Docker is required. Install it (https://docs.docker.com/engine/install/) and re-run." ;;
@@ -264,14 +276,26 @@ maybe_install_docker() {
     fi
   fi
 
-  log "installing Docker (this can take a few minutes)..."
+  # Download the script to a temp file and run it from there, rather than piping the
+  # network straight into a root shell — so a truncated download can't half-run and
+  # the pinned commit can be recorded for the log.
+  get_script=$(mktemp 2>/dev/null) || die "could not create a temp file for the Docker install script."
+  log "downloading the Docker install script (get.docker.com)..."
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL https://get.docker.com | $ins_sudo sh 2>&1 | tee -a "$LOG_FILE"
+    curl -fsSL https://get.docker.com -o "$get_script" \
+      || { rm -f "$get_script"; die "failed to download the Docker install script."; }
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO- https://get.docker.com | $ins_sudo sh 2>&1 | tee -a "$LOG_FILE"
+    wget -qO "$get_script" https://get.docker.com \
+      || { rm -f "$get_script"; die "failed to download the Docker install script."; }
   else
+    rm -f "$get_script"
     die "need curl or wget to download the Docker installer. Install one and re-run."
   fi
+  script_commit=$(sed -n 's/^SCRIPT_COMMIT_SHA=[\"'\'']\{0,1\}\([0-9a-f]\{7,\}\).*/\1/p' "$get_script" 2>/dev/null | head -n 1)
+  [ -n "$script_commit" ] && log "Docker install script commit: ${script_commit}"
+  log "installing Docker (this can take a few minutes)..."
+  $ins_sudo sh "$get_script" 2>&1 | tee -a "$LOG_FILE"
+  rm -f "$get_script"
 
   # The pipe's success is tee's, not the installer's, so verify explicitly.
   command -v docker >/dev/null 2>&1 || die "Docker installation did not complete; see ${LOG_FILE}."
@@ -285,6 +309,7 @@ maybe_install_docker() {
   # Let the invoking user run Docker without sudo after their next login. For THIS
   # run the group isn't active yet, so preflight falls back to sudo below.
   if [ "$(id -u)" != "0" ]; then
+    warn "membership in the 'docker' group grants root-equivalent control of this host (a group member can start privileged containers). Adding $(id -un) to it."
     $ins_sudo usermod -aG docker "$(id -un)" 2>/dev/null \
       && log "added $(id -un) to the 'docker' group (effective after your next login)." || true
   fi
@@ -298,8 +323,15 @@ maybe_install_docker() {
 # Package names differ by distro; the legacy standalone `docker-compose` counts.
 # --------------------------------------------------------------------------- #
 ensure_compose_plugin() {
-  compose version >/dev/null 2>&1 && return 0
-  command -v docker-compose >/dev/null 2>&1 && return 0
+  # Prefer the Compose v2 plugin ('docker compose'). Check it directly rather than via
+  # compose(), which would silently accept the legacy standalone and hide the choice.
+  if $DOCKER_SUDO docker compose version >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v docker-compose >/dev/null 2>&1; then
+    warn "only the legacy standalone 'docker-compose' (v1) is available. Docker considers it end-of-life; install the Compose plugin ('docker compose') when you can."
+    return 0
+  fi
 
   [ "$OS" = "Linux" ] || die "the Docker Compose plugin is required. Install it and re-run."
 
