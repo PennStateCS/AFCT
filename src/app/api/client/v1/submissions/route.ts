@@ -6,6 +6,7 @@ import { logError } from '@/lib/api/activity';
 import { readFormData } from '@/lib/api/request';
 import { SubmissionCreateApiSchema } from '@/schemas/submission';
 import { createSubmission } from '@/lib/create-submission';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 /**
  * The caller's own submission history for one problem (attempt list), newest first,
@@ -28,6 +29,8 @@ import { createSubmission } from '@/lib/create-submission';
  *             submissions: { type: array, items: { type: object } }
  *   400: { description: Missing assignmentId or problemId. }
  *   401: { description: Missing or invalid token. }
+ *   403: { description: Not enrolled in the course. }
+ *   404: { description: "Assignment not found, unpublished, or the problem is not linked to it." }
  *   500: { description: Server error. }
  */
 export const GET = withClientAuth(async (req, _ctx, { user }) => {
@@ -39,6 +42,27 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
   }
 
   try {
+    // Same visibility gate as the web (and this route's POST): the caller must
+    // still have course access, the assignment must be published for students,
+    // and the problem must still be linked. Otherwise a student removed from a
+    // course could keep reading their history here that the browser hides.
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      select: { courseId: true, isPublished: true },
+    });
+    if (!assignment) return apiError(404, 'Assignment not found');
+    if (!(await canAccessCourse(user, assignment.courseId))) {
+      return apiError(403, 'Forbidden');
+    }
+    if (!assignment.isPublished && !(await canManageCourse(user, assignment.courseId))) {
+      return apiError(404, 'Assignment not found');
+    }
+    const link = await prisma.assignmentProblem.findUnique({
+      where: { assignmentId_problemId: { assignmentId, problemId } },
+      select: { assignmentId: true },
+    });
+    if (!link) return apiError(404, 'Assignment not found');
+
     const submissions = await prisma.submission.findMany({
       where: { assignmentId, problemId, studentId: user.id },
       orderBy: { submittedAt: 'desc' },

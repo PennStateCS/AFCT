@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  user: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  user: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
   roster: { findMany: vi.fn() },
   activityLog: { deleteMany: vi.fn() },
 }));
@@ -28,6 +28,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   getSystemUploadLimitMock.mockResolvedValue({ maxBytes: 1024 * 1024, maxMb: 1 });
   prismaMock.roster.findMany.mockResolvedValue([]);
+  // Another active admin exists by default; the last-admin tests override this.
+  prismaMock.user.count.mockResolvedValue(1);
 });
 
 describe('PATCH /api/users/[id]', () => {
@@ -652,6 +654,84 @@ describe('PATCH /api/users/[id]', () => {
     const body = await res.json();
     expect(body.error).toBe('Failed to update user');
   });
+
+  it('returns 409 when demoting the last active admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({
+      avatar: null,
+      firstName: 'A',
+      lastName: 'B',
+      isAdmin: true,
+      inactive: false,
+      timezone: null,
+    });
+    prismaMock.user.count.mockResolvedValue(0); // no other active admin
+
+    const req = new NextRequest('http://localhost/api/users/admin', {
+      method: 'PATCH',
+      body: JSON.stringify({ isAdmin: false }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'admin' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when deactivating the last active admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({
+      avatar: null,
+      firstName: 'A',
+      lastName: 'B',
+      isAdmin: true,
+      inactive: false,
+      timezone: null,
+    });
+    prismaMock.user.count.mockResolvedValue(0);
+
+    const req = new NextRequest('http://localhost/api/users/admin', {
+      method: 'PATCH',
+      body: JSON.stringify({ inactive: true }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'admin' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('allows demoting an admin when another active admin remains', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({
+      avatar: null,
+      firstName: 'A',
+      lastName: 'B',
+      isAdmin: true,
+      inactive: false,
+      timezone: null,
+    });
+    prismaMock.user.count.mockResolvedValue(1);
+    prismaMock.user.update.mockResolvedValue({
+      id: 'admin',
+      email: 'a@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      isAdmin: false,
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+
+    const req = new NextRequest('http://localhost/api/users/admin', {
+      method: 'PATCH',
+      body: JSON.stringify({ isAdmin: false }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'admin' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isAdmin: false }) }),
+    );
+  });
 });
 
 describe('DELETE /api/users/[id]', () => {
@@ -671,6 +751,26 @@ describe('DELETE /api/users/[id]', () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
 
     expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when an admin tries to delete their own account', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+
+    const req = new NextRequest('http://localhost/api/users/admin', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'admin' }) });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.delete).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when the acting admin is inactive', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true, inactive: true } });
+
+    const req = new NextRequest('http://localhost/api/users/u1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.delete).not.toHaveBeenCalled();
   });
 
   it('allows ADMIN to delete user', async () => {
