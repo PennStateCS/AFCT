@@ -179,6 +179,15 @@ serve_restore() {
   [ "$(tag_now)" = "v0.9.0" ]
 }
 
+@test "the updater stamps a liveness heartbeat the healthcheck can read" {
+  export UPDATER_HEARTBEAT_FILE="$TESTDIR/heartbeat"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"hb1","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ -s "$TESTDIR/heartbeat" ]                              # a value was written
+  run grep -Eq '^[0-9]+$' "$TESTDIR/heartbeat"; [ "$status" -eq 0 ]   # an epoch
+}
+
 @test "downgrade rejects a restore point that is not recorded" {
   printf '[]\n' > triggers/restore-points.json
   request '{"action":"downgrade","tag":"v0.9.0","requestId":"d2","restorePoint":"20260101-000000"}'
