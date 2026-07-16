@@ -1810,12 +1810,18 @@ do_restart() {
 # install, where the rest of the stack is already up).
 start_updater() {
   set_env_flag AFCT_UPDATER_ENABLED true
-  info "pulling and starting the updater..."
-  if [ "$LOG_ENABLED" = "true" ]; then
+  info "downloading the updater image..."
+  # Match pull_images: on a terminal, let Docker render its own download progress;
+  # otherwise keep the output in the log.
+  if [ -t 1 ] || [ "$LOG_ENABLED" != "true" ]; then
+    compose_project pull "$UPDATER_SERVICE" || return 1
+  else
     compose_project pull "$UPDATER_SERVICE" >> "$LOG_FILE" 2>&1 || return 1
+  fi
+  info "starting the updater..."
+  if [ "$LOG_ENABLED" = "true" ]; then
     compose_project up -d "$UPDATER_SERVICE" >> "$LOG_FILE" 2>&1 || return 1
   else
-    compose_project pull "$UPDATER_SERVICE" || return 1
     compose_project up -d "$UPDATER_SERVICE" || return 1
   fi
   return 0
