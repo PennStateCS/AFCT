@@ -4,14 +4,7 @@ These instructions work on Apple Silicon and Intel Macs. A continuously availabl
 
 ## Requirements
 
-Prepare a Mac with:
-
-- At least 2 CPU cores
-- At least 6 GB of RAM
-- A public DNS record pointing to the Mac
-- Inbound access on ports 80 and 443
-- Docker Desktop
-- Git, when using the manual method
+Review the [system requirements](../requirements.md) before starting. On macOS you also need [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/); Git is only needed for the manual method.
 
 ## Configure DNS and the network
 
@@ -41,7 +34,7 @@ docker info
 
 Do not continue until all three commands succeed.
 
-## Option 1: Guided installation
+## Guided installation (recommended)
 
 ### Public repository
 
@@ -112,7 +105,9 @@ sh install.sh diagnostics
 
 Review the archive before sharing it.
 
-## Option 2: Manual installation
+## Manual installation
+
+Most deployments should use the guided installer above. Use the manual method only when you need to customize the Compose configuration, automate provisioning, or manage the repository directly with Git.
 
 Clone the repository and create the environment file:
 

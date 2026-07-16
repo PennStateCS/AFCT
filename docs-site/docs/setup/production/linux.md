@@ -4,16 +4,7 @@ These instructions target Ubuntu. Other Linux distributions can run AFCT, but th
 
 ## Requirements
 
-Prepare a server with:
-
-- At least 2 CPU cores
-- At least 6 GB of RAM
-- A public DNS record pointing to the server
-- Inbound access on ports 80 and 443
-- Internet access
-- Git, when using the manual method
-
-The AFCT application may use up to 4 GB of memory. PostgreSQL, nginx, backups, and the operating system also need memory.
+Review the [system requirements](../requirements.md) before starting. On Linux there are no additional prerequisites: the guided installer can install Docker Engine and the Compose plugin for you, and Git is only needed for the manual method.
 
 ## Configure DNS and the firewall
 
@@ -62,7 +53,7 @@ docker info
 
 Do not continue until all three commands succeed.
 
-## Option 1: Guided installation
+## Guided installation (recommended)
 
 ### Public repository
 
@@ -135,7 +126,9 @@ sh install.sh diagnostics
 
 Review the archive before sharing it.
 
-## Option 2: Manual installation
+## Manual installation
+
+Most deployments should use the guided installer above. Use the manual method only when you need to customize the Compose configuration, automate provisioning, or manage the repository directly with Git.
 
 Clone the repository and create the environment file:
 
