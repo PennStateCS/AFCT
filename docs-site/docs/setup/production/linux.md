@@ -1,10 +1,12 @@
 # Deploy AFCT on Linux
 
-These instructions target Ubuntu. Other Linux distributions can run AFCT, but the Docker installation commands will differ.
+These instructions cover **Ubuntu** and **Amazon Linux 2023**. Where the commands differ, both are listed. Other distributions can run AFCT, but the Docker installation commands will differ.
 
 ## Requirements
 
-Review the [system requirements](../requirements.md) before starting. On Linux there are no additional prerequisites: the guided installer can install Docker Engine and the Compose plugin for you, and Git is only needed for the manual method.
+Review the [system requirements](../requirements.md) before starting. Git is only needed for the manual method.
+
+On Ubuntu the guided installer can install Docker Engine and the Compose plugin for you. On Amazon Linux, install Docker and the Compose plugin first (the section below covers it) — the installer's automatic Docker setup uses Docker's convenience script, which does not support Amazon Linux.
 
 ## Configure DNS and the firewall
 
@@ -20,22 +22,43 @@ Keep port 80 open. nginx uses it to redirect HTTP requests to HTTPS on port 443.
 
 ## Install Docker
 
-Install Docker Engine and the Compose plugin:
+### Ubuntu
+
+Install Docker Engine and the Compose plugin from Docker's official repository:
 
 ```bash
 sudo apt update
 sudo apt install -y ca-certificates curl gnupg git
 sudo install -m 0755 -d /etc/apt/keyrings
 
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg |   sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-printf "%s"   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg]   https://download.docker.com/linux/ubuntu   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" |   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io   docker-buildx-plugin docker-compose-plugin
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
+
+### Amazon Linux 2023
+
+Docker is in the Amazon Linux repositories, but the Compose plugin is not, so it is installed from Docker's GitHub releases:
+
+```bash
+sudo dnf install -y docker git
+sudo systemctl enable --now docker
+
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -fSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+```
+
+The `$(uname -m)` picks the right binary for both x86 and Graviton (ARM) instances.
+
+### Both distributions
 
 Allow your account to use Docker without `sudo`:
 

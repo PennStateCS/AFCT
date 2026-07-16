@@ -15,12 +15,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Guides',
-      collapsed: false,
-      items: ['guides/student', 'guides/faculty', 'guides/admin'],
-    },
-    {
-      type: 'category',
       label: 'Installation & Setup',
       items: [
         'setup/requirements',
@@ -31,6 +25,12 @@ const sidebars: SidebarsConfig = {
         'setup/production/windows',
         'setup/production/non-docker',
       ],
+    },
+    {
+      type: 'category',
+      label: 'Guides',
+      collapsed: false,
+      items: ['guides/student', 'guides/faculty', 'guides/admin'],
     },
     {
       type: 'category',

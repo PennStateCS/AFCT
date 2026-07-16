@@ -44,7 +44,7 @@ Review the [system requirements](../requirements.md) before choosing an instance
 
 ## Create the EC2 instance
 
-Create a Linux EC2 instance. Ubuntu LTS is a good default because the Linux guide uses Ubuntu commands.
+Create a Linux EC2 instance. Ubuntu LTS and Amazon Linux 2023 both work; the [Linux deployment guide](linux.md) lists the commands for each.
 
 Recommended starting size:
 
@@ -82,10 +82,11 @@ This exact URL is used for `NEXTAUTH_URL`. Do not use HTTP, an IP address, an ex
 
 ## Connect to the instance
 
-Connect with SSH:
+Connect with SSH. The default user is `ubuntu` on Ubuntu AMIs and `ec2-user` on Amazon Linux:
 
 ```bash
-ssh ubuntu@afct.example.edu
+ssh ubuntu@afct.example.edu      # Ubuntu
+ssh ec2-user@afct.example.edu    # Amazon Linux
 ```
 
 If your DNS record is not ready yet, connect with the EC2 public DNS name or public IP address. Still use the final HTTPS hostname when the installer asks for the public AFCT URL.
