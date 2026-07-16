@@ -25,6 +25,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'setup/requirements',
         'setup/production',
+        'setup/production/aws',
         'setup/production/linux',
         'setup/production/macos',
         'setup/production/windows',
