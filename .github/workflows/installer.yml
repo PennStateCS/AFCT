@@ -32,6 +32,19 @@ jobs:
           sh -n docker/updater/updater.sh
           sh -n docker/backup/backup.sh
 
+      # The Windows installer has no bats-style harness; at minimum, hard-fail on
+      # PowerShell syntax errors (pwsh ships on the ubuntu runners).
+      - name: PowerShell installer parse check
+        shell: pwsh
+        run: |
+          $tokens = $null; $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/deploy/install.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Host "PARSE ERROR: $($_.Message) (line $($_.Extent.StartLineNumber))" }
+            exit 1
+          }
+          Write-Host 'install.ps1 parses cleanly.'
+
       # Advisory for now (the scripts predate shellcheck); surfaces issues without
       # blocking. Tighten to a hard gate once the existing findings are cleared.
       - name: Shellcheck (advisory)
