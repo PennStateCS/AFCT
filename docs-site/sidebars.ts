@@ -36,6 +36,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Operations',
       items: [
+        'operations/system-settings',
         'operations/updates',
         'operations/backups',
         'operations/https-certificates',

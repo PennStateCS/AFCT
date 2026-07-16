@@ -36,8 +36,6 @@ Do not continue until all three commands succeed.
 
 ## Guided installation (recommended)
 
-### Public repository
-
 Create a deployment directory and download the installer bundle:
 
 ```bash
@@ -54,17 +52,6 @@ curl -fLO "$BASE/.env.production.example"
 Run the installer:
 
 ```bash
-sh install.sh
-```
-
-### Private repository
-
-Authenticate with GitHub Container Registry, clone the repository, and run the installer:
-
-```bash
-docker login ghcr.io
-git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
-cd AFCT-Dashboard/deploy
 sh install.sh
 ```
 
