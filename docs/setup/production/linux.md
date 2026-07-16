@@ -205,4 +205,14 @@ sh install.sh diagnostics # create a redacted support archive
 
 `sh install.sh update` records the running image versions before pulling and automatically rolls back if the new version fails its health check.
 
+### In-app upgrades (optional)
+
+To run upgrades and downgrades from **Admin → System Settings → Updates** instead of the command line, enable the updater sidecar:
+
+```bash
+sh install.sh enable-updater    # sh install.sh disable-updater to turn it off
+```
+
+This is **off by default** because the updater holds the Docker socket (root-equivalent on the host). Once enabled, `update`, `restart`, and `status` include it automatically. Downgrades restore a pre-upgrade database backup and **permanently discard everything created since it**, so treat them as recovery, not a casual undo.
+
 Continue with [TLS and HTTPS](../../operations/tls.md), then review [updates](../../operations/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
