@@ -136,7 +136,7 @@ The display format does not change stored timestamps or deadline enforcement.
 |---|---:|---:|
 | **Idle session timeout** | 60 minutes | 5 to 1,440 minutes |
 | **Login max attempts** | 10 | 3 to 50 |
-| **Lockout duration** | 45 minutes | 1 to 1,440 minutes |
+| **Lockout duration** | 10 minutes | 1 to 1,440 minutes |
 
 The server enforces the session timeout. Changing or closing the browser does not extend an expired session.
 
