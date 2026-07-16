@@ -29,7 +29,7 @@ export function FeedbackDialog({
       <DialogContent className="bg-card max-w-xl p-0">
         <DialogHeader className="px-6 pt-6">
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
+          <DialogDescription>
             {description}
           </DialogDescription>
         </DialogHeader>

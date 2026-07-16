@@ -184,7 +184,7 @@
   min-width: 48px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  font-size: 11px;
+  font-size: 0.75rem;
 }
 .cy-tip .cy-tip-val {
   color: var(--foreground);
@@ -197,7 +197,7 @@
   border: 1px solid var(--border);
   padding: 2px 4px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 0.75rem;
 }
 
 .dark {

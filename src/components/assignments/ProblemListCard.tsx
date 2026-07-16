@@ -36,7 +36,7 @@ export function ProblemListCard({
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle className="text-lg">{title}</CardTitle>
         {description ? <p className="text-muted-foreground text-sm">{description}</p> : null}
       </CardHeader>
       <CardContent className="p-0">
@@ -51,7 +51,7 @@ export function ProblemListCard({
                     key="grade"
                     variant="secondary"
                     title="Grade Earned / Max Points"
-                    className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
+                    className="border border-slate-300 bg-white text-xs font-medium text-slate-700"
                   >
                     {problem.grade !== null && problem.grade !== undefined ? problem.grade : '-'}/
                     {problem.maxGrade}
@@ -71,7 +71,7 @@ export function ProblemListCard({
                     key="usage"
                     variant="secondary"
                     title="Submissions Used / Submissions Allowed"
-                    className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
+                    className="border border-slate-300 bg-white text-xs font-medium text-slate-700"
                   >
                     {submissionLabel}
                   </Badge>

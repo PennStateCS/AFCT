@@ -516,7 +516,7 @@ export default function AssignmentDashboardPage({
           className="animate-fade-in-up transition-opacity duration-300"
         >
           <Card className="w-full">
-            <CardHeader className="text-2xl">
+            <CardHeader>
               <div className="flex w-full items-center justify-between">
                 <CardTitle
                   role="heading"
