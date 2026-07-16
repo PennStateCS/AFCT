@@ -43,9 +43,7 @@ This collaboration supports the continued development, deployment, and study of 
 
 ## Documentation
 
-Documentation lives at **<https://pennstatewilkes-barre.github.io/AFCT-Dashboard/>** — user guides, installation, operations, and the [API reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api-reference/afct-dashboard-api) (rebuilt from the route handlers on every push to `main`; the raw spec is at [/api/openapi.json](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api/openapi.json)).
-
-Contributor docs (development setup, architecture, conventions) are in [docs/](docs/README.md).
+Developer and user documentation is available at: **<https://pennstatewilkes-barre.github.io/AFCT-Dashboard/>**
 
 ## Contributors
 
