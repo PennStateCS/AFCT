@@ -59,3 +59,7 @@ prisma/dev.db*
 # Optional: package managers (if unused)
 # .pnpm-store
 # yarn.lock
+
+# The docs site builds separately (github pages), never in the app image
+docs-site
+docs-dist
