@@ -38,7 +38,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'operations/updates',
         'operations/backups',
-        'operations/tls',
+        'operations/https-certificates',
         'operations/troubleshooting',
       ],
     },

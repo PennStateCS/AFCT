@@ -1,4 +1,4 @@
-# TLS and HTTPS
+# HTTPS certificates
 
 AFCT creates a self-signed certificate during the first startup. HTTPS works immediately, but browsers display a warning because the certificate is not trusted.
 
