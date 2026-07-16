@@ -22,6 +22,7 @@ const eslintConfig = [
       'public/**',
       'src/generated/**',
       'src/types/api.ts', // generated from the OpenAPI spec by `npm run docs:types`
+      'docs-site/**', // its own project (docusaurus); local builds leave artifacts here
     ],
   },
   ...nextCoreWebVitals,

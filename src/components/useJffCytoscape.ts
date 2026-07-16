@@ -180,6 +180,12 @@ export function useJffCytoscape({
           cyRef.current = null;
         }
 
+        // Canvas labels need a concrete font-family string, and next/font
+        // registers Geist under a hashed name, so read it off the body.
+        const uiFontFamily =
+          (typeof window !== 'undefined' && getComputedStyle(document.body).fontFamily) ||
+          'ui-sans-serif, system-ui';
+
         const cy = cytoscape({
           container: containerRef.current!,
           elements,
@@ -194,7 +200,7 @@ export function useJffCytoscape({
                 'border-color': STROKE,
                 'border-width': 2,
                 label: 'data(label)',
-                'font-family': 'Inter, ui-sans-serif, system-ui',
+                'font-family': uiFontFamily,
                 'font-size': 16,
                 color: TEXT_COLOR,
                 'text-valign': 'center',
@@ -223,7 +229,7 @@ export function useJffCytoscape({
                 'target-arrow-shape': 'triangle',
                 'arrow-scale': 1.1,
                 label: 'data(label)',
-                'font-family': 'Inter, ui-sans-serif, system-ui',
+                'font-family': uiFontFamily,
                 'font-size': 16,
                 'min-zoomed-font-size': 7,
                 color: TEXT_COLOR,
