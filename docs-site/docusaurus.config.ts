@@ -1,0 +1,121 @@
+import { themes as prismThemes } from 'prism-react-renderer';
+import type { Config } from '@docusaurus/types';
+import type * as Preset from '@docusaurus/preset-classic';
+
+// Published to GitHub Pages as a project site, so every route lives under
+// /AFCT-Dashboard/. The generated OpenAPI reference (Redoc) is copied into the
+// same Pages artifact under /api/ by .github/workflows/docs.yml.
+const config: Config = {
+  title: 'AFCT Dashboard',
+  tagline: 'Automated Feedback for CS Theory',
+  favicon: 'img/favicon.ico',
+
+  url: 'https://pennstatewilkes-barre.github.io',
+  baseUrl: '/AFCT-Dashboard/',
+
+  organizationName: 'PennStateWilkes-Barre',
+  projectName: 'AFCT-Dashboard',
+
+  onBrokenLinks: 'throw',
+
+  markdown: {
+    // The docs are plain Markdown moved in from docs/; compile .md as CommonMark
+    // so stray < and { in prose can't break the MDX compiler.
+    format: 'detect',
+    hooks: {
+      onBrokenMarkdownLinks: 'throw',
+    },
+  },
+
+  i18n: {
+    defaultLocale: 'en',
+    locales: ['en'],
+  },
+
+  presets: [
+    [
+      'classic',
+      {
+        docs: {
+          // Docs-only site: serve the docs at the site root.
+          routeBasePath: '/',
+          sidebarPath: './sidebars.ts',
+          editUrl: 'https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/tree/main/docs-site/',
+        },
+        blog: false,
+        theme: {
+          customCss: './src/css/custom.css',
+        },
+      } satisfies Preset.Options,
+    ],
+  ],
+
+  themeConfig: {
+    navbar: {
+      title: 'AFCT Dashboard',
+      items: [
+        {
+          type: 'docSidebar',
+          sidebarId: 'docs',
+          position: 'left',
+          label: 'Documentation',
+        },
+        {
+          // The generated OpenAPI reference lives in the same Pages deployment,
+          // outside the Docusaurus app, so this is a plain link.
+          href: 'https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api/',
+          label: 'API Reference',
+          position: 'left',
+        },
+        {
+          href: 'https://github.com/PennStateWilkes-Barre/AFCT-Dashboard',
+          label: 'GitHub',
+          position: 'right',
+        },
+      ],
+    },
+    footer: {
+      style: 'dark',
+      links: [
+        {
+          title: 'Documentation',
+          items: [
+            { label: 'Getting started', to: '/' },
+            { label: 'Production setup', to: '/setup/production' },
+            { label: 'Troubleshooting', to: '/operations/troubleshooting' },
+          ],
+        },
+        {
+          title: 'Reference',
+          items: [
+            {
+              label: 'API Reference',
+              href: 'https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api/',
+            },
+            {
+              label: 'OpenAPI spec',
+              href: 'https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api/openapi.json',
+            },
+            { label: 'Roles and permissions', to: '/reference/roles-and-permissions' },
+          ],
+        },
+        {
+          title: 'Project',
+          items: [
+            {
+              label: 'GitHub',
+              href: 'https://github.com/PennStateWilkes-Barre/AFCT-Dashboard',
+            },
+          ],
+        },
+      ],
+      copyright: `Copyright © ${new Date().getFullYear()} Penn State Wilkes-Barre.`,
+    },
+    prism: {
+      theme: prismThemes.github,
+      darkTheme: prismThemes.dracula,
+    },
+  } satisfies Preset.ThemeConfig,
+};
+
+export default config;
