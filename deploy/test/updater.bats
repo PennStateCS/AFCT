@@ -130,23 +130,34 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
 # updater's trigger files (a fresh dump for a backup, an "ok"/"failed" result for a
 # restore) the moment they appear.
 
+# These background shells stand in for the backup sidecar: they answer the
+# updater's trigger files the moment they appear. The loop is long-lived and polls
+# tightly on purpose — a real reply lands in ~0.05s, but on a loaded CI runner this
+# background shell can be starved of CPU for several seconds, so the window must be
+# far wider than the updater's own timeout. (The original fixed 10s lifetime raced
+# an 8s restore timeout and flaked when the runner was busy.) The paired timeouts in
+# the tests below are set to 20s for the same reason; both only bound the
+# pathological case, they don't slow the normal path.
+
 # Fulfill a backup request: create a new dump when backup-now shows up.
 serve_backup() {
-  ( for _ in $(seq 1 100); do
+  ( _i=0
+    while [ "$_i" -lt 800 ]; do
       [ -f backup-triggers/backup-now ] && { : > "backups/afct-$1.dump"; break; }
-      sleep 0.1
+      _i=$((_i + 1)); sleep 0.05
     done ) &
 }
 # Fulfill a restore request with the given result word (ok|failed).
 serve_restore() {
-  ( for _ in $(seq 1 100); do
+  ( _i=0
+    while [ "$_i" -lt 800 ]; do
       [ -f backup-triggers/restore-now ] && { printf '%s\n' "$1" > backup-triggers/restore-result; break; }
-      sleep 0.1
+      _i=$((_i + 1)); sleep 0.05
     done ) &
 }
 
 @test "a successful upgrade records a restore point for the version left behind" {
-  export UPDATER_BACKUP_TIMEOUT=8
+  export UPDATER_BACKUP_TIMEOUT=20
   request '{"action":"upgrade","tag":"v1.1.0","requestId":"u1","backupFirst":true}'
   serve_backup "20260202-000000"; watcher=$!
   run sh updater.sh
@@ -159,7 +170,7 @@ serve_restore() {
 @test "downgrade restores the database and switches to the old version" {
   printf '[{"version":"v0.9.0","backup":"20260101-000000","createdAt":"x"}]\n' > triggers/restore-points.json
   : > backups/afct-20260101-000000.dump
-  export UPDATER_BACKUP_TIMEOUT=2 UPDATER_RESTORE_TIMEOUT=8
+  export UPDATER_BACKUP_TIMEOUT=2 UPDATER_RESTORE_TIMEOUT=20
   request '{"action":"downgrade","tag":"v0.9.0","requestId":"d1","restorePoint":"20260101-000000"}'
   serve_restore "ok 20260101-000000"; watcher=$!
   run sh updater.sh
@@ -179,7 +190,7 @@ serve_restore() {
 @test "downgrade fails cleanly if the restore does not succeed" {
   printf '[{"version":"v0.9.0","backup":"20260101-000000","createdAt":"x"}]\n' > triggers/restore-points.json
   : > backups/afct-20260101-000000.dump
-  export UPDATER_BACKUP_TIMEOUT=2 UPDATER_RESTORE_TIMEOUT=8
+  export UPDATER_BACKUP_TIMEOUT=2 UPDATER_RESTORE_TIMEOUT=20
   request '{"action":"downgrade","tag":"v0.9.0","requestId":"d3","restorePoint":"20260101-000000"}'
   serve_restore "failed restore-error"; watcher=$!
   run sh updater.sh
