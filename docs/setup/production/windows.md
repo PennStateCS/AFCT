@@ -85,13 +85,24 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 ### What the installer asks for
 
-The installer requests:
+The installer prompts for:
 
+- The public AFCT URL, used as `NEXTAUTH_URL`
 - The initial administrator email address
-- The initial administrator password
-- The public AFCT URL
+- The initial administrator password, or it can generate a strong one for you
 
-It then verifies Docker, generates the PostgreSQL password and authentication secret, creates `.env.production`, downloads the images, and starts AFCT.
+It then verifies Docker, generates the PostgreSQL password and authentication secret, writes `.env.production` with restricted permissions, shows a short review, downloads the images, and starts AFCT. A generated administrator password is printed once at the end and is never written to the log, so save it before closing the terminal.
+
+Re-running `.\install.ps1` on a configured host detects the existing installation and offers a menu: start or repair it, update it, reconfigure the public URL or bootstrap settings, run system checks, or create a diagnostics archive. Existing database and authentication secrets are preserved during reconfiguration.
+
+For unattended installs, supply the values as environment variables and pass `-NonInteractive`. Docker Desktop must already be installed and running:
+
+```powershell
+$env:ADMIN_EMAIL = 'admin@example.edu'
+$env:ADMIN_PASSWORD_FILE = 'C:\secrets\afct-admin-password.txt'
+$env:APP_URL = 'https://afct.example.edu'
+.\install.ps1 -NonInteractive
+```
 
 ### Installer diagnostics
 
@@ -166,4 +177,40 @@ Press `Ctrl+C` to stop following the log. AFCT will continue running.
 
 Open the public URL and confirm that the login page loads over HTTPS, the administrator can sign in, and the administration pages open.
 
-A certificate warning is expected until you replace the default self-signed certificate. Continue with [TLS and HTTPS](../../operations/tls.md).
+A certificate warning is expected until you replace the default self-signed certificate.
+
+## Manage a running deployment
+
+The installer also serves as an operations helper. Run these from the directory that contains `docker-compose.yml`:
+
+```powershell
+.\install.ps1 status      # container and application health
+.\install.ps1 logs        # follow the application log (Ctrl+C to stop)
+.\install.ps1 doctor      # read-only system and configuration checks
+.\install.ps1 update      # pull the latest images, recreate, and verify health
+.\install.ps1 restart     # recreate the stack without pulling images
+.\install.ps1 stop        # stop the stack without deleting data volumes
+.\install.ps1 diagnostics # create a redacted support archive
+```
+
+`.\install.ps1 update` records the running image versions before pulling and automatically rolls back if the new version fails its health check.
+
+### In-app upgrades (optional)
+
+To run upgrades and downgrades from **Admin → System Settings → Updates** instead of the command line, enable the updater sidecar:
+
+```powershell
+.\install.ps1 enable-updater    # .\install.ps1 disable-updater to turn it off
+```
+
+A fresh interactive install also offers to enable it at the end; to opt in
+non-interactively, pass `-WithUpdater` (equivalent to running `enable-updater`
+afterward):
+
+```powershell
+.\install.ps1 -WithUpdater
+```
+
+This is **off by default** because the updater holds the Docker socket (root-equivalent on the host). Once enabled, `update`, `restart`, and `status` include it automatically. Downgrades restore a pre-upgrade database backup and **permanently discard everything created since it**, so treat them as recovery, not a casual undo.
+
+Continue with [TLS and HTTPS](../../operations/tls.md), then review [updates](../../operations/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
