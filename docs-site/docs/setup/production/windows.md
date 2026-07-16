@@ -4,17 +4,7 @@ These instructions use Docker Desktop with the WSL 2 backend.
 
 ## Requirements
 
-Prepare a Windows computer with:
-
-- At least 2 CPU cores
-- At least 6 GB of RAM
-- A public DNS record pointing to the computer
-- Inbound access on ports 80 and 443
-- WSL 2
-- Docker Desktop
-- Git, when using the manual method
-
-Docker Desktop, Windows, PostgreSQL, nginx, and the backup service all need memory in addition to the AFCT application.
+Review the [system requirements](../requirements.md) before starting. On Windows you also need WSL 2 and [Docker Desktop](https://docs.docker.com/desktop/install/windows-install/); Git is only needed for the manual method.
 
 ## Configure DNS and the firewall
 
@@ -43,7 +33,7 @@ docker info
 
 Do not continue until WSL 2 is available and all Docker commands succeed.
 
-## Option 1: Guided installation
+## Guided installation (recommended)
 
 ### Public repository
 
@@ -120,7 +110,9 @@ Create one manually with:
 
 Review the archive before sharing it.
 
-## Option 2: Manual installation
+## Manual installation
+
+Most deployments should use the guided installer above. Use the manual method only when you need to customize the Compose configuration, automate provisioning, or manage the repository directly with Git.
 
 Clone the repository and create the environment file:
 
