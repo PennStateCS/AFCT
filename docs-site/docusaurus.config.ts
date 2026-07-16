@@ -32,6 +32,30 @@ const config: Config = {
     locales: ['en'],
   },
 
+  themes: ['docusaurus-theme-openapi-docs'],
+
+  plugins: [
+    [
+      'docusaurus-plugin-openapi-docs',
+      {
+        id: 'api',
+        docsPluginId: 'classic',
+        config: {
+          afct: {
+            // Written by `npm run docs:api` at the repo root; run that first,
+            // then `npm run gen-api` here to (re)generate the MDX pages.
+            specPath: '../docs-dist/openapi.json',
+            outputDir: 'docs/api-reference',
+            sidebarOptions: {
+              groupPathsBy: 'tag',
+              categoryLinkSource: 'tag',
+            },
+          },
+        },
+      },
+    ],
+  ],
+
   presets: [
     [
       'classic',
@@ -41,6 +65,9 @@ const config: Config = {
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/tree/main/docs-site/',
+          // Renders the generated OpenAPI pages (everything else falls through
+          // to the default doc component).
+          docItemComponent: '@theme/ApiItem',
         },
         blog: false,
         theme: {
@@ -61,11 +88,10 @@ const config: Config = {
           label: 'Documentation',
         },
         {
-          // The generated OpenAPI reference lives in the same Pages deployment,
-          // outside the Docusaurus app, so this is a plain link.
-          href: 'https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api/',
-          label: 'API Reference',
+          type: 'docSidebar',
+          sidebarId: 'apiReference',
           position: 'left',
+          label: 'API Reference',
         },
         {
           href: 'https://github.com/PennStateWilkes-Barre/AFCT-Dashboard',
@@ -90,7 +116,7 @@ const config: Config = {
           items: [
             {
               label: 'API Reference',
-              href: 'https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api/',
+              to: '/api-reference/afct-dashboard-api',
             },
             {
               label: 'OpenAPI spec',
