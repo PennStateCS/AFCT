@@ -15,12 +15,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Guides',
-      collapsed: false,
-      items: ['guides/student', 'guides/faculty', 'guides/admin'],
-    },
-    {
-      type: 'category',
       label: 'Installation & Setup',
       items: [
         'setup/requirements',
@@ -34,11 +28,18 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Guides',
+      collapsed: false,
+      items: ['guides/student', 'guides/faculty', 'guides/admin'],
+    },
+    {
+      type: 'category',
       label: 'Operations',
       items: [
+        'operations/system-settings',
         'operations/updates',
         'operations/backups',
-        'operations/tls',
+        'operations/https-certificates',
         'operations/troubleshooting',
       ],
     },
