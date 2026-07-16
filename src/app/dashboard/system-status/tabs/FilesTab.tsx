@@ -93,7 +93,7 @@ export default function FilesTab({
                     className="mb-1 flex items-start justify-between gap-2 last:mb-0"
                   >
                     <div className="min-w-0">
-                      <span className="bg-muted mr-2 rounded px-1.5 py-0.5 text-[10px] uppercase">
+                      <span className="bg-muted mr-2 rounded px-1.5 py-0.5 text-xs uppercase">
                         {f.category}
                       </span>
                       <span className="break-all">{f.path}</span>

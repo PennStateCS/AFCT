@@ -117,7 +117,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-1">
                         <CardTitle className="text-sm leading-none">{assignment.title}</CardTitle>
-                        <div className="text-muted-foreground flex flex-wrap gap-2 text-[10px]">
+                        <div className="text-muted-foreground flex flex-wrap gap-2 text-xs">
                           {assignment.dueDate ? (
                             <span className="border-border rounded-full border px-2 py-1 whitespace-nowrap">
                               Due {formatDateInTimeZone(assignment.dueDate, timezone)}
@@ -130,7 +130,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-right">
-                      <p className="grid grid-cols-[4rem_minmax(4rem,auto)_4rem] items-center gap-2 text-[10px] tracking-[0.12em] uppercase">
+                      <p className="grid grid-cols-[4rem_minmax(4rem,auto)_4rem] items-center gap-2 text-xs tracking-[0.12em] uppercase">
                         <span className="text-foreground text-sm font-semibold">Grade</span>
                         <span className="text-foreground text-left text-sm font-semibold">
                           {(assignment.grade === null ? '-' : `${assignment.grade}`) +
@@ -190,10 +190,10 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                           className="group border-border hover:border-primary hover:bg-primary/5 flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-2 py-2 text-left text-sm transition"
                         >
                           <div className="flex min-w-0 items-center gap-2">
-                            <p className="text-foreground truncate text-[13px] font-medium">
+                            <p className="text-foreground truncate text-sm font-medium">
                               Problem {index + 1}: {problem.title ?? 'Untitled'}
                             </p>
-                            <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-[10px]">
+                            <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">
                               {problem.status.toLowerCase() == 'processing'
                                 ? 'Evaluating'
                                 : problem.grade === null &&
@@ -204,13 +204,13 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                                     ? 'Not Graded'
                                     : 'Graded'}
                             </span>
-                            <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-[10px]">
+                            <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">
                               {problem.submissionCount ? problem.submissionCount : 0}/
                               {problem.maxSubmissions < 0 ? '∞' : problem.maxSubmissions}{' '}
                               Submissions
                             </span>
                             {problem.autograderEnabled && problem.submissionCount ? (
-                              <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-[10px]">
+                              <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">
                                 {'Latest Status: ' + problem.status}
                               </span>
                             ) : (
@@ -218,7 +218,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="border-border rounded-full border px-2 py-1 text-[10px] font-semibold text-slate-700">
+                            <span className="border-border rounded-full border px-2 py-1 text-xs font-semibold text-slate-700">
                               {problem.grade === null
                                 ? `-/${problem.maxPoints}`
                                 : `${problem.grade}/${problem.maxPoints}`}{' '}

@@ -76,7 +76,7 @@ export function CourseTabBar({ counts }: { counts?: TabCounts }) {
             <Icon className="size-3.5 opacity-70" />
             {label}
             {count !== undefined && (
-              <span className="ml-0.5 rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] leading-none font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
+              <span className="ml-0.5 rounded-full bg-teal-100 px-1.5 py-0.5 text-xs leading-none font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
                 {count}
               </span>
             )}
