@@ -35,8 +35,6 @@ Do not continue until WSL 2 is available and all Docker commands succeed.
 
 ## Guided installation (recommended)
 
-### Public repository
-
 Create a deployment directory and download the installer bundle:
 
 ```powershell
@@ -53,17 +51,6 @@ foreach ($file in 'install.ps1', 'docker-compose.yml', '.env.production.example'
 Run the installer:
 
 ```powershell
-.\install.ps1
-```
-
-### Private repository
-
-Authenticate with GitHub Container Registry, clone the repository, and run the installer:
-
-```powershell
-docker login ghcr.io
-git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
-Set-Location .\AFCT-Dashboard\deploy
 .\install.ps1
 ```
 
