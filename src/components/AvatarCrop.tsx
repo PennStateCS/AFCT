@@ -17,9 +17,47 @@ export function AvatarCrop({
   const [crop, setCrop] = useState({ x: 0.5, y: 0.5 });
   const internalEditorRef = useRef<AvatarEditorRef | null>(null);
 
+  // The cropped canvas is what actually gets uploaded, so the position must be
+  // adjustable without a pointer: arrow keys nudge the crop (Shift = bigger steps).
+  const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+  const nudgeCrop = (dx: number, dy: number) => {
+    setCrop((c) => ({ x: clamp01(c.x + dx), y: clamp01(c.y + dy) }));
+    onChange?.();
+  };
+  const handleCropKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 0.1 : 0.02;
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        nudgeCrop(-step, 0);
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        nudgeCrop(step, 0);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        nudgeCrop(0, -step);
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        nudgeCrop(0, step);
+        break;
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <div className="mx-auto grid h-[260px] w-[260px] place-items-center rounded-2xl overflow-hidden">
+      {/* role="application" keeps screen readers in pass-through mode so the
+          arrow keys reach the handler instead of moving the virtual cursor. */}
+      <div
+        role="application"
+        tabIndex={0}
+        aria-label="Avatar crop area"
+        aria-describedby="avatar-crop-hint"
+        onKeyDown={handleCropKeyDown}
+        className="mx-auto grid h-[260px] w-[260px] place-items-center rounded-2xl overflow-hidden focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
+      >
         <AvatarEditor
           ref={editorRef ?? internalEditorRef}
           image={avatarPreview}
@@ -41,6 +79,10 @@ export function AvatarCrop({
           }}
         />
       </div>
+      <p id="avatar-crop-hint" className="sr-only">
+        Drag the image, or focus the crop area and use the arrow keys to reposition
+        it. Hold Shift for larger steps. Use the zoom slider below to resize.
+      </p>
 
       {/* Zoom Bar */}
       <div className="space-y-2">
