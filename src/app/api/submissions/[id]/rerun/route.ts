@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
-import { canManageCourse } from '@/lib/permissions';
+import { canManageCourse, isCourseArchived } from '@/lib/permissions';
 
 /**
  * Re-queues one submission for evaluation, resetting it to PENDING and clearing its
@@ -21,6 +21,7 @@ import { canManageCourse } from '@/lib/permissions';
  *   401: { description: Not signed in. }
  *   403: { description: Caller is not course staff or a system admin. }
  *   404: { description: Submission not found. }
+ *   409: { description: Course is archived. }
  *   500: { description: Server error. }
  */
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
@@ -62,6 +63,15 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         metadata: { submissionId: submission.id, studentId: submission.studentId },
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Archived courses are frozen: rerunning would mutate submission state, so
+    // block it here just like the course-wide rerun's blockWhenArchived does.
+    if (await isCourseArchived(submission.courseId)) {
+      return NextResponse.json(
+        { error: 'Course is archived and cannot be modified' },
+        { status: 409 },
+      );
     }
 
     if (!submission.fileName) {

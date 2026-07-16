@@ -2,10 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const resolveMock = vi.hoisted(() => vi.fn());
 const createSubmissionMock = vi.hoisted(() => vi.fn());
-const prismaMock = vi.hoisted(() => ({ submission: { findMany: vi.fn() } }));
+const canAccessMock = vi.hoisted(() => vi.fn());
+const canManageMock = vi.hoisted(() => vi.fn());
+const prismaMock = vi.hoisted(() => ({
+  submission: { findMany: vi.fn() },
+  assignment: { findUnique: vi.fn() },
+  assignmentProblem: { findUnique: vi.fn() },
+}));
 
 vi.mock('@/lib/client-auth', () => ({ resolveClientToken: resolveMock }));
 vi.mock('@/lib/create-submission', () => ({ createSubmission: createSubmissionMock }));
+vi.mock('@/lib/permissions', () => ({
+  canAccessCourse: canAccessMock,
+  canManageCourse: canManageMock,
+}));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
 import { GET, POST } from './route';
@@ -27,7 +37,14 @@ function makeReq(authHeader?: string) {
 }
 const ctx = { params: Promise.resolve({}) };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Defaults: enrolled caller, published assignment, linked problem.
+  canAccessMock.mockResolvedValue(true);
+  canManageMock.mockResolvedValue(false);
+  prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isPublished: true });
+  prismaMock.assignmentProblem.findUnique.mockResolvedValue({ assignmentId: 'a1' });
+});
 
 describe('POST /api/client/v1/submissions', () => {
   it('401 without a token', async () => {
@@ -107,5 +124,41 @@ describe('GET /api/client/v1/submissions (history)', () => {
       }),
     );
     expect(body.submissions.map((s: { id: string }) => s.id)).toEqual(['s2', 's1']);
+  });
+
+  it('404 for an unknown assignment', async () => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.assignment.findUnique.mockResolvedValue(null);
+
+    const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
+    expect(res.status).toBe(404);
+    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
+  });
+
+  it('403 once the caller loses course access (mirrors the web)', async () => {
+    resolveMock.mockResolvedValue(validUser);
+    canAccessMock.mockResolvedValue(false); // removed from the roster
+
+    const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
+    expect(res.status).toBe(403);
+    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
+  });
+
+  it('404 (masked) when the assignment is unpublished and the caller is not staff', async () => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isPublished: false });
+
+    const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
+    expect(res.status).toBe(404);
+    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
+  });
+
+  it('404 when the problem is no longer linked to the assignment', async () => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue(null);
+
+    const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
+    expect(res.status).toBe(404);
+    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
   });
 });

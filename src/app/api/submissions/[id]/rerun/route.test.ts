@@ -10,6 +10,7 @@ const prismaMock = vi.hoisted(() => ({
   assignment: { findUnique: vi.fn() },
   assignmentProblem: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
+  course: { findUnique: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -37,6 +38,7 @@ const submissionRecord = {
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
 });
 
 describe('POST /api/submissions/[id]/rerun', () => {
@@ -71,6 +73,17 @@ describe('POST /api/submissions/[id]/rerun', () => {
     const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
 
     expect(res.status).toBe(404);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.submission.update).not.toHaveBeenCalled();
   });
 
   it('returns 400 when the submission has no file', async () => {
