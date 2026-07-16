@@ -1,4 +1,4 @@
-name: Publish API docs
+name: Publish docs
 
 on:
   push:
@@ -34,6 +34,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            docs-site/package-lock.json
 
       # The generator only needs js-yaml; skip the Prisma client generation.
       - name: Install dependencies
@@ -41,15 +44,25 @@ jobs:
         env:
           SKIP_PRISMA_GENERATE: '1'
 
+      - name: Build the docs site
+        run: |
+          cd docs-site
+          npm ci
+          npm run build
+
       # docs:api also validates the emitted spec against the OpenAPI schema and
       # fails on a malformed @openapi block, so a bad spec can't reach Pages.
+      # Written straight into the site build so the whole thing ships as one
+      # artifact: Docusaurus at /, the OpenAPI reference at /api/.
       - name: Generate and validate OpenAPI docs
         run: npm run docs:api
+        env:
+          DOCS_OUT: docs-site/build/api
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs-dist
+          path: docs-site/build
 
   deploy:
     needs: build
