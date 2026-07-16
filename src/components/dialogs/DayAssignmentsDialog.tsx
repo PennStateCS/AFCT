@@ -78,7 +78,7 @@ export default function DayAssignmentsDialog({
                 {formatWeekdayInTimeZone(parsedDate, timezone)}
               </div>
             )}
-            <DialogDescription className="text-muted-foreground mt-1 truncate text-sm">
+            <DialogDescription className="mt-1 truncate">
               {assignments.length} assignment{assignments.length !== 1 ? 's' : ''}
             </DialogDescription>
           </div>
@@ -112,7 +112,7 @@ export default function DayAssignmentsDialog({
                           {`${a.course.code} - ${a.title}`}
                         </span>
                         {isDraft && (
-                          <span className="shrink-0 rounded bg-white/25 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+                          <span className="shrink-0 rounded bg-white/25 px-1.5 py-0.5 text-xs font-semibold tracking-wide uppercase">
                             Draft
                           </span>
                         )}

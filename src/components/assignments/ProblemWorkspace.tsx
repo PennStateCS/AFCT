@@ -220,7 +220,7 @@ export default function ProblemWorkspace({
               onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined}
             />
           ) : !isPrivilegedUser ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-[0.70rem] whitespace-nowrap text-slate-700 dark:border-slate-200 dark:text-slate-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-xs whitespace-nowrap text-slate-700 dark:border-slate-200 dark:text-slate-200">
               <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
               <span>
                 {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
@@ -254,7 +254,7 @@ export default function ProblemWorkspace({
                   <div className="flex flex-wrap gap-1">
                     <button
                       onClick={() => setActiveFilters(new Set())}
-                      className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                      className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
                         activeFilters.size === 0
                           ? 'border-foreground bg-foreground text-background'
                           : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
@@ -268,7 +268,7 @@ export default function ProblemWorkspace({
                         <button
                           key={value}
                           onClick={() => toggleFilter(value)}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
                             active
                               ? 'border-foreground bg-foreground text-background'
                               : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
@@ -329,13 +329,13 @@ export default function ProblemWorkspace({
                               <TableCell className="p-1 align-top">
                                 <div className="flex flex-col gap-1">
                                   <span>{submittedAt.toLocaleDateString()}</span>
-                                  <span className="text-muted-foreground text-[11px]">
+                                  <span className="text-muted-foreground text-xs">
                                     {submittedAt.toLocaleTimeString()}
                                   </span>
                                   {isLate ? (
                                     <Badge
                                       variant="secondary"
-                                      className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 shadow-sm"
+                                      className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900 shadow-sm"
                                     >
                                       Late
                                     </Badge>
