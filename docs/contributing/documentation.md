@@ -35,9 +35,9 @@ Use these role names consistently:
 
 ## Put authoritative information in one place
 
-The complete authorization model belongs in [Roles and permissions](../reference/roles-and-permissions.md). Role guides may summarize the rules that matter to their audience, but they should link to the reference page for the complete model.
+The complete authorization model belongs in [Roles and permissions](../../docs-site/docs/reference/roles-and-permissions.md). Role guides may summarize the rules that matter to their audience, but they should link to the reference page for the complete model.
 
-The generated OpenAPI documentation is the detailed reference for browser API routes. The handwritten [Client API](../reference/client-api.md) page covers the stable native-client contract.
+The generated OpenAPI documentation is the detailed reference for browser API routes. The handwritten [Client API](../../docs-site/docs/reference/client-api.md) page covers the stable native-client contract.
 
 ## Check links and examples
 

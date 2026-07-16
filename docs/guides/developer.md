@@ -85,7 +85,7 @@ There is no global non-administrator role. Ask which course is involved before c
 
 Faculty and TAs currently share the same permissions. `COURSE_STAFF_ROLES` contains both roles.
 
-The complete model is in [Roles and permissions](../reference/roles-and-permissions.md). That page is authoritative.
+The complete model is in [Roles and permissions](../../docs-site/docs/reference/roles-and-permissions.md). That page is authoritative.
 
 ### Course access helpers
 
