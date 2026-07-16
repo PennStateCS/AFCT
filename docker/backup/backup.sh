@@ -44,8 +44,14 @@ FALLBACK_ENABLED="${BACKUP_ENABLED:-true}"
 FALLBACK_HOUR="${BACKUP_HOUR:-2}"
 FALLBACK_RETENTION="${BACKUP_RETENTION_DAYS:-14}"
 
+# Liveness heartbeat for the container healthcheck: each loop tick stamps the
+# current epoch here so the healthcheck can tell a live scheduler from a hung one.
+HEARTBEAT_FILE="${BACKUP_HEARTBEAT_FILE:-/tmp/afct-backup.alive}"
+beat() { date +%s > "$HEARTBEAT_FILE" 2>/dev/null || true; }
+
 mkdir -p "$BACKUP_DIR"
 [ -d "$TRIGGER_DIR" ] || mkdir -p "$TRIGGER_DIR" 2>/dev/null || true
+beat
 log "watching schedule + on-demand triggers"
 
 # Echoes "enabled|hour|retention" from SystemSettings, or nothing on failure.
@@ -134,6 +140,7 @@ cached_retention="$FALLBACK_RETENTION"
 elapsed="$SETTINGS_EVERY"  # force a settings/schedule check on the first iteration
 
 while true; do
+  beat
   # Restore requested by the updater (downgrade). Handled before the backup check so
   # a restore is never delayed behind a scheduled backup.
   if [ -f "$RESTORE_TRIGGER_FILE" ]; then

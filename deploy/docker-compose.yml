@@ -180,6 +180,18 @@ services:
       - uploads_data:/snapshot/public-uploads:ro
       - backup_triggers:/backup-triggers
 
+    # Liveness only: the scheduler stamps a heartbeat each tick. A wide 10-minute
+    # window keeps a long pg_dump/pg_restore (which blocks the loop) from reading as
+    # a hang. `$$` is a literal `$` for the shell (Compose would otherwise interpolate).
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test -f /tmp/afct-backup.alive && [ "$$(( $$(date +%s) - $$(cat /tmp/afct-backup.alive) ))" -lt 600 ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   updater:
     # Privileged helper that performs admin-requested app upgrades. It holds the
     # Docker socket so the app never has to: the app can only drop a request file
@@ -214,6 +226,18 @@ services:
       # Request a pre-upgrade backup and confirm it landed before swapping images.
       - backup_triggers:/backup-triggers
       - db_backups:/backups:ro
+
+    # Liveness only: the watch loop stamps a heartbeat each poll and throughout the
+    # long upgrade waits, so an in-progress upgrade stays healthy; only a hung loop
+    # (or a large image pull > 3 min) trips it. `$$` is a literal `$` for the shell.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test -f /tmp/afct-updater.alive && [ "$$(( $$(date +%s) - $$(cat /tmp/afct-updater.alive) ))" -lt 180 ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
 volumes:
   postgres_data:

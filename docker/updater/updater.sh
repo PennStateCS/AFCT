@@ -50,6 +50,12 @@ POLL_INTERVAL="${UPDATER_POLL_INTERVAL:-5}"
 REQUIRE_BACKUP="${UPDATER_REQUIRE_BACKUP:-false}"
 ONCE="${UPDATER_ONCE:-false}"
 
+# Liveness heartbeat for the container healthcheck. Each poll (and each wait
+# iteration during a long upgrade) stamps the current epoch here, so the healthcheck
+# can tell a live-but-idle watcher from a hung one — a bare "Up" cannot.
+HEARTBEAT_FILE="${UPDATER_HEARTBEAT_FILE:-/tmp/afct-updater.alive}"
+beat() { date +%s > "$HEARTBEAT_FILE" 2>/dev/null || true; }
+
 # Docker tags: letters, digits, and . _ - only; up to 128 chars; not starting
 # with a separator. This blocks whitespace, slashes, and shell metacharacters.
 TAG_REGEX='^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
@@ -127,6 +133,7 @@ wait_for_health() {
   _proj=$1
   _elapsed=0
   while [ "$_elapsed" -lt "$HEALTH_TIMEOUT" ]; do
+    beat
     _id=$(dc "$_proj" ps -q "$APP_SERVICE" 2>/dev/null || true)
     if [ -n "$_id" ]; then
       _state=$(docker inspect \
@@ -153,6 +160,7 @@ backup_and_wait() {
   : > "$BACKUP_TRIGGER_FILE" 2>/dev/null || return 1
   _elapsed=0
   while [ "$_elapsed" -lt "$BACKUP_TIMEOUT" ]; do
+    beat
     _now=$(ls -1t "$BACKUP_DIR"/afct-*.dump 2>/dev/null | head -n 1 || true)
     if [ -n "$_now" ] && [ "$_now" != "$_before" ]; then
       basename "$_now" | sed -n 's/^afct-\(.*\)\.dump$/\1/p'
@@ -187,6 +195,7 @@ record_restore_point() {
 wait_for_restore() {
   _elapsed=0
   while [ "$_elapsed" -lt "$RESTORE_TIMEOUT" ]; do
+    beat
     if [ -f "$RESTORE_RESULT_FILE" ]; then
       case "$(cat "$RESTORE_RESULT_FILE" 2>/dev/null || printf '')" in
         ok*) return 0 ;;
@@ -391,11 +400,13 @@ process_downgrade() {
 # Main loop
 # --------------------------------------------------------------------------- #
 log "AFCT updater started (watching ${TRIGGER_DIR})"
+beat
 
 # Recover a claim left behind by a crash mid-upgrade: retry it once.
 [ -f "$CLAIM_FILE" ] && mv "$CLAIM_FILE" "$REQUEST_FILE" 2>/dev/null || true
 
 while :; do
+  beat
   if [ -f "$REQUEST_FILE" ]; then
     process_request || log "request processing raised an unexpected error"
   fi
