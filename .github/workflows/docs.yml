@@ -61,7 +61,9 @@ jobs:
       # The raw spec stays at /api/openapi.json for tools that fetch it
       # directly; /api/ itself is a static redirect to the docs-site reference.
       - name: Copy the raw spec to /api/
-        run: cp docs-dist/openapi.json docs-site/build/api/
+        run: |
+          mkdir -p docs-site/build/api
+          cp docs-dist/openapi.json docs-site/build/api/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

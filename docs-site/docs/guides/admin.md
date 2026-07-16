@@ -116,65 +116,9 @@ An archived course must be restored before it can be deleted.
 
 ## System settings
 
-Use **System Settings** to manage platform-wide behavior.
+Use **System Settings** to manage platform-wide behavior: general options (timezone, upload size, signup, session timeout, account lockout, audit retention), the submission queue, backups, hCaptcha, the TLS certificate, and in-app updates.
 
-### General settings
-
-| Setting | Purpose |
-|---|---|
-| **Timezone** | Default timezone inherited by new courses |
-| **Maximum upload size** | File-size limit for submissions and avatars |
-| **Allow user signup** | Enables or disables public registration |
-| **Allowed signup email domains** | Restricts public registration by domain |
-| **24-hour clock** | Changes how times are displayed |
-
-The display format does not change stored timestamps or deadline enforcement.
-
-### Sessions and account lockout
-
-| Setting | Default | Allowed range |
-|---|---:|---:|
-| **Idle session timeout** | 60 minutes | 5 to 1,440 minutes |
-| **Login max attempts** | 10 | 3 to 50 |
-| **Lockout duration** | 10 minutes | 1 to 1,440 minutes |
-
-The server enforces the session timeout. Changing or closing the browser does not extend an expired session.
-
-### Submission queue
-
-Change queue settings only when the current workload requires it.
-
-| Setting | Default | Allowed range | Purpose |
-|---|---:|---:|---|
-| **Concurrency** | 5 | 1 to 20 | Number of evaluations that run at once |
-| **Retry attempts** | 3 | 1 to 10 | Maximum attempts for a failed evaluation |
-| **Resubmit cooldown** | 10 seconds | 0 to 3,600,000 ms | Minimum delay between attempts on the same problem |
-| **Evaluation timeout** | 30 seconds | 1 to 600 seconds | Maximum run time for one evaluation |
-| **Memory limit** | 256 MB | 64 to 8,192 MB | JVM heap limit for one evaluation |
-| **Analyzer bound** | 15 | 1 to 100 | CFG analyzer limit |
-
-The worker pool reloads these settings every 30 seconds. A restart is not required.
-
-### Backups
-
-Enable or disable daily backups, choose the run hour, and set the retention period.
-
-See [Backups and recovery](../operations/backups.md) for host-level backup instructions.
-
-### Audit retention
-
-Set how long audit entries are retained before automatic pruning.
-
-### Security keys and certificates
-
-Use the security settings to manage:
-
-- hCaptcha site and secret keys
-- TLS certificate, private key, and certificate chain
-- Certificate signing requests
-- Reset to the self-signed certificate
-
-The hCaptcha secret is write-only after it is saved.
+Every setting, with its default and allowed range, is documented in [System settings](../operations/system-settings.md).
 
 ## System status
 

@@ -43,15 +43,7 @@ This collaboration supports the continued development, deployment, and study of 
 
 ## Documentation
 
-The AFCT Dashboard includes automatically generated documentation for the HTTP API. The API reference is rebuilt from the route handlers and published whenever changes are pushed to `main`.
-
-- **[API Reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api-reference/afct-dashboard-api)**: browsable documentation for each endpoint, including authentication requirements, parameters, and request/response formats.
-- **[OpenAPI Specification](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api/openapi.json)**: the raw `openapi.json` file, which can be imported into tools such as Postman, Insomnia, or client-generation workflows.
-
-Written documentation lives in the **[documentation landing page](docs/README.md)**, which
-links to everything else: the role guides (administrator, faculty and TA, student, and
-developer), the reference pages (roles and permissions, the client API), and the setup
-guides for development and production.
+Developer and user documentation is available at: **<https://pennstatewilkes-barre.github.io/AFCT-Dashboard/>**
 
 ## Contributors
 
