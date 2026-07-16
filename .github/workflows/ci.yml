@@ -6,6 +6,13 @@ name: CI
 on:
   push:
     branches: ['main']
+    # Docs-only pushes don't need app CI, and skipping it also skips the GHCR
+    # image build that runs after it (the repo is private, so runner minutes
+    # are metered).
+    paths-ignore:
+      - 'docs-site/**'
+      - 'docs/**'
+      - '**.md'
   pull_request:
 
 permissions:

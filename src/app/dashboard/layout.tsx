@@ -62,7 +62,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 Skip to main content
               </a>
               <DashboardSidebarShell />
-              <div className="flex flex-1 flex-col p-4">
+              {/* min-w-0: without it this flex item refuses to shrink below its
+                  content's intrinsic width, so a wide table stretches the whole
+                  page sideways instead of scrolling inside its own container. */}
+              <div className="flex min-w-0 flex-1 flex-col p-4">
                 <Navbar />
                 <main id="main-content" tabIndex={-1} lang="en">
                   {children}

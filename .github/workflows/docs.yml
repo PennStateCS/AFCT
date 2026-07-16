@@ -3,6 +3,14 @@ name: Publish docs
 on:
   push:
     branches: ['main']
+    # Only what actually changes the published site: the docusaurus sources and
+    # the things the OpenAPI reference is generated from.
+    paths:
+      - 'docs-site/**'
+      - 'src/app/api/**'
+      - 'src/schemas/**'
+      - 'scripts/generate-openapi.mjs'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 # Least privilege plus what GitHub Pages deployment needs.
