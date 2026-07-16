@@ -472,7 +472,7 @@ model SystemSettings {
   // Login lockout policy (per-account): how many failed attempts before the
   // account is temporarily locked, and for how long.
   loginMaxAttempts    Int @default(10)
-  loginLockoutMinutes Int @default(45)
+  loginLockoutMinutes Int @default(10)
 
   // Database backups (run by the db-backup container). backupHour is the
   // server-time (UTC) hour to run the daily dump; retention is days of dumps kept.

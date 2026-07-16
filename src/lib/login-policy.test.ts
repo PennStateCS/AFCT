@@ -25,7 +25,7 @@ describe('getLoginLockoutPolicy', () => {
 
     const policy = await getLoginLockoutPolicy();
 
-    expect(policy).toEqual({ maxAttempts: 10, blockDurationMs: 45 * 60_000 });
+    expect(policy).toEqual({ maxAttempts: 10, blockDurationMs: 10 * 60_000 });
   });
 
   it('falls back to env vars when the DB row is missing', async () => {
@@ -67,6 +67,6 @@ describe('getLoginLockoutPolicy', () => {
 
     const policy = await getLoginLockoutPolicy();
 
-    expect(policy).toEqual({ maxAttempts: 10, blockDurationMs: 45 * 60_000 });
+    expect(policy).toEqual({ maxAttempts: 10, blockDurationMs: 10 * 60_000 });
   });
 });
