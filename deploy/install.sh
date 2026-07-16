@@ -53,6 +53,7 @@ MODE_SET="false"
 ASSUME_YES="false"
 NON_INTERACTIVE="false"
 FORCE_RECONFIGURE="false"
+WITH_UPDATER="false"
 COLOR_ENABLED="false"
 COLOR_FORCED_OFF="false"
 LOG_ENABLED="false"
@@ -112,6 +113,11 @@ Options:
       Infrastructure credentials are preserved; this does not rotate the active
       PostgreSQL password or change an existing administrator account password.
 
+  --with-updater
+      During install, also enable the in-app updater sidecar (in-app upgrades and
+      downgrades). It holds the Docker socket, so it is otherwise off by default.
+      Equivalent to running `enable-updater` afterward.
+
   --no-color
       Disable colored terminal output.
 
@@ -162,6 +168,7 @@ while [ "$#" -gt 0 ]; do
     -y|--yes) ASSUME_YES="true" ;;
     --non-interactive|--noninteractive) NON_INTERACTIVE="true" ;;
     --reconfigure) FORCE_RECONFIGURE="true" ;;
+    --with-updater) WITH_UPDATER="true" ;;
     --no-color) COLOR_FORCED_OFF="true" ;;
     --)
       shift
@@ -237,6 +244,15 @@ heading() {
   printf '\n%s%s%s\n' "$C_BOLD$C_BLUE" "$*" "$C_RESET"
   append_log ""
   append_log "$*"
+}
+
+# Sequential step heading. A running counter (not "N of 4") so a run that skips
+# configuration/review — e.g. starting an existing install — still reads 1, 2, …
+# with no confusing gaps.
+STEP_NUM=0
+step() {
+  STEP_NUM=$((STEP_NUM + 1))
+  heading "Step ${STEP_NUM}: $*"
 }
 
 ask() {
@@ -1139,7 +1155,7 @@ show_deployed_versions() {
 
 
 preflight() {
-  heading "Step 1 of 4: System checks"
+  step "System checks"
 
   [ -f "$COMPOSE_FILE" ] || die "${COMPOSE_FILE} was not found next to this script."
   [ -f "$ENV_EXAMPLE" ] || warn "${ENV_EXAMPLE} was not found; the installer will create a minimal production configuration."
@@ -1453,7 +1469,7 @@ collect_diagnostics() {
 # Installation configuration flow
 # --------------------------------------------------------------------------- #
 configure_new_install() {
-  heading "Step 2 of 4: AFCT configuration"
+  step "AFCT configuration"
 
   _default_url="https://$(hostname 2>/dev/null || printf 'localhost')"
   _requested_url=${APP_URL:-}
@@ -1524,7 +1540,7 @@ configure_new_install() {
 }
 
 configure_existing_install() {
-  heading "Step 2 of 4: Reconfiguration"
+  step "Reconfiguration"
 
   _existing_url=$(read_env_value NEXTAUTH_URL "$ENV_FILE")
   _existing_email=$(read_env_value ADMIN_EMAIL "$ENV_FILE")
@@ -1574,7 +1590,7 @@ configure_existing_install() {
 }
 
 review_configuration() {
-  heading "Step 3 of 4: Review"
+  step "Review"
   info "Public URL:        ${APP_URL_IN}"
   info "Administrator:     ${ADMIN_EMAIL_IN}"
   info "Compose file:      ${COMPOSE_FILE}"
@@ -1609,20 +1625,22 @@ do_install() {
       existing_install_menu
       if [ "$RECONFIGURING" != "true" ]; then
         info "using the existing ${ENV_FILE}."
-        heading "Step 4 of 4: Deploy"
+        step "Deploy"
         DIAG_ON_EXIT="true"
         deploy_stack
         print_completion
         DIAG_ON_EXIT="false"
+        maybe_enable_updater_at_install
         return 0
       fi
     else
       info "using the existing ${ENV_FILE}. Pass --reconfigure to replace managed settings."
-      heading "Step 4 of 4: Deploy"
+      step "Deploy"
       DIAG_ON_EXIT="true"
       deploy_stack
       print_completion
       DIAG_ON_EXIT="false"
+      maybe_enable_updater_at_install
       return 0
     fi
   elif [ "$_existing_complete" = "true" ]; then
@@ -1642,11 +1660,12 @@ do_install() {
   write_environment_file
   success "Configuration written to ${ENV_FILE}."
 
-  heading "Step 4 of 4: Deploy"
+  step "Deploy"
   DIAG_ON_EXIT="true"
   deploy_stack
   print_completion
   DIAG_ON_EXIT="false"
+  maybe_enable_updater_at_install
 }
 
 print_completion() {
@@ -1786,6 +1805,22 @@ do_restart() {
   DIAG_ON_EXIT="false"
 }
 
+# Set the flag and pull+start the updater. Returns non-zero on failure so the
+# caller decides whether that is fatal (a standalone enable) or a warning (during
+# install, where the rest of the stack is already up).
+start_updater() {
+  set_env_flag AFCT_UPDATER_ENABLED true
+  info "pulling and starting the updater..."
+  if [ "$LOG_ENABLED" = "true" ]; then
+    compose_project pull "$UPDATER_SERVICE" >> "$LOG_FILE" 2>&1 || return 1
+    compose_project up -d "$UPDATER_SERVICE" >> "$LOG_FILE" 2>&1 || return 1
+  else
+    compose_project pull "$UPDATER_SERVICE" || return 1
+    compose_project up -d "$UPDATER_SERVICE" || return 1
+  fi
+  return 0
+}
+
 # Turn on the privileged updater sidecar (in-app upgrades/downgrades). Off by
 # default because it holds the Docker socket. Once enabled, the AFCT_UPDATER_ENABLED
 # flag makes update/restart/status/diagnostics include it automatically.
@@ -1799,18 +1834,36 @@ do_enable_updater() {
     die "left the updater disabled."
   fi
 
-  set_env_flag AFCT_UPDATER_ENABLED true
   DIAG_ON_EXIT="true"
-  info "pulling and starting the updater..."
-  if [ "$LOG_ENABLED" = "true" ]; then
-    compose_project pull "$UPDATER_SERVICE" >> "$LOG_FILE" 2>&1 || die "could not pull the updater image. Review ${LOG_FILE}."
-    compose_project up -d "$UPDATER_SERVICE" >> "$LOG_FILE" 2>&1 || die "could not start the updater. Review ${LOG_FILE}."
-  else
-    compose_project pull "$UPDATER_SERVICE" || die "could not pull the updater image."
-    compose_project up -d "$UPDATER_SERVICE" || die "could not start the updater."
-  fi
+  start_updater || die "could not pull or start the updater image. If this repository's afct-updater package is private, make it public or run 'docker login ghcr.io'. See ${LOG_FILE}."
   DIAG_ON_EXIT="false"
   success "in-app updater enabled. Manage versions in Admin -> System Settings -> Updates."
+}
+
+# Offer to enable the updater at the end of a guided install (or honor
+# --with-updater). Non-fatal: the base stack is already healthy, so a failure here
+# only warns and leaves the updater disabled.
+maybe_enable_updater_at_install() {
+  [ "$(read_env_value AFCT_UPDATER_ENABLED "$ENV_FILE" 2>/dev/null)" = "true" ] && return 0
+
+  if [ "$WITH_UPDATER" != "true" ]; then
+    can_prompt || return 0
+    heading "Optional: in-app updater"
+    info "The updater sidecar lets admins upgrade and downgrade AFCT from"
+    info "System Settings. It holds the Docker socket (root-equivalent on this host),"
+    info "so it is off unless you turn it on."
+    confirm "Enable the in-app updater now?" "n" || {
+      info "skipped. Enable it later with: sh install.sh enable-updater"
+      return 0
+    }
+  fi
+
+  if start_updater; then
+    success "in-app updater enabled."
+  else
+    set_env_flag AFCT_UPDATER_ENABLED false
+    warn "could not start the updater (the afct-updater image may be private or unpublished). The rest of AFCT is running; enable it later with: sh install.sh enable-updater"
+  fi
 }
 
 # Stop and remove the updater sidecar, and clear the flag so it stays off.
