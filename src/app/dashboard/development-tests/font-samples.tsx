@@ -1,13 +1,24 @@
 // Side-by-side font comparison for the dev-tests page. The candidate fonts are
 // loaded here (and only here), so the rest of the app stays on whatever
 // fonts.ts says; preload is off since this is a dev-only page.
-import { Inter, Atkinson_Hyperlegible_Next, Source_Sans_3, Roboto } from 'next/font/google';
+import {
+  Inter,
+  Atkinson_Hyperlegible_Next,
+  Source_Sans_3,
+  Roboto,
+  Open_Sans,
+  IBM_Plex_Sans,
+  Lexend,
+} from 'next/font/google';
 import { geistSans } from '@/app/fonts';
 
 const inter = Inter({ subsets: ['latin'], preload: false });
 const atkinson = Atkinson_Hyperlegible_Next({ subsets: ['latin'], preload: false });
 const sourceSans = Source_Sans_3({ subsets: ['latin'], preload: false });
 const roboto = Roboto({ subsets: ['latin'], preload: false });
+const openSans = Open_Sans({ subsets: ['latin'], preload: false });
+const plexSans = IBM_Plex_Sans({ subsets: ['latin'], preload: false });
+const lexend = Lexend({ subsets: ['latin'], preload: false });
 
 const FONTS = [
   { name: 'Geist (current)', className: geistSans.className },
@@ -15,6 +26,9 @@ const FONTS = [
   { name: 'Atkinson Hyperlegible Next', className: atkinson.className },
   { name: 'Source Sans 3', className: sourceSans.className },
   { name: 'Roboto', className: roboto.className },
+  { name: 'Open Sans', className: openSans.className },
+  { name: 'IBM Plex Sans', className: plexSans.className },
+  { name: 'Lexend', className: lexend.className },
 ];
 
 const SIZES = [
@@ -31,7 +45,7 @@ const SAMPLE = 'Sphinx of black quartz: judge my vow. Il1 O0 5S 8B';
 export function FontSamples() {
   return (
     <div className="overflow-x-auto">
-      <div className="grid min-w-[1100px] grid-cols-5 gap-6">
+      <div className="grid min-w-[1760px] grid-cols-8 gap-6">
         {FONTS.map((font) => (
           <div key={font.name} className={font.className}>
             <h3 className="mb-3 border-b pb-2 text-sm font-semibold">{font.name}</h3>
