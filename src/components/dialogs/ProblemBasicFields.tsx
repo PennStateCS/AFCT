@@ -39,10 +39,22 @@ export function ProblemBasicFields({ control, errors }: ProblemBasicFieldsProps)
         name="description"
         render={({ field }) => (
           <div>
-            <Label className="mb-2 block">Description</Label>
-            <Textarea {...field} value={field.value ?? ''} rows={4} placeholder="Optional description" />
+            <Label htmlFor="problem-description" className="mb-2 block">
+              Description
+            </Label>
+            <Textarea
+              {...field}
+              id="problem-description"
+              value={field.value ?? ''}
+              rows={4}
+              placeholder="Optional description"
+              aria-invalid={errors.description ? true : undefined}
+              aria-describedby={errors.description ? 'problem-description-error' : undefined}
+            />
             {errors.description && (
-              <p className="mt-1 text-xs text-red-600">{errors.description.message}</p>
+              <p id="problem-description-error" role="alert" className="mt-1 text-xs text-red-600">
+                {errors.description.message}
+              </p>
             )}
           </div>
         )}
@@ -53,8 +65,11 @@ export function ProblemBasicFields({ control, errors }: ProblemBasicFieldsProps)
         name="type"
         render={({ field }) => (
           <div>
-            <Label className="mb-2 block">Problem Type</Label>
+            <Label htmlFor="problem-type" className="mb-2 block">
+              Problem Type
+            </Label>
             <select
+              id="problem-type"
               className="w-full rounded border p-2"
               value={field.value ?? ''}
               onChange={(e) => field.onChange(e.target.value as ProblemFormRaw['type'])}

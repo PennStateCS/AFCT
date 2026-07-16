@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -149,6 +149,22 @@ const formatBackupTs = (ts: string) => {
   const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(ts);
   return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}` : ts;
 };
+
+// Human labels for the updater's machine phase strings, both for display and so
+// the status live region doesn't announce "rolled underscore back".
+const UPGRADE_PHASE_LABELS: Record<string, string> = {
+  backing_up: 'Backing up',
+  pulling: 'Downloading',
+  migrating: 'Migrating',
+  stopping: 'Stopping',
+  restoring: 'Restoring',
+  rolling_back: 'Rolling back',
+  rolled_back: 'Rolled back',
+  healthy: 'Healthy',
+  failed: 'Failed',
+};
+const upgradePhaseLabel = (phase: string) =>
+  UPGRADE_PHASE_LABELS[phase] ?? phase.replace(/_/g, ' ');
 
 const SETTINGS_TAB_KEY = 'afct.systemSettingsTab';
 const SETTINGS_TABS = ['general', 'queue', 'backups', 'captcha', 'tls', 'updates'];
@@ -304,6 +320,10 @@ export default function SystemSettingsClient() {
   } = useUpgrade(tab === 'updates');
   const [selectedVersion, setSelectedVersion] = useState('');
   const [confirmUpgradeOpen, setConfirmUpgradeOpen] = useState(false);
+  // Focus target for closing the upgrade/restore dialogs: their trigger buttons
+  // are disabled once the action starts, so Radix's default focus return would
+  // land on <body>. Send focus to the status panel instead.
+  const upgradeStatusRef = useRef<HTMLDivElement | null>(null);
   const upgradeInProgress = isUpgradeInProgress(upgradeInfo?.status);
   const upgradeableVersions = (upgradeInfo?.versions ?? []).filter(
     (v) => v.tag !== upgradeInfo?.current,
@@ -998,9 +1018,14 @@ export default function SystemSettingsClient() {
                 </div>
 
                 {upgradeInfo?.status?.phase && (
-                  <div className="space-y-2">
+                  <div className="space-y-2" ref={upgradeStatusRef} tabIndex={-1}>
                     <h3 className="text-sm font-medium">Update status</h3>
-                    <div className="bg-muted/10 w-fit max-w-xl space-y-2 rounded-md border p-3 text-sm">
+                    {/* role="status": phase changes arrive via background polling,
+                        so announce them to screen readers as they happen. */}
+                    <div
+                      role="status"
+                      className="bg-muted/10 w-fit max-w-xl space-y-2 rounded-md border p-3 text-sm"
+                    >
                       <Badge
                         variant={
                           upgradeInfo.status.phase === 'healthy'
@@ -1013,7 +1038,7 @@ export default function SystemSettingsClient() {
                         }
                         className="w-fit"
                       >
-                        {upgradeInfo.status.phase}
+                        {upgradePhaseLabel(upgradeInfo.status.phase)}
                       </Badge>
                       {upgradeInfo.status.message && (
                         <p className="text-muted-foreground">{upgradeInfo.status.message}</p>
@@ -1067,7 +1092,17 @@ export default function SystemSettingsClient() {
               </div>
 
               <Dialog open={confirmUpgradeOpen} onOpenChange={setConfirmUpgradeOpen}>
-                <DialogContent className="bg-card sm:max-w-lg">
+                <DialogContent
+                  className="bg-card sm:max-w-lg"
+                  onCloseAutoFocus={(e) => {
+                    // Once the upgrade starts, the button that opened this dialog is
+                    // disabled, so the default focus return would drop to <body>.
+                    if ((upgradeBusy || upgradeInProgress) && upgradeStatusRef.current) {
+                      e.preventDefault();
+                      upgradeStatusRef.current.focus();
+                    }
+                  }}
+                >
                   <DialogHeader>
                     <DialogTitle>Upgrade AFCT?</DialogTitle>
                     <DialogDescription>
@@ -1124,7 +1159,9 @@ export default function SystemSettingsClient() {
                           <th scope="col" className="p-2 font-medium">
                             Backup taken
                           </th>
-                          <th scope="col" className="p-2 font-medium" />
+                          <th scope="col" className="p-2 font-medium">
+                            <span className="sr-only">Actions</span>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1137,6 +1174,7 @@ export default function SystemSettingsClient() {
                                 type="button"
                                 size="sm"
                                 variant="destructive"
+                                aria-label={`Restore version ${r.version}`}
                                 disabled={disabled || downgradeBusy || upgradeInProgress}
                                 onClick={() => {
                                   setRestoreTarget({ version: r.version, backup: r.backup });
@@ -1160,7 +1198,17 @@ export default function SystemSettingsClient() {
                   if (!open) setRestoreTarget(null);
                 }}
               >
-                <DialogContent className="bg-card sm:max-w-lg">
+                <DialogContent
+                  className="bg-card sm:max-w-lg"
+                  onCloseAutoFocus={(e) => {
+                    // Same as the upgrade dialog: the row's Restore button is disabled
+                    // once the downgrade starts, so send focus to the status panel.
+                    if ((downgradeBusy || upgradeInProgress) && upgradeStatusRef.current) {
+                      e.preventDefault();
+                      upgradeStatusRef.current.focus();
+                    }
+                  }}
+                >
                   <DialogHeader>
                     <DialogTitle className="text-destructive">
                       Restore and downgrade to {restoreTarget?.version}?
@@ -1181,6 +1229,9 @@ export default function SystemSettingsClient() {
                   <InputGroup
                     label="Confirm version"
                     name="restoreConfirm"
+                    // Carried on the field itself (aria-describedby) so screen-reader
+                    // users can re-query what to type without re-reading the dialog.
+                    description={`Type ${restoreTarget?.version ?? ''} to enable the restore button.`}
                     value={restoreConfirmText}
                     setValue={(v) => setRestoreConfirmText(v)}
                     disabled={downgradeBusy}

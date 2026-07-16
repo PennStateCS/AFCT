@@ -403,7 +403,13 @@ describe('DashboardSidebarMenu — collapsible sections', () => {
 
     const pastToggle = await screen.findByRole('button', { name: /Past Courses/ });
     expect(pastToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('CS001')).toBeNull();
+    // The content stays mounted (so aria-controls always resolves) but is hidden.
+    for (const el of screen.getAllByText('CS001')) {
+      expect(el).not.toBeVisible();
+    }
+    const contentId = pastToggle.getAttribute('aria-controls');
+    expect(contentId).toBeTruthy();
+    expect(document.getElementById(contentId as string)).not.toBeNull();
   });
 
   it('restores a persisted collapsed section on mount', () => {

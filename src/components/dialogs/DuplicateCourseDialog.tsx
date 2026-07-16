@@ -199,32 +199,55 @@ export default function DuplicateCourseDialog({
     reset(defaults, { keepErrors: false });
   };
 
+  // Both selectors toast their outcome (sonner toasts are aria-live), so screen
+  // reader users hear what happened - including the nothing-to-add cases, which
+  // would otherwise be silent no-ops.
   const selectCurrentFaculty = async () => {
     const currentFacultyIds = currentRoster
       .filter((row) => row.role === 'FACULTY')
       .map((row) => row.user.id);
-    if (currentFacultyIds.length === 0) return;
+    if (currentFacultyIds.length === 0) {
+      toast.info('This course has no current faculty members to add.');
+      return;
+    }
     const existingIds = new Set(getValues('instructorIds') ?? []);
+    const before = existingIds.size;
     currentFacultyIds.forEach((id) => existingIds.add(id));
+    const added = existingIds.size - before;
     setValue('instructorIds', Array.from(existingIds), {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
+    toast.success(
+      added === 0
+        ? 'All current faculty were already selected.'
+        : `Added ${added} current faculty member${added === 1 ? '' : 's'}.`,
+    );
   };
 
   const selectCurrentTAs = async () => {
     const currentTAIds = currentRoster
       .filter((row) => row.role === 'TA')
       .map((row) => row.user.id);
-    if (currentTAIds.length === 0) return;
+    if (currentTAIds.length === 0) {
+      toast.info('This course has no current TAs to add.');
+      return;
+    }
     const existingIds = new Set(getValues('taIds') ?? []);
+    const before = existingIds.size;
     currentTAIds.forEach((id) => existingIds.add(id));
+    const added = existingIds.size - before;
     setValue('taIds', Array.from(existingIds), {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
+    toast.success(
+      added === 0
+        ? 'All current TAs were already selected.'
+        : `Added ${added} current TA${added === 1 ? '' : 's'}.`,
+    );
   };
 
   // Advance only when the current step's own fields validate; errors render in
@@ -499,6 +522,7 @@ export default function DuplicateCourseDialog({
                       type="button"
                       variant="secondary"
                       onClick={selectCurrentFaculty}
+                      aria-describedby="duplicate-roster-status"
                       disabled={!course?.id || courseRosterQuery.isLoading || courseRosterQuery.isError}
                     >
                       Select current faculty
@@ -507,11 +531,21 @@ export default function DuplicateCourseDialog({
                       type="button"
                       variant="secondary"
                       onClick={selectCurrentTAs}
+                      aria-describedby="duplicate-roster-status"
                       disabled={!course?.id || courseRosterQuery.isLoading || courseRosterQuery.isError}
                     >
                       Select current TAs
                     </Button>
                   </div>
+                  {/* Persistent explanation for why the buttons are disabled (the
+                      error toast is transient); described-by from both buttons. */}
+                  {(courseRosterQuery.isLoading || courseRosterQuery.isError) && (
+                    <p id="duplicate-roster-status" role="status" className="text-muted-foreground text-xs">
+                      {courseRosterQuery.isLoading
+                        ? 'Loading the current roster…'
+                        : 'The current roster could not be loaded. Close and reopen this dialog to retry, or add members below.'}
+                    </p>
+                  )}
                 </div>
 
                 <Controller
@@ -555,8 +589,8 @@ export default function DuplicateCourseDialog({
                 />
 
                 <div className="text-muted-foreground text-xs">
-                  The copy needs at least one faculty member: copy the faculty roster or add
-                  faculty above. Students are never copied.
+                  The copy needs at least one faculty member: use Select current faculty or
+                  add faculty above. Students are never copied.
                 </div>
               </div>
             )}
