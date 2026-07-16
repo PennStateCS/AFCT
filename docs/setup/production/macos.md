@@ -196,6 +196,14 @@ To run upgrades and downgrades from **Admin → System Settings → Updates** in
 sh install.sh enable-updater    # sh install.sh disable-updater to turn it off
 ```
 
+A fresh interactive install also offers to enable it at the end; to opt in
+non-interactively, pass `--with-updater` (equivalent to running `enable-updater`
+afterward):
+
+```bash
+sh install.sh --with-updater
+```
+
 This is **off by default** because the updater holds the Docker socket (root-equivalent on the host). Once enabled, `update`, `restart`, and `status` include it automatically. Downgrades restore a pre-upgrade database backup and **permanently discard everything created since it**, so treat them as recovery, not a casual undo.
 
 Continue with [TLS and HTTPS](../../operations/tls.md), then review [updates](../../operations/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).

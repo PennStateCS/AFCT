@@ -265,6 +265,31 @@ EOF
   run grep -q '^AFCT_UPDATER_ENABLED=true$' .env.production; [ "$status" -eq 0 ]
 }
 
+@test "--with-updater enables the sidecar during a fresh install" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export MOCK_ARGS_LOG="$TESTDIR/args.log"
+  run sh install.sh --non-interactive --with-updater < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -q '^AFCT_UPDATER_ENABLED=true$' .env.production; [ "$status" -eq 0 ]
+  # The profile is now carried on subsequent compose calls (e.g. the health probe).
+  run grep -q -- '--profile updater' "$TESTDIR/args.log"; [ "$status" -eq 0 ]
+}
+
+@test "a fresh non-interactive install without --with-updater leaves the updater off" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -q '^AFCT_UPDATER_ENABLED=true$' .env.production; [ "$status" -ne 0 ]
+}
+
+@test "--help documents --with-updater" {
+  run sh install.sh --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--with-updater"* ]]
+}
+
 @test "disable-updater clears the flag" {
   write_complete_env
   printf 'AFCT_UPDATER_ENABLED=true\n' >> .env.production
