@@ -16,31 +16,15 @@ Linux is the best fit for a long-running public server. Windows and macOS are su
 
 ## Choose an installation method
 
-Each guide includes two paths.
+**Use the guided installer.** It is the recommended method for every platform: it checks Docker, collects the required settings, generates secrets, creates `.env.production`, and starts the stack. It also serves as an operations helper for a running deployment, with `status`, `logs`, `update` (with automatic rollback), `restart`, `stop`, `doctor`, `recover`, and `diagnostics` commands. Each platform guide starts with it.
 
-### Guided installer
-
-The guided installer is recommended for most installations. It checks Docker, collects the required settings, generates secrets, creates `.env.production`, and starts the stack. On Linux and macOS it also serves as an operations helper for a running deployment, with `status`, `logs`, `update` (with automatic rollback), `restart`, `stop`, `doctor`, `recover`, and `diagnostics` commands.
-
-### Manual installation
-
-Use the manual method when you need to customize the Compose configuration, automate provisioning, or manage the repository directly with Git.
-
-Both methods create the same AFCT stack.
+A manual installation path is documented after the installer in each guide, for deployments that need to customize the Compose configuration, automate provisioning, or manage the repository directly with Git. Both methods create the same AFCT stack.
 
 A [non-Docker outline](production/non-docker.md) is available for teams that must reproduce the deployment manually, but that path is not supported.
 
 ## Before installation
 
-Prepare the following:
-
-- At least 2 CPU cores
-- At least 6 GB of RAM
-- A public DNS record for the AFCT host
-- Inbound access on ports 80 and 443
-- Internet access for Docker images and installation files
-
-The public address must be known before configuration because `NEXTAUTH_URL` must exactly match the HTTPS address users enter in their browsers.
+Review the [system requirements](../setup/requirements.md) — hardware, network, and per-platform software prerequisites. In particular, the public DNS name must be known before configuration because `NEXTAUTH_URL` must exactly match the HTTPS address users enter in their browsers.
 
 ## After installation
 

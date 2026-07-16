@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Installation & Setup',
       items: [
+        'setup/requirements',
         'setup/production',
         'setup/production/linux',
         'setup/production/macos',
