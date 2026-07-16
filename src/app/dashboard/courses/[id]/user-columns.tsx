@@ -223,6 +223,7 @@ export const userColumns = (
   const cols: ColumnDef<User>[] = [
     {
       id: 'avatar',
+      meta: { priority: 4 },
       header: () => <span className="sr-only">Avatar</span>,
       cell: ({ row }) => {
         const user = row.original;
@@ -243,14 +244,17 @@ export const userColumns = (
     {
       accessorKey: 'firstName',
       header: 'First Name',
+      meta: { priority: 1 },
     },
     {
       accessorKey: 'lastName',
       header: 'Last Name',
+      meta: { priority: 2 },
     },
     {
       accessorKey: 'email',
       header: 'Email',
+      meta: { priority: 3 },
       cell: ({ row }) => {
         const email = row.original.email;
         return (
@@ -263,6 +267,7 @@ export const userColumns = (
     {
       accessorKey: 'role',
       header: 'Role',
+      meta: { priority: 2 },
       cell: ({ row }) => (
         <Badge
           role={(row.original as RosterUser).role as 'FACULTY' | 'TA' | 'STUDENT' | undefined}
@@ -277,6 +282,7 @@ export const userColumns = (
     cols.push({
       id: 'actions',
       header: 'Actions',
+      meta: { priority: 1 },
       cell: ({ row }) => (
         <ActionsCell
           user={row.original}

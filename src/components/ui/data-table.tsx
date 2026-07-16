@@ -146,15 +146,15 @@ function DataTableToolbar<TData>({
         {showExportButton ? (
           <Button variant="outline" onClick={onExport} aria-label="Export table data to CSV">
             <FileDown className="h-4 w-4" aria-hidden="true" />
-            Export to CSV
+            <span className="hidden sm:inline">Export to CSV</span>
           </Button>
         ) : null}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline">
+            <Button variant="outline" aria-label="Filter columns">
               <Filter className="h-4 w-4" aria-hidden="true" />
-              Filter Columns
+              <span className="hidden sm:inline">Filter Columns</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -255,7 +255,7 @@ function DataTablePagination<TData>({
                 <SelectContent>
                   {PAGE_SIZE_OPTIONS.map((size) => (
                     <SelectItem key={size} value={String(size)}>
-                      Show {size} Records
+                      {size} / page
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -542,10 +542,13 @@ export function DataTable<TData, TValue>({
                   key={row.id}
                   className="bg-[var(--table-background)] hover:bg-[var(--table-highlight)]"
                 >
+                  {/* No forced nowrap on cells: on narrow screens long values
+                      (emails, titles) wrap inside their cell instead of
+                      stretching the whole table into a sideways scroll. */}
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className={`whitespace-nowrap ${getResponsiveClass(cell.column.columnDef.meta?.priority)} ${alignTextClass(cell.column.columnDef.meta?.align)}`}
+                      className={`${getResponsiveClass(cell.column.columnDef.meta?.priority)} ${alignTextClass(cell.column.columnDef.meta?.align)}`}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>

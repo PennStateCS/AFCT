@@ -147,6 +147,7 @@ export default function SystemLogsClient() {
       {
         accessorKey: 'timestamp',
         header: 'Time',
+        meta: { priority: 1 },
         cell: ({ getValue }: { getValue: () => unknown }) => {
           const value = getValue();
           return value
@@ -160,6 +161,7 @@ export default function SystemLogsClient() {
       {
         accessorKey: 'severity',
         header: 'Severity',
+        meta: { priority: 2 },
         cell: ({ getValue }: { getValue: () => unknown }) => {
           const s = ((getValue() as string) || 'INFO') as Severity;
           return <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'}>{s}</Badge>;
@@ -168,6 +170,7 @@ export default function SystemLogsClient() {
       {
         accessorKey: 'category',
         header: 'Category',
+        meta: { priority: 3 },
         cell: ({ getValue }: { getValue: () => unknown }) => (
           <CategoryBadge category={getValue() as string | null} />
         ),
@@ -175,22 +178,26 @@ export default function SystemLogsClient() {
       {
         accessorKey: 'action',
         header: 'Action',
+        meta: { priority: 1 },
         cell: ({ getValue }: { getValue: () => unknown }) =>
           ((getValue() as string) || '').replace(/_/g, ' '),
       },
       {
         accessorKey: 'userLastName',
         header: 'Last Name',
+        meta: { priority: 2 },
         cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
       },
       {
         accessorKey: 'userFirstName',
         header: 'First Name',
+        meta: { priority: 3 },
         cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
       },
       {
         accessorKey: 'ipAddress',
         header: 'IP Address',
+        meta: { priority: 4 },
         cell: ({ getValue }: { getValue: () => unknown }) => {
           const ip = getValue() as string | null;
           // Strip the IPv4-mapped IPv6 prefix for readability (e.g. ::ffff:1.2.3.4).
@@ -200,6 +207,7 @@ export default function SystemLogsClient() {
       {
         id: 'viewer',
         header: 'Logs',
+        meta: { priority: 1 },
         enableSorting: false,
         cell: ({ row }: { row: { original: LogRow } }) => (
           <Button onClick={() => handleViewerOpen(row.original)}>Full Log</Button>

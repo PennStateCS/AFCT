@@ -245,6 +245,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   {
     id: 'avatar',
     header: '',
+    meta: { priority: 4 },
     cell: ({ row }) => {
       const activity = row.original;
       return (
@@ -263,6 +264,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   {
     accessorKey: 'user.firstName',
     header: 'First Name',
+    meta: { priority: 2 },
     cell: ({ row }) => {
       const activity = row.original;
       return <div className="text-sm">{activity.user?.firstName || 'Unknown'}</div>;
@@ -271,6 +273,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   {
     accessorKey: 'user.lastName',
     header: 'Last Name',
+    meta: { priority: 3 },
     cell: ({ row }) => {
       const activity = row.original;
       return <div className="text-sm">{activity.user?.lastName || 'User'}</div>;
@@ -279,6 +282,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   {
     accessorKey: 'action',
     header: 'Activity',
+    meta: { priority: 1 },
     cell: ({ row }) => {
       const activity = row.original;
 
@@ -287,6 +291,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'category',
+    meta: { priority: 3 },
     header: 'Category',
     enableSorting: true,
     accessorFn: (row) => row.category || '',
@@ -294,6 +299,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'assignment',
+    meta: { priority: 2 },
     header: 'Assignment',
     enableSorting: true,
     accessorFn: (row) => {
@@ -327,6 +333,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'problem',
+    meta: { priority: 3 },
     header: 'Problem',
     enableSorting: true,
     accessorFn: (row) => {
@@ -357,6 +364,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     accessorKey: 'timestamp',
+    meta: { priority: 1 },
     header: 'Time',
     cell: ({ row }) => {
       const activity = row.original;
@@ -375,6 +383,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'ipAddress',
+    meta: { priority: 4 },
     header: 'IP Address',
     enableSorting: true,
     accessorFn: (row) => getIpAddress(row.metadata, row) || '',
@@ -386,6 +395,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'metadata',
+    meta: { priority: 4 },
     header: 'Metadata',
     cell: ({ row }) => <MetadataCell activity={row.original} />,
   },
