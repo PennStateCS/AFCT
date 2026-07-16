@@ -137,4 +137,4 @@ The archive contains installer logs, service status, service logs, and redacted 
 
 ## Certificate warnings
 
-See [TLS and HTTPS](tls.md) for expected self-signed warnings and trusted-certificate problems.
+See [HTTPS certificates](https-certificates.md) for expected self-signed warnings and trusted-certificate problems.
