@@ -14,6 +14,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
+      // Still write the report when a test fails - a flaky test shouldn't
+      // cost the whole coverage run.
+      reportOnFailure: true,
       exclude: [
         '**/*.test.ts',
         '**/*.test.tsx',
