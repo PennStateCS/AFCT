@@ -186,7 +186,12 @@ function CollapsibleSidebarGroup({
           />
         </button>
       </SidebarGroupLabel>
-      {open && <SidebarGroupContent id={contentId}>{children}</SidebarGroupContent>}
+      {/* Kept mounted and toggled with `hidden` so the toggle's aria-controls
+          always references an existing element (a conditional render would leave
+          it dangling whenever the section is closed). */}
+      <SidebarGroupContent id={contentId} hidden={!open}>
+        {children}
+      </SidebarGroupContent>
     </SidebarGroup>
   );
 }
