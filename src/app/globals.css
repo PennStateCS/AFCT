@@ -188,9 +188,7 @@
 }
 .cy-tip .cy-tip-val {
   color: var(--foreground);
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-    monospace;
+  font-family: var(--font-geist-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   white-space: pre-wrap;
 }
 .cy-tip code,
@@ -266,7 +264,11 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    /* font-sans must be applied HERE, not inherited from the preflight html
+       rule: next/font defines --font-geist-sans on the body class, so the
+       variable is out of scope at html and the app silently fell back to the
+       system font. */
+    @apply bg-background text-foreground font-sans;
   }
 }
 
@@ -484,7 +486,7 @@ html {
     max-width: 440px !important;
     overflow: hidden !important;
     padding: 0 !important;
-    font-family: var(--font-geist-sans, 'Inter', 'Segoe UI', sans-serif) !important;
+    font-family: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif) !important;
   }
 
   .custom-toast[data-type='success'] {
