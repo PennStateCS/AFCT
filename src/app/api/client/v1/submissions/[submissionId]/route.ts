@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withClientAuth } from '@/lib/api/with-client-auth';
 import { apiError } from '@/lib/api/http';
-import { canViewStudentData } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse, canViewStudentData, isAdmin } from '@/lib/permissions';
 
 type RouteCtx = { params: Promise<{ submissionId: string }> };
 
@@ -58,6 +58,21 @@ export const GET = withClientAuth(async (_req, ctx: RouteCtx, { user }) => {
     }))
   ) {
     return apiError(404, 'Submission not found');
+  }
+
+  // canViewStudentData lets a student see their own work unconditionally; for
+  // this route, mirror the web's student view: non-staff also need current course
+  // access and a published assignment (a student removed from the roster loses
+  // access here the same way the browser hides it).
+  const staff = isAdmin(user) || (await canManageCourse(user, submission.courseId));
+  if (!staff) {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: submission.assignmentId },
+      select: { isPublished: true },
+    });
+    if (!assignment?.isPublished || !(await canAccessCourse(user, submission.courseId))) {
+      return apiError(404, 'Submission not found');
+    }
   }
 
   // The grade lives on the per-problem grade record, not the submission.

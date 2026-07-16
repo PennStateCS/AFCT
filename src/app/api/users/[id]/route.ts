@@ -54,6 +54,7 @@ const pfpsDir = path.join('/private', 'uploads', 'pfps');
  *   400: { description: Invalid timezone. }
  *   401: { description: Not signed in. }
  *   403: { description: "Not allowed to edit this user, or deactivating an actively-enrolled user." }
+ *   409: { description: The change would remove the last active administrator. }
  *   413: { description: Avatar exceeds the system upload limit. }
  *   500: { description: Server error. }
  */
@@ -222,6 +223,28 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       timezone: timezoneRaw ? timezoneRaw : undefined,
     };
 
+    // Never let the deployment lose its last active admin: demoting or
+    // deactivating an active admin requires another one to remain (the realistic
+    // case is an admin doing it to themselves).
+    const losesAdmin = dataToUpdate.isAdmin === false || dataToUpdate.inactive === true;
+    if (losesAdmin && userRecord?.isAdmin && !userRecord.inactive) {
+      const otherActiveAdmins = await prisma.user.count({
+        where: { isAdmin: true, inactive: false, NOT: { id: userId } },
+      });
+      if (otherActiveAdmins === 0) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: actorId,
+          action: 'USER_UPDATE_REJECTED',
+          severity: 'WARNING',
+          metadata: { targetUserId: userId, reason: 'last-active-admin' },
+        });
+        return NextResponse.json(
+          { error: 'Cannot remove the last active administrator' },
+          { status: 409 },
+        );
+      }
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: dataToUpdate,
@@ -296,7 +319,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean }, message: { type: string } } }
- *   403: { description: System administrators only (also returned when not signed in). }
+ *   403: { description: "System administrators only (also returned when not signed in), or attempting to delete your own account." }
  *   500: { description: Server error. }
  */
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -308,7 +331,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     const session = await auth();
     const currentUser = session?.user;
 
-    if (!currentUser || !isAdmin(currentUser)) {
+    if (!currentUser || !isAdmin(currentUser) || currentUser.inactive) {
       console.warn(`[DELETE] Forbidden: ${currentUser?.id} tried to delete user ${userId}`);
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
@@ -319,6 +342,22 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     actorId = currentUser.id;
+
+    // No self-delete: it's irreversible, and since only active admins can reach
+    // this route, blocking it also guarantees a delete can never remove the last
+    // active admin (the deleter always remains).
+    if (currentUser.id === userId) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: actorId,
+        action: 'USER_DELETE_REJECTED',
+        severity: 'WARNING',
+        metadata: { targetUserId: userId, reason: 'self-delete' },
+      });
+      return NextResponse.json(
+        { error: 'You cannot delete your own account' },
+        { status: 403 },
+      );
+    }
 
     // Capture the target's identity before the row is gone, for the audit + avatar cleanup.
     const user = await prisma.user.findUnique({

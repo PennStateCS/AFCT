@@ -3790,6 +3790,24 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Not enrolled in the course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found, unpublished, or the problem is not linked to it. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Server error. */
             500: {
                 headers: {
@@ -8298,6 +8316,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Course is archived. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Server error. */
             500: {
                 headers: {
@@ -8505,7 +8532,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description System administrators only (also returned when not signed in). */
+            /** @description System administrators only (also returned when not signed in), or attempting to delete your own account. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8585,6 +8612,15 @@ export interface operations {
             };
             /** @description Not allowed to edit this user, or deactivating an actively-enrolled user. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The change would remove the last active administrator. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
