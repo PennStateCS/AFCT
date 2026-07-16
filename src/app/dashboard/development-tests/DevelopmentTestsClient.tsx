@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { showToast } from '@/lib/toast';
+import { FontSamples } from './font-samples';
 
 export default function DevelopmentTestsClient() {
   return (
@@ -107,6 +108,17 @@ export default function DevelopmentTestsClient() {
               Dismiss All Toasts
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card aria-labelledby="font-samples-title">
+        <CardHeader>
+          <CardTitle id="font-samples-title" role="heading" aria-level={2} className="text-lg">
+            Font Comparison
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FontSamples />
         </CardContent>
       </Card>
     </div>
