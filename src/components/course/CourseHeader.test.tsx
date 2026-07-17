@@ -95,7 +95,7 @@ describe('CourseHeader', () => {
     const withTa: FullCourse = {
       ...mockCourse,
       enrolled: [
-        ...mockCourse.enrolled,
+        ...(mockCourse.enrolled ?? []),
         { id: 'ta-1', firstName: 'Alan', lastName: 'Turing', role: 'STUDENT', courseRole: 'TA' },
       ],
     };

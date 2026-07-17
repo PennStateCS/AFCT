@@ -9,7 +9,7 @@ const updatesMock = vi.hoisted(() => ({
   isValidRestorePoint: vi.fn(() => true),
   readStatus: vi.fn(() => null),
   updaterAvailable: vi.fn(() => true),
-  readRestorePoints: vi.fn(() => []),
+  readRestorePoints: vi.fn((): Array<{ version: string; backup: string; createdAt?: string }> => []),
   writeUpdateRequest: vi.fn(),
   writeDowngradeRequest: vi.fn(),
 }));
