@@ -26,6 +26,12 @@ CLAIM_FILE="${TRIGGER_DIR}/.processing.json"
 COMPOSE_FILE="${UPDATER_COMPOSE_FILE:-/afct/docker-compose.yml}"
 ENV_FILE="${UPDATER_ENV_FILE:-/afct/.env.production}"
 MANIFEST_FILE="${UPDATER_MANIFEST_FILE:-/afct/versions.json}"
+# The curated release manifest, fetched over HTTPS so a deployed host learns about
+# new releases without redeploying versions.json. This is the authoritative allow
+# list (independent of the app, which only requests a tag). MANIFEST_FILE above is
+# the fallback when the remote is unreachable. Set empty to disable the remote fetch
+# (the test harness does this to stay offline and deterministic).
+MANIFEST_URL="${UPDATER_MANIFEST_URL:-https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy/versions.json}"
 
 APP_SERVICE="${AFCT_APP_SERVICE:-app}"
 APP_CONTAINER="${AFCT_APP_CONTAINER:-afct-app}"
@@ -211,7 +217,16 @@ wait_for_restore() {
 tag_allowed() {
   _tag=$1
   printf '%s' "$_tag" | grep -Eq "$TAG_REGEX" || return 1
-  # When a curated manifest is present it is authoritative: the tag must be listed.
+  # The curated manifest is authoritative: prefer the remote copy (so releases
+  # published after this host was deployed are still allowed), fall back to a local
+  # file, and only if neither is reachable fall back to the character allowlist alone.
+  if [ -n "$MANIFEST_URL" ]; then
+    _remote=$(curl -fsS --max-time 10 "$MANIFEST_URL" 2>/dev/null || true)
+    if [ -n "$_remote" ]; then
+      printf '%s' "$_remote" | jq -e --arg t "$_tag" '(.versions // []) | any(.tag == $t)' >/dev/null 2>&1 || return 1
+      return 0
+    fi
+  fi
   if [ -f "$MANIFEST_FILE" ]; then
     jq -e --arg t "$_tag" '(.versions // []) | any(.tag == $t)' "$MANIFEST_FILE" >/dev/null 2>&1 || return 1
   fi

@@ -26,6 +26,7 @@ setup() {
   export UPDATER_COMPOSE_FILE="$TESTDIR/docker-compose.yml"
   export UPDATER_ENV_FILE="$TESTDIR/.env.production"
   export UPDATER_MANIFEST_FILE="$TESTDIR/versions.json"   # absent unless a test writes it
+  export UPDATER_MANIFEST_URL=""                          # offline: validate against the local file only
   export UPDATER_BACKUP_DIR="$TESTDIR/backups"
   export BACKUP_TRIGGER_DIR="$TESTDIR/backup-triggers"
   export UPDATER_HEALTH_TIMEOUT=6

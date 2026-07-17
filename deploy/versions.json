@@ -1,9 +1,14 @@
 {
   "versions": [
     {
+      "tag": "v0.1.0",
+      "label": "v0.1.0",
+      "notes": "First tagged release."
+    },
+    {
       "tag": "main",
-      "label": "Latest stable",
-      "notes": "Tracks the newest build from the main branch."
+      "label": "Latest (main)",
+      "notes": "Tracks the newest build from the main branch. Moves forward on every merge."
     }
   ]
 }

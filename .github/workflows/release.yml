@@ -1,0 +1,132 @@
+name: Release
+
+# Cut a release by pushing a version tag:
+#   git tag v1.2.3 && git push origin v1.2.3
+#
+# That builds an IMMUTABLE image (ghcr.io/pennstatecs/afct-dashboard:v1.2.3) which
+# the in-app updater can upgrade to and later downgrade back to, adds the version to
+# the curated manifest (deploy/versions.json on main, which the updater fetches over
+# HTTPS), and opens a GitHub Release.
+#
+# Ordinary pushes to main do NOT trigger this — only a v* tag does. The rolling
+# :main image keeps getting published by publish-ghcr.yml on every merge; a release
+# is a separate, deliberate act. Tag a commit that has already gone green on main.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # commit the manifest entry back to main; create the release
+  packages: write # push the image to GHCR
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout (tagged commit)
+        uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The image tag is the git tag verbatim (v1.2.3 -> :v1.2.3), so it matches the
+      # tag string the updater writes to AFCT_APP_TAG and the entry in versions.json.
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/pennstatecs/afct-dashboard
+          tags: |
+            type=ref,event=tag
+          labels: |
+            org.opencontainers.image.title=afct-dashboard
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # Informational scan (exit-code 0 never blocks); flip to '1' to gate on findings.
+      - name: Scan image for vulnerabilities (Trivy)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/pennstatecs/afct-dashboard@${{ steps.build.outputs.digest }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+
+      # Add the new version to the curated manifest on main so the updater offers it.
+      # Idempotent (skips if already listed) and race-safe against concurrent main
+      # pushes. Committed to main, not the tag; [skip ci] keeps it from re-publishing.
+      - name: Add version to release manifest
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          attempt=0
+          while [ "$attempt" -lt 5 ]; do
+            attempt=$((attempt + 1))
+            git fetch origin main
+            git checkout -B main origin/main
+            if jq -e --arg t "$TAG" '(.versions // []) | any(.tag == $t)' deploy/versions.json >/dev/null; then
+              echo "$TAG already in versions.json; nothing to do."
+              exit 0
+            fi
+            # Newest first; keep the moving "main" entry wherever it already sits.
+            tmp=$(mktemp)
+            jq --arg t "$TAG" \
+               '.versions = ([{tag:$t, label:$t, notes:("Release " + $t + ".")}] + (.versions // []))' \
+               deploy/versions.json > "$tmp"
+            mv "$tmp" deploy/versions.json
+            git add deploy/versions.json
+            git commit -m "release: add $TAG to versions.json [skip ci]"
+            if git push origin HEAD:main; then
+              echo "manifest updated on attempt $attempt."
+              exit 0
+            fi
+            echo "push rejected (main moved); retrying ($attempt/5)..."
+            sleep 3
+          done
+          echo "::warning::could not update versions.json after 5 attempts."
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists; leaving it as-is."
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          fi
