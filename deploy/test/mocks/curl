@@ -1,5 +1,19 @@
 #!/bin/sh
-# Mock curl for the smoke test (`/api/health`). MOCK_CURL_RC controls the result
-# (default 0 = the web front answered). The installer never reaches the Docker
-# convenience-script download in these tests, so no network work is simulated.
+# Mock curl. For the health smoke test (`curl ... /api/health`, no -o) it just
+# returns MOCK_CURL_RC (default 0 = the web front answered). For a download
+# (`curl ... -o FILE`, used by `self-update`) it writes MOCK_CURL_BODY to FILE so the
+# caller gets a real file. MOCK_CURL_BODY defaults to a valid no-op script; set it to
+# '' to simulate a truncated/empty download.
+_out=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) _out=${2:-}; shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ -n "$_out" ]; then
+  # No trailing newline, so MOCK_CURL_BODY='' yields a truly empty file (a
+  # truncated download) rather than a one-byte one.
+  printf '%s' "${MOCK_CURL_BODY-#!/bin/sh}" > "$_out"
+fi
 exit "${MOCK_CURL_RC:-0}"

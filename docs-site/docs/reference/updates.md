@@ -12,6 +12,17 @@ sh install.sh update
 
 This records the currently deployed image versions, pulls the latest images, recreates the stack, and waits for the health check. If the new version does not become healthy, it automatically rolls back to the previous images and restores service.
 
+### Update the installer itself
+
+`sh install.sh update` uses the `docker-compose.yml` already on the host. When a release changes the compose file or the updater component, refresh those files first:
+
+```bash
+sh install.sh self-update
+sh install.sh update
+```
+
+`self-update` re-downloads the installer, `docker-compose.yml`, and the environment template from the repository (backing up the old copies). It never touches `.env.production` or any data. It needs no Git checkout — the files come straight from the public repository over HTTPS.
+
 The equivalent Docker commands work on any platform, including Windows PowerShell:
 
 ```bash

@@ -91,11 +91,15 @@ curl -fLO "$BASE/docker-compose.yml"
 curl -fLO "$BASE/.env.production.example"
 ```
 
+These come straight from the public repository over HTTPS — no Git checkout or authentication is needed. (`wget "$BASE/install.sh"` and so on work too if you prefer `wget`.)
+
 Run the installer:
 
 ```bash
 sh install.sh
 ```
+
+Later, you can refresh these files in place with `sh install.sh self-update` before an update — see [Update AFCT](../../reference/updates.md).
 
 ### What the installer asks for
 

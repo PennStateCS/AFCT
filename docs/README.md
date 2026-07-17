@@ -19,9 +19,6 @@ automatically on merge to main.
 |---|---|
 | [Developer guide](guides/developer.md) | Architecture, authorization, API conventions, validation, data access, logging, and CI |
 | [Development setup](setup/development.md) | Local Docker setup, common commands, database work, and development troubleshooting |
-| [Logging policy](logging-policy.md) | What gets audit-logged and at which severity |
-| [Route authorization](route-authorization.md) | Per-route access rules |
-| [Roadmap](roadmap.md) | Planned work |
 
 ## Documentation rules
 

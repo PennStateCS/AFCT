@@ -227,6 +227,38 @@ EOF
   [[ "$output" == *"rollback"* ]]
 }
 
+@test "self-update refreshes the deploy files and never touches .env.production" {
+  write_complete_env
+  _env_before=$(cat .env.production)
+  # The 'downloaded' files carry a marker so we can confirm they replaced the originals.
+  export MOCK_CURL_BODY='#!/bin/sh
+# refreshed-by-self-update
+exit 0'
+  run sh install.sh self-update
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Updated:"* ]]
+  # The secrets file is byte-for-byte untouched.
+  [ "$(cat .env.production)" = "$_env_before" ]
+  # The compose file now holds the refreshed content.
+  run grep -q "refreshed-by-self-update" docker-compose.yml
+  [ "$status" -eq 0 ]
+  # The previous installer was backed up before being replaced.
+  run sh -c 'ls install.sh.backup.* >/dev/null 2>&1'
+  [ "$status" -eq 0 ]
+}
+
+@test "self-update refuses an empty download and keeps the current installer" {
+  write_complete_env
+  cp install.sh install.sh.orig
+  export MOCK_CURL_BODY=''        # simulate a truncated/empty download
+  run sh install.sh self-update
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"invalid"* ]]
+  # The working installer was not clobbered by the bad download.
+  run cmp -s install.sh install.sh.orig
+  [ "$status" -eq 0 ]
+}
+
 @test "doctor runs read-only and prints a result summary" {
   write_complete_env
   run sh install.sh doctor

@@ -38,6 +38,10 @@ COMPOSE_FILE=${AFCT_COMPOSE_FILE:-docker-compose.yml}
 ENV_FILE=${AFCT_ENV_FILE:-.env.production}
 ENV_EXAMPLE=${AFCT_ENV_EXAMPLE:-.env.production.example}
 LOG_FILE=${AFCT_LOG_FILE:-install.log}
+# Where `self-update` fetches the deploy bundle (installer, compose file, env
+# template) from. Points at the public repo's deploy directory; override for a fork
+# or mirror.
+INSTALLER_BASE_URL=${AFCT_INSTALLER_BASE_URL:-https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy}
 APP_SERVICE=${AFCT_APP_SERVICE:-app}
 UPDATER_SERVICE=${AFCT_UPDATER_SERVICE:-updater}
 HEALTH_PATH=${AFCT_HEALTH_PATH:-/api/health}
@@ -88,6 +92,9 @@ Commands:
   status        Show container and application health status.
   logs          Follow application logs. Press Ctrl+C to stop.
   update        Pull the latest images, recreate the stack, and verify health.
+  self-update   Re-download the installer, compose file, and env template from the
+                repository. Does not touch .env.production or data. Run before
+                `update` when a release changes the compose file or the updater.
   restart       Recreate the stack without pulling new images.
   stop          Stop the stack without deleting its data volumes.
   enable-updater  Enable the in-app updater sidecar (in-app upgrades/downgrades).
@@ -129,6 +136,7 @@ Environment variables:
 
 Advanced overrides:
   AFCT_COMPOSE_FILE       Compose file name
+  AFCT_INSTALLER_BASE_URL Base URL `self-update` downloads the deploy files from
   AFCT_ENV_FILE           Production environment file name
   AFCT_ENV_EXAMPLE        Environment template file name
   AFCT_LOG_FILE           Installer log file name
@@ -156,6 +164,7 @@ while [ "$#" -gt 0 ]; do
     status|--status) set_mode "status" ;;
     logs|--logs) set_mode "logs" ;;
     update|--update) set_mode "update" ;;
+    self-update|--self-update) set_mode "self-update" ;;
     restart|--restart) set_mode "restart" ;;
     stop|--stop) set_mode "stop" ;;
     enable-updater|--enable-updater) set_mode "enable-updater" ;;
@@ -1765,6 +1774,80 @@ show_logs() {
   compose_project logs -f --tail 200 "$APP_SERVICE"
 }
 
+# Download a URL to a file with curl or wget (whichever is present). Non-zero on
+# failure. Mirrors the Docker-installer download above.
+fetch_url() {
+  _url=$1
+  _dest=$2
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$_url" -o "$_dest"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$_dest" "$_url"
+  else
+    die "curl or wget is required to download files."
+  fi
+}
+
+# Refresh the deploy bundle (this installer, the compose file, and the env template)
+# from the public repo. It never touches .env.production, data volumes, or running
+# containers — it only updates the files on disk. Run it before `update` when a
+# release changed the compose file or the updater (the Updates tab flags those).
+do_self_update() {
+  info "refreshing the AFCT deploy files from ${INSTALLER_BASE_URL} ..."
+
+  # Stage every download first so a partial or failed fetch never clobbers a working
+  # installer. Temp files live in SCRIPT_DIR so the final swap is an atomic rename on
+  # the same filesystem (safe even though this script is the file being replaced).
+  _t_installer="${SCRIPT_DIR}/.install.sh.new.$$"
+  _t_compose="${SCRIPT_DIR}/.${COMPOSE_FILE}.new.$$"
+  _t_example="${SCRIPT_DIR}/.${ENV_EXAMPLE}.new.$$"
+  _cleanup='rm -f "$_t_installer" "$_t_compose" "$_t_example"'
+
+  if ! fetch_url "${INSTALLER_BASE_URL}/install.sh" "$_t_installer" \
+    || ! fetch_url "${INSTALLER_BASE_URL}/${COMPOSE_FILE}" "$_t_compose" \
+    || ! fetch_url "${INSTALLER_BASE_URL}/${ENV_EXAMPLE}" "$_t_example"; then
+    eval "$_cleanup"
+    die "could not download the deploy files. Check network access to the repository."
+  fi
+
+  # Refuse to install a truncated or corrupt installer.
+  if [ ! -s "$_t_installer" ] || ! sh -n "$_t_installer" 2>/dev/null; then
+    eval "$_cleanup"
+    die "the downloaded installer is invalid; keeping the current one."
+  fi
+
+  _changed=""
+  # file | temp | back-up-the-old-copy?
+  for _row in "install.sh|$_t_installer|yes" "${COMPOSE_FILE}|$_t_compose|yes" "${ENV_EXAMPLE}|$_t_example|no"; do
+    _name=${_row%%|*}
+    _rest=${_row#*|}
+    _tmp=${_rest%%|*}
+    _bak=${_rest##*|}
+    _target="${SCRIPT_DIR}/${_name}"
+
+    if [ -f "$_target" ] && cmp -s "$_tmp" "$_target"; then
+      rm -f "$_tmp"
+      continue
+    fi
+    if [ -f "$_target" ] && [ "$_bak" = "yes" ]; then
+      _stamp=$(date +%Y%m%d-%H%M%S 2>/dev/null || printf 'previous')
+      cp "$_target" "${_target}.backup.${_stamp}" 2>/dev/null \
+        && info "saved the previous ${_name} as ${_name}.backup.${_stamp}."
+    fi
+    mv "$_tmp" "$_target" || { eval "$_cleanup"; die "could not replace ${_name}."; }
+    _changed="${_changed} ${_name}"
+  done
+  chmod +x "${SCRIPT_DIR}/install.sh" 2>/dev/null || true
+
+  if [ -z "$_changed" ]; then
+    success "The deploy files are already up to date."
+    return 0
+  fi
+  success "Updated:${_changed}"
+  info "Your .env.production and data volumes were not touched."
+  info "Apply any new image or compose changes with: sh install.sh update"
+}
+
 do_update() {
   acquire_lock
   prepare_existing_stack
@@ -2024,6 +2107,9 @@ case "$MODE" in
   update)
     init_log
     do_update
+    ;;
+  self-update)
+    do_self_update
     ;;
   restart)
     init_log
