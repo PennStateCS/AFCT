@@ -40,9 +40,11 @@ const LMS_OPTIONS: Array<{ value: LmsPlatform; label: string }> = [
 // and matches by email, so these point staff at the reliable workflow for each LMS.
 const PLATFORM_NOTES: Partial<Record<LmsPlatform, string>> = {
   canvas:
-    'To update existing Canvas assignments, download Canvas’s gradebook CSV, paste in these grades, and re-upload — importing this file directly creates new assignment columns and matches students by SIS Login ID (email).',
+    "To update existing Canvas assignments, download Canvas's gradebook CSV, paste in these grades, and re-upload. Importing this file directly creates new assignment columns and matches students by SIS Login ID (email).",
   moodle:
-    'On import, map the Email column to “useremail” and each assignment column to its grade item. Moodle matches emails case-sensitively.',
+    "On import, map the Email column to 'useremail' and each assignment column to its grade item. Moodle matches emails case-sensitively.",
+  blackboard:
+    "Blackboard matches students by username. This file uses email as the username, so it imports only if your Blackboard usernames are emails. It creates new columns; to update existing ones, download Blackboard's gradebook and re-upload.",
 };
 
 export function GradesLmsExportDialog({
