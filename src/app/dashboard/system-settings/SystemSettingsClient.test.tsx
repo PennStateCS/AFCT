@@ -184,8 +184,9 @@ describe('SystemSettingsClient', () => {
       expect(screen.getByLabelText(/Max upload size \(MB\)/)).toHaveValue(42);
     });
 
-    // Edit a field, then submit the associated form via the Save button.
-    fireEvent.change(screen.getByLabelText(/Max upload size \(MB\)/), { target: { value: '77' } });
+    // Edit a field, then submit the associated form via the Save button. (Kept under
+    // the 50 MB ceiling so the clamp doesn't rewrite it.)
+    fireEvent.change(screen.getByLabelText(/Max upload size \(MB\)/), { target: { value: '40' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save system settings' }));
 
     await waitFor(() => {
@@ -195,7 +196,7 @@ describe('SystemSettingsClient', () => {
     // The PUT body carries the edited + seeded values.
     expect(putCalls[0].body).toMatchObject({
       timezone: 'America/New_York',
-      maxUploadSizeMb: 77,
+      maxUploadSizeMb: 40,
       allowSignup: false,
       sessionTimeoutMinutes: 90,
       loginMaxAttempts: 4,

@@ -2,7 +2,7 @@
  * Course Join API
  *
  * Responsibilities:
- * - Accept a 6-character registration code
+ * - Accept a course registration code
  * - Validate course visibility (published + not archived)
  * - Prevent duplicate enrollment
  * - Create a roster entry as STUDENT
@@ -22,10 +22,14 @@ import { isAdmin } from '@/lib/permissions';
 import { readJson } from '@/lib/api/request';
 import { parseValidDate } from '@/lib/date';
 
-const JoinBody = z.object({ code: z.string().length(6, 'Invalid course code') });
+// Accept both legacy 6-char codes and the current 8-char ones (and a little slack);
+// the real check is the DB lookup below.
+const JoinBody = z.object({
+  code: z.string().trim().min(6, 'Invalid course code').max(16, 'Invalid course code'),
+});
 
 /**
- * Enrolls the signed-in user in a course via its 6-character registration code,
+ * Enrolls the signed-in user in a course via its registration code,
  * as a STUDENT. Users never learn that an unpublished/archived course exists
  * (masked as 404). Global admins can't self-enroll, and the registration window
  * must be open.
@@ -39,7 +43,7 @@ const JoinBody = z.object({ code: z.string().length(6, 'Invalid course code') })
  *         type: object
  *         required: [code]
  *         properties:
- *           code: { type: string, description: 6-character course registration code }
+ *           code: { type: string, description: course registration code }
  * responses:
  *   200:
  *     description: Joined; returns a message and the course.

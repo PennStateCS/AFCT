@@ -32,9 +32,9 @@ describe('getSystemUploadLimit', () => {
     expect((await getSystemUploadLimit()).maxMb).toBe(1);
   });
 
-  it('clamps a too-large value down to the 1024 MB ceiling', async () => {
+  it('clamps a too-large value down to the MAX_UPLOAD_SIZE_MB ceiling', async () => {
     prismaMock.systemSettings.findUnique.mockResolvedValue({ maxUploadSizeMb: 5000 });
-    expect((await getSystemUploadLimit()).maxMb).toBe(1024);
+    expect((await getSystemUploadLimit()).maxMb).toBe(50);
   });
 
   it('truncates fractional MB values', async () => {

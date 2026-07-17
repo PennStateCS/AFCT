@@ -11,7 +11,10 @@ import JffViewerDialog, { JffCytoscapeViewer } from './JffViewerDialog';
 // file generous headroom instead of racing vitest's 5s default. `retry` is the safety
 // net for the residual case: this is an integration test that is correct but races the
 // runner under full-suite contention, so a transient timeout shouldn't fail the build.
-vi.setConfig({ testTimeout: 20000, retry: 2 });
+// Passed via a variable so `retry` (valid at runtime) isn't rejected by setConfig's
+// stricter object-literal type.
+const jffTestConfig = { testTimeout: 20000, retry: 2 };
+vi.setConfig(jffTestConfig);
 
 /* ─────────────────────── cytoscape engine mock (hoisted) ─────────────────── */
 // The viewer sets cyRef.current right after cytoscape() returns and wraps the

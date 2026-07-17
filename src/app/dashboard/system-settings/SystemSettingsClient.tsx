@@ -436,7 +436,7 @@ export default function SystemSettingsClient() {
       return;
     }
 
-    const clampedSize = Math.max(1, Math.min(1024, Math.trunc(Number(maxUploadSizeMb) || 0)));
+    const clampedSize = Math.max(1, Math.min(50, Math.trunc(Number(maxUploadSizeMb) || 0)));
     const clampedTimeout = clampSessionTimeoutMinutes(Number(sessionTimeoutMinutes));
     const evalTimeoutMs = clampSubmissionEvalTimeoutMs(secToMs(Number(evalTimeoutSec)));
     const resubmitCooldownMs = clampSubmissionResubmitCooldownMs(
@@ -710,7 +710,7 @@ export default function SystemSettingsClient() {
                   value={maxUploadSizeMb === '' ? '' : String(maxUploadSizeMb)}
                   setValue={(val) => setField('maxUploadSizeMb', val === '' ? '' : Number(val))}
                   disabled={disabled}
-                  description="Applies to all uploads. 1–1024 MB."
+                  description="Applies to all uploads. 1–50 MB."
                 />
                 <InputGroup
                   label="Session timeout (minutes)"

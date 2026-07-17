@@ -97,7 +97,7 @@ describe('toElements', () => {
     const edges = els.filter((e) => !('classes' in e));
     expect(nodes).toHaveLength(2);
     expect(edges).toHaveLength(2); // 0→1 (bundled) and 1→1
-    const loop = edges.find((e) => e.data.isLoop === 1);
+    const loop = edges.find((e) => 'isLoop' in e.data && e.data.isLoop === 1);
     expect(loop).toBeTruthy();
   });
 

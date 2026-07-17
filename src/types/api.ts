@@ -1559,7 +1559,7 @@ export interface paths {
         put?: never;
         /**
          * Join a course by registration code
-         * @description Enrolls the signed-in user in a course via its 6-character registration code,  as a STUDENT. Users never learn that an unpublished/archived course exists  (masked as 404). Global admins can't self-enroll, and the registration window  must be open.
+         * @description Enrolls the signed-in user in a course via its registration code,  as a STUDENT. Users never learn that an unpublished/archived course exists  (masked as 404). Global admins can't self-enroll, and the registration window  must be open.
          *
          *     **Auth:** required
          *
@@ -7376,7 +7376,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description 6-character course registration code */
+                    /** @description course registration code */
                     code: string;
                 };
             };

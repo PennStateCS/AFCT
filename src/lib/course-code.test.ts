@@ -26,12 +26,12 @@ beforeEach(() => {
 });
 
 describe('generateUniqueCourseCode', () => {
-  it('returns a code in the ABC123 format', async () => {
+  it('returns an 8-character code', async () => {
     prismaMock.course.findUnique.mockResolvedValue(null);
 
     const code = await generateUniqueCourseCode();
 
-    expect(code).toMatch(/^[A-Z]{3}[0-9]{3}$/);
+    expect(code).toMatch(/^[A-Z0-9]{8}$/);
     expect(prismaMock.course.findUnique).toHaveBeenCalledWith({ where: { regCode: code } });
   });
 
@@ -43,7 +43,7 @@ describe('generateUniqueCourseCode', () => {
 
     const code = await generateUniqueCourseCode();
 
-    expect(code).toMatch(/^[A-Z]{3}[0-9]{3}$/);
+    expect(code).toMatch(/^[A-Z0-9]{8}$/);
     expect(prismaMock.course.findUnique).toHaveBeenCalledTimes(2);
   });
 });
@@ -79,7 +79,7 @@ describe('createWithUniqueCourseCode', () => {
 
     expect(create).toHaveBeenCalledTimes(1);
     expect(result).toBe(`made-${create.mock.calls[0]![0]}`);
-    expect(create.mock.calls[0]![0]).toMatch(/^[A-Z]{3}[0-9]{3}$/);
+    expect(create.mock.calls[0]![0]).toMatch(/^[A-Z0-9]{8}$/);
   });
 
   it('retries with a fresh code on a regCode conflict, then succeeds', async () => {

@@ -376,10 +376,10 @@ describe('AssignmentSubmissions — comments', () => {
         expect.objectContaining({ method: 'POST' }),
       ),
     );
-    const call = fetchMock.mock.calls.find(
-      ([u, init]) => String(u) === '/api/comments' && (init as RequestInit)?.method === 'POST',
+    const call = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(
+      ([u, init]) => String(u) === '/api/comments' && init?.method === 'POST',
     );
-    expect(JSON.parse(String((call![1] as RequestInit).body))).toMatchObject({
+    expect(JSON.parse(String(call![1].body))).toMatchObject({
       content: 'Great',
       assignmentId: 'a1',
       problemId: 'p1',
