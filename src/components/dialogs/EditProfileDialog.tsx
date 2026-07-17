@@ -21,6 +21,7 @@ import SelectField from '@/components/ui/SelectField';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 
 import type { SessionUser } from '@/types/next-auth';
 import {
@@ -52,6 +53,10 @@ type EditProfileDialog = {
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
   const queryClient = useQueryClient();
+  // The navbar/sidebar avatars read from the NextAuth session; update() re-runs the
+  // session callback (which re-reads the user from the DB), so the new photo/crop
+  // appears immediately without a page reload.
+  const { update: updateSession } = useSession();
   const avatarEditorRef = useRef<AvatarCropRef['current']>(null);
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
@@ -175,7 +180,11 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       const res = await fetch(apiPaths.me(), { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Failed to update profile');
 
-      // Use NextAuth's update function to immediately update the session
+      // Refresh the session so the navbar/sidebar avatars (which read from it) reflect
+      // the new photo and crop instantly, no reload needed.
+      await updateSession();
+
+      // Kept for any parent that also wants the updated fields.
       await onSave?.({
         firstName: parsed.firstName,
         lastName: parsed.lastName,

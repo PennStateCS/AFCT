@@ -19,6 +19,11 @@ vi.mock('@/components/ui/InputGroup', () =>
 );
 vi.mock('@/components/ui/select', () => import('@/test/mocks/ui').then((mod) => mod.selectMock));
 
+const { updateSession } = vi.hoisted(() => ({ updateSession: vi.fn() }));
+vi.mock('next-auth/react', () => ({
+  useSession: () => ({ data: null, status: 'authenticated', update: updateSession }),
+}));
+
 const { toastSuccess, toastError } = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
@@ -117,6 +122,8 @@ describe('EditProfileDialog', () => {
     });
     expect(setOpen).toHaveBeenCalledWith(false);
     expect(toastSuccess).toHaveBeenCalledWith('Profile updated!');
+    // The session is refreshed so navbar/sidebar avatars update without a reload.
+    expect(updateSession).toHaveBeenCalled();
   });
 
   it('clears the timezone override when Automatic is chosen', async () => {
