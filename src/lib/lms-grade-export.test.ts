@@ -59,4 +59,25 @@ describe('buildLmsGradesCsv', () => {
     const { csvContent } = buildLmsGradesCsv('canvas', studentsWithMissingGrade, assignments);
     expect(csvContent).toContain('"Turing, Alan","","","alan@example.com","","100",""');
   });
+
+  it('neutralizes spreadsheet formula injection in text cells but leaves numbers intact', () => {
+    const evilStudents: LmsStudentRow[] = [
+      {
+        id: 's3',
+        name: '=HYPERLINK("http://evil.example","click")',
+        email: 'x@example.com',
+        a1: '-5', // a legitimately negative grade
+        a2: '=1+1',
+      },
+    ];
+
+    const { csvContent } = buildLmsGradesCsv('generic', evilStudents, assignments);
+
+    // The name and the formula-like grade get an apostrophe prefix so a spreadsheet
+    // renders them as text rather than executing them.
+    expect(csvContent).toContain(`"'=HYPERLINK(""http://evil.example"",""click"")"`);
+    expect(csvContent).toContain(`"'=1+1"`);
+    // A plain negative number is data, not a formula — left untouched.
+    expect(csvContent).toContain('"-5"');
+  });
 });

@@ -13,7 +13,20 @@ export type LmsStudentRow = {
   [key: string]: unknown;
 };
 
-const escapeCsvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+// A spreadsheet treats a cell starting with any of these as a formula.
+const FORMULA_START = /^[=+\-@\t\r]/;
+// Plain (optionally negative) numbers are safe data, not injection — leave them alone.
+const NUMERIC = /^-?\d+(\.\d+)?$/;
+
+const escapeCsvCell = (value: unknown) => {
+  let s = String(value ?? '');
+  // CSV / formula injection guard: user-controlled text (e.g. a student's name set to
+  // `=HYPERLINK(...)`) would run as a formula when the export is opened in Excel/Sheets.
+  // Prefix such cells with an apostrophe so they render as literal text. Numbers pass
+  // through untouched so grades like "-5" stay numeric.
+  if (FORMULA_START.test(s) && !NUMERIC.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+};
 
 const toGradeCell = (value: unknown) => {
   if (value === null || value === undefined || value === '') return '';
@@ -58,7 +71,14 @@ export function buildLmsGradesCsv(
       'Availability',
       ...assignmentHeaders,
     ],
-	brightspace: ['OrgDefinedId', 'Username', 'Last Name', 'First Name', ...brightspaceHeaders, 'End-of-Line Indicator'],
+    brightspace: [
+      'OrgDefinedId',
+      'Username',
+      'Last Name',
+      'First Name',
+      ...brightspaceHeaders,
+      'End-of-Line Indicator',
+    ],
     moodle: ['email', ...assignmentHeaders],
     generic: ['Student Name', 'Email', ...assignmentHeaders],
   };
@@ -87,10 +107,10 @@ export function buildLmsGradesCsv(
 
     if (platform === 'brightspace') {
       return ['', '', lastName, firstName, ...gradeCells, '#'];
-	}
+    }
 
     if (platform === 'moodle') {
-      return [email,  ...gradeCells];
+      return [email, ...gradeCells];
     }
 
     return [student.name ?? `${firstName} ${lastName}`.trim(), email, ...gradeCells];

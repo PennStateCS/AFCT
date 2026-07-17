@@ -154,12 +154,11 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       const selectedForExport = assignments.filter((assignment) =>
         assignmentIds.includes(assignment.id),
       );
-      if (!selectedForExport) {
+      if (selectedForExport.length === 0) {
         showToast.error('Please select an assignment to export.');
         return;
       }
 
-      //const exportAssignments = [{ id: selectedForExport.id, title: selectedForExport.title }];
       const exportAssignments = selectedForExport.map((assignment) => ({
         id: assignment.id,
         title: assignment.title,
@@ -174,9 +173,11 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
 
-      // Download CSV
+      // Download CSV. Prepend a UTF-8 BOM so Excel on Windows renders accented names
+      // correctly instead of mojibake.
       const timestamp = new Date().toISOString().replace('T', '_').replace(/:/g, '-').split('.')[0];
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const BOM = String.fromCharCode(0xfeff);
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
@@ -185,6 +186,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         `${filenamePrefix}-${assignmentSlug || assignmentIds[0]}-${timestamp}.csv`,
       );
       link.click();
+      URL.revokeObjectURL(url);
 
       showToast.success(`Grades exported for ${platform}`);
 
