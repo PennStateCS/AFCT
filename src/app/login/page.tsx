@@ -12,6 +12,7 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
 import { passwordRules } from '@/lib/password-policy';
 import { apiPaths } from '@/lib/api-paths';
+import { safeCallbackUrl } from '@/lib/safe-callback';
 import { isValidEmail } from '@/lib/email';
 import { SignupFormSchema } from '@/schemas/auth';
 
@@ -69,6 +70,9 @@ export default function LoginPage() {
   );
 
   const searchParams = useSearchParams();
+  // Where to send the user after login — honors ?callbackUrl= (e.g. a course join
+  // link that bounced through login), but only same-origin paths (no open redirect).
+  const callbackUrl = safeCallbackUrl(searchParams.get('callbackUrl'));
   const isDev = process.env.NODE_ENV !== 'production';
   // Site key comes from admin settings at runtime, falling back to the build-time env.
   const [captchaSiteKey, setCaptchaSiteKey] = useState<string | undefined>(
@@ -195,7 +199,7 @@ export default function LoginPage() {
       setLoginErrors({});
       setCaptchaVisible(false);
       setCaptchaToken(null);
-      window.location.href = '/dashboard';
+      window.location.href = callbackUrl;
     }
   };
 
@@ -315,7 +319,7 @@ export default function LoginPage() {
     }
 
     setSignupErrors({});
-    window.location.href = '/dashboard';
+    window.location.href = callbackUrl;
   };
 
   const passwordHelperId = 'signup-password-helper';

@@ -99,6 +99,15 @@ describe('proxy', () => {
       expect(location).toContain('callbackUrl=%2Fdashboard%2Fcourses%2Fc1');
     });
 
+    it('preserves the query string in the callbackUrl (e.g. a join link)', async () => {
+      getTokenMock.mockResolvedValue(null);
+      const res = await proxy(req('/dashboard?joinCode=ABCD2345'));
+      const location = res.headers.get('location') ?? '';
+      expect(location).toContain('/login');
+      // Full path + query, URL-encoded, so ?joinCode= survives the login bounce.
+      expect(location).toContain('callbackUrl=%2Fdashboard%3FjoinCode%3DABCD2345');
+    });
+
     it('passes a signed-in visitor through', async () => {
       getTokenMock.mockResolvedValue({ id: 'u1' });
       const res = await proxy(req('/dashboard/courses/c1'));

@@ -44,7 +44,7 @@ function isPublicApi(pathname: string): boolean {
 }
 
 export async function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname, search } = req.nextUrl;
 
   // Public API routes bypass the net entirely (and skip the token read).
   if (pathname.startsWith('/api/') && isPublicApi(pathname)) {
@@ -68,7 +68,7 @@ export async function proxy(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('callbackUrl', pathname);
+    loginUrl.searchParams.set('callbackUrl', pathname + search);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -87,7 +87,7 @@ export async function proxy(req: NextRequest) {
     }
     // Page route: bounce to login, remembering where they were headed.
     const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('callbackUrl', pathname);
+    loginUrl.searchParams.set('callbackUrl', pathname + search);
     return NextResponse.redirect(loginUrl);
   }
 

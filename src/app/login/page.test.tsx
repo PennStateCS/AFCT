@@ -253,6 +253,36 @@ describe('LoginPage', () => {
     await waitFor(() => expect(window.location.href).toBe('/dashboard'));
   });
 
+  it('honors a same-origin callbackUrl after login (e.g. a join link)', async () => {
+    setSearchParams({ callbackUrl: '/dashboard?joinCode=ABCD2345' });
+    signInMock.mockResolvedValueOnce({ error: null });
+    const user = userEvent.setup();
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'admin@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'StrongPass1!' } });
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
+    await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
+
+    await waitFor(() => expect(window.location.href).toBe('/dashboard?joinCode=ABCD2345'));
+  });
+
+  it('ignores an off-site callbackUrl and falls back to the dashboard', async () => {
+    setSearchParams({ callbackUrl: 'https://evil.example.com' });
+    signInMock.mockResolvedValueOnce({ error: null });
+    const user = userEvent.setup();
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'admin@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'StrongPass1!' } });
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
+    await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
+
+    await waitFor(() => expect(window.location.href).toBe('/dashboard'));
+  });
+
   it('keeps the submit button enabled and surfaces field errors on submit', async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
