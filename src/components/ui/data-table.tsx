@@ -152,6 +152,13 @@ function DataTableToolbar<TData>({
   onResetColumns: () => void;
   getColumnLabel: (column: TanstackColumn<TData, unknown>) => string;
 }) {
+  // Placeholder reflects the scope: generic for "all", the column name when scoped.
+  const scopedColumn =
+    searchScope === 'all' ? undefined : searchableColumns.find((col) => col.id === searchScope);
+  const searchPlaceholder = scopedColumn
+    ? `Search ${getColumnLabel(scopedColumn).toLowerCase()}...`
+    : 'Search...';
+
   return (
     <div className="space-y-2">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -159,10 +166,13 @@ function DataTableToolbar<TData>({
           Search table data
         </label>
 
-        <div className="flex w-full gap-2 sm:max-w-md">
+        <div className="flex w-full sm:max-w-md">
           {searchableColumns.length > 0 && (
             <Select value={searchScope} onValueChange={setSearchScope}>
-              <SelectTrigger className="w-auto shrink-0" aria-label="Search scope">
+              <SelectTrigger
+                className="w-[140px] shrink-0 rounded-r-none border-r-0"
+                aria-label="Search scope"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -176,19 +186,19 @@ function DataTableToolbar<TData>({
             </Select>
           )}
 
-          <div className="relative w-full">
+          <div className="relative min-w-0 flex-1">
             <Input
               id="table-search"
-              placeholder="Search..."
+              placeholder={searchPlaceholder}
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
-              className="pr-8"
+              className={`pr-8 ${searchableColumns.length > 0 ? 'rounded-l-none' : ''}`}
             />
             {globalFilter && (
               <button
                 type="button"
                 onClick={() => setGlobalFilter('')}
-                className="absolute top-1/2 right-2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
                 aria-label="Clear search"
               >
                 <X className="h-4 w-4" />
