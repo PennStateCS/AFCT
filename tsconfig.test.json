@@ -13,5 +13,7 @@
     "**/*.tsx",
     "src/types/**/*.d.ts"
   ],
-  "exclude": ["node_modules", ".next"]
+  // docs-site is a separate package with its own tsconfig + node_modules; don't pull
+  // its Docusaurus config into the test typecheck (its deps aren't installed here).
+  "exclude": ["node_modules", ".next", "docs-site"]
 }
