@@ -33,6 +33,9 @@ type CourseRosterEntry = {
     lastName?: string | null;
     email?: string | null;
     avatar?: string | null;
+    cropX?: number | null;
+    cropY?: number | null;
+    zoom?: number | null;
     role?: string | null;
   };
 };
@@ -242,7 +245,13 @@ export default function CourseEditUserDialog({
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
+                  <AvatarImage
+                    src={avatarPreview || undefined}
+                    alt="User Avatar"
+                    cropX={roster.user.cropX ?? 0.5}
+                    cropY={roster.user.cropY ?? 0.5}
+                    zoom={roster.user.zoom ?? 1}
+                  />
                   <AvatarFallback className="bg-secondary text-secondary-foreground">
                     {getInitials(
                       roster.user.firstName,

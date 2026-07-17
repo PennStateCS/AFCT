@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     // server-side; the avatar File stays on the raw form.
     const parsed = await readFormData(req, UserProfileApiSchema);
     if (!parsed.ok) return parsed.response;
-    const { firstName, lastName, deleteAvatar } = parsed.data;
+    const { firstName, lastName, deleteAvatar, cropX, cropY, zoom } = parsed.data;
     const timezoneRaw = parsed.data.timezone ?? '';
     const avatar = parsed.form.get('avatar') as File | null;
     const { maxBytes, maxMb } = await getSystemUploadLimit();
@@ -135,6 +135,9 @@ export async function POST(req: Request) {
         lastName,
         avatar: avatarFileName,
         timezone: timezoneRaw || null,
+        cropX,
+        cropY,
+        zoom,
       },
       select: {
         id: true,
@@ -143,6 +146,9 @@ export async function POST(req: Request) {
         lastName: true,
         avatar: true,
         timezone: true,
+        cropX: true,
+        cropY: true,
+        zoom: true,
       },
     });
 
@@ -209,6 +215,9 @@ export async function GET() {
       lastName: true,
       avatar: true,
       timezone: true,
+      cropX: true,
+      cropY: true,
+      zoom: true,
     },
   });
 

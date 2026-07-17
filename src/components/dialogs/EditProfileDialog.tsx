@@ -37,20 +37,30 @@ import { apiPaths } from '@/lib/api-paths';
 // through to the system default, then the browser.
 const AUTO_TIMEZONE = '__auto__';
 
+type ProfileUser = SessionUser & {
+  cropX?: number;
+  cropY?: number;
+  zoom?: number;
+};
+
 type EditProfileDialog = {
-  user: SessionUser;
+  user: ProfileUser;
   open: boolean;
   setOpen: (open: boolean) => void;
-  onSave?: (updatedUser: Partial<SessionUser>) => Promise<void>;
+  onSave?: (updatedUser: Partial<ProfileUser>) => Promise<void>;
 };
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
   const queryClient = useQueryClient();
   const avatarEditorRef = useRef<AvatarCropRef['current']>(null);
-  const [avatarDirty, setAvatarDirty] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
+  const [avatarCrop, setAvatarCrop] = useState({
+    cropX: user.cropX ?? 0.5,
+    cropY: user.cropY ?? 0.5,
+    zoom: user.zoom ?? 1,
+  });
   // What "Automatic" would resolve to on this device, shown for reassurance.
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -61,6 +71,9 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       lastName: user.lastName ?? '',
       timezone: user.timezone ?? '',
       avatarFile: undefined,
+      cropX: user.cropX ?? 0.5,
+      cropY: user.cropY ?? 0.5,
+      zoom: user.zoom ?? 1,
       deleteAvatar: false,
     }),
     [user],
@@ -91,7 +104,11 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       });
       // Reset preview from current user
       setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
-      setAvatarDirty(false);
+      setAvatarCrop({
+        cropX: user.cropX ?? 0.5,
+        cropY: user.cropY ?? 0.5,
+        zoom: user.zoom ?? 1,
+      });
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -99,9 +116,13 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         keepErrors: false,
         keepValues: false,
       });
-      setAvatarDirty(false);
+      setAvatarCrop({
+        cropX: user.cropX ?? 0.5,
+        cropY: user.cropY ?? 0.5,
+        zoom: user.zoom ?? 1,
+      });
     }
-  }, [open, defaults, reset, user.avatar]);
+  }, [open, defaults, reset, user.avatar, user.cropX, user.cropY, user.zoom]);
 
   const handleAvatarUpload = (file?: File) => {
     // Update RHF state and local state
@@ -111,7 +132,6 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       shouldValidate: true,
     });
     setValue('deleteAvatar', false, { shouldDirty: true });
-    setAvatarDirty(true);
 
     // Set preview Avatar
     if (file) {
@@ -123,20 +143,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
   const handleDeleteAvatar = () => {
     setValue('deleteAvatar', true, { shouldDirty: true });
-    setAvatarDirty(false);
     setAvatarPreview('');
-  };
-
-  const getCroppedAvatarFile = async () => {
-    const editor = avatarEditorRef.current;
-    if (!editor) return null;
-    const canvas = editor.getImageScaledToCanvas();
-    return new Promise<File | null>((resolve) => {
-      canvas.toBlob((blob: Blob | null) => {
-        if (!blob) return resolve(null);
-        resolve(new File([blob], 'avatar.png', { type: 'image/png' }));
-      }, 'image/png');
-    });
   };
 
   const resetForm = () =>
@@ -151,9 +158,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     let avatarToUpload: File | undefined;
     if (parsed.deleteAvatar) {
       avatarToUpload = undefined;
-    } else if (avatarDirty) {
-      avatarToUpload = await getCroppedAvatarFile() || undefined;
-    } else if (parsed.avatarFile) {
+    } else if (parsed.avatarFile instanceof File) {
       avatarToUpload = parsed.avatarFile;
     }
     if (avatarToUpload) formData.append('avatar', avatarToUpload);
@@ -161,6 +166,9 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     // Always send it: a blank value tells the server to clear the override
     // (Automatic), so the display timezone follows the system/browser again.
     formData.append('timezone', parsed.timezone ?? '');
+    formData.append('cropX', String(avatarCrop.cropX));
+    formData.append('cropY', String(avatarCrop.cropY));
+    formData.append('zoom', String(avatarCrop.zoom));
 
     try {
       // Post new profile data to database
@@ -172,6 +180,9 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         firstName: parsed.firstName,
         lastName: parsed.lastName,
         avatar: parsed.deleteAvatar ? null : user.avatar,
+        cropX: avatarCrop.cropX,
+        cropY: avatarCrop.cropY,
+        zoom: avatarCrop.zoom,
         timezone: parsed.timezone || undefined,
       });
 
@@ -212,7 +223,13 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
             <Label className="text-center w-full">Avatar Image</Label>
             <div className="flex items-center justify-center gap-4 w-full">
               <Avatar className="h-20 w-20">
-                <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
+                <AvatarImage
+                  src={avatarPreview || undefined}
+                  alt="User Avatar"
+                  cropX={avatarCrop.cropX}
+                  cropY={avatarCrop.cropY}
+                  zoom={avatarCrop.zoom}
+                />
                 <AvatarFallback className="bg-secondary text-secondary-foreground">
                   {getInitials(user.firstName, user.lastName, user.email)}
                 </AvatarFallback>
@@ -262,7 +279,13 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
             <AvatarCrop
               avatarPreview={avatarPreview}
               editorRef={avatarEditorRef}
-              onChange={() => setAvatarDirty(true)}
+              cropX={avatarCrop.cropX}
+              cropY={avatarCrop.cropY}
+              zoom={avatarCrop.zoom}
+              onPositionChange={(position) =>
+                setAvatarCrop((prev) => ({ ...prev, cropX: position.x, cropY: position.y }))
+              }
+              onZoomChange={(zoom) => setAvatarCrop((prev) => ({ ...prev, zoom }))}
             />
           ) : null}
 

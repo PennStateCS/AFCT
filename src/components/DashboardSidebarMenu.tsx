@@ -226,6 +226,9 @@ export default function DashboardSidebarMenu() {
     firstName = '',
     lastName = '',
     avatar = '',
+    cropX = 0.5,
+    cropY = 0.5,
+    zoom = 1,
     timezone,
     isAdmin = false,
   } = session.user;
@@ -245,6 +248,9 @@ export default function DashboardSidebarMenu() {
     name: resolvedName,
     email,
     avatar: avatarUrl,
+    cropX,
+    cropY,
+    zoom,
     timezone: timezone ?? null,
     password: '', // password is not exposed from session
     temporaryPassword: Boolean(session.user.mustChangePassword),
@@ -535,6 +541,9 @@ export default function DashboardSidebarMenu() {
                     <AvatarImage
                       src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
                       alt={user.name}
+                      cropX={user.cropX ?? 0.5}
+                      cropY={user.cropY ?? 0.5}
+                      zoom={user.zoom ?? 1}
                     />
                     <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
                       {getInitials(user.firstName, user.lastName, user.email)}

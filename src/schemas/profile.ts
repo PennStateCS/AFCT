@@ -12,6 +12,15 @@ export const UserProfileApiSchema = z.object({
   firstName: z.string().trim().min(1, 'First name and last name cannot be blank.'),
   lastName: z.string().trim().min(1, 'First name and last name cannot be blank.'),
   deleteAvatar: formBoolean,
+  cropX: z
+    .preprocess((v) => (v === '' || v === undefined ? 0.5 : Number(v)), z.number().min(0).max(1))
+    .default(0.5),
+  cropY: z
+    .preprocess((v) => (v === '' || v === undefined ? 0.5 : Number(v)), z.number().min(0).max(1))
+    .default(0.5),
+  zoom: z
+    .preprocess((v) => (v === '' || v === undefined ? 1 : Number(v)), z.number().min(0.6).max(2.6))
+    .default(1),
   timezone: z
     .string()
     .trim()
@@ -50,6 +59,9 @@ export const UpdateProfileSchema = z.object({
     // Email is read-only in the dialog; we don't validate it here.
     avatarFile: ImageFileOptional, // Optional file upload
     deleteAvatar: z.boolean().default(false), // Checkbox to delete avatar
+    cropX: z.number().min(0).max(1).default(0.5),
+    cropY: z.number().min(0).max(1).default(0.5),
+    zoom: z.number().min(0.6).max(2.6).default(1),
   timezone: z.string().trim().optional(),
   })
   .strict();

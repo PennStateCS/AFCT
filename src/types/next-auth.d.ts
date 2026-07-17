@@ -10,6 +10,9 @@ declare module 'next-auth' {
       lastName?: string;
       avatar?: string;
       timezone?: string;
+      cropX?: number;
+      cropY?: number;
+      zoom?: number;
       mustChangePassword?: boolean;
       name?: string;
       image?: string;
@@ -36,6 +39,9 @@ declare module 'next-auth' {
     lastName?: string;
     avatar?: string;
     timezone?: string;
+    cropX?: number;
+    cropY?: number;
+    zoom?: number;
     mustChangePassword?: boolean;
     name?: string;
     image?: string;

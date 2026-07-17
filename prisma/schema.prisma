@@ -52,6 +52,13 @@ model User {
   // flag is the only global privilege.
   isAdmin   Boolean @default(false)
   avatar    String?
+  // Avatar framing (0..1 for x/y, zoom multiplier). The original image is stored and
+  // these are applied as a CSS transform at render, so re-cropping needs no re-upload.
+  // Nullable to match the existing columns (migration 20260713155236_avatar_info);
+  // callers fall back to 0.5/0.5/1 when null.
+  cropX     Float?
+  cropY     Float?
+  zoom      Float?
   timezone  String?
   inactive  Boolean @default(false)
 

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import AvatarEditor, { type AvatarEditorRef } from 'react-avatar-editor';
 import { Label } from './ui/label';
 
@@ -7,22 +7,33 @@ export type AvatarCropRef = React.MutableRefObject<AvatarEditorRef | null>;
 export function AvatarCrop({
   avatarPreview,
   editorRef,
-  onChange,
+  cropX,
+  cropY,
+  zoom,
+  onPositionChange,
+  onZoomChange,
 }: {
   avatarPreview: string;
   editorRef?: AvatarCropRef;
-  onChange?: () => void;
+  cropX: number;
+  cropY: number;
+  zoom: number;
+  onPositionChange?: (position: { x: number; y: number }) => void;
+  onZoomChange?: (zoom: number) => void;
 }) {
-  const [zoom, setZoom] = useState(1.2);
-  const [crop, setCrop] = useState({ x: 0.5, y: 0.5 });
+  const [crop, setCrop] = useState({ x: cropX, y: cropY, scale: zoom });
   const internalEditorRef = useRef<AvatarEditorRef | null>(null);
 
-  // The cropped canvas is what actually gets uploaded, so the position must be
-  // adjustable without a pointer: arrow keys nudge the crop (Shift = bigger steps).
+  // The crop position/zoom is stored (the original image is uploaded and framed at
+  // render), so it must be adjustable without a pointer: arrow keys nudge the crop
+  // (Shift = bigger steps).
   const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
   const nudgeCrop = (dx: number, dy: number) => {
-    setCrop((c) => ({ x: clamp01(c.x + dx), y: clamp01(c.y + dy) }));
-    onChange?.();
+    setCrop((c) => {
+      const next = { x: clamp01(c.x + dx), y: clamp01(c.y + dy), scale: c.scale };
+      onPositionChange?.(next);
+      return next;
+    });
   };
   const handleCropKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const step = e.shiftKey ? 0.1 : 0.02;
@@ -45,6 +56,11 @@ export function AvatarCrop({
         break;
     }
   };
+
+  // Update crop whenever the incoming preview or crop params change.
+  useEffect(() => {
+    setCrop({ x: cropX, y: cropY, scale: zoom });
+  }, [avatarPreview, cropX, cropY, zoom]);
 
   return (
     <div className="space-y-4">
@@ -69,8 +85,8 @@ export function AvatarCrop({
           scale={zoom}
           position={crop}
           onPositionChange={(position) => {
-            setCrop(position);
-            onChange?.();
+            setCrop({ x: position.x, y: position.y, scale: crop.scale });
+            onPositionChange?.(position);
           }}
           style={{
             backgroundColor: 'transparent',
@@ -95,8 +111,9 @@ export function AvatarCrop({
           step="0.001"
           value={zoom}
           onChange={(e) => {
-            setZoom(parseFloat(e.target.value));
-            onChange?.();
+            const nextZoom = parseFloat(e.target.value);
+            setCrop((c) => ({ ...c, scale: nextZoom }));
+            onZoomChange?.(nextZoom);
           }}
           className="h-2 w-full cursor-pointer rounded-lg bg-primary-foreground accent-primary"
         />

@@ -111,6 +111,9 @@ describe('EditProfileDialog', () => {
       lastName: 'Lovelace',
       avatar: null,
       timezone: 'UTC',
+      cropX: 0.5,
+      cropY: 0.5,
+      zoom: 1,
     });
     expect(setOpen).toHaveBeenCalledWith(false);
     expect(toastSuccess).toHaveBeenCalledWith('Profile updated!');
