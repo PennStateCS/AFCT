@@ -318,7 +318,6 @@ export default function LoginPage() {
     window.location.href = '/dashboard';
   };
 
-  const isLoginEmailValid = isValidEmail(loginEmail);
   const passwordHelperId = 'signup-password-helper';
   const passwordRuleStatuses = passwordRules.map((rule) => ({
     label: rule.label,
@@ -423,8 +422,8 @@ export default function LoginPage() {
 
                 <Button
                   type="submit"
-                  disabled={loading || !isLoginEmailValid}
-                  aria-disabled={loading || !isLoginEmailValid}
+                  disabled={loading}
+                  aria-disabled={loading}
                   className="w-full bg-[#2F4A8A] text-white disabled:bg-[#2F4A8A] disabled:opacity-80"
                 >
                   {loading ? 'Logging in...' : 'Sign In'}

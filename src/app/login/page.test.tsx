@@ -253,17 +253,18 @@ describe('LoginPage', () => {
     await waitFor(() => expect(window.location.href).toBe('/dashboard'));
   });
 
-  it('requires login inputs before submitting', async () => {
+  it('keeps the submit button enabled and surfaces field errors on submit', async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).toBeDisabled();
+    // The button is no longer hard-disabled before valid input — even a malformed
+    // email leaves it clickable so the user can submit and see the error.
+    expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'not-an-email' } });
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
 
-    fireEvent.change(screen.getByLabelText(/email/i), {
-      target: { value: 'not-an-email' },
-    });
-    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).toBeDisabled());
-
+    // Valid email but missing password: submit runs, surfaces the error, and does
+    // not attempt to authenticate.
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: 'incomplete@example.com' },
     });
