@@ -25,8 +25,16 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Only publish when the triggering CI run succeeded.
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only publish for a successful CI run that was a real push to main on THIS repo.
+    # This job is privileged (packages: write, contents: write) and checks out the
+    # triggering run's head_sha, so it must never build code from a fork or a PR:
+    # `branches: ['main']` alone isn't a trust boundary (a fork branch can be named
+    # `main`). Require event=push and the head repo to be our own.
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main' }}
 
     steps:
       - name: Checkout
