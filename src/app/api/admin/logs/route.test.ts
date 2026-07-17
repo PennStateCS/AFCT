@@ -155,6 +155,20 @@ describe('GET /api/logging', () => {
     expect(where).toEqual({});
   });
 
+  it('filters by category when valid (case-insensitive) and ignores unknown', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?category=course'), routeCtx());
+    expect(prismaMock.activityLog.findMany.mock.calls[0][0].where).toEqual({
+      AND: [{ category: 'COURSE' }],
+    });
+
+    await GET(request('?category=bogus'), routeCtx());
+    expect(prismaMock.activityLog.findMany.mock.calls[1][0].where).toEqual({});
+  });
+
   it('falls back to email when the user has no name', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.activityLog.count.mockResolvedValue(1);

@@ -182,6 +182,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   events: {
     async signIn({ user, account }) {
       const { ipAddress, userAgent } = await getRequestContext();
+
+      // Record the last successful sign-in. Best-effort: never block sign-in on it.
+      if (user?.id) {
+        try {
+          await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+        } catch (e) {
+          console.error('Failed to update lastLogin:', e);
+        }
+      }
+
       try {
         const mustChangePassword = Boolean(
           (user as { mustChangePassword?: boolean } | undefined)?.mustChangePassword,

@@ -15,7 +15,7 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pencil, Trash2, Lock, User2, ChevronDown } from 'lucide-react';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { CompactDate } from '@/components/ui/CompactDate';
 
 import {
   DropdownMenu,
@@ -135,12 +135,16 @@ export function getUserColumns(
       },
     },
     {
+      accessorKey: 'lastLogin',
+      header: 'Last Login',
+      meta: { priority: 3 },
+      cell: ({ row }) => <CompactDate value={row.original.lastLogin} timeZone={timeZone} />,
+    },
+    {
       accessorKey: 'createdAt',
       header: 'Created At',
       meta: { priority: 4 },
-      cell: ({ row }) => {
-        return formatDateTimeInTimeZone(row.original.createdAt, timeZone);
-      },
+      cell: ({ row }) => <CompactDate value={row.original.createdAt} timeZone={timeZone} />,
     },
     {
       id: 'actions',

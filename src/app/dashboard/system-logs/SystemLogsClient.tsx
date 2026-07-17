@@ -41,6 +41,9 @@ const DEFAULT_PAGE_SIZE = 10;
 const SEVERITIES: Severity[] = ['INFO', 'WARNING', 'ERROR', 'SECURITY'];
 const ALL_SEVERITIES = 'ALL';
 
+const CATEGORIES = ['SYSTEM', 'USER', 'COURSE', 'ASSIGNMENT', 'PROBLEM', 'SUBMISSION'] as const;
+const ALL_CATEGORIES = 'ALL';
+
 // Badge palette per severity level.
 const SEVERITY_VARIANT: Record<Severity, 'info' | 'warning' | 'danger' | 'destructive'> = {
   INFO: 'info',
@@ -58,6 +61,7 @@ export default function SystemLogsClient() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [severity, setSeverity] = useState<Severity | typeof ALL_SEVERITIES>(ALL_SEVERITIES);
+  const [category, setCategory] = useState<string>(ALL_CATEGORIES);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
 
   const [selectedData, setSelectedData] = useState('');
@@ -83,6 +87,7 @@ export default function SystemLogsClient() {
     pageSize,
     q: search || undefined,
     severity: severity !== ALL_SEVERITIES ? severity : undefined,
+    category: category !== ALL_CATEGORIES ? category : undefined,
     sortBy: sort?.id,
     sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
   };
@@ -98,6 +103,7 @@ export default function SystemLogsClient() {
       });
       if (queryParams.q) params.set('q', queryParams.q);
       if (queryParams.severity) params.set('severity', queryParams.severity);
+      if (queryParams.category) params.set('category', queryParams.category);
       if (queryParams.sortBy) params.set('sortBy', queryParams.sortBy);
       if (queryParams.sortDir) params.set('sortDir', queryParams.sortDir);
 
@@ -247,25 +253,47 @@ export default function SystemLogsClient() {
           tableLabel="System logs table"
           showExportButton={false}
           actionButtons={
-            <Select
-              value={severity}
-              onValueChange={(v) => {
-                setSeverity(v as Severity | typeof ALL_SEVERITIES);
-                setPageIndex(0);
-              }}
-            >
-              <SelectTrigger aria-label="Filter by severity" className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_SEVERITIES}>All severities</SelectItem>
-                {SEVERITIES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <>
+              <Select
+                value={severity}
+                onValueChange={(v) => {
+                  setSeverity(v as Severity | typeof ALL_SEVERITIES);
+                  setPageIndex(0);
+                }}
+              >
+                <SelectTrigger aria-label="Filter by severity" className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_SEVERITIES}>All severities</SelectItem>
+                  {SEVERITIES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={category}
+                onValueChange={(v) => {
+                  setCategory(v);
+                  setPageIndex(0);
+                }}
+              >
+                <SelectTrigger aria-label="Filter by category" className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_CATEGORIES}>All categories</SelectItem>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c.charAt(0) + c.slice(1).toLowerCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
           }
           manualPagination
           pageCount={pageCount}

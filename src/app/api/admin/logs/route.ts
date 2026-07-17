@@ -28,6 +28,7 @@ function displayName(u: {
  *   - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
  *   - { name: q, in: query, description: "Match on action, category, or author name/email", schema: { type: string } }
  *   - { name: severity, in: query, schema: { type: string, enum: [INFO, WARNING, ERROR, SECURITY] } }
+ *   - { name: category, in: query, schema: { type: string, enum: [SYSTEM, USER, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION] } }
  *   - { name: sortBy, in: query, schema: { type: string, enum: [timestamp, severity, category, action, ipAddress, userLastName, userFirstName] } }
  *   - { name: sortDir, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
  * responses:
@@ -59,6 +60,10 @@ export const GET = withAdminAuth(
       const severity = (['INFO', 'WARNING', 'ERROR', 'SECURITY'] as const).find(
         (s) => s === severityRaw,
       );
+      const categoryRaw = (url.searchParams.get('category') ?? '').trim().toUpperCase();
+      const category = (
+        ['SYSTEM', 'USER', 'COURSE', 'ASSIGNMENT', 'PROBLEM', 'SUBMISSION'] as const
+      ).find((c) => c === categoryRaw);
 
       // Combine the (optional) text search and the (optional) severity filter.
       const conditions: Prisma.ActivityLogWhereInput[] = [];
@@ -85,6 +90,7 @@ export const GET = withAdminAuth(
         });
       }
       if (severity) conditions.push({ severity });
+      if (category) conditions.push({ category });
       const where: Prisma.ActivityLogWhereInput = conditions.length ? { AND: conditions } : {};
 
       // Sorting: only known columns are allowed. `userId` sorts by the author's

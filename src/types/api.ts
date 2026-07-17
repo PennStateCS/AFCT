@@ -755,7 +755,7 @@ export interface paths {
         };
         /**
          * Get a course's activity feed
-         * @description Returns a paginated activity feed for one course: logs tied directly to the  course plus its assignments, problems, submissions, and recent logins by course  members. Any enrolled member of the course (any role) or a system admin.
+         * @description Returns a paginated activity feed for one course: course/assignment/problem/  submission activity plus member logins. Course-content activity by admins (even if  not enrolled) and enrolled staff (Faculty/TA) shows any time — so an admin creating  or editing a problem before the term is included — while other members' content and  all member logins are clipped to the course's start/end dates. Admin logins are never  shown (only their course edits). Staff-only to read (see access gate below).
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/activity/route.ts)
          */
@@ -2123,6 +2123,7 @@ export interface operations {
                 /** @description Match on action, category, or author name/email */
                 q?: string;
                 severity?: "INFO" | "WARNING" | "ERROR" | "SECURITY";
+                category?: "SYSTEM" | "USER" | "COURSE" | "ASSIGNMENT" | "PROBLEM" | "SUBMISSION";
                 sortBy?: "timestamp" | "severity" | "category" | "action" | "ipAddress" | "userLastName" | "userFirstName";
                 sortDir?: "asc" | "desc";
             };
