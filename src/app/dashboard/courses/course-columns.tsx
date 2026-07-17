@@ -21,6 +21,7 @@ import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
 import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { CompactDate } from '@/components/ui/CompactDate';
+import { formatRegistrationCode } from '@/lib/format-registration-code';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, mutateWithToast } from '@/lib/api/fetch-client';
 import { truncate } from '@/lib/utils';
@@ -153,12 +154,7 @@ export const columns = (
     accessorKey: 'regCode',
     meta: { priority: 2 },
     header: 'Registration Code',
-    cell: ({ row }) => {
-      const raw = row.getValue<string>('regCode') || '';
-      const upper = raw.toUpperCase();
-      const formatted = upper.length === 8 ? `${upper.slice(0, 4)}-${upper.slice(4)}` : upper;
-      return <span>{formatted}</span>;
-    },
+    cell: ({ row }) => <span>{formatRegistrationCode(row.getValue<string>('regCode'))}</span>,
   },
   {
     accessorKey: 'startDate',
