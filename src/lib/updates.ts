@@ -9,6 +9,13 @@ export const UPDATE_REQUEST_FILE = path.join(UPDATE_TRIGGER_DIR, 'request.json')
 export const UPDATE_STATUS_FILE = path.join(UPDATE_TRIGGER_DIR, 'status.json');
 // The version -> pre-upgrade-backup map the updater records; drives downgrade.
 export const UPDATE_RESTORE_POINTS_FILE = path.join(UPDATE_TRIGGER_DIR, 'restore-points.json');
+// The updater sidecar stamps this (an epoch) every few seconds while it runs. The
+// app has no Docker access, so a fresh file here is how it knows the sidecar is
+// actually installed and running.
+export const UPDATE_PRESENCE_FILE = path.join(UPDATE_TRIGGER_DIR, 'updater.alive');
+// Generous vs the updater's ~5s beat: tolerates a busy loop / long upgrade without
+// falsely reporting the sidecar as gone.
+const UPDATER_PRESENCE_MAX_AGE_MS = 180_000;
 
 // The curated release manifest: the list of versions an admin may upgrade to.
 // Fetched from the repo by default so it isn't frozen to the running image's own
@@ -79,6 +86,17 @@ export async function fetchManifest(): Promise<ReleaseManifest> {
     ? data.versions.filter((v): v is ReleaseVersion => !!v && isValidTag(v.tag))
     : [];
   return { versions };
+}
+
+// Whether the privileged updater sidecar is installed and running. False when its
+// heartbeat is missing or stale (sidecar disabled, not deployed, or stopped), in
+// which case in-app upgrades/downgrades can't be performed.
+export function updaterAvailable(): boolean {
+  try {
+    return Date.now() - fs.statSync(UPDATE_PRESENCE_FILE).mtimeMs < UPDATER_PRESENCE_MAX_AGE_MS;
+  } catch {
+    return false;
+  }
 }
 
 // The updater's most recent progress, or null if nothing has run / the volume

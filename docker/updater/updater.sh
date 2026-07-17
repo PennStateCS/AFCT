@@ -67,7 +67,16 @@ ONCE="${UPDATER_ONCE:-false}"
 # iteration during a long upgrade) stamps the current epoch here, so the healthcheck
 # can tell a live-but-idle watcher from a hung one — a bare "Up" cannot.
 HEARTBEAT_FILE="${UPDATER_HEARTBEAT_FILE:-/tmp/afct-updater.alive}"
-beat() { date +%s > "$HEARTBEAT_FILE" 2>/dev/null || true; }
+# A second heartbeat in the SHARED trigger volume. The app can't see Docker, so this
+# is how it tells whether the updater sidecar is actually installed and running: the
+# Updates tab reads it and, when it's missing or stale, shows "not installed"
+# guidance instead of an upgrade button that would do nothing.
+PRESENCE_FILE="${UPDATER_PRESENCE_FILE:-${TRIGGER_DIR}/updater.alive}"
+beat() {
+  _beat_now=$(date +%s)
+  printf '%s\n' "$_beat_now" > "$HEARTBEAT_FILE" 2>/dev/null || true
+  printf '%s\n' "$_beat_now" > "$PRESENCE_FILE" 2>/dev/null || true
+}
 
 # Docker tags: letters, digits, and . _ - only; up to 128 chars; not starting
 # with a separator. This blocks whitespace, slashes, and shell metacharacters.

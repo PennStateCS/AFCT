@@ -8,6 +8,7 @@ const updatesMock = vi.hoisted(() => ({
   isValidTag: vi.fn(() => true),
   isValidRestorePoint: vi.fn(() => true),
   readStatus: vi.fn(() => null),
+  updaterAvailable: vi.fn(() => true),
   readRestorePoints: vi.fn(() => []),
   writeUpdateRequest: vi.fn(),
   writeDowngradeRequest: vi.fn(),
@@ -62,6 +63,13 @@ describe('GET /api/admin/settings/upgrade', () => {
     expect(body.current).toBe('v1.0.0');
     expect(body.versions.map((v: { tag: string }) => v.tag)).toEqual(['v1.0.0', 'v1.1.0']);
     expect(body.manifestError).toBe(false);
+    expect(body.updaterAvailable).toBe(true);
+  });
+
+  it('reports updaterAvailable=false when the sidecar heartbeat is absent', async () => {
+    updatesMock.updaterAvailable.mockReturnValue(false);
+    const body = await (await GET(req(), routeCtx())).json();
+    expect(body.updaterAvailable).toBe(false);
   });
 
   it('degrades gracefully when the manifest cannot be fetched', async () => {

@@ -12,6 +12,7 @@ import {
   isValidRestorePoint,
   readRestorePoints,
   readStatus,
+  updaterAvailable,
   writeDowngradeRequest,
   writeUpdateRequest,
   type ReleaseVersion,
@@ -34,6 +35,7 @@ import {
  *             status: { type: object, nullable: true }
  *             versions: { type: array, items: { type: object } }
  *             manifestError: { type: boolean }
+ *             updaterAvailable: { type: boolean }
  *   403: { description: Caller is not a system administrator. }
  */
 export const GET = withAdminAuth(
@@ -52,6 +54,7 @@ export const GET = withAdminAuth(
       status: readStatus(),
       versions,
       manifestError,
+      updaterAvailable: updaterAvailable(),
       restorePoints: readRestorePoints(),
     });
   },

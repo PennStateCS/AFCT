@@ -329,6 +329,8 @@ export default function SystemSettingsClient() {
     (v) => v.tag !== upgradeInfo?.current,
   );
   const selectedVersionInfo = upgradeableVersions.find((v) => v.tag === selectedVersion);
+  // Treated as available until the first load resolves, so the guidance doesn't flash.
+  const updaterAvailable = upgradeInfo?.updaterAvailable !== false;
   // Downgrade (restore) confirm: destructive, so gated behind a type-the-version box.
   const [restoreTarget, setRestoreTarget] = useState<{ version: string; backup: string } | null>(
     null,
@@ -1053,7 +1055,30 @@ export default function SystemSettingsClient() {
                   </div>
                 )}
 
-                {upgradeInfo?.manifestError ? (
+                {!updaterAvailable ? (
+                  <div
+                    role="note"
+                    className="max-w-xl space-y-2 rounded-md border border-amber-500/40 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                  >
+                    <p className="font-medium">The update service isn’t installed.</p>
+                    <p>
+                      In-app upgrades and downgrades need the privileged updater
+                      component, which isn’t running on this server. It holds the Docker
+                      socket, so it’s off by default.
+                    </p>
+                    <p>
+                      To enable it, run this on the server, in the directory that
+                      contains <code className="font-mono">docker-compose.yml</code>:
+                    </p>
+                    <pre className="bg-background/60 overflow-x-auto rounded border p-2 font-mono text-xs">
+                      sh install.sh enable-updater
+                    </pre>
+                    <p>
+                      Then reopen this tab. If your installer predates this command, run{' '}
+                      <code className="font-mono">sh install.sh self-update</code> first.
+                    </p>
+                  </div>
+                ) : upgradeInfo?.manifestError ? (
                   <p className="text-muted-foreground text-sm">
                     The list of available versions could not be loaded. Check the
                     server’s network access and reopen this tab to retry.

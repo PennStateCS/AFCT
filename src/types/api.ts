@@ -2628,6 +2628,7 @@ export interface operations {
                         status?: Record<string, never> | null;
                         versions?: Record<string, never>[];
                         manifestError?: boolean;
+                        updaterAvailable?: boolean;
                     };
                 };
             };

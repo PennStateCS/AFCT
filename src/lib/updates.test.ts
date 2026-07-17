@@ -5,6 +5,7 @@ const fsMock = vi.hoisted(() => ({
   writeFileSync: vi.fn(),
   renameSync: vi.fn(),
   readFileSync: vi.fn(),
+  statSync: vi.fn(),
 }));
 vi.mock('fs', () => ({ default: fsMock, ...fsMock }));
 
@@ -15,6 +16,7 @@ import {
   fetchManifest,
   readStatus,
   readRestorePoints,
+  updaterAvailable,
   writeUpdateRequest,
   writeDowngradeRequest,
   UPDATE_REQUEST_FILE,
@@ -83,6 +85,23 @@ describe('readStatus', () => {
       throw new Error('ENOENT');
     });
     expect(readStatus()).toBeNull();
+  });
+});
+
+describe('updaterAvailable', () => {
+  it('true when the sidecar heartbeat is fresh', () => {
+    fsMock.statSync.mockReturnValue({ mtimeMs: Date.now() - 2_000 });
+    expect(updaterAvailable()).toBe(true);
+  });
+  it('false when the heartbeat is stale', () => {
+    fsMock.statSync.mockReturnValue({ mtimeMs: Date.now() - 10 * 60_000 });
+    expect(updaterAvailable()).toBe(false);
+  });
+  it('false when the heartbeat file is missing', () => {
+    fsMock.statSync.mockImplementation(() => {
+      throw new Error('ENOENT');
+    });
+    expect(updaterAvailable()).toBe(false);
   });
 });
 

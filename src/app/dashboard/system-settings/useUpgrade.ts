@@ -32,6 +32,9 @@ export type UpgradeInfo = {
   status: UpdateStatus | null;
   versions: ReleaseVersion[];
   manifestError: boolean;
+  // False when the privileged updater sidecar isn't installed/running, so in-app
+  // upgrades and downgrades can't be performed.
+  updaterAvailable: boolean;
   restorePoints: RestorePoint[];
 };
 

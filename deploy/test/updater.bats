@@ -192,6 +192,15 @@ serve_restore() {
   [ "$(tag_now)" = "v0.9.0" ]
 }
 
+@test "the updater stamps a presence heartbeat in the shared trigger volume" {
+  # The app (no Docker access) reads this to know the sidecar is installed/running.
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"p1","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ -s "$TESTDIR/triggers/updater.alive" ]                 # a value was written
+  run grep -Eq '^[0-9]+$' "$TESTDIR/triggers/updater.alive"; [ "$status" -eq 0 ]  # an epoch
+}
+
 @test "the updater stamps a liveness heartbeat the healthcheck can read" {
   export UPDATER_HEARTBEAT_FILE="$TESTDIR/heartbeat"
   request '{"action":"upgrade","tag":"v1.1.0","requestId":"hb1","backupFirst":false}'
