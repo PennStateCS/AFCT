@@ -4,10 +4,13 @@ import React from 'react';
 
 import type {
   ColumnDef,
+  ColumnFiltersState,
   VisibilityState,
   SortingState,
   PaginationState,
   OnChangeFn,
+  FilterFn,
+  Row,
   Table as TanstackTable,
   Column as TanstackColumn,
 } from '@tanstack/react-table';
@@ -17,6 +20,8 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   getFilteredRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
   useReactTable,
 } from '@tanstack/react-table';
 import {
@@ -28,7 +33,7 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -37,6 +42,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import { DataTableFacetedFilter } from '@/components/ui/data-table-faceted-filter';
 import {
   Filter,
   ArrowUp,
@@ -70,8 +76,29 @@ declare module '@tanstack/react-table' {
   interface ColumnMeta<TData, TValue> {
     priority?: number;
     align?: ColumnAlign;
+    /** Opt this column into a faceted value filter (multi-select of its values). */
+    filterVariant?: 'multiselect';
+    /** Label for the filter button / search scope / mobile card (defaults to the
+     *  string header, else the column id). */
+    filterLabel?: string;
+    /** Fixed, friendly options for the value filter. Without it, the distinct
+     *  values found in the data are used (good for plain string columns; set this
+     *  for boolean/coded columns so the picker shows real labels). */
+    filterOptions?: { label: string; value: string }[];
+    /** Hide this column from the stacked mobile card view. */
+    mobileHidden?: boolean;
   }
 }
+
+/**
+ * Matches a row when the column's value is one of the selected values. An empty /
+ * missing selection is a no-op (row passes). Values are compared as strings so
+ * boolean and numeric columns work with the string option values the UI stores.
+ */
+const multiSelectFilter: FilterFn<unknown> = (row, columnId, filterValue) => {
+  if (!Array.isArray(filterValue) || filterValue.length === 0) return true;
+  return filterValue.includes(String(row.getValue(columnId)));
+};
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 75, 100];
 
@@ -94,11 +121,17 @@ const ariaSort = (
   return 'none';
 };
 
-/** The table's toolbar: global search, caller action buttons, CSV export, column filter. */
+/** The table's toolbar: scoped global search, caller action buttons, CSV export,
+ *  column visibility, and (row 2) a faceted value-filter for each opted-in column. */
 function DataTableToolbar<TData>({
   table,
   globalFilter,
   setGlobalFilter,
+  searchScope,
+  setSearchScope,
+  searchableColumns,
+  filterableColumns,
+  hasActiveColumnFilters,
   actionButtons,
   showExportButton,
   onExport,
@@ -108,6 +141,11 @@ function DataTableToolbar<TData>({
   table: TanstackTable<TData>;
   globalFilter: string;
   setGlobalFilter: (value: string) => void;
+  searchScope: string;
+  setSearchScope: (value: string) => void;
+  searchableColumns: TanstackColumn<TData, unknown>[];
+  filterableColumns: TanstackColumn<TData, unknown>[];
+  hasActiveColumnFilters: boolean;
   actionButtons?: React.ReactNode;
   showExportButton: boolean;
   onExport: () => void;
@@ -115,74 +153,188 @@ function DataTableToolbar<TData>({
   getColumnLabel: (column: TanstackColumn<TData, unknown>) => string;
 }) {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <label htmlFor="table-search" className="sr-only">
-        Search table data
-      </label>
+    <div className="space-y-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <label htmlFor="table-search" className="sr-only">
+          Search table data
+        </label>
 
-      <div className="relative w-full sm:max-w-sm">
-        <Input
-          id="table-search"
-          placeholder="Search..."
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="pr-8"
-        />
-        {globalFilter && (
-          <button
-            type="button"
-            onClick={() => setGlobalFilter('')}
-            className="absolute top-1/2 right-2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-            aria-label="Clear search"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
+        <div className="flex w-full gap-2 sm:max-w-md">
+          {searchableColumns.length > 0 && (
+            <Select value={searchScope} onValueChange={setSearchScope}>
+              <SelectTrigger className="w-auto shrink-0" aria-label="Search scope">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All columns</SelectItem>
+                {searchableColumns.map((col) => (
+                  <SelectItem key={col.id} value={col.id}>
+                    {getColumnLabel(col)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <div className="relative w-full">
+            <Input
+              id="table-search"
+              placeholder="Search..."
+              value={globalFilter}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              className="pr-8"
+            />
+            {globalFilter && (
+              <button
+                type="button"
+                onClick={() => setGlobalFilter('')}
+                className="absolute top-1/2 right-2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {actionButtons}
+
+          {showExportButton ? (
+            <Button variant="outline" onClick={onExport} aria-label="Export table data to CSV">
+              <FileDown className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Export to CSV</span>
+            </Button>
+          ) : null}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" aria-label="Filter columns">
+                <Filter className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Filter Columns</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {table
+                .getAllLeafColumns()
+                .filter((col) => col.getCanHide())
+                .map((col) => (
+                  <DropdownMenuCheckboxItem
+                    key={col.id}
+                    className="capitalize"
+                    checked={col.getIsVisible()}
+                    onCheckedChange={(value) => col.toggleVisibility(!!value)}
+                  >
+                    {getColumnLabel(col)}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onResetColumns} className="text-red-600 hover:text-red-700">
+                Reset Columns
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {actionButtons}
-
-        {showExportButton ? (
-          <Button variant="outline" onClick={onExport} aria-label="Export table data to CSV">
-            <FileDown className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Export to CSV</span>
-          </Button>
-        ) : null}
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" aria-label="Filter columns">
-              <Filter className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Filter Columns</span>
+      {filterableColumns.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {filterableColumns.map((col) => (
+            <DataTableFacetedFilter
+              key={col.id}
+              column={col}
+              title={getColumnLabel(col)}
+              options={col.columnDef.meta?.filterOptions}
+            />
+          ))}
+          {hasActiveColumnFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => table.resetColumnFilters()}
+              className="px-2"
+            >
+              Clear filters
+              <X className="ml-1 h-4 w-4" aria-hidden="true" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table
-              .getAllLeafColumns()
-              .filter((col) => col.getCanHide())
-              .map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.id}
-                  className="capitalize"
-                  checked={col.getIsVisible()}
-                  onCheckedChange={(value) => col.toggleVisibility(!!value)}
-                >
-                  {getColumnLabel(col)}
-                </DropdownMenuCheckboxItem>
-              ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onResetColumns} className="text-red-600 hover:text-red-700">
-              Reset Columns
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Prev/next paging, an optional total, and a page-size select. Presentation only,
+ *  so it can render inside the desktop table footer or below the mobile cards. */
+function PaginationControls<TData>({
+  table,
+  rowCount,
+  manualPagination,
+}: {
+  table: TanstackTable<TData>;
+  rowCount?: number;
+  manualPagination: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-foreground flex items-center gap-1 font-normal">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => table.previousPage()}
+          disabled={!table.getCanPreviousPage()}
+          aria-label="Previous page"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <span className="px-2 whitespace-nowrap" aria-live="polite">
+          Page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => table.nextPage()}
+          disabled={!table.getCanNextPage()}
+          aria-label="Next page"
+        >
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
+
+      <div className="text-foreground flex items-center gap-3 font-normal">
+        {typeof rowCount === 'number' ? (
+          <span className="text-muted-foreground text-sm whitespace-nowrap" aria-live="polite">
+            {rowCount} total
+          </span>
+        ) : null}
+        {/* Client-side filtering has no visible total; announce the filtered count
+            to screen readers so search results aren't silent. */}
+        {!manualPagination ? (
+          <span className="sr-only" aria-live="polite">
+            {table.getFilteredRowModel().rows.length} results
+          </span>
+        ) : null}
+        <Select
+          value={String(table.getState().pagination.pageSize)}
+          onValueChange={(value) => table.setPageSize(Number(value))}
+        >
+          <SelectTrigger aria-label="Rows per page">
+            <SelectValue placeholder="Select rows per page" />
+          </SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <SelectItem key={size} value={String(size)}>
+                {size} / page
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );
 }
 
-/** The table's footer row: prev/next paging, an optional total, and a page-size select. */
+/** The desktop footer row wrapper around PaginationControls. */
 function DataTablePagination<TData>({
   table,
   rowCount,
@@ -206,66 +358,112 @@ function DataTablePagination<TData>({
         }}
       >
         <TableCell colSpan={colSpan}>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-foreground flex items-center gap-1 font-normal">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                aria-label="Previous page"
-              >
-                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              </Button>
-              <span className="px-2 whitespace-nowrap" aria-live="polite">
-                Page {table.getState().pagination.pageIndex + 1} of{' '}
-                {Math.max(1, table.getPageCount())}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                aria-label="Next page"
-              >
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </div>
-
-            <div className="text-foreground flex items-center gap-3 font-normal">
-              {typeof rowCount === 'number' ? (
-                <span className="text-muted-foreground text-sm whitespace-nowrap" aria-live="polite">
-                  {rowCount} total
-                </span>
-              ) : null}
-              {/* Client-side filtering has no visible total; announce the filtered count
-                  to screen readers so search results aren't silent. */}
-              {!manualPagination ? (
-                <span className="sr-only" aria-live="polite">
-                  {table.getFilteredRowModel().rows.length} results
-                </span>
-              ) : null}
-              <Select
-                value={String(table.getState().pagination.pageSize)}
-                onValueChange={(value) => table.setPageSize(Number(value))}
-              >
-                <SelectTrigger aria-label="Rows per page">
-                  <SelectValue placeholder="Select rows per page" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map((size) => (
-                    <SelectItem key={size} value={String(size)}>
-                      {size} / page
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <PaginationControls
+            table={table}
+            rowCount={rowCount}
+            manualPagination={manualPagination}
+          />
         </TableCell>
       </TableRow>
     </TableFooter>
   );
+}
+
+/**
+ * Stacked card view for narrow screens: each row becomes a card of label/value
+ * pairs (labels are the column headers, values the same cell renderers as the
+ * table), with the actions column pinned to the card footer. Avoids the sideways
+ * scroll a wide table forces on a phone.
+ */
+function DataTableCards<TData>({
+  table,
+  loading,
+  getColumnLabel,
+}: {
+  table: TanstackTable<TData>;
+  loading: boolean;
+  getColumnLabel: (column: TanstackColumn<TData, unknown>) => string;
+}) {
+  if (loading) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center gap-2 rounded-md border py-10 text-gray-500"
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+        <span>Loading data, please wait...</span>
+      </div>
+    );
+  }
+
+  const rows = table.getRowModel().rows;
+  if (!rows.length) {
+    return (
+      <div className="text-muted-foreground flex flex-col items-center rounded-md border py-8">
+        <Inbox className="mb-2 h-10 w-10 text-gray-400" />
+        <p className="font-medium">No data found</p>
+        <p className="text-sm">Try adjusting filters or adding new entries.</p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {rows.map((row: Row<TData>) => {
+        const cells = row.getVisibleCells();
+        const actionsCell = cells.find((c) => c.column.id === 'actions');
+        const bodyCells = cells.filter(
+          (c) => c.column.id !== 'actions' && !c.column.columnDef.meta?.mobileHidden,
+        );
+        return (
+          <li
+            key={row.id}
+            className="rounded-md border bg-[var(--table-background)] p-4"
+          >
+            <dl className="grid gap-2">
+              {bodyCells.map((cell) => (
+                <div
+                  key={cell.id}
+                  className="flex items-start justify-between gap-4 text-sm"
+                >
+                  <dt className="text-muted-foreground font-medium">
+                    {getColumnLabel(cell.column)}
+                  </dt>
+                  <dd className="min-w-0 text-right break-words">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {actionsCell ? (
+              <div className="mt-3 flex justify-end border-t pt-3">
+                {flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * Below 768px, present rows as stacked cards instead of a horizontally scrolling
+ * table. Guards against jsdom / SSR where matchMedia is absent: returns false
+ * until mounted, so the server and tests render the desktop table.
+ */
+function useStackedView() {
+  const [stacked, setStacked] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia('(max-width: 767px)');
+    const update = () => setStacked(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
+  return stacked;
 }
 
 interface DataTableProps<TData, TValue> {
@@ -331,6 +529,35 @@ export function DataTable<TData, TValue>({
   const globalFilter = globalFilterProp ?? internalGlobalFilter;
   const setGlobalFilter = onGlobalFilterChange ?? setInternalGlobalFilter;
 
+  // Client-side value filters (faceted). Server mode owns its own filtering.
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
+  // Search scope: 'all' searches every column, otherwise only the named column.
+  // Read through a ref inside the (stable) global filter fn so changing scope
+  // doesn't need a new function identity / table rebuild.
+  const [searchScope, setSearchScope] = useState('all');
+  const searchScopeRef = useRef(searchScope);
+  searchScopeRef.current = searchScope;
+  const scopedGlobalFilter = useCallback<FilterFn<TData>>((row, columnId, value) => {
+    const scope = searchScopeRef.current;
+    if (scope !== 'all' && columnId !== scope) return false;
+    return String(row.getValue(columnId) ?? '')
+      .toLowerCase()
+      .includes(String(value).toLowerCase());
+  }, []);
+
+  // Attach the multiselect filter fn to any column that opts into value filtering,
+  // so callers only need to set `meta.filterVariant` (declarative, no filterFn wiring).
+  const tableColumns = useMemo(
+    () =>
+      columns.map((col) =>
+        col.meta?.filterVariant
+          ? { ...col, enableColumnFilter: true, filterFn: multiSelectFilter as FilterFn<TData> }
+          : col,
+      ),
+    [columns],
+  );
+
   const [internalSorting, setInternalSorting] = useState<SortingState>([]);
   const sorting = sortingProp ?? internalSorting;
 
@@ -357,7 +584,7 @@ export function DataTable<TData, TValue>({
 
   const table = useReactTable<TData>({
     data,
-    columns,
+    columns: tableColumns,
     // Use a stable row id (if provided on the data object) so pagination
     // and internal row caching won't mix rows between pages. Defaults to
     // index-based ids which can cause cells to show stale values when
@@ -377,20 +604,26 @@ export function DataTable<TData, TValue>({
       columnVisibility,
       sorting,
       pagination,
+      columnFilters,
     },
     manualPagination,
     manualSorting,
     manualFiltering,
     pageCount: manualPagination ? (pageCount ?? -1) : undefined,
     rowCount: manualPagination ? rowCount : undefined,
+    globalFilterFn: scopedGlobalFilter,
     onGlobalFilterChange: handleGlobalFilterChange,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnFiltersChange: setColumnFilters,
     onSortingChange: handleSortingChange,
     onPaginationChange: handlePaginationChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: manualSorting ? undefined : getSortedRowModel(),
     getFilteredRowModel: manualFiltering ? undefined : getFilteredRowModel(),
     getPaginationRowModel: manualPagination ? undefined : getPaginationRowModel(),
+    // Faceted models power the value-filter option lists + counts (client mode only).
+    getFacetedRowModel: manualFiltering ? undefined : getFacetedRowModel(),
+    getFacetedUniqueValues: manualFiltering ? undefined : getFacetedUniqueValues(),
   });
 
   const exportToCSV = () => {
@@ -434,6 +667,8 @@ export function DataTable<TData, TValue>({
   };
 
   const getColumnFilterLabel = (column: ReturnType<typeof table.getAllLeafColumns>[number]) => {
+    const label = column.columnDef.meta?.filterLabel;
+    if (label && label.trim().length > 0) return label;
     const header = column.columnDef.header;
     if (typeof header === 'string' && header.trim().length > 0) {
       return header;
@@ -445,12 +680,35 @@ export function DataTable<TData, TValue>({
     return getColumnFilterLabel(column).toLowerCase();
   };
 
+  // Value-filter and search-scope only make sense client-side (server mode owns
+  // filtering and doesn't have every value on hand).
+  const leafColumns = table.getAllLeafColumns();
+  const filterableColumns = manualFiltering
+    ? []
+    : leafColumns.filter((col) => col.columnDef.meta?.filterVariant);
+  const searchableColumns = manualFiltering
+    ? []
+    : leafColumns.filter(
+        (col) =>
+          col.getCanGlobalFilter() &&
+          col.id !== 'actions' &&
+          typeof col.columnDef.header === 'string',
+      );
+  const hasActiveColumnFilters = columnFilters.length > 0;
+
+  const stacked = useStackedView();
+
   return (
     <div className="space-y-4">
       <DataTableToolbar
         table={table}
         globalFilter={globalFilter}
         setGlobalFilter={setGlobalFilter}
+        searchScope={searchScope}
+        setSearchScope={setSearchScope}
+        searchableColumns={searchableColumns}
+        filterableColumns={filterableColumns}
+        hasActiveColumnFilters={hasActiveColumnFilters}
         actionButtons={actionButtons}
         showExportButton={showExportButton}
         onExport={exportToCSV}
@@ -458,11 +716,23 @@ export function DataTable<TData, TValue>({
         getColumnLabel={getColumnFilterLabel}
       />
 
-      {/* Single scroll container: the Table primitive already wraps the table in an
-          overflow-x-auto div, so this wrapper only frames it (a second overflow-x-auto
-          here produced a doubled/flaky horizontal scrollbar). overflow-hidden keeps the
-          rounded corners clipping the scrolling content. */}
-      <div className="overflow-hidden rounded-md border">
+      {stacked ? (
+        <div className="space-y-3">
+          <DataTableCards table={table} loading={loading} getColumnLabel={getColumnFilterLabel} />
+          <div className="rounded-md border p-3">
+            <PaginationControls
+              table={table}
+              rowCount={rowCount}
+              manualPagination={manualPagination}
+            />
+          </div>
+        </div>
+      ) : (
+        /* Single scroll container: the Table primitive already wraps the table in an
+           overflow-x-auto div, so this wrapper only frames it (a second overflow-x-auto
+           here produced a doubled/flaky horizontal scrollbar). overflow-hidden keeps the
+           rounded corners clipping the scrolling content. */
+        <div className="overflow-hidden rounded-md border">
         <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
           <TableHeader role="rowgroup">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -580,7 +850,8 @@ export function DataTable<TData, TValue>({
             colSpan={columns.length}
           />
         </Table>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

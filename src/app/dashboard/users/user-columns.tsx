@@ -76,7 +76,15 @@ export function getUserColumns(
     {
       accessorKey: 'isAdmin',
       header: 'Admin',
-      meta: { priority: 3 },
+      meta: {
+        priority: 3,
+        filterVariant: 'multiselect',
+        filterLabel: 'Admin',
+        filterOptions: [
+          { label: 'Admin', value: 'true' },
+          { label: 'Standard', value: 'false' },
+        ],
+      },
       cell: ({ row }) =>
         row.original.isAdmin ? (
           <StatusBadge variant="success">Admin</StatusBadge>
@@ -87,7 +95,15 @@ export function getUserColumns(
     {
       accessorKey: 'inactive',
       header: 'Status',
-      meta: { priority: 4 },
+      meta: {
+        priority: 4,
+        filterVariant: 'multiselect',
+        filterLabel: 'Status',
+        filterOptions: [
+          { label: 'Active', value: 'false' },
+          { label: 'Inactive', value: 'true' },
+        ],
+      },
       cell: ({ row }) => {
         const inactive = row.getValue<boolean>('inactive');
         return inactive ? (

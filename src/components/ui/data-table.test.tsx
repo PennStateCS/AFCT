@@ -2,7 +2,7 @@
 
 import React from 'react';
 import '@/components/ui/data-table';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -55,6 +55,13 @@ describe('DataTable', () => {
       return element as HTMLElement;
     }) as unknown as typeof document.createElement);
     clickMock.mockReset();
+    // Popover/Command (Radix + cmdk) call scrollIntoView, which jsdom lacks.
+    (Element.prototype as any).scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    // Leave the desktop (no matchMedia) default in place for other tests.
+    delete (window as any).matchMedia;
   });
 
   it('filters rows with the global search input', async () => {
@@ -110,5 +117,62 @@ describe('DataTable', () => {
     expect(spy).not.toHaveBeenCalledWith(
       expect.stringContaining('Encountered two children with the same key'),
     );
+  });
+
+  it('filters rows with a faceted value filter', async () => {
+    const user = userEvent.setup();
+    const facetColumns: ColumnDef<RowData>[] = [
+      { accessorKey: 'name', header: 'Name', meta: { priority: 1 } },
+      {
+        accessorKey: 'role',
+        header: 'Role',
+        meta: { priority: 2, filterVariant: 'multiselect' },
+      },
+    ];
+
+    render(<DataTable columns={facetColumns} data={data} />);
+
+    // Open the Role value filter and pick "Admin".
+    await user.click(screen.getByRole('button', { name: 'Role' }));
+    await user.click(await screen.findByRole('option', { name: /admin/i }));
+
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+    expect(screen.queryByText('Carol')).not.toBeInTheDocument();
+
+    // A "Clear filters" affordance appears while a filter is active.
+    expect(screen.getByRole('button', { name: /clear filters/i })).toBeInTheDocument();
+  });
+
+  it('does not render a value-filter row when no column opts in', () => {
+    render(<DataTable columns={columns} data={data} />);
+    // No faceted filter button for plain columns.
+    expect(screen.queryByRole('button', { name: 'Role' })).not.toBeInTheDocument();
+  });
+
+  it('offers a search scope selector for searchable columns', () => {
+    render(<DataTable columns={columns} data={data} />);
+    expect(screen.getByRole('combobox', { name: /search scope/i })).toBeInTheDocument();
+  });
+
+  it('renders a stacked card view on small screens', async () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+
+    render(<DataTable columns={columns} data={data} />);
+
+    // The effect flips to the card view; the desktop <table> is gone.
+    expect(await screen.findByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    // Each card labels its values with the column header (one per row).
+    expect(screen.getAllByText('Role').length).toBeGreaterThan(1);
   });
 });

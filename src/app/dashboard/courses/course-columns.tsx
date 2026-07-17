@@ -141,14 +141,14 @@ export const columns = (
   },
   {
     accessorKey: 'semester',
-    meta: { priority: 3 },
+    meta: { priority: 3, filterVariant: 'multiselect' },
     header: 'Semester',
   },
   {
     id: 'registrationStatus',
     accessorFn: (row) =>
       getRegistrationStatus(row.registrationOpenAt, row.registrationCloseAt).label,
-    meta: { priority: 3 },
+    meta: { priority: 3, filterVariant: 'multiselect', filterLabel: 'Registration' },
     header: 'Registration',
     cell: ({ row }) => {
       const registrationStatus = getRegistrationStatus(
