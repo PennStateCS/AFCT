@@ -152,7 +152,13 @@ services:
       context: .
       dockerfile: docker/Dockerfile.dev
     container_name: afct-prisma-studio
-    restart: unless-stopped
+    # Opt-in only: start it with `docker compose --profile studio up -d prisma-studio`.
+    # It is NOT part of the default dev stack. Under Prisma 7 `npx prisma studio`
+    # exits immediately, and with an always-restart policy that became a tight loop
+    # that re-ran `prisma generate` every ~20s and starved the dev server. Gating it
+    # behind a profile and using `restart: no` prevents that.
+    profiles: ['studio']
+    restart: 'no'
     logging: *default-logging
 
     environment:
