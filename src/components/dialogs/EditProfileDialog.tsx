@@ -298,33 +298,35 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
             />
           ) : null}
 
-          {/* First Name */}
-          <Controller
-            name="firstName"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                label="First Name"
-                name="firstName"
-                fieldProps={field}
-                error={errors.firstName?.message}
-              />
-            )}
-          />
+          {/* First + last name sit side by side to save vertical space, and stack
+              on very small screens. */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Controller
+              name="firstName"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  label="First Name"
+                  name="firstName"
+                  fieldProps={field}
+                  error={errors.firstName?.message}
+                />
+              )}
+            />
 
-          {/* Last Name */}
-          <Controller
-            name="lastName"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                label="Last Name"
-                name="lastName"
-                fieldProps={field}
-                error={errors.lastName?.message}
-              />
-            )}
-          />
+            <Controller
+              name="lastName"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  label="Last Name"
+                  name="lastName"
+                  fieldProps={field}
+                  error={errors.lastName?.message}
+                />
+              )}
+            />
+          </div>
 
           {/* Timezone */}
           <Controller
