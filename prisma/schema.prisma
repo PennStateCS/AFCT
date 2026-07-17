@@ -60,6 +60,10 @@ model User {
   // sessions (e.g. an attacker's) rather than leaving them valid until expiry.
   passwordChangedAt DateTime?
 
+  // Last successful sign-in. Stored (not derived from ActivityLog) so it survives
+  // log purges; stamped in the NextAuth signIn event.
+  lastLogin DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

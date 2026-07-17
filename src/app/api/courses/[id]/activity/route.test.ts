@@ -98,23 +98,56 @@ describe('GET /api/courses/[id]/activity', () => {
     expect(body.totalCount).toBe(1);
   });
 
-  it('maps roster member ids into the login-activity filter', async () => {
+  it('shows admin + staff course-content any time (incl. non-enrolled admins); clips others', async () => {
+    const startDate = new Date('2026-01-01');
+    const endDate = new Date('2026-05-01');
     authMock.mockResolvedValue({ user: { id: 'u1' } });
-    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1', startDate, endDate });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    // Non-empty roster so the `(r) => r.userId` mapper actually runs.
-    prismaMock.roster.findMany.mockResolvedValue([{ userId: 'm1' }, { userId: 'm2' }]);
-    prismaMock.activityLog.findMany.mockResolvedValue([{ id: 'log1' }]);
-    prismaMock.activityLog.count.mockResolvedValue(1);
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 'fac', role: 'FACULTY' },
+      { userId: 'stu', role: 'STUDENT' },
+    ]);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+    prismaMock.activityLog.count.mockResolvedValue(0);
 
-    const req = new NextRequest('http://localhost/api/courses/c1/activity?limit=10&offset=0');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+    const req = new NextRequest('http://localhost/api/courses/c1/activity');
+    await GET(req, { params: Promise.resolve({ id: 'c1' }) });
 
-    expect(res.status).toBe(200);
-    // Verify the precomputed roster ids reached the WHERE clause.
     const whereArg = prismaMock.activityLog.findMany.mock.calls[0][0].where;
-    const loginClause = whereArg.OR.find((c: { AND?: unknown[] }) => Array.isArray(c.AND));
-    expect(loginClause.AND).toContainEqual({ userId: { in: ['m1', 'm2'] } });
+    const inDates = { timestamp: { gte: startDate, lte: endDate } };
+    const actorClause = whereArg.OR[0].AND[1];
+
+    // Any admin — enrolled or not — on course content, any time (covers create/edit/delete).
+    expect(actorClause.OR).toContainEqual({ user: { isAdmin: true } });
+    // Enrolled Faculty/TA, any time.
+    expect(actorClause.OR).toContainEqual({ userId: { in: ['fac'] } });
+    // Other enrolled members, only within the course dates.
+    expect(actorClause.OR).toContainEqual({ AND: [{ userId: { in: ['fac', 'stu'] } }, inDates] });
+  });
+
+  it('shows member (non-admin) logins only within the course dates', async () => {
+    const startDate = new Date('2026-01-01');
+    const endDate = new Date('2026-05-01');
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1', startDate, endDate });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 'fac', role: 'FACULTY' },
+      { userId: 'stu', role: 'STUDENT' },
+    ]);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+    prismaMock.activityLog.count.mockResolvedValue(0);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/activity');
+    await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    const loginBranch = prismaMock.activityLog.findMany.mock.calls[0][0].where.OR[1];
+    expect(loginBranch.AND).toContainEqual({ action: { contains: 'LOGIN' } });
+    expect(loginBranch.AND).toContainEqual({ userId: { in: ['fac', 'stu'] } });
+    // Admin logins are excluded (only their course edits are relevant).
+    expect(loginBranch.AND).toContainEqual({ user: { isAdmin: false } });
+    expect(loginBranch.AND).toContainEqual({ timestamp: { gte: startDate, lte: endDate } });
   });
 
   it('returns 500 when activity query fails', async () => {

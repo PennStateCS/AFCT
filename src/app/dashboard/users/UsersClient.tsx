@@ -6,7 +6,6 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { getUserColumns } from './user-columns';
 import { DataTable } from '@/components/ui/data-table';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateUserDialog } from '@/components/dialogs/CreateUserDialog';
@@ -22,7 +21,6 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
 
   const [open, setOpen] = useState(searchParams.get('create') === 'open');
   const [importOpen, setImportOpen] = useState(false);
-  const [onlyActive, setOnlyActive] = useState(false);
   const { timezone } = useEffectiveTimezone();
 
   // Cached user list: survives navigation and dedupes across the dashboard. The
@@ -44,7 +42,6 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
     staleTime: 30_000,
   });
 
-  const activeUsers = useMemo(() => users.filter((item) => !item.inactive), [users]);
   // Stable refresh handler passed to the table + dialogs (refetch is referentially
   // stable, so table columns stay memoized across unrelated re-renders).
   const refresh = useCallback(() => {
@@ -69,10 +66,6 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
           User Accounts
         </CardTitle>
         <div className="flex items-center gap-2">
-          <label className="flex cursor-pointer items-center gap-2">
-            <Checkbox checked={onlyActive} onCheckedChange={(value) => setOnlyActive(!!value)} />
-            <span className="text-sm font-medium">Show only active users</span>
-          </label>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Users />
             Import Users
@@ -98,10 +91,11 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
 
         <DataTable
           columns={columns}
-          data={onlyActive ? activeUsers : users}
+          data={users}
           loading={isLoading}
           tableLabel="Users table"
-          defaultColumnVisibility={{ createdAt: false }}
+          defaultColumnVisibility={{ isAdmin: false }}
+          defaultSorting={[{ id: 'lastName', desc: false }]}
         />
       </CardContent>
 

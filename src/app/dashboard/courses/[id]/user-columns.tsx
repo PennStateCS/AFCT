@@ -267,7 +267,16 @@ export const userColumns = (
     {
       accessorKey: 'role',
       header: 'Role',
-      meta: { priority: 2 },
+      meta: {
+        priority: 2,
+        filterVariant: 'multiselect',
+        filterLabel: 'Role',
+        filterOptions: [
+          { label: 'Faculty', value: 'FACULTY' },
+          { label: 'TA', value: 'TA' },
+          { label: 'Student', value: 'STUDENT' },
+        ],
+      },
       cell: ({ row }) => (
         <Badge
           role={(row.original as RosterUser).role as 'FACULTY' | 'TA' | 'STUDENT' | undefined}

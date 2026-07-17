@@ -49,6 +49,7 @@ export function AssignmentsCard({
             data={assignments}
             loading={isLoading}
             tableLabel="Assignments table"
+            defaultSorting={[{ id: 'dueDate', desc: false }]}
           />
         )}
       </div>

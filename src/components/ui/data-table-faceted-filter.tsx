@@ -57,32 +57,104 @@ function FilterSection<TData>({ column, label, options }: FilterableColumn<TData
     column.setFilterValue(next.size ? Array.from(next) : undefined);
   };
 
+  const labelId = React.useId();
+
   if (resolvedOptions.length === 0) return null;
 
   return (
-    <div className="space-y-1.5">
-      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{label}</p>
-      <div className="space-y-0.5">
-        {resolvedOptions.map((option) => (
-          <label
-            key={option.value}
-            className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
-          >
-            <Checkbox
-              checked={selected.has(option.value)}
-              onCheckedChange={() => toggle(option.value)}
-              aria-label={option.label}
-            />
-            <span>{option.label}</span>
-            {counts.get(option.value) !== undefined && (
-              <span className="text-muted-foreground ml-auto font-mono text-xs">
-                {counts.get(option.value)}
-              </span>
-            )}
-          </label>
-        ))}
+    <div className="w-44 space-y-1.5">
+      <p
+        id={labelId}
+        className="text-muted-foreground text-xs font-medium tracking-wide uppercase"
+      >
+        {label}
+      </p>
+      {/* Group the checkboxes under the section label so a screen reader announces
+          e.g. "Registration group" when entering it. */}
+      <div role="group" aria-labelledby={labelId} className="space-y-0.5">
+        {resolvedOptions.map((option) => {
+          const count = counts.get(option.value);
+          return (
+            <label
+              key={option.value}
+              className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
+            >
+              <Checkbox
+                checked={selected.has(option.value)}
+                onCheckedChange={() => toggle(option.value)}
+                // Fold the match count into the name so it isn't read as a stray
+                // number, but screen-reader users still get it.
+                aria-label={count !== undefined ? `${option.label}, ${count} matching` : option.label}
+              />
+              <span>{option.label}</span>
+              {count !== undefined && (
+                <span aria-hidden="true" className="text-muted-foreground ml-auto font-mono text-xs">
+                  {count}
+                </span>
+              )}
+            </label>
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+/** Shared "Filters" button + popover frame. The body sections are passed as children,
+ *  so both the column-faceted filter and the controlled server-side menu look identical. */
+function FilterPopoverShell({
+  activeCount,
+  onClearAll,
+  children,
+}: {
+  activeCount: number;
+  onClearAll: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          aria-label={activeCount > 0 ? `Filters, ${activeCount} active` : 'Filters'}
+        >
+          <ListFilter className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden sm:inline">Filters</span>
+          {activeCount > 0 && (
+            <Badge variant="secondary" aria-hidden="true" className="ml-1 rounded-sm px-1 font-normal">
+              {activeCount}
+            </Badge>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        // Grow to fill the space Radix has (its available-height/width vars) and only
+        // scroll as a last resort. Sections flow into extra columns when tall, so a
+        // long list uses horizontal room instead of a scrollbar where the screen allows.
+        className="flex max-h-[var(--radix-popover-content-available-height)] w-auto max-w-[var(--radix-popover-content-available-width)] min-w-56 flex-col p-0"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
+          <span className="text-sm font-medium">Filters</span>
+          {activeCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto px-1 py-0 text-xs"
+              onClick={onClearAll}
+            >
+              Clear all
+            </Button>
+          )}
+        </div>
+        {/* Column-direction wrap: sections stack vertically until they hit the popover's
+            (viewport-bounded) height, then flow into another column, widening up to the
+            available width before any scrollbar appears. */}
+        <div className="flex min-h-0 flex-1 flex-col flex-wrap content-start gap-x-6 gap-y-3 overflow-auto p-3">
+          {children}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -101,38 +173,70 @@ export function DataTableFilterPopover<TData>({
   onClearAll: () => void;
 }) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" aria-label="Filters">
-          <ListFilter className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Filters</span>
-          {activeCount > 0 && (
-            <Badge variant="secondary" className="ml-1 rounded-sm px-1 font-normal">
-              {activeCount}
-            </Badge>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 p-0">
-        <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-sm font-medium">Filters</span>
-          {activeCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-auto px-1 py-0 text-xs"
-              onClick={onClearAll}
-            >
-              Clear all
-            </Button>
-          )}
-        </div>
-        <div className="max-h-72 space-y-3 overflow-y-auto p-3">
-          {columns.map((c) => (
-            <FilterSection key={c.column.id} column={c.column} label={c.label} options={c.options} />
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
+    <FilterPopoverShell activeCount={activeCount} onClearAll={onClearAll}>
+      {columns.map((c) => (
+        <FilterSection key={c.column.id} column={c.column} label={c.label} options={c.options} />
+      ))}
+    </FilterPopoverShell>
+  );
+}
+
+/** A controlled filter group for server-driven pages (no client-side table/faceting):
+ *  a labelled block of checkboxes whose selection lives in the parent's state. */
+export interface FilterMenuGroup {
+  key: string;
+  label: string;
+  options: FacetOption[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+}
+
+function ControlledFilterSection({ group }: { group: FilterMenuGroup }) {
+  const labelId = React.useId();
+  const selected = new Set(group.selected);
+  const toggle = (value: string) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    group.onChange(Array.from(next));
+  };
+  return (
+    <div className="w-44 space-y-1.5">
+      <p id={labelId} className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        {group.label}
+      </p>
+      <div role="group" aria-labelledby={labelId} className="space-y-0.5">
+        {group.options.map((option) => (
+          <label
+            key={option.value}
+            className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
+          >
+            <Checkbox
+              checked={selected.has(option.value)}
+              onCheckedChange={() => toggle(option.value)}
+              aria-label={option.label}
+            />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The same "Filters" button + popover as the table faceted filter, but driven by
+ * controlled props — for server-paginated pages (e.g. System Logs) that filter on the
+ * server rather than over client rows. Each group is multi-select.
+ */
+export function DataTableFilterMenu({ groups }: { groups: FilterMenuGroup[] }) {
+  const activeCount = groups.reduce((n, g) => n + g.selected.length, 0);
+  const clearAll = () => groups.forEach((g) => g.onChange([]));
+  return (
+    <FilterPopoverShell activeCount={activeCount} onClearAll={clearAll}>
+      {groups.map((g) => (
+        <ControlledFilterSection key={g.key} group={g} />
+      ))}
+    </FilterPopoverShell>
   );
 }

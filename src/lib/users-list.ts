@@ -10,6 +10,7 @@ export type UserListItem = {
   avatar: string | null;
   timezone: string | null;
   inactive: boolean;
+  lastLogin: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -27,6 +28,7 @@ export async function getUsersList(): Promise<UserListItem[]> {
       avatar: true,
       timezone: true,
       inactive: true,
+      lastLogin: true,
       createdAt: true,
       updatedAt: true,
     },

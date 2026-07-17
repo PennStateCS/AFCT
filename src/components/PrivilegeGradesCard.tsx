@@ -213,6 +213,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         id: 'avatar',
         header: '',
         accessorKey: 'avatar',
+        enableSorting: false,
         cell: ({ row }) => {
           const user = row.original;
           return (

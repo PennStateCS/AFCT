@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { CompactDate } from '@/components/ui/CompactDate';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
@@ -130,7 +130,7 @@ export function useAssignmentColumns(
     {
       accessorKey: 'dueDate',
       header: 'Due Date',
-      cell: ({ row }) => <div>{formatDateTimeInTimeZone(row.original.dueDate, timeZone)}</div>,
+      cell: ({ row }) => <CompactDate value={row.original.dueDate} timeZone={timeZone} />,
     },
     {
       accessorKey: 'maxPoints',
@@ -161,18 +161,12 @@ export function useAssignmentColumns(
       accessorFn: (row) => (row.allowLateSubmissions ? 'Yes' : 'No'),
       cell: ({ row }) => <div>{row.original.allowLateSubmissions ? 'Yes' : 'No'}</div>,
       enableSorting: true,
-      meta: { priority: 3 },
+      meta: { priority: 3, filterVariant: 'multiselect', filterLabel: 'Allow Late' },
     },
     {
       accessorKey: 'lateCutoff',
       header: 'Late Cutoff',
-      cell: ({ row }) => (
-        <div>
-          {row.original.lateCutoff
-            ? formatDateTimeInTimeZone(row.original.lateCutoff, timeZone)
-            : '—'}
-        </div>
-      ),
+      cell: ({ row }) => <CompactDate value={row.original.lateCutoff} timeZone={timeZone} />,
       meta: { priority: 4 },
     },
     {
@@ -194,6 +188,14 @@ export function useAssignmentColumns(
     {
       accessorKey: 'isPublished',
       header: 'Published',
+      meta: {
+        filterVariant: 'multiselect',
+        filterLabel: 'Published',
+        filterOptions: [
+          { label: 'Published', value: 'true' },
+          { label: 'Unpublished', value: 'false' },
+        ],
+      },
       cell: ({ row }) => (
         <PublishSwitchCell
           assignment={row.original}

@@ -15,7 +15,7 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pencil, Trash2, Lock, User2, ChevronDown } from 'lucide-react';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { CompactDate } from '@/components/ui/CompactDate';
 
 import {
   DropdownMenu,
@@ -114,17 +114,17 @@ export function getUserColumns(
       },
     },
     {
-      accessorKey: 'createdAt',
-      header: 'Created At',
-      meta: { priority: 4 },
-      cell: ({ row }) => {
-        return formatDateTimeInTimeZone(row.original.createdAt, timeZone);
-      },
-    },
-    {
       accessorKey: 'temporaryPassword',
       header: 'Password Status',
-      meta: { priority: 3 },
+      meta: {
+        priority: 3,
+        filterVariant: 'multiselect',
+        filterLabel: 'Password Status',
+        filterOptions: [
+          { label: 'Temporary', value: 'true' },
+          { label: 'Normal', value: 'false' },
+        ],
+      },
       cell: ({ row }) => {
         const temporaryPassword = row.getValue<boolean>('temporaryPassword');
         return temporaryPassword ? (
@@ -133,6 +133,18 @@ export function getUserColumns(
           <StatusBadge variant="neutral">Normal</StatusBadge>
         );
       },
+    },
+    {
+      accessorKey: 'createdAt',
+      header: 'Created At',
+      meta: { priority: 4 },
+      cell: ({ row }) => <CompactDate value={row.original.createdAt} timeZone={timeZone} />,
+    },
+    {
+      accessorKey: 'lastLogin',
+      header: 'Last Login',
+      meta: { priority: 3 },
+      cell: ({ row }) => <CompactDate value={row.original.lastLogin} timeZone={timeZone} />,
     },
     {
       id: 'actions',

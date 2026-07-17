@@ -291,7 +291,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'category',
-    meta: { priority: 3 },
+    meta: { priority: 3, filterVariant: 'multiselect', filterLabel: 'Category' },
     header: 'Category',
     enableSorting: true,
     accessorFn: (row) => row.category || '',
@@ -299,7 +299,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'assignment',
-    meta: { priority: 2 },
+    meta: { priority: 2, filterVariant: 'multiselect', filterLabel: 'Assignment' },
     header: 'Assignment',
     enableSorting: true,
     accessorFn: (row) => {
@@ -333,7 +333,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'problem',
-    meta: { priority: 3 },
+    meta: { priority: 3, filterVariant: 'multiselect', filterLabel: 'Problem' },
     header: 'Problem',
     enableSorting: true,
     accessorFn: (row) => {
