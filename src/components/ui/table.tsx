@@ -4,15 +4,41 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledby,
+  ...props
+}: React.ComponentProps<"table">) {
+  // When the table has an accessible name, make its horizontal-scroll container a
+  // focusable, labelled region so keyboard-only users can scroll a wide table
+  // (WCAG 2.1.1). The inset focus ring stays visible even when a parent clips
+  // overflow (e.g. the DataTable's rounded border). Unlabelled tables keep the
+  // plain container — no stray tab stop or unnamed landmark.
+  const hasName = Boolean(ariaLabel || ariaLabelledby)
+
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn(
+        "relative w-full overflow-x-auto",
+        hasName &&
+          "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none",
+      )}
+      {...(hasName
+        ? {
+            role: "region",
+            tabIndex: 0,
+            "aria-label": ariaLabel,
+            "aria-labelledby": ariaLabelledby,
+          }
+        : {})}
     >
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledby}
         {...props}
       />
     </div>

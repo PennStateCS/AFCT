@@ -565,6 +565,7 @@ export default function AssignmentDashboardPage({
                 data={problemTableData}
                 loading={groupsLoading}
                 tableLabel="Assignment problems table"
+                defaultSorting={[{ id: 'title', desc: false }]}
               />
             </CardContent>
           </Card>

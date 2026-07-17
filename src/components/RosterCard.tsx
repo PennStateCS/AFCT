@@ -54,6 +54,7 @@ export function RosterCard({
         data={rosterData as unknown as User[]}
         loading={loading}
         tableLabel="Course roster table"
+        defaultSorting={[{ id: 'lastName', desc: false }]}
       />
     </div>
   );

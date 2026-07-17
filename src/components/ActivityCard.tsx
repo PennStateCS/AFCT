@@ -135,7 +135,12 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
           </div>
         ) : (
           <>
-            <DataTable columns={columns} data={activities} tableLabel="Activity log table" />
+            <DataTable
+              columns={columns}
+              data={activities}
+              tableLabel="Activity log table"
+              defaultSorting={[{ id: 'timestamp', desc: true }]}
+            />
 
             {hasMore && (
               <div className="flex justify-center pt-4">

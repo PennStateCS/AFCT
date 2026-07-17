@@ -5,9 +5,12 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { parseLimitOffset } from '@/lib/api/request';
 
 /**
- * Returns a paginated activity feed for one course: logs tied directly to the
- * course plus its assignments, problems, submissions, and recent logins by course
- * members. Any enrolled member of the course (any role) or a system admin.
+ * Returns a paginated activity feed for one course: course/assignment/problem/
+ * submission activity plus member logins. Course-content activity by admins (even if
+ * not enrolled) and enrolled staff (Faculty/TA) shows any time — so an admin creating
+ * or editing a problem before the term is included — while other members' content and
+ * all member logins are clipped to the course's start/end dates. Admin logins are never
+ * shown (only their course edits). Staff-only to read (see access gate below).
  * @openapi
  * summary: Get a course's activity feed
  * parameters:
@@ -35,7 +38,7 @@ export const GET = withCourseAuth(
     try {
       const course = await prisma.course.findFirst({
         where: { id: courseId },
-        select: { id: true },
+        select: { id: true, startDate: true, endDate: true },
       });
 
       if (!course) {
@@ -46,30 +49,61 @@ export const GET = withCourseAuth(
       const { searchParams } = new URL(request.url);
       const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
-      // Precompute the 24h login window and the course's roster user ids once, then
-      // reuse a single WHERE for both the page query and the count. Previously the
-      // clause was duplicated verbatim and used a correlated per-row rosterEntries
-      // subquery to find member logins; an `userId IN (...)` on the precomputed set
-      // is a plain indexed lookup instead.
-      const loginSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const rosterUserIds = (
-        await prisma.roster.findMany({ where: { courseId }, select: { userId: true } })
-      ).map((r) => r.userId);
+      // Roster membership drives visibility: the feed only shows activity by users
+      // enrolled in this course. Staff (Faculty/TA, or enrolled site admins) may also
+      // show course-content activity *outside* the course dates — e.g. a faculty member
+      // authoring a problem before the term starts, or grading after it ends — while
+      // everyone else (and all logins) are clipped to the course's start/end window.
+      const roster = await prisma.roster.findMany({
+        where: { courseId },
+        select: { userId: true, role: true },
+      });
+      const rosterUserIds = roster.map((r) => r.userId);
+      const staffUserIds = roster
+        .filter((r) => r.role === 'FACULTY' || r.role === 'TA')
+        .map((r) => r.userId);
 
-      const where: Prisma.ActivityLogWhereInput = {
+      // Within the course's start/end dates (inclusive).
+      const inCourseDates: Prisma.ActivityLogWhereInput = {
+        timestamp: { gte: course.startDate, lte: course.endDate },
+      };
+
+      // "Directly related to the course": linked to the course or one of its
+      // assignments / problems / submissions (bare logins and system events are not).
+      const courseLinked: Prisma.ActivityLogWhereInput = {
         OR: [
-          // Direct course activities (indexed foreign key).
           { courseId },
-          // Assignment / problem / submission activities within this course.
           { assignment: { courseId } },
           { problem: { courseId } },
           { submission: { assignmentProblem: { assignment: { courseId } } } },
-          // Recent logins by course members (last 24h).
+        ],
+      };
+
+      const where: Prisma.ActivityLogWhereInput = {
+        OR: [
+          // Course-content activity. Admins (even if not enrolled) and enrolled staff
+          // show any time; other enrolled members only within the course dates — this is
+          // what surfaces "an admin edited this assignment/problem before the term".
+          {
+            AND: [
+              courseLinked,
+              {
+                OR: [
+                  { user: { isAdmin: true } },
+                  { userId: { in: staffUserIds } },
+                  { AND: [{ userId: { in: rosterUserIds } }, inCourseDates] },
+                ],
+              },
+            ],
+          },
+          // Logins: enrolled members within the dates, but never admins — their logins
+          // are noise here, only their course edits are relevant.
           {
             AND: [
               { action: { contains: 'LOGIN' } },
-              { timestamp: { gte: loginSince } },
               { userId: { in: rosterUserIds } },
+              { user: { isAdmin: false } },
+              inCourseDates,
             ],
           },
         ],

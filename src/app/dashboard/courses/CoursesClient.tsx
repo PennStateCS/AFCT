@@ -73,6 +73,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
           data={courses}
           loading={isLoading}
           tableLabel="Courses table"
+          defaultSorting={[{ id: 'startDate', desc: false }]}
         />
       </CardContent>
 

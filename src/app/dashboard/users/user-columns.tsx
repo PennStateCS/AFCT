@@ -114,17 +114,17 @@ export function getUserColumns(
       },
     },
     {
-      accessorKey: 'createdAt',
-      header: 'Created At',
-      meta: { priority: 4 },
-      cell: ({ row }) => {
-        return formatDateTimeInTimeZone(row.original.createdAt, timeZone);
-      },
-    },
-    {
       accessorKey: 'temporaryPassword',
       header: 'Password Status',
-      meta: { priority: 3 },
+      meta: {
+        priority: 3,
+        filterVariant: 'multiselect',
+        filterLabel: 'Password Status',
+        filterOptions: [
+          { label: 'Temporary', value: 'true' },
+          { label: 'Normal', value: 'false' },
+        ],
+      },
       cell: ({ row }) => {
         const temporaryPassword = row.getValue<boolean>('temporaryPassword');
         return temporaryPassword ? (
@@ -132,6 +132,14 @@ export function getUserColumns(
         ) : (
           <StatusBadge variant="neutral">Normal</StatusBadge>
         );
+      },
+    },
+    {
+      accessorKey: 'createdAt',
+      header: 'Created At',
+      meta: { priority: 4 },
+      cell: ({ row }) => {
+        return formatDateTimeInTimeZone(row.original.createdAt, timeZone);
       },
     },
     {

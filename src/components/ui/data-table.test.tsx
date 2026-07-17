@@ -134,7 +134,7 @@ describe('DataTable', () => {
 
     // Open the combined Filters popover and tick "Admin" under the Role section.
     await user.click(screen.getByRole('button', { name: 'Filters' }));
-    await user.click(await screen.findByRole('checkbox', { name: 'Admin' }));
+    await user.click(await screen.findByRole('checkbox', { name: /^admin/i }));
 
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.queryByText('Bob')).not.toBeInTheDocument();

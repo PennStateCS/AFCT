@@ -120,7 +120,12 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       header: 'Type',
       cell: ({ row }: { row: { original: Problem } }) =>
         problemTypeLabels[row.original.type as string] || row.original.type,
-      meta: { priority: 1 },
+      meta: {
+        priority: 1,
+        filterVariant: 'multiselect' as const,
+        filterLabel: 'Type',
+        filterOptions: Object.entries(problemTypeLabels).map(([value, label]) => ({ value, label })),
+      },
       enableSorting: true,
     },
     {
@@ -177,7 +182,15 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
         if (typeof value !== 'boolean') return 'â€”';
         return value ? 'On' : 'Off';
       },
-      meta: { priority: 2 },
+      meta: {
+        priority: 2,
+        filterVariant: 'multiselect' as const,
+        filterLabel: 'Autograder',
+        filterOptions: [
+          { label: 'On', value: 'true' },
+          { label: 'Off', value: 'false' },
+        ],
+      },
       enableSorting: true,
       sortingFn: (
         rowA: { getValue: (id: string) => unknown },
@@ -198,7 +211,15 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       header: 'Deterministic',
       cell: ({ row }: { row: { original: Problem } }) =>
         row.original.isDeterministic ? 'Yes' : 'No',
-      meta: { priority: 2 },
+      meta: {
+        priority: 2,
+        filterVariant: 'multiselect' as const,
+        filterLabel: 'Deterministic',
+        filterOptions: [
+          { label: 'Yes', value: 'true' },
+          { label: 'No', value: 'false' },
+        ],
+      },
       enableSorting: true,
     },
     {

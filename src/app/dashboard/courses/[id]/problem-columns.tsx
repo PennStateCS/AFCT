@@ -66,6 +66,11 @@ export const useProblemColumns = ({
     {
       accessorKey: 'type',
       header: 'Type',
+      meta: {
+        filterVariant: 'multiselect',
+        filterLabel: 'Type',
+        filterOptions: Object.entries(typeLabels).map(([value, label]) => ({ value, label })),
+      },
       cell: ({ row }) =>
         row.original.type ? typeLabels[row.original.type] || row.original.type : 'Unknown',
     },
@@ -96,8 +101,20 @@ export const useProblemColumns = ({
       },
     },
     {
-      accessorKey: 'isDeterministic',
+      id: 'isDeterministic',
       header: 'Deterministic',
+      // Derive the displayed value so sorting and the value filter match what's shown
+      // (only Finite Automata carry a meaningful determinism flag).
+      accessorFn: (row) => (row.type === 'FA' ? (row.isDeterministic ? 'Yes' : 'No') : '—'),
+      meta: {
+        filterVariant: 'multiselect',
+        filterLabel: 'Deterministic',
+        filterOptions: [
+          { label: 'Yes', value: 'Yes' },
+          { label: 'No', value: 'No' },
+          { label: 'N/A', value: '—' },
+        ],
+      },
       cell: ({ row }) =>
         row.original.type === 'FA' ? (row.original.isDeterministic ? 'Yes' : 'No') : '—',
     },

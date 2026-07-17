@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { DataTableFilterPopover } from '@/components/ui/data-table-faceted-filter';
 import {
-  Columns3,
+  Columns3Cog,
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
@@ -165,7 +165,7 @@ function DataTableToolbar<TData>({
         Search table data
       </label>
 
-      <div className="flex w-full sm:max-w-md">
+      <div className="flex w-full sm:max-w-md lg:max-w-lg xl:max-w-xl">
         {searchableColumns.length > 0 && (
           <Select value={searchScope} onValueChange={setSearchScope}>
             <SelectTrigger
@@ -224,7 +224,7 @@ function DataTableToolbar<TData>({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" aria-label="Columns">
-              <Columns3 className="h-4 w-4" aria-hidden="true" />
+              <Columns3Cog className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Columns</span>
             </Button>
           </DropdownMenuTrigger>
@@ -374,10 +374,12 @@ function DataTablePagination<TData>({
 function DataTableCards<TData>({
   table,
   loading,
+  tableLabel,
   getColumnLabel,
 }: {
   table: TanstackTable<TData>;
   loading: boolean;
+  tableLabel: string;
   getColumnLabel: (column: TanstackColumn<TData, unknown>) => string;
 }) {
   if (loading) {
@@ -405,7 +407,7 @@ function DataTableCards<TData>({
   }
 
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-3" aria-label={tableLabel} aria-busy={loading}>
       {rows.map((row: Row<TData>) => {
         const cells = row.getVisibleCells();
         const actionsCell = cells.find((c) => c.column.id === 'actions');
@@ -487,6 +489,8 @@ interface DataTableProps<TData, TValue> {
   manualSorting?: boolean;
   sorting?: SortingState;
   onSortingChange?: OnChangeFn<SortingState>;
+  /** Initial client-side sort (uncontrolled). Ignored when `sorting` is controlled. */
+  defaultSorting?: SortingState;
 
   manualFiltering?: boolean;
   globalFilter?: string;
@@ -510,6 +514,7 @@ export function DataTable<TData, TValue>({
   manualSorting = false,
   sorting: sortingProp,
   onSortingChange,
+  defaultSorting = [],
   manualFiltering = false,
   globalFilter: globalFilterProp,
   onGlobalFilterChange,
@@ -554,7 +559,7 @@ export function DataTable<TData, TValue>({
     [columns],
   );
 
-  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
+  const [internalSorting, setInternalSorting] = useState<SortingState>(defaultSorting);
   const sorting = sortingProp ?? internalSorting;
 
   const [internalPagination, setInternalPagination] = useState<PaginationState>({
@@ -714,7 +719,12 @@ export function DataTable<TData, TValue>({
 
       {stacked ? (
         <div className="space-y-3">
-          <DataTableCards table={table} loading={loading} getColumnLabel={getColumnFilterLabel} />
+          <DataTableCards
+            table={table}
+            loading={loading}
+            tableLabel={tableLabel}
+            getColumnLabel={getColumnFilterLabel}
+          />
           <div className="rounded-md border p-3">
             <PaginationControls
               table={table}
