@@ -458,7 +458,11 @@ export function DataTable<TData, TValue>({
         getColumnLabel={getColumnFilterLabel}
       />
 
-      <div className="overflow-x-auto rounded-md border">
+      {/* Single scroll container: the Table primitive already wraps the table in an
+          overflow-x-auto div, so this wrapper only frames it (a second overflow-x-auto
+          here produced a doubled/flaky horizontal scrollbar). overflow-hidden keeps the
+          rounded corners clipping the scrolling content. */}
+      <div className="overflow-hidden rounded-md border">
         <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
           <TableHeader role="rowgroup">
             {table.getHeaderGroups().map((headerGroup) => (

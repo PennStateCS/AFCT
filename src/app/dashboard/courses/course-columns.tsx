@@ -20,7 +20,7 @@ import type { Course } from '@prisma/client';
 import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
 import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateInTimeZone, formatTimeInTimeZone, parseValidDate } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, mutateWithToast } from '@/lib/api/fetch-client';
 import { truncate } from '@/lib/utils';
@@ -57,6 +57,19 @@ const normalizeDate = (value?: string | Date | null) => {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isFinite(date.getTime()) ? date : null;
 };
+
+// Date over time on two lines so the column stays narrow — a single "MM/DD/YY HH:MM AM"
+// line made the two date columns wide enough to overflow the table on the courses page.
+function CompactDate({ value, timeZone }: { value: string | Date | null; timeZone: string }) {
+  const parsed = parseValidDate(value);
+  if (!parsed) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="leading-tight whitespace-nowrap">
+      <div>{formatDateInTimeZone(parsed, timeZone)}</div>
+      <div className="text-muted-foreground text-xs">{formatTimeInTimeZone(parsed, timeZone)}</div>
+    </div>
+  );
+}
 
 const getRegistrationStatus = (
   registrationOpenAt?: string | Date | null,
@@ -164,17 +177,13 @@ export const columns = (
     accessorKey: 'startDate',
     meta: { priority: 4 },
     header: 'Start Date',
-    cell: ({ row }) => {
-      return formatDateTimeInTimeZone(row.original.startDate, timeZone);
-    },
+    cell: ({ row }) => <CompactDate value={row.original.startDate} timeZone={timeZone} />,
   },
   {
     accessorKey: 'endDate',
     meta: { priority: 4 },
     header: 'End Date',
-    cell: ({ row }) => {
-      return formatDateTimeInTimeZone(row.original.endDate, timeZone);
-    },
+    cell: ({ row }) => <CompactDate value={row.original.endDate} timeZone={timeZone} />,
   },
   {
     id: 'instructor',
