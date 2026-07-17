@@ -101,6 +101,33 @@ describe('GET /api/logging', () => {
     expect(body.rows[0].userId).toBe('Ada Lovelace');
   });
 
+  it('scopes the search to a single field (action) without a user lookup', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?q=login&field=action'), routeCtx());
+
+    const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+    expect(where).toEqual({
+      AND: [{ OR: [{ action: { contains: 'login', mode: 'insensitive' } }] }],
+    });
+    // Action scope never resolves users.
+    expect(prismaMock.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns no rows when a name-scoped search matches no users', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findMany.mockResolvedValue([]); // no user matches
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?q=nobody&field=name'), routeCtx());
+
+    const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+    expect(where).toEqual({ AND: [{ id: { in: [] } }] });
+  });
+
   it('sorts by an allowed column and direction', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.activityLog.count.mockResolvedValue(0);
@@ -141,7 +168,19 @@ describe('GET /api/logging', () => {
     await GET(request('?severity=error'), routeCtx());
 
     const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
-    expect(where).toEqual({ AND: [{ severity: 'ERROR' }] });
+    expect(where).toEqual({ AND: [{ severity: { in: ['ERROR'] } }] });
+  });
+
+  it('filters by multiple severities (repeated param)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?severity=error&severity=security'), routeCtx());
+
+    const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+    // Kept in canonical order regardless of param order.
+    expect(where).toEqual({ AND: [{ severity: { in: ['ERROR', 'SECURITY'] } }] });
   });
 
   it('ignores an unknown severity value', async () => {
@@ -162,7 +201,7 @@ describe('GET /api/logging', () => {
 
     await GET(request('?category=course'), routeCtx());
     expect(prismaMock.activityLog.findMany.mock.calls[0][0].where).toEqual({
-      AND: [{ category: 'COURSE' }],
+      AND: [{ category: { in: ['COURSE'] } }],
     });
 
     await GET(request('?category=bogus'), routeCtx());

@@ -135,16 +135,16 @@ export function getUserColumns(
       },
     },
     {
-      accessorKey: 'lastLogin',
-      header: 'Last Login',
-      meta: { priority: 3 },
-      cell: ({ row }) => <CompactDate value={row.original.lastLogin} timeZone={timeZone} />,
-    },
-    {
       accessorKey: 'createdAt',
       header: 'Created At',
       meta: { priority: 4 },
       cell: ({ row }) => <CompactDate value={row.original.createdAt} timeZone={timeZone} />,
+    },
+    {
+      accessorKey: 'lastLogin',
+      header: 'Last Login',
+      meta: { priority: 3 },
+      cell: ({ row }) => <CompactDate value={row.original.lastLogin} timeZone={timeZone} />,
     },
     {
       id: 'actions',

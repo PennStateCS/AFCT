@@ -129,7 +129,7 @@ function DataTableToolbar<TData>({
   setGlobalFilter,
   searchScope,
   setSearchScope,
-  searchableColumns,
+  scopeOptions,
   filterableColumns,
   activeFilterCount,
   actionButtons,
@@ -143,7 +143,7 @@ function DataTableToolbar<TData>({
   setGlobalFilter: (value: string) => void;
   searchScope: string;
   setSearchScope: (value: string) => void;
-  searchableColumns: TanstackColumn<TData, unknown>[];
+  scopeOptions: { value: string; label: string }[];
   filterableColumns: TanstackColumn<TData, unknown>[];
   activeFilterCount: number;
   actionButtons?: React.ReactNode;
@@ -152,12 +152,13 @@ function DataTableToolbar<TData>({
   onResetColumns: () => void;
   getColumnLabel: (column: TanstackColumn<TData, unknown>) => string;
 }) {
-  // Placeholder reflects the scope: generic for "all", the column name when scoped.
-  const scopedColumn =
-    searchScope === 'all' ? undefined : searchableColumns.find((col) => col.id === searchScope);
-  const searchPlaceholder = scopedColumn
-    ? `Search ${getColumnLabel(scopedColumn).toLowerCase()}...`
-    : 'Search...';
+  const hasScope = scopeOptions.length > 0;
+  // Placeholder reflects the scope: generic on the default (first) option, the field
+  // name when scoped to a specific one.
+  const isDefaultScope = !hasScope || searchScope === scopeOptions[0]?.value;
+  const scopedLabel = scopeOptions.find((o) => o.value === searchScope)?.label;
+  const searchPlaceholder =
+    !isDefaultScope && scopedLabel ? `Search ${scopedLabel.toLowerCase()}...` : 'Search...';
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -166,7 +167,7 @@ function DataTableToolbar<TData>({
       </label>
 
       <div className="flex w-full sm:max-w-md lg:max-w-lg xl:max-w-xl">
-        {searchableColumns.length > 0 && (
+        {hasScope && (
           <Select value={searchScope} onValueChange={setSearchScope}>
             <SelectTrigger
               className="w-[140px] shrink-0 rounded-r-none border-r-0"
@@ -175,10 +176,9 @@ function DataTableToolbar<TData>({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All columns</SelectItem>
-              {searchableColumns.map((col) => (
-                <SelectItem key={col.id} value={col.id}>
-                  {getColumnLabel(col)}
+              {scopeOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -191,7 +191,7 @@ function DataTableToolbar<TData>({
             placeholder={searchPlaceholder}
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className={`pr-8 ${searchableColumns.length > 0 ? 'rounded-l-none' : ''}`}
+            className={`pr-8 ${hasScope ? 'rounded-l-none' : ''}`}
           />
           {globalFilter && (
             <button
@@ -495,6 +495,15 @@ interface DataTableProps<TData, TValue> {
   manualFiltering?: boolean;
   globalFilter?: string;
   onGlobalFilterChange?: (value: string) => void;
+  /**
+   * Server-side search scope. Provide explicit options (e.g. `[{value:'all',label:'All
+   * columns'}, {value:'action',label:'Action'}]`) plus a controlled value/handler to get
+   * the same segmented scope dropdown the client tables derive from their columns. The
+   * first option is the default; the parent decides what scoping means server-side.
+   */
+  searchScopeOptions?: { value: string; label: string }[];
+  searchScope?: string;
+  onSearchScopeChange?: (value: string) => void;
 }
 
 export function DataTable<TData, TValue>({
@@ -518,6 +527,9 @@ export function DataTable<TData, TValue>({
   manualFiltering = false,
   globalFilter: globalFilterProp,
   onGlobalFilterChange,
+  searchScopeOptions,
+  searchScope: searchScopeProp,
+  onSearchScopeChange,
 }: DataTableProps<TData, TValue>) {
   const { columnVisibility, setColumnVisibility, resetColumns } = usePersistentColumnVisibility(
     storageKey,
@@ -533,10 +545,13 @@ export function DataTable<TData, TValue>({
   // Client-side value filters (faceted). Server mode owns its own filtering.
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  // Search scope: 'all' searches every column, otherwise only the named column.
+  // Search scope: 'all' searches every column, otherwise only the named column
+  // (client mode). In server mode the parent controls the scope value + meaning.
   // Read through a ref inside the (stable) global filter fn so changing scope
   // doesn't need a new function identity / table rebuild.
-  const [searchScope, setSearchScope] = useState('all');
+  const [internalSearchScope, setInternalSearchScope] = useState('all');
+  const searchScope = searchScopeProp ?? internalSearchScope;
+  const setSearchScope = onSearchScopeChange ?? setInternalSearchScope;
   const searchScopeRef = useRef(searchScope);
   searchScopeRef.current = searchScope;
   const scopedGlobalFilter = useCallback<FilterFn<TData>>((row, columnId, value) => {
@@ -695,6 +710,16 @@ export function DataTable<TData, TValue>({
           col.id !== 'actions' &&
           typeof col.columnDef.header === 'string',
       );
+  // Scope dropdown options: explicit (server mode) or derived from the columns (client),
+  // with an "All columns" default prepended in the derived case.
+  const scopeOptions =
+    searchScopeOptions ??
+    (searchableColumns.length > 0
+      ? [
+          { value: 'all', label: 'All columns' },
+          ...searchableColumns.map((col) => ({ value: col.id, label: getColumnFilterLabel(col) })),
+        ]
+      : []);
   const activeFilterCount = columnFilters.length;
 
   const stacked = useStackedView();
@@ -707,7 +732,7 @@ export function DataTable<TData, TValue>({
         setGlobalFilter={setGlobalFilter}
         searchScope={searchScope}
         setSearchScope={setSearchScope}
-        searchableColumns={searchableColumns}
+        scopeOptions={scopeOptions}
         filterableColumns={filterableColumns}
         activeFilterCount={activeFilterCount}
         actionButtons={actionButtons}

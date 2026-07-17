@@ -27,8 +27,9 @@ function displayName(u: {
  *   - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
  *   - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
  *   - { name: q, in: query, description: "Match on action, category, or author name/email", schema: { type: string } }
- *   - { name: severity, in: query, schema: { type: string, enum: [INFO, WARNING, ERROR, SECURITY] } }
- *   - { name: category, in: query, schema: { type: string, enum: [SYSTEM, USER, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION] } }
+ *   - { name: field, in: query, description: "Restrict the search to one field", schema: { type: string, enum: [all, action, category, name, email] } }
+ *   - { name: severity, in: query, description: "Repeatable; filters to any of the given levels", schema: { type: array, items: { type: string, enum: [INFO, WARNING, ERROR, SECURITY] } } }
+ *   - { name: category, in: query, description: "Repeatable; filters to any of the given categories", schema: { type: array, items: { type: string, enum: [SYSTEM, USER, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION] } } }
  *   - { name: sortBy, in: query, schema: { type: string, enum: [timestamp, severity, category, action, ipAddress, userLastName, userFirstName] } }
  *   - { name: sortDir, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
  * responses:
@@ -56,41 +57,56 @@ export const GET = withAdminAuth(
         maxSize: MAX_PAGE_SIZE,
       });
       const q = (url.searchParams.get('q') ?? '').trim();
-      const severityRaw = (url.searchParams.get('severity') ?? '').trim().toUpperCase();
-      const severity = (['INFO', 'WARNING', 'ERROR', 'SECURITY'] as const).find(
-        (s) => s === severityRaw,
-      );
-      const categoryRaw = (url.searchParams.get('category') ?? '').trim().toUpperCase();
-      const category = (
-        ['SYSTEM', 'USER', 'COURSE', 'ASSIGNMENT', 'PROBLEM', 'SUBMISSION'] as const
-      ).find((c) => c === categoryRaw);
+      // Optional search scope: restrict the text search to one field. Default: all.
+      const FIELDS = ['all', 'action', 'category', 'name', 'email'] as const;
+      const fieldRaw = (url.searchParams.get('field') ?? 'all').trim().toLowerCase();
+      const field = FIELDS.find((f) => f === fieldRaw) ?? 'all';
 
-      // Combine the (optional) text search and the (optional) severity filter.
+      // Severity and category are multi-select (repeated query params). Keep only the
+      // known values, in canonical order.
+      const SEVERITIES = ['INFO', 'WARNING', 'ERROR', 'SECURITY'] as const;
+      const CATEGORIES = ['SYSTEM', 'USER', 'COURSE', 'ASSIGNMENT', 'PROBLEM', 'SUBMISSION'] as const;
+      const pickValues = <T extends readonly string[]>(raw: string[], allowed: T): T[number][] => {
+        const wanted = new Set(raw.map((v) => v.trim().toUpperCase()));
+        return allowed.filter((a) => wanted.has(a));
+      };
+      const severities = pickValues(url.searchParams.getAll('severity'), SEVERITIES);
+      const categories = pickValues(url.searchParams.getAll('category'), CATEGORIES);
+
+      // Combine the (optional, scoped) text search and the filters.
       const conditions: Prisma.ActivityLogWhereInput[] = [];
       if (q) {
-        // Search matches the action or category directly, or logs authored by a
-        // user whose name/email matches (userId is an id, so resolve matches first).
-        const matchingUsers = await prisma.user.findMany({
-          where: {
-            OR: [
+        const wantAction = field === 'all' || field === 'action';
+        const wantCategory = field === 'all' || field === 'category';
+        const wantName = field === 'all' || field === 'name';
+        const wantEmail = field === 'all' || field === 'email';
+
+        const clauses: Prisma.ActivityLogWhereInput[] = [];
+        if (wantAction) clauses.push({ action: { contains: q, mode: 'insensitive' } });
+        if (wantCategory) clauses.push({ category: { contains: q, mode: 'insensitive' } });
+        if (wantName || wantEmail) {
+          // userId is an id, so resolve author matches to ids first.
+          const userOr: Prisma.UserWhereInput[] = [];
+          if (wantName) {
+            userOr.push(
               { firstName: { contains: q, mode: 'insensitive' } },
               { lastName: { contains: q, mode: 'insensitive' } },
-              { email: { contains: q, mode: 'insensitive' } },
-            ],
-          },
-          select: { id: true },
-        });
-        const matchedUserIds = matchingUsers.map((u) => u.id);
-        conditions.push({
-          OR: [
-            { action: { contains: q, mode: 'insensitive' } },
-            { category: { contains: q, mode: 'insensitive' } },
-            ...(matchedUserIds.length ? [{ userId: { in: matchedUserIds } }] : []),
-          ],
-        });
+            );
+          }
+          if (wantEmail) userOr.push({ email: { contains: q, mode: 'insensitive' } });
+          const matchingUsers = await prisma.user.findMany({
+            where: { OR: userOr },
+            select: { id: true },
+          });
+          const ids = matchingUsers.map((u) => u.id);
+          if (ids.length) clauses.push({ userId: { in: ids } });
+        }
+        // If a scoped search found nothing to match on (e.g. name scope, no such user),
+        // return no rows rather than silently ignoring the scope.
+        conditions.push(clauses.length ? { OR: clauses } : { id: { in: [] } });
       }
-      if (severity) conditions.push({ severity });
-      if (category) conditions.push({ category });
+      if (severities.length) conditions.push({ severity: { in: severities } });
+      if (categories.length) conditions.push({ category: { in: categories } });
       const where: Prisma.ActivityLogWhereInput = conditions.length ? { AND: conditions } : {};
 
       // Sorting: only known columns are allowed. `userId` sorts by the author's

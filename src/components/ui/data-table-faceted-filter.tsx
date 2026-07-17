@@ -100,19 +100,16 @@ function FilterSection<TData>({ column, label, options }: FilterableColumn<TData
   );
 }
 
-/**
- * A single "Filters" button (to the right of the search) whose popover holds a value
- * filter for every column that opted in via `meta.filterVariant`. An active count sits
- * on the button; "Clear all" resets every column filter at once.
- */
-export function DataTableFilterPopover<TData>({
-  columns,
+/** Shared "Filters" button + popover frame. The body sections are passed as children,
+ *  so both the column-faceted filter and the controlled server-side menu look identical. */
+function FilterPopoverShell({
   activeCount,
   onClearAll,
+  children,
 }: {
-  columns: FilterableColumn<TData>[];
   activeCount: number;
   onClearAll: () => void;
+  children: React.ReactNode;
 }) {
   return (
     <Popover>
@@ -154,11 +151,92 @@ export function DataTableFilterPopover<TData>({
             (viewport-bounded) height, then flow into another column, widening up to the
             available width before any scrollbar appears. */}
         <div className="flex min-h-0 flex-1 flex-col flex-wrap content-start gap-x-6 gap-y-3 overflow-auto p-3">
-          {columns.map((c) => (
-            <FilterSection key={c.column.id} column={c.column} label={c.label} options={c.options} />
-          ))}
+          {children}
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * A single "Filters" button (to the right of the search) whose popover holds a value
+ * filter for every column that opted in via `meta.filterVariant`. An active count sits
+ * on the button; "Clear all" resets every column filter at once.
+ */
+export function DataTableFilterPopover<TData>({
+  columns,
+  activeCount,
+  onClearAll,
+}: {
+  columns: FilterableColumn<TData>[];
+  activeCount: number;
+  onClearAll: () => void;
+}) {
+  return (
+    <FilterPopoverShell activeCount={activeCount} onClearAll={onClearAll}>
+      {columns.map((c) => (
+        <FilterSection key={c.column.id} column={c.column} label={c.label} options={c.options} />
+      ))}
+    </FilterPopoverShell>
+  );
+}
+
+/** A controlled filter group for server-driven pages (no client-side table/faceting):
+ *  a labelled block of checkboxes whose selection lives in the parent's state. */
+export interface FilterMenuGroup {
+  key: string;
+  label: string;
+  options: FacetOption[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+}
+
+function ControlledFilterSection({ group }: { group: FilterMenuGroup }) {
+  const labelId = React.useId();
+  const selected = new Set(group.selected);
+  const toggle = (value: string) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    group.onChange(Array.from(next));
+  };
+  return (
+    <div className="w-44 space-y-1.5">
+      <p id={labelId} className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        {group.label}
+      </p>
+      <div role="group" aria-labelledby={labelId} className="space-y-0.5">
+        {group.options.map((option) => (
+          <label
+            key={option.value}
+            className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
+          >
+            <Checkbox
+              checked={selected.has(option.value)}
+              onCheckedChange={() => toggle(option.value)}
+              aria-label={option.label}
+            />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The same "Filters" button + popover as the table faceted filter, but driven by
+ * controlled props — for server-paginated pages (e.g. System Logs) that filter on the
+ * server rather than over client rows. Each group is multi-select.
+ */
+export function DataTableFilterMenu({ groups }: { groups: FilterMenuGroup[] }) {
+  const activeCount = groups.reduce((n, g) => n + g.selected.length, 0);
+  const clearAll = () => groups.forEach((g) => g.onChange([]));
+  return (
+    <FilterPopoverShell activeCount={activeCount} onClearAll={clearAll}>
+      {groups.map((g) => (
+        <ControlledFilterSection key={g.key} group={g} />
+      ))}
+    </FilterPopoverShell>
   );
 }

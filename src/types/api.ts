@@ -2122,8 +2122,12 @@ export interface operations {
                 pageSize?: number;
                 /** @description Match on action, category, or author name/email */
                 q?: string;
-                severity?: "INFO" | "WARNING" | "ERROR" | "SECURITY";
-                category?: "SYSTEM" | "USER" | "COURSE" | "ASSIGNMENT" | "PROBLEM" | "SUBMISSION";
+                /** @description Restrict the search to one field */
+                field?: "all" | "action" | "category" | "name" | "email";
+                /** @description Repeatable; filters to any of the given levels */
+                severity?: ("INFO" | "WARNING" | "ERROR" | "SECURITY")[];
+                /** @description Repeatable; filters to any of the given categories */
+                category?: ("SYSTEM" | "USER" | "COURSE" | "ASSIGNMENT" | "PROBLEM" | "SUBMISSION")[];
                 sortBy?: "timestamp" | "severity" | "category" | "action" | "ipAddress" | "userLastName" | "userFirstName";
                 sortDir?: "asc" | "desc";
             };

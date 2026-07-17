@@ -8,13 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CategoryBadge } from '@/components/ui/category-badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
+import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 import { DownloadLogsDialog } from '@/components/dialogs/DownloadLogsDialog';
 import { apiPaths } from '@/lib/api-paths';
@@ -39,10 +33,19 @@ type LogRow = {
 const DEFAULT_PAGE_SIZE = 10;
 
 const SEVERITIES: Severity[] = ['INFO', 'WARNING', 'ERROR', 'SECURITY'];
-const ALL_SEVERITIES = 'ALL';
-
 const CATEGORIES = ['SYSTEM', 'USER', 'COURSE', 'ASSIGNMENT', 'PROBLEM', 'SUBMISSION'] as const;
-const ALL_CATEGORIES = 'ALL';
+
+// Search scope options (server-side): restrict the text search to one field.
+const SEARCH_FIELDS = [
+  { value: 'all', label: 'All fields' },
+  { value: 'action', label: 'Action' },
+  { value: 'category', label: 'Category' },
+  { value: 'name', label: 'Name' },
+  { value: 'email', label: 'Email' },
+];
+
+// Title-case a coded category (e.g. ASSIGNMENT → Assignment) for display.
+const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 
 // Badge palette per severity level.
 const SEVERITY_VARIANT: Record<Severity, 'info' | 'warning' | 'danger' | 'destructive'> = {
@@ -60,8 +63,9 @@ export default function SystemLogsClient() {
   // query actually sent to the server.
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [severity, setSeverity] = useState<Severity | typeof ALL_SEVERITIES>(ALL_SEVERITIES);
-  const [category, setCategory] = useState<string>(ALL_CATEGORIES);
+  const [searchField, setSearchField] = useState('all');
+  const [severities, setSeverities] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
 
   const [selectedData, setSelectedData] = useState('');
@@ -86,8 +90,9 @@ export default function SystemLogsClient() {
     page: pageIndex + 1,
     pageSize,
     q: search || undefined,
-    severity: severity !== ALL_SEVERITIES ? severity : undefined,
-    category: category !== ALL_CATEGORIES ? category : undefined,
+    field: searchField !== 'all' ? searchField : undefined,
+    severities,
+    categories,
     sortBy: sort?.id,
     sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
   };
@@ -102,8 +107,9 @@ export default function SystemLogsClient() {
         pageSize: String(queryParams.pageSize),
       });
       if (queryParams.q) params.set('q', queryParams.q);
-      if (queryParams.severity) params.set('severity', queryParams.severity);
-      if (queryParams.category) params.set('category', queryParams.category);
+      if (queryParams.field) params.set('field', queryParams.field);
+      queryParams.severities.forEach((s) => params.append('severity', s));
+      queryParams.categories.forEach((c) => params.append('category', c));
       if (queryParams.sortBy) params.set('sortBy', queryParams.sortBy);
       if (queryParams.sortDir) params.set('sortDir', queryParams.sortDir);
 
@@ -253,47 +259,30 @@ export default function SystemLogsClient() {
           tableLabel="System logs table"
           showExportButton={false}
           actionButtons={
-            <>
-              <Select
-                value={severity}
-                onValueChange={(v) => {
-                  setSeverity(v as Severity | typeof ALL_SEVERITIES);
-                  setPageIndex(0);
-                }}
-              >
-                <SelectTrigger aria-label="Filter by severity" className="w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_SEVERITIES}>All severities</SelectItem>
-                  {SEVERITIES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={category}
-                onValueChange={(v) => {
-                  setCategory(v);
-                  setPageIndex(0);
-                }}
-              >
-                <SelectTrigger aria-label="Filter by category" className="w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_CATEGORIES}>All categories</SelectItem>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c.charAt(0) + c.slice(1).toLowerCase()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </>
+            <DataTableFilterMenu
+              groups={[
+                {
+                  key: 'severity',
+                  label: 'Severity',
+                  options: SEVERITIES.map((s) => ({ label: s, value: s })),
+                  selected: severities,
+                  onChange: (v) => {
+                    setSeverities(v);
+                    setPageIndex(0);
+                  },
+                },
+                {
+                  key: 'category',
+                  label: 'Category',
+                  options: CATEGORIES.map((c) => ({ label: titleCase(c), value: c })),
+                  selected: categories,
+                  onChange: (v) => {
+                    setCategories(v);
+                    setPageIndex(0);
+                  },
+                },
+              ]}
+            />
           }
           manualPagination
           pageCount={pageCount}
@@ -303,6 +292,12 @@ export default function SystemLogsClient() {
           manualFiltering
           globalFilter={searchInput}
           onGlobalFilterChange={setSearchInput}
+          searchScopeOptions={SEARCH_FIELDS}
+          searchScope={searchField}
+          onSearchScopeChange={(v) => {
+            setSearchField(v);
+            setPageIndex(0);
+          }}
           manualSorting
           sorting={sorting}
           onSortingChange={handleSortingChange}
