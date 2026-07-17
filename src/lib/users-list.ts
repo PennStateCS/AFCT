@@ -8,6 +8,9 @@ export type UserListItem = {
   temporaryPassword: boolean;
   isAdmin: boolean;
   avatar: string | null;
+  cropX: number | null;
+  cropY: number | null;
+  zoom: number | null;
   timezone: string | null;
   inactive: boolean;
   createdAt: Date;
@@ -25,6 +28,9 @@ export async function getUsersList(): Promise<UserListItem[]> {
       temporaryPassword: true,
       isAdmin: true,
       avatar: true,
+      cropX: true,
+      cropY: true,
+      zoom: true,
       timezone: true,
       inactive: true,
       createdAt: true,
