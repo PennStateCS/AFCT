@@ -79,10 +79,24 @@ export default function RandomGroupsDialog({
     return Array.from(map.entries()).sort((a, b) => b[0] - a[0]);
   }, [sizes]);
 
+  // Uniform random integer in [0, max) from the platform CSPRNG. Rejection sampling
+  // avoids the modulo bias of `getRandomValues() % max`.
+  function randomIndex(max: number): number {
+    if (max <= 1) return 0;
+    const limit = Math.floor(0x100000000 / max) * max;
+    const buf = new Uint32Array(1);
+    let v: number;
+    do {
+      crypto.getRandomValues(buf);
+      v = buf[0]!;
+    } while (v >= limit);
+    return v % max;
+  }
+
   function shuffle<T>(arr: T[]) {
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = randomIndex(i + 1);
       // Fisher–Yates swap: i and j are always in-bounds (0 <= j <= i < length),
       // so both reads are defined; a guarded swap here would only add noise.
       const tmp = a[i]!;

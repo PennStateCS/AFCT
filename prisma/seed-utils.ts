@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import type { PrismaClient, CourseRole } from '@prisma/client';
 
 /**
@@ -6,22 +7,27 @@ import type { PrismaClient, CourseRole } from '@prisma/client';
 export const withRole = <T, R>(items: T[], role: R) => items.map((item) => ({ ...item, role }));
 
 /**
- * Pick a random item from a list.
+ * Pick a random item from a list. Uses the CSPRNG (`node:crypto`) for a uniform,
+ * unbiased pick.
  */
 export const pickRandom = <T>(items: T[]): T | undefined => {
   if (items.length === 0) return undefined;
-  return items[Math.floor(Math.random() * items.length)];
+  return items[randomInt(items.length)];
 };
 
 /**
- * Pick a random slice of items sized between min and max.
+ * Pick a random slice of items sized between min and max. Uses an unbiased
+ * Fisher–Yates shuffle backed by the CSPRNG (`node:crypto`).
  */
 export const pickRandomRange = <T>(items: T[], min: number, max: number): T[] => {
-  const count = Math.min(
-    items.length,
-    Math.max(min, Math.floor(Math.random() * (max - min + 1)) + min),
-  );
-  const shuffled = [...items].sort(() => Math.random() - 0.5);
+  const count = Math.min(items.length, Math.max(min, randomInt(min, max + 1)));
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    const tmp = shuffled[i]!;
+    shuffled[i] = shuffled[j]!;
+    shuffled[j] = tmp;
+  }
   return shuffled.slice(0, count);
 };
 

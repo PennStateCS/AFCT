@@ -19,6 +19,20 @@ updates:
         patterns:
           - '*'
 
+  # The Docusaurus docs site has its own lockfile; without this entry Dependabot
+  # never sees its advisories. Its deps are build-time only (the published site is
+  # static HTML), so these are low-risk, but let Dependabot regenerate the lock.
+  - package-ecosystem: npm
+    directory: /docs-site
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      docs-npm-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
