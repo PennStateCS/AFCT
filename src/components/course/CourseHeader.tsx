@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import type { FullCourse } from '@/types/course';
 import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
 import { showToast } from '@/lib/toast';
+import { formatRegistrationCode } from '@/lib/format-registration-code';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -15,14 +16,14 @@ interface CourseHeaderProps {
 }
 
 /**
- * The course join (registration) code plus one-click copy of the code and of a
- * shareable invite link. The code is shown grouped as `ABCD-EFGH` for readability,
- * but the copied value is the plain 8-character code the join endpoint expects; the
- * invite link is `/dashboard?joinCode=<code>`, which joins the course on open.
+ * The course registration code plus one-click copy of the code and of a shareable
+ * invite link. The code is shown grouped as `ABCD-EFGH` for readability, but the
+ * copied value is the plain 8-character code the join endpoint expects; the invite
+ * link is `/dashboard?joinCode=<code>`, which joins the course on open.
  */
-function JoinCode({ code }: { code: string }) {
+function RegistrationCode({ code }: { code: string }) {
   const [copied, setCopied] = React.useState<null | 'code' | 'link'>(null);
-  const formatted = code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
+  const formatted = formatRegistrationCode(code);
 
   const copy = async (value: string, which: 'code' | 'link', okMsg: string) => {
     try {
@@ -35,13 +36,13 @@ function JoinCode({ code }: { code: string }) {
     }
   };
 
-  const copyCode = () => void copy(code, 'code', 'Join code copied');
+  const copyCode = () => void copy(code, 'code', 'Registration code copied');
   const copyLink = () =>
     void copy(`${window.location.origin}/dashboard?joinCode=${code}`, 'link', 'Invite link copied');
 
   return (
     <span className="flex items-center gap-1.5">
-      <span className="text-muted-foreground">Join code: </span>
+      <span className="text-muted-foreground">Registration Code: </span>
       <span className="font-mono font-medium tracking-wide">{formatted}</span>
       <Button
         type="button"
@@ -49,8 +50,8 @@ function JoinCode({ code }: { code: string }) {
         size="icon"
         className="h-6 w-6"
         onClick={copyCode}
-        aria-label={copied === 'code' ? 'Join code copied' : `Copy join code ${formatted}`}
-        title="Copy join code"
+        aria-label={copied === 'code' ? 'Registration code copied' : `Copy registration code ${formatted}`}
+        title="Copy registration code"
       >
         {copied === 'code' ? (
           <Check className="h-3.5 w-3.5 text-green-600" />
@@ -121,7 +122,7 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
   };
   const facultyNames = formatAllNames(getInstructors(enrolled));
   const tas = enrolled.filter((u) => u.courseRole === 'TA');
-  const joinCode = (course.regCode ?? '').toUpperCase();
+  const registrationCode = (course.regCode ?? '').toUpperCase();
 
   // -- render ---------------------------------------------------------------
   return (
@@ -148,7 +149,7 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
         </div>
       </div>
 
-      {/* Faculty, TAs (only when there are any), then the join code + copy */}
+      {/* Faculty, TAs (only when there are any), then the registration code + copy */}
       {!isStudent && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span>
@@ -161,7 +162,7 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
               {formatAllNames(tas)}
             </span>
           )}
-          {joinCode ? <JoinCode code={joinCode} /> : null}
+          {registrationCode ? <RegistrationCode code={registrationCode} /> : null}
         </div>
       )}
     </>

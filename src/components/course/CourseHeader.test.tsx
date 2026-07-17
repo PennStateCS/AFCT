@@ -104,7 +104,7 @@ describe('CourseHeader', () => {
     expect(screen.getByText('Alan Turing')).toBeInTheDocument();
   });
 
-  it('shows the join code formatted and copies the plain code', async () => {
+  it('shows the registration code formatted and copies the plain code', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
@@ -114,7 +114,7 @@ describe('CourseHeader', () => {
     expect(screen.getByText('ABCD-2345')).toBeInTheDocument();
 
     // Copies the plain 8-character code the join endpoint expects.
-    fireEvent.click(screen.getByRole('button', { name: /copy join code/i }));
+    fireEvent.click(screen.getByRole('button', { name: /copy registration code/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('ABCD2345'));
     expect(toastMock.success).toHaveBeenCalled();
   });
