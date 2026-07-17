@@ -13,7 +13,11 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { GradeBreakdownDialog } from '@/components/dialogs/GradeBreakdownDialog';
 import { formatTimeInTimeZone } from '@/lib/date';
 import { GradesLmsExportDialog } from '@/components/dialogs/GradesLmsExportDialog';
-import { buildLmsGradesCsv, type LmsPlatform } from '@/lib/lms-grade-export';
+import {
+  buildLmsGradesCsv,
+  findCanvasReservedTitleConflicts,
+  type LmsPlatform,
+} from '@/lib/lms-grade-export';
 import { useSession } from 'next-auth/react';
 import { apiPaths } from '@/lib/api-paths';
 
@@ -163,6 +167,22 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         id: assignment.id,
         title: assignment.title,
       }));
+
+      // Canvas ignores columns whose title contains a reserved word; warn (don't block)
+      // so staff know those grades won't import.
+      if (platform === 'canvas') {
+        const conflicts = findCanvasReservedTitleConflicts(
+          exportAssignments.map((assignment) => assignment.title),
+        );
+        if (conflicts.length > 0) {
+          showToast.warning(
+            `Canvas will ignore these columns because their titles contain reserved words: ${conflicts.join(
+              ', ',
+            )}. Rename the assignment or edit the CSV before importing.`,
+          );
+        }
+      }
+
       const { csvContent, filenamePrefix } = buildLmsGradesCsv(
         platform,
         students,

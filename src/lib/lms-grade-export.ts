@@ -13,6 +13,45 @@ export type LmsStudentRow = {
   [key: string]: unknown;
 };
 
+// Canvas silently drops an assignment column whose title *contains* one of these
+// phrases (case-insensitive substring). Source: Instructure "How do I import grades".
+const CANVAS_RESERVED_SUBSTRINGS = [
+  'Current Score',
+  'Current Points',
+  'Current Grade',
+  'Final Score',
+  'Final Points',
+  'Final Grade',
+  'Override Score',
+  'Override Grade',
+  'Override Status',
+];
+// Canvas also reserves these as identity column names — a *exact* title match collides.
+// (Substring matching here would false-positive, e.g. "id" inside "Bridge".)
+const CANVAS_RESERVED_COLUMN_NAMES = [
+  'Student',
+  'ID',
+  'SIS User ID',
+  'SIS Login ID',
+  'Section',
+  'Integration ID',
+  'Root Account',
+];
+
+/**
+ * Returns the assignment titles Canvas would ignore on import because they collide
+ * with a reserved phrase (substring) or reserved identity column (exact). Used to warn
+ * staff before a Canvas export so they can rename the assignment or edit the CSV.
+ */
+export function findCanvasReservedTitleConflicts(titles: string[]): string[] {
+  const substrings = CANVAS_RESERVED_SUBSTRINGS.map((s) => s.toLowerCase());
+  const exactNames = new Set(CANVAS_RESERVED_COLUMN_NAMES.map((s) => s.toLowerCase()));
+  return titles.filter((title) => {
+    const t = title.trim().toLowerCase();
+    return exactNames.has(t) || substrings.some((s) => t.includes(s));
+  });
+}
+
 // A spreadsheet treats a cell starting with any of these as a formula.
 const FORMULA_START = /^[=+\-@\t\r]/;
 // Plain (optionally negative) numbers are safe data, not injection — leave them alone.

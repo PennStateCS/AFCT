@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildLmsGradesCsv, type LmsAssignment, type LmsStudentRow } from './lms-grade-export';
+import {
+  buildLmsGradesCsv,
+  findCanvasReservedTitleConflicts,
+  type LmsAssignment,
+  type LmsStudentRow,
+} from './lms-grade-export';
 
 describe('buildLmsGradesCsv', () => {
   const assignments: LmsAssignment[] = [
@@ -79,5 +84,28 @@ describe('buildLmsGradesCsv', () => {
     expect(csvContent).toContain(`"'=1+1"`);
     // A plain negative number is data, not a formula — left untouched.
     expect(csvContent).toContain('"-5"');
+  });
+});
+
+describe('findCanvasReservedTitleConflicts', () => {
+  it('flags titles containing a reserved phrase (case-insensitive substring)', () => {
+    expect(
+      findCanvasReservedTitleConflicts(['Final Grade Reflection', 'current score check']),
+    ).toEqual(['Final Grade Reflection', 'current score check']);
+  });
+
+  it('flags titles that exactly match a reserved column name', () => {
+    expect(findCanvasReservedTitleConflicts(['Section', 'id'])).toEqual(['Section', 'id']);
+  });
+
+  it('does not false-positive on reserved column names appearing as substrings', () => {
+    // "Bridge" contains "id", "Student Presentation" contains "Student" — neither collides.
+    expect(findCanvasReservedTitleConflicts(['Bridge Project', 'Student Presentation'])).toEqual(
+      [],
+    );
+  });
+
+  it('returns an empty array when nothing collides', () => {
+    expect(findCanvasReservedTitleConflicts(['Homework 1', 'Quiz 1'])).toEqual([]);
   });
 });

@@ -36,6 +36,15 @@ const LMS_OPTIONS: Array<{ value: LmsPlatform; label: string }> = [
   { value: 'generic', label: 'Generic CSV' },
 ];
 
+// Short import tips shown under the platform picker. A fresh export creates new columns
+// and matches by email, so these point staff at the reliable workflow for each LMS.
+const PLATFORM_NOTES: Partial<Record<LmsPlatform, string>> = {
+  canvas:
+    'To update existing Canvas assignments, download Canvas’s gradebook CSV, paste in these grades, and re-upload — importing this file directly creates new assignment columns and matches students by SIS Login ID (email).',
+  moodle:
+    'On import, map the Email column to “useremail” and each assignment column to its grade item. Moodle matches emails case-sensitively.',
+};
+
 export function GradesLmsExportDialog({
   open,
   setOpen,
@@ -75,6 +84,11 @@ export function GradesLmsExportDialog({
           options={LMS_OPTIONS}
           placeholder="Select LMS"
         />
+
+        {PLATFORM_NOTES[platform] && (
+          <p className="text-muted-foreground -mt-2 text-xs">{PLATFORM_NOTES[platform]}</p>
+        )}
+
         <label className="flex cursor-pointer items-center gap-2">
           <Checkbox checked={selectAll} onCheckedChange={(value) => setSelectAll(!!value)} />
           <span className="text-sm font-medium">Export whole gradebook</span>
