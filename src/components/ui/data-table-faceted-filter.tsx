@@ -2,21 +2,11 @@
 
 import * as React from 'react';
 import type { Column } from '@tanstack/react-table';
-import { Check, ListFilter } from 'lucide-react';
+import { ListFilter } from 'lucide-react';
 
-import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from '@/components/ui/command';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export interface FacetOption {
@@ -24,26 +14,23 @@ export interface FacetOption {
   value: string;
 }
 
-/**
- * A single column's value filter: a dropdown of the distinct values that column
- * holds, each toggleable. Selecting several values ORs them within the column;
- * different columns' filters AND together (standard react-table columnFilters).
- * The filter value is stored as a string[] and matched by the table's multiselect
- * filterFn, so this stays in sync with `column.getFilterValue()`.
- */
-export function DataTableFacetedFilter<TData, TValue>({
-  column,
-  title,
-  options,
-}: {
-  column: Column<TData, TValue>;
-  title: string;
-  /** Optional fixed option list (value + friendly label). Falls back to the
-   *  distinct values found in the data (e.g. for plain string columns). */
+export interface FilterableColumn<TData> {
+  column: Column<TData, unknown>;
+  label: string;
+  /** Fixed, friendly options; falls back to the distinct values in the data. */
   options?: FacetOption[];
-}) {
+}
+
+/**
+ * One column's value filter, rendered as a labelled block of checkboxes inside the
+ * shared filter popover. Selecting several values ORs them within the column; the
+ * selection is stored as a string[] on the column filter and matched by the table's
+ * multiselect filterFn. Values are compared as strings, so boolean/coded columns
+ * work once given friendly `options`.
+ */
+function FilterSection<TData>({ column, label, options }: FilterableColumn<TData>) {
   const facets = column.getFacetedUniqueValues();
-  const selectedValues = new Set((column.getFilterValue() as string[] | undefined) ?? []);
+  const selected = new Set((column.getFilterValue() as string[] | undefined) ?? []);
 
   // Counts keyed by the stringified raw value so boolean/number columns line up
   // with the string option values we filter on.
@@ -55,7 +42,6 @@ export function DataTableFacetedFilter<TData, TValue>({
     return map;
   }, [facets]);
 
-  // Without an explicit option list, derive one from the values present in the data.
   const resolvedOptions: FacetOption[] = React.useMemo(() => {
     if (options && options.length > 0) return options;
     return Array.from(counts.keys())
@@ -64,99 +50,88 @@ export function DataTableFacetedFilter<TData, TValue>({
       .map((v) => ({ label: v, value: v }));
   }, [options, counts]);
 
-  const commit = (next: Set<string>) => {
-    const arr = Array.from(next);
-    column.setFilterValue(arr.length ? arr : undefined);
+  const toggle = (value: string) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    column.setFilterValue(next.size ? Array.from(next) : undefined);
   };
 
+  if (resolvedOptions.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{label}</p>
+      <div className="space-y-0.5">
+        {resolvedOptions.map((option) => (
+          <label
+            key={option.value}
+            className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
+          >
+            <Checkbox
+              checked={selected.has(option.value)}
+              onCheckedChange={() => toggle(option.value)}
+              aria-label={option.label}
+            />
+            <span>{option.label}</span>
+            {counts.get(option.value) !== undefined && (
+              <span className="text-muted-foreground ml-auto font-mono text-xs">
+                {counts.get(option.value)}
+              </span>
+            )}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A single "Filters" button (to the right of the search) whose popover holds a value
+ * filter for every column that opted in via `meta.filterVariant`. An active count sits
+ * on the button; "Clear all" resets every column filter at once.
+ */
+export function DataTableFilterPopover<TData>({
+  columns,
+  activeCount,
+  onClearAll,
+}: {
+  columns: FilterableColumn<TData>[];
+  activeCount: number;
+  onClearAll: () => void;
+}) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="border-dashed">
+        <Button variant="outline" aria-label="Filters">
           <ListFilter className="h-4 w-4" aria-hidden="true" />
-          {title}
-          {selectedValues.size > 0 && (
-            <>
-              <Separator orientation="vertical" className="mx-1 h-4" />
-              <Badge variant="secondary" className="rounded-sm px-1 font-normal lg:hidden">
-                {selectedValues.size}
-              </Badge>
-              <div className="hidden gap-1 lg:flex">
-                {selectedValues.size > 2 ? (
-                  <Badge variant="secondary" className="rounded-sm px-1 font-normal">
-                    {selectedValues.size} selected
-                  </Badge>
-                ) : (
-                  resolvedOptions
-                    .filter((option) => selectedValues.has(option.value))
-                    .map((option) => (
-                      <Badge
-                        key={option.value}
-                        variant="secondary"
-                        className="rounded-sm px-1 font-normal"
-                      >
-                        {option.label}
-                      </Badge>
-                    ))
-                )}
-              </div>
-            </>
+          <span className="hidden sm:inline">Filters</span>
+          {activeCount > 0 && (
+            <Badge variant="secondary" className="ml-1 rounded-sm px-1 font-normal">
+              {activeCount}
+            </Badge>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-0" align="start">
-        <Command>
-          <CommandInput placeholder={title} />
-          <CommandList>
-            <CommandEmpty>No values.</CommandEmpty>
-            <CommandGroup>
-              {resolvedOptions.map((option) => {
-                const isSelected = selectedValues.has(option.value);
-                return (
-                  <CommandItem
-                    key={option.value}
-                    onSelect={() => {
-                      const next = new Set(selectedValues);
-                      if (isSelected) next.delete(option.value);
-                      else next.add(option.value);
-                      commit(next);
-                    }}
-                  >
-                    <div
-                      className={cn(
-                        'flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
-                        isSelected
-                          ? 'bg-primary text-primary-foreground'
-                          : 'opacity-50 [&_svg]:invisible',
-                      )}
-                    >
-                      <Check className="h-3 w-3" />
-                    </div>
-                    <span>{option.label}</span>
-                    {counts.get(option.value) !== undefined && (
-                      <span className="text-muted-foreground ml-auto flex h-4 w-4 items-center justify-center font-mono text-xs">
-                        {counts.get(option.value)}
-                      </span>
-                    )}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-            {selectedValues.size > 0 && (
-              <>
-                <CommandSeparator />
-                <CommandGroup>
-                  <CommandItem
-                    onSelect={() => column.setFilterValue(undefined)}
-                    className="justify-center text-center"
-                  >
-                    Clear filter
-                  </CommandItem>
-                </CommandGroup>
-              </>
-            )}
-          </CommandList>
-        </Command>
+      <PopoverContent align="end" className="w-64 p-0">
+        <div className="flex items-center justify-between border-b px-3 py-2">
+          <span className="text-sm font-medium">Filters</span>
+          {activeCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto px-1 py-0 text-xs"
+              onClick={onClearAll}
+            >
+              Clear all
+            </Button>
+          )}
+        </div>
+        <div className="max-h-72 space-y-3 overflow-y-auto p-3">
+          {columns.map((c) => (
+            <FilterSection key={c.column.id} column={c.column} label={c.label} options={c.options} />
+          ))}
+        </div>
       </PopoverContent>
     </Popover>
   );

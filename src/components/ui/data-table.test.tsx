@@ -132,22 +132,21 @@ describe('DataTable', () => {
 
     render(<DataTable columns={facetColumns} data={data} />);
 
-    // Open the Role value filter and pick "Admin".
-    await user.click(screen.getByRole('button', { name: 'Role' }));
-    await user.click(await screen.findByRole('option', { name: /admin/i }));
+    // Open the combined Filters popover and tick "Admin" under the Role section.
+    await user.click(screen.getByRole('button', { name: 'Filters' }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Admin' }));
 
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.queryByText('Bob')).not.toBeInTheDocument();
     expect(screen.queryByText('Carol')).not.toBeInTheDocument();
 
-    // A "Clear filters" affordance appears while a filter is active.
-    expect(screen.getByRole('button', { name: /clear filters/i })).toBeInTheDocument();
+    // A "Clear all" affordance appears while a filter is active.
+    expect(screen.getByRole('button', { name: /clear all/i })).toBeInTheDocument();
   });
 
-  it('does not render a value-filter row when no column opts in', () => {
+  it('does not render a Filters button when no column opts in', () => {
     render(<DataTable columns={columns} data={data} />);
-    // No faceted filter button for plain columns.
-    expect(screen.queryByRole('button', { name: 'Role' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
   });
 
   it('offers a search scope selector for searchable columns', () => {

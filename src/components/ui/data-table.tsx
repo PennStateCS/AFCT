@@ -42,7 +42,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { DataTableFacetedFilter } from '@/components/ui/data-table-faceted-filter';
+import { DataTableFilterPopover } from '@/components/ui/data-table-faceted-filter';
 import {
   Filter,
   ArrowUp,
@@ -121,8 +121,8 @@ const ariaSort = (
   return 'none';
 };
 
-/** The table's toolbar: scoped global search, caller action buttons, CSV export,
- *  column visibility, and (row 2) a faceted value-filter for each opted-in column. */
+/** The table's toolbar: scoped global search, a combined value-filter popover for the
+ *  opted-in columns, caller action buttons, CSV export, and column visibility. */
 function DataTableToolbar<TData>({
   table,
   globalFilter,
@@ -131,7 +131,7 @@ function DataTableToolbar<TData>({
   setSearchScope,
   searchableColumns,
   filterableColumns,
-  hasActiveColumnFilters,
+  activeFilterCount,
   actionButtons,
   showExportButton,
   onExport,
@@ -145,7 +145,7 @@ function DataTableToolbar<TData>({
   setSearchScope: (value: string) => void;
   searchableColumns: TanstackColumn<TData, unknown>[];
   filterableColumns: TanstackColumn<TData, unknown>[];
-  hasActiveColumnFilters: boolean;
+  activeFilterCount: number;
   actionButtons?: React.ReactNode;
   showExportButton: boolean;
   onExport: () => void;
@@ -160,116 +160,102 @@ function DataTableToolbar<TData>({
     : 'Search...';
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <label htmlFor="table-search" className="sr-only">
-          Search table data
-        </label>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <label htmlFor="table-search" className="sr-only">
+        Search table data
+      </label>
 
-        <div className="flex w-full sm:max-w-md">
-          {searchableColumns.length > 0 && (
-            <Select value={searchScope} onValueChange={setSearchScope}>
-              <SelectTrigger
-                className="w-[140px] shrink-0 rounded-r-none border-r-0"
-                aria-label="Search scope"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All columns</SelectItem>
-                {searchableColumns.map((col) => (
-                  <SelectItem key={col.id} value={col.id}>
-                    {getColumnLabel(col)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <div className="flex w-full sm:max-w-md">
+        {searchableColumns.length > 0 && (
+          <Select value={searchScope} onValueChange={setSearchScope}>
+            <SelectTrigger
+              className="w-[140px] shrink-0 rounded-r-none border-r-0"
+              aria-label="Search scope"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All columns</SelectItem>
+              {searchableColumns.map((col) => (
+                <SelectItem key={col.id} value={col.id}>
+                  {getColumnLabel(col)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        <div className="relative min-w-0 flex-1">
+          <Input
+            id="table-search"
+            placeholder={searchPlaceholder}
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            className={`pr-8 ${searchableColumns.length > 0 ? 'rounded-l-none' : ''}`}
+          />
+          {globalFilter && (
+            <button
+              type="button"
+              onClick={() => setGlobalFilter('')}
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
           )}
-
-          <div className="relative min-w-0 flex-1">
-            <Input
-              id="table-search"
-              placeholder={searchPlaceholder}
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              className={`pr-8 ${searchableColumns.length > 0 ? 'rounded-l-none' : ''}`}
-            />
-            {globalFilter && (
-              <button
-                type="button"
-                onClick={() => setGlobalFilter('')}
-                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
-                aria-label="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {actionButtons}
-
-          {showExportButton ? (
-            <Button variant="outline" onClick={onExport} aria-label="Export table data to CSV">
-              <FileDown className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Export to CSV</span>
-            </Button>
-          ) : null}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" aria-label="Filter columns">
-                <Filter className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Filter Columns</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {table
-                .getAllLeafColumns()
-                .filter((col) => col.getCanHide())
-                .map((col) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.id}
-                    className="capitalize"
-                    checked={col.getIsVisible()}
-                    onCheckedChange={(value) => col.toggleVisibility(!!value)}
-                  >
-                    {getColumnLabel(col)}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onResetColumns} className="text-red-600 hover:text-red-700">
-                Reset Columns
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
 
-      {filterableColumns.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {filterableColumns.map((col) => (
-            <DataTableFacetedFilter
-              key={col.id}
-              column={col}
-              title={getColumnLabel(col)}
-              options={col.columnDef.meta?.filterOptions}
-            />
-          ))}
-          {hasActiveColumnFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => table.resetColumnFilters()}
-              className="px-2"
-            >
-              Clear filters
-              <X className="ml-1 h-4 w-4" aria-hidden="true" />
+      <div className="flex flex-wrap gap-2">
+        {filterableColumns.length > 0 && (
+          <DataTableFilterPopover
+            activeCount={activeFilterCount}
+            onClearAll={() => table.resetColumnFilters()}
+            columns={filterableColumns.map((col) => ({
+              column: col,
+              label: getColumnLabel(col),
+              options: col.columnDef.meta?.filterOptions,
+            }))}
+          />
+        )}
+
+        {actionButtons}
+
+        {showExportButton ? (
+          <Button variant="outline" onClick={onExport} aria-label="Export table data to CSV">
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Export to CSV</span>
+          </Button>
+        ) : null}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" aria-label="Filter columns">
+              <Filter className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Filter Columns</span>
             </Button>
-          )}
-        </div>
-      )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {table
+              .getAllLeafColumns()
+              .filter((col) => col.getCanHide())
+              .map((col) => (
+                <DropdownMenuCheckboxItem
+                  key={col.id}
+                  className="capitalize"
+                  checked={col.getIsVisible()}
+                  onCheckedChange={(value) => col.toggleVisibility(!!value)}
+                >
+                  {getColumnLabel(col)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onResetColumns} className="text-red-600 hover:text-red-700">
+              Reset Columns
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }
@@ -704,7 +690,7 @@ export function DataTable<TData, TValue>({
           col.id !== 'actions' &&
           typeof col.columnDef.header === 'string',
       );
-  const hasActiveColumnFilters = columnFilters.length > 0;
+  const activeFilterCount = columnFilters.length;
 
   const stacked = useStackedView();
 
@@ -718,7 +704,7 @@ export function DataTable<TData, TValue>({
         setSearchScope={setSearchScope}
         searchableColumns={searchableColumns}
         filterableColumns={filterableColumns}
-        hasActiveColumnFilters={hasActiveColumnFilters}
+        activeFilterCount={activeFilterCount}
         actionButtons={actionButtons}
         showExportButton={showExportButton}
         onExport={exportToCSV}
