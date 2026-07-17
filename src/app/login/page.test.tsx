@@ -524,8 +524,82 @@ describe('LoginPage', () => {
         true,
       ),
     );
-    await waitFor(() => expect(showToastErrorMock).toHaveBeenCalledWith('Signup failed.'));
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith('Signup failed. Please try again.'),
+    );
     expect(signInMock).not.toHaveBeenCalled();
+  });
+
+  it('shows the server reason and pins it to the email field when the email is already registered (409)', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await switchMode(user, /Sign up/i);
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/system-settings/public')) {
+        return createJsonResponse({ timezone: 'UTC', allowSignup: true }, 200);
+      }
+      if (url.includes('/api/auth/signup')) {
+        return createJsonResponse({ error: 'Email already registered.' }, 409);
+      }
+      return createJsonResponse({}, 500);
+    });
+
+    fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
+    fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'linus@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/), { target: { value: 'StrongPass1!' } });
+    fireEvent.change(screen.getByLabelText('Confirm Password'), {
+      target: { value: 'StrongPass1!' },
+    });
+
+    await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith('Email already registered.'),
+    );
+    // stays on the signup form, does not bounce to login
+    expect(screen.getByLabelText('Confirm Password')).toBeInTheDocument();
+    expect(signInMock).not.toHaveBeenCalled();
+  });
+
+  it('shows the domain-not-allowed reason without treating a 403 as "signups disabled"', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await switchMode(user, /Sign up/i);
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/system-settings/public')) {
+        return createJsonResponse({ timezone: 'UTC', allowSignup: true }, 200);
+      }
+      if (url.includes('/api/auth/signup')) {
+        return createJsonResponse(
+          { error: 'Email domain not allowed. Allowed domains: psu.edu' },
+          403,
+        );
+      }
+      return createJsonResponse({}, 500);
+    });
+
+    fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
+    fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'linus@gmail.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/), { target: { value: 'StrongPass1!' } });
+    fireEvent.change(screen.getByLabelText('Confirm Password'), {
+      target: { value: 'StrongPass1!' },
+    });
+
+    await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith(
+        'Email domain not allowed. Allowed domains: psu.edu',
+      ),
+    );
+    // must NOT have been kicked to the login form
+    expect(screen.getByLabelText('Confirm Password')).toBeInTheDocument();
   });
 
   it('shows slowdown toast when signup route responds with 428', async () => {
@@ -607,7 +681,7 @@ describe('LoginPage', () => {
         return createJsonResponse({ timezone: 'UTC', allowSignup: true }, 200);
       }
       if (url.includes('/api/auth/signup')) {
-        return createJsonResponse({}, 403);
+        return createJsonResponse({ error: 'Signup is disabled.' }, 403);
       }
       return createJsonResponse({}, 500);
     });
@@ -623,7 +697,7 @@ describe('LoginPage', () => {
     await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
 
     await waitFor(() =>
-      expect(showToastErrorMock).toHaveBeenCalledWith('Signups are currently disabled.'),
+      expect(showToastErrorMock).toHaveBeenCalledWith('Signup is disabled.'),
     );
     expect(signInMock).not.toHaveBeenCalled();
   });

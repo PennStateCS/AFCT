@@ -276,24 +276,43 @@ export default function LoginPage() {
       return;
     }
 
-    if (res.status === 403) {
-      showToast.error('Signups are currently disabled.');
-      setMode('login');
-      return;
-    }
-
     if (!res.ok) {
-      showToast.error('Signup failed.');
+      // Surface the server's specific reason. 403 is overloaded — signup disabled
+      // vs. an email domain that isn't allowed — and 409 is a duplicate email.
+      const message =
+        (await res.json().catch(() => null))?.error ?? 'Signup failed. Please try again.';
+
+      if (res.status === 403 && /disabled/i.test(message)) {
+        showToast.error(message);
+        setMode('login');
+        return;
+      }
+      // Duplicate email or disallowed domain: pin it to the email field so the
+      // user sees which input to fix, not just a toast.
+      if (res.status === 409 || res.status === 403) {
+        setSignupErrors({ email: message });
+      }
+      showToast.error(message);
       return;
     }
 
-    await signIn('credentials', {
+    const signInResult = await signIn('credentials', {
       email: trimmed.email,
       password: trimmed.password,
       interactionMs: computeInteractionMs(),
       captchaToken: captchaToken ?? undefined,
       redirect: false,
     });
+
+    // The account was created; if the immediate auto-login didn't take, don't
+    // strand the user on a bounce — send them to sign in with a clear message.
+    if (signInResult?.error) {
+      showToast.success('Account created. Please sign in.');
+      setSignupErrors({});
+      setLoginEmail(trimmed.email);
+      setMode('login');
+      return;
+    }
 
     setSignupErrors({});
     window.location.href = '/dashboard';
