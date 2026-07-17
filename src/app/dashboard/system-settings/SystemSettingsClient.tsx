@@ -1075,7 +1075,7 @@ export default function SystemSettingsClient() {
                       disabled={disabled || upgradeBusy || upgradeInProgress}
                       options={upgradeableVersions.map((v) => ({
                         value: v.tag,
-                        label: v.label ? `${v.label} (${v.tag})` : v.tag,
+                        label: v.label && v.label !== v.tag ? `${v.label} (${v.tag})` : v.tag,
                       }))}
                       triggerClassName="border-black"
                     />
