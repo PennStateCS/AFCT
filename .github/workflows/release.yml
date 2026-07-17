@@ -31,6 +31,10 @@ jobs:
     steps:
       - name: Checkout (tagged commit)
         uses: actions/checkout@v5
+        with:
+          # Full history + tags so the manifest step can diff this tag against the
+          # previous release to decide whether a host-side installer run is needed.
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -122,6 +126,22 @@ jobs:
           set -eu
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Does an in-app upgrade to this release need a host-side installer run? Yes
+          # if the updater sidecar or the compose file changed since the previous
+          # release (the app can't apply either to itself). First release: no previous
+          # tag to diff, so it's a fresh install -> false.
+          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
+          RHU=false
+          if [ -n "$PREV" ]; then
+            if ! git diff --quiet "$PREV" "$TAG" -- docker/updater/ deploy/docker-compose.yml; then
+              RHU=true
+            fi
+            echo "changes vs ${PREV} in updater/compose -> requiresHostUpdate=${RHU}"
+          else
+            echo "no previous tag; requiresHostUpdate=false"
+          fi
+
           attempt=0
           while [ "$attempt" -lt 5 ]; do
             attempt=$((attempt + 1))
@@ -133,8 +153,8 @@ jobs:
             fi
             # Newest first; keep the moving "main" entry wherever it already sits.
             tmp=$(mktemp)
-            jq --arg t "$TAG" \
-               '.versions = ([{tag:$t, label:$t, notes:("Release " + $t + ".")}] + (.versions // []))' \
+            jq --arg t "$TAG" --argjson rhu "$RHU" \
+               '.versions = ([{tag:$t, label:$t, notes:("Release " + $t + "."), requiresHostUpdate:$rhu}] + (.versions // []))' \
                deploy/versions.json > "$tmp"
             mv "$tmp" deploy/versions.json
             git add deploy/versions.json

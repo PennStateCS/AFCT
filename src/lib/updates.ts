@@ -36,6 +36,10 @@ export type ReleaseVersion = {
   label?: string;
   notes?: string;
   releasedAt?: string;
+  // Set when an in-app upgrade alone isn't enough for this release — the updater
+  // sidecar or the compose file changed, and the app can't apply those to itself.
+  // The admin must run the installer on the host afterward to finish.
+  requiresHostUpdate?: boolean;
 };
 
 export type ReleaseManifest = { versions: ReleaseVersion[] };

@@ -40,6 +40,12 @@ Use a `vMAJOR.MINOR.PATCH` tag. Keep it in step with `version` in `package.json`
 - The manifest entry the workflow writes is minimal (`label` and `notes` default to
   the tag). Edit `deploy/versions.json` afterward if you want a friendlier label or
   real release notes shown in the Updates tab.
+- `requiresHostUpdate` is set automatically: if `docker/updater/**` or
+  `deploy/docker-compose.yml` changed since the previous release, the entry is flagged
+  and the Updates tab tells the admin to run `sh install.sh update` on the host after
+  upgrading (an in-app upgrade can't replace the updater or apply compose changes to
+  itself). Override it by editing the entry in `deploy/versions.json` if the
+  auto-detection is wrong for a given release.
 - To pull a bad release, remove its entry from `deploy/versions.json` on `main`. The
   updater stops offering it within its fetch interval; the image stays in GHCR but is
   no longer selectable.

@@ -8,6 +8,8 @@ export type ReleaseVersion = {
   label?: string;
   notes?: string;
   releasedAt?: string;
+  // See src/lib/updates.ts: this release also needs a host-side `install.sh update`.
+  requiresHostUpdate?: boolean;
 };
 
 export type UpdateStatus = {

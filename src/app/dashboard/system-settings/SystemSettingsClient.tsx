@@ -328,6 +328,7 @@ export default function SystemSettingsClient() {
   const upgradeableVersions = (upgradeInfo?.versions ?? []).filter(
     (v) => v.tag !== upgradeInfo?.current,
   );
+  const selectedVersionInfo = upgradeableVersions.find((v) => v.tag === selectedVersion);
   // Downgrade (restore) confirm: destructive, so gated behind a type-the-version box.
   const [restoreTarget, setRestoreTarget] = useState<{ version: string; backup: string } | null>(
     null,
@@ -1079,6 +1080,20 @@ export default function SystemSettingsClient() {
                       }))}
                       triggerClassName="border-black"
                     />
+                    {selectedVersionInfo?.notes && (
+                      <p className="text-muted-foreground text-sm">{selectedVersionInfo.notes}</p>
+                    )}
+                    {selectedVersionInfo?.requiresHostUpdate && (
+                      <div
+                        role="note"
+                        className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                      >
+                        This release also updates a component the in-app upgrade can’t
+                        replace on its own. After the upgrade finishes, run{' '}
+                        <code className="font-mono">sh install.sh update</code> on the
+                        server to complete it.
+                      </div>
+                    )}
                     <Button
                       type="button"
                       size="sm"
@@ -1113,6 +1128,13 @@ export default function SystemSettingsClient() {
                       may take a few minutes, during which the site may be briefly
                       unavailable. A failed upgrade is rolled back automatically.
                     </DialogDescription>
+                    {selectedVersionInfo?.requiresHostUpdate && (
+                      <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                        Afterward, run <code className="font-mono">sh install.sh update</code>{' '}
+                        on the server to finish updating a component the app can’t replace
+                        itself.
+                      </p>
+                    )}
                   </DialogHeader>
                   <DialogFooter>
                     <Button
