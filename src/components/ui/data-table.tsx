@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { DataTableFilterPopover } from '@/components/ui/data-table-faceted-filter';
 import {
-  Filter,
+  Columns3,
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
@@ -221,18 +221,11 @@ function DataTableToolbar<TData>({
 
         {actionButtons}
 
-        {showExportButton ? (
-          <Button variant="outline" onClick={onExport} aria-label="Export table data to CSV">
-            <FileDown className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Export to CSV</span>
-          </Button>
-        ) : null}
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" aria-label="Filter columns">
-              <Filter className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Filter Columns</span>
+            <Button variant="outline" aria-label="Columns">
+              <Columns3 className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Columns</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -255,6 +248,13 @@ function DataTableToolbar<TData>({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {showExportButton ? (
+          <Button variant="outline" onClick={onExport} aria-label="Export table data to CSV">
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Export</span>
+          </Button>
+        ) : null}
       </div>
     </div>
   );
