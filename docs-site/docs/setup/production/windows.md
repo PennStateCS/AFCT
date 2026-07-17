@@ -35,6 +35,10 @@ Do not continue until WSL 2 is available and all Docker commands succeed.
 
 ## Guided installation (recommended)
 
+:::warning Don't run the installer from a `git clone`
+Download the bundle into a fresh, empty directory as shown below — do **not** run the installer from a checkout of the repository. A clone contains a developer compose file that *builds* the nginx and backup images from local folders, and the installer will fail with an error like `unable to prepare context: path ".../docker/nginx" not found`. The downloaded `docker-compose.yml` pulls the prebuilt published images instead and needs no repository checkout. (A clone is only for the [manual method](#manual-installation).)
+:::
+
 Create a deployment directory and download the installer bundle:
 
 ```powershell
