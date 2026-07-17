@@ -16,9 +16,12 @@ x-logging: &default-logging
 
 services:
   app:
-    # The deployed app version. AFCT_APP_TAG (in .env.production) selects the image
-    # tag; it defaults to `main` when unset. The in-app updater sets this to perform
-    # an upgrade. nginx and the backup image track their own `:main` tag.
+    # The deployed stack version. AFCT_APP_TAG (in .env.production) selects the image
+    # tag for the whole stack — app, nginx, and backup all track it — and defaults to
+    # `main` when unset. The in-app updater sets this to perform an upgrade. Postgres
+    # is digest-pinned (not versioned); the updater image also tracks this tag but is
+    # only swapped by a host-side `docker compose pull` (it cannot recreate itself
+    # mid-upgrade).
     image: ghcr.io/pennstatecs/afct-dashboard:${AFCT_APP_TAG:-main}
     container_name: afct-app
     restart: unless-stopped
@@ -76,7 +79,8 @@ services:
       start_period: 60s
 
   nginx:
-    image: ghcr.io/pennstatecs/afct-nginx:main
+    # Versioned in lockstep with the app (see the app service above).
+    image: ghcr.io/pennstatecs/afct-nginx:${AFCT_APP_TAG:-main}
     container_name: afct-nginx
     restart: unless-stopped
     logging: *default-logging
@@ -153,7 +157,8 @@ services:
     # upload volumes. Schedule (on/off, hour, retention) comes from System Settings.
     # Copy the db_backups volume off-host regularly; it protects against bad
     # data/migrations, not host loss.
-    image: ghcr.io/pennstatecs/afct-backup:main
+    # Versioned in lockstep with the app (see the app service above).
+    image: ghcr.io/pennstatecs/afct-backup:${AFCT_APP_TAG:-main}
     container_name: afct-db-backup
     restart: unless-stopped
     logging: *default-logging
@@ -198,7 +203,10 @@ services:
     # in update_triggers, which this service validates (strict tag allowlist +
     # curated release manifest) and acts on. It only ever recreates the `app`
     # service, backing up first and rolling back to the previous image on failure.
-    image: ghcr.io/pennstatecs/afct-updater:main
+    # Tracks the stack version like the others, but an in-app upgrade never recreates
+    # this service (it can't replace the container its own process runs in); the new
+    # updater image is picked up by the next host-side `docker compose pull`/update.
+    image: ghcr.io/pennstatecs/afct-updater:${AFCT_APP_TAG:-main}
     container_name: afct-updater
     restart: unless-stopped
     logging: *default-logging

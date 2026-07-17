@@ -83,6 +83,35 @@ jobs:
           ignore-unfixed: true
           exit-code: '0'
 
+      # Sidecars, versioned in lockstep with the app so an upgrade moves the whole
+      # stack. Each gets the same immutable :vX.Y.Z tag as the dashboard image.
+      - name: Build and push nginx image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/nginx
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ghcr.io/pennstatecs/afct-nginx:${{ github.ref_name }}
+
+      - name: Build and push backup image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/backup
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ghcr.io/pennstatecs/afct-backup:${{ github.ref_name }}
+
+      - name: Build and push updater image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/updater
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: ghcr.io/pennstatecs/afct-updater:${{ github.ref_name }}
+
       # Add the new version to the curated manifest on main so the updater offers it.
       # Idempotent (skips if already listed) and race-safe against concurrent main
       # pushes. Committed to main, not the tag; [skip ci] keeps it from re-publishing.

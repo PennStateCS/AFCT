@@ -35,6 +35,13 @@ MANIFEST_URL="${UPDATER_MANIFEST_URL:-https://raw.githubusercontent.com/PennStat
 
 APP_SERVICE="${AFCT_APP_SERVICE:-app}"
 APP_CONTAINER="${AFCT_APP_CONTAINER:-afct-app}"
+# Sidecars versioned in lockstep with the app; recreated together on an upgrade.
+# Postgres (digest-pinned) and this updater are deliberately excluded — the updater
+# cannot recreate its own container mid-run, so its new image is picked up by the
+# next host-side `docker compose pull`.
+NGINX_SERVICE="${AFCT_NGINX_SERVICE:-nginx}"
+BACKUP_SERVICE="${AFCT_BACKUP_SERVICE:-db-backup}"
+STACK_SERVICES="${AFCT_STACK_SERVICES:-$APP_SERVICE $NGINX_SERVICE $BACKUP_SERVICE}"
 IMAGE_REPO="${UPDATER_IMAGE_REPO:-ghcr.io/pennstatecs/afct-dashboard}"
 DEFAULT_TAG="${UPDATER_DEFAULT_TAG:-main}"
 
@@ -130,8 +137,12 @@ set_app_tag() {
 
 recreate_app() {
   _proj=$1
-  dc "$_proj" pull "$APP_SERVICE" >/dev/null 2>&1 || return 1
-  dc "$_proj" up -d "$APP_SERVICE" >/dev/null 2>&1 || return 1
+  # Pull + recreate the app and its lockstep sidecars (nginx, backup) at the selected
+  # tag. Word-splitting of STACK_SERVICES is intentional (a list of service names).
+  # shellcheck disable=SC2086
+  dc "$_proj" pull $STACK_SERVICES >/dev/null 2>&1 || return 1
+  # shellcheck disable=SC2086
+  dc "$_proj" up -d $STACK_SERVICES >/dev/null 2>&1 || return 1
   return 0
 }
 

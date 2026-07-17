@@ -97,7 +97,12 @@ case "$cmd" in
         esac
         ;;
       pull) exit "${MOCK_PULL_RC:-0}" ;;
-      up) exit "${MOCK_UP_RC:-0}" ;;
+      up)
+        # Record the recreated services (e.g. "-d app nginx db-backup") so a test can
+        # assert what an upgrade touches.
+        [ -n "${MOCK_UP_LOG:-}" ] && printf '%s\n' "$*" >> "$MOCK_UP_LOG"
+        exit "${MOCK_UP_RC:-0}"
+        ;;
       ps)
         case "$*" in
           *-q*)

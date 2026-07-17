@@ -31,8 +31,12 @@ Use a `vMAJOR.MINOR.PATCH` tag. Keep it in step with `version` in `package.json`
 
 ## Notes
 
-- Only the **app** image is versioned. nginx, backup, and the updater track `:main`
-  by design, so a release only publishes the dashboard image.
+- All four images move in lockstep: a release builds `afct-dashboard`, `afct-nginx`,
+  `afct-backup`, and `afct-updater` at the same `:vX.Y.Z` tag, and the deploy compose
+  points every service at `${AFCT_APP_TAG}`. An in-app upgrade recreates the app,
+  nginx, and backup together. The **updater** image is versioned too, but the running
+  updater can't recreate its own container mid-upgrade — it picks up the new image on
+  the next host-side `sh install.sh update` / `docker compose pull`.
 - The manifest entry the workflow writes is minimal (`label` and `notes` default to
   the tag). Edit `deploy/versions.json` afterward if you want a friendlier label or
   real release notes shown in the Updates tab.

@@ -55,6 +55,18 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   run grep -q '^NEXTAUTH_SECRET=keepme$' .env.production; [ "$status" -eq 0 ]
 }
 
+@test "an upgrade recreates the app and its lockstep sidecars but not the updater" {
+  export MOCK_UP_LOG="$TESTDIR/up.log"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"ls1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  run grep -q 'app' "$TESTDIR/up.log"; [ "$status" -eq 0 ]
+  run grep -q 'nginx' "$TESTDIR/up.log"; [ "$status" -eq 0 ]
+  run grep -q 'db-backup' "$TESTDIR/up.log"; [ "$status" -eq 0 ]
+  # The updater must never recreate its own container.
+  run grep -q 'updater' "$TESTDIR/up.log"; [ "$status" -ne 0 ]
+}
+
 @test "an invalid tag is rejected and the version is unchanged" {
   request '{"action":"upgrade","tag":"bad tag!","requestId":"r2","backupFirst":false}'
   run sh updater.sh
