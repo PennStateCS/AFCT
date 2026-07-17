@@ -125,6 +125,9 @@ export const GET = withCourseAuth(
               lastName: true,
               email: true,
               avatar: true,
+              cropX: true,
+              cropY: true,
+              zoom: true,
             },
           })
         : [];
@@ -139,6 +142,9 @@ export const GET = withCourseAuth(
           lastName: u.lastName,
           email: u.email,
           avatar: u.avatar,
+          cropX: u.cropX,
+          cropY: u.cropY,
+          zoom: u.zoom,
         }));
 
       // Get assignments for the course

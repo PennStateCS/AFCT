@@ -184,6 +184,9 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
             firstName: 'Ada',
             lastName: 'Lovelace',
             avatar: null,
+            cropX: null,
+            cropY: null,
+            zoom: null,
             role: 'FACULTY',
           },
         },
@@ -267,6 +270,9 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
       firstName: null,
       lastName: null,
       avatar: null,
+      cropX: null,
+      cropY: null,
+      zoom: null,
       role: null,
     });
     expect(json.problemGrades.p1).toMatchObject({ grade: null, feedback: null });

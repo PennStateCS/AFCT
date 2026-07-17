@@ -298,6 +298,9 @@ describe('POST /api/comments', () => {
       firstName: null,
       lastName: null,
       avatar: null,
+      cropX: null,
+      cropY: null,
+      zoom: null,
       role: null,
     });
   });
