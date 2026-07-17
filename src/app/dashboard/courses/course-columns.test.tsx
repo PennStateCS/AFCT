@@ -255,9 +255,9 @@ describe('course-columns display cells', () => {
     expect(link.textContent?.endsWith('…')).toBe(true);
   });
 
-  it('formats a 6-character registration code as XXX-XXX, uppercased', () => {
-    renderCell('regCode', { regCode: 'abc123' });
-    expect(screen.getByText('ABC-123')).toBeInTheDocument();
+  it('formats an 8-character registration code as XXXX-XXXX, uppercased', () => {
+    renderCell('regCode', { regCode: 'abcd2345' });
+    expect(screen.getByText('ABCD-2345')).toBeInTheDocument();
   });
 
   it('centers the registration badge and labels an open window', () => {

@@ -156,7 +156,7 @@ export const columns = (
     cell: ({ row }) => {
       const raw = row.getValue<string>('regCode') || '';
       const upper = raw.toUpperCase();
-      const formatted = upper.length === 6 ? `${upper.slice(0, 3)}-${upper.slice(3)}` : upper;
+      const formatted = upper.length === 8 ? `${upper.slice(0, 4)}-${upper.slice(4)}` : upper;
       return <span>{formatted}</span>;
     },
   },

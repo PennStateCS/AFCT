@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -13,13 +13,19 @@ import {
 } from '@/components/ui/input-otp';
 import { apiPaths } from '@/lib/api-paths';
 
+// Registration codes are 8 characters (see src/lib/course-code.ts).
+const CODE_LENGTH = 8;
+const cleanCode = (raw: string) => raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
 export function JoinCourseModule() {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const autoJoinedRef = useRef(false);
 
-  const handleJoin = async () => {
-    if (code.length !== 6) {
-      toast.error('Please enter a valid 6-character registration code.');
+  const joinWithCode = useCallback(async (rawCode: string) => {
+    const clean = cleanCode(rawCode);
+    if (clean.length !== CODE_LENGTH) {
+      toast.error(`Please enter a valid ${CODE_LENGTH}-character registration code.`);
       return;
     }
 
@@ -28,7 +34,7 @@ export function JoinCourseModule() {
       const res = await fetch(apiPaths.courseJoin(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: clean }),
       });
 
       const data = await res.json();
@@ -40,17 +46,33 @@ export function JoinCourseModule() {
       toast.error(errorMessage);
     } finally {
       setLoading(false);
-      setCode(''); // ✅ Always clears boxes after click
+      setCode(''); // Always clear the boxes after an attempt.
     }
-  };
+  }, []);
 
-  const handleClear = () => {
-    setCode('');
-  };
+  // Join straight from a shared link: /dashboard?joinCode=XXXXXXXX. Runs once; the
+  // param is stripped afterward so a refresh doesn't re-attempt the join.
+  useEffect(() => {
+    if (autoJoinedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const linkCode = params.get('joinCode');
+    if (!linkCode) return;
+    autoJoinedRef.current = true;
+
+    const clean = cleanCode(linkCode).slice(0, CODE_LENGTH);
+    setCode(clean);
+    params.delete('joinCode');
+    const qs = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+
+    if (clean.length === CODE_LENGTH) void joinWithCode(clean);
+  }, [joinWithCode]);
+
+  const handleClear = () => setCode('');
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void handleJoin();
+    void joinWithCode(code);
   };
 
   return (
@@ -82,13 +104,12 @@ export function JoinCourseModule() {
               id="course-code"
               name="courseCode"
               aria-describedby="course-code-help"
-              maxLength={6}
+              maxLength={CODE_LENGTH}
               value={code.toUpperCase()}
               onPaste={(e) => {
-                e.preventDefault(); // Prevent the typical pasteing-in of data
-                const pastedData = e.clipboardData.getData('text/plain'); // Get what the user is trying to paste
-                const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, ''); // Replace all characters that are not A-Z0-9a-z with whitespace
-                setCode(processedData); // Set the processed data to the box
+                e.preventDefault(); // Prevent pasting raw data
+                const pastedData = e.clipboardData.getData('text/plain');
+                setCode(cleanCode(pastedData).slice(0, CODE_LENGTH));
               }}
               onChange={setCode}
               pattern="[A-Z0-9a-z]+$"
@@ -99,17 +120,19 @@ export function JoinCourseModule() {
                 <InputOTPSlot index={0} className="min-w-0" />
                 <InputOTPSlot index={1} className="min-w-0" />
                 <InputOTPSlot index={2} className="min-w-0" />
+                <InputOTPSlot index={3} className="min-w-0" />
               </InputOTPGroup>
               <InputOTPSeparator>-</InputOTPSeparator>
               <InputOTPGroup className="min-w-0">
-                <InputOTPSlot index={3} className="min-w-0" />
                 <InputOTPSlot index={4} className="min-w-0" />
                 <InputOTPSlot index={5} className="min-w-0" />
+                <InputOTPSlot index={6} className="min-w-0" />
+                <InputOTPSlot index={7} className="min-w-0" />
               </InputOTPGroup>
             </InputOTP>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button type="submit" disabled={loading || code.length !== 6}>
+            <Button type="submit" disabled={loading || code.length !== CODE_LENGTH}>
               {loading ? 'Joining...' : 'Join'}
             </Button>
             <Button

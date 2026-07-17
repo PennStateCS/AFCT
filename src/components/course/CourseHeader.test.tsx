@@ -41,7 +41,7 @@ const mockCourse: FullCourse = {
   deletedAt: null,
   timezone: 'America/New_York',
   emptyStringNotation: 'EPSILON',
-  regCode: 'abc123',
+  regCode: 'abcd2345',
   createdAt: new Date('2025-06-01T13:00:00Z'),
   updatedAt: new Date('2025-06-01T13:00:00Z'),
   problems: [],
@@ -110,12 +110,12 @@ describe('CourseHeader', () => {
 
     render(<CourseHeader course={mockCourse} isStudent={false} />);
 
-    // Displayed grouped as ABC-123 for readability.
-    expect(screen.getByText('ABC-123')).toBeInTheDocument();
+    // Displayed grouped as ABCD-2345 for readability.
+    expect(screen.getByText('ABCD-2345')).toBeInTheDocument();
 
-    // Copies the plain 6-character code the join endpoint expects.
+    // Copies the plain 8-character code the join endpoint expects.
     fireEvent.click(screen.getByRole('button', { name: /copy join code/i }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith('ABC123'));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('ABCD2345'));
     expect(toastMock.success).toHaveBeenCalled();
   });
 });

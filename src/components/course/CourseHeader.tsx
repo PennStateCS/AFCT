@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, Link as LinkIcon } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,24 +15,29 @@ interface CourseHeaderProps {
 }
 
 /**
- * The course join (registration) code plus a one-click copy. The code is shown
- * grouped as `ABC-123` for readability, but the copied value is the plain
- * 6-character code that the join endpoint expects.
+ * The course join (registration) code plus one-click copy of the code and of a
+ * shareable invite link. The code is shown grouped as `ABCD-EFGH` for readability,
+ * but the copied value is the plain 8-character code the join endpoint expects; the
+ * invite link is `/dashboard?joinCode=<code>`, which joins the course on open.
  */
 function JoinCode({ code }: { code: string }) {
-  const [copied, setCopied] = React.useState(false);
-  const formatted = code.length === 6 ? `${code.slice(0, 3)}-${code.slice(3)}` : code;
+  const [copied, setCopied] = React.useState<null | 'code' | 'link'>(null);
+  const formatted = code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
 
-  const handleCopy = async () => {
+  const copy = async (value: string, which: 'code' | 'link', okMsg: string) => {
     try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      showToast.success('Join code copied');
-      window.setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(value);
+      setCopied(which);
+      showToast.success(okMsg);
+      window.setTimeout(() => setCopied(null), 1500);
     } catch {
-      showToast.error('Could not copy the join code');
+      showToast.error('Could not copy to the clipboard');
     }
   };
+
+  const copyCode = () => void copy(code, 'code', 'Join code copied');
+  const copyLink = () =>
+    void copy(`${window.location.origin}/dashboard?joinCode=${code}`, 'link', 'Invite link copied');
 
   return (
     <span className="flex items-center gap-1.5">
@@ -43,14 +48,29 @@ function JoinCode({ code }: { code: string }) {
         variant="ghost"
         size="icon"
         className="h-6 w-6"
-        onClick={handleCopy}
-        aria-label={copied ? 'Join code copied' : `Copy join code ${formatted}`}
+        onClick={copyCode}
+        aria-label={copied === 'code' ? 'Join code copied' : `Copy join code ${formatted}`}
         title="Copy join code"
       >
-        {copied ? (
+        {copied === 'code' ? (
           <Check className="h-3.5 w-3.5 text-green-600" />
         ) : (
           <Copy className="h-3.5 w-3.5" />
+        )}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6"
+        onClick={copyLink}
+        aria-label={copied === 'link' ? 'Invite link copied' : 'Copy invite link'}
+        title="Copy invite link"
+      >
+        {copied === 'link' ? (
+          <Check className="h-3.5 w-3.5 text-green-600" />
+        ) : (
+          <LinkIcon className="h-3.5 w-3.5" />
         )}
       </Button>
     </span>

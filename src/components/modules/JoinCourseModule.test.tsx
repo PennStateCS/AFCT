@@ -46,6 +46,8 @@ beforeEach(() => {
   toastError.mockReset();
   fetchMock.mockReset();
   global.fetch = fetchMock as unknown as typeof fetch;
+  // Reset the URL so a prior test's ?joinCode= doesn't leak into the next.
+  window.history.pushState({}, '', '/dashboard');
 });
 
 afterAll(() => {
@@ -76,7 +78,7 @@ describe('JoinCourseModule', () => {
     render(<JoinCourseModule />);
 
     const input = screen.getByLabelText('otp-input');
-    await user.type(input, 'ABCDEF');
+    await user.type(input, 'ABCD2345');
 
     const joinButton = screen.getByRole('button', { name: 'Join' });
     expect(joinButton).toBeEnabled();
@@ -89,7 +91,7 @@ describe('JoinCourseModule', () => {
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: 'ABCDEF' }),
+          body: JSON.stringify({ code: 'ABCD2345' }),
         }),
       ),
     );
@@ -108,10 +110,31 @@ describe('JoinCourseModule', () => {
     render(<JoinCourseModule />);
 
     const input = screen.getByLabelText('otp-input');
-    await user.type(input, 'ABCDEF');
+    await user.type(input, 'ABCD2345');
     await user.click(screen.getByRole('button', { name: 'Join' }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Invalid code'));
     expect(input).toHaveValue('');
+  });
+
+  it('auto-joins from a ?joinCode= link and strips the param', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ course: { name: 'Linked Course' } }),
+    } as Response);
+    window.history.pushState({}, '', '/dashboard?joinCode=ABCD2345&keep=1');
+
+    render(<JoinCourseModule />);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/courses/join',
+        expect.objectContaining({ body: JSON.stringify({ code: 'ABCD2345' }) }),
+      ),
+    );
+    expect(toastSuccess).toHaveBeenCalledWith('You have joined Linked Course');
+    // The joinCode param is stripped so a refresh won't re-join; other params stay.
+    expect(window.location.search).not.toContain('joinCode');
+    expect(window.location.search).toContain('keep=1');
   });
 });
