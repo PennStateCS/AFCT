@@ -37,7 +37,6 @@ const sidebars: SidebarsConfig = {
       label: 'Operations',
       items: [
         'operations/system-settings',
-        'operations/updates',
         'operations/backups',
         'operations/https-certificates',
         'operations/troubleshooting',
@@ -47,6 +46,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Reference',
       items: [
+        'reference/updates',
         'reference/roles-and-permissions',
         'reference/client-api',
         'reference/deployment-architecture',

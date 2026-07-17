@@ -68,4 +68,4 @@ Upgrade or downgrade AFCT from the browser. This tab is functional only when the
 - **Current version** and a list of published releases to upgrade to. An upgrade backs up the database first, downloads the new version, restarts, and rolls back automatically if the new version fails its health check.
 - **Restore a previous version**: downgrades by restoring the database backup taken before that version was replaced. This **permanently discards everything created since that backup** — submissions, grades, accounts — and is confirmed by typing the target version. Treat it as recovery, not a casual undo.
 
-See [Update AFCT](updates.md) for the command-line equivalent and details.
+See [Update AFCT](../reference/updates.md) for the command-line equivalent and details.
