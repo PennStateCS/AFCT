@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getInitials } from '@/app/utils/initials';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +9,6 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
 import { AvatarCrop, type AvatarCropRef } from '../AvatarCrop';
 import { Trash2, Upload } from 'lucide-react';
@@ -230,58 +228,43 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
           {/* Avatar */}
           <div className="flex flex-col items-center gap-3">
             <Label className="text-center w-full">Avatar Image</Label>
-            <div className="flex items-center justify-center gap-4 w-full">
-              <Avatar className="h-20 w-20">
-                <AvatarImage
-                  src={avatarPreview || undefined}
-                  alt="User Avatar"
-                  cropX={avatarCrop.cropX}
-                  cropY={avatarCrop.cropY}
-                  zoom={avatarCrop.zoom}
-                />
-                <AvatarFallback className="bg-secondary text-secondary-foreground">
-                  {getInitials(user.firstName, user.lastName, user.email)}
-                </AvatarFallback>
-              </Avatar>
-
-              <div className="flex w-full max-w-xs flex-col gap-3">
-                <input
-                  id="avatar-upload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
-                />
+            {/* No separate preview: the crop editor below shows the current image. */}
+            <input
+              id="avatar-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
+            />
+            <div className="flex w-full gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => document.getElementById('avatar-upload')?.click()}
+                className="flex flex-1 items-center justify-center gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                Upload Avatar
+              </Button>
+              {avatarPreview && (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => document.getElementById('avatar-upload')?.click()}
-                  className="flex items-center gap-2"
+                  className="flex flex-1 items-center justify-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
+                  onClick={handleDeleteAvatar}
                 >
-                  <Upload className="h-4 w-4" />
-                  Upload Avatar
+                  <Trash2 className="h-4 w-4" />
+                  Delete Avatar
                 </Button>
-                {errors.avatarFile?.message && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {typeof errors.avatarFile?.message === 'string'
-                      ? errors.avatarFile.message
-                      : String(errors.avatarFile?.message)}
-                  </p>
-                )}
-
-                {avatarPreview && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
-                    onClick={handleDeleteAvatar}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Avatar
-                  </Button>
-                )}
-              </div>
+              )}
             </div>
+            {errors.avatarFile?.message && (
+              <p className="text-xs text-red-600">
+                {typeof errors.avatarFile?.message === 'string'
+                  ? errors.avatarFile.message
+                  : String(errors.avatarFile?.message)}
+              </p>
+            )}
           </div>
 
           {avatarPreview ? (
