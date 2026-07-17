@@ -29,7 +29,7 @@ MANIFEST_FILE="${UPDATER_MANIFEST_FILE:-/afct/versions.json}"
 
 APP_SERVICE="${AFCT_APP_SERVICE:-app}"
 APP_CONTAINER="${AFCT_APP_CONTAINER:-afct-app}"
-IMAGE_REPO="${UPDATER_IMAGE_REPO:-ghcr.io/pennstatewilkes-barre/afct-dashboard}"
+IMAGE_REPO="${UPDATER_IMAGE_REPO:-ghcr.io/pennstatecs/afct-dashboard}"
 DEFAULT_TAG="${UPDATER_DEFAULT_TAG:-main}"
 
 BACKUP_TRIGGER_DIR="${BACKUP_TRIGGER_DIR:-/backup-triggers}"

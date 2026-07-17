@@ -2,10 +2,10 @@
 
 End-user documentation (guides, installation, operations, reference) lives in the
 Docusaurus site under [`docs-site/`](../docs-site/) and is published at
-<https://pennstatewilkes-barre.github.io/AFCT-Dashboard/>. The generated HTTP API
+<https://pennstatecs.github.io/AFCT/>. The generated HTTP API
 reference is published on the same site under
-[/api-reference/](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api-reference/afct-dashboard-api);
-the [OpenAPI specification](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api/openapi.json)
+[/api-reference/](https://pennstatecs.github.io/AFCT/api-reference/afct-dashboard-api);
+the [OpenAPI specification](https://pennstatecs.github.io/AFCT/api/openapi.json)
 can be imported into Postman, Insomnia, and OpenAPI client generators.
 
 To edit the published docs, edit the Markdown under

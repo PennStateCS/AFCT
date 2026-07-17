@@ -5,7 +5,7 @@
 Please report security issues **privately**; do not open a public issue for a
 suspected vulnerability.
 
-- Preferred: use GitHub's **[Report a vulnerability](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/security/advisories/new)**
+- Preferred: use GitHub's **[Report a vulnerability](https://github.com/PennStateCS/AFCT/security/advisories/new)**
   (Security → Advisories) to open a private advisory.
 - Or email the maintainer at **jdc308@psu.edu** with the details and, if possible,
   steps to reproduce.

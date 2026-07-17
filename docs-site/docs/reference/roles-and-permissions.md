@@ -32,7 +32,7 @@ Each user has at most one roster role in a course because `Roster` is unique on 
 
 ## Course authorization helpers
 
-Course routes use the helpers in [`src/lib/permissions.ts`](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/blob/main/src/lib/permissions.ts).
+Course routes use the helpers in [`src/lib/permissions.ts`](https://github.com/PennStateCS/AFCT/blob/main/src/lib/permissions.ts).
 
 | Helper | Access rule | Typical use |
 |---|---|---|

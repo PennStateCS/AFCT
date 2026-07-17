@@ -25,4 +25,4 @@ Once deployed, see [updates](operations/updates.md), [backups](operations/backup
 
 ## Integrating with AFCT
 
-The HTTP API is documented in the [API Reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api-reference/afct-dashboard-api), generated from the code on every release. The native submission client uses the token-authenticated [client API](reference/client-api.md).
+The HTTP API is documented in the [API Reference](https://pennstatecs.github.io/AFCT/api-reference/afct-dashboard-api), generated from the code on every release. The native submission client uses the token-authenticated [client API](reference/client-api.md).

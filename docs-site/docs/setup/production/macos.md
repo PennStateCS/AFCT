@@ -42,7 +42,7 @@ Create a deployment directory and download the installer bundle:
 mkdir afct
 cd afct
 
-BASE=https://raw.githubusercontent.com/PennStateWilkes-Barre/AFCT-Dashboard/main/deploy
+BASE=https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy
 
 curl -fLO "$BASE/install.sh"
 curl -fLO "$BASE/docker-compose.yml"
@@ -99,8 +99,8 @@ Most deployments should use the guided installer above. Use the manual method on
 Clone the repository and create the environment file:
 
 ```bash
-git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
-cd AFCT-Dashboard
+git clone https://github.com/PennStateCS/AFCT.git
+cd AFCT
 cp .env.production.example .env.production
 nano .env.production
 ```

@@ -3,18 +3,18 @@ import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 // Published to GitHub Pages as a project site, so every route lives under
-// /AFCT-Dashboard/. The generated OpenAPI reference (Redoc) is copied into the
+// /AFCT/. The generated OpenAPI reference (Redoc) is copied into the
 // same Pages artifact under /api/ by .github/workflows/docs.yml.
 const config: Config = {
   title: 'AFCT Dashboard',
   tagline: 'Automated Feedback for CS Theory',
   favicon: 'img/favicon.ico',
 
-  url: 'https://pennstatewilkes-barre.github.io',
-  baseUrl: '/AFCT-Dashboard/',
+  url: 'https://pennstatecs.github.io',
+  baseUrl: '/AFCT/',
 
-  organizationName: 'PennStateWilkes-Barre',
-  projectName: 'AFCT-Dashboard',
+  organizationName: 'PennStateCS',
+  projectName: 'AFCT',
 
   onBrokenLinks: 'throw',
 
@@ -64,7 +64,7 @@ const config: Config = {
           // Docs-only site: serve the docs at the site root.
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/tree/main/docs-site/',
+          editUrl: 'https://github.com/PennStateCS/AFCT/tree/main/docs-site/',
           // Renders the generated OpenAPI pages (everything else falls through
           // to the default doc component).
           docItemComponent: '@theme/ApiItem',
@@ -94,7 +94,7 @@ const config: Config = {
           label: 'API Reference',
         },
         {
-          href: 'https://github.com/PennStateWilkes-Barre/AFCT-Dashboard',
+          href: 'https://github.com/PennStateCS/AFCT',
           label: 'GitHub',
           position: 'right',
         },
@@ -120,7 +120,7 @@ const config: Config = {
             },
             {
               label: 'OpenAPI spec',
-              href: 'https://pennstatewilkes-barre.github.io/AFCT-Dashboard/api/openapi.json',
+              href: 'https://pennstatecs.github.io/AFCT/api/openapi.json',
             },
             { label: 'Roles and permissions', to: '/reference/roles-and-permissions' },
           ],
@@ -130,7 +130,7 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/PennStateWilkes-Barre/AFCT-Dashboard',
+              href: 'https://github.com/PennStateCS/AFCT',
             },
           ],
         },

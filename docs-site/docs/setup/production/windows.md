@@ -41,7 +41,7 @@ Create a deployment directory and download the installer bundle:
 New-Item -ItemType Directory -Path afct -Force | Out-Null
 Set-Location afct
 
-$base = 'https://raw.githubusercontent.com/PennStateWilkes-Barre/AFCT-Dashboard/main/deploy'
+$base = 'https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy'
 
 foreach ($file in 'install.ps1', 'docker-compose.yml', '.env.production.example') {
     Invoke-WebRequest "$base/$file" -OutFile $file
@@ -104,8 +104,8 @@ Most deployments should use the guided installer above. Use the manual method on
 Clone the repository and create the environment file:
 
 ```powershell
-git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
-Set-Location .\AFCT-Dashboard
+git clone https://github.com/PennStateCS/AFCT.git
+Set-Location .\AFCT
 Copy-Item .env.production.example .env.production
 notepad .env.production
 ```

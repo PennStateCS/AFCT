@@ -15,7 +15,7 @@ export const UPDATE_RESTORE_POINTS_FILE = path.join(UPDATE_TRIGGER_DIR, 'restore
 // build; override for a pinned or mirrored deployment.
 export const UPDATE_MANIFEST_URL =
   process.env.UPDATE_MANIFEST_URL ||
-  'https://raw.githubusercontent.com/PennStateWilkes-Barre/AFCT-Dashboard/main/deploy/versions.json';
+  'https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy/versions.json';
 
 // Same tag rule the updater sidecar enforces: letters, digits, and . _ - only,
 // not leading with a separator. Keep the two in sync.

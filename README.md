@@ -12,8 +12,8 @@ Built with:
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38B2AC?logo=tailwindcss&logoColor=white)
 ![Auth.js](https://img.shields.io/badge/Auth.js-NextAuth%20v5-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript)
-[![CI](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/ci.yml)
-[![Publish Docker image to GHCR](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml/badge.svg?branch=main)](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml)
+[![CI](https://github.com/PennStateCS/AFCT/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/PennStateCS/AFCT/actions/workflows/ci.yml)
+[![Publish Docker image to GHCR](https://github.com/PennStateCS/AFCT/actions/workflows/publish-ghcr.yml/badge.svg?branch=main)](https://github.com/PennStateCS/AFCT/actions/workflows/publish-ghcr.yml)
 
 ## Tech Stack
 
@@ -43,7 +43,7 @@ This collaboration supports the continued development, deployment, and study of 
 
 ## Documentation
 
-Developer and user documentation is available at: **<https://pennstatewilkes-barre.github.io/AFCT-Dashboard/>**
+Developer and user documentation is available at: **<https://pennstatecs.github.io/AFCT/>**
 
 ## Contributors
 

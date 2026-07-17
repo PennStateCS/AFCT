@@ -6,9 +6,9 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git"
+    "url": "git+https://github.com/PennStateCS/AFCT.git"
   },
-  "homepage": "https://github.com/PennStateWilkes-Barre/AFCT-Dashboard#readme",
+  "homepage": "https://github.com/PennStateCS/AFCT#readme",
   "engines": {
     "node": ">=22.0.0"
   },

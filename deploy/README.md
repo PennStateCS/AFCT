@@ -18,7 +18,7 @@ the server, then run the installer.
 **Once this repository is public:**
 
 ```sh
-BASE=https://raw.githubusercontent.com/PennStateWilkes-Barre/AFCT-Dashboard/main/deploy
+BASE=https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy
 wget "$BASE/install.sh" "$BASE/docker-compose.yml" "$BASE/.env.production.example"
 sh install.sh
 ```
@@ -29,8 +29,8 @@ authentication. On a machine that's logged in:
 ```sh
 docker login ghcr.io                 # once, if not already
 # get the deploy/ folder, e.g. clone the repo, or use the GitHub "Code -> Download":
-git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
-cd AFCT-Dashboard/deploy
+git clone https://github.com/PennStateCS/AFCT.git
+cd AFCT/deploy
 sh install.sh
 ```
 
@@ -41,7 +41,7 @@ Install **Docker Desktop** (with WSL 2) and make sure it's running. Then, in
 
 ```powershell
 # Once the repository is public:
-$base = 'https://raw.githubusercontent.com/PennStateWilkes-Barre/AFCT-Dashboard/main/deploy'
+$base = 'https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy'
 foreach ($f in 'install.ps1', 'docker-compose.yml', '.env.production.example') {
   Invoke-WebRequest "$base/$f" -OutFile $f
 }

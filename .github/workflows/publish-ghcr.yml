@@ -53,7 +53,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/pennstatewilkes-barre/afct-dashboard
+          images: ghcr.io/pennstatecs/afct-dashboard
           tags: |
             type=raw,value=main
             type=sha,format=short,prefix=sha-
@@ -114,7 +114,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ghcr.io/pennstatewilkes-barre/afct-dashboard@${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
+          image-ref: ghcr.io/pennstatecs/afct-dashboard@${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
           format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: true
@@ -141,7 +141,7 @@ jobs:
             echo "No digest available; skipping pin."
             exit 0
           fi
-          IMAGE="ghcr.io/pennstatewilkes-barre/afct-dashboard@${DIGEST}"
+          IMAGE="ghcr.io/pennstatecs/afct-dashboard@${DIGEST}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -151,7 +151,7 @@ jobs:
             git fetch origin "$BRANCH"
             git checkout -B "$BRANCH" "origin/$BRANCH"
             sed -i -E \
-              "s#^([[:space:]]*image:[[:space:]]*)ghcr\.io/pennstatewilkes-barre/afct-dashboard.*#\1${IMAGE}#" \
+              "s#^([[:space:]]*image:[[:space:]]*)ghcr\.io/pennstatecs/afct-dashboard.*#\1${IMAGE}#" \
               docker-compose.yml
             if git diff --quiet -- docker-compose.yml; then
               echo "docker-compose.yml already pinned to ${DIGEST}."
@@ -182,8 +182,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
-            ghcr.io/pennstatewilkes-barre/afct-nginx:main
-            ghcr.io/pennstatewilkes-barre/afct-nginx:sha-${{ github.event.workflow_run.head_sha }}
+            ghcr.io/pennstatecs/afct-nginx:main
+            ghcr.io/pennstatecs/afct-nginx:sha-${{ github.event.workflow_run.head_sha }}
 
       - name: Build and push backup image
         if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
@@ -194,8 +194,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
-            ghcr.io/pennstatewilkes-barre/afct-backup:main
-            ghcr.io/pennstatewilkes-barre/afct-backup:sha-${{ github.event.workflow_run.head_sha }}
+            ghcr.io/pennstatecs/afct-backup:main
+            ghcr.io/pennstatecs/afct-backup:sha-${{ github.event.workflow_run.head_sha }}
 
       - name: Build and push updater image
         if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
@@ -206,5 +206,5 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
-            ghcr.io/pennstatewilkes-barre/afct-updater:main
-            ghcr.io/pennstatewilkes-barre/afct-updater:sha-${{ github.event.workflow_run.head_sha }}
+            ghcr.io/pennstatecs/afct-updater:main
+            ghcr.io/pennstatecs/afct-updater:sha-${{ github.event.workflow_run.head_sha }}

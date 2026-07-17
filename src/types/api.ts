@@ -15,7 +15,7 @@ export interface paths {
          * List exportable log fields
          * @description Lists the activity-log columns that may be included in a CSV export; drives the  Download dialog's field picker. Nested under `export` because it describes what  the sibling `POST /admin/logs/export` accepts. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/export/fields/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/logs/export/fields/route.ts)
          */
         get: operations["getAdminLogsExportFields"];
         put?: never;
@@ -39,7 +39,7 @@ export interface paths {
          * Export activity logs
          * @description Returns the selected activity-log columns within a time range, for CSV export.  System administrators only. Column names are validated against the exportable allow-list  before reaching the Prisma select (guards field injection), and the result is  capped at MAX_EXPORT_ROWS so one export can't page the whole table into memory.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/export/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/logs/export/route.ts)
          */
         post: operations["postAdminLogsExport"];
         delete?: never;
@@ -59,7 +59,7 @@ export interface paths {
          * List activity (audit) logs
          * @description A single page of activity (audit) logs, newest first, with `userId` resolved to  the author's display name. Search, severity filter, and sort all run server-side.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/logs/route.ts)
          */
         get: operations["getAdminLogs"];
         put?: never;
@@ -83,7 +83,7 @@ export interface paths {
          * Reset a user's password (admin)
          * @description Sets another user's password on their behalf (an admin-initiated reset).  System administrators only; the new password still has to meet the strength  policy. Pass `isTemporary` to force a change at next login. The plaintext  password is never logged, only who reset whom.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/reset-password/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/reset-password/route.ts)
          */
         post: operations["postAdminResetPassword"];
         delete?: never;
@@ -103,7 +103,7 @@ export interface paths {
          * Download a backup file
          * @description Streams a single backup file to the caller as an attachment. System administrators only.  A database dump contains the entire database (password hashes and all PII), so  the download is always recorded as a SECURITY audit event. The filename is  checked against a strict allow-list and the resolved path must stay inside the  backup directory: two independent guards against path traversal.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/download/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/backups/download/route.ts)
          */
         get: operations["getAdminSettingsBackupsDownload"];
         put?: never;
@@ -125,7 +125,7 @@ export interface paths {
          * List backups
          * @description Lists available backups, newest first, each pairing a database dump with its  matching upload-files archive. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/backups/route.ts)
          */
         get: operations["getAdminSettingsBackups"];
         put?: never;
@@ -133,7 +133,7 @@ export interface paths {
          * Trigger a backup now
          * @description Requests an on-demand backup by dropping a trigger file the db-backup container  polls for. System administrators only. Returns 202 (accepted); the backup runs  asynchronously in that container, not in this request.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/backups/route.ts)
          */
         post: operations["postAdminSettingsBackups"];
         delete?: never;
@@ -153,14 +153,14 @@ export interface paths {
          * Get system settings
          * @description Returns the singleton system settings, falling back to defaults for any unset  field. The hCaptcha secret is never returned; only `hcaptchaSecretConfigured`  reports whether one is stored. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/route.ts)
          */
         get: operations["getAdminSettings"];
         /**
          * Update system settings
          * @description Updates the singleton system settings (upsert). Every field is optional, so a  partial payload only touches the fields it includes; numeric fields are clamped  to safe bounds and an invalid timezone is rejected. The hCaptcha secret is  write-only: send a non-empty `hcaptchaSecretKey` to set it, or  `hcaptchaSecretClear: true` to remove it. Changes are audited (never the secret  value). System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/route.ts)
          */
         put: operations["putAdminSettings"];
         post?: never;
@@ -181,7 +181,7 @@ export interface paths {
          * Get TLS certificate status
          * @description Returns metadata about the currently installed TLS certificate and whether a  CSR is awaiting a signed cert. Admin only. Never returns key or PEM material.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/tls/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/tls/route.ts)
          */
         get: operations["getAdminSettingsTls"];
         put?: never;
@@ -189,14 +189,14 @@ export interface paths {
          * Install or generate a TLS certificate
          * @description Performs a certificate operation, chosen by the `action` field. Admin only;  unauthorized-but-authenticated attempts are recorded as a security event. Cert  bodies and keys are accepted in the request but never echoed back or logged.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/tls/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/tls/route.ts)
          */
         post: operations["postAdminSettingsTls"];
         /**
          * Reset TLS to a self-signed certificate
          * @description Removes the installed certificate and reverts to a self-signed one. Admin only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/tls/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/tls/route.ts)
          */
         delete: operations["deleteAdminSettingsTls"];
         options?: never;
@@ -215,7 +215,7 @@ export interface paths {
          * Get upgrade status and available versions
          * @description Reports the deployed version, the available curated releases, and the latest  progress of any in-flight upgrade. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/upgrade/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/upgrade/route.ts)
          */
         get: operations["getAdminSettingsUpgrade"];
         put?: never;
@@ -223,7 +223,7 @@ export interface paths {
          * Request an application upgrade or downgrade
          * @description Requests an application upgrade to a curated release by dropping a validated  request for the updater sidecar to perform. System administrators only. Returns  202; the swap, health check, and rollback happen asynchronously in the sidecar.  Upgrade to a curated release, or DOWNGRADE by restoring a recorded pre-upgrade  backup (which permanently discards everything created since it). Returns 202.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/upgrade/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/upgrade/route.ts)
          */
         post: operations["postAdminSettingsUpgrade"];
         delete?: never;
@@ -243,7 +243,7 @@ export interface paths {
          * Database status
          * @description Database tab: reachability, engine details, per-engine stats (Postgres or  SQLite), and the last migration. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/database/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/database/route.ts)
          */
         get: operations["getAdminStatusDatabase"];
         put?: never;
@@ -265,7 +265,7 @@ export interface paths {
          * Docker/container status
          * @description Docker tab: container detection (cgroups, /.dockerenv, env hints) and container  id / hostname when running inside a container. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/docker/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/docker/route.ts)
          */
         get: operations["getAdminStatusDocker"];
         put?: never;
@@ -287,7 +287,7 @@ export interface paths {
          * Abandoned-file report
          * @description Files tab: report of orphaned uploads, files on disk that no DB row  references, by category, with up to 50 samples. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/files/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/files/route.ts)
          */
         get: operations["getAdminStatusFiles"];
         put?: never;
@@ -296,7 +296,7 @@ export interface paths {
          * Delete an orphaned upload
          * @description Deletes a single orphaned upload. Guards on every axis (known category,  separator-free name, still unreferenced, path stays inside the category  folder). System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/files/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/files/route.ts)
          */
         delete: operations["deleteAdminStatusFiles"];
         options?: never;
@@ -315,7 +315,7 @@ export interface paths {
          * Network status (DNS/TLS/latency/error-rate)
          * @description Network tab: DNS resolution for the DB and auth hosts, auth-endpoint latency +  TLS certificate expiry, DB round-trip latency and connection count, and recent  error-rate ratios. DNS/TLS are TTL-cached. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/network/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/network/route.ts)
          */
         get: operations["getAdminStatusNetwork"];
         put?: never;
@@ -337,7 +337,7 @@ export interface paths {
          * Server status (host + process + software)
          * @description Server tab: host + process metrics (uptime, CPU/memory/disk-IO sample, OS, IP  addresses) and software versions (Node/Next/Java/evaluator + build metadata).  System administrators only. Tool versions are TTL-cached server-side.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/server/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/server/route.ts)
          */
         get: operations["getAdminStatusServer"];
         put?: never;
@@ -359,7 +359,7 @@ export interface paths {
          * Active session status
          * @description Session tab: recent active sessions (last 24h, deduped) and rolling 5/15/60m  counts, from the audit log. Includes other users' session PII (emails, IPs), so  system administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/sessions/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/sessions/route.ts)
          */
         get: operations["getAdminStatusSessions"];
         put?: never;
@@ -381,7 +381,7 @@ export interface paths {
          * Status summary (top cards)
          * @description Summary cards at the top of the status dashboard: DB reachability/provider,  uptime, process CPU/memory, DB table count + size, 24h session counts, and this  probe's own latency. Fast by design so it renders immediately while the per-tab  detail loads lazily. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/summary/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/summary/route.ts)
          */
         get: operations["getAdminStatusSummary"];
         put?: never;
@@ -405,7 +405,7 @@ export interface paths {
          * List submissions for problems (admin)
          * @description Returns every submission across a set of problems, flattened for the admin  grading view: student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/submissions/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/submissions/route.ts)
          */
         post: operations["postAdminSubmissions"];
         delete?: never;
@@ -427,7 +427,7 @@ export interface paths {
          * Bulk-create users
          * @description Bulk-creates user accounts from parsed spreadsheet rows (the CSV import flow).  System administrators only. Accounts are created with no global role. Each row  is validated independently: a bad row  is collected in `failed` with a reason rather than aborting the batch, so the  response always reports per-row created/failed outcomes. Duplicate emails are  caught both within the batch and against existing users. `temporaryPasswords`  forces a reset at first login.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/bulk/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/users/bulk/route.ts)
          */
         post: operations["postAdminUsersBulk"];
         delete?: never;
@@ -447,7 +447,7 @@ export interface paths {
          * List users (lightweight)
          * @description Lightweight user list used to refresh the users table without the audit-logging  side effect of the main `/api/users` GET. Same admin restriction, but read-only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/list/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/users/list/route.ts)
          */
         get: operations["getAdminUsersList"];
         put?: never;
@@ -469,7 +469,7 @@ export interface paths {
          * List users
          * @description Lists users for the admin-facing users table. System administrators only; the  access itself is audited.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/users/route.ts)
          */
         get: operations["getAdminUsers"];
         put?: never;
@@ -477,7 +477,7 @@ export interface paths {
          * Create a user
          * @description Creates a single user directly (admin-provisioned account), unlike self-service  signup. System administrators only. Validates email, password strength, and  timezone, and rejects a duplicate email. The account is created with no global  role; admin rights are granted separately via the isAdmin flag.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/users/route.ts)
          */
         post: operations["postAdminUsers"];
         delete?: never;
@@ -499,7 +499,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/problems/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/assignments/[id]/problems/route.ts)
          */
         get: operations["getAssignmentsByIdProblems"];
         put?: never;
@@ -521,7 +521,7 @@ export interface paths {
          * Check whether an email is registered
          * @description Reports whether an email is already registered, so the signup form can warn  before submitting. Unauthenticated by design; it therefore leaks account  existence, which is an accepted trade-off for signup UX, but it is IP rate-limited  so it can't be used to bulk-enumerate accounts, and it only ever returns a boolean.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/auth/check-email/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/auth/check-email/route.ts)
          */
         get: operations["getAuthCheckEmail"];
         put?: never;
@@ -545,7 +545,7 @@ export interface paths {
          * Register a new account
          * @description Self-service account registration. New accounts are created with no elevated  privileges; access is granted later through the staff-only user-management routes.  Gated by the `allowSignup` system setting, and protected by a tiered rate  limiter: repeated attempts escalate from silent friction, to a captcha challenge  (428), to an outright block (429). The password must satisfy the strength policy.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/auth/signup/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/auth/signup/route.ts)
          */
         post: operations["postAuthSignup"];
         delete?: never;
@@ -567,7 +567,7 @@ export interface paths {
          * Client login (issue a bearer token)
          * @description Native-client login. Verifies email + password through the same shared path as  the browser login (rate limiting, account lockout, bot friction, bcrypt, security  logging) and, on success, issues a **bearer token** the client sends on every  later request as `Authorization: Bearer <token>`. Unlike the browser flow there's  no cookie, no CSRF, and no idle-timeout. The rate limiter's captcha "challenge"  (which a native client can't solve) is reported as a 429 back-off.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/auth/login/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/auth/login/route.ts)
          */
         post: operations["postClientV1AuthLogin"];
         delete?: never;
@@ -589,7 +589,7 @@ export interface paths {
          * Client logout (revoke the current token)
          * @description Revokes the bearer token used to make this request, so it can no longer  authenticate. Idempotent.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/auth/logout/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/auth/logout/route.ts)
          */
         post: operations["postClientV1AuthLogout"];
         delete?: never;
@@ -609,7 +609,7 @@ export interface paths {
          * Check the current token (whoami)
          * @description Whoami / token check. A cheap endpoint the client can call to confirm its bearer  token is still valid: `200` with the user when the token is good, `401` when it's  missing, expired, or revoked. (Also renews the sliding expiry, like any  authenticated call.)
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/auth/me/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/auth/me/route.ts)
          */
         get: operations["getClientV1AuthMe"];
         put?: never;
@@ -631,7 +631,7 @@ export interface paths {
          * List a course's assignments + problems (client)
          * @description A course's **published** assignments and their problems, for the token's user  (client screen after picking a course). Includes each problem's type, per-assignment  maxPoints/maxSubmissions, the student's grade, attempt count, and latest status;  never the answer-key file. A course the caller can't reach is masked as 404.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/courses/[courseId]/assignments/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/courses/[courseId]/assignments/route.ts)
          */
         get: operations["getClientV1CoursesByCourseIdAssignments"];
         put?: never;
@@ -653,7 +653,7 @@ export interface paths {
          * List my courses (client)
          * @description The signed-in user's courses (slim shape for the client), scoped to the token's  user, same visibility as the web app: enrolled, non-deleted courses that are  published or where the user is staff.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/courses/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/courses/route.ts)
          */
         get: operations["getClientV1Courses"];
         put?: never;
@@ -675,7 +675,7 @@ export interface paths {
          * Get a submission's result (client)
          * @description The result of one submission, for polling after a submit. Returns the queue  `status` (PENDING/PROCESSING/COMPLETED/FAILED) and, once evaluated, whether it was  `correct`, the `grade`, and the `feedback` (the witness / counterexample string).  A caller may read their own submission; staff may read anyone's in their course.  Anything else is masked as 404.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/[submissionId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/submissions/[submissionId]/route.ts)
          */
         get: operations["getClientV1SubmissionsBySubmissionId"];
         put?: never;
@@ -697,7 +697,7 @@ export interface paths {
          * List my submissions for a problem (client)
          * @description The caller's own submission history for one problem (attempt list), newest first,  so the client can show past attempts and drill into any one's result via  `GET /submissions/{id}`. Scoped to the token's user, so it never exposes anyone  else's work.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/submissions/route.ts)
          */
         get: operations["getClientV1Submissions"];
         put?: never;
@@ -705,7 +705,7 @@ export interface paths {
          * Submit a solution (client)
          * @description Submit a solution file (client). Same multipart body, validation, caps, cooldown,  late policy, storage, and queueing as the web `/api/submissions` (it runs the same  `createSubmission` service) but authenticated by a bearer token. Returns 202 with  the new submission's id + status.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/submissions/route.ts)
          */
         post: operations["postClientV1Submissions"];
         delete?: never;
@@ -729,7 +729,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/comments/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/comments/route.ts)
          */
         post: operations["postComments"];
         /**
@@ -738,7 +738,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/comments/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/comments/route.ts)
          */
         delete: operations["deleteComments"];
         options?: never;
@@ -757,7 +757,7 @@ export interface paths {
          * Get a course's activity feed
          * @description Returns a paginated activity feed for one course: logs tied directly to the  course plus its assignments, problems, submissions, and recent logins by course  members. Any enrolled member of the course (any role) or a system admin.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/activity/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/activity/route.ts)
          */
         get: operations["getCoursesByIdActivity"];
         put?: never;
@@ -785,7 +785,7 @@ export interface paths {
          * Archive or unarchive a course
          * @description Toggles a course's archived state. **Both archiving and un-archiving are  admin-only**: freezing a course (or reopening a frozen one to edits) is a  privileged action. Archiving also runs a safety check (canArchiveCourse) using  the course's stored dates rather than any client value, to avoid timezone drift  deciding whether a course has really ended.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/archive/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/archive/route.ts)
          */
         patch: operations["patchCoursesByIdArchive"];
         trace?: never;
@@ -801,7 +801,7 @@ export interface paths {
          * Get group→problem mappings for an assignment
          * @description Returns each course group alongside the problem ids mapped to it for this  assignment (the group→problem assignment matrix). Any enrolled member of the  course (any role) or a system admin.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/group-problems/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/group-problems/route.ts)
          */
         get: operations["getCoursesByIdAssignmentsByAidGroupProblems"];
         put?: never;
@@ -810,7 +810,7 @@ export interface paths {
          * Remove group→problem mappings
          * @description Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or  a system admin. A `groupId` is required: pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/group-problems/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/group-problems/route.ts)
          */
         delete: operations["deleteCoursesByIdAssignmentsByAidGroupProblems"];
         options?: never;
@@ -829,7 +829,7 @@ export interface paths {
          * Get a student's problem grades for an assignment
          * @description Returns a student's per-problem grades and feedback for one assignment, keyed by  problem id. A student may read their own; staff may read anyone's. Responds 204  when nothing has been graded yet.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/[studentId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/[studentId]/route.ts)
          */
         get: operations["getCoursesByIdAssignmentsByAidProblemGradesByStudentId"];
         put?: never;
@@ -837,7 +837,7 @@ export interface paths {
          * Batch set/clear a student's problem grades for an assignment
          * @description Batch-saves this student's problem grades for the assignment in a single request;  the write counterpart to the GET above (co-located as the same resource). The body  maps problemId → grade (a number within [0, maxPoints], or null to clear). Course  staff (faculty or TAs) or a system admin. Only problems whose grade actually changed  are written: a null for a graded problem deletes it, a number upserts it (existing  feedback is left untouched), and unchanged problems are skipped. Every applied change  is audited with its previous value, mirroring the single-problem grade route.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/[studentId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/[studentId]/route.ts)
          */
         post: operations["postCoursesByIdAssignmentsByAidProblemGradesByStudentId"];
         delete?: never;
@@ -857,7 +857,7 @@ export interface paths {
          * Get an assignment's grading-completion summary
          * @description Per-student completion summary for one assignment: maps each student to whether  every problem in the assignment has been graded (used to flag fully-graded  students in the grading UI). Course staff (faculty or TAs) or a system admin.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/summary/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/summary/route.ts)
          */
         get: operations["getCoursesByIdAssignmentsByAidProblemGradesSummary"];
         put?: never;
@@ -879,7 +879,7 @@ export interface paths {
          * Get a single problem grade
          * @description Reads one student's grade and feedback for a specific problem within an  assignment. The student themselves, course staff, or a system admin. Returns nulls  (not 404) when the problem exists but hasn't been graded.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grade/[studentId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grade/[studentId]/route.ts)
          */
         get: operations["getCoursesByIdAssignmentsByAidProblemsByPidGradeByStudentId"];
         put?: never;
@@ -887,7 +887,7 @@ export interface paths {
          * Set or clear a problem grade
          * @description Sets or clears a student's grade (and optional feedback) for one problem. Course  staff (faculty or TAs) or a system admin. A numeric grade must be within [0, maxPoints]; sending  a null grade deletes the record. Every change is audited with the previous value.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grade/[studentId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grade/[studentId]/route.ts)
          */
         post: operations["postCoursesByIdAssignmentsByAidProblemsByPidGradeByStudentId"];
         delete?: never;
@@ -908,7 +908,7 @@ export interface paths {
          * Update an assignment problem's settings
          * @description Updates the per-assignment settings for one problem: its point value, submission  cap, and whether the autograder runs. Course staff (faculty or TAs) or a system  admin. The problem  must already be linked to the assignment, and the assignment must belong to the  course in the path.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/route.ts)
          */
         put: operations["putCoursesByIdAssignmentsByAidProblemsByPid"];
         post?: never;
@@ -931,14 +931,14 @@ export interface paths {
          * Add problems to an assignment
          * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked; existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
          */
         post: operations["postCoursesByIdAssignmentsByAidProblems"];
         /**
          * Remove a problem from an assignment
          * @description Detaches a problem from an assignment (and clears any group→problem mappings for  it), leaving the problem itself intact in the course. Course staff (faculty or  TAs) or a system admin. Both the assignment and the problem must belong to the  course in the path. The problem id travels in the request body.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
          */
         delete: operations["deleteCoursesByIdAssignmentsByAidProblems"];
         options?: never;
@@ -957,7 +957,7 @@ export interface paths {
          * Get a student's review data for an assignment
          * @description Assembles the grading/review view for one student on one assignment: their  submissions (grouped by problem, with evaluation output), the comments about  them, and their per-problem grades. Falls back gracefully if the optional  `evaluationRaw` column is absent.   Access: the student themselves, course staff, or a system admin (`studentId` must  be the caller's id unless they are course staff or a system admin). Course  membership is also required, except for global admins.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/review-data/[studentId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/review-data/[studentId]/route.ts)
          */
         get: operations["getCoursesByIdAssignmentsByAidReviewDataByStudentId"];
         put?: never;
@@ -979,14 +979,14 @@ export interface paths {
          * Get a course assignment
          * @description Returns the assignment with its problems. Staff/admins also get the course roster in the full view; non-staff members see published assignments only (unpublished are masked as 404) and no roster.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
          */
         get: operations["getCoursesByIdAssignmentsByAid"];
         /**
          * Update a course assignment (full)
          * @description Full update of an assignment. Course staff (faculty or TAs) or a system admin.  Guards protect data integrity: an assignment can't be unpublished once it has  submissions or grades, and its group mode can't change after any submission exists.  Late-submission rules are validated the same way as on create.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
          */
         put: operations["putCoursesByIdAssignmentsByAid"];
         post?: never;
@@ -994,7 +994,7 @@ export interface paths {
          * Delete a course assignment
          * @description Deletes an assignment, but only when it's safe: no submissions and no comments. Its  problem links are cleared first, then the assignment is removed. Course staff  (faculty or TAs) or a system admin.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
          */
         delete: operations["deleteCoursesByIdAssignmentsByAid"];
         options?: never;
@@ -1003,7 +1003,7 @@ export interface paths {
          * Update a course assignment (partial)
          * @description Partial update of an assignment: only the fields present in the body are changed.  Course staff (faculty or TAs) or a system admin, with the same unpublish/group-mode  guards and late-window validation as the full update.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
          */
         patch: operations["patchCoursesByIdAssignmentsByAid"];
         trace?: never;
@@ -1019,7 +1019,7 @@ export interface paths {
          * Get my context for an assignment
          * @description Everything the caller needs to see their own work on an assignment, grouped by  problem: their submissions, the comments addressed to them, and their per-problem  and overall grades. Requires enrollment in the course; students can't see it  until the assignment is published. Scoped entirely to the caller's own data.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/student-context/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/student-context/route.ts)
          */
         get: operations["getCoursesByIdAssignmentsByAidStudentContext"];
         put?: never;
@@ -1041,7 +1041,7 @@ export interface paths {
          * Get a student's submissions for an assignment
          * @description Returns a student's submissions for an assignment, grouped by problem and each  annotated with that problem's metadata (falls back gracefully if the optional  `evaluationRaw` column is absent). The `[sid]` segment is the student id.   Access: the student themselves, course staff, or a system admin (`sid` must be the  caller's id unless they are course staff or a system admin). Course membership is  also required, except for global admins.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/submissions/[sid]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/submissions/[sid]/route.ts)
          */
         get: operations["getCoursesByIdAssignmentsByAidSubmissionsBySid"];
         put?: never;
@@ -1063,7 +1063,7 @@ export interface paths {
          * List a course's published assignments
          * @description Lists a course's published assignments with each one's total and max grade  (summed across its problems). Course faculty or a system admin (TAs excluded).
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/route.ts)
          */
         get: operations["getCoursesByIdAssignments"];
         put?: never;
@@ -1071,7 +1071,7 @@ export interface paths {
          * Create a course assignment
          * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the **course's** timezone. Late  submissions and their cutoff must agree: a cutoff is required when late is on,  forbidden when off, and must fall on or after the due date.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/route.ts)
          */
         post: operations["postCoursesByIdAssignments"];
         delete?: never;
@@ -1093,7 +1093,7 @@ export interface paths {
          * Duplicate a course
          * @description Creates a new course modeled on an existing one, in a single transaction. The  copy's faculty comes from the copied faculty roster and/or an explicit  `instructorIds` list; at least one faculty member is required (the caller is  NOT added automatically). TAs are copied only when asked. `copyMode` (or the  legacy copyAssignments/copyProblems booleans) selects what carries over:  assignments only, problems only, or assignments with their problems. The copy  always starts unpublished with a fresh registration code. System administrators  only. Dates are interpreted in the actor's timezone.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/duplicate/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/duplicate/route.ts)
          */
         post: operations["postCoursesByIdDuplicate"];
         delete?: never;
@@ -1113,7 +1113,7 @@ export interface paths {
          * Get the course grade matrix
          * @description Returns the full gradebook matrix for a course: students × assignments with each  cell holding the student's summed assignment grade (problem grades collapsed  into one total). Course staff (faculty or TAs) or a system admin.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/grades/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
         get: operations["getCoursesByIdGrades"];
         put?: never;
@@ -1121,7 +1121,7 @@ export interface paths {
          * Log a gradebook export
          * @description Records a gradebook export in the audit log. The CSV itself is built and  downloaded client-side, so this endpoint just captures that an export happened  (and a little about its scope). Course staff (faculty or TAs) or a system admin.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/grades/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
         post: operations["postCoursesByIdGrades"];
         delete?: never;
@@ -1141,7 +1141,7 @@ export interface paths {
          * List all group memberships for a course
          * @description Lists every group membership for the course in one call; the aggregate that  replaces fetching each group's members separately when resolving which group a  student belongs to. Course staff (faculty or TAs) or a system admin. Returns the  raw (userId, groupId) pairs; callers that need a userId→group map build it in  their own preferred group order.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/group-memberships/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/group-memberships/route.ts)
          */
         get: operations["getCoursesByIdGroupMemberships"];
         put?: never;
@@ -1166,7 +1166,7 @@ export interface paths {
          * Remove a group member
          * @description Removes one member from a group. Course staff (faculty or TAs) or a system admin.  The group must belong to the course in the path and the membership must exist.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/[userId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/[userId]/route.ts)
          */
         delete: operations["deleteCoursesByIdGroupsByGroupIdMembersByUserId"];
         options?: never;
@@ -1185,7 +1185,7 @@ export interface paths {
          * List group members
          * @description Lists a group's members, oldest first. Course staff (faculty or TAs) or a system  admin. The group must belong to the course in the path.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
          */
         get: operations["getCoursesByIdGroupsByGroupIdMembers"];
         put?: never;
@@ -1193,7 +1193,7 @@ export interface paths {
          * Add a group member
          * @description Adds one user to a group. Course staff (faculty or TAs) or a system admin. The  user must already be enrolled in the course; the upsert makes re-adding a no-op.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
          */
         post: operations["postCoursesByIdGroupsByGroupIdMembers"];
         delete?: never;
@@ -1203,7 +1203,7 @@ export interface paths {
          * Set group members in bulk
          * @description Replaces a group's membership with the given set of users in one call, computing  the adds and removes. Course staff (faculty or TAs) or a system admin. Every user  must be enrolled in the course, or the whole update is rejected.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
          */
         patch: operations["patchCoursesByIdGroupsByGroupIdMembers"];
         trace?: never;
@@ -1222,14 +1222,14 @@ export interface paths {
          * Delete a group
          * @description Deletes a group; its membership rows cascade away with it. Course staff (faculty  or TAs) or a system admin. The group must belong to the course in the path.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
          */
         delete: operations["deleteCoursesByIdGroupsByGroupId"];
         /**
          * CORS preflight
          * @description CORS preflight handler.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
          */
         options: operations["optionsCoursesByIdGroupsByGroupId"];
         head?: never;
@@ -1237,7 +1237,7 @@ export interface paths {
          * Rename a group
          * @description Renames a group. Course staff (faculty or TAs) or a system admin. The group must  belong to the course in the path, and the new name must be unique within that course.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
          */
         patch: operations["patchCoursesByIdGroupsByGroupId"];
         trace?: never;
@@ -1253,7 +1253,7 @@ export interface paths {
          * List course groups
          * @description Lists a course's groups, alphabetically. Course staff (faculty or TAs) or a  system admin.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/route.ts)
          */
         get: operations["getCoursesByIdGroups"];
         put?: never;
@@ -1261,7 +1261,7 @@ export interface paths {
          * Create a course group
          * @description Creates a group in the course. Course staff (faculty or TAs) or a system admin.  Group names are unique per course.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/route.ts)
          */
         post: operations["postCoursesByIdGroups"];
         delete?: never;
@@ -1283,7 +1283,7 @@ export interface paths {
          * Look up users by email
          * @description Resolves a list of emails to user records, splitting them into `found` and  `notFound`, used by the roster importer to preview who exists before enrolling.  Matching is case-insensitive regardless of DB collation. Restricted to course  staff (faculty or TAs) or a system admin: only someone who can manage the course  in the path may resolve emails to accounts.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/lookup-users/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/lookup-users/route.ts)
          */
         post: operations["postCoursesByIdLookupUsers"];
         delete?: never;
@@ -1304,7 +1304,7 @@ export interface paths {
          * Update a course problem
          * @description Updates a problem within a course (multipart/form-data). Course staff (faculty or  TAs) or a system admin. The problem must belong to the course in the path. Sending a  new file replaces the stored solution; it's structure-validated and size-checked  first, and the previous file is removed. Omitting the file keeps the current one.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/[pid]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/problems/[pid]/route.ts)
          */
         put: operations["putCoursesByIdProblemsByPid"];
         post?: never;
@@ -1312,7 +1312,7 @@ export interface paths {
          * Delete a course problem
          * @description Deletes a problem within a course and its solution file. Course staff (faculty or  TAs) or a system admin. The problem must belong to the course in the path. Refused  while the problem is still attached to any assignment (problems are shared across  assignments many-to-many); otherwise its submissions are removed first, then the  record and file.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/[pid]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/problems/[pid]/route.ts)
          */
         delete: operations["deleteCoursesByIdProblemsByPid"];
         options?: never;
@@ -1333,7 +1333,7 @@ export interface paths {
          * Create a problem in a course
          * @description Creates a problem in a course from an uploaded solution file (multipart/form-data).  Course staff (faculty or TAs) or a system admin. The file's XML structure is  validated against the problem type before it's written to disk, and it's  size-checked against the system upload limit. `maxStates` applies to FA/PDA and  `isDeterministic` to FA. The course comes from the path.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/problems/route.ts)
          */
         post: operations["postCoursesByIdProblems"];
         delete?: never;
@@ -1359,7 +1359,7 @@ export interface paths {
          * Publish or unpublish a course
          * @description Toggles a course's published state. Course staff (faculty or TA) or a system admin.  Unpublishing runs a  safety check (canUnpublishCourse) that refuses if students would lose access to  work already in progress.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/publish/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/publish/route.ts)
          */
         patch: operations["patchCoursesByIdPublish"];
         trace?: never;
@@ -1375,7 +1375,7 @@ export interface paths {
          * Get a roster entry
          * @description Returns one roster entry (with the user's profile) plus the viewer's own course  role and an `viewerIsAdmin` flag, so the UI can decide which actions to offer.  Access is tiered: the caller must be a member of the course (the wrapper enforces  this), and a non-staff member may only read their OWN entry; course staff  (faculty/TA) and admins may read anyone's. `userId` may be the literal "me" to  target the caller.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
         get: operations["getCoursesByIdRosterByUserId"];
         put?: never;
@@ -1384,7 +1384,7 @@ export interface paths {
          * Remove a user from a course
          * @description Removes a user from a course roster. Permission is tiered: the shared wrapper  admits global admins and course faculty only (TAs and students are rejected up  front); the remaining rule (a faculty member may not remove another faculty  member) is enforced here (a global admin may). Two safety rules block the removal  outright: the user must have no submissions in the course, and a course can't lose  its last faculty member.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
         delete: operations["deleteCoursesByIdRosterByUserId"];
         options?: never;
@@ -1393,7 +1393,7 @@ export interface paths {
          * Change a user's course role
          * @description Changes a user's course role. Only a global admin or a course faculty member may  do this. The last faculty member can't be demoted, keeping every course with  someone in charge.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
         patch: operations["patchCoursesByIdRosterByUserId"];
         trace?: never;
@@ -1411,7 +1411,7 @@ export interface paths {
          * Bulk-enroll students
          * @description Enrolls many users as STUDENT in one transaction (the roster's bulk-add flow).  Course staff (faculty or TAs) or a system admin. Existing roster entries are  reset to STUDENT rather than duplicated, so it's safe to re-run. Every user is  added as a STUDENT regardless of any other role.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/bulk/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/bulk/route.ts)
          */
         post: operations["postCoursesByIdRosterBulk"];
         delete?: never;
@@ -1433,7 +1433,7 @@ export interface paths {
          * Enroll a user in a course
          * @description Adds (or re-roles) a single user on a course roster. Course staff (faculty or  TAs) or a system admin. The user is always added as a STUDENT; callers don't  pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/route.ts)
          */
         post: operations["postCoursesByIdRoster"];
         delete?: never;
@@ -1455,7 +1455,7 @@ export interface paths {
          *
          *     **Auth:** requires FACULTY / TA / STUDENT
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/route.ts)
          */
         get: operations["getCoursesById"];
         /**
@@ -1464,7 +1464,7 @@ export interface paths {
          *
          *     **Auth:** requires FACULTY / TA / STUDENT
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/route.ts)
          */
         put: operations["putCoursesById"];
         post?: never;
@@ -1474,7 +1474,7 @@ export interface paths {
          *
          *     **Auth:** requires FACULTY / TA / STUDENT
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/route.ts)
          */
         delete: operations["deleteCoursesById"];
         options?: never;
@@ -1493,7 +1493,7 @@ export interface paths {
          * Get my grades for a course
          * @description Returns the signed-in student's own grade breakdown for a course: published  assignments, their problems, and per-problem grade, latest submission status,  and attempt count. Available to enrolled members (viewing their own data) and  to staff.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/student-grades/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/student-grades/route.ts)
          */
         get: operations["getCoursesByIdStudentGrades"];
         put?: never;
@@ -1515,7 +1515,7 @@ export interface paths {
          * List a course's students
          * @description Returns just the STUDENT members of a course (user profiles). Course staff  (faculty or TAs) or a system admin.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/students/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/students/route.ts)
          */
         get: operations["getCoursesByIdStudents"];
         put?: never;
@@ -1539,7 +1539,7 @@ export interface paths {
          * Rerun all submissions in a course
          * @description Re-queues every submission in a course, resetting each to PENDING (with a fresh  attempt budget) and clearing its feedback/result: the bulk counterpart to the  single-submission rerun. Course staff (faculty or TAs) or a system admin. Logs one  batch-summary event and returns the count re-queued.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/submissions/rerun/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/submissions/rerun/route.ts)
          */
         post: operations["postCoursesByIdSubmissionsRerun"];
         delete?: never;
@@ -1563,7 +1563,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/join/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/join/route.ts)
          */
         post: operations["postCoursesJoin"];
         delete?: never;
@@ -1583,7 +1583,7 @@ export interface paths {
          * List all courses
          * @description Returns every course with its roster and assignment metadata. System administrators only; the payload spans all courses and includes every member's identity and each course's registration code.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/route.ts)
          */
         get: operations["getCourses"];
         put?: never;
@@ -1593,7 +1593,7 @@ export interface paths {
          *
          *     **Auth:** requires FACULTY / TA
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/route.ts)
          */
         post: operations["postCourses"];
         delete?: never;
@@ -1615,7 +1615,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/userCourses/[email]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/userCourses/[email]/route.ts)
          */
         get: operations["getCoursesUserCoursesByEmail"];
         put?: never;
@@ -1639,7 +1639,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/files/pfps/[file]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/files/pfps/[file]/route.ts)
          */
         get: operations["getFilesPfpsByFile"];
         put?: never;
@@ -1663,7 +1663,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/files/problems/[file]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/files/problems/[file]/route.ts)
          */
         get: operations["getFilesProblemsByFile"];
         put?: never;
@@ -1687,7 +1687,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/files/solutions/[file]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/files/solutions/[file]/route.ts)
          */
         get: operations["getFilesSolutionsByFile"];
         put?: never;
@@ -1711,7 +1711,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/files/submissions/[file]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/files/submissions/[file]/route.ts)
          */
         get: operations["getFilesSubmissionsByFile"];
         put?: never;
@@ -1733,7 +1733,7 @@ export interface paths {
          * status routes (`/api/admin/status/*`).
          * @description status routes (`/api/admin/status/*`).
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/health/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/health/route.ts)
          */
         get: operations["getHealth"];
         put?: never;
@@ -1759,7 +1759,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/assignments/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/assignments/route.ts)
          */
         post: operations["postMeAssignments"];
         delete?: never;
@@ -1781,7 +1781,7 @@ export interface paths {
          *
          *     **Auth:** requires FACULTY / TA / ADMIN / STUDENT
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/courses/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/courses/route.ts)
          */
         get: operations["getMeCourses"];
         put?: never;
@@ -1805,7 +1805,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/enrollments/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/enrollments/route.ts)
          */
         get: operations["getMeEnrollments"];
         put?: never;
@@ -1831,7 +1831,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/password/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/password/route.ts)
          */
         post: operations["postMePassword"];
         delete?: never;
@@ -1853,7 +1853,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/route.ts)
          */
         get: operations["getMe"];
         put?: never;
@@ -1863,7 +1863,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/route.ts)
          */
         post: operations["postMe"];
         delete?: never;
@@ -1887,7 +1887,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/session/extend/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/session/extend/route.ts)
          */
         post: operations["postSessionExtend"];
         delete?: never;
@@ -1911,7 +1911,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/submissions/[id]/rerun/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/submissions/[id]/rerun/route.ts)
          */
         post: operations["postSubmissionsByIdRerun"];
         delete?: never;
@@ -1935,7 +1935,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/submissions/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/submissions/route.ts)
          */
         post: operations["postSubmissions"];
         delete?: never;
@@ -1955,7 +1955,7 @@ export interface paths {
          * Get public system settings
          * @description The safe subset of system settings the login and signup screens need before a  user is authenticated. Deliberately public and limited to non-sensitive values  (notably the hCaptcha *site* key, never the secret).
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/public/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/system-settings/public/route.ts)
          */
         get: operations["getSystemSettingsPublic"];
         put?: never;
@@ -1977,7 +1977,7 @@ export interface paths {
          * Not supported
          * @description This resource only supports PATCH and DELETE.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/[id]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/users/[id]/route.ts)
          */
         get: operations["getUsersById"];
         put?: never;
@@ -1985,7 +1985,7 @@ export interface paths {
          * Not supported
          * @description This resource only supports PATCH and DELETE.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/[id]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/users/[id]/route.ts)
          */
         post: operations["postUsersById"];
         /**
@@ -1994,7 +1994,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/[id]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/users/[id]/route.ts)
          */
         delete: operations["deleteUsersById"];
         options?: never;
@@ -2005,7 +2005,7 @@ export interface paths {
          *
          *     **Auth:** required
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/[id]/route.ts)
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/users/[id]/route.ts)
          */
         patch: operations["patchUsersById"];
         trace?: never;

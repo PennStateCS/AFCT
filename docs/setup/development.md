@@ -76,8 +76,8 @@ docker info
 ## Clone the repository
 
 ```bash
-git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
-cd AFCT-Dashboard
+git clone https://github.com/PennStateCS/AFCT.git
+cd AFCT
 ```
 
 All remaining commands assume the repository root.

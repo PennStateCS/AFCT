@@ -18,7 +18,7 @@ import { Validator } from '@seriousme/openapi-schema-validator';
 
 const API_DIR = 'src/app/api';
 const OUT_DIR = process.env.DOCS_OUT || 'docs-dist';
-const REPO = 'pennstatewilkes-barre/afct-dashboard';
+const REPO = 'PennStateCS/AFCT';
 const BRANCH = 'main';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
