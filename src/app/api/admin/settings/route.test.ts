@@ -449,8 +449,9 @@ describe('PUT /api/system-settings', () => {
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
-    expect(call.update.maxUploadSizeMb).toBe(1024);
-    expect(call.create.maxUploadSizeMb).toBe(1024);
+    // Clamped to MAX_UPLOAD_SIZE_MB (kept in step with the nginx body-size ceiling).
+    expect(call.update.maxUploadSizeMb).toBe(50);
+    expect(call.create.maxUploadSizeMb).toBe(50);
   });
 
   it('clamps submissionAnalyzerLimit above the cap', async () => {

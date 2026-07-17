@@ -3,7 +3,11 @@ import { clampInt } from '@/lib/api/request';
 export const DEFAULT_SYSTEM_TIMEZONE = 'UTC';
 export const DEFAULT_MAX_UPLOAD_SIZE_MB = 25;
 export const MIN_UPLOAD_SIZE_MB = 1;
-export const MAX_UPLOAD_SIZE_MB = 1024;
+// Ceiling for the admin-configurable per-file upload limit. Must stay <= nginx's
+// client_max_body_size (docker/nginx/default.conf) so the infra rejects oversized
+// bodies before they reach the app. Generous for this app (submissions are KB,
+// avatars a few MB); the old 1024 let a single request stream ~1 GB into memory.
+export const MAX_UPLOAD_SIZE_MB = 50;
 export const DEFAULT_ALLOW_SIGNUP = true;
 /** Canonical comma-separated signup email-domain allow-list. Blank = any domain allowed. */
 export const DEFAULT_SIGNUP_ALLOWED_DOMAINS = '';
