@@ -160,9 +160,12 @@ function DataTableToolbar<TData>({
   const searchPlaceholder =
     !isDefaultScope && scopedLabel ? `Search ${scopedLabel.toLowerCase()}...` : 'Search...';
 
+  // Unique id so multiple DataTables on one page don't collide on the search label.
+  const searchId = React.useId();
+
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <label htmlFor="table-search" className="sr-only">
+      <label htmlFor={searchId} className="sr-only">
         Search table data
       </label>
 
@@ -187,7 +190,7 @@ function DataTableToolbar<TData>({
 
         <div className="relative min-w-0 flex-1">
           <Input
-            id="table-search"
+            id={searchId}
             placeholder={searchPlaceholder}
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
@@ -399,7 +402,7 @@ function DataTableCards<TData>({
   if (!rows.length) {
     return (
       <div className="text-muted-foreground flex flex-col items-center rounded-md border py-8">
-        <Inbox className="mb-2 h-10 w-10 text-gray-400" />
+        <Inbox className="mb-2 h-10 w-10 text-gray-400" aria-hidden="true" />
         <p className="font-medium">No data found</p>
         <p className="text-sm">Try adjusting filters or adding new entries.</p>
       </div>
@@ -864,7 +867,7 @@ export function DataTable<TData, TValue>({
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="py-8 text-center">
                   <div className="text-muted-foreground flex flex-col items-center">
-                    <Inbox className="mb-2 h-10 w-10 text-gray-400" />
+                    <Inbox className="mb-2 h-10 w-10 text-gray-400" aria-hidden="true" />
                     <p className="font-medium">No data found</p>
                     <p className="text-sm">Try adjusting filters or adding new entries.</p>
                   </div>
