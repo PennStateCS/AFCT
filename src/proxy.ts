@@ -69,11 +69,13 @@ function buildCsp(nonce: string): string {
   ].join('; ');
 }
 
-// Enforce only when explicitly enabled; otherwise ship the policy Report-Only so a
-// missed directive reports a violation instead of breaking the page. Flip
-// CSP_ENFORCE=true after a report-only bake confirms hCaptcha, styles, and app
-// scripts are clean.
-const CSP_ENFORCE = process.env.CSP_ENFORCE === 'true';
+// Enforce the policy in production; keep it Report-Only in development so Next's HMR
+// and error-overlay inline scripts aren't blocked while you work. Set CSP_ENFORCE=false
+// in production to fall back to Report-Only (e.g. to debug a violation without breaking
+// the page); set CSP_ENFORCE=true in dev to preview enforcement.
+const CSP_ENFORCE =
+  process.env.CSP_ENFORCE === 'true' ||
+  (process.env.NODE_ENV === 'production' && process.env.CSP_ENFORCE !== 'false');
 
 // Generate a nonce, return the request headers Next reads it from plus a helper that
 // stamps the browser-facing (enforced or report-only) header onto a response.
