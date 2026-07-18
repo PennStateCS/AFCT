@@ -264,13 +264,18 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           const isAssigned = assignedFlags?.[a.id] !== false;
 
           // Not assigned to this student: show a solid gray box instead of a grade.
+          // role="img" so the accessible name is announced (a bare div's aria-label is
+          // not reliably surfaced); the sr-only text is a belt-and-braces fallback.
           if (!isAssigned) {
             return (
               <div
-                className="bg-muted mx-auto h-6 w-full rounded"
+                role="img"
                 aria-label="Not assigned"
                 title="Not assigned"
-              />
+                className="bg-muted mx-auto h-6 w-full rounded"
+              >
+                <span className="sr-only">Not assigned</span>
+              </div>
             );
           }
 

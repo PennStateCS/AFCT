@@ -146,6 +146,13 @@ export function RandomAssignDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* Persistent live region so the preview result is announced when it is built. */}
+        <span className="sr-only" role="status" aria-live="polite">
+          {preview
+            ? `Preview ready. ${preview.placedCount} student${preview.placedCount === 1 ? '' : 's'} will be placed.`
+            : ''}
+        </span>
+
         {!preview ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -73,7 +73,8 @@ describe('GroupSetView', () => {
     renderView();
     await screen.findByText('Group 1');
     await user.click(screen.getByLabelText('Select Cara C'));
-    expect(await screen.findByText('1 selected')).toBeInTheDocument();
+    // "1 selected" appears in both the visible action bar and the sr-only live region.
+    await waitFor(() => expect(screen.getAllByText('1 selected').length).toBeGreaterThan(0));
     expect(screen.getByRole('button', { name: /move to/i })).toBeInTheDocument();
   });
 });

@@ -327,6 +327,11 @@ export function GroupSetView({
         ))}
       </dl>
 
+      {/* Persistent live region so selection changes (including 0 -> 1) are announced. */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {selected.size > 0 ? `${selected.size} selected` : ''}
+      </span>
+
       {/* Selection action bar */}
       {selected.size > 0 && (
         <div
@@ -334,9 +339,7 @@ export function GroupSetView({
           role="region"
           aria-label="Selection actions"
         >
-          <span className="text-sm font-medium" aria-live="polite">
-            {selected.size} selected
-          </span>
+          <span className="text-sm font-medium">{selected.size} selected</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
