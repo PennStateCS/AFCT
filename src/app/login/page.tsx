@@ -459,6 +459,8 @@ export default function LoginPage() {
                   error={loginErrors.password}
                 />
 
+                {renderCaptchaGate()}
+
                 <Button
                   type="submit"
                   disabled={loading}
@@ -467,8 +469,6 @@ export default function LoginPage() {
                 >
                   {loading ? 'Logging in...' : 'Sign In'}
                 </Button>
-
-                {renderCaptchaGate()}
 
                 {allowSignup ? (
                   <div className="text-center text-sm text-gray-600">
