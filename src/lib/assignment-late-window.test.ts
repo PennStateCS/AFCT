@@ -14,22 +14,19 @@ const base = {
 };
 
 describe('computeLateSubmissionState', () => {
-  it('errors when late is enabled with no cutoff anywhere', () => {
+  it('allows late submissions with no cutoff (accepted with no deadline)', () => {
     const result = computeLateSubmissionState({ ...base, incomingAllowLate: true });
-    expect(result).toEqual({
-      ok: false,
-      message: 'Late submission cutoff is required when late submissions are enabled.',
-    });
+    expect(result).toEqual({ ok: true, allowLateSubmissions: true, lateCutoff: null });
   });
 
-  it('errors when late is enabled and the cutoff is cleared with an empty string', () => {
+  it('clears the cutoff to none when late is enabled and it is cleared with an empty string', () => {
     const result = computeLateSubmissionState({
       ...base,
       incomingAllowLate: true,
       existingLateCutoff: afterDue,
       incomingLateCutoff: '',
     });
-    expect(result.ok).toBe(false);
+    expect(result).toEqual({ ok: true, allowLateSubmissions: true, lateCutoff: null });
   });
 
   it('keeps the existing cutoff when the field is omitted', () => {

@@ -75,30 +75,26 @@ vi.mock('@/components/ui/data-table', () => ({
   ),
 }));
 
-vi.mock('@/components/ui/SelectField', () => ({
-  __esModule: true,
-  default: ({
-    label,
-    value,
-    onValueChange,
-    options,
+vi.mock('@/components/ui/SearchableSelect', () => ({
+  SearchableSelect: ({
+    items,
+    onSelect,
+    placeholder,
     disabled,
   }: {
-    label: string;
-    value?: string;
-    onValueChange?: (v: string) => void;
-    options: Array<{ value: string; label: string }>;
+    items: Array<{ id: string; label: string }>;
+    onSelect: (id: string) => void;
+    placeholder?: string;
     disabled?: boolean;
   }) => (
     <select
-      aria-label={label}
-      value={value}
+      aria-label={placeholder}
       disabled={disabled}
-      onChange={(e) => onValueChange?.(e.target.value)}
+      onChange={(e) => onSelect(e.target.value)}
     >
       <option value="">choose</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
+      {items.map((o) => (
+        <option key={o.id} value={o.id}>
           {o.label}
         </option>
       ))}
@@ -177,9 +173,8 @@ vi.mock('@/components/dialogs/CreateProblemDialog', () => ({
     open ? <div data-testid="create-dialog" /> : null,
 }));
 
-vi.mock('@/components/dialogs/EditAssignmentDialog', () => ({
-  EditAssignmentDialog: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="edit-assignment-dialog" /> : null,
+vi.mock('@/components/assignments/AssignmentSettingsCard', () => ({
+  AssignmentSettingsCard: () => <div data-testid="assignment-settings" />,
 }));
 
 vi.mock('@/components/dialogs/EditProblemDialog', () => ({
@@ -372,26 +367,18 @@ describe('PrivilegeAssignmentView — header', () => {
     renderView({ initialAssignment: makeAssignment({ description: null }) });
     expect(screen.getByText('No description.')).toBeInTheDocument();
   });
-
-  it('badges an unpublished assignment as "Not Published"', () => {
-    renderView({ initialAssignment: makeAssignment({ isPublished: false }) });
-    expect(screen.getByText('Not Published')).toBeInTheDocument();
-  });
-
-  it('badges a published, not-yet-due assignment as "Published"', () => {
-    renderView();
-    expect(screen.getByText('Published')).toBeInTheDocument();
-  });
-
-  it('badges a published, past-due assignment as "Past Due"', () => {
-    renderView({ initialAssignment: makeAssignment({ dueDate: '2000-01-01T00:00:00Z' }) });
-    expect(screen.getByText('Past Due')).toBeInTheDocument();
-  });
 });
 
 describe('PrivilegeAssignmentView — tabs', () => {
-  it('defaults to the Problems tab and lists the assignment problems', () => {
+  it('defaults to the Description tab and shows the description', () => {
     renderView();
+    expect(screen.getByText('Do the thing.')).toBeInTheDocument();
+  });
+
+  it('lists the assignment problems on the Problems tab', async () => {
+    const user = userEvent.setup();
+    renderView();
+    await user.click(screen.getByRole('tab', { name: /Problems/ }));
     const table = screen.getByTestId('data-table');
     expect(within(table).getByText('Problem One')).toBeInTheDocument();
     expect(within(table).getByText('Problem Two')).toBeInTheDocument();
@@ -415,6 +402,10 @@ describe('PrivilegeAssignmentView — tabs', () => {
 });
 
 describe('PrivilegeAssignmentView — queries', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('fetches the course problem pool for the picker on the Problems tab', async () => {
     renderView();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=problems'));
@@ -452,6 +443,10 @@ describe('PrivilegeAssignmentView — queries', () => {
 });
 
 describe('PrivilegeAssignmentView — archived course', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('hides the management buttons when the course is archived', () => {
     const { container } = renderView({
       initialAssignment: makeAssignment({
@@ -459,7 +454,7 @@ describe('PrivilegeAssignmentView — archived course', () => {
       }),
     });
     // `hidden` elements drop out of the a11y tree, so query the DOM directly.
-    for (const label of ['Edit Assignment', 'Create Problem', 'Add Existing Problem']) {
+    for (const label of ['Create Problem', 'Add Existing Problem']) {
       const btn = container.querySelector(`button[aria-label="${label}"]`);
       expect(btn).not.toBeNull();
       expect(btn).toHaveAttribute('hidden');
@@ -468,6 +463,10 @@ describe('PrivilegeAssignmentView — archived course', () => {
 });
 
 describe('PrivilegeAssignmentView — add problems', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('POSTs the selected problems, toasts success, and refetches the assignment', async () => {
     renderView();
     const addBtn = screen.getByRole('button', { name: 'Add Existing Problem' });
@@ -504,6 +503,10 @@ describe('PrivilegeAssignmentView — add problems', () => {
 });
 
 describe('PrivilegeAssignmentView — remove problem', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('confirms, DELETEs, toasts success, and refetches', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'remove-p1' }));
@@ -553,6 +556,10 @@ describe('PrivilegeAssignmentView — remove problem', () => {
 });
 
 describe('PrivilegeAssignmentView — render viewer', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('opens the submission viewer with the solution file for a problem that has one', () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'render-p1' }));
@@ -571,6 +578,10 @@ describe('PrivilegeAssignmentView — render viewer', () => {
 });
 
 describe('PrivilegeAssignmentView — description & edit dialogs', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('opens the description dialog with the problem description', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'desc-p1' }));
@@ -586,10 +597,11 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     expect(dialog).toHaveAttribute('data-course-id', 'c1');
   });
 
-  it('opens the edit-assignment dialog from the header button', () => {
+  it('opens the Settings tab from the tab bar', async () => {
+    const user = userEvent.setup();
     renderView();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Assignment' }));
-    expect(screen.getByTestId('edit-assignment-dialog')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /Settings/ }));
+    expect(await screen.findByTestId('assignment-settings')).toBeInTheDocument();
   });
 
   it('opens the create-problem dialog from the header button', async () => {
@@ -604,15 +616,7 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
 describe('PrivilegeAssignmentView — assignment switcher', () => {
   it('navigates to the chosen assignment', () => {
     renderView();
-    fireEvent.change(screen.getByLabelText('Assignment'), { target: { value: 'a2' } });
+    fireEvent.change(screen.getByLabelText('Switch assignment'), { target: { value: 'a2' } });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2');
-  });
-
-  it('toasts and does not navigate when the selected assignment is unknown', () => {
-    renderView();
-    // The empty option resolves to no assignment in allAssignments.
-    fireEvent.change(screen.getByLabelText('Assignment'), { target: { value: '' } });
-    expect(toast.error).toHaveBeenCalledWith('Selected assignment not found');
-    expect(nav.push).not.toHaveBeenCalled();
   });
 });

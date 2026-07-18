@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import type { Assignment, Problem, Course } from '@prisma/client';
+import type { Problem, Course } from '@prisma/client';
 
 import { showToast } from '@/lib/toast';
 import type { EnrollableUser } from '@/types/course';
@@ -81,14 +81,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
     [dialogStates],
   );
 
-  const handleAssignmentEditClick = useCallback(
-    (assignment: Assignment) => {
-      dialogStates.setSelectedAssignment(assignment);
-      dialogStates.setEditAssignmentOpen(true);
-    },
-    [dialogStates],
-  );
-
   const handleAssignmentDeleteClick = useCallback(
     (assignmentId: string) => {
       dialogStates.setPendingDelete({ id: assignmentId, type: 'assignment' });
@@ -139,15 +131,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
     [handleEnrollUser, courseId, refetchCourse],
   );
 
-  const handleAssignmentSave = useCallback(
-    async (updatedAssignment: Assignment) => {
-      await handlers.handleAssignmentSave(updatedAssignment);
-      dialogStates.setEditAssignmentOpen(false);
-      dialogStates.setSelectedAssignment(null);
-    },
-    [handlers, dialogStates],
-  );
-
   // The Settings tab's inline form has already persisted the change and hands us
   // the server's updated course; just merge it into local state and confirm.
   const handleCourseSaved = useCallback(
@@ -192,7 +175,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           onCreateProblem={() => dialogStates.setProblemOpen(true)}
           onEnrollUser={openEnrollDialog}
           onBulkEnroll={openBulkEnrollDialog}
-          onAssignmentEdit={handleAssignmentEditClick}
           onAssignmentDelete={handleAssignmentDeleteClick}
           onAssignmentPublishToggle={handlers.handleAssignmentPublishToggle}
           onProblemEdit={handleProblemEditClick}
@@ -215,12 +197,8 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           setSelectedProblem={dialogStates.setSelectedProblem}
           onProblemCreated={handlers.handleProblemCreated}
           onProblemSaved={handlers.handleProblemSaved}
-          editAssignmentOpen={dialogStates.editAssignmentOpen}
-          setEditAssignmentOpen={dialogStates.setEditAssignmentOpen}
-          selectedAssignment={dialogStates.selectedAssignment}
           createAssignmentOpen={dialogStates.createAssignmentOpen}
           setCreateAssignmentOpen={dialogStates.setCreateAssignmentOpen}
-          onAssignmentSave={handleAssignmentSave}
           onAssignmentCreate={handlers.handleAssignmentCreate}
           confirmOpen={dialogStates.confirmOpen}
           pendingDelete={dialogStates.pendingDelete}

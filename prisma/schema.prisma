@@ -41,26 +41,33 @@ enum LogSeverity {
   SECURITY // auth failures and access-control denials
 }
 
+// Who an AssignmentOverride targets. Only STUDENT ships now; GROUP is reserved for the
+// Group Sets rework (see AssignmentOverride).
+enum OverrideTargetType {
+  STUDENT // userId set, groupId null
+  GROUP // groupId set, userId null (reserved)
+}
+
 model User {
-  id        String  @id @default(cuid())
-  email     String  @unique
-  firstName String?
-  lastName  String?
-  password  String
+  id                String  @id @default(cuid())
+  email             String  @unique
+  firstName         String?
+  lastName          String?
+  password          String
   temporaryPassword Boolean @default(false)
   // Global system-admin grant. Course-level abilities live on Roster.role; this
   // flag is the only global privilege.
-  isAdmin   Boolean @default(false)
-  avatar    String?
+  isAdmin           Boolean @default(false)
+  avatar            String?
   // Avatar framing (0..1 for x/y, zoom multiplier). The original image is stored and
   // these are applied as a CSS transform at render, so re-cropping needs no re-upload.
   // Nullable to match the existing columns (migration 20260713155236_avatar_info);
   // callers fall back to 0.5/0.5/1 when null.
-  cropX     Float?
-  cropY     Float?
-  zoom      Float?
-  timezone  String?
-  inactive  Boolean @default(false)
+  cropX             Float?
+  cropY             Float?
+  zoom              Float?
+  timezone          String?
+  inactive          Boolean @default(false)
 
   // Stamped on every password change/reset. A JWT issued before this instant is
   // rejected in the session callback, so a reset actually terminates existing
@@ -74,14 +81,16 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rosterEntries Roster[]
-  submissions   Submission[]
-  problemGrades AssignmentProblemGrade[]
-  activityLogs  ActivityLog[]
-  groupRosters  GroupRoster[] // Group memberships across courses
-  commentsAbout Comment[]         @relation("CommentsAboutStudent") // Comments about this student's work
-  commentsAuthored Comment[]      @relation("CommentAuthor") // Comments this user wrote
-  clientTokens  ClientApiToken[] // Bearer tokens issued to the native (Java) client
+  rosterEntries       Roster[]
+  submissions         Submission[]
+  problemGrades       AssignmentProblemGrade[]
+  activityLogs        ActivityLog[]
+  groupRosters        GroupRoster[] // Group memberships across courses
+  commentsAbout       Comment[]                @relation("CommentsAboutStudent") // Comments about this student's work
+  commentsAuthored    Comment[]                @relation("CommentAuthor") // Comments this user wrote
+  clientTokens        ClientApiToken[] // Bearer tokens issued to the native (Java) client
+  assignmentOverrides AssignmentOverride[]     @relation("OverrideTarget") // deadline overrides targeting this student
+  overridesCreated    AssignmentOverride[]     @relation("OverrideCreatedBy") // overrides this user created
 
   @@index([isAdmin])
   @@index([inactive])
@@ -112,18 +121,18 @@ model ClientApiToken {
 }
 
 model Course {
-  id          String   @id @default(cuid())
-  name        String
-  code        String
-  regCode     String?  @unique
-  semester    String
-  credits     Int
-  startDate   DateTime
-  endDate     DateTime
+  id                  String    @id @default(cuid())
+  name                String
+  code                String
+  regCode             String?   @unique
+  semester            String
+  credits             Int
+  startDate           DateTime
+  endDate             DateTime
   registrationOpenAt  DateTime?
   registrationCloseAt DateTime?
-  isPublished Boolean  @default(false)
-  isArchived  Boolean  @default(false)
+  isPublished         Boolean   @default(false)
+  isArchived          Boolean   @default(false)
 
   // Soft delete: when set, the course is retained for recovery but hidden from all
   // non-admin views and inaccessible through the app. Deletion requires the course to
@@ -145,7 +154,7 @@ model Course {
   roster       Roster[] // Users in the course with roles
   assignments  Assignment[]
   problems     Problem[]
-  submissions   Submission[]
+  submissions  Submission[]
   groups       Group[]
   groupRosters GroupRoster[]
   groupSets    GroupSet[]
@@ -181,16 +190,25 @@ model Roster {
 }
 
 model Assignment {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  dueDate     DateTime
-  isPublished Boolean  @default(false)
-  isGroup     Boolean  @default(false) // Whether this assignment is group-based
+  id                 String    @id @default(cuid())
+  title              String
+  description        String?
+  dueDate            DateTime
+  // "Available from" for the whole class. Null means available immediately. Per-student
+  // extensions can override this via AssignmentOverride; the effective value is resolved
+  // in lib/effective-deadline. Interpreted in the course timezone like dueDate.
+  unlockAt           DateTime?
+  // When true the assignment is assigned to every student in the course. When false it is
+  // assigned only to students who have an AssignmentOverride row, so staff can target one
+  // or a few students (Canvas "assign to specific students"). A student is "assigned" iff
+  // assignedToEveryone OR they have an override row.
+  assignedToEveryone Boolean   @default(true)
+  isPublished        Boolean   @default(false)
+  isGroup            Boolean   @default(false) // Whether this assignment is group-based
 
   // Late submission controls. Defaults to false to match the app (the create form
   // and API both default this off; the value is always sent explicitly).
-  allowLateSubmissions Boolean  @default(false)
+  allowLateSubmissions Boolean   @default(false)
   lateCutoff           DateTime?
 
   createdAt DateTime @default(now())
@@ -199,10 +217,11 @@ model Assignment {
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
-  problems     AssignmentProblem[]
-  comments     Comment[]
-  activityLogs ActivityLog[]
+  problems                AssignmentProblem[]
+  comments                Comment[]
+  activityLogs            ActivityLog[]
   groupAssignmentProblems GroupAssignmentProblem[]
+  overrides               AssignmentOverride[]
 
   @@index([courseId])
   @@index([isPublished])
@@ -212,18 +231,59 @@ model Assignment {
   @@index([isGroup])
 }
 
+// A per-target deadline override for one assignment (Canvas "Assign To"). The
+// assignment's own dueDate/unlockAt/lateCutoff/allowLateSubmissions are the "Everyone"
+// default; a row here supersedes those for one student. Every field is nullable and
+// null means "inherit the assignment's value", so an override can move only the due
+// date and keep the base late policy. Resolution + the inherit rule live in
+// lib/effective-deadline.
+//
+// groupId is reserved for the upcoming Group Sets rework: only STUDENT overrides ship
+// now, but the shape (targetType + a nullable groupId) lets group targeting land later
+// without a data migration. It is intentionally a bare column with no Group relation so
+// this table stays decoupled from the groups tables being rebuilt.
+model AssignmentOverride {
+  id         String             @id @default(cuid())
+  targetType OverrideTargetType
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId String
+
+  user    User?   @relation("OverrideTarget", fields: [userId], references: [id], onDelete: Cascade)
+  userId  String?
+  groupId String? // reserved for Group Sets; no relation yet (see note above)
+
+  unlockAt             DateTime?
+  dueDate              DateTime?
+  lateCutoff           DateTime?
+  allowLateSubmissions Boolean?
+
+  // Nullable + SetNull so deleting the staff account that created an override does not
+  // block user deletion (same pattern as ActivityLog). The durable actor identity is in
+  // the activity log, not this column.
+  createdBy   User?    @relation("OverrideCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([assignmentId, userId]) // at most one override per (assignment, student)
+  @@unique([assignmentId, groupId]) // future: at most one per (assignment, group)
+  @@index([userId])
+  @@index([groupId])
+}
+
 model Problem {
-  id               String       @id @default(cuid())
-  title            String
-  description      String?
-  fileName         String?
-  originalFileName String?
-  maxSubmissions   Int?
-  maxPoints        Int         @default(100)
-  autograderEnabled Boolean    @default(true)
-  type             ProblemType?
-  maxStates        Int?
-  isDeterministic  Boolean?
+  id                String       @id @default(cuid())
+  title             String
+  description       String?
+  fileName          String?
+  originalFileName  String?
+  maxSubmissions    Int?
+  maxPoints         Int          @default(100)
+  autograderEnabled Boolean      @default(true)
+  type              ProblemType?
+  maxStates         Int?
+  isDeterministic   Boolean?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -231,12 +291,10 @@ model Problem {
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
-  assignments  AssignmentProblem[]
+  assignments             AssignmentProblem[]
   groupAssignmentProblems GroupAssignmentProblem[]
-  comments     Comment[]
-  activityLogs ActivityLog[]
-
-
+  comments                Comment[]
+  activityLogs            ActivityLog[]
 
   @@index([courseId])
   @@index([type])
@@ -253,8 +311,8 @@ model Group {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  groupRosters            GroupRoster[]
-  submissions             Submission[]
+  groupRosters GroupRoster[]
+  submissions  Submission[]
 
   groupAssignmentProblems GroupAssignmentProblem[]
 
@@ -391,12 +449,10 @@ model GroupMembership {
   @@index([userId])
 }
 
-
-
 model Submission {
-  id          String   @id @default(cuid())
-  feedback    String?
-  correct     Boolean?
+  id            String   @id @default(cuid())
+  feedback      String?
+  correct       Boolean?
   evaluationRaw Json?
 
   fileName         String?
@@ -423,9 +479,9 @@ model Submission {
   groupId String?
 
   // Queue
-  status   SubmissionStatus @default(PENDING)
+  status      SubmissionStatus @default(PENDING)
   submittedAt DateTime         @default(now())
-  attempts Int              @default(0) // Number of times the worker has claimed this submission
+  attempts    Int              @default(0) // Number of times the worker has claimed this submission
 
   // Logs
   activityLogs ActivityLog[]
@@ -436,7 +492,6 @@ model Submission {
   @@index([courseId])
   @@index([groupId])
   @@index([assignmentId, problemId, studentId])
-
   // Performance indexes
   @@index([assignmentId, problemId])
   @@index([studentId, courseId, assignmentId, problemId, submittedAt])
@@ -459,8 +514,8 @@ model AssignmentProblemGrade {
   updatedAt DateTime @updatedAt
 
   assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade, onUpdate: Cascade)
-  assignmentId String
-  problemId    String
+  assignmentId      String
+  problemId         String
 
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
@@ -546,14 +601,14 @@ model ActivityLog {
 
 model SystemSettings {
   /// Singleton row (id=1)
-  id              Int    @id @default(1)
-  timezone        String @default("UTC")
-  maxUploadSizeMb Int    @default(25)
-  allowSignup     Boolean @default(true)
+  id                    Int     @id @default(1)
+  timezone              String  @default("UTC")
+  maxUploadSizeMb       Int     @default(25)
+  allowSignup           Boolean @default(true)
   // Canonical comma-separated allow-list of email domains permitted to self-register
   // (e.g. "psu.edu,example.edu"). Blank = no restriction (any domain may sign up).
-  signupAllowedDomains String @default("")
-  sessionTimeoutMinutes Int @default(60)
+  signupAllowedDomains  String  @default("")
+  sessionTimeoutMinutes Int     @default(60)
 
   // App-wide date/time display preference. When true, times render on a 24-hour clock
   // (e.g. 23:59); otherwise 12-hour with AM/PM. Display-only, never affects stored

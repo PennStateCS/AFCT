@@ -1,6 +1,8 @@
 // src/lib/student-assignments.ts
 import { prisma } from '@/lib/prisma';
 import type { ProblemType } from '@prisma/client';
+import { effectiveDeadline } from '@/lib/effective-deadline';
+import { assignedToStudentWhere } from '@/lib/assignment-visibility';
 
 export type StudentAssignmentProblem = {
   id: string;
@@ -19,9 +21,13 @@ export type StudentAssignment = {
   id: string;
   title: string;
   description: string | null;
+  /** "Available from" resolved for this student; null means available immediately. */
+  unlockAt: Date | null;
   dueDate: Date | null;
   allowLateSubmissions: boolean;
   lateCutoff: Date | null;
+  /** True before unlockAt: the description and problems are withheld until it opens. */
+  locked: boolean;
   problems: StudentAssignmentProblem[];
 };
 
@@ -39,14 +45,29 @@ export async function getStudentCourseAssignments(
   courseId: string,
 ): Promise<StudentAssignment[]> {
   const assignments = await prisma.assignment.findMany({
-    where: { courseId, isPublished: true },
+    // Published, and assigned to this student (everyone, or via their own override).
+    where: { courseId, isPublished: true, ...assignedToStudentWhere(userId) },
     select: {
       id: true,
       title: true,
       description: true,
+      unlockAt: true,
       dueDate: true,
       allowLateSubmissions: true,
       lateCutoff: true,
+      // Only this student's override (0 or 1 row) so we can resolve their dates.
+      overrides: {
+        where: { userId },
+        select: {
+          targetType: true,
+          userId: true,
+          groupId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+        },
+      },
     },
     orderBy: { dueDate: 'asc' },
   });
@@ -106,13 +127,38 @@ export async function getStudentCourseAssignments(
     });
   }
 
-  return assignments.map((a) => ({
-    id: a.id,
-    title: a.title,
-    description: a.description,
-    dueDate: a.dueDate ?? null,
-    allowLateSubmissions: a.allowLateSubmissions,
-    lateCutoff: a.lateCutoff ?? null,
-    problems: byAssignment[a.id] ?? [],
-  }));
+  const now = new Date();
+  const resolved = assignments.map((a) => {
+    const eff = effectiveDeadline(
+      {
+        unlockAt: a.unlockAt,
+        dueDate: a.dueDate,
+        allowLateSubmissions: a.allowLateSubmissions,
+        lateCutoff: a.lateCutoff,
+      },
+      a.overrides ?? [],
+      userId,
+    );
+    // Before an assignment unlocks, the student sees it exists and when it opens, but not
+    // its description or problems (Canvas-style content lock).
+    const locked = !!eff.unlockAt && eff.unlockAt.getTime() > now.getTime();
+    return {
+      id: a.id,
+      title: a.title,
+      description: locked ? null : a.description,
+      unlockAt: eff.unlockAt,
+      dueDate: eff.dueDate,
+      allowLateSubmissions: eff.allowLateSubmissions,
+      lateCutoff: eff.lateCutoff,
+      locked,
+      problems: locked ? [] : (byAssignment[a.id] ?? []),
+    };
+  });
+
+  // The DB order is by the base due date; re-sort by each student's effective due so an
+  // extension moves the assignment to its right place in this student's list. A null due
+  // date sorts last, matching Postgres ASC ordering.
+  const dueKey = (d: Date | null) => (d ? d.getTime() : Number.POSITIVE_INFINITY);
+  resolved.sort((a, b) => dueKey(a.dueDate) - dueKey(b.dueDate));
+  return resolved;
 }

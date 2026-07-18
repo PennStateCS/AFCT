@@ -44,19 +44,32 @@ describe('getAssignmentsForUserRange', () => {
     await getAssignmentsForUserRange({ userId: 'u1', ...range });
 
     const where = prismaMock.assignment.findMany.mock.calls[0][0].where;
-    // Staff/TA courses: every assignment. Student course: gated on the assignment
-    // AND the course being published: a student in an unpublished course must not
-    // see anything from it, even a published assignment.
+    // Staff/TA courses: every assignment whose base due is in range. Student course:
+    // gated on the assignment AND the course being published, matched on the base due
+    // OR this student's own override due (so an extension moves the date correctly).
     expect(where.OR).toEqual([
-      { courseId: { in: ['staff-course', 'ta-course'] } },
+      {
+        courseId: { in: ['staff-course', 'ta-course'] },
+        dueDate: { gte: range.startDate, lte: range.endDate },
+      },
       {
         courseId: { in: ['student-course'] },
         isPublished: true,
         course: { isPublished: true },
+        AND: [
+          {
+            OR: [
+              { dueDate: { gte: range.startDate, lte: range.endDate } },
+              { overrides: { some: { userId: 'u1', dueDate: { gte: range.startDate, lte: range.endDate } } } },
+            ],
+          },
+          { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: 'u1' } } }] },
+        ],
       },
     ]);
-    // The old unscoped `courseId: { in: [...] }` filter is gone.
+    // The old top-level `dueDate` and unscoped `courseId` filters are gone.
     expect(where.courseId).toBeUndefined();
+    expect(where.dueDate).toBeUndefined();
     // Archived and soft-deleted courses are excluded from the calendar for everyone.
     expect(where.course).toEqual({ isArchived: false, deletedAt: null });
   });
@@ -70,10 +83,27 @@ describe('getAssignmentsForUserRange', () => {
     await getAssignmentsForUserRange({ userId: 'admin1', ...range });
 
     const where = prismaMock.assignment.findMany.mock.calls[0][0].where;
-    // The global admin flag outranks the STUDENT roster row: no publish gating.
+    // The global admin flag outranks the STUDENT roster row: no publish gating, and the
+    // student branch (with its override match) targets an empty course set.
     expect(where.OR).toEqual([
-      { courseId: { in: ['enrolled-as-student'] } },
-      { courseId: { in: [] }, isPublished: true, course: { isPublished: true } },
+      {
+        courseId: { in: ['enrolled-as-student'] },
+        dueDate: { gte: range.startDate, lte: range.endDate },
+      },
+      {
+        courseId: { in: [] },
+        isPublished: true,
+        course: { isPublished: true },
+        AND: [
+          {
+            OR: [
+              { dueDate: { gte: range.startDate, lte: range.endDate } },
+              { overrides: { some: { userId: 'admin1', dueDate: { gte: range.startDate, lte: range.endDate } } } },
+            ],
+          },
+          { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: 'admin1' } } }] },
+        ],
+      },
     ]);
   });
 

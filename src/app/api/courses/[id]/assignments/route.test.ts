@@ -194,9 +194,47 @@ describe('POST /api/courses/[id]/assignments', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when late submissions are enabled without a cutoff', async () => {
+  it('accepts a null lateCutoff for a no-late assignment (wizard payload)', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.create.mockResolvedValue({
+      id: 'a1',
+      title: 'New',
+      description: null,
+      isPublished: false,
+      isGroup: false,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      courseId: 'c1',
+    });
+
+    // The create wizard sends lateCutoff: null (and unlockAt undefined) when late is off.
+    const res = await post({
+      title: 'New',
+      dueDate: '2026-01-10',
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      unlockAt: null,
+    });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('allows late submissions with no cutoff (accepted with no deadline)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.create.mockResolvedValue({
+      id: 'a1',
+      title: 'New',
+      description: null,
+      isPublished: false,
+      isGroup: false,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      allowLateSubmissions: true,
+      lateCutoff: null,
+      courseId: 'c1',
+    });
 
     const res = await post({
       title: 'New',
@@ -204,7 +242,12 @@ describe('POST /api/courses/[id]/assignments', () => {
       allowLateSubmissions: true,
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ allowLateSubmissions: true, lateCutoff: null }),
+      }),
+    );
   });
 
   it('returns 400 when the late cutoff precedes the due date', async () => {
@@ -245,6 +288,42 @@ describe('POST /api/courses/[id]/assignments', () => {
       expect.objectContaining({ data: expect.objectContaining({ courseId: 'c1', title: 'New' }) }),
     );
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('stores an available-from (unlockAt) date', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    // Available-from before the (mocked) due date so the ordering check passes.
+    toDateTimeMock.mockReturnValue(new Date('2026-01-05T00:00:00.000Z'));
+    prismaMock.assignment.create.mockResolvedValue({
+      id: 'a1',
+      title: 'New',
+      description: null,
+      isPublished: false,
+      isGroup: false,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      unlockAt: new Date('2026-01-05T00:00:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      courseId: 'c1',
+    });
+
+    const res = await post({ title: 'New', dueDate: '2026-01-10', unlockAt: '2026-01-05' });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ unlockAt: expect.any(Date) }) }),
+    );
+  });
+
+  it('rejects an unlockAt after the due date', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const res = await post({ title: 'New', dueDate: '2026-01-10', unlockAt: '2026-01-20' });
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.assignment.create).not.toHaveBeenCalled();
   });
 
   it('returns 409 when the course is archived', async () => {

@@ -88,6 +88,10 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/group-problems`,
   assignmentStudentContext: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/student-context`,
+  assignmentOverrides: (courseId: string, aid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/overrides`,
+  assignmentOverride: (courseId: string, aid: string, oid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/overrides/${oid}`,
 
   // --- Global assignment routes -------------------------------------------
   assignmentByIdProblems: (id: string) => `/api/assignments/${id}/problems`,
