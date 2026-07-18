@@ -194,9 +194,20 @@ describe('POST /api/courses/[id]/assignments', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when late submissions are enabled without a cutoff', async () => {
+  it('allows late submissions with no cutoff (accepted with no deadline)', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.create.mockResolvedValue({
+      id: 'a1',
+      title: 'New',
+      description: null,
+      isPublished: false,
+      isGroup: false,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      allowLateSubmissions: true,
+      lateCutoff: null,
+      courseId: 'c1',
+    });
 
     const res = await post({
       title: 'New',
@@ -204,7 +215,12 @@ describe('POST /api/courses/[id]/assignments', () => {
       allowLateSubmissions: true,
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ allowLateSubmissions: true, lateCutoff: null }),
+      }),
+    );
   });
 
   it('returns 400 when the late cutoff precedes the due date', async () => {

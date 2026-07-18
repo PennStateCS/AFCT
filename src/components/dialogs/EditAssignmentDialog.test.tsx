@@ -154,10 +154,14 @@ describe('EditAssignmentDialog', () => {
     };
     fetchMock.mockResolvedValueOnce(createJsonResponse(updatedAssignment));
 
-    const { setOpen, onSave } = renderDialog();
+    // Render with an explicit cutoff so the field is pre-populated (no auto-fill).
+    const { setOpen, onSave } = renderDialog({
+      assignment: { ...baseAssignment, lateCutoff: new Date('2026-09-05T23:59:00Z') },
+    });
 
-    const cutoffInput = screen.getByLabelText('Late Submission Cutoff');
+    const cutoffInput = screen.getByLabelText(/Late Submission Cutoff/);
     const expectedCutoffValue = (cutoffInput as HTMLInputElement).value;
+    expect(expectedCutoffValue).not.toBe('');
 
     await makeDirty(user);
     await user.click(screen.getByLabelText('Publish Now'));
@@ -207,20 +211,21 @@ describe('EditAssignmentDialog', () => {
     expect(payload.lateCutoff).toBeNull();
   });
 
-  it('auto-populates cutoff when enabling late submissions', async () => {
+  it('leaves the cutoff empty when enabling late submissions (no auto-fill)', async () => {
     const user = userEvent.setup();
 
-    renderDialog({ assignment: { ...baseAssignment, allowLateSubmissions: false } });
+    renderDialog({
+      assignment: { ...baseAssignment, allowLateSubmissions: false, lateCutoff: null },
+    });
 
-    const dueDateInput = screen.getByLabelText('Due Date & Time') as HTMLInputElement;
-    const expectedCutoff = dueDateInput.value;
-    expect(expectedCutoff).not.toBe('');
-    expect(screen.queryByLabelText('Late Submission Cutoff')).toBeNull();
+    expect(screen.queryByLabelText(/Late Submission Cutoff/)).toBeNull();
 
     await user.click(screen.getByLabelText('Allow Late Submissions'));
 
-    const cutoffInput = await screen.findByLabelText('Late Submission Cutoff');
-    expect((cutoffInput as HTMLInputElement).value).toBe(expectedCutoff);
+    // The cutoff is optional (blank = no deadline), so the field appears empty rather
+    // than being auto-populated with the due date.
+    const cutoffInput = await screen.findByLabelText(/Late Submission Cutoff/);
+    expect((cutoffInput as HTMLInputElement).value).toBe('');
   });
 
   it('shows a toast when the API errors', async () => {

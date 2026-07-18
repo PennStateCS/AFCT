@@ -400,13 +400,18 @@ export function CreateAssignmentWizardDialog({
                     )}
                   />
                   {baseAllowLate ? (
-                    <CourseDateTimeField
-                      control={control}
-                      name="lateCutoff"
-                      label="Available until (late deadline)"
-                      error={errors.lateCutoff?.message}
-                      min={baseDue || undefined}
-                    />
+                    <>
+                      <CourseDateTimeField
+                        control={control}
+                        name="lateCutoff"
+                        label="Available until (optional)"
+                        error={errors.lateCutoff?.message}
+                        min={baseDue || undefined}
+                      />
+                      <p className="text-muted-foreground text-xs">
+                        Leave blank to accept late submissions with no deadline.
+                      </p>
+                    </>
                   ) : (
                     <p className="text-muted-foreground text-xs">Closes at the due date.</p>
                   )}
@@ -488,7 +493,7 @@ export function CreateAssignmentWizardDialog({
                           <CourseDateTimeField
                             control={control}
                             name={`overrides.${index}.lateCutoff`}
-                            label="Available until (late deadline)"
+                            label="Available until (optional)"
                           />
                         )}
                       </CollapsibleContent>

@@ -127,7 +127,6 @@ export function EditAssignmentDialog({
 
   const allowLateSubmissions = watch('allowLateSubmissions');
   const dueDateValue = watch('dueDate');
-  const lateCutoffValue = watch('lateCutoff');
 
   useEffect(() => {
     if (!allowLateSubmissions) {
@@ -138,29 +137,8 @@ export function EditAssignmentDialog({
     }
   }, [allowLateSubmissions, setValue]);
 
-  useEffect(() => {
-    if (allowLateSubmissions && !lateCutoffValue) {
-      setValue(
-        'lateCutoff',
-        dueDateValue ??
-          assignmentLateCutoffString ??
-          assignmentDueDateString ??
-          nowLocalString(timeZone),
-        {
-          shouldValidate: true,
-          shouldDirty: false,
-        },
-      );
-    }
-  }, [
-    allowLateSubmissions,
-    assignmentDueDateString,
-    assignmentLateCutoffString,
-    dueDateValue,
-    lateCutoffValue,
-    setValue,
-    timeZone,
-  ]);
+  // The late cutoff is optional: a blank cutoff means late submissions are accepted with
+  // no deadline, so we intentionally do NOT auto-fill it when late is enabled.
 
   // Keep publish state separate since it's not part of form schema
   // Reset on open/close (prevents error/touched flicker)
@@ -367,7 +345,7 @@ export function EditAssignmentDialog({
               control={control}
               render={({ field }) => (
                 <InputGroup
-                  label="Late Submission Cutoff"
+                  label="Late Submission Cutoff (optional)"
                   name="lateCutoff"
                   type="datetime-local"
                   fieldProps={{

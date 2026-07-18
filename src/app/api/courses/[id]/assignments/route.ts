@@ -84,9 +84,9 @@ export const GET = withCourseAuth(
 
 /**
  * Creates an assignment in the course. Course staff (faculty or TAs) or a system
- * admin. The due date is interpreted as end-of-day in the **course's** timezone. Late
- * submissions and their cutoff must agree: a cutoff is required when late is on,
- * forbidden when off, and must fall on or after the due date.
+ * admin. The due date is interpreted as end-of-day in the **course's** timezone. The
+ * late cutoff is optional when late submissions are on (blank means no deadline), must
+ * be omitted when late is off, and must fall on or after the due date when set.
  * @openapi
  * summary: Create a course assignment
  * parameters:
@@ -133,12 +133,8 @@ export const POST = withCourseAuth(
           { status: 400 },
         );
       }
-      if (allowLateSubmissions && !data.lateCutoff) {
-        return NextResponse.json(
-          { error: 'Late submission cutoff is required when late submissions are enabled.' },
-          { status: 400 },
-        );
-      }
+      // A cutoff is optional when late submissions are enabled: no cutoff means late
+      // submissions are accepted with no deadline.
 
       const dueDate = toEndOfDayInTimezone(data.dueDate, courseTimezone);
       const lateCutoffDate =

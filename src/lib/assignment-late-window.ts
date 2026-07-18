@@ -38,18 +38,13 @@ export function computeLateSubmissionState(options: {
   let lateCutoff = existingLateCutoff;
 
   if (allowLateSubmissions) {
+    // The cutoff is optional: omitted keeps the existing value, an empty string clears
+    // it, and a value sets it. A null/absent cutoff means late submissions are accepted
+    // with no deadline.
     if (incomingLateCutoff === undefined) {
-      if (!lateCutoff) {
-        return {
-          ok: false,
-          message: 'Late submission cutoff is required when late submissions are enabled.',
-        };
-      }
+      // keep existing (may be null = no cutoff)
     } else if (!incomingLateCutoff) {
-      return {
-        ok: false,
-        message: 'Late submission cutoff is required when late submissions are enabled.',
-      };
+      lateCutoff = null;
     } else {
       lateCutoff = toDateTimeInTimezone(incomingLateCutoff, timezone);
     }

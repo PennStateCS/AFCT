@@ -443,13 +443,16 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
   });
 
   it('returns 400 for an inconsistent late-submission window', async () => {
-    // allowLate enabled with no cutoff (existing has none) -> computeLateSubmissionState fails.
+    // A cutoff supplied while late submissions are disabled is inconsistent.
     prismaMock.assignment.findFirst.mockResolvedValue({
       ...existingAssignment,
       allowLateSubmissions: false,
       lateCutoff: null,
     });
-    const res = await PUT(putReq({ allowLateSubmissions: true }), mutationParams);
+    const res = await PUT(
+      putReq({ allowLateSubmissions: false, lateCutoff: '2026-01-20' }),
+      mutationParams,
+    );
     expect(res.status).toBe(400);
   });
 
@@ -570,7 +573,11 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
       allowLateSubmissions: false,
       lateCutoff: null,
     });
-    const res = await PATCH(patchReq({ allowLateSubmissions: true }), mutationParams);
+    // A cutoff supplied while late submissions are disabled is inconsistent.
+    const res = await PATCH(
+      patchReq({ allowLateSubmissions: false, lateCutoff: '2026-01-20' }),
+      mutationParams,
+    );
     expect(res.status).toBe(400);
   });
 

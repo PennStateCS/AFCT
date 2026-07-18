@@ -36,21 +36,17 @@ const validateLateSubmissionStrings = (
   }
 
   if (allowLate) {
-    if (!cutoffRaw) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['lateCutoff'],
-        message: 'Provide a cutoff or disable late submissions.',
-      });
-      return;
-    }
-    const cutoffDate = new Date(cutoffRaw);
-    if (cutoffDate < dueDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['lateCutoff'],
-        message: 'Cutoff must be on or after the due date.',
-      });
+    // A cutoff is optional: when set it closes late submissions at that time; when
+    // blank there is no cutoff and late submissions are accepted with no deadline.
+    if (cutoffRaw) {
+      const cutoffDate = new Date(cutoffRaw);
+      if (cutoffDate < dueDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['lateCutoff'],
+          message: 'Cutoff must be on or after the due date.',
+        });
+      }
     }
   } else if (cutoffRaw) {
     ctx.addIssue({
@@ -122,19 +118,8 @@ export const UpdateAssignmentSchema = BaseAssignmentFormSchemaObject.partial()
     const dueRaw = data.dueDate;
     const cutoffRaw = data.lateCutoff;
 
-    if (!allowLate && !cutoffRaw) {
-      return;
-    }
-
-    if (allowLate && !cutoffRaw) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['lateCutoff'],
-        message: 'Provide a cutoff or disable late submissions.',
-      });
-      return;
-    }
-
+    // A cutoff is optional when late is enabled (blank = no deadline). Nothing to
+    // cross-check unless both a due date and a cutoff are present.
     if (!dueRaw || !cutoffRaw) return;
 
     const dueDate = new Date(dueRaw);
