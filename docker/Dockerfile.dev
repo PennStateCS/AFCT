@@ -41,7 +41,11 @@ RUN mkdir -p /private/uploads/pfps /private/uploads/problems \
 # `prisma generate` here, the schema isn't copied yet; the client is generated
 # below, after the source is in place.
 COPY --chown=node:node package.json package-lock.json ./
-RUN SKIP_PRISMA_GENERATE=1 npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
+# Write a marker recording which lockfile these deps came from. The dev entrypoint
+# compares it against the bind-mounted package-lock.json and reinstalls when they
+# diverge, so a freshly-seeded node_modules volume starts in sync and skips that.
+RUN SKIP_PRISMA_GENERATE=1 npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false && \
+    cp package-lock.json node_modules/.afct-deps-lock
 
 # Evaluator JAR + the cfganalyzer binary it shells out to.
 COPY --chown=node:node jars /app/jars

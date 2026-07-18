@@ -17,6 +17,30 @@ if [ "$(id -u)" = "0" ]; then
   chown -R node:node /app/.next /app/node_modules /private/uploads || true
 fi
 
+# --- Dependencies (dev only) ---
+# node_modules is a named volume that outlives image rebuilds (same reason the
+# Prisma client is regenerated below). So a dependency change in the bind-mounted
+# package-lock.json can leave the volume stale, and a manual `npm ci` into a running
+# container can be interrupted by the restart policy and leave it half-installed --
+# either of which crash-loops the app. Reconcile it here instead: if the marker is
+# missing or differs from the current lockfile, run a clean install before anything
+# else touches node_modules. This runs synchronously in the entrypoint (no running
+# dev server to kill), so it can't be interrupted mid-install. In prod node_modules
+# is baked into the image, not a volume, so this never runs.
+DEPS_MARKER="node_modules/.afct-deps-lock"
+if [ "${ENSURE_DEPS:-true}" = "true" ] && [ "${NODE_ENV:-}" = "development" ]; then
+  if [ ! -f package-lock.json ]; then
+    log "no package-lock.json; skipping dependency sync"
+  elif [ ! -f "$DEPS_MARKER" ] || ! cmp -s package-lock.json "$DEPS_MARKER"; then
+    log "dependencies changed; installing (npm ci, this can take a minute)"
+    SKIP_PRISMA_GENERATE=1 npm ci --legacy-peer-deps --no-audit --progress=false
+    cp package-lock.json "$DEPS_MARKER"
+    log "dependencies installed"
+  else
+    log "dependencies up to date"
+  fi
+fi
+
 # The app can't run without a database.
 if [ -z "${DATABASE_URL:-}" ]; then
   log "DATABASE_URL is not set; refusing to start"
