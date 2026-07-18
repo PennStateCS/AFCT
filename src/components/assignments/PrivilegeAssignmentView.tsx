@@ -398,6 +398,10 @@ export default function AssignmentDashboardPage({
                 <AlignLeft className="size-3.5 opacity-70" />
                 Assignment
               </TabsTrigger>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="settings">
+                <Settings className="size-3.5 opacity-70" />
+                Due Date(s)
+              </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="problems">
                 <FileText className="size-3.5 opacity-70" />
                 Problems
@@ -405,10 +409,6 @@ export default function AssignmentDashboardPage({
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="submissions">
                 <Package className="size-3.5 opacity-70" />
                 Submissions
-              </TabsTrigger>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="settings">
-                <Settings className="size-3.5 opacity-70" />
-                Due Date(s)
               </TabsTrigger>
             </TabsList>
             <TabsContent value="description">

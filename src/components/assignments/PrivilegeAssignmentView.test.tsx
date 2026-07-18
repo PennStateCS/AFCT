@@ -377,10 +377,10 @@ describe('PrivilegeAssignmentView — tabs', () => {
     expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
   });
 
-  it('orders the tabs Assignment, Problems, Submissions, Due Date(s)', () => {
+  it('orders the tabs Assignment, Due Date(s), Problems, Submissions', () => {
     renderView();
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent?.trim());
-    expect(tabs).toEqual(['Assignment', 'Problems', 'Submissions', 'Due Date(s)']);
+    expect(tabs).toEqual(['Assignment', 'Due Date(s)', 'Problems', 'Submissions']);
   });
 
   it('lists the assignment problems on the Problems tab', async () => {
