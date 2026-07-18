@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AssignmentSubmissions from './AssignmentSubmissions';
@@ -205,38 +205,6 @@ describe('AssignmentSubmissions', () => {
       expect(screen.getByText('Problem One')).toBeInTheDocument();
     });
     expect(screen.getByTestId('problem-workspace')).toBeInTheDocument();
-  });
-
-  it('uses the consolidated group-memberships endpoint once and no per-group calls', async () => {
-    const fetchMock = routeFetch({
-      '/students': () => ({ ok: true, json: async () => students }),
-      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
-      '/group-memberships': () => ({
-        ok: true,
-        json: async () => ({ memberships: [{ userId: 's1', groupId: 'g1' }] }),
-      }),
-      '/review-data/': () => ({ ok: true, json: async () => emptyReviewData }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    renderWithClient(
-      <AssignmentSubmissions
-        {...baseProps}
-        assignmentIsGroup
-        groups={[{ id: 'g1', name: 'Group 1' }]}
-        groupProblemsMap={{ g1: ['p1'] }}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/group-memberships');
-    });
-
-    const calledUrls = fetchMock.mock.calls.map((c) => c[0] as string);
-    // Consolidated endpoint hit exactly once...
-    expect(calledUrls.filter((u) => u.includes('/group-memberships')).length).toBe(1);
-    // ...and the old per-group members endpoint is never called.
-    expect(calledUrls.some((u) => /\/groups\/[^/]+\/members/.test(u))).toBe(false);
   });
 
   it('posts a single-problem grade then re-fetches review-data (invalidation)', async () => {
@@ -464,45 +432,6 @@ describe('AssignmentSubmissions — state seeding & edges', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to load review data'));
-  });
-});
-
-describe('AssignmentSubmissions — group problem filtering', () => {
-  // p1 is assignment-level (unmapped); p2 belongs to group g1.
-  const groupProps = {
-    ...baseProps,
-    problems: [
-      { id: 'p1', title: 'Assignment Level', type: 'FA', maxPoints: 10 },
-      { id: 'p2', title: 'Group Only', type: 'FA', maxPoints: 10 },
-    ],
-    assignmentIsGroup: true,
-    groups: [{ id: 'g1', name: 'G1' }],
-    groupProblemsMap: { g1: ['p2'] },
-  };
-
-  const renderWithMemberships = (memberships: Array<{ userId: string; groupId: string }>) => {
-    const fetchMock = routeFetch({
-      '/students': () => ({ ok: true, json: async () => students }),
-      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
-      '/group-memberships': () => ({ ok: true, json: async () => ({ memberships }) }),
-      '/review-data/': () => ({ ok: true, json: async () => emptyReviewData }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    renderWithClient(<AssignmentSubmissions {...groupProps} />);
-  };
-
-  it('shows assignment-level and the student group’s problems for a group member', async () => {
-    renderWithMemberships([{ userId: 's1', groupId: 'g1' }]);
-    const list = await screen.findByTestId('problem-list');
-    await waitFor(() => expect(within(list).getByText('Group Only')).toBeInTheDocument());
-    expect(within(list).getByText('Assignment Level')).toBeInTheDocument();
-  });
-
-  it('shows only assignment-level problems for a student in no group', async () => {
-    renderWithMemberships([]); // s1 is not a member of g1
-    const list = await screen.findByTestId('problem-list');
-    await waitFor(() => expect(within(list).getByText('Assignment Level')).toBeInTheDocument());
-    expect(within(list).queryByText('Group Only')).not.toBeInTheDocument();
   });
 });
 

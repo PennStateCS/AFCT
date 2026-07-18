@@ -43,22 +43,19 @@ interface AssignmentWithProblems {
 type RouteCtx = { params: Promise<{ id: string; aid: string }> };
 
 // Envelope for POST (associate problems). Lenient by design: a malformed
-// problemIds/groupId falls back rather than 400ing (`problemSettings` is validated
-// separately so it can return its own specific error). `groupId` is a group id or 'ALL'.
+// problemIds falls back rather than 400ing (`problemSettings` is validated
+// separately so it can return its own specific error).
 const AssociateProblemsBodySchema = z
   .object({
     problemIds: z.array(z.string()).catch([]),
-    groupId: z.string().optional().catch(undefined),
   })
-  .catch({ problemIds: [], groupId: undefined });
+  .catch({ problemIds: [] });
 
 /**
  * Attaches problems to an assignment with per-problem settings (points, submission
  * cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already
  * linked; existing links, especially those with submissions, are preserved and
- * reported back. For group assignments, an optional `groupId` (or "ALL") maps the
- * given problems to specific groups, even ones already on the assignment. Only
- * problems belonging to this course are accepted.
+ * reported back. Only problems belonging to this course are accepted.
  * @openapi
  * summary: Add problems to an assignment
  * parameters:
@@ -82,7 +79,6 @@ const AssociateProblemsBodySchema = z
  *                 maxPoints: { type: number, minimum: 0 }
  *                 maxSubmissions: { type: integer, description: "-1 for unlimited, else >= 1" }
  *                 autograderEnabled: { type: boolean }
- *           groupId: { type: string, description: A group id or "ALL" (group assignments only) }
  * responses:
  *   200: { description: The assignment's problem list plus a summary of what changed. }
  *   400: { description: Empty/invalid body or invalid problemSettings. }
@@ -110,7 +106,7 @@ export const POST = withAssignmentAuth(
         return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
       }
 
-      const { problemIds, groupId } = AssociateProblemsBodySchema.parse(body);
+      const { problemIds } = AssociateProblemsBodySchema.parse(body);
       const parsedSettings = ProblemAssociationSettingsArray.safeParse(body.problemSettings ?? []);
       if (!parsedSettings.success) {
         return NextResponse.json(
@@ -182,42 +178,6 @@ export const POST = withAssignmentAuth(
         });
       }
 
-      // If a group mapping was requested and the assignment supports group assignments,
-      // create group mappings for the requested problems **regardless** of whether the
-      // problems were newly added in this request. This enables assigning an existing
-      // assignment problem to one or more groups after it already exists on the assignment.
-      let mappedGroupCount = 0;
-      if (groupId) {
-        if (assignment.isGroup) {
-          let groupIdsToMap: string[] = [];
-          if (groupId === 'ALL') {
-            const groups = await prisma.group.findMany({ where: { courseId } });
-            groupIdsToMap = groups.map((g) => g.id);
-          } else {
-            // Validate the group exists and belongs to the course
-            const group = await prisma.group.findUnique({ where: { id: groupId } });
-            if (group && group.courseId === courseId) groupIdsToMap = [groupId];
-          }
-
-          if (groupIdsToMap.length > 0 && validIds.length > 0) {
-            const mappings = [] as { assignmentId: string; problemId: string; groupId: string }[];
-            // Map all validIds (this covers both newly added and already-present assignment problems)
-            for (const pid of validIds) {
-              for (const gid of groupIdsToMap) {
-                mappings.push({ assignmentId, problemId: pid, groupId: gid });
-              }
-            }
-            if (mappings.length > 0) {
-              await prisma.groupAssignmentProblem.createMany({
-                data: mappings,
-                skipDuplicates: true,
-              });
-              mappedGroupCount = mappings.length;
-            }
-          }
-        }
-      }
-
       // Final set includes all existing problems + new problems
       const finalProblemIds = [...existingProblemIds, ...newProblemIds];
 
@@ -254,7 +214,6 @@ export const POST = withAssignmentAuth(
             ),
             finalProblemIds: finalProblemIds,
             linksWithSubmissions: linksWithSubmissions.length,
-            ...(mappedGroupCount > 0 ? { groupId, mappedGroupCount } : {}),
           },
         });
       } catch (logErr) {
@@ -296,10 +255,10 @@ export const POST = withAssignmentAuth(
 );
 
 /**
- * Detaches a problem from an assignment (and clears any group→problem mappings for
- * it), leaving the problem itself intact in the course. Course staff (faculty or
- * TAs) or a system admin. Both the assignment and the problem must belong to the
- * course in the path. The problem id travels in the request body.
+ * Detaches a problem from an assignment, leaving the problem itself intact in the
+ * course. Course staff (faculty or TAs) or a system admin. Both the assignment and
+ * the problem must belong to the course in the path. The problem id travels in the
+ * request body.
  * @openapi
  * summary: Remove a problem from an assignment
  * parameters:
@@ -343,11 +302,6 @@ export const DELETE = withAssignmentAuth(
           problemId,
         },
       });
-
-      // Also remove any group-specific mappings for this assignment/problem so
-      // the problem is fully unassigned from groups when removed from the
-      // assignment.
-      await prisma.groupAssignmentProblem.deleteMany({ where: { assignmentId, problemId } });
 
       // Retrieve updated problem list for this assignment
       const updated = (await prisma.assignment.findUnique({

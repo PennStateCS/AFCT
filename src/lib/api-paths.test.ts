@@ -38,9 +38,6 @@ describe('apiPaths', () => {
     expect(apiPaths.assignmentProblemGrade('c1', 'a1', 'p1', 's1')).toBe(
       '/api/courses/c1/assignments/a1/problems/p1/grade/s1',
     );
-    expect(apiPaths.assignmentGroupProblems('c1', 'a1')).toBe(
-      '/api/courses/c1/assignments/a1/group-problems',
-    );
   });
 
   it('builds problem, submission, and account paths', () => {

@@ -35,7 +35,7 @@ const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> =
     title: 'Assign To',
     fields: ['assignedToEveryone', 'unlockAt', 'dueDate', 'allowLateSubmissions', 'lateCutoff', 'overrides'],
   },
-  { title: 'Options', fields: ['isPublished', 'isGroup'] },
+  { title: 'Options', fields: ['isPublished'] },
   { title: 'Review', fields: [] },
 ];
 const LAST_STEP = STEPS.length - 1;
@@ -108,7 +108,6 @@ export function CreateAssignmentWizardDialog({
       allowLateSubmissions: false,
       lateCutoff: undefined,
       isPublished: false,
-      isGroup: false,
       courseId,
       overrides: [],
     }),
@@ -156,7 +155,6 @@ export function CreateAssignmentWizardDialog({
       allowLateSubmissions: raw.allowLateSubmissions,
       lateCutoff: raw.allowLateSubmissions ? raw.lateCutoff : null,
       isPublished: raw.isPublished,
-      isGroup: raw.isGroup,
     };
 
     let created: Assignment;
@@ -292,20 +290,6 @@ export function CreateAssignmentWizardDialog({
                       checked={!!field.value}
                       onCheckedChange={(checked) => field.onChange(!!checked)}
                       description="Makes the assignment visible to enrolled students."
-                      descriptionPlacement="inline"
-                    />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="isGroup"
-                  render={({ field }) => (
-                    <SwitchField
-                      label="Group assignment"
-                      name="isGroup"
-                      checked={!!field.value}
-                      onCheckedChange={(checked) => field.onChange(!!checked)}
-                      description="Students submit and are graded as groups. Per-student overrides still target individuals."
                       descriptionPlacement="inline"
                     />
                   )}

@@ -21,10 +21,6 @@ export const problemTypeLabels: Record<string, string> = {
 };
 
 export type ProblemColumnsParams = {
-  /** Whether this is a group assignment; controls the Group column's presence. */
-  isGroup: boolean;
-  /** Group display names per problem id (empty = "All students"). */
-  groupNamesByProblemId: Record<string, string[]>;
   /** Archived courses are read-only: Edit/Remove items are hidden. */
   courseIsArchived: boolean;
   openDescription: (desc: string) => void;
@@ -41,8 +37,6 @@ export type ProblemColumnsParams = {
  */
 export function buildProblemColumns(params: ProblemColumnsParams) {
   const {
-    isGroup,
-    groupNamesByProblemId,
     courseIsArchived,
     openDescription,
     openRenderViewer,
@@ -86,35 +80,6 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       meta: { priority: 2 },
       enableSorting: false,
     },
-    // Group column: only present for group assignments
-    ...(isGroup
-      ? [
-          {
-            id: 'group',
-            header: 'Group',
-            cell: ({ row }: { row: { original: Problem } }) => {
-              const pid = row.original.id;
-              const names = groupNamesByProblemId[pid] ?? [];
-
-              if (names.length === 0) return <span title="All students">All students</span>;
-
-              if (names.length === 1)
-                return (
-                  <span className="truncate" title={names[0]}>
-                    {names[0]}
-                  </span>
-                );
-              return (
-                <span className="truncate" title={names.join(', ')}>
-                  {names[0]} (+{names.length - 1})
-                </span>
-              );
-            },
-            meta: { priority: 2 },
-            enableSorting: false,
-          },
-        ]
-      : []),
     {
       accessorKey: 'type',
       header: 'Type',

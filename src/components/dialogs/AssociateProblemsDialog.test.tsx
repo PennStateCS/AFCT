@@ -75,7 +75,7 @@ describe('AssociateProblemsDialog', () => {
     await user.type(screen.getByLabelText(/max submissions/i), '4');
     await user.click(screen.getByRole('button', { name: 'Add Problem' }));
 
-    expect(onAddProblems).toHaveBeenCalledWith(['p1'], undefined, [
+    expect(onAddProblems).toHaveBeenCalledWith(['p1'], [
       {
         problemId: 'p1',
         maxPoints: 12,

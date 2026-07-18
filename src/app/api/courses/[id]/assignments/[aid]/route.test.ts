@@ -423,25 +423,6 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     );
   });
 
-  it('blocks changing group mode once submissions exist', async () => {
-    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment, isGroup: false });
-    prismaMock.submission.count.mockResolvedValue(1);
-    const res = await PUT(putReq({ isGroup: true }), mutationParams);
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toContain('group mode');
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      expect.anything(),
-      expect.objectContaining({
-        action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
-        severity: 'WARNING',
-        courseId: 'c1',
-        assignmentId: 'a1',
-        metadata: { reason: 'has submissions' },
-      }),
-    );
-  });
-
   it('returns 400 for an inconsistent late-submission window', async () => {
     // A cutoff supplied while late submissions are disabled is inconsistent.
     prismaMock.assignment.findFirst.mockResolvedValue({
@@ -544,25 +525,6 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
         courseId: 'c1',
         assignmentId: 'a1',
         metadata: { reason: 'has grades' },
-      }),
-    );
-  });
-
-  it('blocks changing group mode once submissions exist', async () => {
-    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
-    prismaMock.submission.count.mockResolvedValue(2);
-    const res = await PATCH(patchReq({ isGroup: true }), mutationParams);
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toContain('group mode');
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      expect.anything(),
-      expect.objectContaining({
-        action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
-        severity: 'WARNING',
-        courseId: 'c1',
-        assignmentId: 'a1',
-        metadata: { reason: 'has submissions' },
       }),
     );
   });

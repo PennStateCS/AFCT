@@ -517,7 +517,7 @@ export interface paths {
         };
         /**
          * List an assignment's problems
-         * @description Lists an assignment's problems, tagged with whether the caller has solved each  (a correct submission) and their grade. For group assignments, visibility follows  the caller's group: unassigned problems show to everyone, group-mapped ones only  to that group's members. Course faculty or a system admin (TAs excluded).
+         * @description Lists an assignment's problems, tagged with whether the caller has solved each  (a correct submission) and their grade. All problems are visible. Course faculty  or a system admin (TAs excluded).
          *
          *     **Auth:** required
          *
@@ -834,34 +834,6 @@ export interface paths {
         patch: operations["patchCoursesByIdArchive"];
         trace?: never;
     };
-    "/api/courses/{id}/assignments/{aid}/group-problems": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get group→problem mappings for an assignment
-         * @description Returns each course group alongside the problem ids mapped to it for this  assignment (the group→problem assignment matrix). Any enrolled member of the  course (any role) or a system admin.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/group-problems/route.ts)
-         */
-        get: operations["getCoursesByIdAssignmentsByAidGroupProblems"];
-        put?: never;
-        post?: never;
-        /**
-         * Remove group→problem mappings
-         * @description Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or  a system admin. A `groupId` is required: pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/group-problems/route.ts)
-         */
-        delete: operations["deleteCoursesByIdAssignmentsByAidGroupProblems"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/courses/{id}/assignments/{aid}/overrides/{oid}": {
         parameters: {
             query?: never;
@@ -1029,14 +1001,14 @@ export interface paths {
         put?: never;
         /**
          * Add problems to an assignment
-         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked; existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
+         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked; existing links, especially those with submissions, are preserved and  reported back. Only problems belonging to this course are accepted.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
          */
         post: operations["postCoursesByIdAssignmentsByAidProblems"];
         /**
          * Remove a problem from an assignment
-         * @description Detaches a problem from an assignment (and clears any group→problem mappings for  it), leaving the problem itself intact in the course. Course staff (faculty or  TAs) or a system admin. Both the assignment and the problem must belong to the  course in the path. The problem id travels in the request body.
+         * @description Detaches a problem from an assignment, leaving the problem itself intact in the  course. Course staff (faculty or TAs) or a system admin. Both the assignment and  the problem must belong to the course in the path. The problem id travels in the  request body.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
          */
@@ -1101,7 +1073,7 @@ export interface paths {
         head?: never;
         /**
          * Update a course assignment (partial)
-         * @description Partial update of an assignment: only the fields present in the body are changed.  Course staff (faculty or TAs) or a system admin, with the same unpublish/group-mode  guards and late-window validation as the full update.
+         * @description Partial update of an assignment: only the fields present in the body are changed.  Course staff (faculty or TAs) or a system admin, with the same unpublish guard and  late-window validation as the full update.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
          */
@@ -1238,28 +1210,6 @@ export interface paths {
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
         get: operations["getCoursesByIdGrades"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/group-memberships": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List all group memberships for a course
-         * @description Lists every group membership for the course in one call; the aggregate that  replaces fetching each group's members separately when resolving which group a  student belongs to. Course staff (faculty or TAs) or a system admin. Returns the  raw (userId, groupId) pairs; callers that need a userId→group map build it in  their own preferred group order.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/group-memberships/route.ts)
-         */
-        get: operations["getCoursesByIdGroupMemberships"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1440,124 +1390,6 @@ export interface paths {
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/group-sets/route.ts)
          */
         post: operations["postCoursesByIdGroupSets"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/groups/{groupId}/members/{userId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Remove a group member
-         * @description Removes one member from a group. Course staff (faculty or TAs) or a system admin.  The group must belong to the course in the path and the membership must exist.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/[userId]/route.ts)
-         */
-        delete: operations["deleteCoursesByIdGroupsByGroupIdMembersByUserId"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/groups/{groupId}/members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List group members
-         * @description Lists a group's members, oldest first. Course staff (faculty or TAs) or a system  admin. The group must belong to the course in the path.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
-         */
-        get: operations["getCoursesByIdGroupsByGroupIdMembers"];
-        put?: never;
-        /**
-         * Add a group member
-         * @description Adds one user to a group. Course staff (faculty or TAs) or a system admin. The  user must already be enrolled in the course; the upsert makes re-adding a no-op.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
-         */
-        post: operations["postCoursesByIdGroupsByGroupIdMembers"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Set group members in bulk
-         * @description Replaces a group's membership with the given set of users in one call, computing  the adds and removes. Course staff (faculty or TAs) or a system admin. Every user  must be enrolled in the course, or the whole update is rejected.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
-         */
-        patch: operations["patchCoursesByIdGroupsByGroupIdMembers"];
-        trace?: never;
-    };
-    "/api/courses/{id}/groups/{groupId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a group
-         * @description Deletes a group; its membership rows cascade away with it. Course staff (faculty  or TAs) or a system admin. The group must belong to the course in the path.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
-         */
-        delete: operations["deleteCoursesByIdGroupsByGroupId"];
-        /**
-         * CORS preflight
-         * @description CORS preflight handler.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
-         */
-        options: operations["optionsCoursesByIdGroupsByGroupId"];
-        head?: never;
-        /**
-         * Rename a group
-         * @description Renames a group. Course staff (faculty or TAs) or a system admin. The group must  belong to the course in the path, and the new name must be unique within that course.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
-         */
-        patch: operations["patchCoursesByIdGroupsByGroupId"];
-        trace?: never;
-    };
-    "/api/courses/{id}/groups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List course groups
-         * @description Lists a course's groups, alphabetically. Course staff (faculty or TAs) or a  system admin.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/route.ts)
-         */
-        get: operations["getCoursesByIdGroups"];
-        put?: never;
-        /**
-         * Create a course group
-         * @description Creates a group in the course. Course staff (faculty or TAs) or a system admin.  Group names are unique per course.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/groups/route.ts)
-         */
-        post: operations["postCoursesByIdGroups"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4589,124 +4421,6 @@ export interface operations {
             };
         };
     };
-    getCoursesByIdAssignmentsByAidGroupProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Groups, each with its mapped problemIds. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success?: boolean;
-                        groups?: Record<string, never>[];
-                    };
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not an enrolled member of the course and not a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteCoursesByIdAssignmentsByAidGroupProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    problemIds: string[];
-                    /** @description A group id, or "ALL" */
-                    groupId: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Mappings removed. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Empty body, no problemIds, invalid group, or missing groupId. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     deleteCoursesByIdAssignmentsByAidOverridesByOid: {
         parameters: {
             query?: never;
@@ -5419,8 +5133,6 @@ export interface operations {
                         maxSubmissions: number;
                         autograderEnabled: boolean;
                     }[];
-                    /** @description A group id or "ALL" (group assignments only) */
-                    groupId?: string;
                 };
             };
         };
@@ -5687,7 +5399,6 @@ export interface operations {
                     allowLateSubmissions?: boolean;
                     lateCutoff?: string | null;
                     isPublished?: boolean;
-                    isGroup?: boolean;
                 };
             };
         };
@@ -5833,7 +5544,6 @@ export interface operations {
                     allowLateSubmissions?: boolean;
                     lateCutoff?: string | null;
                     isPublished?: boolean;
-                    isGroup?: boolean;
                 };
             };
         };
@@ -6100,7 +5810,6 @@ export interface operations {
                     /** @description Required when allowLateSubmissions is true */
                     lateCutoff?: string;
                     isPublished?: boolean;
-                    isGroup?: boolean;
                 };
             };
         };
@@ -6331,60 +6040,6 @@ export interface operations {
                 };
             };
             /** @description Not course staff (faculty or TAs) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdGroupMemberships: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description All (userId, groupId) membership pairs for the course. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        memberships?: {
-                            userId?: string;
-                            groupId?: string;
-                        }[];
-                    };
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7189,565 +6844,6 @@ export interface operations {
                 };
             };
             /** @description A group set with that name already exists in the course. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteCoursesByIdGroupsByGroupIdMembersByUserId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                groupId: string;
-                userId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Member removed. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Group or membership not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdGroupsByGroupIdMembers: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                groupId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The group's members. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        members?: Record<string, never>[];
-                    };
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Group not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postCoursesByIdGroupsByGroupIdMembers: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                groupId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    userId: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Member added. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing userId, or the user isn't enrolled in the course. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Group not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    patchCoursesByIdGroupsByGroupIdMembers: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                groupId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description The complete desired member set */
-                    members: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description Membership updated; lists who was added and removed. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success?: boolean;
-                        added?: string[];
-                        removed?: string[];
-                    };
-                };
-            };
-            /** @description Missing members array, or some users aren't enrolled. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Group not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteCoursesByIdGroupsByGroupId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                groupId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Group deleted. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Group not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    optionsCoursesByIdGroupsByGroupId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                groupId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No content. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    patchCoursesByIdGroupsByGroupId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                groupId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    name: string;
-                };
-            };
-        };
-        responses: {
-            /** @description The updated group. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing name. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Group not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Name already used by another group in the course. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdGroups: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The course's groups. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postCoursesByIdGroups: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description New group name */
-                    name?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description The created group. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing group name. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Course not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description A group with that name already exists in the course. */
             409: {
                 headers: {
                     [name: string]: unknown;

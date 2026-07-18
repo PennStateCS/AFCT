@@ -157,11 +157,11 @@ export async function usersShareGroupInCourse(
 ): Promise<boolean> {
   if (!courseId || !userA || !userB) return false;
   if (userA === userB) return true;
-  const shared = await prisma.groupRoster.findFirst({
+  const shared = await prisma.groupMembership.findFirst({
     where: {
       courseId,
       userId: userA,
-      group: { groupRosters: { some: { userId: userB } } },
+      group: { memberships: { some: { userId: userB } } },
     },
     select: { id: true },
   });

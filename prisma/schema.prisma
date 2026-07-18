@@ -85,7 +85,6 @@ model User {
   submissions         Submission[]
   problemGrades       AssignmentProblemGrade[]
   activityLogs        ActivityLog[]
-  groupRosters        GroupRoster[] // Group memberships across courses
   commentsAbout       Comment[]                @relation("CommentsAboutStudent") // Comments about this student's work
   commentsAuthored    Comment[]                @relation("CommentAuthor") // Comments this user wrote
   clientTokens        ClientApiToken[] // Bearer tokens issued to the native (Java) client
@@ -155,8 +154,6 @@ model Course {
   assignments  Assignment[]
   problems     Problem[]
   submissions  Submission[]
-  groups       Group[]
-  groupRosters GroupRoster[]
   groupSets    GroupSet[]
   activityLogs ActivityLog[]
 
@@ -204,7 +201,13 @@ model Assignment {
   // assignedToEveryone OR they have an override row.
   assignedToEveryone Boolean   @default(true)
   isPublished        Boolean   @default(false)
-  isGroup            Boolean   @default(false) // Whether this assignment is group-based
+
+  // When set, this is a group assignment tied to one group set: students are assigned
+  // via their group in that set and submit as a group. Null means an individual
+  // assignment. Group targeting itself is expressed as GROUP AssignmentOverride rows
+  // pointing at StudentGroups within this set.
+  groupSet   GroupSet? @relation(fields: [groupSetId], references: [id], onDelete: SetNull)
+  groupSetId String?
 
   // Late submission controls. Defaults to false to match the app (the create form
   // and API both default this off; the value is always sent explicitly).
@@ -217,18 +220,17 @@ model Assignment {
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
-  problems                AssignmentProblem[]
-  comments                Comment[]
-  activityLogs            ActivityLog[]
-  groupAssignmentProblems GroupAssignmentProblem[]
-  overrides               AssignmentOverride[]
+  problems     AssignmentProblem[]
+  comments     Comment[]
+  activityLogs ActivityLog[]
+  overrides    AssignmentOverride[]
 
   @@index([courseId])
   @@index([isPublished])
   @@index([dueDate])
   @@index([lateCutoff])
   @@index([courseId, isPublished])
-  @@index([isGroup])
+  @@index([groupSetId])
 }
 
 // A per-target deadline override for one assignment (Canvas "Assign To"). The
@@ -238,10 +240,9 @@ model Assignment {
 // date and keep the base late policy. Resolution + the inherit rule live in
 // lib/effective-deadline.
 //
-// groupId is reserved for the upcoming Group Sets rework: only STUDENT overrides ship
-// now, but the shape (targetType + a nullable groupId) lets group targeting land later
-// without a data migration. It is intentionally a bare column with no Group relation so
-// this table stays decoupled from the groups tables being rebuilt.
+// A target is either a STUDENT (userId set) or a GROUP (groupId set, pointing at a
+// StudentGroup within the assignment's groupSet). GROUP rows assign every member of the
+// group and give them a shared window; the group also owns their submission set.
 model AssignmentOverride {
   id         String             @id @default(cuid())
   targetType OverrideTargetType
@@ -251,7 +252,10 @@ model AssignmentOverride {
 
   user    User?   @relation("OverrideTarget", fields: [userId], references: [id], onDelete: Cascade)
   userId  String?
-  groupId String? // reserved for Group Sets; no relation yet (see note above)
+
+  // GROUP target: the StudentGroup this override applies to (all its members).
+  studentGroup StudentGroup? @relation("OverrideGroupTarget", fields: [groupId], references: [id], onDelete: Cascade)
+  groupId      String?
 
   unlockAt             DateTime?
   dueDate              DateTime?
@@ -291,54 +295,13 @@ model Problem {
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
-  assignments             AssignmentProblem[]
-  groupAssignmentProblems GroupAssignmentProblem[]
-  comments                Comment[]
-  activityLogs            ActivityLog[]
+  assignments  AssignmentProblem[]
+  comments     Comment[]
+  activityLogs ActivityLog[]
 
   @@index([courseId])
   @@index([type])
   @@index([createdAt])
-}
-
-model Group {
-  id   String @id @default(cuid())
-  name String
-
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  courseId String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  groupRosters GroupRoster[]
-  submissions  Submission[]
-
-  groupAssignmentProblems GroupAssignmentProblem[]
-
-  @@unique([courseId, name])
-  @@index([courseId])
-}
-
-model GroupRoster {
-  id String @id @default(cuid())
-
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  courseId String
-
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  groupId String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([groupId, userId])
-  @@index([courseId])
-  @@index([userId])
-  @@index([groupId])
 }
 
 model AssignmentProblem {
@@ -359,27 +322,11 @@ model AssignmentProblem {
   @@index([assignmentId])
 }
 
-model GroupAssignmentProblem {
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  assignmentId String
-  problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  problemId    String
-  group        Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  groupId      String
-
-  @@id([assignmentId, problemId, groupId])
-  @@index([groupId])
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Group Sets (redesigned group management). Deliberately independent of the
-// legacy Group / GroupRoster / GroupAssignmentProblem tables above, which still
-// power group assignments and group submissions. Wiring group sets into
-// assignments happens in a later phase.
-//
-// A course has many group sets; a group set has many groups; a group has many
-// student members. A student belongs to at most one group within a given set,
-// but may belong to groups in different sets.
+// Group Sets. A course has many group sets; a group set has many groups; a group
+// has many student members. A student belongs to at most one group within a given
+// set, but may belong to groups in different sets. Assignments can target groups in
+// a set (see Assignment.groupSetId) for group submissions.
 // ─────────────────────────────────────────────────────────────────────────────
 
 model GroupSet {
@@ -392,7 +339,8 @@ model GroupSet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  groups StudentGroup[]
+  groups      StudentGroup[]
+  assignments Assignment[]
 
   // Unique set name per course. Case-insensitive + trimmed uniqueness is enforced
   // in the service layer (this DB constraint is the exact-match backstop).
@@ -410,7 +358,9 @@ model StudentGroup {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships GroupMembership[]
+  memberships         GroupMembership[]
+  assignmentOverrides AssignmentOverride[] @relation("OverrideGroupTarget")
+  submissions         Submission[]
 
   // Unique group name within its set (case-insensitive + trimmed in the service
   // layer). Different sets may reuse the same group names.
@@ -474,9 +424,11 @@ model Submission {
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
-  // Optional group reference for group submissions
-  group   Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  groupId String?
+  // Set for a group submission: the StudentGroup that owns this submission set. Any
+  // member's submit writes the group here; individual submissions leave it null. The
+  // submitting member is still recorded in studentId.
+  studentGroup   StudentGroup? @relation(fields: [studentGroupId], references: [id], onDelete: SetNull)
+  studentGroupId String?
 
   // Queue
   status      SubmissionStatus @default(PENDING)
@@ -486,12 +438,13 @@ model Submission {
   // Logs
   activityLogs ActivityLog[]
 
-  @@unique([assignmentId, problemId, groupId])
   @@index([assignmentId])
   @@index([studentId])
   @@index([courseId])
-  @@index([groupId])
+  @@index([studentGroupId])
   @@index([assignmentId, problemId, studentId])
+  // Group submission set + cap counting for a group.
+  @@index([assignmentId, problemId, studentGroupId])
   // Performance indexes
   @@index([assignmentId, problemId])
   @@index([studentId, courseId, assignmentId, problemId, submittedAt])

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
   course: { findUnique: vi.fn() },
-  groupRoster: { findFirst: vi.fn() },
+  groupMembership: { findFirst: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -194,16 +194,16 @@ describe('staffManagesStudent', () => {
 describe('usersShareGroupInCourse', () => {
   it('short-circuits true when both ids are the same', async () => {
     await expect(usersShareGroupInCourse('c', 'u', 'u')).resolves.toBe(true);
-    expect(prismaMock.groupRoster.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.groupMembership.findFirst).not.toHaveBeenCalled();
   });
 
   it('is true when a shared group exists', async () => {
-    prismaMock.groupRoster.findFirst.mockResolvedValue({ id: 'gr1' });
+    prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gr1' });
     await expect(usersShareGroupInCourse('c', 'a', 'b')).resolves.toBe(true);
   });
 
   it('is false when no shared group and when an id is missing', async () => {
-    prismaMock.groupRoster.findFirst.mockResolvedValue(null);
+    prismaMock.groupMembership.findFirst.mockResolvedValue(null);
     await expect(usersShareGroupInCourse('c', 'a', 'b')).resolves.toBe(false);
     await expect(usersShareGroupInCourse('c', 'a', null)).resolves.toBe(false);
   });
@@ -227,7 +227,7 @@ describe('canViewStudentData', () => {
 
   it('a groupmate may view shared work on a group assignment', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
-    prismaMock.groupRoster.findFirst.mockResolvedValue({ id: 'gr1' }); // same group
+    prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gr1' }); // same group
     await expect(
       canViewStudentData({ id: 'u' }, 'c', 'mate', { groupAssignment: true }),
     ).resolves.toBe(true);

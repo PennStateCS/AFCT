@@ -51,9 +51,8 @@ interface AssignmentWithProblemsAndCourse {
 
 /**
  * State-integrity guards shared by the full (PUT) and partial (PATCH) updates: an
- * assignment can't be unpublished once it has submissions or grades, and its group mode
- * can't change after any submission exists. Returns a `NextResponse` to short-circuit
- * the update, or `null` when the change is allowed.
+ * assignment can't be unpublished once it has submissions or grades. Returns a
+ * `NextResponse` to short-circuit the update, or `null` when the change is allowed.
  */
 async function assertAssignmentMutable(
   req: Request,
@@ -61,11 +60,10 @@ async function assertAssignmentMutable(
     userId: string;
     courseId: string;
     assignmentId: string | undefined;
-    existing: { isGroup: boolean };
-    data: { isPublished?: boolean; isGroup?: boolean };
+    data: { isPublished?: boolean };
   },
 ): Promise<NextResponse | null> {
-  const { userId, courseId, assignmentId, existing, data } = params;
+  const { userId, courseId, assignmentId, data } = params;
 
   // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
   // Block unpublishing an assignment that already has submissions or grades.
@@ -103,26 +101,6 @@ async function assertAssignmentMutable(
         metadata: { reason: 'has grades' },
       });
       return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
-    }
-  }
-
-  // Prevent changing the assignment's group mode once submissions exist.
-  if (data.isGroup !== undefined && data.isGroup !== existing.isGroup) {
-    const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId } })) > 0;
-    if (hasAnySubmission) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId,
-        action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
-        category: 'ASSIGNMENT',
-        severity: 'WARNING',
-        courseId,
-        assignmentId,
-        metadata: { reason: 'has submissions' },
-      });
-      return NextResponse.json(
-        { error: 'Cannot change assignment group mode after submissions exist' },
-        { status: 403 },
-      );
     }
   }
 
@@ -367,7 +345,6 @@ export const GET = withCourseAuth(
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, nullable: true }
  *           isPublished: { type: boolean }
- *           isGroup: { type: boolean }
  * responses:
  *   200: { description: The updated assignment. }
  *   400: { description: Inconsistent late-submission window. }
@@ -397,7 +374,6 @@ export const PUT = withCourseAuth(
       userId: user.id,
       courseId,
       assignmentId: id,
-      existing,
       data,
     });
     if (mutationBlock) return mutationBlock;
@@ -445,7 +421,6 @@ export const PUT = withCourseAuth(
           allowLateSubmissions,
           lateCutoff,
           isPublished: data.isPublished,
-          isGroup: data.isGroup === undefined ? undefined : data.isGroup,
         },
       });
 
@@ -466,7 +441,6 @@ export const PUT = withCourseAuth(
           unlockAt: updated.unlockAt ? updated.unlockAt.toISOString() : null,
           allowLateSubmissions: updated.allowLateSubmissions,
           lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
-          isGroup: updated.isGroup,
         },
       });
 
@@ -489,8 +463,8 @@ export const PUT = withCourseAuth(
 
 /**
  * Partial update of an assignment: only the fields present in the body are changed.
- * Course staff (faculty or TAs) or a system admin, with the same unpublish/group-mode
- * guards and late-window validation as the full update.
+ * Course staff (faculty or TAs) or a system admin, with the same unpublish guard and
+ * late-window validation as the full update.
  * @openapi
  * summary: Update a course assignment (partial)
  * parameters:
@@ -510,7 +484,6 @@ export const PUT = withCourseAuth(
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, nullable: true }
  *           isPublished: { type: boolean }
- *           isGroup: { type: boolean }
  * responses:
  *   200: { description: The updated assignment. }
  *   400: { description: Inconsistent late-submission window. }
@@ -538,7 +511,6 @@ export const PATCH = withCourseAuth(
       userId: user.id,
       courseId,
       assignmentId: id,
-      existing,
       data,
     });
     if (mutationBlock) return mutationBlock;
@@ -584,7 +556,6 @@ export const PATCH = withCourseAuth(
         allowLateSubmissions?: boolean;
         lateCutoff?: Date | null;
         isPublished?: boolean;
-        isGroup?: boolean;
       } = {};
 
       if (data.title !== undefined) updateData.title = data.title;
@@ -599,7 +570,6 @@ export const PATCH = withCourseAuth(
       }
       if (data.lateCutoff !== undefined) updateData.lateCutoff = lateCutoff;
       if (data.isPublished !== undefined) updateData.isPublished = data.isPublished;
-      if (data.isGroup !== undefined) updateData.isGroup = data.isGroup;
 
       const updated = await prisma.assignment.update({
         where: { id },
@@ -624,7 +594,6 @@ export const PATCH = withCourseAuth(
           unlockAt: updated.unlockAt ? updated.unlockAt.toISOString() : null,
           allowLateSubmissions: updated.allowLateSubmissions,
           lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
-          isGroup: updated.isGroup,
         },
       });
 

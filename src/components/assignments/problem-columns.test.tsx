@@ -10,8 +10,6 @@ import { buildProblemColumns, type ProblemColumnsParams } from './problem-column
 type AnyCol = any;
 
 const makeParams = (over: Partial<ProblemColumnsParams> = {}): ProblemColumnsParams => ({
-  isGroup: false,
-  groupNamesByProblemId: {},
   courseIsArchived: false,
   openDescription: vi.fn(),
   openRenderViewer: vi.fn(),
@@ -45,7 +43,7 @@ const arg = (p: Record<string, any>) => ({ row: { original: p } });
 const DASH = find(cols(), 'assignmentMaxPoints').cell(arg(problem({})));
 
 describe('buildProblemColumns', () => {
-  it('includes the expected columns and omits Group for a non-group assignment', () => {
+  it('includes the expected columns', () => {
     const ids = cols().map((c) => c.id ?? c.accessorKey);
     expect(ids).toEqual([
       'number',
@@ -60,12 +58,6 @@ describe('buildProblemColumns', () => {
       'answerFile',
       'actions',
     ]);
-  });
-
-  it('adds a Group column for a group assignment', () => {
-    const ids = cols({ isGroup: true }).map((c) => c.id ?? c.accessorKey);
-    expect(ids).toContain('group');
-    expect(ids.indexOf('group')).toBe(3); // right after the description column
   });
 
   it('numbers rows from 1', () => {
@@ -119,20 +111,6 @@ describe('buildProblemColumns', () => {
 
     rerender(<>{desc.cell(arg(problem({ description: null })))}</>);
     expect(screen.queryByText('View Description')).not.toBeInTheDocument();
-  });
-
-  it('groups: shows "All students" when unmapped, the name when single, and a +N summary', () => {
-    const g = (map: Record<string, string[]>) =>
-      find(cols({ isGroup: true, groupNamesByProblemId: map }), 'group');
-
-    render(<>{g({}).cell(arg(problem()))}</>);
-    expect(screen.getByText('All students')).toBeInTheDocument();
-
-    render(<>{g({ p1: ['Team A'] }).cell(arg(problem()))}</>);
-    expect(screen.getByText('Team A')).toBeInTheDocument();
-
-    render(<>{g({ p1: ['Team A', 'Team B'] }).cell(arg(problem()))}</>);
-    expect(screen.getByText('Team A (+1)')).toBeInTheDocument();
   });
 
   it('answer-file cell: renders a viewer button when a file exists, else "No file"', () => {

@@ -10,17 +10,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import InputGroup from '@/components/ui/InputGroup';
-import { Label } from '@/components/ui/label';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-} from '@/components/ui/dropdown-menu';
-import { ChevronDown, Search as SearchIcon, Check } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
 import { ProblemAssociationSettingsArray } from '@/schemas/problem';
 
@@ -50,11 +42,10 @@ type AddProblemModalProps = {
   defaultMaxPoints?: number;
   defaultMaxSubmissions?: number;
   defaultAutograderEnabled?: boolean;
-  // optionally pass a groupId when adding problems; returns a Promise so the dialog
-  // can await the parent-side API operation (no Promise.resolve wrapper needed)
+  // Returns a Promise so the dialog can await the parent-side API operation
+  // (no Promise.resolve wrapper needed).
   onAddProblems: (
     problemIds: string[],
-    groupId?: string,
     problemSettings?: ProblemSettingsPayload[],
   ) => void | Promise<void>;
 };
@@ -80,13 +71,6 @@ export function AssociateProblemsDialog({
     setLocalAllProblems(allProblems);
   }, [allProblems]);
 
-  // Groups and group-assignment mapping
-  const [assignmentIsGroup, setAssignmentIsGroup] = React.useState(false);
-  const [groups, setGroups] = React.useState<{ id: string; name: string }[]>([]);
-  const [groupsLoading, setGroupsLoading] = React.useState(false);
-  const [selectedGroupId, setSelectedGroupId] = React.useState<'ALL' | string>('ALL');
-  const [groupFilter, setGroupFilter] = React.useState('');
-  const [groupProblemsMap, setGroupProblemsMap] = React.useState<Record<string, string[]>>({});
   const [selectedProblemToAdd, setSelectedProblemToAdd] = React.useState<string>('');
   const [newProblemMaxPoints, setNewProblemMaxPoints] = React.useState<string>(
     String(defaultMaxPoints ?? 100),
@@ -109,16 +93,13 @@ export function AssociateProblemsDialog({
   );
   const [configError, setConfigError] = React.useState<string | null>(null);
 
-  // Initialize dialog only after we know which viewer to show (group-based or not)
   const [internalOpen, setInternalOpen] = React.useState(false);
-  const [initializing, setInitializing] = React.useState(false);
 
   React.useEffect(() => {
     let aborted = false;
     const ac = new AbortController();
 
     async function init() {
-      setInitializing(true);
       setInternalOpen(false);
       setSelectedProblemToAdd('');
       setNewProblemMaxPoints(String(defaultMaxPoints ?? 100));
@@ -137,62 +118,11 @@ export function AssociateProblemsDialog({
       );
       setNewProblemAutograderEnabled(defaultAutograderEnabled ?? true);
       setConfigError(null);
-      setSelectedGroupId('ALL');
-      setGroupFilter('');
-      setGroups([]);
-      setGroupProblemsMap({});
 
+      // Refresh the authoritative problem list for this course when the dialog
+      // opens so deleted problems don't remain selectable in the UI.
       try {
-        if (!courseId) {
-          setAssignmentIsGroup(false);
-          setGroups([]);
-          setGroupProblemsMap({});
-          setInternalOpen(true);
-          return;
-        }
-
-        // Determine assignment group support
-        let isGroup = false;
-        if (assignmentId) {
-          const aRes = await fetch(apiPaths.assignment(courseId, assignmentId), {
-            signal: ac.signal,
-          });
-          if (aRes.ok) {
-            const aData = await aRes.json();
-            isGroup = !!aData?.isGroup;
-          }
-        }
-        if (aborted) return;
-        setAssignmentIsGroup(isGroup);
-
-        if (isGroup) {
-          setGroupsLoading(true);
-          const [grRes, gpRes] = await Promise.all([
-            fetch(apiPaths.courseGroups(courseId)),
-            fetch(apiPaths.assignmentGroupProblems(courseId, String(assignmentId))),
-          ]);
-
-          if (grRes.ok) {
-            const gr = await grRes.json();
-            setGroups(Array.isArray(gr) ? gr : (gr.groups ?? []));
-          } else {
-            setGroups([]);
-          }
-
-          if (gpRes.ok) {
-            const gp = await gpRes.json();
-            const map: Record<string, string[]> = {};
-            for (const g of gp.groups ?? []) map[g.id] = g.problemIds || [];
-            setGroupProblemsMap(map);
-          } else {
-            setGroupProblemsMap({});
-          }
-          setGroupsLoading(false);
-        }
-
-        // Refresh the authoritative problem list for this course when the dialog
-        // opens so deleted problems don't remain selectable in the UI.
-        try {
+        if (courseId) {
           const pRes = await fetch(apiPaths.course(courseId, { view: 'problems' }), {
             signal: ac.signal,
           });
@@ -203,138 +133,54 @@ export function AssociateProblemsDialog({
           } else {
             setLocalAllProblems(allProblems);
           }
-        } catch (err: unknown) {
-          if (err instanceof Error && err.name !== 'AbortError')
-            console.error('Failed to fetch problems for dialog:', err);
-          setLocalAllProblems(allProblems);
-        }
-
-        if (!aborted) {
-          setInternalOpen(true);
         }
       } catch (err: unknown) {
-        if (err instanceof Error && err.name === 'AbortError') return;
-        console.error('Failed to initialize AssociateProblemsDialog:', err);
-        // Fallback: show the simple dialog (non-group)
-        setAssignmentIsGroup(false);
-        setGroups([]);
-        setGroupProblemsMap({});
-        if (!aborted) setInternalOpen(true);
-      } finally {
-        if (!aborted) setInitializing(false);
+        if (err instanceof Error && err.name !== 'AbortError')
+          console.error('Failed to fetch problems for dialog:', err);
+        setLocalAllProblems(allProblems);
       }
+
+      if (!aborted) setInternalOpen(true);
     }
 
-    if (open) void init();
-
-    // If parent closed while we were initializing, close local dialog too
-    if (!open) {
+    if (open) {
+      void init();
+    } else {
       setInternalOpen(false);
-      setInitializing(false);
     }
 
     return () => {
       aborted = true;
       ac.abort();
-      setInitializing(false);
     };
-  }, [
-    open,
-    courseId,
-    assignmentId,
-    defaultMaxPoints,
-    defaultMaxSubmissions,
-    defaultAutograderEnabled,
-    allProblems,
-  ]);
+  }, [open, courseId, defaultMaxPoints, defaultMaxSubmissions, defaultAutograderEnabled, allProblems]);
 
-  // Determine which problems are originally assigned for the selected group (or overall assignment when ALL)
   const assignmentProblemIds = React.useMemo(
     () => new Set(usedProblems.map((p) => p.id)),
     [usedProblems],
   );
 
-  const allMappedIds = React.useMemo(() => {
-    const s = new Set<string>();
-    Object.values(groupProblemsMap).forEach((arr) => arr.forEach((id) => s.add(id)));
-    return s;
-  }, [groupProblemsMap]);
-
-  // Problems in the assignment that are not mapped to any group are treated as assigned to ALL groups
-  const unassignedInAssignment = React.useMemo(() => {
-    const s = new Set<string>();
-    for (const id of assignmentProblemIds) if (!allMappedIds.has(id)) s.add(id);
-    return s;
-  }, [assignmentProblemIds, allMappedIds]);
-
-  const originalAssignedIds = React.useMemo(() => {
-    // When viewing All Students, only show problems that are not mapped to any group (assignment-level problems)
-    if (selectedGroupId === 'ALL') return new Set(unassignedInAssignment);
-
-    // Specific group: include group-mapped problems and unassigned problems (which apply to all groups)
-    const s = new Set<string>(groupProblemsMap[selectedGroupId] ?? []);
-    for (const id of unassignedInAssignment) s.add(id);
-    return s;
-  }, [selectedGroupId, unassignedInAssignment, groupProblemsMap]);
-
-  // Available problems when group assignments are enabled
-  const rightProblems = React.useMemo(() => {
-    return localAllProblems.filter((p) => !originalAssignedIds.has(p.id));
-  }, [localAllProblems, originalAssignedIds]);
-
-  // Available problems for non-group assignments
-  const unusedProblems = React.useMemo(() => {
+  // Available problems: everything in the course not already on the assignment.
+  const selectableProblems = React.useMemo(() => {
     return localAllProblems.filter((p) => !assignmentProblemIds.has(p.id));
   }, [localAllProblems, assignmentProblemIds]);
 
-  const selectableProblems = React.useMemo(
-    () => (assignmentIsGroup ? rightProblems : unusedProblems),
-    [assignmentIsGroup, rightProblems, unusedProblems],
-  );
-
-  // Reset pending add state when switching selected group
+  // Keep the dialog in sync with external changes while it's open (e.g. a problem
+  // removed or deleted elsewhere) so the picker won't show stale/deleted problems.
   React.useEffect(() => {
-    setSelectedProblemToAdd('');
-    setConfigError(null);
-  }, [selectedGroupId]);
-
-  // Keep the dialog in sync with external changes while it's open.
-  // This covers cases where problems/group mappings are modified elsewhere
-  // (removing a problem, deleting a problem, admin actions) so the UI won't show
-  // stale mappings or deleted problems while user has the dialog open.
-  React.useEffect(() => {
-    if (!internalOpen) return;
+    if (!internalOpen || !courseId) return;
     let aborted = false;
     const ac = new AbortController();
 
     async function syncExternal() {
       try {
-        // Fetch latest course problems
-        const pReq = fetch(apiPaths.course(String(courseId), { view: 'problems' }), {
+        const pRes = await fetch(apiPaths.course(String(courseId), { view: 'problems' }), {
           signal: ac.signal,
         });
-        // Fetch group->problem mappings only for assignments that support groups.
-        const gpReq = assignmentId
-          ? fetch(apiPaths.assignmentGroupProblems(String(courseId), assignmentId), {
-              signal: ac.signal,
-            })
-          : Promise.resolve(null);
-
-        const [pRes, gpRes] = await Promise.all([pReq, gpReq]);
-
-        if (!aborted) {
-          if (pRes && pRes.ok) {
-            const pData = await pRes.json();
-            const list = Array.isArray(pData?.problems) ? pData.problems : [];
-            setLocalAllProblems(list);
-          }
-
-          if (gpRes && gpRes.ok) {
-            const gp = await gpRes.json();
-            const map: Record<string, string[]> = {};
-            for (const g of gp.groups ?? []) map[g.id] = g.problemIds || [];
-            setGroupProblemsMap(map);
-          }
+        if (!aborted && pRes.ok) {
+          const pData = await pRes.json();
+          const list = Array.isArray(pData?.problems) ? pData.problems : [];
+          setLocalAllProblems(list);
         }
       } catch (err: unknown) {
         if (!(err instanceof Error) || err.name !== 'AbortError')
@@ -356,10 +202,6 @@ export function AssociateProblemsDialog({
       onClose();
     }
   };
-
-  // If we're initializing, don't show the dialog yet; parent expects open to be controlled.
-  // Render nothing while initializing to avoid flashing UI.
-  if (initializing) return null;
 
   const handleAdd = async () => {
     setConfigError(null);
@@ -399,11 +241,8 @@ export function AssociateProblemsDialog({
       return;
     }
 
-    const allProblemIds = [selectedProblem.id];
-    const groupIdToSend = selectedGroupId === 'ALL' ? undefined : selectedGroupId;
-
     try {
-      await onAddProblems(allProblemIds, groupIdToSend, settings);
+      await onAddProblems([selectedProblem.id], settings);
 
       setInternalOpen(false);
       onClose();
@@ -425,76 +264,6 @@ export function AssociateProblemsDialog({
           <DialogDescription>Select one problem, configure it, then save.</DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
-          {assignmentIsGroup && (
-            <div>
-              <Label className="mb-2 block">Assign To</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="border-input bg-background flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-left">
-                      {selectedGroupId === 'ALL'
-                        ? 'All Students'
-                        : groups.find((g) => g.id === selectedGroupId)?.name || 'Select group'}
-                    </span>
-                    <ChevronDown className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-72 p-2">
-                  <div className="relative">
-                    <SearchIcon className="text-muted-foreground absolute top-3 left-3 h-4 w-4" />
-                    <Input
-                      className="pl-10"
-                      placeholder="Search groups"
-                      value={groupFilter}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        setGroupFilter(e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="max-h-64 overflow-auto rounded-md">
-                    <ul>
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedGroupId('ALL')}
-                          className={`hover:bg-primary/10 flex w-full items-center justify-between gap-2 px-3 py-2 text-left ${selectedGroupId === 'ALL' ? 'bg-primary/10' : ''}`}
-                        >
-                          <div className="truncate">All students</div>
-                          {selectedGroupId === 'ALL' && <Check className="h-4 w-4" />}
-                        </button>
-                      </li>
-                      {groupsLoading ? (
-                        <li className="text-muted-foreground p-3 text-sm">Loading…</li>
-                      ) : groups.filter((g) =>
-                          g.name.toLowerCase().includes(groupFilter.toLowerCase()),
-                        ).length === 0 ? (
-                        <li className="text-muted-foreground p-3 text-sm">No groups available</li>
-                      ) : (
-                        groups
-                          .filter((g) => g.name.toLowerCase().includes(groupFilter.toLowerCase()))
-                          .map((g) => (
-                            <li key={g.id}>
-                              <button
-                                type="button"
-                                onClick={() => setSelectedGroupId(g.id)}
-                                className={`hover:bg-primary/10 flex w-full items-center justify-between gap-2 px-3 py-2 text-left ${selectedGroupId === g.id ? 'bg-primary/10' : ''}`}
-                              >
-                                <div className="truncate">{g.name}</div>
-                                {selectedGroupId === g.id && <Check className="h-4 w-4" />}
-                              </button>
-                            </li>
-                          ))
-                      )}
-                    </ul>
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
-
           <div className="space-y-4">
             <SelectField
               label="Problem"

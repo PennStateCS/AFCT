@@ -11,17 +11,9 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import InputGroup from '@/components/ui/InputGroup';
 import { Checkbox } from '@/components/ui/checkbox';
 import SwitchField from '@/components/ui/SwitchField';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-} from '@/components/ui/dropdown-menu';
-import { Check, ChevronDown, Search as SearchIcon } from 'lucide-react';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -49,7 +41,7 @@ type CreateProblemDialogProps = {
   courseId: string;
   courseIsArchived: boolean;
   // Optional assignment context: when provided, the dialog will automatically
-  // add the created problem to the assignment and optionally assign it to a group.
+  // add the created problem to the assignment.
   assignmentId?: string;
   onCreated?: (created?: Problem, createdSuccessfully?: boolean) => void;
 };
@@ -105,112 +97,20 @@ export function CreateProblemDialog({
   const isUnlimitedStates = watch('isUnlimitedStates');
   const file = watch('file');
 
-  // Group assignment support (only relevant when opened in assignment context)
-  const [assignmentIsGroup, setAssignmentIsGroup] = useState(false);
-  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
-  const [groupsLoading, setGroupsLoading] = useState(false);
-  const [selectedGroupId, setSelectedGroupId] = useState<'ALL' | string>('ALL');
-  const [groupFilter, setGroupFilter] = useState('');
-  const filteredGroups = useMemo(() => {
-    const q = groupFilter.trim().toLowerCase();
-    if (!q) return groups;
-    return groups.filter((g) => g.name.toLowerCase().includes(q));
-  }, [groups, groupFilter]);
-
-  // Internal visibility state: only show dialog after groups are loaded (if needed)
+  // Internal visibility state, mirrors the parent's `open`.
   const [internalOpen, setInternalOpen] = useState(false);
 
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
 
   useEffect(() => {
-    let aborted = false;
-    const ac = new AbortController();
-
-    async function init() {
-      setInternalOpen(false);
-      setSelectedGroupId('ALL');
-      setAssignmentIsGroup(false);
-      setGroups([]);
-      setGroupsLoading(false);
-
-      try {
-        if (assignmentId) {
-          const res = await fetch(apiPaths.assignment(courseId, assignmentId), {
-            signal: ac.signal,
-          });
-          if (!res.ok) {
-            // treat as non-group assignment on failure
-            setAssignmentIsGroup(false);
-          } else {
-            const data = await res.json();
-            setAssignmentIsGroup(!!data?.isGroup);
-            if (data?.isGroup) {
-              setGroupsLoading(true);
-              try {
-                const gr = await fetch(apiPaths.courseGroups(courseId));
-                if (gr.ok) {
-                  const gdata = await gr.json();
-                  setGroups(Array.isArray(gdata) ? gdata : []);
-                } else {
-                  setGroups([]);
-                }
-              } catch (err) {
-                if ((err as { name?: string } | null)?.name === 'AbortError') return;
-                console.error('Failed to load groups:', err);
-                setGroups([]);
-              } finally {
-                setGroupsLoading(false);
-              }
-            } else {
-              setGroups([]);
-            }
-          }
-        } else {
-          setAssignmentIsGroup(false);
-          setGroups([]);
-        }
-      } catch (err) {
-        if ((err as { name?: string } | null)?.name === 'AbortError') return;
-        console.error('Failed to load assignment info:', err);
-        setAssignmentIsGroup(false);
-        setGroups([]);
-        setGroupsLoading(false);
-      } finally {
-        if (!aborted) {
-          // Ready to open the dialog: reset form and show
-          reset(defaults, {
-            keepDirty: false,
-            keepTouched: false,
-            keepErrors: false,
-            keepValues: false,
-          });
-          setInternalOpen(true);
-        }
-      }
-    }
-
-    if (open) {
-      void init();
-    } else {
-      // parent closed while we were possibly initializing
-      setInternalOpen(false);
-      reset(defaults, {
-        keepDirty: false,
-        keepTouched: false,
-        keepErrors: false,
-        keepValues: false,
-      });
-      setSelectedGroupId('ALL');
-      setAssignmentIsGroup(false);
-      setGroups([]);
-      setGroupsLoading(false);
-    }
-
-    return () => {
-      aborted = true;
-      ac.abort();
-    };
-  }, [open, defaults, reset, assignmentId, courseId]);
+    reset(defaults, {
+      keepDirty: false,
+      keepTouched: false,
+      keepErrors: false,
+      keepValues: false,
+    });
+    setInternalOpen(open);
+  }, [open, defaults, reset]);
 
   const resetForm = () => {
     reset(defaults, {
@@ -219,7 +119,6 @@ export function CreateProblemDialog({
       keepErrors: false,
       keepValues: false,
     });
-    setSelectedGroupId('ALL');
   };
 
   const onSubmit = async (raw: FormValues) => {
@@ -274,17 +173,12 @@ export function CreateProblemDialog({
       }
 
       // If we were opened in the context of an assignment, automatically add the
-      // created problem to it (best-effort; group support is based on assignment.groupId).
+      // created problem to it (best-effort).
       if (created?.id && assignmentId) {
         try {
-          const payload: { problemIds: string[]; groupId?: string } = {
+          await apiClient.post(apiPaths.assignmentProblems(courseId, assignmentId), {
             problemIds: [created.id],
-          };
-          // A specific group (not 'ALL') scopes the assignment; 'ALL' omits groupId.
-          if (assignmentIsGroup && selectedGroupId && selectedGroupId !== 'ALL') {
-            payload.groupId = selectedGroupId;
-          }
-          await apiClient.post(apiPaths.assignmentProblems(courseId, assignmentId), payload);
+          });
         } catch (err) {
           console.error('Failed to add created problem to assignment:', err);
         }
@@ -332,82 +226,6 @@ export function CreateProblemDialog({
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <ProblemBasicFields control={control} errors={errors} />
-
-          {/* Group assignment dropdown (shown only when the assignment supports groups) */}
-          {assignmentIsGroup && (
-            <div>
-              <Label className="mb-2 block">Assign to Group</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <div>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between rounded border p-2 text-left"
-                      aria-haspopup="listbox"
-                    >
-                      <span className="truncate">
-                        {selectedGroupId === 'ALL'
-                          ? 'All students'
-                          : groups.find((g) => g.id === selectedGroupId)?.name || 'Select group'}
-                      </span>
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </button>
-                  </div>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-80 max-w-[90vw] p-2" align="start">
-                  <div className="mb-2">
-                    <div className="relative">
-                      <SearchIcon className="text-muted-foreground absolute top-3 left-3 h-4 w-4" />
-                      <Input
-                        className="pl-10"
-                        placeholder="Search groups"
-                        value={groupFilter}
-                        onChange={(e) => setGroupFilter(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-
-                  <div className="bg-card max-h-64 overflow-auto rounded-md border">
-                    <ul>
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedGroupId('ALL')}
-                          className={`hover:bg-primary/10 flex w-full items-center justify-between gap-2 px-3 py-2 text-left ${
-                            selectedGroupId === 'ALL' ? 'bg-primary/10' : ''
-                          }`}
-                        >
-                          <div className="truncate">All students</div>
-                          {selectedGroupId === 'ALL' && <Check className="h-4 w-4" />}
-                        </button>
-                      </li>
-                      {groupsLoading ? (
-                        <li className="text-muted-foreground p-3 text-sm">Loading…</li>
-                      ) : filteredGroups.length === 0 ? (
-                        <li className="text-muted-foreground p-3 text-sm">No groups available</li>
-                      ) : (
-                        filteredGroups.map((g) => (
-                          <li key={g.id}>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedGroupId(g.id)}
-                              className={`hover:bg-primary/10 flex w-full items-center justify-between gap-2 px-3 py-2 text-left ${
-                                selectedGroupId === g.id ? 'bg-primary/10' : ''
-                              }`}
-                            >
-                              <div className="truncate">{g.name}</div>
-                              {selectedGroupId === g.id && <Check className="h-4 w-4" />}
-                            </button>
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
 
           {/* Max States (FA/PDA only) */}
           {(type === 'FA' || type === 'PDA') && (

@@ -47,11 +47,6 @@ type AssignmentSummary = {
   title: string;
 };
 
-// Stable empty defaults so the values derived from the groups query keep a
-// constant identity between renders (keeps the memoized group-name map stable).
-const EMPTY_GROUPS: { id: string; name: string }[] = [];
-const EMPTY_GROUP_PROBLEMS_MAP: Record<string, string[]> = {};
-
 // The "Add existing problem" picker wants optional (not nullable) description/type, so
 // widen a DB problem row to that shape. Shared by its candidate and used-problem lists.
 function normalizeProblem(p: Problem) {
@@ -199,45 +194,8 @@ export default function AssignmentDashboardPage({
   const allAssignments = assignmentsQuery.data ?? [];
   const assignmentsLoading = assignmentsQuery.isFetching;
 
-  // Read 3: for a group assignment, fetch groups and the mapping of
-  // problems -> groups. Only runs for group assignments. TanStack Query cancels
-  // in-flight fetches via the AbortSignal, so no manual AbortController plumbing.
-  const groupsEnabled = !!id && !!aid && !!assignment?.isGroup;
-  const groupsQuery = useQuery({
-    queryKey: ['course', id, 'assignment', aid, 'groups-and-mappings'],
-    queryFn: async ({ signal }) => {
-      const [grRes, gpRes] = await Promise.all([
-        fetch(apiPaths.courseGroups(id), { signal }),
-        fetch(apiPaths.assignmentGroupProblems(id, aid), { signal }),
-      ]);
-
-      let nextGroups: { id: string; name: string }[] = [];
-      if (grRes.ok) {
-        const gr = await grRes.json();
-        nextGroups = Array.isArray(gr) ? gr : (gr.groups ?? []);
-      }
-
-      const groupProblemsMap: Record<string, string[]> = {};
-      if (gpRes.ok) {
-        const gp = await gpRes.json();
-        for (const g of gp.groups ?? []) groupProblemsMap[g.id] = g.problemIds || [];
-      }
-
-      return { groups: nextGroups, groupProblemsMap };
-    },
-    enabled: groupsEnabled,
-    staleTime: 30_000,
-  });
-  const groups = groupsQuery.data?.groups ?? EMPTY_GROUPS;
-  const groupProblemsMap = groupsQuery.data?.groupProblemsMap ?? EMPTY_GROUP_PROBLEMS_MAP;
-  // Cold-load only. The problem rows come from `assignment` (not this query), so a
-  // background groups refetch must not flip the DataTable to its blocking "Loading
-  // data" state and hide every row; only the initial group fetch should.
-  const groupsLoading = groupsEnabled && groupsQuery.isLoading;
-
   async function handleAddProblems(
     problemIds: string[],
-    groupId?: string,
     problemSettings?: {
       problemId: string;
       maxPoints: number;
@@ -249,10 +207,8 @@ export default function AssignmentDashboardPage({
     try {
       const payload: {
         problemIds: string[];
-        groupId?: string;
         problemSettings?: ProblemLinkSettings[];
       } = { problemIds };
-      if (groupId) payload.groupId = groupId;
       if (problemSettings && problemSettings.length > 0) payload.problemSettings = problemSettings;
 
       const res = await fetch(apiPaths.assignmentProblems(id, aid), {
@@ -299,20 +255,6 @@ export default function AssignmentDashboardPage({
     [id],
   );
 
-  // All hooks must run before any early return so their call order is stable.
-  const groupNamesByProblemId = useMemo(() => {
-    const namesById = new Map(groups.map((group) => [group.id, group.name]));
-    const map: Record<string, string[]> = {};
-    for (const [groupId, problemIds] of Object.entries(groupProblemsMap)) {
-      const name = namesById.get(groupId) ?? groupId;
-      for (const problemId of problemIds ?? []) {
-        if (!map[problemId]) map[problemId] = [];
-        map[problemId].push(name);
-      }
-    }
-    return map;
-  }, [groupProblemsMap, groups]);
-
   const problemTableData = useMemo(
     () =>
       (assignment?.problems ?? []).map((ap) => ({
@@ -350,26 +292,17 @@ export default function AssignmentDashboardPage({
 
   // Memoized so the DataTable isn't handed a fresh column model on every render
   // (this view re-renders on tab/dialog state and every query settle). All closed-
-  // over handlers are useCallback-stable; the group column depends on isGroup.
+  // over handlers are useCallback-stable.
   const problemColumns = useMemo(
     () =>
       buildProblemColumns({
-        isGroup: !!assignment?.isGroup,
-        groupNamesByProblemId,
         courseIsArchived,
         openDescription,
         openRenderViewer,
         handleEditProblem,
         onRemoveProblem: setProblemToRemove,
       }),
-    [
-      assignment?.isGroup,
-      groupNamesByProblemId,
-      courseIsArchived,
-      openDescription,
-      openRenderViewer,
-      handleEditProblem,
-    ],
+    [courseIsArchived, openDescription, openRenderViewer, handleEditProblem],
   );
 
   if (loading) return <LoadingSpinner label="Loading" />;
@@ -519,7 +452,6 @@ export default function AssignmentDashboardPage({
                 <DataTable
                   columns={problemColumns}
                   data={problemTableData}
-                  loading={groupsLoading}
                   tableLabel="Assignment problems table"
                   defaultSorting={[{ id: 'title', desc: false }]}
                 />
@@ -532,9 +464,6 @@ export default function AssignmentDashboardPage({
                 assignmentId={aid}
                 maxAssignmentGrade={assignment.maxPoints}
                 problems={submissionTabProblems}
-                assignmentIsGroup={assignment.isGroup ?? false}
-                groups={groups}
-                groupProblemsMap={groupProblemsMap}
               />
             </TabsContent>
             <TabsContent value="settings">
@@ -545,6 +474,7 @@ export default function AssignmentDashboardPage({
                 timeZone={assignment.course?.timezone ?? timezone}
                 assignment={{
                   ...assignment,
+                  groupSetId: null,
                   description: assignment.description ?? null,
                   createdAt: assignment.createdAt ?? new Date(),
                   updatedAt: assignment.updatedAt ?? new Date(),
@@ -552,7 +482,6 @@ export default function AssignmentDashboardPage({
                     typeof assignment.dueDate === 'string'
                       ? new Date(assignment.dueDate)
                       : assignment.dueDate,
-                  isGroup: assignment.isGroup ?? false,
                   allowLateSubmissions: assignment.allowLateSubmissions ?? false,
                   lateCutoff: assignment.lateCutoff
                     ? typeof assignment.lateCutoff === 'string'
@@ -608,8 +537,8 @@ export default function AssignmentDashboardPage({
         courseIsArchived={courseIsArchived}
         allProblems={allProblems.map(normalizeProblem)}
         usedProblems={usedProblems}
-        onAddProblems={(selectedProblemIds, groupId, problemSettings) => {
-          return handleAddProblems(selectedProblemIds, groupId, problemSettings);
+        onAddProblems={(selectedProblemIds, problemSettings) => {
+          return handleAddProblems(selectedProblemIds, problemSettings);
         }}
       />
       <CreateProblemDialog

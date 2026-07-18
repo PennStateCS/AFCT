@@ -106,7 +106,6 @@ export const GET = withCourseAuth(
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, description: Required when allowLateSubmissions is true }
  *           isPublished: { type: boolean }
- *           isGroup: { type: boolean }
  * responses:
  *   201: { description: The created assignment. }
  *   400: { description: "Missing fields, or an inconsistent late-submission window." }
@@ -169,7 +168,6 @@ export const POST = withCourseAuth(
           allowLateSubmissions,
           lateCutoff: lateCutoffDate,
           isPublished: data.isPublished || false,
-          isGroup: !!data.isGroup,
           courseId,
         },
       });
@@ -188,7 +186,6 @@ export const POST = withCourseAuth(
           title: created.title,
           description: created.description ? created.description : '',
           isPublished: created.isPublished,
-          isGroup: created.isGroup,
           dueDate: created.dueDate.toISOString(),
           unlockAt: created.unlockAt ? created.unlockAt.toISOString() : null,
           allowLateSubmissions: created.allowLateSubmissions,

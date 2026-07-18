@@ -46,9 +46,6 @@ type Props = {
   maxAssignmentGrade: number;
   assignmentDueDate?: string | Date | null;
   problems?: Problem[];
-  assignmentIsGroup?: boolean;
-  groups?: { id: string; name: string }[];
-  groupProblemsMap?: Record<string, string[]>;
 };
 
 // Helpers
@@ -78,9 +75,6 @@ export default function AssignmentSubmissions({
   assignmentId,
   assignmentDueDate,
   problems,
-  assignmentIsGroup = false,
-  groups = [],
-  groupProblemsMap = {},
 }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -94,12 +88,6 @@ export default function AssignmentSubmissions({
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
-  // If this is a group assignment we'll compute the student's group and
-  // filter which problems are shown. Cache per-student group lookups.
-  // undefined = not yet resolved; null = resolved -> student is not in any group
-  const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null | undefined>(
-    undefined,
-  );
 
   // Grade editing state (robust, GradesCard style)
   const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
@@ -172,43 +160,8 @@ export default function AssignmentSubmissions({
     return problems ?? [];
   }, [problems]);
 
-  // Compute which problems should be visible for the selected student when
-  // this is a group assignment. Rules:
-  // - Problems mapped to the student's group are visible
-  // - Problems not mapped to any group (assignment-level) are visible to all
-  // - If group mapping isn't available yet, fall back to showing all problems
-  const visibleProblems = useMemo(() => {
-    // If this is not a group assignment, show all assignment problems
-    if (!assignmentIsGroup) return assignmentProblems;
-
-    const gpMap = groupProblemsMap ?? {};
-    const allMapped = new Set<string>(Object.values(gpMap).flat());
-
-    // Assignment-level problems = problems not mapped to any group
-    const assignmentLevel = assignmentProblems.filter((p) => !allMapped.has(p.id));
-
-    // If mappings not loaded yet -> fall back to showing all assignment problems
-    if (!gpMap || Object.keys(gpMap).length === 0) return assignmentProblems;
-
-    // If we don't yet know the student's group (undefined), show assignment-level + all group-mapped (safe fallback)
-    if (selectedStudentGroupId === undefined) {
-      const byGroup = new Set<string>([
-        ...assignmentLevel.map((p) => p.id),
-        ...Object.values(gpMap).flat(),
-      ]);
-      return assignmentProblems.filter((p) => byGroup.has(p.id));
-    }
-
-    // If the student is resolved to be NOT in any group (null), show only assignment-level problems
-    if (selectedStudentGroupId === null) {
-      return assignmentLevel;
-    }
-
-    // Visible = assignment-level + problems mapped to the student's group
-    const allowed = new Set<string>(assignmentLevel.map((p) => p.id));
-    for (const pid of gpMap[selectedStudentGroupId] ?? []) allowed.add(pid);
-    return assignmentProblems.filter((p) => allowed.has(p.id));
-  }, [assignmentProblems, selectedStudentGroupId, groupProblemsMap, assignmentIsGroup]);
+  // All assignment problems are visible.
+  const visibleProblems = assignmentProblems;
 
   const limitText = useCallback((value: string, max = 80) => {
     return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -263,60 +216,6 @@ export default function AssignmentSubmissions({
 
     return { earned: totalEarned, available: totalAvailable };
   }, [assignmentProblems, problemGrades, selectedStudent]);
-
-  // Preload group membership once per course to avoid repeated network calls when
-  // navigating between students. A single consolidated endpoint returns every
-  // (userId, groupId) pair for the course.
-  const groupMembershipsQuery = useQuery({
-    queryKey: ['course', courseId, 'group-memberships'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.courseGroupMemberships(courseId));
-      if (!res.ok) throw new Error('Failed to load group memberships');
-      return (await res.json()) as { memberships: Array<{ userId: string; groupId: string }> };
-    },
-    enabled: assignmentIsGroup && groups.length > 0,
-    staleTime: 30_000,
-  });
-
-  // Cold-load only: on a warm cache a background refetch of memberships must not
-  // blank the student panel or reset the resolved group (isFetching would).
-  const loadingGroupMemberships = groupMembershipsQuery.isLoading;
-
-  // Build the userId→groupId map by iterating groups IN ORDER and assigning the
-  // consolidated memberships that match each group, first-write-wins per user;
-  // this preserves the exact "first group in array order wins" semantics of the
-  // previous per-group fan-out. Empty when not a group assignment / no data.
-  const groupMembershipByStudent = useMemo<Record<string, string>>(() => {
-    if (!assignmentIsGroup || !groups || groups.length === 0) return {};
-    const memberships = groupMembershipsQuery.data?.memberships;
-    if (!memberships) return {};
-    const membershipMap: Record<string, string> = {};
-    for (const group of groups) {
-      for (const member of memberships) {
-        if (member.groupId !== group.id) continue;
-        if (!membershipMap[member.userId]) {
-          membershipMap[member.userId] = group.id;
-        }
-      }
-    }
-    return membershipMap;
-  }, [assignmentIsGroup, groups, groupMembershipsQuery.data]);
-
-  // Determine selected student's group from preloaded membership data.
-  useEffect(() => {
-    if (!assignmentIsGroup || !selectedStudent) {
-      setSelectedStudentGroupId(null);
-      return;
-    }
-
-    if (loadingGroupMemberships) {
-      setSelectedStudentGroupId(undefined);
-      return;
-    }
-
-    const groupId = groupMembershipByStudent[selectedStudent.id] ?? null;
-    setSelectedStudentGroupId(groupId);
-  }, [assignmentIsGroup, selectedStudent, loadingGroupMemberships, groupMembershipByStudent]);
 
   const handleSelectProblem = useCallback(
     (problemId: string) => {
@@ -699,11 +598,7 @@ export default function AssignmentSubmissions({
     });
 
   const isStudentDataLoading =
-    loadingSubmissions ||
-    loadingComments ||
-    loadingProblemGrades ||
-    (assignmentIsGroup && Boolean(selectedStudent) && selectedStudentGroupId === undefined) ||
-    (assignmentIsGroup && loadingGroupMemberships);
+    loadingSubmissions || loadingComments || loadingProblemGrades;
 
   useEffect(() => {
     if (isStudentDataLoading) {

@@ -74,7 +74,6 @@ const BaseAssignmentFormSchemaObject = z
     allowLateSubmissions: z.boolean().default(false),
     lateCutoff: DateTimeLocalFormOptional,
     isPublished: z.boolean(),
-    isGroup: z.boolean().optional(),
     courseId: z.string().min(1, 'Course id is required.'),
   })
   .strict();
@@ -190,7 +189,6 @@ export const AssignmentCreateApiSchema = z.object({
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().nullable().optional(),
   isPublished: z.boolean().optional(),
-  isGroup: z.boolean().optional(),
 });
 
 export const AssignmentUpdateApiSchema = z.object({
@@ -202,7 +200,6 @@ export const AssignmentUpdateApiSchema = z.object({
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().nullable().optional(),
   isPublished: z.boolean().optional(),
-  isGroup: z.boolean().optional(),
 });
 
 /**

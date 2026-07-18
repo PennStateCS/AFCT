@@ -43,7 +43,6 @@ export const GET = withClientAuth(async (_req, ctx: RouteCtx, { user }) => {
       courseId: true,
       assignmentId: true,
       problemId: true,
-      groupId: true,
       status: true,
       correct: true,
       feedback: true,
@@ -54,7 +53,7 @@ export const GET = withClientAuth(async (_req, ctx: RouteCtx, { user }) => {
   if (
     !submission ||
     !(await canViewStudentData(user, submission.courseId, submission.studentId, {
-      groupAssignment: submission.groupId != null,
+      groupAssignment: false,
     }))
   ) {
     return apiError(404, 'Submission not found');

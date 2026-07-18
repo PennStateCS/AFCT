@@ -39,7 +39,6 @@ export type AssignmentWithDetails = {
   allowLateSubmissions?: boolean;
   lateCutoff?: string | Date | null;
   isPublished: boolean;
-  isGroup?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
   problems: AssignmentProblemLink[];

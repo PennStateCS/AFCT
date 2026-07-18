@@ -100,7 +100,6 @@ export function AssignmentSettingsCard({
       allowLateSubmissions: assignment.allowLateSubmissions ?? false,
       lateCutoff: toLocal(assignment.lateCutoff),
       isPublished: assignment.isPublished ?? false,
-      isGroup: assignment.isGroup ?? false,
       courseId,
       overrides: loadedOverrides.map((o) => ({
         userId: o.userId ?? '',
@@ -117,7 +116,6 @@ export function AssignmentSettingsCard({
       assignment.assignedToEveryone,
       assignment.description,
       assignment.dueDate,
-      assignment.isGroup,
       assignment.isPublished,
       assignment.title,
       assignment.unlockAt,
@@ -155,7 +153,6 @@ export function AssignmentSettingsCard({
       allowLateSubmissions: raw.allowLateSubmissions,
       lateCutoff: raw.allowLateSubmissions ? raw.lateCutoff || null : null,
       isPublished: raw.isPublished,
-      isGroup: raw.isGroup,
     };
     let updated: Assignment;
     try {
@@ -260,21 +257,6 @@ export function AssignmentSettingsCard({
         />
 
         <AssignToFields control={control} errors={errors} courseId={courseId} active />
-
-        <Controller
-          name="isGroup"
-          control={control}
-          render={({ field }) => (
-            <SwitchField
-              label="Group Assignment"
-              name="isGroup"
-              checked={!!field.value}
-              onCheckedChange={(checked) => field.onChange(!!checked)}
-              description="Students submit and are graded as groups for this assignment."
-              descriptionPlacement="inline"
-            />
-          )}
-        />
 
         <Controller
           name="isPublished"

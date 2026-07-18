@@ -14,14 +14,6 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
     findFirst: vi.fn(),
   },
-  group: {
-    findMany: vi.fn(),
-    findUnique: vi.fn(),
-  },
-  groupAssignmentProblem: {
-    createMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
   course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
 }));
@@ -175,74 +167,6 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     expect(prismaMock.assignmentProblem.createMany).not.toHaveBeenCalled();
   });
 
-  it('skips group mapping when the assignment is not a group assignment', async () => {
-    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
-    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
-    prismaMock.assignment.findFirst.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      isPublished: true,
-      isGroup: false,
-    });
-
-    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problemIds: ['p1'], groupId: 'ALL' }),
-    });
-
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
-    expect(res.status).toBe(200);
-    expect(prismaMock.group.findMany).not.toHaveBeenCalled();
-    expect(prismaMock.groupAssignmentProblem.createMany).not.toHaveBeenCalled();
-  });
-
-  it('skips group mapping when the specified group is not in the course', async () => {
-    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
-    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
-    prismaMock.assignment.findFirst.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      isPublished: true,
-      isGroup: true,
-    });
-    // Group belongs to a different course -> not mapped.
-    prismaMock.group.findUnique.mockResolvedValue({ id: 'g-other', courseId: 'other' });
-
-    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problemIds: ['p1'], groupId: 'g-other' }),
-    });
-
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
-    expect(res.status).toBe(200);
-    expect(prismaMock.groupAssignmentProblem.createMany).not.toHaveBeenCalled();
-  });
-
-  it('skips group mapping when there are no valid problems to map', async () => {
-    // No valid problems -> validIds is empty, so no mappings are created even for a real group.
-    prismaMock.problem.findMany.mockResolvedValue([]);
-    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
-    prismaMock.assignment.findFirst.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      isPublished: true,
-      isGroup: true,
-    });
-    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1' }]);
-
-    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problemIds: ['p999'], groupId: 'ALL' }),
-    });
-
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
-    expect(res.status).toBe(200);
-    expect(prismaMock.groupAssignmentProblem.createMany).not.toHaveBeenCalled();
-  });
-
   it('still succeeds when activity logging fails', async () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
@@ -324,109 +248,6 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     expect(successCall).toBeDefined();
     expect(successCall?.[2].metadata).not.toHaveProperty('groupId');
     expect(successCall?.[2].metadata).not.toHaveProperty('mappedGroupCount');
-  });
-
-  it('adds group mappings when groupId is ALL', async () => {
-    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p3' }]);
-    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
-    prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 1 });
-    prismaMock.assignment.findFirst.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      isPublished: true,
-      isGroup: true,
-    });
-    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1' }, { id: 'g2' }]);
-    prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 2 });
-
-    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problemIds: ['p3'], groupId: 'ALL' }),
-    });
-
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
-
-    expect(res.status).toBe(200);
-
-    expect(prismaMock.group.findMany).toHaveBeenCalledWith({ where: { courseId: 'c1' } });
-    expect(prismaMock.groupAssignmentProblem.createMany).toHaveBeenCalledWith({
-      data: [
-        { assignmentId: 'a1', problemId: 'p3', groupId: 'g1' },
-        { assignmentId: 'a1', problemId: 'p3', groupId: 'g2' },
-      ],
-      skipDuplicates: true,
-    });
-    // The group-mapping branch records groupId + the mapped count so it's auditable.
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      expect.anything(),
-      expect.objectContaining({
-        action: 'ADD_ASSIGNMENT_PROBLEMS',
-        metadata: expect.objectContaining({ groupId: 'ALL', mappedGroupCount: 2 }),
-      }),
-    );
-  });
-
-  it('adds group mapping for a specified groupId', async () => {
-    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p4' }]);
-    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
-    prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 1 });
-    prismaMock.assignment.findFirst.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      isPublished: true,
-      isGroup: true,
-    });
-    prismaMock.group.findUnique.mockResolvedValue({ id: 'g-x', courseId: 'c1' });
-    prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 1 });
-
-    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problemIds: ['p4'], groupId: 'g-x' }),
-    });
-
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
-    expect(res.status).toBe(200);
-
-    expect(prismaMock.group.findUnique).toHaveBeenCalledWith({ where: { id: 'g-x' } });
-    expect(prismaMock.groupAssignmentProblem.createMany).toHaveBeenCalledWith({
-      data: [{ assignmentId: 'a1', problemId: 'p4', groupId: 'g-x' }],
-      skipDuplicates: true,
-    });
-  });
-
-  it('allows assigning an already-present assignment problem to a group', async () => {
-    // Problem is already part of the assignment (assignmentProblem.findMany returns it)
-    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p5' }]);
-    prismaMock.assignmentProblem.findMany.mockResolvedValue([
-      { problemId: 'p5', _count: { submissions: 0 } },
-    ]);
-    prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 0 });
-    prismaMock.assignment.findFirst.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      isPublished: true,
-      isGroup: true,
-    });
-    prismaMock.group.findUnique.mockResolvedValue({ id: 'g-y', courseId: 'c1' });
-    prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 1 });
-
-    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problemIds: ['p5'], groupId: 'g-y' }),
-    });
-
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
-    expect(res.status).toBe(200);
-
-    expect(prismaMock.group.findUnique).toHaveBeenCalledWith({ where: { id: 'g-y' } });
-    expect(prismaMock.groupAssignmentProblem.createMany).toHaveBeenCalledWith({
-      data: [{ assignmentId: 'a1', problemId: 'p5', groupId: 'g-y' }],
-      skipDuplicates: true,
-    });
   });
 
   it('ignores invalid problem ids not in the course', async () => {
@@ -585,8 +406,7 @@ describe('DELETE /api/courses/[id]/[aid]/problems (remove a problem)', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.problems).toHaveLength(1);
-    // Ensure group mappings were removed along with the assignmentProblem link
-    expect(prismaMock.groupAssignmentProblem.deleteMany).toHaveBeenCalledWith({
+    expect(prismaMock.assignmentProblem.deleteMany).toHaveBeenCalledWith({
       where: { assignmentId: 'a1', problemId: 'p1' },
     });
     expect(activityLogMock).toHaveBeenCalled();

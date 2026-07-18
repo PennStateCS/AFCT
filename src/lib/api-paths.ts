@@ -34,13 +34,6 @@ export const apiPaths = {
   courseRoster: (id: string) => `/api/courses/${id}/roster`,
   courseRosterBulk: (id: string) => `/api/courses/${id}/roster/bulk`,
   courseLookupUsers: (id: string) => `/api/courses/${id}/lookup-users`,
-  courseGroupMemberships: (id: string) => `/api/courses/${id}/group-memberships`,
-  courseGroups: (id: string) => `/api/courses/${id}/groups`,
-  courseGroup: (id: string, groupId: string) => `/api/courses/${id}/groups/${groupId}`,
-  courseGroupMembers: (id: string, groupId: string) =>
-    `/api/courses/${id}/groups/${groupId}/members`,
-  courseGroupMember: (id: string, groupId: string, userId: string) =>
-    `/api/courses/${id}/groups/${groupId}/members/${userId}`,
   // Group sets (redesigned group management)
   courseGroupSets: (id: string) => `/api/courses/${id}/group-sets`,
   courseGroupSet: (id: string, setId: string) => `/api/courses/${id}/group-sets/${setId}`,
@@ -84,8 +77,6 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/review-data/${studentId}`,
   assignmentSubmissions: (courseId: string, aid: string, sid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/submissions/${sid}`,
-  assignmentGroupProblems: (courseId: string, aid: string) =>
-    `/api/courses/${courseId}/assignments/${aid}/group-problems`,
   assignmentStudentContext: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/student-context`,
   assignmentOverrides: (courseId: string, aid: string) =>

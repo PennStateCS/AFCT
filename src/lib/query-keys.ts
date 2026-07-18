@@ -35,10 +35,6 @@ export const queryKeys = {
     roster: (courseId: string) => ['course', courseId, 'roster'] as const,
     rosterEntry: (courseId: string, userId: string) =>
       ['course', courseId, 'roster', userId] as const,
-    groups: (courseId: string) => ['course', courseId, 'groups'] as const,
-    groupMembers: (courseId: string, groupId: string) =>
-      ['course', courseId, 'group', groupId, 'members'] as const,
-    groupMemberships: (courseId: string) => ['course', courseId, 'group-memberships'] as const,
     // Group sets (redesigned group management). All nest under the course prefix
     // so invalidateQueries(['course', courseId]) cascades.
     groupSets: (courseId: string) => ['course', courseId, 'group-sets'] as const,

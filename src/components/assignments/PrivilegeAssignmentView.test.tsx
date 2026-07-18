@@ -245,7 +245,6 @@ const makeAssignment = (over: Record<string, unknown> = {}) => ({
   title: 'Regular Languages',
   description: 'Do the thing.',
   isPublished: true,
-  isGroup: false,
   dueDate: '2999-01-01T00:00:00Z', // far future → not past due
   maxPoints: 100,
   courseId: 'c1',
@@ -282,8 +281,6 @@ type Handlers = {
   courseProblems: () => Resp;
   assignmentsList: () => Resp;
   problemsMutation: (init?: RequestInit) => Resp;
-  groups: () => Resp;
-  groupProblems: () => Resp;
 };
 
 const courseProblemsList = [p1, p2, problem({ id: 'p3', title: 'Problem Three' })];
@@ -293,18 +290,11 @@ const defaultHandlers = (): Handlers => ({
   courseProblems: () => ({ ok: true, json: async () => ({ problems: courseProblemsList }) }),
   assignmentsList: () => ({ ok: true, json: async () => initialAssignments }),
   problemsMutation: () => ({ ok: true, json: async () => ({}) }),
-  groups: () => ({ ok: true, json: async () => ({ groups: [{ id: 'g1', name: 'Team A' }] }) }),
-  groupProblems: () => ({
-    ok: true,
-    json: async () => ({ groups: [{ id: 'g1', problemIds: ['p1'] }] }),
-  }),
 });
 
 let handlers: Handlers;
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   const u = String(url);
-  if (u.includes('/group-problems')) return handlers.groupProblems();
-  if (u.includes('/groups')) return handlers.groups();
   if (u.includes('/assignments/a1/problems')) return handlers.problemsMutation(init);
   if (u.includes('/assignments/a1')) return handlers.shell();
   if (u.includes('/assignments')) return handlers.assignmentsList();
@@ -426,19 +416,6 @@ describe('PrivilegeAssignmentView — queries', () => {
     await waitFor(() => expect(addBtn).toBeEnabled());
     fireEvent.click(addBtn);
     expect(await screen.findByText('picker-count:3')).toBeInTheDocument();
-  });
-
-  it('fetches groups and group-problem mappings for a group assignment', async () => {
-    renderView({ initialAssignment: makeAssignment({ isGroup: true }) });
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups', expect.anything()),
-    );
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/courses/c1/assignments/a1/group-problems',
-        expect.anything(),
-      ),
-    );
   });
 });
 

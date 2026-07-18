@@ -165,7 +165,6 @@ export type ResolvedAssignment = {
   id: string;
   courseId: string;
   isPublished: boolean;
-  isGroup: boolean;
 };
 
 export type AssignmentAuthContext = CourseAuthContext & { assignment: ResolvedAssignment };
@@ -203,7 +202,7 @@ export function withAssignmentAuth<Ctx extends CourseParams, R extends Response 
 
       const assignment = await prisma.assignment.findFirst({
         where: { id: assignmentId, courseId: courseAuth.courseId },
-        select: { id: true, courseId: true, isPublished: true, isGroup: true },
+        select: { id: true, courseId: true, isPublished: true },
       });
 
       // Not found, or not in this course → 404 (never leak that it exists elsewhere).
