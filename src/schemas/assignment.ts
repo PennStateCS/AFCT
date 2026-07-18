@@ -159,6 +159,25 @@ export const UpdateAssignmentSchema = BaseAssignmentFormSchemaObject.partial()
 /** Export a form-only schema for UI, if you want the bare form without publish logic */
 export const AssignmentFormSchema = AssignmentFormSchemaWithValidation;
 
+/** One per-student override card in the create wizard (dates as datetime-local strings). */
+const OverrideFormItem = z.object({
+  userId: z.string().min(1),
+  studentName: z.string().optional(),
+  unlockAt: DateTimeLocalFormOptional,
+  dueDate: DateTimeLocalFormOptional,
+  allowLateSubmissions: z.boolean().optional(),
+  lateCutoff: DateTimeLocalFormOptional,
+});
+
+/**
+ * The create-assignment wizard: the base ("Everyone") fields plus a list of per-student
+ * overrides. The base late/unlock rules are validated here; each override's effective
+ * window is validated server-side (it needs the base row to resolve inherited fields).
+ */
+export const AssignmentWizardFormSchema = BaseAssignmentFormSchemaObject.extend({
+  overrides: z.array(OverrideFormItem).default([]),
+}).superRefine(validateLateSubmissionStrings);
+
 /**
  * Server (API) schemas for the assignment create/update routes. Dates stay as
  * strings (parsed in the course timezone server-side); field rules mirror the

@@ -1,7 +1,7 @@
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
 import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
-import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDialog';
+import { CreateAssignmentWizardDialog } from '@/components/dialogs/CreateAssignmentWizardDialog';
 import { EnrollUserDialog } from '@/components/dialogs/EnrollUsersDialog';
 import BulkEnrollDialog from '@/components/dialogs/BulkEnrollDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -128,7 +128,7 @@ export function CourseDialogs({
         />
       )}
 
-      <CreateAssignmentDialog
+      <CreateAssignmentWizardDialog
         open={createAssignmentOpen}
         setOpen={setCreateAssignmentOpen}
         courseId={course.id}

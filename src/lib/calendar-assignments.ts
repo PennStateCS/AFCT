@@ -152,7 +152,7 @@ export async function getAssignmentsForUserRange(params: {
     if (!isStaff) {
       dueDate = effectiveDeadline(
         { unlockAt, dueDate: a.dueDate, allowLateSubmissions, lateCutoff },
-        overrides,
+        overrides ?? [],
         userId,
       ).dueDate;
       // The widened query can return an assignment whose base due is in range but whose

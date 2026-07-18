@@ -131,7 +131,7 @@ export async function getStudentCourseAssignments(
         allowLateSubmissions: a.allowLateSubmissions,
         lateCutoff: a.lateCutoff,
       },
-      a.overrides,
+      a.overrides ?? [],
       userId,
     );
     return {
@@ -147,7 +147,9 @@ export async function getStudentCourseAssignments(
   });
 
   // The DB order is by the base due date; re-sort by each student's effective due so an
-  // extension moves the assignment to its right place in this student's list.
-  resolved.sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0));
+  // extension moves the assignment to its right place in this student's list. A null due
+  // date sorts last, matching Postgres ASC ordering.
+  const dueKey = (d: Date | null) => (d ? d.getTime() : Number.POSITIVE_INFINITY);
+  resolved.sort((a, b) => dueKey(a.dueDate) - dueKey(b.dueDate));
   return resolved;
 }
