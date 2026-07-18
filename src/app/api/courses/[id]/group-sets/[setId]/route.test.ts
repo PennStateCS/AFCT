@@ -12,7 +12,7 @@ const activityLogMock = vi.hoisted(() => vi.fn());
 const serviceMock = vi.hoisted(() => ({
   findGroupSet: vi.fn(),
   loadGroupSetDetail: vi.fn(),
-  groupSetDeletionBlockers: vi.fn(() => []),
+  groupSetDeletionBlockers: vi.fn(async (): Promise<string[]> => []),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
