@@ -62,6 +62,40 @@ vi.mock('@/components/ui/SearchableSelect', () => ({
   ),
 }));
 
+vi.mock('@/components/ui/SearchableMultiSelect', () => ({
+  SearchableMultiSelect: ({
+    label,
+    items,
+    value,
+    onChange,
+  }: {
+    label: string;
+    items: Array<{ id: string; label: string }>;
+    value: string[];
+    onChange: (next: string[]) => void;
+  }) => (
+    <fieldset>
+      <legend>{label}</legend>
+      {items.map((item) => (
+        <label key={item.id}>
+          {item.label}
+          <input
+            type="checkbox"
+            aria-label={item.label}
+            checked={(value ?? []).includes(item.id)}
+            onChange={() => {
+              const set = new Set(value ?? []);
+              if (set.has(item.id)) set.delete(item.id);
+              else set.add(item.id);
+              onChange(Array.from(set));
+            }}
+          />
+        </label>
+      ))}
+    </fieldset>
+  ),
+}));
+
 vi.mock('@/components/ui/switch', () => ({
   Switch: ({
     id,
@@ -194,7 +228,8 @@ describe('CreateAssignmentWizardDialog', () => {
     await user.type(screen.getByLabelText('Title'), 'Homework 1');
     await clickNext(user); // -> Assign To
 
-    // The base due date has a default, so we can add an override and proceed.
+    // Assigned to everyone by default; add a date override for one student via the
+    // "Add date override" picker, then proceed.
     await user.click(await screen.findByRole('button', { name: 'Sam Student' }));
     await clickNext(user); // -> Options
     await clickNext(user); // -> Review
@@ -229,9 +264,11 @@ describe('CreateAssignmentWizardDialog', () => {
     await user.type(screen.getByLabelText('Title'), 'Homework 1');
     await clickNext(user); // -> Assign To
 
-    // Pick a group set, then add one of its groups as a target.
+    // Assign to specific targets: turn off "everyone", pick a group set, then check one
+    // of its groups as the audience target.
+    await user.click(screen.getByRole('switch', { name: /assign to everyone in the course/i }));
     await user.click(await screen.findByRole('button', { name: 'Project Teams (1 group)' }));
-    await user.click(await screen.findByRole('button', { name: 'Team A (1 member)' }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Team A (1 member)' }));
 
     await clickNext(user); // -> Options
     await clickNext(user); // -> Review
@@ -271,7 +308,7 @@ describe('CreateAssignmentWizardDialog', () => {
 
     await clickNext(user);
 
-    // Assign To never mounts (no "Add a student override" control yet).
-    expect(screen.queryByText('Add a student override')).not.toBeInTheDocument();
+    // Assign To never mounts (its "Assignment audience" section is absent).
+    expect(screen.queryByText('Assignment audience')).not.toBeInTheDocument();
   });
 });
