@@ -83,6 +83,8 @@ import { useBackups } from './useBackups';
 import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
 
 type SystemSettingsResponse = {
+  // Read-only NEXTAUTH_URL (server-level), shown for reference; not part of the form.
+  configuredUrl: string;
   timezone: string;
   maxUploadSizeMb: number;
   allowSignup: boolean;
@@ -211,7 +213,9 @@ function buildSettingsSnapshot(data: SystemSettingsResponse): FormSnapshot {
 // (typed via the setField wrapper below); `reset` replaces the whole snapshot on seed.
 type FormAction =
   | { type: 'reset'; snapshot: FormSnapshot }
-  | { [K in keyof FormSnapshot]: { type: 'set'; field: K; value: FormSnapshot[K] } }[keyof FormSnapshot];
+  | {
+      [K in keyof FormSnapshot]: { type: 'set'; field: K; value: FormSnapshot[K] };
+    }[keyof FormSnapshot];
 
 function formReducer(state: FormSnapshot, action: FormAction): FormSnapshot {
   if (action.type === 'reset') return action.snapshot;
@@ -276,12 +280,9 @@ export default function SystemSettingsClient() {
   // slice each). `setField` is the typed single-field updater the field JSX calls; a
   // whole-object `reset` seeds/restores the form (on load, Cancel, and after save).
   const [form, dispatchForm] = useReducer(formReducer, initialSeed ?? EMPTY_FORM);
-  const setField = useCallback(
-    <K extends keyof FormSnapshot>(field: K, value: FormSnapshot[K]) => {
-      dispatchForm({ type: 'set', field, value } as FormAction);
-    },
-    [],
-  );
+  const setField = useCallback(<K extends keyof FormSnapshot>(field: K, value: FormSnapshot[K]) => {
+    dispatchForm({ type: 'set', field, value } as FormAction);
+  }, []);
 
   const {
     timezone,
@@ -686,6 +687,27 @@ export default function SystemSettingsClient() {
               </p>
               {/* All General fields stacked in a single, consistently-sized column. */}
               <div className="max-w-md space-y-5">
+                {/* Read-only: NEXTAUTH_URL is a server-level env var, not a stored
+                    setting. Shown for reference with instructions to change it. */}
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Configured URL</p>
+                  <p className="bg-muted/10 rounded-md border px-3 py-2 font-mono text-sm break-all">
+                    {loading
+                      ? 'Loading…'
+                      : settingsData?.configuredUrl
+                        ? settingsData.configuredUrl
+                        : 'Not set'}
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    The public address AFCT uses for sign-in links and redirects (the{' '}
+                    <code className="font-mono">NEXTAUTH_URL</code> environment variable). It is
+                    read-only here because it is set at the server level and only takes effect after
+                    a restart. To change it, re-run the installer on the server with the new address
+                    (<code className="font-mono">sh install.sh --reconfigure</code>, or pass{' '}
+                    <code className="font-mono">APP_URL=https://new.address</code>). That rewrites
+                    the value, restarts the stack, and preserves your data and secrets.
+                  </p>
+                </div>
                 <SelectField
                   label="Timezone"
                   name="timezone"
@@ -721,7 +743,9 @@ export default function SystemSettingsClient() {
                   min={MIN_SESSION_TIMEOUT_MINUTES}
                   max={MAX_SESSION_TIMEOUT_MINUTES}
                   value={sessionTimeoutMinutes === '' ? '' : String(sessionTimeoutMinutes)}
-                  setValue={(val) => setField('sessionTimeoutMinutes', val === '' ? '' : Number(val))}
+                  setValue={(val) =>
+                    setField('sessionTimeoutMinutes', val === '' ? '' : Number(val))
+                  }
                   disabled={disabled}
                   description={`Signs out after inactivity. ${MIN_SESSION_TIMEOUT_MINUTES}–${MAX_SESSION_TIMEOUT_MINUTES} min.`}
                 />
@@ -760,7 +784,9 @@ export default function SystemSettingsClient() {
                   min={MIN_ACTIVITY_LOG_RETENTION_DAYS}
                   max={MAX_ACTIVITY_LOG_RETENTION_DAYS}
                   value={activityLogRetentionDays === '' ? '' : String(activityLogRetentionDays)}
-                  setValue={(val) => setField('activityLogRetentionDays', val === '' ? '' : Number(val))}
+                  setValue={(val) =>
+                    setField('activityLogRetentionDays', val === '' ? '' : Number(val))
+                  }
                   disabled={disabled}
                   description={`System Logs older than this are deleted daily. ${MIN_ACTIVITY_LOG_RETENTION_DAYS}–${MAX_ACTIVITY_LOG_RETENTION_DAYS} days.`}
                 />
@@ -1007,16 +1033,18 @@ export default function SystemSettingsClient() {
 
             <TabsContent value="updates">
               <p className="text-muted-foreground mb-4 text-sm">
-                Upgrade AFCT to a newer published release. The stack backs up the
-                database first, downloads the new version, and restarts; if the new
-                version fails its health check it is rolled back automatically.
+                Upgrade AFCT to a newer published release. The stack backs up the database first,
+                downloads the new version, and restarts; if the new version fails its health check
+                it is rolled back automatically.
               </p>
 
               <div className="max-w-2xl space-y-5">
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium">Current version</h3>
                   <Badge variant="secondary" className="w-fit font-mono">
-                    {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
+                    {upgradeLoading && !upgradeInfo
+                      ? 'Loading…'
+                      : (upgradeInfo?.current ?? 'unknown')}
                   </Badge>
                 </div>
 
@@ -1062,13 +1090,13 @@ export default function SystemSettingsClient() {
                   >
                     <p className="font-medium">The update service isn’t installed.</p>
                     <p>
-                      In-app upgrades and downgrades need the privileged updater
-                      component, which isn’t running on this server. It holds the Docker
-                      socket, so it’s off by default.
+                      In-app upgrades and downgrades need the privileged updater component, which
+                      isn’t running on this server. It holds the Docker socket, so it’s off by
+                      default.
                     </p>
                     <p>
-                      To enable it, run this on the server, in the directory that
-                      contains <code className="font-mono">docker-compose.yml</code>:
+                      To enable it, run this on the server, in the directory that contains{' '}
+                      <code className="font-mono">docker-compose.yml</code>:
                     </p>
                     <pre className="bg-background/60 overflow-x-auto rounded border p-2 font-mono text-xs">
                       sh install.sh enable-updater
@@ -1080,8 +1108,8 @@ export default function SystemSettingsClient() {
                   </div>
                 ) : upgradeInfo?.manifestError ? (
                   <p className="text-muted-foreground text-sm">
-                    The list of available versions could not be loaded. Check the
-                    server’s network access and reopen this tab to retry.
+                    The list of available versions could not be loaded. Check the server’s network
+                    access and reopen this tab to retry.
                   </p>
                 ) : upgradeableVersions.length === 0 ? (
                   <p className="text-muted-foreground text-sm">
@@ -1113,10 +1141,10 @@ export default function SystemSettingsClient() {
                         role="note"
                         className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
                       >
-                        This release also updates a component the in-app upgrade can’t
-                        replace on its own. After the upgrade finishes, run{' '}
-                        <code className="font-mono">sh install.sh update</code> on the
-                        server to complete it.
+                        This release also updates a component the in-app upgrade can’t replace on
+                        its own. After the upgrade finishes, run{' '}
+                        <code className="font-mono">sh install.sh update</code> on the server to
+                        complete it.
                       </div>
                     )}
                     <Button
@@ -1148,16 +1176,15 @@ export default function SystemSettingsClient() {
                     <DialogDescription>
                       AFCT will upgrade from{' '}
                       <span className="font-mono">{upgradeInfo?.current}</span> to{' '}
-                      <span className="font-mono">{selectedVersion}</span>. It backs up
-                      the database first, downloads the new version, and restarts. This
-                      may take a few minutes, during which the site may be briefly
-                      unavailable. A failed upgrade is rolled back automatically.
+                      <span className="font-mono">{selectedVersion}</span>. It backs up the database
+                      first, downloads the new version, and restarts. This may take a few minutes,
+                      during which the site may be briefly unavailable. A failed upgrade is rolled
+                      back automatically.
                     </DialogDescription>
                     {selectedVersionInfo?.requiresHostUpdate && (
                       <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                        Afterward, run <code className="font-mono">sh install.sh update</code>{' '}
-                        on the server to finish updating a component the app can’t replace
-                        itself.
+                        Afterward, run <code className="font-mono">sh install.sh update</code> on
+                        the server to finish updating a component the app can’t replace itself.
                       </p>
                     )}
                   </DialogHeader>
@@ -1189,8 +1216,8 @@ export default function SystemSettingsClient() {
                     Restore a previous version
                   </h3>
                   <p className="text-muted-foreground text-sm">
-                    Downgrading restores the database backup taken before that version was
-                    replaced. It{' '}
+                    Downgrading restores the database backup taken before that version was replaced.
+                    It{' '}
                     <span className="text-destructive font-medium">
                       permanently discards everything created since that backup
                     </span>{' '}
@@ -1265,11 +1292,10 @@ export default function SystemSettingsClient() {
                       <span className="font-mono">
                         {restoreTarget ? formatBackupTs(restoreTarget.backup) : ''}
                       </span>{' '}
-                      and runs{' '}
-                      <span className="font-mono">{restoreTarget?.version}</span>. Everything
-                      created since that backup — submissions, grades, accounts — is{' '}
-                      <span className="text-destructive font-medium">permanently lost</span>.
-                      A safety backup of the current state is taken first. Type{' '}
+                      and runs <span className="font-mono">{restoreTarget?.version}</span>.
+                      Everything created since that backup — submissions, grades, accounts — is{' '}
+                      <span className="text-destructive font-medium">permanently lost</span>. A
+                      safety backup of the current state is taken first. Type{' '}
                       <span className="font-mono">{restoreTarget?.version}</span> to confirm.
                     </DialogDescription>
                   </DialogHeader>
@@ -1284,11 +1310,7 @@ export default function SystemSettingsClient() {
                     disabled={downgradeBusy}
                   />
                   <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setRestoreTarget(null)}
-                    >
+                    <Button type="button" variant="outline" onClick={() => setRestoreTarget(null)}>
                       Cancel
                     </Button>
                     <Button

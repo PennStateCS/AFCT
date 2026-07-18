@@ -48,6 +48,7 @@ describe('GET /api/system-settings', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({
+      configuredUrl: expect.any(String),
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
@@ -92,6 +93,7 @@ describe('GET /api/system-settings', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({
+      configuredUrl: expect.any(String),
       timezone: 'America/New_York',
       maxUploadSizeMb: 100,
       allowSignup: false,
@@ -378,7 +380,10 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ hcaptchaSiteKey: 'site-1', hcaptchaSecretKey: '' }), routeCtx());
+    const res = await PUT(
+      putBody({ hcaptchaSiteKey: 'site-1', hcaptchaSecretKey: '' }),
+      routeCtx(),
+    );
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -390,7 +395,10 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ hcaptchaSecretClear: true, hcaptchaSecretKey: 'ignored' }), routeCtx());
+    const res = await PUT(
+      putBody({ hcaptchaSecretClear: true, hcaptchaSecretKey: 'ignored' }),
+      routeCtx(),
+    );
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -581,7 +589,10 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ loginMaxAttempts: 99_999, loginLockoutMinutes: 0 }), routeCtx());
+    const res = await PUT(
+      putBody({ loginMaxAttempts: 99_999, loginLockoutMinutes: 0 }),
+      routeCtx(),
+    );
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];

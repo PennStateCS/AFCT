@@ -111,12 +111,17 @@ async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promis
  *             activityLogRetentionDays: { type: integer }
  *             hcaptchaSiteKey: { type: string }
  *             hcaptchaSecretConfigured: { type: boolean, description: Whether a secret is stored; the value is never returned }
+ *             configuredUrl: { type: string, description: Read-only NEXTAUTH_URL (the app public address); set at the server level and not editable here }
  *   403: { description: Caller is not a system administrator. }
  */
 export const GET = withAdminAuth(
   async () => {
     const settings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
     return NextResponse.json({
+      // Read-only: the public address is an environment variable (NEXTAUTH_URL) set by
+      // the installer, not a stored setting. Surfaced so an admin can see it without
+      // shell access; it can only be changed by re-running the installer + restart.
+      configuredUrl: process.env.NEXTAUTH_URL?.trim() ?? '',
       timezone: settings?.timezone ?? DEFAULT_SYSTEM_TIMEZONE,
       maxUploadSizeMb: settings?.maxUploadSizeMb ?? DEFAULT_MAX_UPLOAD_SIZE_MB,
       allowSignup: settings?.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
