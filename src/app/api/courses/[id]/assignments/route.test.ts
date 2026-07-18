@@ -194,6 +194,33 @@ describe('POST /api/courses/[id]/assignments', () => {
     expect(res.status).toBe(400);
   });
 
+  it('accepts a null lateCutoff for a no-late assignment (wizard payload)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.create.mockResolvedValue({
+      id: 'a1',
+      title: 'New',
+      description: null,
+      isPublished: false,
+      isGroup: false,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      courseId: 'c1',
+    });
+
+    // The create wizard sends lateCutoff: null (and unlockAt undefined) when late is off.
+    const res = await post({
+      title: 'New',
+      dueDate: '2026-01-10',
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      unlockAt: null,
+    });
+
+    expect(res.status).toBe(201);
+  });
+
   it('allows late submissions with no cutoff (accepted with no deadline)', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });

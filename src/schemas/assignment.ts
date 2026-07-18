@@ -183,10 +183,12 @@ export const AssignmentCreateApiSchema = z.object({
   title: z.string().min(1, 'Missing required fields').max(200, 'Title is too long.'),
   description: z.string().max(20000, 'Description is too long.').optional(),
   dueDate: z.string().min(1, 'A due date is required.'),
-  unlockAt: z.string().optional(),
+  // Nullable so callers can send null to mean "no value" (the create UI sends
+  // lateCutoff: null when late is off); the handler treats null and absent the same.
+  unlockAt: z.string().nullable().optional(),
   assignedToEveryone: z.boolean().optional(),
   allowLateSubmissions: z.boolean().optional(),
-  lateCutoff: z.string().optional(),
+  lateCutoff: z.string().nullable().optional(),
   isPublished: z.boolean().optional(),
   isGroup: z.boolean().optional(),
 });
