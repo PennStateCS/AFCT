@@ -12,6 +12,9 @@ const prismaMock = vi.hoisted(() => ({
   assignment: {
     findMany: vi.fn(),
   },
+  assignmentOverride: {
+    deleteMany: vi.fn(),
+  },
   submission: {
     findFirst: vi.fn(),
   },
@@ -294,6 +297,10 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
 
     expect(res.status).toBe(200);
     expect(prismaMock.roster.deleteMany).toHaveBeenCalled();
+    // The user's due-date overrides in this course are cleared alongside the roster row.
+    expect(prismaMock.assignmentOverride.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u2', assignmentId: { in: ['a1'] } },
+    });
   });
 
   it('returns 409 when the removal transaction hits a serialization conflict', async () => {

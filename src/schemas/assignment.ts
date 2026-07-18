@@ -186,6 +186,25 @@ export const AssignmentUpdateApiSchema = z.object({
   isGroup: z.boolean().optional(),
 });
 
+/**
+ * Per-target due-date override (Canvas "Assign To"). Dates stay strings (parsed in the
+ * course timezone server-side). Every deadline field is nullable/optional: omitted keeps
+ * the existing value on update, a value sets it, and null means "inherit the assignment's
+ * base value". The handler fetches the base assignment and validates the effective window,
+ * because inherit-awareness can't live in the schema alone.
+ */
+export const OverrideCreateApiSchema = z.object({
+  userId: z.string().min(1, 'A target student is required.'),
+  unlockAt: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
+  lateCutoff: z.string().nullable().optional(),
+  allowLateSubmissions: z.boolean().nullable().optional(),
+});
+
+export const OverrideUpdateApiSchema = OverrideCreateApiSchema.partial().omit({ userId: true });
+
 /** Types */
 export type UpdateAssignmentInput = z.infer<typeof UpdateAssignmentSchema>;
 export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
+export type OverrideCreateInput = z.infer<typeof OverrideCreateApiSchema>;
+export type OverrideUpdateInput = z.infer<typeof OverrideUpdateApiSchema>;
