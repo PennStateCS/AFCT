@@ -51,6 +51,7 @@ interface CourseDialogsProps {
   // Bulk enroll
   bulkEnrollOpen?: boolean;
   setBulkEnrollOpen?: (open: boolean) => void;
+  onBulkEnrollComplete?: () => void;
 }
 
 export function CourseDialogs({
@@ -89,6 +90,7 @@ export function CourseDialogs({
   onEnrollUser,
   bulkEnrollOpen,
   setBulkEnrollOpen,
+  onBulkEnrollComplete,
 }: CourseDialogsProps) {
   return (
     <>
@@ -171,9 +173,7 @@ export function CourseDialogs({
           setOpen={(v) => setBulkEnrollOpen?.(v)}
           courseId={course.id}
           courseIsArchived={course.isArchived}
-          onComplete={() => {
-            /* noop */
-          }}
+          onComplete={onBulkEnrollComplete}
         />
       )}
     </>

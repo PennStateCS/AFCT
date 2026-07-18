@@ -58,6 +58,13 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
     setBulkEnrollOpen(true);
   }, []);
 
+  // After a bulk enroll, refresh the course (summary counts) and re-pull the
+  // roster section so the newly enrolled students appear in the roster table.
+  const handleBulkEnrollComplete = useCallback(async () => {
+    await refetchCourse();
+    await loadTabData('roster');
+  }, [refetchCourse, loadTabData]);
+
   const handleProblemEditClick = useCallback(
     (problem: Problem) => {
       dialogStates.setSelectedProblem(problem);
@@ -229,6 +236,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           onEnrollUser={handleEnrollUserWrapper}
           bulkEnrollOpen={bulkEnrollOpen}
           setBulkEnrollOpen={setBulkEnrollOpen}
+          onBulkEnrollComplete={handleBulkEnrollComplete}
         />
       )}
     </div>
