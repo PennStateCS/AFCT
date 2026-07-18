@@ -93,6 +93,7 @@ const sidebars: SidebarsConfig = {
         'reference/roles-and-permissions',
         'reference/client-api',
         'reference/deployment-architecture',
+        'reference/content-security-policy',
       ],
     },
   ],
