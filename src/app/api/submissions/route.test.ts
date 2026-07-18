@@ -418,6 +418,27 @@ describe('POST /api/submissions', () => {
     expect(prismaMock.submission.create).toHaveBeenCalled();
   });
 
+  it('lets course staff test-submit before the assignment is unlocked', async () => {
+    // Real permissions read the roster; a FACULTY role makes the viewer course staff.
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY', course: { isPublished: true } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      courseId: 'course-1',
+      unlockAt: FUTURE,
+      dueDate: FUTURE,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      isPublished: true,
+      overrides: [],
+    });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(logActions()).not.toContain('SUBMISSION_REJECTED_NOT_OPEN');
+    expect(prismaMock.submission.create).toHaveBeenCalled();
+  });
+
   it('rejects a submission before the assignment is unlocked', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'assignment-1',

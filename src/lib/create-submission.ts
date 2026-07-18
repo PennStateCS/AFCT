@@ -252,7 +252,10 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     user.id,
   );
   const window = evaluateSubmissionWindow(deadline, now);
-  if (!window.accepted) {
+  // Course staff (and admins) may test-submit before an assignment unlocks; the
+  // not-open gate applies to students only. Staff are still subject to the late window,
+  // matching existing behavior.
+  if (!window.accepted && !(window.reason === 'not-open' && isCourseStaff)) {
     const meta = {
       unlockAt: deadline.unlockAt ? deadline.unlockAt.toISOString() : null,
       dueDate: deadline.dueDate.toISOString(),
