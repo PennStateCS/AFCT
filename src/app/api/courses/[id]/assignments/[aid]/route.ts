@@ -12,7 +12,7 @@ import { readJson } from '@/lib/api/request';
 import { sumProblemPoints } from '@/lib/course-format';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
-import { computeLateSubmissionState } from '@/lib/assignment-late-window';
+import { computeLateSubmissionState, resolveUnlockAt } from '@/lib/assignment-late-window';
 
 // Types
 interface AssignmentWithProblemsAndCourse {
@@ -306,6 +306,7 @@ export const GET = withCourseAuth(
  *           title: { type: string }
  *           description: { type: string }
  *           dueDate: { type: string }
+ *           unlockAt: { type: string, nullable: true, description: Available-from date; null clears it }
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, nullable: true }
  *           isPublished: { type: boolean }
@@ -362,6 +363,16 @@ export const PUT = withCourseAuth(
         return NextResponse.json({ error: lateState.message }, { status: 400 });
       }
 
+      const unlockState = resolveUnlockAt({
+        incoming: data.unlockAt,
+        existing: existing.unlockAt,
+        dueDate,
+        timezone: courseTimezone,
+      });
+      if (!unlockState.ok) {
+        return NextResponse.json({ error: unlockState.message }, { status: 400 });
+      }
+
       const { allowLateSubmissions, lateCutoff } = lateState;
 
       const updated = await prisma.assignment.update({
@@ -372,6 +383,7 @@ export const PUT = withCourseAuth(
           // Use the computed value (keeps the existing due date when none was sent)
           // rather than re-deriving from a possibly-undefined data.dueDate.
           dueDate,
+          unlockAt: unlockState.unlockAt,
           allowLateSubmissions,
           lateCutoff,
           isPublished: data.isPublished,
@@ -393,6 +405,7 @@ export const PUT = withCourseAuth(
           title: updated.title,
           isPublished: updated.isPublished,
           dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+          unlockAt: updated.unlockAt ? updated.unlockAt.toISOString() : null,
           allowLateSubmissions: updated.allowLateSubmissions,
           lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
           isGroup: updated.isGroup,
@@ -435,6 +448,7 @@ export const PUT = withCourseAuth(
  *           title: { type: string }
  *           description: { type: string }
  *           dueDate: { type: string }
+ *           unlockAt: { type: string, nullable: true, description: Available-from date; null clears it }
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, nullable: true }
  *           isPublished: { type: boolean }
@@ -490,6 +504,16 @@ export const PATCH = withCourseAuth(
         return NextResponse.json({ error: lateState.message }, { status: 400 });
       }
 
+      const unlockState = resolveUnlockAt({
+        incoming: data.unlockAt,
+        existing: existing.unlockAt,
+        dueDate: effectiveDueDate,
+        timezone: courseTimezone,
+      });
+      if (!unlockState.ok) {
+        return NextResponse.json({ error: unlockState.message }, { status: 400 });
+      }
+
       const { allowLateSubmissions, lateCutoff } = lateState;
 
       // Build update data object with only provided fields
@@ -497,6 +521,7 @@ export const PATCH = withCourseAuth(
         title?: string;
         description?: string;
         dueDate?: Date;
+        unlockAt?: Date | null;
         allowLateSubmissions?: boolean;
         lateCutoff?: Date | null;
         isPublished?: boolean;
@@ -506,6 +531,7 @@ export const PATCH = withCourseAuth(
       if (data.title !== undefined) updateData.title = data.title;
       if (data.description !== undefined) updateData.description = data.description;
       if (data.dueDate !== undefined) updateData.dueDate = effectiveDueDate;
+      if (unlockState.changed) updateData.unlockAt = unlockState.unlockAt;
       if (data.allowLateSubmissions !== undefined) {
         updateData.allowLateSubmissions = allowLateSubmissions;
       }
@@ -533,6 +559,7 @@ export const PATCH = withCourseAuth(
           title: updated.title,
           isPublished: updated.isPublished,
           dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+          unlockAt: updated.unlockAt ? updated.unlockAt.toISOString() : null,
           allowLateSubmissions: updated.allowLateSubmissions,
           lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
           isGroup: updated.isGroup,

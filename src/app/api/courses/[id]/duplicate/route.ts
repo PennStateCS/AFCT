@@ -359,6 +359,7 @@ export const POST = withAdminAuth(
                     title: a.title,
                     description: a.description ?? undefined,
                     dueDate: a.dueDate,
+                    unlockAt: a.unlockAt,
                     isPublished: false,
                     courseId: newCourse.id,
                   },

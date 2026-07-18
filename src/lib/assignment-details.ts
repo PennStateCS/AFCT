@@ -33,6 +33,7 @@ export type AssignmentWithDetails = {
   courseCode?: string;
   courseIsArchived?: boolean;
   dueDate: string | Date;
+  unlockAt?: string | Date | null;
   maxPoints: number;
   allowLateSubmissions?: boolean;
   lateCutoff?: string | Date | null;

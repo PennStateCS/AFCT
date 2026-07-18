@@ -72,3 +72,37 @@ export function computeLateSubmissionState(options: {
 
   return { ok: true, allowLateSubmissions, lateCutoff };
 }
+
+export type UnlockAtResult =
+  | { ok: true; unlockAt: Date | null; changed: boolean }
+  | { ok: false; message: string };
+
+/**
+ * Resolves an assignment's `unlockAt` ("available from"), validating it against the due
+ * date. Shared by create and the update handlers.
+ *   - `incoming === undefined` means "field omitted" (keep `existing`)
+ *   - an empty string or null means "clear it"
+ *   - a value is interpreted in the course timezone
+ * `unlockAt` must be on or before the due date.
+ */
+export function resolveUnlockAt(options: {
+  incoming?: string | null;
+  existing: Date | null;
+  dueDate: Date;
+  timezone: string;
+}): UnlockAtResult {
+  const { incoming, existing, dueDate, timezone } = options;
+
+  let unlockAt = existing;
+  let changed = false;
+  if (incoming !== undefined) {
+    changed = true;
+    unlockAt = incoming ? toDateTimeInTimezone(incoming, timezone) : null;
+  }
+
+  if (unlockAt && unlockAt.getTime() > dueDate.getTime()) {
+    return { ok: false, message: 'Available-from must be on or before the due date.' };
+  }
+
+  return { ok: true, unlockAt, changed };
+}

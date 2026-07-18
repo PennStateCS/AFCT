@@ -671,6 +671,11 @@ export default function AssignmentDashboardPage({
                 ? new Date(assignment.lateCutoff)
                 : assignment.lateCutoff
               : null,
+            unlockAt: assignment.unlockAt
+              ? typeof assignment.unlockAt === 'string'
+                ? new Date(assignment.unlockAt)
+                : assignment.unlockAt
+              : null,
           }}
           onSave={() => {
             void invalidateAssignment();

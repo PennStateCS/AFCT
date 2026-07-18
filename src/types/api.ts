@@ -5172,6 +5172,8 @@ export interface operations {
                     title?: string;
                     description?: string;
                     dueDate?: string;
+                    /** @description Available-from date; null clears it */
+                    unlockAt?: string | null;
                     allowLateSubmissions?: boolean;
                     lateCutoff?: string | null;
                     isPublished?: boolean;
@@ -5316,6 +5318,8 @@ export interface operations {
                     title?: string;
                     description?: string;
                     dueDate?: string;
+                    /** @description Available-from date; null clears it */
+                    unlockAt?: string | null;
                     allowLateSubmissions?: boolean;
                     lateCutoff?: string | null;
                     isPublished?: boolean;
@@ -5580,6 +5584,8 @@ export interface operations {
                     description?: string;
                     /** @description Interpreted as end-of-day in the course's timezone */
                     dueDate?: string;
+                    /** @description Available-from date; must be on or before the due date */
+                    unlockAt?: string;
                     allowLateSubmissions?: boolean;
                     /** @description Required when allowLateSubmissions is true */
                     lateCutoff?: string;

@@ -16,6 +16,7 @@ const validateLateSubmissionStrings = (
     allowLateSubmissions?: boolean;
     lateCutoff?: string;
     dueDate?: string;
+    unlockAt?: string;
   },
   ctx: z.RefinementCtx,
 ) => {
@@ -25,6 +26,14 @@ const validateLateSubmissionStrings = (
 
   if (!dueRaw) return;
   const dueDate = new Date(dueRaw);
+
+  if (data.unlockAt && new Date(data.unlockAt) > dueDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['unlockAt'],
+      message: 'Available-from must be on or before the due date.',
+    });
+  }
 
   if (allowLate) {
     if (!cutoffRaw) {
@@ -64,6 +73,7 @@ const BaseAssignmentFormSchemaObject = z
       .max(200, 'Title is too long.'),
     description: z.string().trim().max(20000, 'Description is too long.').optional(),
     dueDate: DateTimeLocalForm,
+    unlockAt: DateTimeLocalFormOptional,
     allowLateSubmissions: z.boolean().default(false),
     lateCutoff: DateTimeLocalFormOptional,
     isPublished: z.boolean(),
@@ -91,6 +101,14 @@ export const UpdateAssignmentSchema = BaseAssignmentFormSchemaObject.partial()
     isPublished: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.unlockAt && data.dueDate && new Date(data.unlockAt) > new Date(data.dueDate)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['unlockAt'],
+        message: 'Available-from must be on or before the due date.',
+      });
+    }
+
     if (
       data.allowLateSubmissions === undefined &&
       data.lateCutoff === undefined &&
@@ -150,6 +168,7 @@ export const AssignmentCreateApiSchema = z.object({
   title: z.string().min(1, 'Missing required fields').max(200, 'Title is too long.'),
   description: z.string().max(20000, 'Description is too long.').optional(),
   dueDate: z.string().min(1, 'A due date is required.'),
+  unlockAt: z.string().optional(),
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().optional(),
   isPublished: z.boolean().optional(),
@@ -160,6 +179,7 @@ export const AssignmentUpdateApiSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
   dueDate: z.string().optional(),
+  unlockAt: z.string().nullable().optional(),
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().nullable().optional(),
   isPublished: z.boolean().optional(),

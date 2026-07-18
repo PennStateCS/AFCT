@@ -6,6 +6,7 @@ import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
+import { resolveUnlockAt } from '@/lib/assignment-late-window';
 import { AssignmentCreateApiSchema } from '@/schemas/assignment';
 
 /**
@@ -101,6 +102,7 @@ export const GET = withCourseAuth(
  *           title: { type: string }
  *           description: { type: string }
  *           dueDate: { type: string, description: Interpreted as end-of-day in the course's timezone }
+ *           unlockAt: { type: string, description: Available-from date; must be on or before the due date }
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, description: Required when allowLateSubmissions is true }
  *           isPublished: { type: boolean }
@@ -151,11 +153,22 @@ export const POST = withCourseAuth(
         );
       }
 
+      const unlockState = resolveUnlockAt({
+        incoming: data.unlockAt,
+        existing: null,
+        dueDate,
+        timezone: courseTimezone,
+      });
+      if (!unlockState.ok) {
+        return NextResponse.json({ error: unlockState.message }, { status: 400 });
+      }
+
       const created = await prisma.assignment.create({
         data: {
           title: data.title,
           description: data.description,
           dueDate,
+          unlockAt: unlockState.unlockAt,
           allowLateSubmissions,
           lateCutoff: lateCutoffDate,
           isPublished: data.isPublished || false,
@@ -180,6 +193,7 @@ export const POST = withCourseAuth(
           isPublished: created.isPublished,
           isGroup: created.isGroup,
           dueDate: created.dueDate.toISOString(),
+          unlockAt: created.unlockAt ? created.unlockAt.toISOString() : null,
           allowLateSubmissions: created.allowLateSubmissions,
           lateCutoff: created.lateCutoff ? created.lateCutoff.toISOString() : null,
         },
