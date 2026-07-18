@@ -334,7 +334,7 @@ describe('LoginPage', () => {
 
     await waitFor(() =>
       expect(showToastErrorMock).toHaveBeenCalledWith(
-        'We detected unusual activity. Please slow down then retry.',
+        'Unusual activity detected. Complete the security check below to continue.',
       ),
     );
   });
@@ -418,11 +418,44 @@ describe('LoginPage', () => {
 
     await waitFor(() =>
       expect(showToastErrorMock).toHaveBeenCalledWith(
-        'We detected unusual activity. Please pause briefly before retrying.',
+        'Unusual activity detected. Complete the security check below to continue.',
       ),
     );
     expect(signInMock).toHaveBeenCalled();
     expect(screen.getAllByTestId('mock-hcaptcha').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('tells the user to wait when a bot challenge fires but no captcha is configured', async () => {
+    const user = userEvent.setup();
+    const savedKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+    delete process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+    try {
+      signInMock.mockResolvedValueOnce({ error: 'BotChallengeRequired' });
+
+      render(<LoginPage />);
+
+      fireEvent.change(screen.getByLabelText(/email/i), {
+        target: { value: 'admin@example.com' },
+      });
+      fireEvent.change(screen.getByLabelText(/^password$/i), {
+        target: { value: 'StrongPass1!' },
+      });
+
+      await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
+
+      await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
+
+      await waitFor(() =>
+        expect(showToastErrorMock).toHaveBeenCalledWith(
+          'Too many attempts. Please wait a moment before trying again.',
+        ),
+      );
+      // No captcha configured, so no widget is shown; the cooldown alone throttles.
+      expect(screen.queryByTestId('mock-hcaptcha')).toBeNull();
+    } finally {
+      if (savedKey === undefined) delete process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+      else process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY = savedKey;
+    }
   });
 
   it("prevents signup when passwords don't match", async () => {
@@ -661,7 +694,7 @@ describe('LoginPage', () => {
 
     await waitFor(() =>
       expect(showToastErrorMock).toHaveBeenCalledWith(
-        'Please slow down before creating another account.',
+        'Unusual activity detected. Complete the security check below to continue.',
       ),
     );
     expect(signInMock).not.toHaveBeenCalled();
@@ -727,9 +760,7 @@ describe('LoginPage', () => {
 
     await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
 
-    await waitFor(() =>
-      expect(showToastErrorMock).toHaveBeenCalledWith('Signup is disabled.'),
-    );
+    await waitFor(() => expect(showToastErrorMock).toHaveBeenCalledWith('Signup is disabled.'));
     expect(signInMock).not.toHaveBeenCalled();
   });
 });

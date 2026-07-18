@@ -113,13 +113,14 @@ export default function LoginPage() {
     Math.max(0, Math.round(getMonotonicNow() - interactionStartRef.current));
   const shouldRenderCaptcha = Boolean(captchaVisible && captchaSiteKey);
 
+  // Reveal the captcha widget when one is configured. Returns whether it was shown
+  // so callers can tailor their message: solve-the-challenge vs. just wait out the
+  // cooldown (when no captcha is set up, the limiter still enforces a timed cooldown).
   const requestCaptchaIfAvailable = useCallback(() => {
-    if (!captchaSiteKey) {
-      showToast.error('Security challenge unavailable. Please contact support.');
-      return;
-    }
+    if (!captchaSiteKey) return false;
     setCaptchaVisible(true);
     setCaptchaToken(null);
+    return true;
   }, [captchaSiteKey]);
 
   const handleCaptchaVerify = (token: string) => setCaptchaToken(token);
@@ -148,8 +149,12 @@ export default function LoginPage() {
     }
 
     if (error === 'BotChallengeRequired') {
-      showToast.error('We detected unusual activity. Please slow down then retry.');
-      requestCaptchaIfAvailable();
+      const shown = requestCaptchaIfAvailable();
+      showToast.error(
+        shown
+          ? 'Unusual activity detected. Complete the security check below to continue.'
+          : 'Too many attempts. Please wait a moment before trying again.',
+      );
       return;
     }
 
@@ -188,8 +193,12 @@ export default function LoginPage() {
         showToast.error('Too many login attempts. Please wait a few minutes and try again.');
         setLoginErrors({ password: 'Temporarily locked due to too many attempts.' });
       } else if (result.error === 'BotChallengeRequired') {
-        showToast.error('We detected unusual activity. Please pause briefly before retrying.');
-        requestCaptchaIfAvailable();
+        const shown = requestCaptchaIfAvailable();
+        showToast.error(
+          shown
+            ? 'Unusual activity detected. Complete the security check below to continue.'
+            : 'Too many attempts. Please wait a moment before trying again.',
+        );
       } else {
         showToast.error('Invalid email or password.');
         setLoginErrors({ password: 'Email or password is incorrect.' });
@@ -270,8 +279,12 @@ export default function LoginPage() {
     setLoading(false);
 
     if (res.status === 428) {
-      showToast.error('Please slow down before creating another account.');
-      requestCaptchaIfAvailable();
+      const shown = requestCaptchaIfAvailable();
+      showToast.error(
+        shown
+          ? 'Unusual activity detected. Complete the security check below to continue.'
+          : 'Please slow down. Wait a moment before creating another account.',
+      );
       return;
     }
 
