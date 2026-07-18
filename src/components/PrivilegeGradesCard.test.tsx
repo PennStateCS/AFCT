@@ -129,6 +129,30 @@ describe('PrivilegeGradesCard', () => {
     });
   });
 
+  it('renders a gray "Not assigned" box for unassigned cells and a normal grade otherwise', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...gradesPayload,
+        // s1 is assigned a1 (normal cell); s2 is not assigned (gray box).
+        assigned: {
+          s1: { a1: true },
+          s2: { a1: false },
+        },
+      }),
+    });
+
+    renderWithClient(<PrivilegeGradesCard courseId="c1" />);
+
+    // The unassigned cell renders exactly one gray box.
+    const notAssigned = await screen.findAllByLabelText('Not assigned');
+    expect(notAssigned).toHaveLength(1);
+
+    // The assigned cell renders its grade normally (8/10), and the gray box has no grade.
+    expect(screen.getByText('8')).toBeInTheDocument();
+    expect(screen.getAllByText('/10')).toHaveLength(1);
+  });
+
   it('surfaces an error toast when the fetch fails', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,

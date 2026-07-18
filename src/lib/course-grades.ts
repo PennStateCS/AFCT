@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { isStudentAssigned } from '@/lib/assignment-visibility';
 
 export type GradeMatrixStudent = {
   id: string;
@@ -24,6 +25,10 @@ export type CourseGradeMatrix = {
   assignments: GradeMatrixAssignment[];
   // grades[studentId][assignmentId] = summed points earned (problem grades collapsed), or null.
   grades: Record<string, Record<string, number | null>>;
+  // assigned[studentId][assignmentId] = whether the student is actually assigned that
+  // assignment (assigned to everyone, an individual override, or a group override on a
+  // group they belong to). Cells where this is false render as a gray "not assigned" box.
+  assigned: Record<string, Record<string, boolean>>;
 };
 
 /**
@@ -72,7 +77,16 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
 
   const assignmentRows = await prisma.assignment.findMany({
     where: { courseId },
-    select: { id: true, title: true, dueDate: true, problems: { select: { maxPoints: true } } },
+    select: {
+      id: true,
+      title: true,
+      dueDate: true,
+      assignedToEveryone: true,
+      problems: { select: { maxPoints: true } },
+      // Individual (userId) and group (groupId) override targets, used to decide who is
+      // actually assigned each assignment.
+      overrides: { select: { userId: true, groupId: true } },
+    },
     orderBy: { dueDate: 'asc' },
   });
   const assignments: GradeMatrixAssignment[] = assignmentRows.map((a) => ({
@@ -86,13 +100,48 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
   const studentIds = students.map((s) => s.id);
 
   const grades: Record<string, Record<string, number | null>> = {};
+  const assigned: Record<string, Record<string, boolean>> = {};
   for (const s of studentIds) {
     grades[s] = {};
-    for (const a of assignmentIds) grades[s][a] = null;
+    assigned[s] = {};
+    for (const a of assignmentIds) {
+      grades[s][a] = null;
+      assigned[s][a] = true;
+    }
   }
 
   if (assignmentIds.length === 0 || studentIds.length === 0) {
-    return { students, assignments, grades };
+    return { students, assignments, grades, assigned };
+  }
+
+  // One batched membership read for the whole roster: each student's set of group ids,
+  // used with the per-assignment group overrides to decide "assigned".
+  const memberships = await prisma.groupMembership.findMany({
+    where: { userId: { in: studentIds } },
+    select: { userId: true, groupId: true },
+  });
+  const groupIdsByStudent = new Map<string, string[]>();
+  for (const m of memberships) {
+    const list = groupIdsByStudent.get(m.userId);
+    if (list) list.push(m.groupId);
+    else groupIdsByStudent.set(m.userId, [m.groupId]);
+  }
+
+  // Compute "assigned" per (student, assignment) from the already-loaded overrides and
+  // memberships (no per-cell queries): everyone, an individual override, or a group
+  // override on a group the student belongs to.
+  for (const a of assignmentRows) {
+    for (const s of studentIds) {
+      const studentAssigned = assigned[s];
+      if (studentAssigned) {
+        studentAssigned[a.id] = isStudentAssigned(
+          { assignedToEveryone: a.assignedToEveryone },
+          a.overrides ?? [],
+          s,
+          groupIdsByStudent.get(s) ?? [],
+        );
+      }
+    }
   }
 
   // Sum the per-problem grades into one assignment total per student.
@@ -107,5 +156,5 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
     if (studentGrades) studentGrades[g.assignmentId] = g._sum.grade ?? 0;
   });
 
-  return { students, assignments, grades };
+  return { students, assignments, grades, assigned };
 }

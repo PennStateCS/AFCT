@@ -275,7 +275,14 @@ const initialAssignments = [
 
 /* ─────────────────────────── fetch router + render ──────────────────────── */
 
-type Resp = { ok: boolean; status?: number; json: () => Promise<unknown> };
+type Resp = {
+  ok: boolean;
+  status?: number;
+  json: () => Promise<unknown>;
+  // apiClient reads the raw body via text() on success; provided where a handler backs an
+  // apiClient call (e.g. the header publish PUT).
+  text?: () => Promise<string>;
+};
 type Handlers = {
   shell: () => Resp | Promise<Resp>;
   courseProblems: () => Resp;
@@ -286,7 +293,11 @@ type Handlers = {
 const courseProblemsList = [p1, p2, problem({ id: 'p3', title: 'Problem Three' })];
 
 const defaultHandlers = (): Handlers => ({
-  shell: () => ({ ok: true, json: async () => makeAssignment() }),
+  shell: () => ({
+    ok: true,
+    json: async () => makeAssignment(),
+    text: async () => JSON.stringify(makeAssignment()),
+  }),
   courseProblems: () => ({ ok: true, json: async () => ({ problems: courseProblemsList }) }),
   assignmentsList: () => ({ ok: true, json: async () => initialAssignments }),
   problemsMutation: () => ({ ok: true, json: async () => ({}) }),
@@ -364,6 +375,12 @@ describe('PrivilegeAssignmentView — tabs', () => {
   it('defaults to the Assignment tab and shows the description form', () => {
     renderView();
     expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
+  });
+
+  it('orders the tabs Assignment, Problems, Submissions, Due Date(s)', () => {
+    renderView();
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent?.trim());
+    expect(tabs).toEqual(['Assignment', 'Problems', 'Submissions', 'Due Date(s)']);
   });
 
   it('lists the assignment problems on the Problems tab', async () => {
@@ -588,6 +605,39 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     await waitFor(() => expect(createBtn).toBeEnabled());
     fireEvent.click(createBtn);
     expect(screen.getByTestId('create-dialog')).toBeInTheDocument();
+  });
+});
+
+describe('PrivilegeAssignmentView — publish toggle', () => {
+  it('PUTs the new publish state from the header switch and refetches the shell', async () => {
+    renderView();
+    // The header switch reflects the current isPublished (true) and toggles to false.
+    fireEvent.click(screen.getByRole('switch', { name: /Published/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/courses/c1/assignments/a1',
+        expect.objectContaining({ method: 'PUT' }),
+      ),
+    );
+    const call = fetchMock.mock.calls.find(
+      ([u, init]) =>
+        String(u).endsWith('/assignments/a1') && (init as RequestInit)?.method === 'PUT',
+    );
+    expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ isPublished: false });
+
+    // Invalidation triggers a background refetch of the assignment shell.
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/assignments/a1?view=problems'),
+    );
+  });
+
+  it('toasts an error when the publish PUT fails', async () => {
+    handlers.shell = () => ({ ok: false, status: 409, json: async () => ({ error: 'nope' }) });
+    // Seed from SSR so the view renders without depending on the failing shell fetch.
+    renderView();
+    fireEvent.click(screen.getByRole('switch', { name: /Published/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('nope'));
   });
 });
 

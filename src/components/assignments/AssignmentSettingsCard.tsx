@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
@@ -9,7 +9,6 @@ import type { Assignment } from '@prisma/client';
 
 import { Button } from '@/components/ui/button';
 import { Settings } from 'lucide-react';
-import SwitchField from '@/components/ui/SwitchField';
 import { AssignToFields } from '@/components/assignments/AssignToFields';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -265,21 +264,6 @@ export function AssignmentSettingsCard({
         }}
       >
         <AssignToFields control={control} errors={errors} courseId={courseId} active />
-
-        <Controller
-          name="isPublished"
-          control={control}
-          render={({ field }) => (
-            <SwitchField
-              label="Published"
-              name="isPublished"
-              checked={!!field.value}
-              onCheckedChange={(checked) => field.onChange(!!checked)}
-              description="Makes the assignment visible to enrolled students."
-              descriptionPlacement="inline"
-            />
-          )}
-        />
 
         <div className="flex justify-end">
           <Button

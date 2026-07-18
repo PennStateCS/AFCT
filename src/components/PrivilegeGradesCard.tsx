@@ -50,7 +50,13 @@ type GradesResponse = {
   students: ApiStudent[];
   assignments: Assignment[];
   grades: Record<string, Record<string, number | null>>;
+  // assigned[studentId][assignmentId]; a false cell renders as a gray "not assigned" box.
+  assigned?: Record<string, Record<string, boolean>>;
 };
+
+// Per-row key holding the student's assignment-assigned flags, so the cell renderer can
+// tell "not assigned" (gray box) apart from "assigned but ungraded" (blank).
+const ASSIGNED_KEY = '__assigned';
 
 type GradesData = {
   students: StudentRow[];
@@ -79,7 +85,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load grades');
       const body = (await res.json()) as GradesResponse;
 
-      const { students: s, assignments: a, grades } = body;
+      const { students: s, assignments: a, grades, assigned } = body;
 
       // maxPoints is already computed by the grades API (sum of problem max points)
       const assignmentsWithPoints: Assignment[] = a.map((asg) => ({
@@ -99,10 +105,14 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           cropY: stu.cropY,
           zoom: stu.zoom,
         };
+        const assignedFlags: Record<string, boolean> = {};
         for (const asg of a) {
           const grade = grades?.[stu.id]?.[asg.id];
           row[asg.id] = grade ?? null;
+          // Default to assigned when the flag is absent (older payloads / safety).
+          assignedFlags[asg.id] = assigned?.[stu.id]?.[asg.id] !== false;
         }
+        row[ASSIGNED_KEY] = assignedFlags;
         return row;
       });
 
@@ -250,6 +260,19 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           const user = row.original;
           const val = user[a.id];
           const max = a.maxPoints;
+          const assignedFlags = user[ASSIGNED_KEY] as Record<string, boolean> | undefined;
+          const isAssigned = assignedFlags?.[a.id] !== false;
+
+          // Not assigned to this student: show a solid gray box instead of a grade.
+          if (!isAssigned) {
+            return (
+              <div
+                className="bg-muted mx-auto h-6 w-full rounded"
+                aria-label="Not assigned"
+                title="Not assigned"
+              />
+            );
+          }
 
           const handleClick = () => {
             setSelectedStudent({ id: user.id, name: `${user.firstName} ${user.lastName}` });

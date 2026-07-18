@@ -8,6 +8,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { Switch } from '@/components/ui/switch';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
@@ -33,6 +34,7 @@ import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { AssignmentWithDetails } from '@/lib/assignment-details';
 import { apiPaths } from '@/lib/api-paths';
+import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { queryKeys } from '@/lib/query-keys';
 import { buildProblemColumns } from './problem-columns';
 
@@ -306,6 +308,16 @@ export default function AssignmentDashboardPage({
     [courseIsArchived, openDescription, openRenderViewer, handleEditProblem],
   );
 
+  async function handlePublishChange(checked: boolean) {
+    if (!id || !aid) return;
+    try {
+      await apiClient.put(apiPaths.assignment(id, aid), { isPublished: checked });
+      await invalidateAssignment();
+    } catch (err) {
+      showToast.error(err instanceof ApiError ? err.message : 'Failed to update publish state');
+    }
+  }
+
   if (loading) return <LoadingSpinner label="Loading" />;
   if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
 
@@ -339,6 +351,16 @@ export default function AssignmentDashboardPage({
                   {assignment.title}
                 </span>
               </CardTitle>
+              {/* Publish toggle: server enforces the guards (e.g. no unpublish after submissions). */}
+              <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
+                <Switch
+                  aria-label="Published"
+                  checked={!!assignment.isPublished}
+                  onCheckedChange={(checked) => void handlePublishChange(!!checked)}
+                  disabled={courseIsArchived}
+                />
+                Published
+              </label>
               {/* Quick jump to another assignment in this course. */}
               <div className="w-56 shrink-0">
                 <SearchableSelect
@@ -376,13 +398,13 @@ export default function AssignmentDashboardPage({
                 <AlignLeft className="size-3.5 opacity-70" />
                 Assignment
               </TabsTrigger>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="submissions">
-                <Package className="size-3.5 opacity-70" />
-                Submissions
-              </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="problems">
                 <FileText className="size-3.5 opacity-70" />
                 Problems
+              </TabsTrigger>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="submissions">
+                <Package className="size-3.5 opacity-70" />
+                Submissions
               </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="settings">
                 <Settings className="size-3.5 opacity-70" />

@@ -327,6 +327,7 @@ export function AssignToFields({
                     name={`overrides.${index}.allowLateSubmissions`}
                     checked={!!field.value}
                     onCheckedChange={(checked) => field.onChange(!!checked)}
+                    description="Accept submissions after the due date until the deadline below."
                     descriptionPlacement="inline"
                   />
                 )}

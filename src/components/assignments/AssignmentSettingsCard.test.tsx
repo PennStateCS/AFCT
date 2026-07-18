@@ -5,6 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Controller, type Control, type FieldValues } from 'react-hook-form';
 import type { Assignment } from '@prisma/client';
 
 import { AssignmentSettingsCard } from './AssignmentSettingsCard';
@@ -18,9 +19,26 @@ vi.mock('@/lib/toast', () => ({
   showToast: { success: toastSuccessMock, error: toastErrorMock, warning: vi.fn() },
 }));
 
-// The Assign-To section is covered by the wizard test; stub it here.
+// The Assign-To section is covered by the wizard test; stub it here, but wire one real
+// control (the allow-late toggle) to the enclosing form so tests can make the form dirty
+// (and keep it valid) now that the Published switch has moved to the page header.
 vi.mock('@/components/assignments/AssignToFields', () => ({
-  AssignToFields: () => <div data-testid="assign-to" />,
+  AssignToFields: ({ control }: { control: Control<FieldValues> }) => (
+    <div data-testid="assign-to">
+      <Controller
+        control={control}
+        name="allowLateSubmissions"
+        render={({ field }) => (
+          <input
+            type="checkbox"
+            aria-label="Allow late submissions"
+            checked={!!field.value}
+            onChange={(e) => field.onChange(e.target.checked)}
+          />
+        )}
+      />
+    </div>
+  ),
 }));
 
 const assignment = {
@@ -97,8 +115,9 @@ describe('AssignmentSettingsCard', () => {
     const save = screen.getByRole('button', { name: /save changes/i });
     expect(save).toBeDisabled();
 
-    // Title/description moved to the Assignment tab; toggle Published to make the form dirty.
-    await user.click(screen.getByRole('switch', { name: /Published/i }));
+    // Title/description moved to the Assignment tab and Published moved to the page header;
+    // toggle the allow-late control (still in the card) to make the form dirty.
+    await user.click(screen.getByRole('checkbox', { name: /Allow late submissions/i }));
     await waitFor(() => expect(save).toBeEnabled());
     await user.click(save);
 
@@ -113,12 +132,14 @@ describe('AssignmentSettingsCard', () => {
     )!;
     expect(String(put[0])).toBe('/api/courses/c1/assignments/a1');
     const body = JSON.parse((put[1] as RequestInit).body as string);
-    // Title/description are still sent unchanged (seeded); the toggled field is isPublished.
+    // Title/description are still sent unchanged (seeded); the toggled field is
+    // allowLateSubmissions (now true), and isPublished still rides along at its seeded value.
     expect(body).toMatchObject({
       title: 'Original',
       assignedToEveryone: true,
+      allowLateSubmissions: true,
       lateCutoff: null,
-      isPublished: true,
+      isPublished: false,
     });
 
     await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Assignment settings saved'));

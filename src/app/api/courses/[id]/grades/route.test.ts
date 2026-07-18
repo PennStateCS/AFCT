@@ -6,6 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   user: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
   assignmentProblemGrade: { groupBy: vi.fn() },
+  groupMembership: { findMany: vi.fn() },
   activityLog: { findFirst: vi.fn() },
   course: { findUnique: vi.fn() },
 }));
@@ -23,6 +24,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  prismaMock.groupMembership.findMany.mockResolvedValue([]);
   // No recent view logged → the throttled read-audit proceeds to createEnhancedActivityLog.
   prismaMock.activityLog.findFirst.mockResolvedValue(null);
   activityLogMock.mockResolvedValue(undefined);

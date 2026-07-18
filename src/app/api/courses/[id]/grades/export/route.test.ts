@@ -6,6 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   user: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
   assignmentProblemGrade: { groupBy: vi.fn() },
+  groupMembership: { findMany: vi.fn() },
   course: { findUnique: vi.fn() },
 }));
 const authMock = vi.hoisted(() => vi.fn());
@@ -41,6 +42,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  prismaMock.groupMembership.findMany.mockResolvedValue([]);
   activityLogMock.mockResolvedValue(undefined);
 });
 
