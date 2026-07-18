@@ -237,7 +237,7 @@ export default function ProblemWorkspace({
           ) : null}
         </div>
 
-      <div className="grid items-stretch gap-4 lg:grid-cols-[60%_40%]">
+      <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <WorkspacePanel
             title="Submissions"
             icon={<FileText className="h-4 w-4" />}
