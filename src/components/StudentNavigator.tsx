@@ -203,13 +203,14 @@ export default function StudentNavigator({
           ) : null}
         </span>
       </div>
-      <div className="ml-auto flex items-center gap-2">
+      {/* Prev / student picker / Next joined into one segmented control. */}
+      <div className="ml-auto flex items-center">
         <Button
           variant="secondary"
           onClick={onPrev}
           aria-keyshortcuts="ArrowLeft"
           title="Previous student (Left arrow)"
-          className="flex w-28 items-center justify-center gap-x-1"
+          className="flex w-28 items-center justify-center gap-x-1 rounded-r-none"
         >
           <ChevronLeft className="h-4 w-4" /> Previous
         </Button>
@@ -217,7 +218,7 @@ export default function StudentNavigator({
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 flex w-[320px] items-center justify-between gap-2 border focus:ring-2 focus:ring-offset-1"
+              className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 relative flex w-[320px] items-center justify-between gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
             >
               <span className="flex items-center gap-2 truncate">
                 {selectedStudent ? (
@@ -296,7 +297,7 @@ export default function StudentNavigator({
           onClick={onNext}
           aria-keyshortcuts="ArrowRight"
           title="Next student (Right arrow)"
-          className="flex w-28 items-center justify-center gap-x-1"
+          className="flex w-28 items-center justify-center gap-x-1 rounded-l-none"
         >
           Next <ChevronRight className="h-4 w-4" />
         </Button>
