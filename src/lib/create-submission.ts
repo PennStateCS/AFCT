@@ -144,10 +144,17 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       lateCutoff: true,
       isPublished: true,
       assignedToEveryone: true,
-      // Only this submitter's override (0 or 1 row via the unique index) so the
-      // effective window can account for a per-student extension.
+      // The overrides that apply to this submitter: their own STUDENT override and/or
+      // the GROUP override for a group they belong to (at most one of each; a student is
+      // never targeted both ways). Drives the effective window and, for a group target,
+      // the group submission set.
       overrides: {
-        where: { userId: user.id },
+        where: {
+          OR: [
+            { userId: user.id },
+            { studentGroup: { memberships: { some: { userId: user.id } } } },
+          ],
+        },
         select: {
           targetType: true,
           userId: true,
@@ -170,6 +177,18 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
   const courseId = assignment.courseId;
   ctx.courseId = courseId;
 
+  // If the submitter is group-targeted, they submit into the group's shared set: any
+  // member submits, all members share it, and the cap/cooldown count group-wide. At most
+  // one group applies (no double-targeting).
+  const studentGroupIds = (assignment.overrides ?? [])
+    .filter((o) => o.targetType === 'GROUP' && o.groupId != null)
+    .map((o) => o.groupId as string);
+  const submissionGroupId = studentGroupIds[0] ?? null;
+  // Count scope for the per-problem cap + cooldown: the whole group, or just this student.
+  const countScope = submissionGroupId
+    ? { assignmentId, problemId, studentGroupId: submissionGroupId }
+    : { assignmentId, problemId, studentId: user.id };
+
   // Authorization: admins may submit anywhere; everyone else must be on the roster.
   if (!(await canAccessCourse(user, courseId))) {
     await audit('SUBMISSION_FORBIDDEN', 'SECURITY', {
@@ -191,7 +210,12 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
 
   // "Assign to specific students": a student not assigned this work can't submit to it.
   // Mask as 404, same as unpublished. Staff may always test-submit.
-  const submitterAssigned = isStudentAssigned(assignment, assignment.overrides, user.id);
+  const submitterAssigned = isStudentAssigned(
+    assignment,
+    assignment.overrides,
+    user.id,
+    studentGroupIds,
+  );
   if (!submitterAssigned && !submitterIsStaff) {
     await audit('SUBMISSION_NOT_ASSIGNED', 'SECURITY', {
       error: 'Submission to an assignment the student is not assigned.',
@@ -214,9 +238,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
   // check runs again inside the serializable transaction below.
   const isCourseStaff = submitterIsStaff;
   if (!isCourseStaff && link.maxSubmissions > 0) {
-    const priorCount = await prisma.submission.count({
-      where: { assignmentId, problemId, studentId: user.id },
-    });
+    const priorCount = await prisma.submission.count({ where: countScope });
     if (priorCount >= link.maxSubmissions) {
       await audit('SUBMISSION_LIMIT_REACHED', 'WARNING', {
         maxSubmissions: link.maxSubmissions,
@@ -230,7 +252,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
   const { resubmitCooldownMs } = await getQueueSettings();
   if (resubmitCooldownMs > 0) {
     const lastSubmission = await prisma.submission.findFirst({
-      where: { assignmentId, problemId, studentId: user.id },
+      where: countScope,
       orderBy: { submittedAt: 'desc' },
       select: { submittedAt: true },
     });
@@ -264,6 +286,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     },
     assignment.overrides ?? [],
     user.id,
+    studentGroupIds,
   );
   const window = evaluateSubmissionWindow(deadline, now);
   // Course staff (and admins) may test-submit before an assignment unlocks; the
@@ -343,9 +366,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       submission = await prisma.$transaction(
         async (tx) => {
           if (!isCourseStaff && link.maxSubmissions > 0) {
-            const priorCount = await tx.submission.count({
-              where: { assignmentId, problemId, studentId: user.id },
-            });
+            const priorCount = await tx.submission.count({ where: countScope });
             if (priorCount >= link.maxSubmissions) {
               throw new SubmissionCapReachedError();
             }
@@ -356,6 +377,8 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
               assignmentId,
               problemId,
               studentId: user.id,
+              // The group that owns this submission set (null for individual submissions).
+              studentGroupId: submissionGroupId,
               fileName,
               originalFileName,
               feedback: null,
