@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,9 +17,14 @@ import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { Textarea } from '@/components/ui/textarea';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { CourseDateTimeField } from './CourseDateTimeField';
 import { useRosterStudentOptions, getStudentName } from './useRosterStudentOptions';
-import { X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useForm, Controller, useFieldArray, type FieldPath } from 'react-hook-form';
@@ -112,6 +117,25 @@ export function CreateAssignmentWizardDialog({
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'overrides' });
+
+  // Override cards collapse to a one-line summary so many due dates stay scannable. The
+  // most recently added card auto-expands; the rest keep whatever the user set.
+  const [openCards, setOpenCards] = useState<Set<string>>(new Set());
+  const prevCount = useRef(0);
+  useEffect(() => {
+    if (fields.length > prevCount.current && fields.length > 0) {
+      const newest = fields[fields.length - 1]?.id;
+      if (newest) setOpenCards((prev) => new Set(prev).add(newest));
+    }
+    prevCount.current = fields.length;
+  }, [fields]);
+  const setCardOpen = (id: string, open: boolean) =>
+    setOpenCards((prev) => {
+      const next = new Set(prev);
+      if (open) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const baseAllowLate = watch('allowLateSubmissions');
   const baseDue = watch('dueDate');
@@ -366,18 +390,38 @@ export function CreateAssignmentWizardDialog({
                   )}
                 </div>
 
-                {/* Per-student override cards */}
+                {/* Per-student override cards, each collapsible to a one-line summary */}
                 {fields.map((f, index) => {
-                  const overrideAllowLate = overrides[index]?.allowLateSubmissions;
+                  const o = overrides[index];
+                  const overrideAllowLate = o?.allowLateSubmissions;
+                  const isOpen = openCards.has(f.id);
+                  // One-line summary shown when the card is collapsed.
+                  const dueText = o?.dueDate ? formatLocal(o.dueDate) : 'inherits';
+                  let summary = `Due ${dueText}`;
+                  if (o?.unlockAt) summary = `From ${formatLocal(o.unlockAt)} · ${summary}`;
+                  if (o?.allowLateSubmissions && o?.lateCutoff) {
+                    summary += ` · late until ${formatLocal(o.lateCutoff)}`;
+                  }
                   return (
-                    <div
+                    <Collapsible
                       key={f.id}
-                      className="rounded-lg border p-4 space-y-3"
+                      open={isOpen}
+                      onOpenChange={(open) => setCardOpen(f.id, open)}
+                      className="rounded-lg border"
                       role="group"
                       aria-label={`Override for ${f.studentName ?? 'student'}`}
                     >
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">{f.studentName}</p>
+                      <div className="flex items-center justify-between gap-2 p-3">
+                        <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                          <ChevronDown
+                            className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                            aria-hidden="true"
+                          />
+                          <span className="text-sm font-medium">{f.studentName}</span>
+                          {!isOpen && (
+                            <span className="text-muted-foreground truncate text-xs">{summary}</span>
+                          )}
+                        </CollapsibleTrigger>
                         <Button
                           type="button"
                           variant="ghost"
@@ -388,43 +432,45 @@ export function CreateAssignmentWizardDialog({
                           <X className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </div>
-                      <p className="text-muted-foreground text-xs">
-                        Leave a field blank to inherit the {everyoneLabel.toLowerCase()} value
-                        {baseDue ? ` (due ${formatLocal(baseDue)})` : ''}.
-                      </p>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <CourseDateTimeField
+                      <CollapsibleContent className="space-y-3 border-t p-4 pt-3">
+                        <p className="text-muted-foreground text-xs">
+                          Leave a field blank to inherit the {everyoneLabel.toLowerCase()} value
+                          {baseDue ? ` (due ${formatLocal(baseDue)})` : ''}.
+                        </p>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <CourseDateTimeField
+                            control={control}
+                            name={`overrides.${index}.unlockAt`}
+                            label="Available from"
+                          />
+                          <CourseDateTimeField
+                            control={control}
+                            name={`overrides.${index}.dueDate`}
+                            label="Due"
+                          />
+                        </div>
+                        <Controller
                           control={control}
-                          name={`overrides.${index}.unlockAt`}
-                          label="Available from"
+                          name={`overrides.${index}.allowLateSubmissions`}
+                          render={({ field }) => (
+                            <SwitchField
+                              label="Allow late submissions"
+                              name={`overrides.${index}.allowLateSubmissions`}
+                              checked={!!field.value}
+                              onCheckedChange={(checked) => field.onChange(!!checked)}
+                              descriptionPlacement="inline"
+                            />
+                          )}
                         />
-                        <CourseDateTimeField
-                          control={control}
-                          name={`overrides.${index}.dueDate`}
-                          label="Due"
-                        />
-                      </div>
-                      <Controller
-                        control={control}
-                        name={`overrides.${index}.allowLateSubmissions`}
-                        render={({ field }) => (
-                          <SwitchField
-                            label="Allow late submissions"
-                            name={`overrides.${index}.allowLateSubmissions`}
-                            checked={!!field.value}
-                            onCheckedChange={(checked) => field.onChange(!!checked)}
-                            descriptionPlacement="inline"
+                        {overrideAllowLate && (
+                          <CourseDateTimeField
+                            control={control}
+                            name={`overrides.${index}.lateCutoff`}
+                            label="Available until (late deadline)"
                           />
                         )}
-                      />
-                      {overrideAllowLate && (
-                        <CourseDateTimeField
-                          control={control}
-                          name={`overrides.${index}.lateCutoff`}
-                          label="Available until (late deadline)"
-                        />
-                      )}
-                    </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   );
                 })}
 
