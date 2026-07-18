@@ -862,6 +862,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/overrides/{oid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an assignment due-date override
+         * @description Deletes a per-student due-date override (the student falls back to the base dates).  Course staff (faculty or TAs) or a system admin.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/overrides/[oid]/route.ts)
+         */
+        delete: operations["deleteCoursesByIdAssignmentsByAidOverridesByOid"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an assignment due-date override
+         * @description Updates a per-student due-date override. Course staff (faculty or TAs) or a system  admin. Omitted fields keep their current value; null inherits the base.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/overrides/[oid]/route.ts)
+         */
+        patch: operations["patchCoursesByIdAssignmentsByAidOverridesByOid"];
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List an assignment's due-date overrides
+         * @description Lists the per-student due-date overrides for an assignment. Course staff (faculty or  TAs) or a system admin.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/overrides/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidOverrides"];
+        put?: never;
+        /**
+         * Create an assignment due-date override
+         * @description Creates a per-student due-date override. Course staff (faculty or TAs) or a system  admin. The target must be a student enrolled in the course. Dates are interpreted in  the course's timezone; the effective window (override values falling back to the base)  must stay ordered.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/overrides/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsByAidOverrides"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/problem-grades/{studentId}": {
         parameters: {
             query?: never;
@@ -1113,7 +1169,7 @@ export interface paths {
         put?: never;
         /**
          * Create a course assignment
-         * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the **course's** timezone. Late  submissions and their cutoff must agree: a cutoff is required when late is on,  forbidden when off, and must fall on or after the due date.
+         * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the **course's** timezone. The  late cutoff is optional when late submissions are on (blank means no deadline), must  be omitted when late is off, and must fall on or after the due date when set.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/route.ts)
          */
@@ -4473,6 +4529,282 @@ export interface operations {
             };
         };
     };
+    deleteCoursesByIdAssignmentsByAidOverridesByOid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                oid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Override not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patchCoursesByIdAssignmentsByAidOverridesByOid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                oid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    unlockAt?: string | null;
+                    dueDate?: string | null;
+                    lateCutoff?: string | null;
+                    allowLateSubmissions?: boolean | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated override. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid window. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Override not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidOverrides: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The assignment's overrides. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignmentsByAidOverrides: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    userId: string;
+                    unlockAt?: string | null;
+                    dueDate?: string | null;
+                    lateCutoff?: string | null;
+                    allowLateSubmissions?: boolean | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The created override. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid target or window. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description An override already exists for this student. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getCoursesByIdAssignmentsByAidProblemGradesByStudentId: {
         parameters: {
             query?: never;
@@ -5172,6 +5504,8 @@ export interface operations {
                     title?: string;
                     description?: string;
                     dueDate?: string;
+                    /** @description Available-from date; null clears it */
+                    unlockAt?: string | null;
                     allowLateSubmissions?: boolean;
                     lateCutoff?: string | null;
                     isPublished?: boolean;
@@ -5316,6 +5650,8 @@ export interface operations {
                     title?: string;
                     description?: string;
                     dueDate?: string;
+                    /** @description Available-from date; null clears it */
+                    unlockAt?: string | null;
                     allowLateSubmissions?: boolean;
                     lateCutoff?: string | null;
                     isPublished?: boolean;
@@ -5580,6 +5916,8 @@ export interface operations {
                     description?: string;
                     /** @description Interpreted as end-of-day in the course's timezone */
                     dueDate?: string;
+                    /** @description Available-from date; must be on or before the due date */
+                    unlockAt?: string;
                     allowLateSubmissions?: boolean;
                     /** @description Required when allowLateSubmissions is true */
                     lateCutoff?: string;

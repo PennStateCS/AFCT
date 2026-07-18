@@ -1,7 +1,6 @@
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
-import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
-import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDialog';
+import { CreateAssignmentWizardDialog } from '@/components/dialogs/CreateAssignmentWizardDialog';
 import { EnrollUserDialog } from '@/components/dialogs/EnrollUsersDialog';
 import BulkEnrollDialog from '@/components/dialogs/BulkEnrollDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -22,13 +21,9 @@ interface CourseDialogsProps {
   onProblemCreated: (problem?: Problem) => void;
   onProblemSaved: (problem?: Problem) => void;
 
-  // Assignments
-  editAssignmentOpen: boolean;
-  setEditAssignmentOpen: (open: boolean) => void;
-  selectedAssignment: Assignment | null;
+  // Assignments (editing lives on the assignment page's Settings tab now)
   createAssignmentOpen: boolean;
   setCreateAssignmentOpen: (open: boolean) => void;
-  onAssignmentSave: (assignment: Assignment) => void;
   onAssignmentCreate: (assignment: Assignment) => void;
 
   // Delete confirm
@@ -67,12 +62,8 @@ export function CourseDialogs({
   onProblemCreated,
   onProblemSaved,
 
-  editAssignmentOpen,
-  setEditAssignmentOpen,
-  selectedAssignment,
   createAssignmentOpen,
   setCreateAssignmentOpen,
-  onAssignmentSave,
   onAssignmentCreate,
   confirmOpen,
   pendingDelete,
@@ -102,19 +93,6 @@ export function CourseDialogs({
         onCreated={onProblemCreated}
       />
 
-      {selectedAssignment && (
-        <EditAssignmentDialog
-          courseIsArchived={course.isArchived}
-          assignment={selectedAssignment}
-          // Edit due dates in the COURSE's zone (where the server stores them), not the
-          // viewer's, otherwise saving would shift the deadline.
-          timeZone={course.timezone ?? timeZone}
-          open={editAssignmentOpen}
-          setOpen={setEditAssignmentOpen}
-          onSave={onAssignmentSave}
-        />
-      )}
-
       {selectedProblem && (
         <EditProblemDialog
           courseIsArchived={course.isArchived}
@@ -128,7 +106,7 @@ export function CourseDialogs({
         />
       )}
 
-      <CreateAssignmentDialog
+      <CreateAssignmentWizardDialog
         open={createAssignmentOpen}
         setOpen={setCreateAssignmentOpen}
         courseId={course.id}

@@ -4,7 +4,6 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -722,11 +721,15 @@ export default function AssignmentSubmissions({
   return (
     <div>
       {selectedStudent && (
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-2xl">
+        <div className="space-y-4">
+          <div>
+            <h2
+              role="heading"
+              aria-level={2}
+              className="flex items-center gap-2 text-2xl font-semibold"
+            >
               <FileText className="h-6 w-6" /> Submissions
-            </CardTitle>
+            </h2>
 
             <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <StudentNavigator
@@ -741,9 +744,9 @@ export default function AssignmentSubmissions({
                 assignmentId={assignmentId}
               />
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent role="region" aria-labelledby="review-student-heading">
+          <div role="region" aria-labelledby="review-student-heading">
             {/* Names the panel with the selected student so the region is meaningful
                 to screen readers; StudentNavigator's live region announces changes. */}
             <h3 id="review-student-heading" className="sr-only">
@@ -839,8 +842,8 @@ export default function AssignmentSubmissions({
                 );
               })()
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {openDialog.submission && (

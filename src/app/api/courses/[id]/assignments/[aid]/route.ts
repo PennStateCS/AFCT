@@ -12,7 +12,9 @@ import { readJson } from '@/lib/api/request';
 import { sumProblemPoints } from '@/lib/course-format';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
-import { computeLateSubmissionState } from '@/lib/assignment-late-window';
+import { computeLateSubmissionState, resolveUnlockAt } from '@/lib/assignment-late-window';
+import { effectiveDeadline } from '@/lib/effective-deadline';
+import { isStudentAssigned } from '@/lib/assignment-visibility';
 
 // Types
 interface AssignmentWithProblemsAndCourse {
@@ -172,6 +174,20 @@ export const GET = withCourseAuth(
           courseId,
         },
         include: {
+          // This caller's own override (0 or 1), used both to check "assign to specific
+          // students" and to resolve their effective unlock date for the content lock.
+          overrides: {
+            where: { userId: user.id },
+            select: {
+              targetType: true,
+              userId: true,
+              groupId: true,
+              unlockAt: true,
+              dueDate: true,
+              lateCutoff: true,
+              allowLateSubmissions: true,
+            },
+          },
           problems: {
             select: {
               maxPoints: true,
@@ -227,6 +243,45 @@ export const GET = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
       }
 
+      // "Assign to specific students": a non-staff member not assigned this work can't
+      // see it either. Same 404 mask.
+      const gate = assignment as unknown as {
+        assignedToEveryone?: boolean;
+        overrides?: Array<{ userId: string | null }>;
+      };
+      if (
+        !isStaff &&
+        !isStudentAssigned(
+          { assignedToEveryone: gate.assignedToEveryone ?? true },
+          gate.overrides ?? [],
+          user.id,
+        )
+      ) {
+        return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+      }
+
+      // Before an assignment unlocks, a non-staff member sees that it exists and when it
+      // opens, but not its description or problems (Canvas-style content lock).
+      const av = assignment as unknown as {
+        description: string | null;
+        unlockAt: Date | null;
+        dueDate: Date;
+        allowLateSubmissions: boolean;
+        lateCutoff: Date | null;
+        overrides: Parameters<typeof effectiveDeadline>[1];
+      };
+      const eff = effectiveDeadline(
+        {
+          unlockAt: av.unlockAt,
+          dueDate: av.dueDate,
+          allowLateSubmissions: av.allowLateSubmissions,
+          lateCutoff: av.lateCutoff,
+        },
+        av.overrides ?? [],
+        user.id,
+      );
+      const locked = !isStaff && !!eff.unlockAt && eff.unlockAt.getTime() > Date.now();
+
       // Keep problems in the structure that the frontend expects
       const problemsWithRelation = assignment.problems.map(
         (ap: (typeof assignment.problems)[number]) => ({
@@ -260,8 +315,10 @@ export const GET = withCourseAuth(
       // Return structured assignment matching the frontend's expected format
       return NextResponse.json({
         ...assignmentData,
+        description: locked ? null : av.description,
+        locked,
         maxPoints: totalProblemPoints,
-        problems: problemsWithRelation,
+        problems: locked ? [] : problemsWithRelation,
         course: {
           id: courseId,
           name: course.name,
@@ -306,6 +363,7 @@ export const GET = withCourseAuth(
  *           title: { type: string }
  *           description: { type: string }
  *           dueDate: { type: string }
+ *           unlockAt: { type: string, nullable: true, description: Available-from date; null clears it }
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, nullable: true }
  *           isPublished: { type: boolean }
@@ -362,6 +420,16 @@ export const PUT = withCourseAuth(
         return NextResponse.json({ error: lateState.message }, { status: 400 });
       }
 
+      const unlockState = resolveUnlockAt({
+        incoming: data.unlockAt,
+        existing: existing.unlockAt,
+        dueDate,
+        timezone: courseTimezone,
+      });
+      if (!unlockState.ok) {
+        return NextResponse.json({ error: unlockState.message }, { status: 400 });
+      }
+
       const { allowLateSubmissions, lateCutoff } = lateState;
 
       const updated = await prisma.assignment.update({
@@ -372,6 +440,8 @@ export const PUT = withCourseAuth(
           // Use the computed value (keeps the existing due date when none was sent)
           // rather than re-deriving from a possibly-undefined data.dueDate.
           dueDate,
+          unlockAt: unlockState.unlockAt,
+          assignedToEveryone: data.assignedToEveryone,
           allowLateSubmissions,
           lateCutoff,
           isPublished: data.isPublished,
@@ -393,6 +463,7 @@ export const PUT = withCourseAuth(
           title: updated.title,
           isPublished: updated.isPublished,
           dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+          unlockAt: updated.unlockAt ? updated.unlockAt.toISOString() : null,
           allowLateSubmissions: updated.allowLateSubmissions,
           lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
           isGroup: updated.isGroup,
@@ -435,6 +506,7 @@ export const PUT = withCourseAuth(
  *           title: { type: string }
  *           description: { type: string }
  *           dueDate: { type: string }
+ *           unlockAt: { type: string, nullable: true, description: Available-from date; null clears it }
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, nullable: true }
  *           isPublished: { type: boolean }
@@ -490,6 +562,16 @@ export const PATCH = withCourseAuth(
         return NextResponse.json({ error: lateState.message }, { status: 400 });
       }
 
+      const unlockState = resolveUnlockAt({
+        incoming: data.unlockAt,
+        existing: existing.unlockAt,
+        dueDate: effectiveDueDate,
+        timezone: courseTimezone,
+      });
+      if (!unlockState.ok) {
+        return NextResponse.json({ error: unlockState.message }, { status: 400 });
+      }
+
       const { allowLateSubmissions, lateCutoff } = lateState;
 
       // Build update data object with only provided fields
@@ -497,6 +579,8 @@ export const PATCH = withCourseAuth(
         title?: string;
         description?: string;
         dueDate?: Date;
+        unlockAt?: Date | null;
+        assignedToEveryone?: boolean;
         allowLateSubmissions?: boolean;
         lateCutoff?: Date | null;
         isPublished?: boolean;
@@ -506,6 +590,10 @@ export const PATCH = withCourseAuth(
       if (data.title !== undefined) updateData.title = data.title;
       if (data.description !== undefined) updateData.description = data.description;
       if (data.dueDate !== undefined) updateData.dueDate = effectiveDueDate;
+      if (unlockState.changed) updateData.unlockAt = unlockState.unlockAt;
+      if (data.assignedToEveryone !== undefined) {
+        updateData.assignedToEveryone = data.assignedToEveryone;
+      }
       if (data.allowLateSubmissions !== undefined) {
         updateData.allowLateSubmissions = allowLateSubmissions;
       }
@@ -533,6 +621,7 @@ export const PATCH = withCourseAuth(
           title: updated.title,
           isPublished: updated.isPublished,
           dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+          unlockAt: updated.unlockAt ? updated.unlockAt.toISOString() : null,
           allowLateSubmissions: updated.allowLateSubmissions,
           lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
           isGroup: updated.isGroup,

@@ -1,0 +1,119 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+
+const prismaMock = vi.hoisted(() => ({
+  course: { findUnique: vi.fn() },
+  assignmentOverride: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  roster: { findFirst: vi.fn() },
+}));
+
+const authMock = vi.hoisted(() => vi.fn());
+const activityLogMock = vi.hoisted(() => vi.fn());
+const resolveTzMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
+vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+vi.mock('@/lib/course-timezone', () => ({ resolveCourseTimezone: resolveTzMock }));
+
+import { PATCH, DELETE } from './route';
+
+const EXISTING = {
+  id: 'o1',
+  userId: 'stu-1',
+  unlockAt: null,
+  dueDate: new Date('2026-01-20T23:59:00.000Z'),
+  lateCutoff: null,
+  allowLateSubmissions: null,
+  assignment: {
+    unlockAt: null,
+    dueDate: new Date('2026-01-10T23:59:00.000Z'),
+    lateCutoff: null,
+    allowLateSubmissions: false,
+  },
+};
+
+const ctx = { params: Promise.resolve({ id: 'c1', aid: 'a1', oid: 'o1' }) };
+
+const patch = (body: unknown) =>
+  PATCH(
+    new NextRequest('http://localhost/x', { method: 'PATCH', body: JSON.stringify(body) }),
+    ctx,
+  );
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
+  prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  prismaMock.assignmentOverride.findFirst.mockResolvedValue(EXISTING);
+  resolveTzMock.mockResolvedValue('UTC');
+});
+
+describe('PATCH override', () => {
+  it('updates the override and logs old->new due date', async () => {
+    prismaMock.assignmentOverride.update.mockResolvedValue({
+      ...EXISTING,
+      dueDate: new Date('2026-01-25T23:59:00.000Z'),
+    });
+
+    const res = await patch({ dueDate: '2026-01-25' });
+
+    expect(res.status).toBe(200);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'UPDATE_ASSIGNMENT_OVERRIDE',
+        metadata: expect.objectContaining({ previousDueDate: EXISTING.dueDate.toISOString() }),
+      }),
+    );
+  });
+
+  it('returns 404 when the override is not found', async () => {
+    prismaMock.assignmentOverride.findFirst.mockResolvedValue(null);
+
+    const res = await patch({ dueDate: '2026-01-25' });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.assignmentOverride.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a due date before an inherited-effective unlock', async () => {
+    // Base unlock is Jan 15; moving the override due to Jan 12 would invert the window.
+    prismaMock.assignmentOverride.findFirst.mockResolvedValue({
+      ...EXISTING,
+      assignment: { ...EXISTING.assignment, unlockAt: new Date('2026-01-15T00:00:00.000Z') },
+    });
+
+    const res = await patch({ dueDate: '2026-01-12' });
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.assignmentOverride.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE override', () => {
+  it('deletes the override and logs it', async () => {
+    prismaMock.assignmentOverride.delete.mockResolvedValue(EXISTING);
+
+    const res = await DELETE(new NextRequest('http://localhost/x', { method: 'DELETE' }), ctx);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignmentOverride.delete).toHaveBeenCalledWith({ where: { id: 'o1' } });
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'DELETE_ASSIGNMENT_OVERRIDE' }),
+    );
+  });
+
+  it('returns 404 when the override is not found', async () => {
+    prismaMock.assignmentOverride.findFirst.mockResolvedValue(null);
+
+    const res = await DELETE(new NextRequest('http://localhost/x', { method: 'DELETE' }), ctx);
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.assignmentOverride.delete).not.toHaveBeenCalled();
+  });
+});

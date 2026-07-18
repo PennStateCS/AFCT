@@ -3,14 +3,15 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import type { Assignment } from '@prisma/client';
 import type { AssignmentWithProblemCount } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
+import { NotebookText, Trash2, ChevronDown, BookOpen, CalendarClock } from 'lucide-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { CompactDate } from '@/components/ui/CompactDate';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import type { AssignmentOverrideSummary } from '@/types/course';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
@@ -50,6 +51,71 @@ export function MaxPointsCell({
   const pts = needsFetch ? (data ? (data.maxPoints ?? 0) : null) : maxPoints;
 
   return <div>{pts !== null ? pts : '...'}</div>;
+}
+
+// Due date cell that shows the base date plus, when the assignment has per-student
+// overrides, a "+N" badge opening a popover with each student's effective window.
+export function DueDateCell({
+  assignment,
+  timeZone,
+}: {
+  assignment: AssignmentWithProblemCount;
+  timeZone: string;
+}) {
+  const overrides = assignment.overrides ?? [];
+  const everyoneLabel = assignment.assignedToEveryone === false ? 'Everyone else' : 'Everyone';
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <CompactDate value={assignment.dueDate} timeZone={timeZone} />
+      {overrides.length > 0 && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 focus-visible:ring-ring/40 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
+              aria-label={`Multiple due dates (${overrides.length} override${overrides.length === 1 ? '' : 's'}); show details`}
+            >
+              <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+              Multiple
+              <ChevronDown className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 p-3 text-xs">
+            <p className="mb-2 font-medium">Due dates</p>
+            <ul className="space-y-2">
+              <li className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground truncate">{everyoneLabel}</span>
+                <span className="shrink-0">
+                  <CompactDate value={assignment.dueDate} timeZone={timeZone} />
+                </span>
+              </li>
+              {overrides.map((o: AssignmentOverrideSummary, i) => {
+                const effDue = o.dueDate ?? assignment.dueDate;
+                const effAllowLate = o.allowLateSubmissions ?? assignment.allowLateSubmissions;
+                const effCutoff = effAllowLate ? (o.lateCutoff ?? assignment.lateCutoff) : null;
+                return (
+                  <li key={i} className="flex flex-col gap-0.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="truncate font-medium">{o.studentName}</span>
+                      <span className="shrink-0">
+                        <CompactDate value={effDue} timeZone={timeZone} />
+                      </span>
+                    </div>
+                    {effCutoff && (
+                      <span className="text-muted-foreground">
+                        late until <CompactDate value={effCutoff} timeZone={timeZone} />
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </PopoverContent>
+        </Popover>
+      )}
+    </div>
+  );
 }
 
 // Component for the publish switch with confirmation dialog
@@ -107,7 +173,6 @@ function PublishSwitchCell({
 export function useAssignmentColumns(
   courseIsArchived: boolean,
   handleAssignmentDeleteClick: (id: string) => void,
-  handleAssignmentEditClick: (assignment: Assignment) => void,
   handlePublishToggle: (assignmentId: string, newValue: boolean) => void,
   timeZone: string,
 ): ColumnDef<AssignmentWithProblemCount>[] {
@@ -130,7 +195,7 @@ export function useAssignmentColumns(
     {
       accessorKey: 'dueDate',
       header: 'Due Date',
-      cell: ({ row }) => <CompactDate value={row.original.dueDate} timeZone={timeZone} />,
+      cell: ({ row }) => <DueDateCell assignment={row.original} timeZone={timeZone} />,
     },
     {
       accessorKey: 'maxPoints',
@@ -231,14 +296,6 @@ export function useAssignmentColumns(
                     <BookOpen className="mr-2 h-4 w-4" />
                     View Assignment
                   </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleAssignmentEditClick(row.original)}
-                  className="flex items-center gap-2"
-                  hidden={courseIsArchived}
-                >
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit Assignment
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
 

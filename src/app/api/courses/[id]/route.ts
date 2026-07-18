@@ -108,6 +108,23 @@ export const GET = withCourseAuth(
                     _count: {
                       select: { problems: true },
                     },
+                    // Per-student due-date overrides, staff-only (peers' names + dates
+                    // must never reach a student). Feeds the "overrides" badge/popover.
+                    ...(isStaff
+                      ? {
+                          overrides: {
+                            select: {
+                              unlockAt: true,
+                              dueDate: true,
+                              lateCutoff: true,
+                              allowLateSubmissions: true,
+                              user: {
+                                select: { firstName: true, lastName: true, email: true },
+                              },
+                            },
+                          },
+                        }
+                      : {}),
                   },
                 },
               }
@@ -124,10 +141,20 @@ export const GET = withCourseAuth(
 
       // The findUnique uses conditional includes, so widen to the relations and
       // _count that may be present for the requested view.
+      type OverrideRowRaw = {
+        unlockAt: Date | null;
+        dueDate: Date | null;
+        lateCutoff: Date | null;
+        allowLateSubmissions: boolean | null;
+        user: { firstName: string | null; lastName: string | null; email: string };
+      };
       type AssignmentRow = Record<string, unknown> & {
         id: string;
+        unlockAt?: Date | null;
+        assignedToEveryone?: boolean;
         problems?: Array<{ maxPoints?: number | null }>;
         _count?: { problems?: number };
+        overrides?: OverrideRowRaw[];
       };
       const courseData = course as unknown as Omit<
         typeof course,
@@ -211,6 +238,8 @@ export const GET = withCourseAuth(
             title: assignment.title,
             description: assignment.description,
             dueDate: assignment.dueDate,
+            unlockAt: assignment.unlockAt ?? null,
+            assignedToEveryone: assignment.assignedToEveryone ?? true,
             allowLateSubmissions: assignment.allowLateSubmissions,
             lateCutoff: assignment.lateCutoff,
             maxPoints: totalProblemPoints,
@@ -219,6 +248,15 @@ export const GET = withCourseAuth(
             updatedAt: assignment.updatedAt,
             courseId: assignment.courseId,
             problemCount: assignment._count?.problems ?? 0,
+            // Staff-only; empty for students (overrides not selected for them).
+            overrides: (assignment.overrides ?? []).map((o) => ({
+              studentName:
+                `${o.user.firstName ?? ''} ${o.user.lastName ?? ''}`.trim() || o.user.email,
+              unlockAt: o.unlockAt,
+              dueDate: o.dueDate,
+              lateCutoff: o.lateCutoff,
+              allowLateSubmissions: o.allowLateSubmissions,
+            })),
             submissionCount,
             commentCount,
             hasSubmissionsOrComments: submissionCount > 0 || commentCount > 0,

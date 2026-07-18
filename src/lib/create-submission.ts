@@ -16,6 +16,9 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { canAccessCourse, canManageCourse, isCourseArchived } from '@/lib/permissions';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { errMessage } from '@/lib/errors';
+import { evaluateSubmissionWindow } from '@/lib/submission-window';
+import { effectiveDeadline } from '@/lib/effective-deadline';
+import { isStudentAssigned } from '@/lib/assignment-visibility';
 
 /** Thrown inside the create transaction when the per-problem cap is already met. */
 class SubmissionCapReachedError extends Error {}
@@ -135,10 +138,26 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     select: {
       id: true,
       courseId: true,
+      unlockAt: true,
       dueDate: true,
       allowLateSubmissions: true,
       lateCutoff: true,
       isPublished: true,
+      assignedToEveryone: true,
+      // Only this submitter's override (0 or 1 row via the unique index) so the
+      // effective window can account for a per-student extension.
+      overrides: {
+        where: { userId: user.id },
+        select: {
+          targetType: true,
+          userId: true,
+          groupId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+        },
+      },
     },
   });
 
@@ -159,11 +178,23 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     return { ok: false, status: 403, error: 'Forbidden' };
   }
 
+  const submitterIsStaff = await canManageCourse(user, courseId);
+
   // Students may only submit to a published assignment; staff may test unpublished
   // ones. Mask as 404 so an unpublished assignment stays invisible to a student.
-  if (!assignment.isPublished && !(await canManageCourse(user, courseId))) {
+  if (!assignment.isPublished && !submitterIsStaff) {
     await audit('SUBMISSION_UNPUBLISHED_ASSIGNMENT', 'SECURITY', {
       error: 'Submission to an unpublished assignment by a non-staff user.',
+    });
+    return { ok: false, status: 404, error: 'Assignment not found.' };
+  }
+
+  // "Assign to specific students": a student not assigned this work can't submit to it.
+  // Mask as 404, same as unpublished. Staff may always test-submit.
+  const submitterAssigned = isStudentAssigned(assignment, assignment.overrides, user.id);
+  if (!submitterAssigned && !submitterIsStaff) {
+    await audit('SUBMISSION_NOT_ASSIGNED', 'SECURITY', {
+      error: 'Submission to an assignment the student is not assigned.',
     });
     return { ok: false, status: 404, error: 'Assignment not found.' };
   }
@@ -181,7 +212,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
 
   // Per-problem cap (staff exempt; `<= 0` is unlimited). Fast path; the authoritative
   // check runs again inside the serializable transaction below.
-  const isCourseStaff = await canManageCourse(user, courseId);
+  const isCourseStaff = submitterIsStaff;
   if (!isCourseStaff && link.maxSubmissions > 0) {
     const priorCount = await prisma.submission.count({
       where: { assignmentId, problemId, studentId: user.id },
@@ -221,29 +252,51 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     }
   }
 
-  // Late policy.
+  // Availability + late policy, resolved for this submitter (a per-student override can
+  // move any of these). One resolver drives submit, the calendar, and the student views.
   const now = new Date();
-  if (now > assignment.dueDate) {
-    if (!assignment.allowLateSubmissions) {
+  const deadline = effectiveDeadline(
+    {
+      unlockAt: assignment.unlockAt,
+      dueDate: assignment.dueDate,
+      allowLateSubmissions: assignment.allowLateSubmissions,
+      lateCutoff: assignment.lateCutoff,
+    },
+    assignment.overrides ?? [],
+    user.id,
+  );
+  const window = evaluateSubmissionWindow(deadline, now);
+  // Course staff (and admins) may test-submit before an assignment unlocks; the
+  // not-open gate applies to students only. Staff are still subject to the late window,
+  // matching existing behavior.
+  if (!window.accepted && !(window.reason === 'not-open' && isCourseStaff)) {
+    const meta = {
+      unlockAt: deadline.unlockAt ? deadline.unlockAt.toISOString() : null,
+      dueDate: deadline.dueDate.toISOString(),
+      allowLateSubmissions: deadline.allowLateSubmissions,
+      lateCutoff: deadline.lateCutoff ? deadline.lateCutoff.toISOString() : null,
+      submittedAt: now.toISOString(),
+      overrideSource: deadline.source,
+    };
+    if (window.reason === 'not-open') {
+      await audit('SUBMISSION_REJECTED_NOT_OPEN', 'WARNING', {
+        ...meta,
+        reason: 'Assignment is not open for submissions yet.',
+      });
+      return { ok: false, status: 403, error: 'This assignment is not open for submissions yet.' };
+    }
+    if (window.reason === 'late-not-allowed') {
       await audit('SUBMISSION_REJECTED_LATE', 'WARNING', {
-        dueDate: assignment.dueDate.toISOString(),
-        allowLateSubmissions: assignment.allowLateSubmissions,
-        lateCutoff: assignment.lateCutoff ? assignment.lateCutoff.toISOString() : null,
-        submittedAt: now.toISOString(),
+        ...meta,
         reason: 'Late submissions are not allowed for this assignment.',
       });
       return { ok: false, status: 403, error: 'Late submissions are not allowed for this assignment.' };
     }
-    if (assignment.lateCutoff && now > assignment.lateCutoff) {
-      await audit('SUBMISSION_REJECTED_LATE_CUTOFF', 'WARNING', {
-        dueDate: assignment.dueDate.toISOString(),
-        allowLateSubmissions: assignment.allowLateSubmissions,
-        lateCutoff: assignment.lateCutoff.toISOString(),
-        submittedAt: now.toISOString(),
-        reason: 'Late submission cutoff has passed for this assignment.',
-      });
-      return { ok: false, status: 403, error: 'Late submission cutoff has passed for this assignment.' };
-    }
+    await audit('SUBMISSION_REJECTED_LATE_CUTOFF', 'WARNING', {
+      ...meta,
+      reason: 'Late submission cutoff has passed for this assignment.',
+    });
+    return { ok: false, status: 403, error: 'Late submission cutoff has passed for this assignment.' };
   }
 
   let fileName: string | null = null;

@@ -6,6 +6,7 @@ import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 import { getCourseDateBucket } from '@/lib/course-status';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 
 export const metadata: Metadata = {
   title: 'AFCT Dashboard',
@@ -111,27 +112,76 @@ export default async function DashboardPage() {
   // running two unbounded submission/grade queries on this (the most-visited)
   // page. The feature can be rebuilt properly later; until then it does no work.
 
-  // Get upcoming assignments for all user's courses
-  const assignments =
+  // Get upcoming assignments for all the user's courses, resolved for THIS user: a
+  // student with a due-date override sees (and is sorted by) their own effective due
+  // date. Staff have no override rows, so they see the base dates unchanged. The query
+  // matches on the base due OR this user's override due so an extension into the future
+  // still surfaces even when the base date has passed.
+  const now = new Date();
+  const rawAssignments =
     courseIds.length === 0
       ? []
       : await prisma.assignment.findMany({
           where: {
             courseId: { in: courseIds },
             isPublished: true,
-            dueDate: { gt: new Date() },
+            AND: [
+              // Base due OR this user's override due is in the future.
+              {
+                OR: [
+                  { dueDate: { gt: now } },
+                  { overrides: { some: { userId: id, dueDate: { gt: now } } } },
+                ],
+              },
+              // And this user is actually assigned it (everyone, or via their override).
+              { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: id } } }] },
+            ],
           },
           select: {
             id: true,
             title: true,
             dueDate: true,
+            unlockAt: true,
+            allowLateSubmissions: true,
+            lateCutoff: true,
             courseId: true,
+            overrides: {
+              where: { userId: id },
+              select: {
+                targetType: true,
+                userId: true,
+                groupId: true,
+                unlockAt: true,
+                dueDate: true,
+                lateCutoff: true,
+                allowLateSubmissions: true,
+              },
+            },
             // The module labels each row with its course so multi-course users can
             // tell which "Lab 3" is which.
             course: { select: { code: true } },
           },
           orderBy: { dueDate: 'asc' },
         });
+
+  const assignments = rawAssignments
+    .map((a) => {
+      const eff = effectiveDeadline(
+        {
+          unlockAt: a.unlockAt,
+          dueDate: a.dueDate,
+          allowLateSubmissions: a.allowLateSubmissions,
+          lateCutoff: a.lateCutoff,
+        },
+        a.overrides,
+        id,
+      );
+      return { id: a.id, title: a.title, courseId: a.courseId, course: a.course, dueDate: eff.dueDate };
+    })
+    // Drop rows whose effective due has already passed (base was in range but the
+    // override moved it into the past).
+    .filter((a) => a.dueDate > now)
+    .sort((x, y) => x.dueDate.getTime() - y.dueDate.getTime());
 
   return (
     <div className="flex h-full w-full flex-col pb-4 lg:flex-row">

@@ -9,7 +9,8 @@
  * **overrides** and a **grace period**, see `docs/roadmap.md`) slots into this one
  * function instead of every comparison site.
  *
- * This mirrors the current submit-route logic exactly:
+ * Order of checks:
+ *   - before unlockAt (if set)                           → rejected `not-open`
  *   - on time            → accepted (not late)
  *   - late + late allowed + before cutoff (or no cutoff) → accepted (late)
  *   - late + late not allowed                            → rejected `late-not-allowed`
@@ -18,6 +19,8 @@
 
 /** The assignment fields the window depends on (all UTC instants). */
 export type DeadlineFields = {
+  // "Available from"; null means available immediately.
+  unlockAt: Date | null;
   dueDate: Date;
   allowLateSubmissions: boolean;
   lateCutoff: Date | null;
@@ -25,6 +28,7 @@ export type DeadlineFields = {
 
 export type SubmissionWindow =
   | { accepted: true; late: boolean }
+  | { accepted: false; late: false; reason: 'not-open' }
   | { accepted: false; late: true; reason: 'late-not-allowed' | 'cutoff-passed' };
 
 /**
@@ -35,6 +39,10 @@ export function evaluateSubmissionWindow(
   assignment: DeadlineFields,
   now: Date = new Date(),
 ): SubmissionWindow {
+  if (assignment.unlockAt && now.getTime() < assignment.unlockAt.getTime()) {
+    return { accepted: false, late: false, reason: 'not-open' };
+  }
+
   const isLate = now.getTime() > assignment.dueDate.getTime();
 
   if (!isLate) {

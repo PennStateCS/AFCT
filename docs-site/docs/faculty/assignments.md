@@ -1,19 +1,30 @@
 # Assignments
 
-The **Assignments** page contains the work students complete in a course. An assignment holds its own instructions and deadline, plus one or more problems from the course problem bank.
+The **Assignments** page contains the work students complete in a course. An assignment holds its own instructions, an availability window and deadline, and one or more problems from the course problem bank. One assignment can have different due dates for different students.
 
 ## Create an assignment
 
-1. Open the course and select **Assignments**.
-2. Select **Create Assignment**.
-3. Enter a title and optional description.
-4. Set the due date and time. AFCT interprets this value in the course timezone.
-5. Turn on **Group Assignment** if problem availability should be assigned by course group.
-6. Choose whether to **Publish Now**.
-7. If you accept late work, turn on **Allow Late Submissions** and set a late cutoff.
-8. Select **Create Assignment**.
+Select **Create Assignment** to open the wizard. It has four steps.
 
-The late cutoff must be at or after the due date. If you do not publish immediately, you can finish adding and checking problems before students see the assignment.
+1. **Details** - enter a title and optional description.
+2. **Assign To** - set who the assignment is for and when it is due (see below).
+3. **Options** - choose whether to **Publish Now**, and turn on **Group Assignment** if problem availability should be assigned by course group.
+4. **Review** - check the summary, then select **Create Assignment**.
+
+All dates are interpreted in the course timezone. If you do not publish immediately, you can finish adding and checking problems before students see the assignment.
+
+### Assign To and due dates
+
+The **Assign To** step starts with an **Everyone** card that sets the default dates for the whole class:
+
+- **Available from** (optional) - before this time the assignment is locked. Students see that it exists and when it opens, but not its description or problems. Leave it blank to make the assignment available immediately.
+- **Due** - the on-time deadline.
+- **Allow late submissions** - accept work after the due date.
+- **Available until** (optional) - when late submissions are on, this is the last moment late work is accepted. **Leave it blank to accept late submissions with no deadline.** When set, it must be on or after the due date.
+
+**Give a student different dates.** Use **Add a student override** and pick a student. A card appears where you can set that student's own available-from, due date, and late policy. Any field you leave blank inherits the Everyone value, so you can change only the due date and keep the rest. Once an override exists, the base card is relabeled **Everyone else**.
+
+**Assign to specific students only.** Turn off **Assign to everyone in the course** to assign the work to just the students you add. Students who are not added do not see the assignment at all. The dates on the first card become the defaults those students inherit.
 
 ## Add problems
 
@@ -36,19 +47,22 @@ These assignment settings can differ from the defaults in the problem bank. Remo
 
 ## Review the assignment list
 
-The table shows the due date, total points, number of problems, late-work settings, submission and comment counts, and publication status. Select an assignment title or choose **Manage**, then **View Assignment**, to open it.
+The table shows the due date, total points, number of problems, late-work settings, submission and comment counts, and publication status.
 
-Use the **Published** switch to show or hide an assignment. AFCT asks for confirmation before applying the change.
+When an assignment has per-student due dates, the **Due Date** cell shows a **Multiple** badge next to the base date. Select it to see each student's dates in a popover.
 
-## Edit or delete an assignment
+Use the **Published** switch to show or hide an assignment. AFCT asks for confirmation before applying the change. Select an assignment title, or choose **Manage** then **View Assignment**, to open it.
 
-Open **Manage** for an assignment to edit or delete it.
+## Edit an assignment
+
+Open the assignment and use its **Settings** tab. It holds all of the assignment's settings - title, description, the availability window and due dates, the assign-to overrides, late policy, publication, and group mode - and saves them in place.
 
 Keep these safeguards in mind:
 
 - You cannot change an assignment between individual and group mode after a student has submitted work.
 - You cannot unpublish an assignment after it has submissions or grades.
 - You cannot delete an assignment after it has submissions or discussion comments.
+- Removing a student from the course also removes any due-date overrides they had.
 - An archived course is read-only.
 
 When students begin working, use the assignment's [Submissions](submissions.md) tab to review files, rerun the autograder, discuss a problem, and enter grades.

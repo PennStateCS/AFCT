@@ -6,6 +6,7 @@ import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
+import { resolveUnlockAt } from '@/lib/assignment-late-window';
 import { AssignmentCreateApiSchema } from '@/schemas/assignment';
 
 /**
@@ -83,9 +84,9 @@ export const GET = withCourseAuth(
 
 /**
  * Creates an assignment in the course. Course staff (faculty or TAs) or a system
- * admin. The due date is interpreted as end-of-day in the **course's** timezone. Late
- * submissions and their cutoff must agree: a cutoff is required when late is on,
- * forbidden when off, and must fall on or after the due date.
+ * admin. The due date is interpreted as end-of-day in the **course's** timezone. The
+ * late cutoff is optional when late submissions are on (blank means no deadline), must
+ * be omitted when late is off, and must fall on or after the due date when set.
  * @openapi
  * summary: Create a course assignment
  * parameters:
@@ -101,6 +102,7 @@ export const GET = withCourseAuth(
  *           title: { type: string }
  *           description: { type: string }
  *           dueDate: { type: string, description: Interpreted as end-of-day in the course's timezone }
+ *           unlockAt: { type: string, description: Available-from date; must be on or before the due date }
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, description: Required when allowLateSubmissions is true }
  *           isPublished: { type: boolean }
@@ -131,12 +133,8 @@ export const POST = withCourseAuth(
           { status: 400 },
         );
       }
-      if (allowLateSubmissions && !data.lateCutoff) {
-        return NextResponse.json(
-          { error: 'Late submission cutoff is required when late submissions are enabled.' },
-          { status: 400 },
-        );
-      }
+      // A cutoff is optional when late submissions are enabled: no cutoff means late
+      // submissions are accepted with no deadline.
 
       const dueDate = toEndOfDayInTimezone(data.dueDate, courseTimezone);
       const lateCutoffDate =
@@ -151,11 +149,23 @@ export const POST = withCourseAuth(
         );
       }
 
+      const unlockState = resolveUnlockAt({
+        incoming: data.unlockAt,
+        existing: null,
+        dueDate,
+        timezone: courseTimezone,
+      });
+      if (!unlockState.ok) {
+        return NextResponse.json({ error: unlockState.message }, { status: 400 });
+      }
+
       const created = await prisma.assignment.create({
         data: {
           title: data.title,
           description: data.description,
           dueDate,
+          unlockAt: unlockState.unlockAt,
+          assignedToEveryone: data.assignedToEveryone ?? true,
           allowLateSubmissions,
           lateCutoff: lateCutoffDate,
           isPublished: data.isPublished || false,
@@ -180,6 +190,7 @@ export const POST = withCourseAuth(
           isPublished: created.isPublished,
           isGroup: created.isGroup,
           dueDate: created.dueDate.toISOString(),
+          unlockAt: created.unlockAt ? created.unlockAt.toISOString() : null,
           allowLateSubmissions: created.allowLateSubmissions,
           lateCutoff: created.lateCutoff ? created.lateCutoff.toISOString() : null,
         },

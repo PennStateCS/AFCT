@@ -2,13 +2,12 @@
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { Pencil, FileText, Package, Plus } from 'lucide-react';
+import { AlignLeft, FileText, Package, Plus, Settings } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import SelectField from '@/components/ui/SelectField';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
@@ -21,11 +20,11 @@ import {
   DialogDescription,
   DialogClose,
 } from '@/components/ui/dialog';
-import { Controller, useForm } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
-import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
+import { AssignmentSettingsCard } from '@/components/assignments/AssignmentSettingsCard';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TAB_BAR_LIST_CLASS, TAB_BAR_TRIGGER_CLASS } from '@/components/course/course-tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
 import type { Problem } from '@prisma/client';
@@ -72,11 +71,6 @@ export default function AssignmentDashboardPage({
   initialAssignment = null,
   initialAssignments,
 }: PrivilegeAssignmentViewProps) {
-  const { control } = useForm({
-    defaultValues: {
-      assignmentSelect: initialAssignment?.id || '',
-    },
-  });
   const { timezone } = useEffectiveTimezone();
   const { id, aid } = useParams<{ id: string; aid: string }>();
   const epsSymbol = useEmptyStringSymbol(id);
@@ -85,12 +79,11 @@ export default function AssignmentDashboardPage({
 
   const queryClient = useQueryClient();
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
-  const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
   const [addProblemDialogOpen, setAddProblemDialogOpen] = useState(false);
   const [createProblemOpen, setCreateProblemOpen] = useState(false);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
-  const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
+  const [tab, setTab] = useState(searchParams.get('tab') || 'description');
 
   // Assignment shell, cached and keyed to this course/assignment via the shared
   // queryKeys.assignment.shell key, so this privileged view and the embedded
@@ -292,7 +285,6 @@ export default function AssignmentDashboardPage({
     setProblemToRemove(null);
   }
 
-  const handleEditAssignment = () => setEditAssignmentOpen(true);
   const handleAddExistingProblem = () => setAddProblemDialogOpen(true);
   const handleCreateProblem = () => setCreateProblemOpen(true);
   const handleEditProblem = useCallback(
@@ -399,189 +391,188 @@ export default function AssignmentDashboardPage({
 
   return (
     <div className="mx-auto w-full text-sm">
-      <Card className="relative mb-8">
-        <Button
-          variant="default"
-          aria-label="Edit Assignment"
-          onClick={handleEditAssignment}
-          className="absolute top-6 right-6"
-          hidden={courseIsArchived}
-        >
-          <Pencil className="mr-2 h-4 w-4" />
-          Edit Assignment
-        </Button>
-        <CardHeader>
-          <CardTitle
-            role="heading"
-            aria-level={1}
-            className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words"
-          >
-            <span className="font-semibold">Assignment:</span>{' '}
-            <span className="min-w-0 [overflow-wrap:anywhere] break-words">{assignment.title}</span>
-            {(() => {
-              const pastDue = assignment.isPublished && new Date(assignment.dueDate) <= new Date();
-              const variant = !assignment.isPublished ? 'warning' : pastDue ? 'danger' : 'success';
-              const status = !assignment.isPublished
-                ? 'Not Published'
-                : pastDue
-                  ? 'Past Due'
-                  : 'Published';
-              return <Badge variant={variant}>{status}</Badge>;
-            })()}
-          </CardTitle>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
-            {/* Show course name/code as a link to the course page (fallback to courseId) */}
-            <Link
-              href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-              className="max-w-full break-all text-blue-700 hover:underline"
-            >
-              {assignment.course?.name || assignment.courseName || assignment.courseId}
-              {assignment.course?.code
-                ? ` (${assignment.course.code})`
-                : assignment.courseCode
-                  ? ` (${assignment.courseCode})`
-                  : ''}
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="min-w-0">
-            <span className="font-semibold">Description:</span>
-            <p className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
-              {assignment.description ?? 'No description.'}
-            </p>
-          </div>
-          <div className="max-w-xs">
-            <Controller
-              control={control}
-              name="assignmentSelect"
-              render={({ field }) => (
-                <SelectField
-                  label="Assignment"
-                  name="assignmentSelect"
-                  id="assignmentSelect"
-                  value={field.value}
-                  onValueChange={(assignmentId) => {
-                    field.onChange(assignmentId);
-                    const selectedAssignment =
-                      allAssignments.find((a) => a.id === assignmentId) ?? null;
-
-                    if (!selectedAssignment) {
-                      showToast.error('Selected assignment not found');
-                      return;
-                    }
-
-                    if (id) {
-                      router.push(`/dashboard/courses/${id}/${selectedAssignment.id}`);
-                    } else {
-                      window.location.href = selectedAssignment.id;
-                    }
-                  }}
-                  placeholder={assignmentsLoading ? 'Loading...' : 'Choose assignment'}
-                  disabled={assignmentsLoading}
-                  options={allAssignments.map((assignOption) => ({
-                    value: assignOption.id,
-                    label: assignOption.title,
-                  }))}
-                  className="w-full"
-                  triggerClassName="!h-8 text-xs"
-                />
-              )}
-            />
-          </div>
-        </CardContent>
-      </Card>
       <Tabs value={tab} onValueChange={handleTabChange}>
-        <TabsList
-          aria-label="Assignment sections"
-          className="bg-card border-border h-12 w-full rounded-md border p-1 shadow-sm"
-        >
-          <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 flex-1 data-[state=active]:text-white"
-            value="problems"
-          >
-            <FileText className="h-4 w-4" />
-            Problems
-          </TabsTrigger>
-          <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 flex-1 data-[state=active]:text-white"
-            value="submissions"
-          >
-            <Package className="h-4 w-4" />
-            Submissions
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent
-          value="problems"
-          className="animate-fade-in-up transition-opacity duration-300"
-        >
-          <Card className="w-full">
-            <CardHeader>
-              <div className="flex w-full items-center justify-between">
-                <CardTitle
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <CardTitle
+                role="heading"
+                aria-level={1}
+                className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words"
+              >
+                <span className="font-semibold">Assignment:</span>{' '}
+                <span className="min-w-0 [overflow-wrap:anywhere] break-words">
+                  {assignment.title}
+                </span>
+              </CardTitle>
+              {/* Quick jump to another assignment in this course. */}
+              <div className="w-56 shrink-0">
+                <SearchableSelect
+                  items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
+                  onSelect={(assignmentId) => {
+                    if (id) router.push(`/dashboard/courses/${id}/${assignmentId}`);
+                    else window.location.href = assignmentId;
+                  }}
+                  placeholder={assignmentsLoading ? 'Loading…' : 'Switch assignment'}
+                  searchPlaceholder="Search assignments..."
+                  emptyStateText="No assignments found."
+                  disabled={assignmentsLoading}
+                />
+              </div>
+            </div>
+            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+              {/* Show course name/code as a link to the course page (fallback to courseId) */}
+              <Link
+                href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
+                className="max-w-full break-all text-blue-700 hover:underline"
+              >
+                {assignment.course?.name || assignment.courseName || assignment.courseId}
+                {assignment.course?.code
+                  ? ` (${assignment.course.code})`
+                  : assignment.courseCode
+                    ? ` (${assignment.courseCode})`
+                    : ''}
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Tab selector, matching the underline style used on the course page. */}
+            <TabsList aria-label="Assignment sections" className={TAB_BAR_LIST_CLASS}>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="description">
+                <AlignLeft className="size-3.5 opacity-70" />
+                Description
+              </TabsTrigger>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="submissions">
+                <Package className="size-3.5 opacity-70" />
+                Submissions
+              </TabsTrigger>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="problems">
+                <FileText className="size-3.5 opacity-70" />
+                Problems
+              </TabsTrigger>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="settings">
+                <Settings className="size-3.5 opacity-70" />
+                Settings
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="description">
+              <div className="space-y-4">
+                <h2
                   role="heading"
                   aria-level={2}
-                  className="flex items-center gap-2 text-2xl"
+                  className="flex items-center gap-2 text-2xl font-semibold"
                 >
-                  <FileText className="h-6 w-6" />
-                  Problems
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="default"
-                    aria-label="Create Problem"
-                    onClick={handleCreateProblem}
-                    disabled={problemsLoading}
-                    hidden={courseIsArchived}
-                  >
-                    <Plus />
-                    Create Problem
-                  </Button>
-                  <Button
-                    variant="default"
-                    aria-label="Add Existing Problem"
-                    onClick={handleAddExistingProblem}
-                    disabled={problemsLoading}
-                    hidden={courseIsArchived}
-                  >
-                    <Plus />
-                    Add Existing Problem
-                  </Button>
-                </div>
+                  <AlignLeft className="h-6 w-6" />
+                  Description
+                </h2>
+                <p className="text-muted-foreground min-h-32 resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
+                  {assignment.description ?? 'No description.'}
+                </p>
               </div>
-              <p
-                className="text-muted-foreground mt-2 max-w-3xl text-sm text-balance"
-                hidden={courseIsArchived}
-              >
-                This assignment consists of the following problems. You may add an existing problem
-                from this course using the <strong>Add Existing Problem</strong> button in the
-                upper-right corner, or create a new problem using the{' '}
-                <strong>Create Problem</strong> button.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <DataTable
-                columns={problemColumns}
-                data={problemTableData}
-                loading={groupsLoading}
-                tableLabel="Assignment problems table"
-                defaultSorting={[{ id: 'title', desc: false }]}
+            </TabsContent>
+            <TabsContent
+              value="problems"
+              className="animate-fade-in-up transition-opacity duration-300"
+            >
+              <div className="space-y-4">
+                <div className="flex w-full items-center justify-between">
+                  <h2
+                    role="heading"
+                    aria-level={2}
+                    className="flex items-center gap-2 text-2xl font-semibold"
+                  >
+                    <FileText className="h-6 w-6" />
+                    Problems
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="default"
+                      aria-label="Create Problem"
+                      onClick={handleCreateProblem}
+                      disabled={problemsLoading}
+                      hidden={courseIsArchived}
+                    >
+                      <Plus />
+                      Create Problem
+                    </Button>
+                    <Button
+                      variant="default"
+                      aria-label="Add Existing Problem"
+                      onClick={handleAddExistingProblem}
+                      disabled={problemsLoading}
+                      hidden={courseIsArchived}
+                    >
+                      <Plus />
+                      Add Existing Problem
+                    </Button>
+                  </div>
+                </div>
+                <p
+                  className="text-muted-foreground max-w-3xl text-sm text-balance"
+                  hidden={courseIsArchived}
+                >
+                  This assignment consists of the following problems. You may add an existing
+                  problem from this course using the <strong>Add Existing Problem</strong> button in
+                  the upper-right corner, or create a new problem using the{' '}
+                  <strong>Create Problem</strong> button.
+                </p>
+                <DataTable
+                  columns={problemColumns}
+                  data={problemTableData}
+                  loading={groupsLoading}
+                  tableLabel="Assignment problems table"
+                  defaultSorting={[{ id: 'title', desc: false }]}
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="submissions">
+              <AssignmentSubmissions
+                courseIsArchived={courseIsArchived}
+                courseId={id}
+                assignmentId={aid}
+                maxAssignmentGrade={assignment.maxPoints}
+                problems={submissionTabProblems}
+                assignmentIsGroup={assignment.isGroup ?? false}
+                groups={groups}
+                groupProblemsMap={groupProblemsMap}
               />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="submissions">
-          <AssignmentSubmissions
-            courseIsArchived={courseIsArchived}
-            courseId={id}
-            assignmentId={aid}
-            maxAssignmentGrade={assignment.maxPoints}
-            problems={submissionTabProblems}
-            assignmentIsGroup={assignment.isGroup ?? false}
-            groups={groups}
-            groupProblemsMap={groupProblemsMap}
-          />
-        </TabsContent>
+            </TabsContent>
+            <TabsContent value="settings">
+              <AssignmentSettingsCard
+                courseId={id}
+                courseIsArchived={courseIsArchived}
+                // Edit the dates in the COURSE's zone (what the server stores them in).
+                timeZone={assignment.course?.timezone ?? timezone}
+                assignment={{
+                  ...assignment,
+                  description: assignment.description ?? null,
+                  createdAt: assignment.createdAt ?? new Date(),
+                  updatedAt: assignment.updatedAt ?? new Date(),
+                  dueDate:
+                    typeof assignment.dueDate === 'string'
+                      ? new Date(assignment.dueDate)
+                      : assignment.dueDate,
+                  isGroup: assignment.isGroup ?? false,
+                  allowLateSubmissions: assignment.allowLateSubmissions ?? false,
+                  lateCutoff: assignment.lateCutoff
+                    ? typeof assignment.lateCutoff === 'string'
+                      ? new Date(assignment.lateCutoff)
+                      : assignment.lateCutoff
+                    : null,
+                  unlockAt: assignment.unlockAt
+                    ? typeof assignment.unlockAt === 'string'
+                      ? new Date(assignment.unlockAt)
+                      : assignment.unlockAt
+                    : null,
+                  assignedToEveryone: assignment.assignedToEveryone ?? true,
+                }}
+                onSaved={() => {
+                  void invalidateAssignment();
+                }}
+              />
+            </TabsContent>
+          </CardContent>
+        </Card>
       </Tabs>
       {/* Submission viewer dialog, keyed off the problem type. */}
       {viewerOpen && viewerSrc && (
@@ -647,36 +638,6 @@ export default function AssignmentDashboardPage({
         onConfirm={handleConfirmRemoveProblem}
         onCancel={() => setProblemToRemove(null)}
       />
-      {assignment && (
-        <EditAssignmentDialog
-          courseIsArchived={courseIsArchived}
-          open={editAssignmentOpen}
-          setOpen={setEditAssignmentOpen}
-          // Edit the due date in the COURSE's zone (what the server stores it in), not
-          // the viewer's, otherwise saving would shift the deadline.
-          timeZone={assignment.course?.timezone ?? timezone}
-          assignment={{
-            ...assignment,
-            description: assignment.description ?? null,
-            createdAt: assignment.createdAt ?? new Date(),
-            updatedAt: assignment.updatedAt ?? new Date(),
-            dueDate:
-              typeof assignment.dueDate === 'string'
-                ? new Date(assignment.dueDate)
-                : assignment.dueDate,
-            isGroup: assignment.isGroup ?? false,
-            allowLateSubmissions: assignment.allowLateSubmissions ?? false,
-            lateCutoff: assignment.lateCutoff
-              ? typeof assignment.lateCutoff === 'string'
-                ? new Date(assignment.lateCutoff)
-                : assignment.lateCutoff
-              : null,
-          }}
-          onSave={() => {
-            void invalidateAssignment();
-          }}
-        />
-      )}
       {problemToEdit && (
         <EditProblemDialog
           courseIsArchived={courseIsArchived}

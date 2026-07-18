@@ -80,6 +80,43 @@ describe('GET /api/courses/[id]/[aid]', () => {
     expect(res.status).toBe(200);
   });
 
+  it('locks description and problems for a student before the assignment unlocks', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Assignment',
+      description: 'Secret details',
+      isPublished: true,
+      unlockAt: new Date('2999-01-01T00:00:00.000Z'), // far future -> locked
+      dueDate: new Date('2999-01-08T00:00:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      assignedToEveryone: true,
+      overrides: [],
+      problems: [
+        {
+          maxPoints: 10,
+          maxSubmissions: 1,
+          autograderEnabled: true,
+          problem: { id: 'p1', title: 'P1', description: 'hidden', type: 'FA' },
+        },
+      ],
+      course: { name: 'Course', code: 'C1', isArchived: false },
+    });
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1?view=problems'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1' }) },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.locked).toBe(true);
+    expect(body.description).toBeNull();
+    expect(body.problems).toEqual([]);
+  });
+
   const assignmentWithAnswerFile = {
     id: 'a1',
     title: 'Assignment',
@@ -406,13 +443,16 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
   });
 
   it('returns 400 for an inconsistent late-submission window', async () => {
-    // allowLate enabled with no cutoff (existing has none) -> computeLateSubmissionState fails.
+    // A cutoff supplied while late submissions are disabled is inconsistent.
     prismaMock.assignment.findFirst.mockResolvedValue({
       ...existingAssignment,
       allowLateSubmissions: false,
       lateCutoff: null,
     });
-    const res = await PUT(putReq({ allowLateSubmissions: true }), mutationParams);
+    const res = await PUT(
+      putReq({ allowLateSubmissions: false, lateCutoff: '2026-01-20' }),
+      mutationParams,
+    );
     expect(res.status).toBe(400);
   });
 
@@ -533,7 +573,11 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
       allowLateSubmissions: false,
       lateCutoff: null,
     });
-    const res = await PATCH(patchReq({ allowLateSubmissions: true }), mutationParams);
+    // A cutoff supplied while late submissions are disabled is inconsistent.
+    const res = await PATCH(
+      patchReq({ allowLateSubmissions: false, lateCutoff: '2026-01-20' }),
+      mutationParams,
+    );
     expect(res.status).toBe(400);
   });
 
