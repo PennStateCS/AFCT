@@ -48,6 +48,29 @@ describe('buildLmsGradesCsv', () => {
     expect(csvContent).toContain('"Ada Lovelace","ada@example.com","95","88"');
   });
 
+  it('builds Moodle CSV keyed by email', () => {
+    const { csvContent, filenamePrefix } = buildLmsGradesCsv('moodle', students, assignments);
+
+    expect(filenamePrefix).toBe('grades-moodle');
+    expect(csvContent).toContain('"email","Homework 1","Quiz 1"');
+    expect(csvContent).toContain('"ada@example.com","95","88"');
+  });
+
+  it('builds Brightspace CSV with email as Username and no name columns', () => {
+    const { csvContent, filenamePrefix } = buildLmsGradesCsv('brightspace', students, assignments);
+
+    expect(filenamePrefix).toBe('grades-brightspace');
+    // Only identity + "Points Grade" columns + the end-of-line indicator.
+    expect(csvContent).toContain(
+      '"OrgDefinedId","Username","Homework 1 Points Grade","Quiz 1 Points Grade","End-of-Line Indicator"',
+    );
+    // Names are not allowed in a Brightspace import.
+    expect(csvContent).not.toContain('First Name');
+    expect(csvContent).not.toContain('Last Name');
+    // OrgDefinedId blank (faculty fill in), Username prefilled with email, row ends with "#".
+    expect(csvContent).toContain('"","ada@example.com","95","88","#"');
+  });
+
   it('exports blank cells when a grade is missing', () => {
     const studentsWithMissingGrade: LmsStudentRow[] = [
       {

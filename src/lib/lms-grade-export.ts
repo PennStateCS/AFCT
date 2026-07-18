@@ -26,7 +26,7 @@ const CANVAS_RESERVED_SUBSTRINGS = [
   'Override Grade',
   'Override Status',
 ];
-// Canvas also reserves these as identity column names — a *exact* title match collides.
+// Canvas also reserves these as identity column names; an exact title match collides.
 // (Substring matching here would false-positive, e.g. "id" inside "Bridge".)
 const CANVAS_RESERVED_COLUMN_NAMES = [
   'Student',
@@ -54,7 +54,7 @@ export function findCanvasReservedTitleConflicts(titles: string[]): string[] {
 
 // A spreadsheet treats a cell starting with any of these as a formula.
 const FORMULA_START = /^[=+\-@\t\r]/;
-// Plain (optionally negative) numbers are safe data, not injection — leave them alone.
+// Plain (optionally negative) numbers are safe data, not injection; leave them alone.
 const NUMERIC = /^-?\d+(\.\d+)?$/;
 
 const escapeCsvCell = (value: unknown) => {
@@ -110,14 +110,11 @@ export function buildLmsGradesCsv(
       'Availability',
       ...assignmentHeaders,
     ],
-    brightspace: [
-      'OrgDefinedId',
-      'Username',
-      'Last Name',
-      'First Name',
-      ...brightspaceHeaders,
-      'End-of-Line Indicator',
-    ],
+    // Brightspace only accepts the identity columns (OrgDefinedId / Username), the
+    // "<item> Points Grade" columns, and the End-of-Line Indicator; extra fields like
+    // names are disallowed. We prefill Username with email (a best guess) and leave
+    // OrgDefinedId blank for faculty to fill from a Brightspace gradebook export.
+    brightspace: ['OrgDefinedId', 'Username', ...brightspaceHeaders, 'End-of-Line Indicator'],
     moodle: ['email', ...assignmentHeaders],
     generic: ['Student Name', 'Email', ...assignmentHeaders],
   };
@@ -145,7 +142,10 @@ export function buildLmsGradesCsv(
     }
 
     if (platform === 'brightspace') {
-      return ['', '', lastName, firstName, ...gradeCells, '#'];
+      // OrgDefinedId blank (unknown), Username = email (best guess), then the Points
+      // Grade cells and the required end-of-line "#". Brightspace needs a valid
+      // Username OR OrgDefinedId, so faculty may need to correct these before import.
+      return ['', email, ...gradeCells, '#'];
     }
 
     if (platform === 'moodle') {

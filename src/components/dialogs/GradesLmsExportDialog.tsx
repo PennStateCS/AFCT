@@ -45,6 +45,8 @@ const PLATFORM_NOTES: Partial<Record<LmsPlatform, string>> = {
     "On import, map the Email column to 'useremail' and each assignment column to its grade item. Moodle matches emails case-sensitively.",
   blackboard:
     "Blackboard matches students by username. This file uses email as the username, so it imports only if your Blackboard usernames are emails. It creates new columns; to update existing ones, download Blackboard's gradebook and re-upload.",
+  brightspace:
+    "Brightspace matches students by Username or Org Defined ID. This file pre-fills Username with each student's email. If your Brightspace usernames are not emails, export your Brightspace gradebook and copy the correct Username or Org Defined ID into this file before importing.",
 };
 
 export function GradesLmsExportDialog({
