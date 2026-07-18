@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
+import { useQuery } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import type { Assignment } from '@prisma/client';
@@ -12,9 +13,11 @@ import { Settings } from 'lucide-react';
 import SwitchField from '@/components/ui/SwitchField';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
+import { AssignToFields } from '@/components/assignments/AssignToFields';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
-import { AssignmentFormSchema, UpdateAssignmentSchema } from '@/schemas/assignment';
+import { apiClient, ApiError } from '@/lib/api/fetch-client';
+import { AssignmentWizardFormSchema } from '@/schemas/assignment';
 
 // Date -> "YYYY-MM-DDTHH:MM" for <input type="datetime-local"> in a timezone.
 function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
@@ -33,11 +36,24 @@ function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): strin
   return `${l.year ?? '0000'}-${l.month ?? '01'}-${l.day ?? '01'}T${l.hour ?? '00'}:${l.minute ?? '00'}`;
 }
 
-function nowLocalString(timeZone: string): string {
-  return toDateTimeLocalInTimeZone(new Date(), timeZone);
+type OverrideApi = {
+  id: string;
+  userId: string | null;
+  unlockAt: string | null;
+  dueDate: string | null;
+  lateCutoff: string | null;
+  allowLateSubmissions: boolean | null;
+  user?: { firstName: string | null; lastName: string | null; email: string } | null;
+};
+
+function overrideStudentName(u: OverrideApi['user']): string {
+  return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim() || u?.email || 'Student';
 }
 
-type AssignmentWithUnlock = Assignment & { unlockAt?: Date | string | null };
+type AssignmentWithUnlock = Assignment & {
+  unlockAt?: Date | string | null;
+  assignedToEveryone?: boolean;
+};
 
 type Props = {
   courseId: string;
@@ -47,14 +63,14 @@ type Props = {
   onSaved?: (updated: Assignment) => void;
 };
 
-// RHF state before Zod transforms (strings for datetime-local).
-type FormValues = z.input<typeof AssignmentFormSchema>;
+type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 
 /**
- * The assignment's settings, edited in place on the assignment page's Settings tab. Holds
- * the fields that used to live in the Edit Assignment dialog (title, description, the
- * availability window and due date, late policy, publication, group mode) and saves them
- * with one PUT. Per-student due-date overrides are managed from the create wizard.
+ * The assignment's settings, edited in place on the assignment page's Settings tab. Covers
+ * the base fields plus the full "Assign To" section (availability window, due date, late
+ * policy, assign-to-everyone toggle, and per-student due-date overrides), reusing the same
+ * AssignToFields as the create wizard. Saving PUTs the base and diffs the overrides
+ * (create / update / delete) against what was loaded.
  */
 export function AssignmentSettingsCard({
   courseId,
@@ -63,45 +79,51 @@ export function AssignmentSettingsCard({
   courseIsArchived,
   onSaved,
 }: Props) {
-  const dueString = useMemo(
-    () => toDateTimeLocalInTimeZone(assignment.dueDate, timeZone),
-    [assignment.dueDate, timeZone],
-  );
-  const unlockString = useMemo(
-    () =>
-      assignment.unlockAt ? toDateTimeLocalInTimeZone(assignment.unlockAt, timeZone) : undefined,
-    [assignment.unlockAt, timeZone],
-  );
-  const cutoffString = useMemo(
-    () =>
-      assignment.lateCutoff
-        ? toDateTimeLocalInTimeZone(assignment.lateCutoff, timeZone)
-        : undefined,
-    [assignment.lateCutoff, timeZone],
-  );
+  const overridesQuery = useQuery({
+    queryKey: ['course', courseId, 'assignment', assignment.id, 'overrides'],
+    queryFn: () =>
+      apiClient.get<OverrideApi[]>(apiPaths.assignmentOverrides(courseId, assignment.id)),
+    staleTime: 30_000,
+  });
+  const loadedOverrides = useMemo(() => overridesQuery.data ?? [], [overridesQuery.data]);
+
+  const toLocal = (v: Date | string | null | undefined): string | undefined =>
+    v ? toDateTimeLocalInTimeZone(v, timeZone) : undefined;
 
   const defaultValues: FormValues = useMemo(
     () => ({
       title: assignment.title ?? '',
       description: assignment.description ?? '',
-      unlockAt: unlockString,
-      dueDate: dueString,
+      unlockAt: toLocal(assignment.unlockAt),
+      dueDate: toDateTimeLocalInTimeZone(assignment.dueDate, timeZone),
+      assignedToEveryone: assignment.assignedToEveryone ?? true,
       allowLateSubmissions: assignment.allowLateSubmissions ?? false,
-      lateCutoff: cutoffString,
+      lateCutoff: toLocal(assignment.lateCutoff),
       isPublished: assignment.isPublished ?? false,
       isGroup: assignment.isGroup ?? false,
       courseId,
+      overrides: loadedOverrides.map((o) => ({
+        userId: o.userId ?? '',
+        studentName: overrideStudentName(o.user),
+        unlockAt: toLocal(o.unlockAt),
+        dueDate: toLocal(o.dueDate),
+        allowLateSubmissions: o.allowLateSubmissions ?? undefined,
+        lateCutoff: toLocal(o.lateCutoff),
+      })),
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       assignment.allowLateSubmissions,
+      assignment.assignedToEveryone,
       assignment.description,
+      assignment.dueDate,
       assignment.isGroup,
       assignment.isPublished,
       assignment.title,
+      assignment.unlockAt,
       courseId,
-      cutoffString,
-      dueString,
-      unlockString,
+      loadedOverrides,
+      timeZone,
     ],
   );
 
@@ -109,57 +131,80 @@ export function AssignmentSettingsCard({
     control,
     handleSubmit,
     reset,
-    watch,
-    setValue,
     formState: { errors, isValid, isSubmitting, isDirty },
   } = useForm<FormValues>({
-    resolver: zodResolver(AssignmentFormSchema),
+    resolver: zodResolver(AssignmentWizardFormSchema),
     defaultValues,
-    mode: 'onBlur',
+    mode: 'onChange',
     reValidateMode: 'onChange',
   });
 
-  const allowLateSubmissions = watch('allowLateSubmissions');
-  const dueDateValue = watch('dueDate');
-
-  // Re-seed the form whenever the saved assignment changes (e.g. after a save refetch).
+  // Re-seed when the assignment or its loaded overrides change (e.g. after a save refetch).
   useEffect(() => {
-    reset(defaultValues, { keepDirty: false, keepTouched: false, keepErrors: false });
+    reset(defaultValues);
   }, [defaultValues, reset]);
 
-  // Clear the cutoff when late is turned off. It stays optional when on (blank = no deadline).
-  useEffect(() => {
-    if (!allowLateSubmissions) {
-      setValue('lateCutoff', undefined, { shouldValidate: true, shouldDirty: false });
-    }
-  }, [allowLateSubmissions, setValue]);
-
   const onSubmit = async (raw: FormValues) => {
-    const payload = UpdateAssignmentSchema.parse({ id: assignment.id, ...raw });
-    const body = {
-      ...payload,
-      unlockAt: payload.unlockAt ?? null,
-      lateCutoff: payload.allowLateSubmissions ? (payload.lateCutoff ?? null) : null,
-      isGroup: payload.isGroup ?? false,
+    // 1. Save the base assignment fields.
+    const basePayload = {
+      title: raw.title,
+      description: raw.description ?? '',
+      unlockAt: raw.unlockAt || null,
+      dueDate: raw.dueDate,
+      assignedToEveryone: raw.assignedToEveryone,
+      allowLateSubmissions: raw.allowLateSubmissions,
+      lateCutoff: raw.allowLateSubmissions ? raw.lateCutoff || null : null,
+      isPublished: raw.isPublished,
+      isGroup: raw.isGroup,
     };
-
+    let updated: Assignment;
     try {
-      const res = await fetch(apiPaths.assignment(courseId, assignment.id), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        showToast.error(data?.error || data?.message || `Server returned ${res.status}`);
-        return;
-      }
-      const updated = (await res.json()) as Assignment;
-      showToast.success('Assignment settings saved');
-      onSaved?.(updated);
+      updated = await apiClient.put<Assignment>(
+        apiPaths.assignment(courseId, assignment.id),
+        basePayload,
+      );
     } catch (err) {
-      showToast.error(`Network error saving settings: ${(err as Error).message || err}`);
+      showToast.error(err instanceof ApiError ? err.message : 'Failed to save settings');
+      return;
     }
+
+    // 2. Diff the per-student overrides against what was loaded (keyed by student).
+    const origByUser = new Map(
+      loadedOverrides.filter((o) => o.userId).map((o) => [o.userId as string, o]),
+    );
+    const formByUser = new Map((raw.overrides ?? []).map((o) => [o.userId, o]));
+
+    const ops: Promise<unknown>[] = [];
+    for (const [userId, orig] of origByUser) {
+      if (!formByUser.has(userId)) {
+        ops.push(apiClient.del(apiPaths.assignmentOverride(courseId, assignment.id, orig.id)));
+      }
+    }
+    for (const [userId, o] of formByUser) {
+      const body = {
+        unlockAt: o.unlockAt || null,
+        dueDate: o.dueDate || null,
+        allowLateSubmissions: o.allowLateSubmissions ?? null,
+        lateCutoff: o.allowLateSubmissions ? o.lateCutoff || null : null,
+      };
+      const orig = origByUser.get(userId);
+      if (orig) {
+        ops.push(
+          apiClient.patch(apiPaths.assignmentOverride(courseId, assignment.id, orig.id), body),
+        );
+      } else {
+        ops.push(apiClient.post(apiPaths.assignmentOverrides(courseId, assignment.id), { userId, ...body }));
+      }
+    }
+    const failed = (await Promise.allSettled(ops)).filter((r) => r.status === 'rejected').length;
+
+    await overridesQuery.refetch();
+    if (failed > 0) {
+      showToast.warning(`Settings saved, but ${failed} due-date change(s) could not be saved.`);
+    } else {
+      showToast.success('Assignment settings saved');
+    }
+    onSaved?.(updated);
   };
 
   return (
@@ -169,7 +214,7 @@ export function AssignmentSettingsCard({
         Settings
       </h2>
       <form
-        className="max-w-2xl space-y-4"
+        className="max-w-2xl space-y-6"
         onSubmit={(e) => {
           e.preventDefault();
           void handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
@@ -214,86 +259,7 @@ export function AssignmentSettingsCard({
           )}
         />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Controller
-            name="unlockAt"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                label="Available from (optional)"
-                name="unlockAt"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
-                error={errors.unlockAt?.message}
-              />
-            )}
-          />
-          <Controller
-            name="dueDate"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                label="Due Date & Time"
-                name="dueDate"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
-                error={errors.dueDate?.message}
-              />
-            )}
-          />
-        </div>
-
-        <Controller
-          name="allowLateSubmissions"
-          control={control}
-          render={({ field }) => (
-            <SwitchField
-              label="Allow Late Submissions"
-              name="allowLateSubmissions"
-              checked={!!field.value}
-              onCheckedChange={(checked) => field.onChange(!!checked)}
-              description="Students can submit after the deadline, until the cutoff below."
-              descriptionPlacement="inline"
-            />
-          )}
-        />
-
-        {allowLateSubmissions && (
-          <>
-            <Controller
-              name="lateCutoff"
-              control={control}
-              render={({ field }) => (
-                <InputGroup
-                  label="Late Submission Cutoff (optional)"
-                  name="lateCutoff"
-                  type="datetime-local"
-                  fieldProps={{
-                    ...field,
-                    value: field.value ?? '',
-                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                      field.onChange(e.target.value),
-                  }}
-                  min={dueDateValue ?? nowLocalString(timeZone)}
-                  error={errors.lateCutoff?.message}
-                />
-              )}
-            />
-            <p className="text-muted-foreground text-xs">
-              Leave blank to accept late submissions with no deadline.
-            </p>
-          </>
-        )}
+        <AssignToFields control={control} errors={errors} courseId={courseId} active />
 
         <Controller
           name="isGroup"
