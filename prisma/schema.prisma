@@ -148,6 +148,7 @@ model Course {
   submissions   Submission[]
   groups       Group[]
   groupRosters GroupRoster[]
+  groupSets    GroupSet[]
   activityLogs ActivityLog[]
 
   @@index([isPublished])
@@ -170,7 +171,8 @@ model Roster {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  comments Comment[]
+  comments         Comment[]
+  groupMemberships GroupMembership[]
 
   @@unique([courseId, userId])
   @@index([courseId])
@@ -309,6 +311,84 @@ model GroupAssignmentProblem {
 
   @@id([assignmentId, problemId, groupId])
   @@index([groupId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group Sets (redesigned group management). Deliberately independent of the
+// legacy Group / GroupRoster / GroupAssignmentProblem tables above, which still
+// power group assignments and group submissions. Wiring group sets into
+// assignments happens in a later phase.
+//
+// A course has many group sets; a group set has many groups; a group has many
+// student members. A student belongs to at most one group within a given set,
+// but may belong to groups in different sets.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model GroupSet {
+  id   String @id @default(cuid())
+  name String
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groups StudentGroup[]
+
+  // Unique set name per course. Case-insensitive + trimmed uniqueness is enforced
+  // in the service layer (this DB constraint is the exact-match backstop).
+  @@unique([courseId, name])
+  @@index([courseId])
+}
+
+model StudentGroup {
+  id   String @id @default(cuid())
+  name String
+
+  groupSet   GroupSet @relation(fields: [groupSetId], references: [id], onDelete: Cascade)
+  groupSetId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships GroupMembership[]
+
+  // Unique group name within its set (case-insensitive + trimmed in the service
+  // layer). Different sets may reuse the same group names.
+  @@unique([groupSetId, name])
+  // Composite target so a membership can prove its group belongs to its set at
+  // the database level.
+  @@unique([id, groupSetId])
+  @@index([groupSetId])
+}
+
+model GroupMembership {
+  id String @id @default(cuid())
+
+  groupSetId String
+
+  // The group is bound to its set through a composite reference, so the database
+  // rejects any membership whose group lives in a different set.
+  group   StudentGroup @relation(fields: [groupId, groupSetId], references: [id, groupSetId], onDelete: Cascade)
+  groupId String
+
+  // The member must be a roster row in the course (the service layer always sets
+  // courseId from the set, and additionally requires role STUDENT + active). This
+  // composite reference to Roster is the database-level "is enrolled here" guard.
+  roster   Roster @relation(fields: [courseId, userId], references: [courseId, userId], onDelete: Cascade)
+  courseId String
+  userId   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // The concurrency-critical guarantee: a student can hold at most one group per
+  // set even under two simultaneous assign requests.
+  @@unique([groupSetId, userId])
+  @@index([groupId, groupSetId])
+  @@index([courseId, userId])
+  @@index([userId])
 }
 
 

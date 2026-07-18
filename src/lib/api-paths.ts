@@ -41,6 +41,19 @@ export const apiPaths = {
     `/api/courses/${id}/groups/${groupId}/members`,
   courseGroupMember: (id: string, groupId: string, userId: string) =>
     `/api/courses/${id}/groups/${groupId}/members/${userId}`,
+  // Group sets (redesigned group management)
+  courseGroupSets: (id: string) => `/api/courses/${id}/group-sets`,
+  courseGroupSet: (id: string, setId: string) => `/api/courses/${id}/group-sets/${setId}`,
+  courseGroupSetDuplicate: (id: string, setId: string) =>
+    `/api/courses/${id}/group-sets/${setId}/duplicate`,
+  courseGroupSetGroups: (id: string, setId: string) =>
+    `/api/courses/${id}/group-sets/${setId}/groups`,
+  courseGroupSetGroup: (id: string, setId: string, groupId: string) =>
+    `/api/courses/${id}/group-sets/${setId}/groups/${groupId}`,
+  courseGroupSetMemberships: (id: string, setId: string) =>
+    `/api/courses/${id}/group-sets/${setId}/memberships`,
+  courseGroupSetRandomAssign: (id: string, setId: string) =>
+    `/api/courses/${id}/group-sets/${setId}/random-assign`,
   courseProblems: (id: string) => `/api/courses/${id}/problems`,
   courseProblem: (id: string, pid: string) => `/api/courses/${id}/problems/${pid}`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
