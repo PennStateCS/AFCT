@@ -11,6 +11,8 @@ import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-reac
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { CompactDate } from '@/components/ui/CompactDate';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import type { AssignmentOverrideSummary } from '@/types/course';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
@@ -50,6 +52,69 @@ export function MaxPointsCell({
   const pts = needsFetch ? (data ? (data.maxPoints ?? 0) : null) : maxPoints;
 
   return <div>{pts !== null ? pts : '...'}</div>;
+}
+
+// Due date cell that shows the base date plus, when the assignment has per-student
+// overrides, a "+N" badge opening a popover with each student's effective window.
+export function DueDateCell({
+  assignment,
+  timeZone,
+}: {
+  assignment: AssignmentWithProblemCount;
+  timeZone: string;
+}) {
+  const overrides = assignment.overrides ?? [];
+  const everyoneLabel = assignment.assignedToEveryone === false ? 'Everyone else' : 'Everyone';
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <CompactDate value={assignment.dueDate} timeZone={timeZone} />
+      {overrides.length > 0 && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="border-input text-muted-foreground hover:bg-muted focus-visible:ring-ring/40 rounded-full border px-1.5 py-0.5 text-xs leading-none focus-visible:ring-[3px] focus-visible:outline-none"
+              aria-label={`${overrides.length} due-date override${overrides.length === 1 ? '' : 's'}; show details`}
+            >
+              +{overrides.length}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 p-3 text-xs">
+            <p className="mb-2 font-medium">Due dates</p>
+            <ul className="space-y-2">
+              <li className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground truncate">{everyoneLabel}</span>
+                <span className="shrink-0">
+                  <CompactDate value={assignment.dueDate} timeZone={timeZone} />
+                </span>
+              </li>
+              {overrides.map((o: AssignmentOverrideSummary, i) => {
+                const effDue = o.dueDate ?? assignment.dueDate;
+                const effAllowLate = o.allowLateSubmissions ?? assignment.allowLateSubmissions;
+                const effCutoff = effAllowLate ? (o.lateCutoff ?? assignment.lateCutoff) : null;
+                return (
+                  <li key={i} className="flex flex-col gap-0.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="truncate font-medium">{o.studentName}</span>
+                      <span className="shrink-0">
+                        <CompactDate value={effDue} timeZone={timeZone} />
+                      </span>
+                    </div>
+                    {effCutoff && (
+                      <span className="text-muted-foreground">
+                        late until <CompactDate value={effCutoff} timeZone={timeZone} />
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </PopoverContent>
+        </Popover>
+      )}
+    </div>
+  );
 }
 
 // Component for the publish switch with confirmation dialog
@@ -130,7 +195,7 @@ export function useAssignmentColumns(
     {
       accessorKey: 'dueDate',
       header: 'Due Date',
-      cell: ({ row }) => <CompactDate value={row.original.dueDate} timeZone={timeZone} />,
+      cell: ({ row }) => <DueDateCell assignment={row.original} timeZone={timeZone} />,
     },
     {
       accessorKey: 'maxPoints',

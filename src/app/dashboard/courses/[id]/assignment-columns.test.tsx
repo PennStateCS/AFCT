@@ -4,7 +4,9 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MaxPointsCell } from './assignment-columns';
+import userEvent from '@testing-library/user-event';
+import { MaxPointsCell, DueDateCell } from './assignment-columns';
+import type { AssignmentWithProblemCount } from '@/types/course';
 
 // Fresh QueryClient per test (retry off, no lingering cache) so each render starts
 // with a cold assignment.shell cache entry.
@@ -41,5 +43,55 @@ describe('MaxPointsCell', () => {
       expect(screen.getByText('17')).toBeInTheDocument();
     });
     expect(global.fetch).toHaveBeenCalledWith('/api/courses/c1/assignments/a1?view=problems');
+  });
+});
+
+describe('DueDateCell', () => {
+  const base = {
+    id: 'a1',
+    courseId: 'c1',
+    dueDate: new Date('2026-01-19T22:06:00.000Z'),
+    allowLateSubmissions: false,
+    lateCutoff: null,
+  } as unknown as AssignmentWithProblemCount;
+
+  it('shows only the base date when there are no overrides', () => {
+    render(<DueDateCell assignment={base} timeZone="UTC" />);
+    expect(screen.queryByRole('button', { name: /override/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a +N badge and lists each student in a popover', async () => {
+    const user = userEvent.setup();
+    const assignment = {
+      ...base,
+      overrides: [
+        {
+          studentName: 'Ada Lovelace',
+          dueDate: new Date('2026-01-24T22:06:00.000Z'),
+          allowLateSubmissions: null,
+          lateCutoff: null,
+        },
+        // Same due date as everyone, but late is now allowed until a cutoff.
+        {
+          studentName: 'Alan Turing',
+          dueDate: null,
+          allowLateSubmissions: true,
+          lateCutoff: new Date('2026-01-26T22:06:00.000Z'),
+        },
+      ],
+    } as unknown as AssignmentWithProblemCount;
+
+    render(<DueDateCell assignment={assignment} timeZone="UTC" />);
+
+    const badge = screen.getByRole('button', { name: /2 due-date overrides/i });
+    expect(badge).toHaveTextContent('+2');
+
+    await user.click(badge);
+
+    expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.getByText('Alan Turing')).toBeInTheDocument();
+    expect(screen.getByText('Everyone')).toBeInTheDocument();
+    // The late-only override surfaces its late deadline.
+    expect(screen.getByText(/late until/i)).toBeInTheDocument();
   });
 });

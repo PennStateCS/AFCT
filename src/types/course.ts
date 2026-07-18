@@ -3,6 +3,15 @@ import type { Course, Assignment, Problem } from '@prisma/client';
 // Assignment with problem count as returned by API. `maxPoints` is not stored on
 // the assignment record any more; consumers are expected to fetch it separately
 // from /api/assignments/:id (it is calculated by summing the problem maxPoints).
+/** One per-student due-date override, summarized for the staff assignment table. */
+export type AssignmentOverrideSummary = {
+  studentName: string;
+  unlockAt?: string | Date | null;
+  dueDate?: string | Date | null;
+  lateCutoff?: string | Date | null;
+  allowLateSubmissions?: boolean | null;
+};
+
 export type AssignmentWithProblemCount = Assignment & {
   problemCount: number;
   maxPoints?: number;
@@ -11,6 +20,8 @@ export type AssignmentWithProblemCount = Assignment & {
   hasSubmissionsOrComments?: boolean;
   submissionCount?: number;
   commentCount?: number;
+  /** Per-student overrides (staff view only); empty/absent when there are none. */
+  overrides?: AssignmentOverrideSummary[];
 };
 
 export type FullCourse = Course & {

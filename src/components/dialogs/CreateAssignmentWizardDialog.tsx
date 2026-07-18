@@ -74,6 +74,28 @@ function formatLocal(value: string | undefined | null): string {
   return value ? value.replace('T', ' ') : '';
 }
 
+/**
+ * A full, human-readable window ("Available … · Due … · Late until …" / "· No late") from
+ * already-resolved (effective) datetime-local strings. Used in Review so a target that
+ * only changes the late policy still reads clearly.
+ */
+function formatWindow(w: {
+  unlockAt?: string;
+  dueDate?: string;
+  allowLate?: boolean;
+  lateCutoff?: string;
+}): string {
+  const parts: string[] = [];
+  if (w.unlockAt) parts.push(`Available ${formatLocal(w.unlockAt)}`);
+  parts.push(`Due ${w.dueDate ? formatLocal(w.dueDate) : 'not set'}`);
+  if (w.allowLate) {
+    parts.push(w.lateCutoff ? `Late until ${formatLocal(w.lateCutoff)}` : 'Late accepted');
+  } else {
+    parts.push('No late');
+  }
+  return parts.join(' · ');
+}
+
 export function CreateAssignmentWizardDialog({
   open,
   setOpen,
@@ -527,24 +549,31 @@ export function CreateAssignmentWizardDialog({
                   <dd className="font-medium">{review.title}</dd>
                   <dt className="text-muted-foreground">{everyoneLabel}</dt>
                   <dd>
-                    {review.unlockAt ? `From ${formatLocal(review.unlockAt)}, ` : ''}due{' '}
-                    {formatLocal(review.dueDate)}
-                    {review.allowLateSubmissions
-                      ? `, late until ${formatLocal(review.lateCutoff)}`
-                      : ''}
+                    {formatWindow({
+                      unlockAt: review.unlockAt,
+                      dueDate: review.dueDate,
+                      allowLate: review.allowLateSubmissions,
+                      lateCutoff: review.lateCutoff,
+                    })}
                   </dd>
-                  {(review.overrides ?? []).map((o, i) => (
-                    <React.Fragment key={i}>
-                      <dt className="text-muted-foreground">{o.studentName}</dt>
-                      <dd>
-                        {o.unlockAt ? `From ${formatLocal(o.unlockAt)}, ` : ''}
-                        due {o.dueDate ? formatLocal(o.dueDate) : 'inherits'}
-                        {o.allowLateSubmissions && o.lateCutoff
-                          ? `, late until ${formatLocal(o.lateCutoff)}`
-                          : ''}
-                      </dd>
-                    </React.Fragment>
-                  ))}
+                  {(review.overrides ?? []).map((o, i) => {
+                    // Resolve each override against the base so a partial change (e.g. same
+                    // due date but late now allowed) shows its full effective window.
+                    const effAllow = o.allowLateSubmissions ?? review.allowLateSubmissions;
+                    return (
+                      <React.Fragment key={i}>
+                        <dt className="text-muted-foreground">{o.studentName}</dt>
+                        <dd>
+                          {formatWindow({
+                            unlockAt: o.unlockAt || review.unlockAt,
+                            dueDate: o.dueDate || review.dueDate,
+                            allowLate: effAllow,
+                            lateCutoff: effAllow ? o.lateCutoff || review.lateCutoff : undefined,
+                          })}
+                        </dd>
+                      </React.Fragment>
+                    );
+                  })}
                   <dt className="text-muted-foreground">Publish</dt>
                   <dd>{review.isPublished ? 'Now' : 'Later'}</dd>
                 </dl>
