@@ -16,6 +16,8 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { canAccessCourse, canManageCourse, isCourseArchived } from '@/lib/permissions';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { errMessage } from '@/lib/errors';
+import { evaluateSubmissionWindow } from '@/lib/submission-window';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 
 /** Thrown inside the create transaction when the per-problem cap is already met. */
 class SubmissionCapReachedError extends Error {}
@@ -135,10 +137,25 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     select: {
       id: true,
       courseId: true,
+      unlockAt: true,
       dueDate: true,
       allowLateSubmissions: true,
       lateCutoff: true,
       isPublished: true,
+      // Only this submitter's override (0 or 1 row via the unique index) so the
+      // effective window can account for a per-student extension.
+      overrides: {
+        where: { userId: user.id },
+        select: {
+          targetType: true,
+          userId: true,
+          groupId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+        },
+      },
     },
   });
 
@@ -221,29 +238,48 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     }
   }
 
-  // Late policy.
+  // Availability + late policy, resolved for this submitter (a per-student override can
+  // move any of these). One resolver drives submit, the calendar, and the student views.
   const now = new Date();
-  if (now > assignment.dueDate) {
-    if (!assignment.allowLateSubmissions) {
+  const deadline = effectiveDeadline(
+    {
+      unlockAt: assignment.unlockAt,
+      dueDate: assignment.dueDate,
+      allowLateSubmissions: assignment.allowLateSubmissions,
+      lateCutoff: assignment.lateCutoff,
+    },
+    assignment.overrides ?? [],
+    user.id,
+  );
+  const window = evaluateSubmissionWindow(deadline, now);
+  if (!window.accepted) {
+    const meta = {
+      unlockAt: deadline.unlockAt ? deadline.unlockAt.toISOString() : null,
+      dueDate: deadline.dueDate.toISOString(),
+      allowLateSubmissions: deadline.allowLateSubmissions,
+      lateCutoff: deadline.lateCutoff ? deadline.lateCutoff.toISOString() : null,
+      submittedAt: now.toISOString(),
+      overrideSource: deadline.source,
+    };
+    if (window.reason === 'not-open') {
+      await audit('SUBMISSION_REJECTED_NOT_OPEN', 'WARNING', {
+        ...meta,
+        reason: 'Assignment is not open for submissions yet.',
+      });
+      return { ok: false, status: 403, error: 'This assignment is not open for submissions yet.' };
+    }
+    if (window.reason === 'late-not-allowed') {
       await audit('SUBMISSION_REJECTED_LATE', 'WARNING', {
-        dueDate: assignment.dueDate.toISOString(),
-        allowLateSubmissions: assignment.allowLateSubmissions,
-        lateCutoff: assignment.lateCutoff ? assignment.lateCutoff.toISOString() : null,
-        submittedAt: now.toISOString(),
+        ...meta,
         reason: 'Late submissions are not allowed for this assignment.',
       });
       return { ok: false, status: 403, error: 'Late submissions are not allowed for this assignment.' };
     }
-    if (assignment.lateCutoff && now > assignment.lateCutoff) {
-      await audit('SUBMISSION_REJECTED_LATE_CUTOFF', 'WARNING', {
-        dueDate: assignment.dueDate.toISOString(),
-        allowLateSubmissions: assignment.allowLateSubmissions,
-        lateCutoff: assignment.lateCutoff.toISOString(),
-        submittedAt: now.toISOString(),
-        reason: 'Late submission cutoff has passed for this assignment.',
-      });
-      return { ok: false, status: 403, error: 'Late submission cutoff has passed for this assignment.' };
-    }
+    await audit('SUBMISSION_REJECTED_LATE_CUTOFF', 'WARNING', {
+      ...meta,
+      reason: 'Late submission cutoff has passed for this assignment.',
+    });
+    return { ok: false, status: 403, error: 'Late submission cutoff has passed for this assignment.' };
   }
 
   let fileName: string | null = null;

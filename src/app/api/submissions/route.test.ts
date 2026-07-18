@@ -346,9 +346,9 @@ describe('POST /api/submissions', () => {
     expect(prismaMock.submission.create).toHaveBeenCalled();
   });
 
-  // Branch 252 true side: the SUBMISSION_REJECTED_LATE log serialises a present
-  // lateCutoff (rather than the null used elsewhere).
-  it('returns 403 with a serialised lateCutoff when late submissions are disabled', async () => {
+  // With late disabled there is no effective late window, so the rejection log reports
+  // the effective dueDate and a null cutoff (the resolver nulls an inert stored cutoff).
+  it('returns 403 and logs the effective window when late submissions are disabled', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'assignment-1',
       courseId: 'course-1',
@@ -364,7 +364,9 @@ describe('POST /api/submissions', () => {
     const rejectedLog = activityLogMock.mock.calls.find(
       (call) => call[2]?.action === 'SUBMISSION_REJECTED_LATE',
     );
-    expect(rejectedLog?.[2]?.metadata?.lateCutoff).toBe(PAST.toISOString());
+    expect(rejectedLog?.[2]?.metadata?.dueDate).toBe(PAST.toISOString());
+    expect(rejectedLog?.[2]?.metadata?.lateCutoff).toBeNull();
+    expect(rejectedLog?.[2]?.metadata?.overrideSource).toBe('base');
     expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
@@ -385,6 +387,54 @@ describe('POST /api/submissions', () => {
     expect(res.status).toBe(202);
     expect(logActions()).not.toContain('SUBMISSION_REJECTED_LATE_CUTOFF');
     expect(prismaMock.submission.create).toHaveBeenCalled();
+  });
+
+  it('accepts a submission past the base due when the student has a due-date override', async () => {
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      courseId: 'course-1',
+      unlockAt: null,
+      dueDate: PAST, // base due already passed
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      isPublished: true,
+      overrides: [
+        {
+          targetType: 'STUDENT',
+          userId: 'user-1',
+          groupId: null,
+          unlockAt: null,
+          dueDate: FUTURE, // this student's due is still in the future
+          lateCutoff: null,
+          allowLateSubmissions: null,
+        },
+      ],
+    });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(logActions()).not.toContain('SUBMISSION_REJECTED_LATE');
+    expect(prismaMock.submission.create).toHaveBeenCalled();
+  });
+
+  it('rejects a submission before the assignment is unlocked', async () => {
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      courseId: 'course-1',
+      unlockAt: FUTURE, // not open yet
+      dueDate: FUTURE,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      isPublished: true,
+      overrides: [],
+    });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(403);
+    expect(logActions()).toContain('SUBMISSION_REJECTED_NOT_OPEN');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
   // Branch 374 true side / line 375: the upload directory does not yet exist, so it
