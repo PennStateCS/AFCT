@@ -13,7 +13,7 @@ services:
   app:
     # CI pins this to the exact published digest on each push to main
     # (.github/workflows/publish-ghcr.yml), so deploys are reproducible.
-    image: ghcr.io/pennstatecs/afct-dashboard@sha256:10603c6985b556fc90e2c0086edbecf7c64246d4abcb7bc376fd828d6c3de7ef
+    image: ghcr.io/pennstatecs/afct-dashboard@sha256:b90183a05356c70890bd623bd6c3857ffee2251a922631eb0a361cfde91c8262
     container_name: afct-app
     restart: unless-stopped
     logging: *default-logging
@@ -53,6 +53,8 @@ services:
       - private_uploads:/private/uploads
       # App writes the admin TLS cert here; nginx reads it (below).
       - tls_certs:/app/certs
+      # ACME HTTP-01 challenge tokens; nginx serves them over HTTP (Let's Encrypt).
+      - acme_challenge:/app/acme-challenge
       # Backups: read-only for listing/downloading. The app can request a backup
       # only by dropping a flag in the separate (writable) trigger volume, so it
       # can never modify or delete actual backups.
@@ -97,6 +99,8 @@ services:
       - uploads_data:/usr/share/nginx/html/uploads
       # Admin TLS cert written by the app; nginx reads it (see entrypoint.sh).
       - tls_certs:/etc/nginx/custom-certs:ro
+      # ACME HTTP-01 challenge webroot, written by the app; nginx serves it over HTTP.
+      - acme_challenge:/var/www/acme-challenge:ro
 
     healthcheck:
       # A 301 from the HTTP→HTTPS redirect means nginx is serving (curl -f only
@@ -194,5 +198,6 @@ volumes:
   private_uploads:
   nginx_certs:
   tls_certs:
+  acme_challenge:
   db_backups:
   backup_triggers:

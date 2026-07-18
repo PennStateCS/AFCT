@@ -2525,6 +2525,13 @@ export interface operations {
                         validTo?: string | null;
                         selfSigned?: boolean | null;
                         pendingCsr?: boolean;
+                        /** @description Let's Encrypt auto-renewal state (managed=false when not configured). */
+                        acme?: {
+                            managed?: boolean;
+                            domain?: string;
+                            email?: string;
+                            staging?: boolean;
+                        };
                     };
                 };
             };
@@ -2550,10 +2557,10 @@ export interface operations {
             content: {
                 "application/json": {
                     /**
-                     * @description install (default) = upload cert+key; generate-csr = create a CSR to be signed externally; install-signed = install the cert returned for a pending CSR; self-signed = generate a self-signed cert.
+                     * @description install (default) = upload cert+key; generate-csr = create a CSR to be signed externally; install-signed = install the cert returned for a pending CSR; self-signed = generate a self-signed cert; lets-encrypt = obtain a free auto-renewing cert via ACME HTTP-01; lets-encrypt-disable = turn off auto-renewal (leaves the current cert in place).
                      * @enum {string}
                      */
-                    action?: "install" | "generate-csr" | "install-signed" | "self-signed";
+                    action?: "install" | "generate-csr" | "install-signed" | "self-signed" | "lets-encrypt" | "lets-encrypt-disable";
                     /** @description PEM cert (install / install-signed) */
                     cert?: string;
                     /** @description PEM private key (install) */
@@ -2564,6 +2571,12 @@ export interface operations {
                     commonName?: string;
                     organization?: string;
                     altNames?: string[];
+                    /** @description Public domain for lets-encrypt (must resolve to this server) */
+                    domain?: string;
+                    /** @description Contact email for lets-encrypt */
+                    email?: string;
+                    /** @description Use the Let's Encrypt staging CA for testing */
+                    staging?: boolean;
                 };
             };
         };

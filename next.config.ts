@@ -35,14 +35,12 @@ const nextConfig: NextConfig = {
   // but invalidation never fired), which is why dev-in-Docker runs webpack (see
   // docker-compose.dev.yml). Kept because it's the documented Turbopack fallback
   // and harmless elsewhere.
-  ...(process.env.CHOKIDAR_USEPOLLING === 'true'
-    ? { watchOptions: { pollIntervalMs: 500 } }
-    : {}),
+  ...(process.env.CHOKIDAR_USEPOLLING === 'true' ? { watchOptions: { pollIntervalMs: 500 } } : {}),
 
   // Keep native/server-only deps external so they load from node_modules at
   // runtime instead of being bundled (bcrypt is a native addon). This is
   // bundler-agnostic; it applies under Turbopack too, unlike webpack externals.
-  serverExternalPackages: ['bcrypt'],
+  serverExternalPackages: ['bcrypt', 'acme-client'],
 
   // Baseline security headers on every response. No CSP here; that needs
   // app-specific tuning; these are safe defense-in-depth defaults.

@@ -14,13 +14,13 @@ graph TD
 
 ## Service responsibilities
 
-| Compose service | Container        | Responsibility                                                                                       |
-| --------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
-| `nginx`         | `afct-nginx`     | Terminates TLS, redirects HTTP to HTTPS, and forwards requests to the application                    |
-| `app`           | `afct-app`       | Runs the Next.js interface, API routes, authentication, submission worker, and evaluator integration |
-| `postgres`      | `afct-postgres`  | Stores application data                                                                              |
-| `db-backup`     | `afct-db-backup` | Creates scheduled and on-demand database and uploaded-file backups                                   |
-| `updater`       | `afct-updater`   | Optional privileged helper for approved in-app upgrades and downgrades                               |
+| Compose service | Container        | Responsibility                                                                                                                        |
+| --------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `nginx`         | `afct-nginx`     | Terminates TLS, serves Let's Encrypt HTTP challenges, redirects other HTTP traffic to HTTPS, and forwards requests to the application |
+| `app`           | `afct-app`       | Runs the Next.js interface, API routes, authentication, submission worker, evaluator integration, and Let's Encrypt renewal           |
+| `postgres`      | `afct-postgres`  | Stores application data                                                                                                               |
+| `db-backup`     | `afct-db-backup` | Creates scheduled and on-demand database and uploaded-file backups                                                                    |
+| `updater`       | `afct-updater`   | Optional privileged helper for approved in-app upgrades and downgrades                                                                |
 
 nginx is the only service with published network ports. It listens on ports 80 and 443. The application uses an internal port on the private Compose network, and PostgreSQL does not publish a host port.
 
@@ -35,6 +35,8 @@ Named volumes retain:
 - Backup archives
 - Active and self-signed TLS certificates
 - Backup and update request files
+
+The application and nginx also share a volume for temporary Let's Encrypt HTTP challenge files. nginx serves only that challenge path over plain HTTP so the certificate authority can confirm domain control.
 
 Replacing a container does not remove these volumes. Commands that include `--volumes`, `-v`, or `docker volume rm` can permanently delete data.
 

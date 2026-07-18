@@ -48,13 +48,16 @@ The secret is write-only and is not displayed after saving. Use **Remove saved s
 
 ## TLS Certificate
 
-The TLS tab supports three setup methods:
+The TLS tab supports four setup methods:
 
+- Request and automatically renew a trusted certificate from Let's Encrypt
 - Generate a certificate signing request, then install the signed certificate
 - Create a self-signed certificate
 - Upload an existing PEM certificate and private key
 
-AFCT can also reset the installation to a self-signed certificate. Review [HTTPS certificates](../operations/https-certificates.md) before replacing a production certificate.
+Let's Encrypt requires a public domain that points to the server and internet access to port 80. Use its staging option to check DNS and firewall settings before requesting a production certificate.
+
+AFCT can also turn off Let's Encrypt auto-renewal without removing the current certificate, or reset the installation to a self-signed certificate. Review [HTTPS certificates](../operations/https-certificates.md) before replacing a production certificate.
 
 ## Updates
 

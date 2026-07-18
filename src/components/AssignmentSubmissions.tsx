@@ -554,7 +554,11 @@ export default function AssignmentSubmissions({
               : old,
         );
         void queryClient.invalidateQueries({
-          queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
+          queryKey: queryKeys.assignment.reviewData(
+            courseId,
+            assignmentId,
+            selectedStudentId ?? '',
+          ),
         });
         showToast.success('Comment deleted successfully');
       } catch (err) {
@@ -739,7 +743,14 @@ export default function AssignmentSubmissions({
             </div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent role="region" aria-labelledby="review-student-heading">
+            {/* Names the panel with the selected student so the region is meaningful
+                to screen readers; StudentNavigator's live region announces changes. */}
+            <h3 id="review-student-heading" className="sr-only">
+              Reviewing{' '}
+              {`${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+                'this student'}
+            </h3>
             {assignmentProblems.length === 0 ? (
               <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
                 No problems have been added to this assignment yet.

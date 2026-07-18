@@ -1,0 +1,8 @@
+# Generated file: written by `npm run docs` (openapi-typescript). Must be committed
+# exactly as the generator emits it, or CI's docs-check fails. Never reformat it.
+src/types/api.ts
+
+# Build outputs.
+.next/
+docs-dist/
+coverage/
