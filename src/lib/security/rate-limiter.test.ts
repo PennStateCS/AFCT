@@ -2,6 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   evaluateLoginRateLimit,
   evaluateSignupRateLimit,
+  peekLoginRateLimit,
   recordLoginSuccess,
   recordSignupSuccess,
   applyBotFriction,
@@ -64,7 +65,11 @@ describe('evaluateLoginRateLimit — IP-only escalation', () => {
 
 describe('evaluateLoginRateLimit — account lockout policy', () => {
   it('blocks the account after the configured max attempts, reason "account"', () => {
-    const params = { ip: '203.0.113.20', identifier: 'user@example.com', accountLimit: { maxAttempts: 1 } };
+    const params = {
+      ip: '203.0.113.20',
+      identifier: 'user@example.com',
+      accountLimit: { maxAttempts: 1 },
+    };
     // First attempt is allowed, second exceeds the 1-attempt cap → blocked.
     expect(evaluateLoginRateLimit(params).status).toBe('ok');
     const blocked = evaluateLoginRateLimit(params);
@@ -194,5 +199,37 @@ describe('formatRetryAfterSeconds', () => {
     expect(formatRetryAfterSeconds(1_000)).toBe('1');
     expect(formatRetryAfterSeconds(1_001)).toBe('2');
     expect(formatRetryAfterSeconds(2_500)).toBe('3');
+  });
+});
+
+describe('peekLoginRateLimit — read-only classification', () => {
+  const ip = '198.51.100.7';
+  const identifier = 'user@example.edu';
+
+  it('reports ok for a fresh IP/account and does not count', () => {
+    expect(peekLoginRateLimit({ ip, identifier }).status).toBe('ok');
+    // Peeking many times never escalates on its own.
+    for (let i = 0; i < 30; i++) peekLoginRateLimit({ ip, identifier });
+    expect(peekLoginRateLimit({ ip, identifier }).status).toBe('ok');
+    // A real evaluation right after is still the FIRST counted attempt (ok).
+    expect(evaluateLoginRateLimit({ ip, identifier }).status).toBe('ok');
+  });
+
+  it('reports challenge once the account bucket has been challenged', () => {
+    // Drive the per-account bucket to its challenge threshold (7).
+    for (let i = 1; i <= 7; i++) evaluateLoginRateLimit({ ip, identifier });
+    expect(evaluateLoginRateLimit({ ip, identifier }).status).toBe('challenge');
+    // The peek reflects that state without advancing toward a block.
+    expect(peekLoginRateLimit({ ip, identifier }).status).toBe('challenge');
+    expect(peekLoginRateLimit({ ip, identifier }).status).toBe('challenge');
+  });
+
+  it('reports blocked once the bucket is blocked', () => {
+    // A tight per-account cap trips a block on the 2nd attempt (before the challenge
+    // threshold), which the peek then reflects.
+    const accountLimit = { maxAttempts: 1 };
+    evaluateLoginRateLimit({ ip, identifier, accountLimit });
+    expect(evaluateLoginRateLimit({ ip, identifier, accountLimit }).status).toBe('blocked');
+    expect(peekLoginRateLimit({ ip, identifier, accountLimit }).status).toBe('blocked');
   });
 });

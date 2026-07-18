@@ -150,10 +150,29 @@ const createJsonResponse = <T,>(data: T, status = 200) =>
 
 const mockPublicSettings = (allowSignup = true) => {
   fetchMock.mockImplementation((input: RequestInfo | URL) => {
-    if (String(input).includes('/api/system-settings/public')) {
+    const url = String(input);
+    if (url.includes('/api/system-settings/public')) {
       return createJsonResponse({ timezone: 'UTC', allowSignup }, 200);
     }
+    // The login form classifies a failed sign-in via this endpoint; default to "ok"
+    // (treat as bad credentials) unless a test overrides it below.
+    if (url.includes('/api/auth/login-check')) {
+      return createJsonResponse({ status: 'ok', retryAfterMs: 0 }, 200);
+    }
+    return createJsonResponse({}, 500);
+  });
+};
 
+// Override the login-check classification for a test (challenge / blocked / ok).
+const setLoginCheckStatus = (status: 'ok' | 'challenge' | 'blocked', allowSignup = true) => {
+  fetchMock.mockImplementation((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('/api/system-settings/public')) {
+      return createJsonResponse({ timezone: 'UTC', allowSignup }, 200);
+    }
+    if (url.includes('/api/auth/login-check')) {
+      return createJsonResponse({ status, retryAfterMs: 0 }, 200);
+    }
     return createJsonResponse({}, 500);
   });
 };
@@ -374,9 +393,10 @@ describe('LoginPage', () => {
     await waitFor(() => expect(signInMock).toHaveBeenCalled());
   });
 
-  it('surfaces rate limit errors from signIn', async () => {
+  it('surfaces rate limit errors classified via login-check', async () => {
     const user = userEvent.setup();
-    signInMock.mockResolvedValueOnce({ error: 'RateLimitExceeded' });
+    signInMock.mockResolvedValueOnce({ error: 'CredentialsSignin' });
+    setLoginCheckStatus('blocked');
 
     render(<LoginPage />);
 
@@ -399,9 +419,10 @@ describe('LoginPage', () => {
     expect(signInMock).toHaveBeenCalled();
   });
 
-  it('surfaces bot challenge errors from signIn', async () => {
+  it('surfaces bot challenge classified via login-check (shows captcha)', async () => {
     const user = userEvent.setup();
-    signInMock.mockResolvedValueOnce({ error: 'BotChallengeRequired' });
+    signInMock.mockResolvedValueOnce({ error: 'CredentialsSignin' });
+    setLoginCheckStatus('challenge');
 
     render(<LoginPage />);
 
@@ -430,7 +451,8 @@ describe('LoginPage', () => {
     const savedKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
     delete process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
     try {
-      signInMock.mockResolvedValueOnce({ error: 'BotChallengeRequired' });
+      signInMock.mockResolvedValueOnce({ error: 'CredentialsSignin' });
+      setLoginCheckStatus('challenge');
 
       render(<LoginPage />);
 

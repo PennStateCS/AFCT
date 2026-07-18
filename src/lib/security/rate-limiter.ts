@@ -236,6 +236,51 @@ export const evaluateLoginRateLimit = (params: {
   return ensureEvaluations(configs, params.interactionMs);
 };
 
+// Read the CURRENT login rate-limit state without counting an attempt. The login form
+// (via /api/auth/login-check) uses this to classify a failed sign-in, which NextAuth
+// only reports as a generic error: is it a captcha challenge, a temporary block, or
+// just bad credentials? The authoritative counting stays in the credentials
+// `authorize` path; this only observes the flags that path already set.
+const peekBucket = (key: string, config: BucketConfig, now: number): BucketEvaluation => {
+  const bucket = buckets.get(key);
+  if (!bucket || now >= bucket.resetAt) {
+    return { type: 'ok', applyFriction: false, frictionDelayMs: 0 };
+  }
+  if (bucket.blockedUntil && now < bucket.blockedUntil) {
+    return { type: 'blocked', retryAfterMs: bucket.blockedUntil - now };
+  }
+  if (bucket.challengeUntil && now < bucket.challengeUntil) {
+    return { type: 'challenge', retryAfterMs: bucket.challengeUntil - now };
+  }
+  return { type: 'ok', applyFriction: false, frictionDelayMs: 0 };
+};
+
+export const peekLoginRateLimit = (params: {
+  ip?: string;
+  identifier?: string;
+  accountLimit?: { maxAttempts?: number; blockDurationMs?: number };
+}): RateLimitDecision => {
+  const now = Date.now();
+  const evaluations = [
+    {
+      evaluation: peekBucket(bucketKey('login:ip', params.ip), LOGIN_IP_CONFIG, now),
+      reason: 'ip' as LimitReason,
+    },
+  ];
+  if (params.identifier) {
+    const accountConfig: BucketConfig = {
+      ...LOGIN_ACCOUNT_CONFIG,
+      maxAttempts: params.accountLimit?.maxAttempts ?? LOGIN_ACCOUNT_CONFIG.maxAttempts,
+      blockDurationMs: params.accountLimit?.blockDurationMs ?? LOGIN_ACCOUNT_CONFIG.blockDurationMs,
+    };
+    evaluations.push({
+      evaluation: peekBucket(bucketKey('login:account', params.identifier), accountConfig, now),
+      reason: 'account' as LimitReason,
+    });
+  }
+  return combineResults(evaluations);
+};
+
 export const evaluateSignupRateLimit = (params: {
   ip?: string;
   identifier?: string;
