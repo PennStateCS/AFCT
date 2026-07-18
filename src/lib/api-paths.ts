@@ -29,6 +29,7 @@ export const apiPaths = {
     `/api/courses/${id}/activity${qs({ limit: opts?.limit, offset: opts?.offset })}`,
   courseStudents: (id: string) => `/api/courses/${id}/students`,
   courseGrades: (id: string) => `/api/courses/${id}/grades`,
+  courseGradesExport: (id: string) => `/api/courses/${id}/grades/export`,
   courseStudentGrades: (id: string) => `/api/courses/${id}/student-grades`,
   courseRoster: (id: string) => `/api/courses/${id}/roster`,
   courseRosterBulk: (id: string) => `/api/courses/${id}/roster/bulk`,

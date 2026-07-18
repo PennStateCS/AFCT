@@ -1102,6 +1102,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/grades/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export course grades as an LMS CSV
+         * @description Builds an import-ready LMS gradebook CSV server-side and returns it as a download.  The export is audited here (atomically with generation) rather than via a separate,  skippable client call. Course staff (faculty or TAs) or a system admin.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/grades/export/route.ts)
+         */
+        get: operations["getCoursesByIdGradesExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/grades": {
         parameters: {
             query?: never;
@@ -1111,19 +1133,13 @@ export interface paths {
         };
         /**
          * Get the course grade matrix
-         * @description Returns the full gradebook matrix for a course: students × assignments with each  cell holding the student's summed assignment grade (problem grades collapsed  into one total). Course staff (faculty or TAs) or a system admin.
+         * @description Returns the full gradebook matrix for a course: students x assignments with each cell  holding the student's summed assignment grade (problem grades collapsed into one  total). Course staff (faculty or TAs) or a system admin. Reading the whole gradebook  is a FERPA-relevant access, so it's recorded (throttled) in the audit log.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
         get: operations["getCoursesByIdGrades"];
         put?: never;
-        /**
-         * Log a gradebook export
-         * @description Records a gradebook export in the audit log. The CSV itself is built and  downloaded client-side, so this endpoint just captures that an export happened  (and a little about its scope). Course staff (faculty or TAs) or a system admin.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/grades/route.ts)
-         */
-        post: operations["postCoursesByIdGrades"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5567,9 +5583,13 @@ export interface operations {
             };
         };
     };
-    getCoursesByIdGrades: {
+    getCoursesByIdGradesExport: {
         parameters: {
-            query?: never;
+            query?: {
+                platform?: "canvas" | "blackboard" | "moodle" | "brightspace" | "generic";
+                /** @description Comma-separated assignment ids, or 'all' / omitted for the whole gradebook */
+                assignments?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -5578,17 +5598,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Students, assignments, and a nested grades map (grades[studentId][assignmentId]). */
+            /** @description A CSV file (text/csv) as an attachment. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description No matching assignments to export. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content: {
-                    "application/json": {
-                        students?: Record<string, never>[];
-                        assignments?: Record<string, never>[];
-                        grades?: Record<string, never>;
-                    };
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Not signed in. */
@@ -5620,7 +5643,7 @@ export interface operations {
             };
         };
     };
-    postCoursesByIdGrades: {
+    getCoursesByIdGrades: {
         parameters: {
             query?: never;
             header?: never;
@@ -5629,24 +5652,20 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @description Target LMS/platform label */
-                    platform?: string;
-                    wholeGradebook?: boolean;
-                    assignmentCount?: number;
-                    studentCount?: number;
-                };
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description Export recorded. */
+            /** @description Students, assignments, and a nested grades map (grades[studentId][assignmentId]). */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        students?: Record<string, never>[];
+                        assignments?: Record<string, never>[];
+                        grades?: Record<string, never>;
+                    };
+                };
             };
             /** @description Not signed in. */
             401: {

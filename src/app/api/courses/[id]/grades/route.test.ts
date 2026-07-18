@@ -6,6 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   user: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
   assignmentProblemGrade: { groupBy: vi.fn() },
+  activityLog: { findFirst: vi.fn() },
   course: { findUnique: vi.fn() },
 }));
 
@@ -16,12 +17,14 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
-import { GET, POST } from './route';
+import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  // No recent view logged → the throttled read-audit proceeds to createEnhancedActivityLog.
+  prismaMock.activityLog.findFirst.mockResolvedValue(null);
   activityLogMock.mockResolvedValue(undefined);
 });
 
@@ -227,147 +230,5 @@ describe('GET /api/courses/[id]/grades', () => {
     expect(body.detail).toBe('kaboom');
 
     consoleSpy.mockRestore();
-  });
-});
-
-// Helper: a JSON POST request to the export-log endpoint.
-const postReq = (body?: unknown) =>
-  new NextRequest('http://localhost/api/courses/c1/grades', {
-    method: 'POST',
-    ...(body === undefined
-      ? {}
-      : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-  });
-
-describe('POST /api/courses/[id]/grades (export log)', () => {
-  it('returns 400 when course ID missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'a1', isAdmin: true } });
-    const res = await POST(postReq({}), { params: Promise.resolve({ id: '' }) });
-    expect(res.status).toBe(400);
-  });
-
-  it('returns 401 when unauthenticated', async () => {
-    authMock.mockResolvedValue(null);
-
-    const res = await POST(postReq({}), { params: Promise.resolve({ id: 'c1' }) });
-    expect(res.status).toBe(401);
-  });
-
-  it('returns 403 and logs a denial when the caller is not course staff', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue(null);
-
-    const res = await POST(postReq({}), { params: Promise.resolve({ id: 'c1' }) });
-
-    expect(res.status).toBe(403);
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      expect.anything(),
-      expect.objectContaining({ action: 'GRADES_EXPORT_DENIED', severity: 'SECURITY' }),
-    );
-  });
-
-  it('records the export with the provided scope metadata', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-
-    const res = await POST(
-      postReq({ platform: 'canvas', wholeGradebook: true, assignmentCount: 3, studentCount: 25 }),
-      { params: Promise.resolve({ id: 'c1' }) },
-    );
-
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ success: true });
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      expect.anything(),
-      expect.objectContaining({
-        action: 'GRADES_EXPORTED',
-        severity: 'INFO',
-        courseId: 'c1',
-        metadata: expect.objectContaining({
-          platform: 'canvas',
-          wholeGradebook: true,
-          assignmentCount: 3,
-          studentCount: 25,
-        }),
-      }),
-    );
-  });
-
-  it('applies defaults for a missing/invalid body (unknown platform, zero counts)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
-
-    // No body at all → req.json() rejects and is caught → {} → all defaults.
-    const res = await POST(postReq(), { params: Promise.resolve({ id: 'c1' }) });
-
-    expect(res.status).toBe(200);
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      expect.anything(),
-      expect.objectContaining({
-        action: 'GRADES_EXPORTED',
-        metadata: expect.objectContaining({
-          platform: 'unknown',
-          wholeGradebook: false,
-          assignmentCount: 0,
-          studentCount: 0,
-        }),
-      }),
-    );
-  });
-
-  it('returns 500 and logs an error when recording the export fails', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    // First call (GRADES_EXPORTED) throws; the catch's error-log call then succeeds.
-    activityLogMock.mockRejectedValueOnce(new Error('log down'));
-
-    const res = await POST(postReq({}), { params: Promise.resolve({ id: 'c1' }) });
-
-    expect(res.status).toBe(500);
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      expect.anything(),
-      expect.objectContaining({ action: 'GRADES_EXPORT_ERROR', severity: 'ERROR' }),
-    );
-    consoleSpy.mockRestore();
-  });
-
-  it('returns 500 and logs "unknown error" when a non-Error is thrown', async () => {
-    // Branch 68: `error instanceof Error ? error.message : 'unknown error'`.
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    activityLogMock.mockRejectedValueOnce('boom');
-
-    const res = await POST(postReq({}), { params: Promise.resolve({ id: 'c1' }) });
-
-    expect(res.status).toBe(500);
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      expect.anything(),
-      expect.objectContaining({
-        action: 'GRADES_EXPORT_ERROR',
-        metadata: expect.objectContaining({ error: 'unknown error' }),
-      }),
-    );
-    consoleSpy.mockRestore();
-  });
-
-  it('returns 409 and records nothing when the course is archived', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
-
-    const res = await POST(postReq({}), { params: Promise.resolve({ id: 'c1' }) });
-
-    expect(res.status).toBe(409);
-    expect(activityLogMock).not.toHaveBeenCalledWith(
-      prismaMock,
-      expect.anything(),
-      expect.objectContaining({ action: 'GRADES_EXPORTED' }),
-    );
   });
 });
