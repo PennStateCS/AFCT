@@ -55,14 +55,25 @@ Use the **Published** switch to show or hide an assignment. AFCT asks for confir
 
 ## Edit an assignment
 
-Open the assignment and use its **Settings** tab. It holds all of the assignment's settings - title, description, the availability window and due dates, the assign-to overrides, late policy, publication, and group mode - and saves them in place.
+Open the assignment and use its **Settings** tab. It holds all of the assignment's settings - title, description, the availability window and due dates, the assign-to targets, and late policy and publication - and saves them in place.
 
 Keep these safeguards in mind:
 
-- You cannot change an assignment between individual and group mode after a student has submitted work.
 - You cannot unpublish an assignment after it has submissions or grades.
 - You cannot delete an assignment after it has submissions or discussion comments.
 - Removing a student from the course also removes any due-date overrides they had.
 - An archived course is read-only.
+
+## Group assignments
+
+In the **Assign To** section you can target whole groups as well as individual students. Pick a [group set](groups.md), then add the groups you want to assign. Each group, like each student, can have its own availability window and due dates.
+
+When an assignment is assigned to a group:
+
+- The group shares one submission set per problem. Any member can submit, and every member sees the group's submissions.
+- Autograding grades the whole group: each member receives the group's grade, which you can override for an individual student on the [Submissions](submissions.md) tab.
+- A student is assigned at most one way per assignment. Adding a group whose member is already assigned individually (or a student who is already in an assigned group) is rejected.
+
+Once a group in the set has submitted work, the group set is locked: you can still rename or duplicate it, but you cannot change its groups or memberships, and you cannot delete a group set that an assignment uses. Plan the groups before students begin submitting.
 
 When students begin working, use the assignment's [Submissions](submissions.md) tab to review files, rerun the autograder, discuss a problem, and enter grades.
