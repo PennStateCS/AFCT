@@ -38,6 +38,25 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// Polyfill matchMedia (absent in jsdom) for components that read it directly
+// (useIsMobile) or transitively (react-resizable-panels' pointer check). Defaults
+// to "does not match" so the desktop layout renders.
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
 let warnSpy: ReturnType<typeof vi.spyOn> | undefined;
 let errorSpy: ReturnType<typeof vi.spyOn> | undefined;
 

@@ -123,6 +123,8 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
         fileName: 'sub-1.jff',
         originalFileName: 'sub-1.jff',
         problemId: 'p1',
+        studentId: 'student-1',
+        student: { id: 'student-1', firstName: 'Grace', lastName: 'Hopper' },
       },
     ]);
 
@@ -175,10 +177,12 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
               evaluationRaw: { score: 1 },
               fileName: 'sub-1.jff',
               originalFileName: 'sub-1.jff',
+              submittedBy: 'Grace Hopper',
             },
           ],
         },
       },
+      isGroup: false,
       comments: [
         {
           id: 'comment-1',
@@ -335,6 +339,8 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
         fileName: 'g.jff',
         originalFileName: 'g.jff',
         problemId: 'p1',
+        studentId: 'teammate-9',
+        student: { id: 'teammate-9', firstName: 'Kata', lastName: 'Rin' },
       },
     ]);
 
@@ -357,6 +363,9 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     );
     const json = await res.json();
     expect(json.submissions.p1.submissions[0].id).toBe('group-sub');
+    // Group assignment => flag set and the submitter (a groupmate) is named.
+    expect(json.isGroup).toBe(true);
+    expect(json.submissions.p1.submissions[0].submittedBy).toBe('Kata Rin');
   });
 
   it('falls back when evaluationRaw column is unavailable', async () => {

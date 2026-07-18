@@ -13,6 +13,8 @@ export type ReviewDataResponse = {
   submissions?: Record<string, SubmissionData>;
   comments?: Array<DiscussionComment & { problemId?: string | null }>;
   problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
+  /** True when the selected student submits this assignment as a group. */
+  isGroup?: boolean;
 };
 
 /**
@@ -40,7 +42,7 @@ export function useReviewData(
       if (!res.ok) {
         // Match the previous silent handling of auth/not-found responses.
         if ([401, 403, 404].includes(res.status)) {
-          return { submissions: {}, comments: [], problemGrades: {} };
+          return { submissions: {}, comments: [], problemGrades: {}, isGroup: false };
         }
         throw new Error((await res.json())?.error || 'Failed to load review data');
       }

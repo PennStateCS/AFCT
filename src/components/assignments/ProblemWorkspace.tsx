@@ -25,6 +25,8 @@ import type { SubmissionStatusFilter } from '@/lib/submission-status-filter';
 import { STATUS_FILTER_OPTIONS, filterSubmissions } from '@/lib/submission-status-filter';
 import { apiPaths } from '@/lib/api-paths';
 import { statusToneClass, getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
+import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type Problem = {
   id: string;
@@ -47,6 +49,8 @@ export type ProblemWorkspaceProps = {
   problem: Problem | null;
   submissions: ProblemSubmission[];
   assignmentDueDate?: string | Date | null;
+  /** Group assignment: show a "Submitted by" column naming the member who submitted. */
+  showSubmitter?: boolean;
   comments: ProblemWorkspaceComment[];
   commentText: string;
   onCommentTextChange: (text: string) => void;
@@ -97,6 +101,7 @@ export default function ProblemWorkspace({
   problem,
   submissions,
   assignmentDueDate,
+  showSubmitter = false,
   comments,
   commentText,
   onCommentTextChange,
@@ -122,6 +127,9 @@ export default function ProblemWorkspace({
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
   const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
+  // Render each submission's date/time in the course/effective timezone (not the
+  // reviewer's browser locale), so the time shown is the one that student submitted at.
+  const { timezone, hour12 } = useEffectiveTimezone();
 
   const toggleFilter = (f: SubmissionStatusFilter) => {
     setActiveFilters((prev) => {
@@ -304,6 +312,9 @@ export default function ProblemWorkspace({
                     <TableHeader>
                       <TableRow>
                         <TableHead className="px-2 py-1">Submitted</TableHead>
+                        {showSubmitter ? (
+                          <TableHead className="px-2 py-1">Submitted by</TableHead>
+                        ) : null}
                         <TableHead className="px-2 py-1">Status</TableHead>
                         <TableHead className="px-2 py-1">Manage</TableHead>
                       </TableRow>
@@ -312,7 +323,7 @@ export default function ProblemWorkspace({
                       {visibleSubmissions.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={5}
+                            colSpan={showSubmitter ? 4 : 3}
                             className="text-muted-foreground py-6 text-center text-sm"
                           >
                             No submissions match the selected filter.
@@ -328,9 +339,9 @@ export default function ProblemWorkspace({
                             <TableRow key={submission.id} className="hover:bg-transparent">
                               <TableCell className="p-1 align-top">
                                 <div className="flex flex-col gap-1">
-                                  <span>{submittedAt.toLocaleDateString()}</span>
+                                  <span>{formatDateInTimeZone(submittedAt, timezone)}</span>
                                   <span className="text-muted-foreground text-xs">
-                                    {submittedAt.toLocaleTimeString()}
+                                    {formatTimeInTimeZone(submittedAt, timezone, hour12)}
                                   </span>
                                   {isLate ? (
                                     <Badge
@@ -342,6 +353,13 @@ export default function ProblemWorkspace({
                                   ) : null}
                                 </div>
                               </TableCell>
+                              {showSubmitter ? (
+                                <TableCell className="p-1 align-top whitespace-nowrap">
+                                  {typeof submission.submittedBy === 'string'
+                                    ? submission.submittedBy
+                                    : '—'}
+                                </TableCell>
+                              ) : null}
                               <TableCell className="p-1 align-top">
                                 {renderStatusCell(submission)}
                               </TableCell>

@@ -15,6 +15,12 @@ import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/components/ui/resizable';
+import { useIsMobile } from '@/hooks/use-mobile';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
@@ -297,6 +303,14 @@ export default function AssignmentSubmissions({
   const loadingSubmissions = reviewFetching;
   const loadingComments = reviewFetching;
   const loadingProblemGrades = reviewFetching;
+
+  // Group assignment for the selected student => the workspace shows a "Submitted by"
+  // column so staff can see which member made each attempt.
+  const reviewIsGroup = !!reviewData?.isGroup;
+
+  // Below the desktop breakpoint the two panels stack; above it they sit side by side
+  // in a draggable split.
+  const isMobile = useIsMobile();
 
   // Read-only review data derived straight from the query cache instead of being
   // mirrored into state by an effect. Empty for no selected student or a failed load
@@ -674,66 +688,87 @@ export default function AssignmentSubmissions({
                   : [];
                 const selectedComments = selectedProblem ? comments[selectedProblem.id] || [] : [];
 
-                return (
-                  <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-                    <ProblemListCard
-                      problems={problemListItems}
-                      selectedProblemId={selectedProblem?.id ?? null}
-                      onSelect={handleSelectProblem}
-                      title="Problems"
-                      description="Select a problem to review submissions and discussion."
-                      className="h-full"
-                      scrollAreaClassName="max-h-[520px]"
-                    />
+                const listCard = (
+                  <ProblemListCard
+                    problems={problemListItems}
+                    selectedProblemId={selectedProblem?.id ?? null}
+                    onSelect={handleSelectProblem}
+                    title="Problems"
+                    description="Select a problem to review submissions and discussion."
+                    className="h-full"
+                    scrollAreaClassName="max-h-[520px]"
+                  />
+                );
 
-                    <div className="print:col-span-2">
-                      <ProblemWorkspace
-                        problem={selectedProblem}
-                        submissions={selectedSubs}
-                        assignmentDueDate={assignmentDueDate}
-                        comments={selectedComments}
-                        commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
-                        onCommentTextChange={(text: string) =>
-                          selectedProblem &&
-                          setCommentTexts((prev) => ({
-                            ...prev,
-                            [selectedProblem.id]: text,
-                          }))
-                        }
-                        onSaveComment={() => selectedProblem && saveComment(selectedProblem.id)}
-                        onDeleteComment={(commentId: string) =>
-                          selectedProblem && deleteComment(commentId)
-                        }
-                        isSaving={selectedProblem ? savingComments[selectedProblem.id] : false}
-                        deletingComments={deletingComments}
-                        onViewSubmission={(submission: ProblemSubmission) =>
-                          setOpenDialog({ open: true, submission })
-                        }
-                        onRerunSubmission={(submission) =>
-                          handleRerunSubmission(submission as unknown as Submission)
-                        }
-                        onRerunVisibleSubmissions={handleRerunVisibleSubmissions}
-                        rerunning={rerunning}
-                        courseIsArchived={courseIsArchived}
-                        gradeInput={selectedProblem ? gradeInputs[selectedProblem.id] || '' : ''}
-                        currentGrade={
-                          selectedProblem ? (problemGrades[selectedProblem.id] ?? null) : null
-                        }
-                        gradeError={
-                          selectedProblem ? problemGradeErrors[selectedProblem.id] || null : null
-                        }
-                        onGradeInputChange={(value) =>
-                          selectedProblem && handleGradeInputChange(selectedProblem.id, value)
-                        }
-                        onSaveGrade={() => selectedProblem && saveProblemGrade(selectedProblem.id)}
-                        isSavingGrade={
-                          selectedProblem ? Boolean(savingProblemGrades[selectedProblem.id]) : false
-                        }
-                        isLoadingGrade={loadingProblemGrades}
-                        isPrivilegedUser={true}
-                      />
+                const workspace = (
+                  <ProblemWorkspace
+                    problem={selectedProblem}
+                    submissions={selectedSubs}
+                    assignmentDueDate={assignmentDueDate}
+                    showSubmitter={reviewIsGroup}
+                    comments={selectedComments}
+                    commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
+                    onCommentTextChange={(text: string) =>
+                      selectedProblem &&
+                      setCommentTexts((prev) => ({
+                        ...prev,
+                        [selectedProblem.id]: text,
+                      }))
+                    }
+                    onSaveComment={() => selectedProblem && saveComment(selectedProblem.id)}
+                    onDeleteComment={(commentId: string) =>
+                      selectedProblem && deleteComment(commentId)
+                    }
+                    isSaving={selectedProblem ? savingComments[selectedProblem.id] : false}
+                    deletingComments={deletingComments}
+                    onViewSubmission={(submission: ProblemSubmission) =>
+                      setOpenDialog({ open: true, submission })
+                    }
+                    onRerunSubmission={(submission) =>
+                      handleRerunSubmission(submission as unknown as Submission)
+                    }
+                    onRerunVisibleSubmissions={handleRerunVisibleSubmissions}
+                    rerunning={rerunning}
+                    courseIsArchived={courseIsArchived}
+                    gradeInput={selectedProblem ? gradeInputs[selectedProblem.id] || '' : ''}
+                    currentGrade={
+                      selectedProblem ? (problemGrades[selectedProblem.id] ?? null) : null
+                    }
+                    gradeError={
+                      selectedProblem ? problemGradeErrors[selectedProblem.id] || null : null
+                    }
+                    onGradeInputChange={(value) =>
+                      selectedProblem && handleGradeInputChange(selectedProblem.id, value)
+                    }
+                    onSaveGrade={() => selectedProblem && saveProblemGrade(selectedProblem.id)}
+                    isSavingGrade={
+                      selectedProblem ? Boolean(savingProblemGrades[selectedProblem.id]) : false
+                    }
+                    isLoadingGrade={loadingProblemGrades}
+                    isPrivilegedUser={true}
+                  />
+                );
+
+                // Stack on small screens; a draggable horizontal split on desktop.
+                if (isMobile) {
+                  return (
+                    <div className="flex flex-col gap-4">
+                      {listCard}
+                      <div className="print:col-span-2">{workspace}</div>
                     </div>
-                  </div>
+                  );
+                }
+
+                return (
+                  <ResizablePanelGroup className="items-stretch gap-0 print:block">
+                    <ResizablePanel defaultSize={280} minSize={220} className="min-w-0 pr-3">
+                      {listCard}
+                    </ResizablePanel>
+                    <ResizableHandle withHandle className="print:hidden" />
+                    <ResizablePanel minSize={420} className="min-w-0 pl-3 print:col-span-2">
+                      {workspace}
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
                 );
               })()
             )}

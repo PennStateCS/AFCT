@@ -5302,6 +5302,8 @@ export interface operations {
                         submissions?: Record<string, never>;
                         comments?: Record<string, never>[];
                         problemGrades?: Record<string, never>;
+                        /** @description Whether the student submits this assignment as a group. */
+                        isGroup?: boolean;
                     };
                 };
             };

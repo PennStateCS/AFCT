@@ -17,7 +17,13 @@ type SubmissionRecord = {
   fileName: string | null;
   originalFileName: string | null;
   problemId: string;
+  studentId: string;
+  student?: { id: string; firstName: string | null; lastName: string | null } | null;
 };
+
+// `student` is selected so the staff view can label each attempt with the group member
+// who made it (the "Submitted by" column, only shown for group assignments).
+const submitterSelect = { select: { id: true, firstName: true, lastName: true } } as const;
 
 const submissionSelectWithEvaluation = {
   id: true,
@@ -29,6 +35,8 @@ const submissionSelectWithEvaluation = {
   fileName: true,
   originalFileName: true,
   problemId: true,
+  studentId: true,
+  student: submitterSelect,
 } as const;
 
 // Deliberately omits `evaluationRaw`: this is the fallback used when that optional
@@ -43,7 +51,16 @@ const submissionSelectWithoutEvaluation = {
   fileName: true,
   originalFileName: true,
   problemId: true,
+  studentId: true,
+  student: submitterSelect,
 } as const;
+
+/** "First Last" for a submission's author (falls back to "Unknown"). */
+function submitterName(
+  u: { firstName: string | null; lastName: string | null } | null | undefined,
+): string {
+  return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim() || 'Unknown';
+}
 
 /**
  * Assembles the grading/review view for one student on one assignment: their
@@ -71,6 +88,7 @@ const submissionSelectWithoutEvaluation = {
  *             submissions: { type: object }
  *             comments: { type: array, items: { type: object } }
  *             problemGrades: { type: object }
+ *             isGroup: { type: boolean, description: Whether the student submits this assignment as a group. }
  *   401: { description: Not signed in. }
  *   403: { description: "Requesting another student's data without being course staff or a system admin, or not an enrolled member of the course." }
  *   404: { description: Assignment not found for this course. }
@@ -213,6 +231,7 @@ export const GET = withCourseAuth(
             evaluationRaw?: unknown | null;
             fileName: string | null;
             originalFileName: string | null;
+            submittedBy: string;
           }[];
         }
       > = {};
@@ -231,6 +250,8 @@ export const GET = withCourseAuth(
             evaluationRaw: s.evaluationRaw ?? null,
             fileName: s.fileName,
             originalFileName: s.originalFileName,
+            // Who actually made this attempt; the staff view surfaces it for group work.
+            submittedBy: submitterName(s.student),
           })),
         };
       }
@@ -287,6 +308,8 @@ export const GET = withCourseAuth(
         submissions: submissionsByProblem,
         comments,
         problemGrades,
+        // Group assignment for this student => the workspace shows a "Submitted by" column.
+        isGroup: !!groupId,
       });
     } catch (error) {
       console.error('GET /api/courses/[id]/[aid]/review-data/[studentId]/route.ts error:', error);
