@@ -14,6 +14,7 @@ import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { computeLateSubmissionState, resolveUnlockAt } from '@/lib/assignment-late-window';
 import { effectiveDeadline } from '@/lib/effective-deadline';
+import { isStudentAssigned } from '@/lib/assignment-visibility';
 
 // Types
 interface AssignmentWithProblemsAndCourse {
@@ -244,8 +245,18 @@ export const GET = withCourseAuth(
 
       // "Assign to specific students": a non-staff member not assigned this work can't
       // see it either. Same 404 mask.
-      const gate = assignment as { assignedToEveryone?: boolean; overrides?: unknown[] };
-      if (!isStaff && gate.assignedToEveryone === false && (gate.overrides?.length ?? 0) === 0) {
+      const gate = assignment as unknown as {
+        assignedToEveryone?: boolean;
+        overrides?: Array<{ userId: string | null }>;
+      };
+      if (
+        !isStaff &&
+        !isStudentAssigned(
+          { assignedToEveryone: gate.assignedToEveryone ?? true },
+          gate.overrides ?? [],
+          user.id,
+        )
+      ) {
         return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
       }
 

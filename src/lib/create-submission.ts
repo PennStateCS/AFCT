@@ -18,6 +18,7 @@ import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { errMessage } from '@/lib/errors';
 import { evaluateSubmissionWindow } from '@/lib/submission-window';
 import { effectiveDeadline } from '@/lib/effective-deadline';
+import { isStudentAssigned } from '@/lib/assignment-visibility';
 
 /** Thrown inside the create transaction when the per-problem cap is already met. */
 class SubmissionCapReachedError extends Error {}
@@ -190,9 +191,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
 
   // "Assign to specific students": a student not assigned this work can't submit to it.
   // Mask as 404, same as unpublished. Staff may always test-submit.
-  const submitterAssigned =
-    assignment.assignedToEveryone !== false ||
-    assignment.overrides.some((o) => o.userId === user.id);
+  const submitterAssigned = isStudentAssigned(assignment, assignment.overrides, user.id);
   if (!submitterAssigned && !submitterIsStaff) {
     await audit('SUBMISSION_NOT_ASSIGNED', 'SECURITY', {
       error: 'Submission to an assignment the student is not assigned.',

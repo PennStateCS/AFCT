@@ -15,5 +15,7 @@ export function isStudentAssigned(
   overrides: Array<{ userId: string | null }>,
   userId: string,
 ): boolean {
-  return assignment.assignedToEveryone || overrides.some((o) => o.userId === userId);
+  // `!== false` so a missing flag (e.g. a partial select) defaults to assigned, matching
+  // the NOT NULL default true on the column.
+  return assignment.assignedToEveryone !== false || overrides.some((o) => o.userId === userId);
 }
