@@ -26,6 +26,8 @@ export type StudentAssignment = {
   dueDate: Date | null;
   allowLateSubmissions: boolean;
   lateCutoff: Date | null;
+  /** True before unlockAt: the description and problems are withheld until it opens. */
+  locked: boolean;
   problems: StudentAssignmentProblem[];
 };
 
@@ -125,6 +127,7 @@ export async function getStudentCourseAssignments(
     });
   }
 
+  const now = new Date();
   const resolved = assignments.map((a) => {
     const eff = effectiveDeadline(
       {
@@ -136,15 +139,19 @@ export async function getStudentCourseAssignments(
       a.overrides ?? [],
       userId,
     );
+    // Before an assignment unlocks, the student sees it exists and when it opens, but not
+    // its description or problems (Canvas-style content lock).
+    const locked = !!eff.unlockAt && eff.unlockAt.getTime() > now.getTime();
     return {
       id: a.id,
       title: a.title,
-      description: a.description,
+      description: locked ? null : a.description,
       unlockAt: eff.unlockAt,
       dueDate: eff.dueDate,
       allowLateSubmissions: eff.allowLateSubmissions,
       lateCutoff: eff.lateCutoff,
-      problems: byAssignment[a.id] ?? [],
+      locked,
+      problems: locked ? [] : (byAssignment[a.id] ?? []),
     };
   });
 

@@ -13,6 +13,7 @@ import { sumProblemPoints } from '@/lib/course-format';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { computeLateSubmissionState, resolveUnlockAt } from '@/lib/assignment-late-window';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 
 // Types
 interface AssignmentWithProblemsAndCourse {
@@ -172,8 +173,20 @@ export const GET = withCourseAuth(
           courseId,
         },
         include: {
-          // This caller's own override (0 or 1), to check "assign to specific students".
-          overrides: { where: { userId: user.id }, select: { userId: true } },
+          // This caller's own override (0 or 1), used both to check "assign to specific
+          // students" and to resolve their effective unlock date for the content lock.
+          overrides: {
+            where: { userId: user.id },
+            select: {
+              targetType: true,
+              userId: true,
+              groupId: true,
+              unlockAt: true,
+              dueDate: true,
+              lateCutoff: true,
+              allowLateSubmissions: true,
+            },
+          },
           problems: {
             select: {
               maxPoints: true,
@@ -236,6 +249,28 @@ export const GET = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
       }
 
+      // Before an assignment unlocks, a non-staff member sees that it exists and when it
+      // opens, but not its description or problems (Canvas-style content lock).
+      const av = assignment as unknown as {
+        description: string | null;
+        unlockAt: Date | null;
+        dueDate: Date;
+        allowLateSubmissions: boolean;
+        lateCutoff: Date | null;
+        overrides: Parameters<typeof effectiveDeadline>[1];
+      };
+      const eff = effectiveDeadline(
+        {
+          unlockAt: av.unlockAt,
+          dueDate: av.dueDate,
+          allowLateSubmissions: av.allowLateSubmissions,
+          lateCutoff: av.lateCutoff,
+        },
+        av.overrides ?? [],
+        user.id,
+      );
+      const locked = !isStaff && !!eff.unlockAt && eff.unlockAt.getTime() > Date.now();
+
       // Keep problems in the structure that the frontend expects
       const problemsWithRelation = assignment.problems.map(
         (ap: (typeof assignment.problems)[number]) => ({
@@ -269,8 +304,10 @@ export const GET = withCourseAuth(
       // Return structured assignment matching the frontend's expected format
       return NextResponse.json({
         ...assignmentData,
+        description: locked ? null : av.description,
+        locked,
         maxPoints: totalProblemPoints,
-        problems: problemsWithRelation,
+        problems: locked ? [] : problemsWithRelation,
         course: {
           id: courseId,
           name: course.name,
