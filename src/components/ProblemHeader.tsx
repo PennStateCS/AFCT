@@ -61,30 +61,32 @@ export default function ProblemHeader({
 
   return (
     <div className={className}>
-      <div className="flex flex-wrap items-center gap-3">
-        <CardTitle className="text-lg">{title}</CardTitle>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
-          {badge ? (
-            <Badge
-              variant="outline"
-              className={`inline-flex min-h-8 items-center rounded-full px-3 py-1 ${badge.className}`}
-            >
-              {badge.label}
-            </Badge>
-          ) : null}
-          {typeof maxStates === 'number' ? (
-            <span className={metaPillClass}>Max States: {maxStates === -1 ? 'Unlimited' : maxStates}</span>
-          ) : null}
-          {typeof isDeterministic === 'boolean' ? (
-            <span className={metaPillClass}>{isDeterministic ? 'Deterministic' : 'Nondeterministic'}</span>
-          ) : null}
-          {submissionsLabel !== null ? (
-            <span className={metaPillClass}>Max Submissions: {submissionsLabel}</span>
-          ) : null}
-          {typeof autograderEnabled === 'boolean' ? (
-            <span className={metaPillClass}>Autograder: {autograderEnabled ? 'On' : 'Off'}</span>
-          ) : null}
-        </div>
+      <CardTitle className="text-lg">{title}</CardTitle>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+        {badge ? (
+          <Badge
+            variant="outline"
+            className={`inline-flex min-h-8 items-center rounded-full px-3 py-1 ${badge.className}`}
+          >
+            {badge.label}
+          </Badge>
+        ) : null}
+        {typeof maxStates === 'number' ? (
+          <span className={metaPillClass}>
+            Max States: {maxStates === -1 ? 'Unlimited' : maxStates}
+          </span>
+        ) : null}
+        {typeof isDeterministic === 'boolean' ? (
+          <span className={metaPillClass}>
+            {isDeterministic ? 'Deterministic' : 'Nondeterministic'}
+          </span>
+        ) : null}
+        {submissionsLabel !== null ? (
+          <span className={metaPillClass}>Max Submissions: {submissionsLabel}</span>
+        ) : null}
+        {typeof autograderEnabled === 'boolean' ? (
+          <span className={metaPillClass}>Autograder: {autograderEnabled ? 'On' : 'Off'}</span>
+        ) : null}
       </div>
       {description ? <div className="text-muted-foreground mt-2 text-sm">{description}</div> : null}
     </div>
