@@ -10,11 +10,16 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findUnique: vi.fn() },
 }));
 
+const resolveGroupMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@/lib/client-auth', () => ({ resolveClientToken: resolveMock }));
 vi.mock('@/lib/create-submission', () => ({ createSubmission: createSubmissionMock }));
 vi.mock('@/lib/permissions', () => ({
   canAccessCourse: canAccessMock,
   canManageCourse: canManageMock,
+}));
+vi.mock('@/lib/assignment-groups', () => ({
+  resolveStudentSubmissionGroupId: resolveGroupMock,
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -44,6 +49,8 @@ beforeEach(() => {
   canManageMock.mockResolvedValue(false);
   prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isPublished: true });
   prismaMock.assignmentProblem.findUnique.mockResolvedValue({ assignmentId: 'a1' });
+  // Individual caller by default; the group-aware test overrides this.
+  resolveGroupMock.mockResolvedValue(null);
 });
 
 describe('POST /api/client/v1/submissions', () => {
@@ -124,6 +131,28 @@ describe('GET /api/client/v1/submissions (history)', () => {
       }),
     );
     expect(body.submissions.map((s: { id: string }) => s.id)).toEqual(['s2', 's1']);
+  });
+
+  it('widens the caller\'s attempt list to the group set when group-assigned', async () => {
+    resolveGroupMock.mockResolvedValue('group-1');
+    prismaMock.submission.findMany.mockResolvedValue([
+      { id: 'g1', status: 'COMPLETED', correct: true, submittedAt: new Date('2026-01-02T00:00:00Z') },
+    ]);
+
+    const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
+    expect(res.status).toBe(200);
+    expect(resolveGroupMock).toHaveBeenCalledWith('a1', 'u1');
+    expect(prismaMock.submission.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          assignmentId: 'a1',
+          problemId: 'p1',
+          OR: [{ studentId: 'u1' }, { studentGroupId: 'group-1' }],
+        },
+      }),
+    );
+    const body = await res.json();
+    expect(body.submissions.map((s: { id: string }) => s.id)).toEqual(['g1']);
   });
 
   it('404 for an unknown assignment', async () => {

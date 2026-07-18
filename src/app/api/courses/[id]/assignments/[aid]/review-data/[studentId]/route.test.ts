@@ -11,10 +11,14 @@ const prismaMock = vi.hoisted(() => ({
 
 const authMock = vi.hoisted(() => vi.fn());
 const logMock = vi.hoisted(() => vi.fn());
+const resolveGroupMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: logMock }));
+vi.mock('@/lib/assignment-groups', () => ({
+  resolveStudentSubmissionGroupId: resolveGroupMock,
+}));
 
 import { Prisma } from '@prisma/client';
 import { GET } from './route';
@@ -45,6 +49,8 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
     prismaMock.submission.findMany.mockResolvedValue([]);
     logMock.mockResolvedValue(undefined);
+    // Individual submission by default; group-aware tests override this.
+    resolveGroupMock.mockResolvedValue(null);
   });
 
   it('returns 401 for unauthenticated requests', async () => {
@@ -315,6 +321,42 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     expect(res.status).toBe(500);
     expect(prismaMock.submission.findMany).toHaveBeenCalledTimes(1);
     consoleSpy.mockRestore();
+  });
+
+  it('widens the submissions query to the group set when the student is group-assigned', async () => {
+    resolveGroupMock.mockResolvedValue('group-1');
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        id: 'group-sub',
+        submittedAt: new Date('2026-03-01T10:00:00.000Z'),
+        feedback: 'ok',
+        correct: true,
+        evaluationRaw: null,
+        fileName: 'g.jff',
+        originalFileName: 'g.jff',
+        problemId: 'p1',
+      },
+    ]);
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(200);
+    expect(resolveGroupMock).toHaveBeenCalledWith(params.aid, params.studentId);
+    // The submissions fetch ORs the student's own rows with the group's set...
+    expect(prismaMock.submission.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          assignmentId: params.aid,
+          OR: [{ studentId: params.studentId }, { studentGroupId: 'group-1' }],
+        },
+      }),
+    );
+    // ...and the grade read stays per-student (unchanged).
+    expect(prismaMock.assignmentProblemGrade.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { assignmentId: params.aid, studentId: params.studentId } }),
+    );
+    const json = await res.json();
+    expect(json.submissions.p1.submissions[0].id).toBe('group-sub');
   });
 
   it('falls back when evaluationRaw column is unavailable', async () => {

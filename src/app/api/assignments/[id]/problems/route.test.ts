@@ -9,16 +9,22 @@ const prismaMock = vi.hoisted(() => ({
 
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
+const resolveGroupMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+vi.mock('@/lib/assignment-groups', () => ({
+  resolveStudentSubmissionGroupId: resolveGroupMock,
+}));
 
 import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  // Individual caller by default; the group-aware test overrides this.
+  resolveGroupMock.mockResolvedValue(null);
 });
 
 describe('GET /api/assignments/[id]/problems', () => {
@@ -93,6 +99,48 @@ describe('GET /api/assignments/[id]/problems', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body[0]).toMatchObject({ id: 'p1', solved: true, grade: 85 });
+  });
+
+  it('counts the group\'s solved submissions when the caller is group-assigned', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: true });
+    resolveGroupMock.mockResolvedValue('group-1');
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      {
+        problem: {
+          id: 'p1',
+          title: 'P',
+          description: null,
+          type: 'FA',
+          maxStates: null,
+          isDeterministic: null,
+        },
+        submissions: [{ id: 's1' }],
+      },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1/problems');
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    // Resolved once for the assignment+caller, reused across problems.
+    expect(resolveGroupMock).toHaveBeenCalledTimes(1);
+    expect(resolveGroupMock).toHaveBeenCalledWith('a1', 'u1');
+    expect(prismaMock.assignmentProblem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          submissions: expect.objectContaining({
+            where: {
+              correct: true,
+              OR: [{ studentId: 'u1' }, { studentGroupId: 'group-1' }],
+            },
+          }),
+        }),
+      }),
+    );
+    const body = await res.json();
+    expect(body[0].solved).toBe(true);
   });
 
   it('still returns problems when activity logging fails', async () => {

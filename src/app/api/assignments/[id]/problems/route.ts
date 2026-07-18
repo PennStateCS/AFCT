@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
 import type { ProblemTypeEnum } from '@/schemas/problem';
 import type { z } from 'zod';
 
@@ -91,7 +92,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const courseId = assignment.courseId;
 
     // ---- Load problems ----
-    const submissionsWhere = { studentId: userId, correct: true };
+    // Group-aware solved state: if the caller is group-assigned for this assignment,
+    // count the group's correct submissions too (resolved once for the assignment).
+    const groupId = await resolveStudentSubmissionGroupId(assignmentId, userId);
+    const submissionsWhere = groupId
+      ? { correct: true, OR: [{ studentId: userId }, { studentGroupId: groupId }] }
+      : { studentId: userId, correct: true };
 
     const assignmentProblems = (await prisma.assignmentProblem.findMany({
       where: { assignmentId: assignmentId },

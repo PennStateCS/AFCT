@@ -7,6 +7,7 @@ import { readFormData } from '@/lib/api/request';
 import { SubmissionCreateApiSchema } from '@/schemas/submission';
 import { createSubmission } from '@/lib/create-submission';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
+import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
 
 /**
  * The caller's own submission history for one problem (attempt list), newest first,
@@ -63,8 +64,13 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
     });
     if (!link) return apiError(404, 'Assignment not found');
 
+    // Group-aware read: a group-assigned caller sees the group's shared attempts for
+    // this problem plus any of their own individual rows.
+    const groupId = await resolveStudentSubmissionGroupId(assignmentId, user.id);
     const submissions = await prisma.submission.findMany({
-      where: { assignmentId, problemId, studentId: user.id },
+      where: groupId
+        ? { assignmentId, problemId, OR: [{ studentId: user.id }, { studentGroupId: groupId }] }
+        : { assignmentId, problemId, studentId: user.id },
       orderBy: { submittedAt: 'desc' },
       select: { id: true, status: true, correct: true, submittedAt: true },
     });

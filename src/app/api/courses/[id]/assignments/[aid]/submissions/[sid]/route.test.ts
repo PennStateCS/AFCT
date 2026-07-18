@@ -9,16 +9,22 @@ const prismaMock = vi.hoisted(() => ({
 
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
+const resolveGroupMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+vi.mock('@/lib/assignment-groups', () => ({
+  resolveStudentSubmissionGroupId: resolveGroupMock,
+}));
 
 import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  // Individual submission by default; the group-aware test overrides this.
+  resolveGroupMock.mockResolvedValue(null);
 });
 
 describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
@@ -104,6 +110,57 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     const body = await res.json();
     expect(body.p1.submissions).toHaveLength(1);
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('widens the query to the group set for a group-assigned student', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      {
+        problem: {
+          id: 'p1',
+          title: 'P1',
+          description: null,
+          type: null,
+          maxStates: null,
+          isDeterministic: null,
+          originalFileName: null,
+        },
+      },
+    ]);
+    resolveGroupMock.mockResolvedValue('group-1');
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        id: 'group-sub',
+        submittedAt: new Date('2025-01-01'),
+        feedback: 'ok',
+        correct: true,
+        fileName: 'f1',
+        originalFileName: 'o1',
+        problemId: 'p1',
+      },
+    ]);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-a'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-a' }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    expect(resolveGroupMock).toHaveBeenCalledWith('a1', 'student-a');
+    expect(prismaMock.submission.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          assignmentId: 'a1',
+          OR: [{ studentId: 'student-a' }, { studentGroupId: 'group-1' }],
+        },
+      }),
+    );
+    const body = await res.json();
+    expect(body.p1.submissions[0].id).toBe('group-sub');
   });
 
   it('returns 403 for staff not on the course roster', async () => {

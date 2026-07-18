@@ -5,6 +5,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logDenial } from '@/lib/api/activity';
+import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
 
 // Types
 interface Submission {
@@ -129,14 +130,21 @@ export const GET = withCourseAuth(
         );
       }
 
+      // Group-aware read: if the student is group-assigned for this assignment, they
+      // see the group's shared submission set plus any of their own individual rows.
+      const groupId =
+        assignmentId && studentId
+          ? await resolveStudentSubmissionGroupId(assignmentId, studentId)
+          : null;
+      const submissionsWhere: Prisma.SubmissionWhereInput = groupId
+        ? { assignmentId, OR: [{ studentId }, { studentGroupId: groupId }] }
+        : { assignmentId, studentId };
+
       // Fetch all submissions for the student for this assignment
       let submissions: Submission[] = [];
       try {
         submissions = (await prisma.submission.findMany({
-          where: {
-            assignmentId,
-            studentId,
-          },
+          where: submissionsWhere,
           orderBy: { submittedAt: 'desc' },
           select: submissionSelectWithEvaluation as unknown as Prisma.SubmissionSelect,
         })) as Submission[];
@@ -147,10 +155,7 @@ export const GET = withCourseAuth(
           String(error.meta?.column ?? '').includes('evaluationRaw')
         ) {
           submissions = (await prisma.submission.findMany({
-            where: {
-              assignmentId,
-              studentId,
-            },
+            where: submissionsWhere,
             orderBy: { submittedAt: 'desc' },
             select: submissionSelectWithoutEvaluation,
           })) as Submission[];

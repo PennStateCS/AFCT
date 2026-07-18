@@ -40,6 +40,7 @@ export const GET = withClientAuth(async (_req, ctx: RouteCtx, { user }) => {
     select: {
       id: true,
       studentId: true,
+      studentGroupId: true,
       courseId: true,
       assignmentId: true,
       problemId: true,
@@ -49,11 +50,13 @@ export const GET = withClientAuth(async (_req, ctx: RouteCtx, { user }) => {
     },
   });
 
-  // Hide existence: not found, or the caller may not see this student's work.
+  // Hide existence: not found, or the caller may not see this student's work. A group
+  // submission (studentGroupId set) is visible to any groupmate, so let
+  // canViewStudentData widen to the group in that case.
   if (
     !submission ||
     !(await canViewStudentData(user, submission.courseId, submission.studentId, {
-      groupAssignment: false,
+      groupAssignment: submission.studentGroupId != null,
     }))
   ) {
     return apiError(404, 'Submission not found');
