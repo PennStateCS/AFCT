@@ -231,6 +231,28 @@ export default function AssignmentSubmissions({
     [updateQuery],
   );
 
+  // Number keys 1-9 jump to that problem (matching the numbers in the list), unless
+  // the user is typing in a field (comment box, grade input, student search, etc.).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
+        return;
+      }
+      if (e.key >= '1' && e.key <= '9') {
+        const problem = visibleProblems[Number(e.key) - 1];
+        if (problem) {
+          e.preventDefault();
+          handleSelectProblem(problem.id);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [visibleProblems, handleSelectProblem]);
+
   useEffect(() => {
     if (students.length === 0) {
       setSelectedIndex(-1);
@@ -697,6 +719,7 @@ export default function AssignmentSubmissions({
                     description="Select a problem to review submissions and discussion."
                     className="h-full"
                     scrollAreaClassName="max-h-[520px]"
+                    numberShortcuts
                   />
                 );
 
@@ -761,11 +784,11 @@ export default function AssignmentSubmissions({
 
                 return (
                   <ResizablePanelGroup className="items-stretch gap-0 print:block">
-                    <ResizablePanel defaultSize={280} minSize={220} className="min-w-0 pr-3">
+                    <ResizablePanel defaultSize={280} minSize={180} className="min-w-0 pr-3">
                       {listCard}
                     </ResizablePanel>
                     <ResizableHandle withHandle className="print:hidden" />
-                    <ResizablePanel minSize={420} className="min-w-0 pl-3 print:col-span-2">
+                    <ResizablePanel minSize={340} className="min-w-0 pl-3 print:col-span-2">
                       {workspace}
                     </ResizablePanel>
                   </ResizablePanelGroup>

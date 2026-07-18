@@ -202,6 +202,7 @@ export default function ProblemWorkspace({
     <div className="space-y-4 print:space-y-2">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <ProblemHeader
+            className="min-w-0 lg:flex-1"
             title={problem.title}
             description={problem.description ?? undefined}
             type={problem.type ?? undefined}

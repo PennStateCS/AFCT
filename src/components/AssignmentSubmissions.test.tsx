@@ -20,9 +20,12 @@ vi.mock('@/lib/toast', () => ({
   showToast: { success: toastSuccess, error: toastError },
 }));
 
-// Selected student is driven from the URL (?studentId=s1).
+// Selected student is driven from the URL (?studentId=s1). useRouter returns a STABLE
+// object (like Next's real hook) so callbacks memoized on `router` don't churn every
+// render.
+const routerMock = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => routerMock,
   useSearchParams: () => new URLSearchParams('studentId=s1'),
 }));
 
@@ -587,5 +590,50 @@ describe('AssignmentSubmissions — reviewData seeding safety net (M12)', () => 
     // Editing the field clears the per-problem error.
     fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '5' } });
     await waitFor(() => expect(screen.queryByTestId('grade-error')).not.toBeInTheDocument());
+  });
+
+  describe('problem number shortcuts', () => {
+    const twoProblemProps = {
+      ...baseProps,
+      problems: [
+        { id: 'p1', title: 'Problem One', type: 'FA', maxPoints: 10 },
+        { id: 'p2', title: 'Problem Two', type: 'FA', maxPoints: 10 },
+      ],
+    };
+    // p1 has one submission, p2 has two, so the workspace's submission-count reveals
+    // which problem is selected.
+    const twoProblemRoutes = () =>
+      routeFetch({
+        '/students': () => ({ ok: true, json: async () => students }),
+        'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+        '/review-data/': () => ({
+          ok: true,
+          json: async () => ({
+            submissions: { p1: [{ id: 'p1-a' }], p2: [{ id: 'p2-a' }, { id: 'p2-b' }] },
+            comments: [],
+            problemGrades: {},
+          }),
+        }),
+      });
+
+    it('selects a problem when its number key is pressed', async () => {
+      vi.stubGlobal('fetch', twoProblemRoutes());
+      renderWithClient(<AssignmentSubmissions {...twoProblemProps} />);
+      // First problem is selected by default (one submission).
+      await waitFor(() => expect(screen.getByTestId('submission-count')).toHaveTextContent('1'));
+
+      fireEvent.keyDown(window, { key: '2' });
+      await waitFor(() => expect(screen.getByTestId('submission-count')).toHaveTextContent('2'));
+    });
+
+    it('ignores the number key while typing in a field', async () => {
+      vi.stubGlobal('fetch', twoProblemRoutes());
+      renderWithClient(<AssignmentSubmissions {...twoProblemProps} />);
+      await waitFor(() => expect(screen.getByTestId('submission-count')).toHaveTextContent('1'));
+
+      // A digit typed into an input must not switch problems.
+      fireEvent.keyDown(screen.getByTestId('grade-input'), { key: '2' });
+      expect(screen.getByTestId('submission-count')).toHaveTextContent('1');
+    });
   });
 });

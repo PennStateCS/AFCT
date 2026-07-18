@@ -21,6 +21,8 @@ export type ProblemListCardProps = {
   description?: string;
   className?: string;
   scrollAreaClassName?: string;
+  /** When set, the leading number for the first 9 problems is announced as a 1-9 keyboard shortcut. */
+  numberShortcuts?: boolean;
 };
 
 export function ProblemListCard({
@@ -32,6 +34,7 @@ export function ProblemListCard({
   description,
   className = '',
   scrollAreaClassName = 'h-[520px]',
+  numberShortcuts = false,
 }: ProblemListCardProps) {
   return (
     <Card className={className}>
@@ -84,12 +87,16 @@ export function ProblemListCard({
                 </div>
               );
 
+              const shortcut = numberShortcuts && index < 9 ? String(index + 1) : undefined;
+
               return (
                 <li key={problem.id}>
                   <button
                     type="button"
                     onClick={() => onSelect(problem.id)}
                     aria-current={isActive ? 'true' : undefined}
+                    aria-keyshortcuts={shortcut}
+                    title={shortcut ? `Press ${shortcut} to select` : undefined}
                     className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
                       isActive
                         ? 'bg-secondary text-secondary-foreground'
