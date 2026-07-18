@@ -247,6 +247,12 @@ export function AssignToFields({
         const isGroup = !!f.groupId;
         const displayName = isGroup ? (f.groupName ?? 'Group') : (f.studentName ?? 'Student');
         const targetLabel = isGroup ? `group ${displayName}` : displayName;
+        // Names of the group's members, when the set detail is loaded.
+        const groupMembers = isGroup
+          ? (groups.find((g) => g.id === f.groupId)?.members ?? []).map(
+              (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || m.email,
+            )
+          : [];
         const overrideAllowLate = o?.allowLateSubmissions;
         const isOpen = openCards.has(f.id);
         const dueText = o?.dueDate ? formatLocal(o.dueDate) : 'inherits';
@@ -291,6 +297,11 @@ export function AssignToFields({
               </Button>
             </div>
             <CollapsibleContent className="space-y-3 border-t p-4 pt-3">
+              {isGroup && groupMembers.length > 0 && (
+                <p className="text-muted-foreground text-xs">
+                  <span className="font-medium">Members:</span> {groupMembers.join(', ')}
+                </p>
+              )}
               <p className="text-muted-foreground text-xs">
                 Leave a field blank to inherit the {everyoneLabel.toLowerCase()} value
                 {baseDue ? ` (due ${formatLocal(baseDue)})` : ''}.

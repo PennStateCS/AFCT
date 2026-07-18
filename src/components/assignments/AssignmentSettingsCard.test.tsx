@@ -97,8 +97,8 @@ describe('AssignmentSettingsCard', () => {
     const save = screen.getByRole('button', { name: /save changes/i });
     expect(save).toBeDisabled();
 
-    await user.clear(screen.getByLabelText('Title'));
-    await user.type(screen.getByLabelText('Title'), 'New title');
+    // Title/description moved to the Assignment tab; toggle Published to make the form dirty.
+    await user.click(screen.getByRole('switch', { name: /Published/i }));
     await waitFor(() => expect(save).toBeEnabled());
     await user.click(save);
 
@@ -113,7 +113,13 @@ describe('AssignmentSettingsCard', () => {
     )!;
     expect(String(put[0])).toBe('/api/courses/c1/assignments/a1');
     const body = JSON.parse((put[1] as RequestInit).body as string);
-    expect(body).toMatchObject({ title: 'New title', assignedToEveryone: true, lateCutoff: null });
+    // Title/description are still sent unchanged (seeded); the toggled field is isPublished.
+    expect(body).toMatchObject({
+      title: 'Original',
+      assignedToEveryone: true,
+      lateCutoff: null,
+      isPublished: true,
+    });
 
     await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Assignment settings saved'));
     expect(onSaved).toHaveBeenCalled();

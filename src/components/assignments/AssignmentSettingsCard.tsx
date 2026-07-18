@@ -8,11 +8,8 @@ import type { z } from 'zod';
 import type { Assignment } from '@prisma/client';
 
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Settings } from 'lucide-react';
 import SwitchField from '@/components/ui/SwitchField';
-import { Textarea } from '@/components/ui/textarea';
-import InputGroup from '@/components/ui/InputGroup';
 import { AssignToFields } from '@/components/assignments/AssignToFields';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -254,8 +251,12 @@ export function AssignmentSettingsCard({
     <div className="space-y-4">
       <h2 role="heading" aria-level={2} className="flex items-center gap-2 text-2xl font-semibold">
         <Settings className="h-6 w-6" />
-        Settings
+        Due dates
       </h2>
+      <p className="text-muted-foreground text-sm">
+        Set the availability window, due dates, and who the assignment is assigned to. Edit the
+        title and description on the Assignment tab.
+      </p>
       <form
         className="max-w-2xl space-y-6"
         onSubmit={(e) => {
@@ -263,45 +264,6 @@ export function AssignmentSettingsCard({
           void handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
         }}
       >
-        <Controller
-          name="title"
-          control={control}
-          render={({ field }) => (
-            <InputGroup
-              label="Title"
-              name="title"
-              fieldProps={field}
-              error={errors.title?.message}
-              showStatus
-              isValid={!errors.title && !!field.value}
-            />
-          )}
-        />
-
-        <Controller
-          name="description"
-          control={control}
-          render={({ field }) => (
-            <div>
-              <Label htmlFor="settings-description" className="mb-2 block">
-                Description
-              </Label>
-              <Textarea
-                {...field}
-                id="settings-description"
-                value={field.value ?? ''}
-                placeholder="Enter assignment description"
-                className="min-h-[100px]"
-              />
-              {errors.description && (
-                <p className="mt-1 text-xs text-red-600" role="alert">
-                  {errors.description.message}
-                </p>
-              )}
-            </div>
-          )}
-        />
-
         <AssignToFields control={control} errors={errors} courseId={courseId} active />
 
         <Controller

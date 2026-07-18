@@ -348,21 +348,22 @@ describe('PrivilegeAssignmentView — header', () => {
     expect(link).toHaveAttribute('href', '/dashboard/courses/c1');
   });
 
-  it('renders the description', () => {
+  it('renders the description in the editable form', () => {
     renderView();
-    expect(screen.getByText('Do the thing.')).toBeInTheDocument();
+    // The Assignment tab now shows a title + description form defaulting to the values.
+    expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
   });
 
-  it('shows "No description." when the assignment has none', () => {
+  it('shows an empty description field when the assignment has none', () => {
     renderView({ initialAssignment: makeAssignment({ description: null }) });
-    expect(screen.getByText('No description.')).toBeInTheDocument();
+    expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('');
   });
 });
 
 describe('PrivilegeAssignmentView — tabs', () => {
-  it('defaults to the Description tab and shows the description', () => {
+  it('defaults to the Assignment tab and shows the description form', () => {
     renderView();
-    expect(screen.getByText('Do the thing.')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
   });
 
   it('lists the assignment problems on the Problems tab', async () => {
@@ -577,7 +578,7 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
   it('opens the Settings tab from the tab bar', async () => {
     const user = userEvent.setup();
     renderView();
-    await user.click(screen.getByRole('tab', { name: /Settings/ }));
+    await user.click(screen.getByRole('tab', { name: /Due Date/ }));
     expect(await screen.findByTestId('assignment-settings')).toBeInTheDocument();
   });
 

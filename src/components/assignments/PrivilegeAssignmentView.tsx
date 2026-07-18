@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { showToast } from '@/lib/toast';
 import { AssignmentSettingsCard } from '@/components/assignments/AssignmentSettingsCard';
+import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsForm';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TAB_BAR_LIST_CLASS, TAB_BAR_TRIGGER_CLASS } from '@/components/course/course-tabs';
@@ -373,7 +374,7 @@ export default function AssignmentDashboardPage({
             <TabsList aria-label="Assignment sections" className={TAB_BAR_LIST_CLASS}>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="description">
                 <AlignLeft className="size-3.5 opacity-70" />
-                Description
+                Assignment
               </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="submissions">
                 <Package className="size-3.5 opacity-70" />
@@ -385,7 +386,7 @@ export default function AssignmentDashboardPage({
               </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="settings">
                 <Settings className="size-3.5 opacity-70" />
-                Settings
+                Due Date(s)
               </TabsTrigger>
             </TabsList>
             <TabsContent value="description">
@@ -396,11 +397,16 @@ export default function AssignmentDashboardPage({
                   className="flex items-center gap-2 text-2xl font-semibold"
                 >
                   <AlignLeft className="h-6 w-6" />
-                  Description
+                  Assignment
                 </h2>
-                <p className="text-muted-foreground min-h-32 resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
-                  {assignment.description ?? 'No description.'}
-                </p>
+                <AssignmentBasicsForm
+                  courseId={id}
+                  assignmentId={assignment.id}
+                  initialTitle={assignment.title}
+                  initialDescription={assignment.description ?? ''}
+                  courseIsArchived={courseIsArchived}
+                  onSaved={() => void invalidateAssignment()}
+                />
               </div>
             </TabsContent>
             <TabsContent
@@ -474,7 +480,7 @@ export default function AssignmentDashboardPage({
                 timeZone={assignment.course?.timezone ?? timezone}
                 assignment={{
                   ...assignment,
-                  groupSetId: null,
+                  groupSetId: assignment.groupSetId ?? null,
                   description: assignment.description ?? null,
                   createdAt: assignment.createdAt ?? new Date(),
                   updatedAt: assignment.updatedAt ?? new Date(),

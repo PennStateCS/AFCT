@@ -35,6 +35,7 @@ export type AssignmentWithDetails = {
   dueDate: string | Date;
   unlockAt?: string | Date | null;
   assignedToEveryone?: boolean;
+  groupSetId?: string | null;
   maxPoints: number;
   allowLateSubmissions?: boolean;
   lateCutoff?: string | Date | null;
