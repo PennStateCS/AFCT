@@ -63,6 +63,8 @@ services:
       - private_uploads:/private/uploads
       # App writes the admin TLS cert here; nginx reads it.
       - tls_certs:/app/certs
+      # ACME HTTP-01 challenge tokens; nginx serves them over HTTP (Let's Encrypt).
+      - acme_challenge:/app/acme-challenge
       # Backups: read-only for listing/downloading. The app can only request a
       # backup by dropping a flag in the writable trigger volume.
       - db_backups:/backups:ro
@@ -104,6 +106,8 @@ services:
       - uploads_data:/usr/share/nginx/html/uploads
       # Admin TLS cert written by the app; nginx reads it.
       - tls_certs:/etc/nginx/custom-certs:ro
+      # ACME HTTP-01 challenge webroot, written by the app; nginx serves it over HTTP.
+      - acme_challenge:/var/www/acme-challenge:ro
 
     healthcheck:
       test: ['CMD-SHELL', 'curl -fsS -o /dev/null http://localhost/ || exit 1']
@@ -253,6 +257,7 @@ volumes:
   private_uploads:
   nginx_certs:
   tls_certs:
+  acme_challenge:
   db_backups:
   backup_triggers:
   update_triggers:

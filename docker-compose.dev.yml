@@ -61,6 +61,8 @@ services:
       - afct-dev-uploads-data:/app/public/uploads
       - afct-dev-private-uploads:/private/uploads
       - afct-dev-tls-certs:/app/certs
+      # ACME HTTP-01 challenge tokens; nginx serves them over HTTP (Let's Encrypt).
+      - afct-dev-acme-challenge:/app/acme-challenge
       # Backups: read-only for listing/downloading; requests go via the trigger volume.
       - afct-dev-db-backups:/backups:ro
       - afct-dev-backup-triggers:/backup-triggers
@@ -89,6 +91,7 @@ services:
       - nginx_certs:/etc/nginx/certs
       - afct-dev-uploads-data:/usr/share/nginx/html/uploads
       - afct-dev-tls-certs:/etc/nginx/custom-certs:ro
+      - afct-dev-acme-challenge:/var/www/acme-challenge:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
 
@@ -185,5 +188,6 @@ volumes:
   afct-dev-private-uploads:
   afct-dev-uploads-data:
   afct-dev-tls-certs:
+  afct-dev-acme-challenge:
   afct-dev-db-backups:
   afct-dev-backup-triggers:

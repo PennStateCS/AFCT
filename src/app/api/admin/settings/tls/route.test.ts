@@ -12,15 +12,29 @@ const tls = vi.hoisted(() => ({
   hasPendingCsr: vi.fn(() => false),
   generateCsr: vi.fn(() => ({ csr: 'CSR-PEM' })),
   installSignedCert: vi.fn((): CertInfo => ({ installed: true, subject: 'CN=signed' })),
-  generateSelfSigned: vi.fn(
-    (): CertInfo => ({ installed: true, subject: 'CN=self', selfSigned: true }),
-  ),
+  generateSelfSigned: vi.fn((): CertInfo => ({
+    installed: true,
+    subject: 'CN=self',
+    selfSigned: true,
+  })),
+}));
+
+const AcmeError = vi.hoisted(() => class AcmeError extends Error {});
+const acme = vi.hoisted(() => ({
+  requestCertificate: vi.fn(async () => ({
+    installed: true,
+    subject: 'CN=le',
+    validTo: '2030-01-01',
+  })),
+  disableAcme: vi.fn(),
+  getAcmeState: vi.fn(() => ({ managed: false }) as Record<string, unknown>),
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: auditMock }));
 vi.mock('@/lib/tls-cert', () => ({ ...tls, CertValidationError }));
+vi.mock('@/lib/acme', () => ({ ...acme, AcmeError }));
 
 import { GET, POST, DELETE } from './route';
 
@@ -136,7 +150,12 @@ describe('TLS route actions', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ installed: true, subject: 'CN=current', pendingCsr: true });
+    expect(body).toEqual({
+      installed: true,
+      subject: 'CN=current',
+      pendingCsr: true,
+      acme: { managed: false },
+    });
   });
 
   it('returns 400 for an invalid JSON body', async () => {
@@ -268,6 +287,63 @@ describe('TLS route actions', () => {
     const audit = lastAudit();
     expect(audit.action).toBe('TLS_CERT_ERROR');
     expect(audit.metadata.attempted).toBe('install');
+  });
+
+  it('obtains a Let’s Encrypt certificate and logs TLS_CERT_INSTALLED (lets-encrypt)', async () => {
+    authMock.mockResolvedValue(admin);
+    acme.getAcmeState.mockReturnValue({
+      managed: true,
+      domain: 'afct.example.edu',
+      staging: false,
+    });
+
+    const res = await POST(
+      post({
+        action: 'lets-encrypt',
+        domain: 'afct.example.edu',
+        email: 'admin@example.edu',
+        staging: false,
+      }),
+      routeCtx(),
+    );
+
+    expect(res.status).toBe(200);
+    expect(acme.requestCertificate).toHaveBeenCalledWith({
+      domain: 'afct.example.edu',
+      email: 'admin@example.edu',
+      staging: false,
+    });
+    const body = await res.json();
+    expect(body.acme).toEqual({ managed: true, domain: 'afct.example.edu', staging: false });
+    const audit = lastAudit();
+    expect(audit.action).toBe('TLS_CERT_INSTALLED');
+    expect(audit.metadata.method).toBe('lets-encrypt');
+    expect(audit.metadata.domain).toBe('afct.example.edu');
+  });
+
+  it('rejects a failed ACME order with 400 and logs TLS_CERT_REJECTED', async () => {
+    authMock.mockResolvedValue(admin);
+    acme.requestCertificate.mockRejectedValueOnce(new AcmeError('domain does not point here'));
+
+    const res = await POST(
+      post({ action: 'lets-encrypt', domain: 'bad.example.edu', email: 'a@example.edu' }),
+      routeCtx(),
+    );
+
+    expect(res.status).toBe(400);
+    const audit = lastAudit();
+    expect(audit.action).toBe('TLS_CERT_REJECTED');
+    expect(audit.metadata.reason).toBe('domain does not point here');
+  });
+
+  it('disables Let’s Encrypt auto-renewal and logs TLS_ACME_DISABLED', async () => {
+    authMock.mockResolvedValue(admin);
+
+    const res = await POST(post({ action: 'lets-encrypt-disable' }), routeCtx());
+
+    expect(res.status).toBe(200);
+    expect(acme.disableAcme).toHaveBeenCalled();
+    expect(lastAudit().action).toBe('TLS_ACME_DISABLED');
   });
 
   it('logs "unknown error" when a non-Error value is thrown', async () => {
