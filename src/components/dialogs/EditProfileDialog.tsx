@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { getInitials } from '@/app/utils/initials';
 import {
   Dialog,
@@ -47,6 +47,11 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   // Local preview state (keep separate from RHF file)
   const queryClient = useQueryClient();
   const avatarEditorRef = useRef<AvatarCropRef['current']>(null);
+  // Ref (not getElementById) to trigger the hidden file input, and a unique id so
+  // the input/button/error can be associated even if the dialog renders more than once.
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const avatarUploadId = useId();
+  const avatarErrorId = `${avatarUploadId}-error`;
   const [avatarDirty, setAvatarDirty] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
@@ -152,7 +157,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     if (parsed.deleteAvatar) {
       avatarToUpload = undefined;
     } else if (avatarDirty) {
-      avatarToUpload = await getCroppedAvatarFile() || undefined;
+      avatarToUpload = (await getCroppedAvatarFile()) || undefined;
     } else if (parsed.avatarFile) {
       avatarToUpload = parsed.avatarFile;
     }
@@ -209,8 +214,8 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Avatar */}
           <div className="flex flex-col items-center gap-3">
-            <Label className="text-center w-full">Avatar Image</Label>
-            <div className="flex items-center justify-center gap-4 w-full">
+            <Label className="w-full text-center">Avatar Image</Label>
+            <div className="flex w-full items-center justify-center gap-4">
               <Avatar className="h-20 w-20">
                 <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
                 <AvatarFallback className="bg-secondary text-secondary-foreground">
@@ -220,23 +225,27 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
               <div className="flex w-full max-w-xs flex-col gap-3">
                 <input
-                  id="avatar-upload"
+                  id={avatarUploadId}
+                  ref={avatarInputRef}
                   type="file"
                   accept="image/*"
                   className="hidden"
+                  aria-invalid={errors.avatarFile?.message ? true : undefined}
+                  aria-describedby={errors.avatarFile?.message ? avatarErrorId : undefined}
                   onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
                 />
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => document.getElementById('avatar-upload')?.click()}
+                  onClick={() => avatarInputRef.current?.click()}
+                  aria-describedby={errors.avatarFile?.message ? avatarErrorId : undefined}
                   className="flex items-center gap-2"
                 >
                   <Upload className="h-4 w-4" />
                   Upload Avatar
                 </Button>
                 {errors.avatarFile?.message && (
-                  <p className="mt-1 text-xs text-red-600">
+                  <p id={avatarErrorId} role="alert" className="mt-1 text-xs text-red-600">
                     {typeof errors.avatarFile?.message === 'string'
                       ? errors.avatarFile.message
                       : String(errors.avatarFile?.message)}

@@ -110,8 +110,22 @@ export default function StudentNavigator({
     setMenuOpen(false);
   };
 
+  const selectedName = selectedStudent
+    ? `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+      'Unnamed student'
+    : null;
+
   return (
     <div className="flex w-full items-center justify-between gap-2">
+      {/* Polite live region: announces the newly selected student on navigation,
+          since focus stays on the Prev/Next/dropdown control while the panel changes. */}
+      <span className="sr-only" aria-live="polite">
+        {selectedName
+          ? `Now reviewing ${selectedName}, student ${selectedIndex + 1} of ${students.length}. ${
+              selectedStatus ? 'All problems graded.' : 'Missing grades.'
+            }`
+          : ''}
+      </span>
       <div className="min-w-0">
         <span className="block">
           {loadingAssignment ? (
@@ -166,15 +180,18 @@ export default function StudentNavigator({
                 {selectedStudent ? (
                   <span
                     className={`h-2.5 w-2.5 rounded-full ${selectedStatus ? 'bg-green-500' : 'bg-red-500'}`}
-                    aria-label={selectedStatus ? 'All problems graded' : 'Missing grades'}
+                    aria-hidden="true"
                   />
                 ) : null}
                 <span className="truncate">
-                  {selectedStudent
-                    ? `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
-                      'Unnamed student'
-                    : 'Select student'}
+                  {selectedStudent ? (selectedName ?? 'Unnamed student') : 'Select student'}
                 </span>
+                {/* Text equivalent for the dot, announced when the trigger is focused. */}
+                {selectedStudent ? (
+                  <span className="sr-only">
+                    {selectedStatus ? '(all problems graded)' : '(missing grades)'}
+                  </span>
+                ) : null}
               </span>
               <ChevronDown className="h-4 w-4" />
             </Button>
@@ -219,6 +236,10 @@ export default function StudentNavigator({
                       />
                       <span className="truncate">
                         {s.firstName} {s.lastName}
+                      </span>
+                      {/* Text equivalent for the color-coded dot (use of color). */}
+                      <span className="sr-only">
+                        {gradeStatuses?.[s.id] ? 'All problems graded' : 'Missing grades'}
                       </span>
                     </span>
                   </DropdownMenuItem>

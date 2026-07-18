@@ -12,10 +12,16 @@ interface ToastOptions {
 
 type ToastKind = 'success' | 'error' | 'warning' | 'info' | 'loading';
 
-const getA11yOptions = (type: ToastKind) => ({
-  role: type === 'error' ? 'alert' : 'status',
-  ariaLive: 'assertive' as const,
-});
+// Only errors interrupt (assertive/alert). Routine success, info, warning, and
+// loading messages announce politely via role="status" so they don't cut off
+// whatever a screen reader is currently reading.
+const getA11yOptions = (type: ToastKind) => {
+  const isError = type === 'error';
+  return {
+    role: isError ? 'alert' : 'status',
+    ariaLive: isError ? ('assertive' as const) : ('polite' as const),
+  };
+};
 
 export const showToast = {
   success: (message: string, options?: ToastOptions) => {
