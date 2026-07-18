@@ -2,7 +2,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { Pencil, FileText, Package, Plus } from 'lucide-react';
+import { Pencil, FileText, Package, Plus, Settings } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { Controller, useForm } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
-import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
+import { AssignmentSettingsCard } from '@/components/assignments/AssignmentSettingsCard';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
@@ -85,7 +85,6 @@ export default function AssignmentDashboardPage({
 
   const queryClient = useQueryClient();
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
-  const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
   const [addProblemDialogOpen, setAddProblemDialogOpen] = useState(false);
   const [createProblemOpen, setCreateProblemOpen] = useState(false);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
@@ -292,7 +291,6 @@ export default function AssignmentDashboardPage({
     setProblemToRemove(null);
   }
 
-  const handleEditAssignment = () => setEditAssignmentOpen(true);
   const handleAddExistingProblem = () => setAddProblemDialogOpen(true);
   const handleCreateProblem = () => setCreateProblemOpen(true);
   const handleEditProblem = useCallback(
@@ -403,7 +401,7 @@ export default function AssignmentDashboardPage({
         <Button
           variant="default"
           aria-label="Edit Assignment"
-          onClick={handleEditAssignment}
+          onClick={() => handleTabChange('settings')}
           className="absolute top-6 right-6"
           hidden={courseIsArchived}
         >
@@ -510,6 +508,13 @@ export default function AssignmentDashboardPage({
             <Package className="h-4 w-4" />
             Submissions
           </TabsTrigger>
+          <TabsTrigger
+            className="data-[state=active]:bg-secondary w-50 flex-1 data-[state=active]:text-white"
+            value="settings"
+          >
+            <Settings className="h-4 w-4" />
+            Settings
+          </TabsTrigger>
         </TabsList>
         <TabsContent
           value="problems"
@@ -582,6 +587,40 @@ export default function AssignmentDashboardPage({
             groupProblemsMap={groupProblemsMap}
           />
         </TabsContent>
+        <TabsContent value="settings">
+          <AssignmentSettingsCard
+            courseId={id}
+            courseIsArchived={courseIsArchived}
+            // Edit the dates in the COURSE's zone (what the server stores them in).
+            timeZone={assignment.course?.timezone ?? timezone}
+            assignment={{
+              ...assignment,
+              description: assignment.description ?? null,
+              createdAt: assignment.createdAt ?? new Date(),
+              updatedAt: assignment.updatedAt ?? new Date(),
+              dueDate:
+                typeof assignment.dueDate === 'string'
+                  ? new Date(assignment.dueDate)
+                  : assignment.dueDate,
+              isGroup: assignment.isGroup ?? false,
+              allowLateSubmissions: assignment.allowLateSubmissions ?? false,
+              lateCutoff: assignment.lateCutoff
+                ? typeof assignment.lateCutoff === 'string'
+                  ? new Date(assignment.lateCutoff)
+                  : assignment.lateCutoff
+                : null,
+              unlockAt: assignment.unlockAt
+                ? typeof assignment.unlockAt === 'string'
+                  ? new Date(assignment.unlockAt)
+                  : assignment.unlockAt
+                : null,
+              assignedToEveryone: assignment.assignedToEveryone ?? true,
+            }}
+            onSaved={() => {
+              void invalidateAssignment();
+            }}
+          />
+        </TabsContent>
       </Tabs>
       {/* Submission viewer dialog, keyed off the problem type. */}
       {viewerOpen && viewerSrc && (
@@ -647,42 +686,6 @@ export default function AssignmentDashboardPage({
         onConfirm={handleConfirmRemoveProblem}
         onCancel={() => setProblemToRemove(null)}
       />
-      {assignment && (
-        <EditAssignmentDialog
-          courseIsArchived={courseIsArchived}
-          open={editAssignmentOpen}
-          setOpen={setEditAssignmentOpen}
-          // Edit the due date in the COURSE's zone (what the server stores it in), not
-          // the viewer's, otherwise saving would shift the deadline.
-          timeZone={assignment.course?.timezone ?? timezone}
-          assignment={{
-            ...assignment,
-            description: assignment.description ?? null,
-            createdAt: assignment.createdAt ?? new Date(),
-            updatedAt: assignment.updatedAt ?? new Date(),
-            dueDate:
-              typeof assignment.dueDate === 'string'
-                ? new Date(assignment.dueDate)
-                : assignment.dueDate,
-            isGroup: assignment.isGroup ?? false,
-            allowLateSubmissions: assignment.allowLateSubmissions ?? false,
-            lateCutoff: assignment.lateCutoff
-              ? typeof assignment.lateCutoff === 'string'
-                ? new Date(assignment.lateCutoff)
-                : assignment.lateCutoff
-              : null,
-            unlockAt: assignment.unlockAt
-              ? typeof assignment.unlockAt === 'string'
-                ? new Date(assignment.unlockAt)
-                : assignment.unlockAt
-              : null,
-            assignedToEveryone: assignment.assignedToEveryone ?? true,
-          }}
-          onSave={() => {
-            void invalidateAssignment();
-          }}
-        />
-      )}
       {problemToEdit && (
         <EditProblemDialog
           courseIsArchived={courseIsArchived}

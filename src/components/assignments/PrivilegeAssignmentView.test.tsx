@@ -177,9 +177,8 @@ vi.mock('@/components/dialogs/CreateProblemDialog', () => ({
     open ? <div data-testid="create-dialog" /> : null,
 }));
 
-vi.mock('@/components/dialogs/EditAssignmentDialog', () => ({
-  EditAssignmentDialog: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="edit-assignment-dialog" /> : null,
+vi.mock('@/components/assignments/AssignmentSettingsCard', () => ({
+  AssignmentSettingsCard: () => <div data-testid="assignment-settings" />,
 }));
 
 vi.mock('@/components/dialogs/EditProblemDialog', () => ({
@@ -586,10 +585,10 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     expect(dialog).toHaveAttribute('data-course-id', 'c1');
   });
 
-  it('opens the edit-assignment dialog from the header button', () => {
+  it('opens the Settings tab from the header Edit button', () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'Edit Assignment' }));
-    expect(screen.getByTestId('edit-assignment-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('assignment-settings')).toBeInTheDocument();
   });
 
   it('opens the create-problem dialog from the header button', async () => {
