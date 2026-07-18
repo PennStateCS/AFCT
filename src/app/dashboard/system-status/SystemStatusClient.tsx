@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Server, Database, Container, Network, Users, HardDrive } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -29,12 +30,12 @@ import SessionsTab from './tabs/SessionsTab';
 import FilesTab from './tabs/FilesTab';
 
 const TABS = [
-  { value: 'server', label: 'Server' },
-  { value: 'database', label: 'Database' },
-  { value: 'docker', label: 'Docker' },
-  { value: 'network', label: 'Network' },
-  { value: 'sessions', label: 'Session' },
-  { value: 'files', label: 'Files' },
+  { value: 'server', label: 'Server', icon: Server },
+  { value: 'database', label: 'Database', icon: Database },
+  { value: 'docker', label: 'Docker', icon: Container },
+  { value: 'network', label: 'Network', icon: Network },
+  { value: 'sessions', label: 'Session', icon: Users },
+  { value: 'files', label: 'Files', icon: HardDrive },
 ] as const;
 
 export default function SystemStatusClient() {
@@ -197,6 +198,7 @@ export default function SystemStatusClient() {
                 value={t.value}
                 className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
               >
+                <t.icon aria-hidden="true" />
                 {t.label}
               </TabsTrigger>
             ))}
