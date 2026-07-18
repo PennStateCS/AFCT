@@ -39,14 +39,15 @@ export const COURSE_TABS: readonly CourseTabDef[] = [
 
 // Underline navigation: a light bar on the card's own (white) background with a
 // subtle bottom border. Overrides the segmented/filled defaults from TabsList.
-const LIST_CLASS =
+// Exported so other in-card tab bars (e.g. the assignment page) match this one.
+export const TAB_BAR_LIST_CLASS =
   'h-auto w-full items-center justify-start gap-6 overflow-x-auto overflow-y-hidden rounded-none border-b border-border bg-transparent p-0';
 
 // Each trigger is a content-width item with a transparent bottom border that
 // turns teal (and its text teal + bolder) when active, sitting just above the
 // bar's own bottom border. No negative margin here: it would push the trigger
 // 1px past the scroll container and produce a phantom vertical scrollbar.
-const TRIGGER_CLASS = [
+export const TAB_BAR_TRIGGER_CLASS = [
   'text-muted-foreground hover:text-foreground',
   'data-[state=active]:text-teal-600 dark:data-[state=active]:text-teal-400 data-[state=active]:font-semibold',
   'inline-flex h-auto min-w-36 flex-none items-center justify-center gap-1.5 whitespace-nowrap',
@@ -61,7 +62,7 @@ type TabCounts = Partial<Record<TabType, number>>;
 
 export function CourseTabBar({ counts }: { counts?: TabCounts }) {
   return (
-    <TabsList aria-label="Course content sections" className={LIST_CLASS}>
+    <TabsList aria-label="Course content sections" className={TAB_BAR_LIST_CLASS}>
       {COURSE_TABS.map(({ value, label, Icon }) => {
         const count = counts?.[value];
         return (
@@ -70,7 +71,7 @@ export function CourseTabBar({ counts }: { counts?: TabCounts }) {
             id={`tab-${value}`}
             aria-controls={`panel-${value}`}
             aria-label={count === undefined ? label : `${label}, ${count}`}
-            className={TRIGGER_CLASS}
+            className={TAB_BAR_TRIGGER_CLASS}
             value={value}
           >
             <Icon className="size-3.5 opacity-70" />

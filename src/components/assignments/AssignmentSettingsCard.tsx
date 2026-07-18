@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import type { Assignment } from '@prisma/client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Settings } from 'lucide-react';
@@ -69,11 +68,15 @@ export function AssignmentSettingsCard({
     [assignment.dueDate, timeZone],
   );
   const unlockString = useMemo(
-    () => (assignment.unlockAt ? toDateTimeLocalInTimeZone(assignment.unlockAt, timeZone) : undefined),
+    () =>
+      assignment.unlockAt ? toDateTimeLocalInTimeZone(assignment.unlockAt, timeZone) : undefined,
     [assignment.unlockAt, timeZone],
   );
   const cutoffString = useMemo(
-    () => (assignment.lateCutoff ? toDateTimeLocalInTimeZone(assignment.lateCutoff, timeZone) : undefined),
+    () =>
+      assignment.lateCutoff
+        ? toDateTimeLocalInTimeZone(assignment.lateCutoff, timeZone)
+        : undefined,
     [assignment.lateCutoff, timeZone],
   );
 
@@ -160,179 +163,178 @@ export function AssignmentSettingsCard({
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle role="heading" aria-level={2} className="flex items-center gap-2 text-2xl">
-          <Settings className="h-6 w-6" />
-          Settings
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form
-          className="max-w-2xl space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
-          }}
-        >
+    <div className="space-y-4">
+      <h2 role="heading" aria-level={2} className="flex items-center gap-2 text-2xl font-semibold">
+        <Settings className="h-6 w-6" />
+        Settings
+      </h2>
+      <form
+        className="max-w-2xl space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
+        }}
+      >
+        <Controller
+          name="title"
+          control={control}
+          render={({ field }) => (
+            <InputGroup
+              label="Title"
+              name="title"
+              fieldProps={field}
+              error={errors.title?.message}
+              showStatus
+              isValid={!errors.title && !!field.value}
+            />
+          )}
+        />
+
+        <Controller
+          name="description"
+          control={control}
+          render={({ field }) => (
+            <div>
+              <Label htmlFor="settings-description" className="mb-2 block">
+                Description
+              </Label>
+              <Textarea
+                {...field}
+                id="settings-description"
+                value={field.value ?? ''}
+                placeholder="Enter assignment description"
+                className="min-h-[100px]"
+              />
+              {errors.description && (
+                <p className="mt-1 text-xs text-red-600" role="alert">
+                  {errors.description.message}
+                </p>
+              )}
+            </div>
+          )}
+        />
+
+        <div className="grid gap-4 md:grid-cols-2">
           <Controller
-            name="title"
+            name="unlockAt"
             control={control}
             render={({ field }) => (
               <InputGroup
-                label="Title"
-                name="title"
-                fieldProps={field}
-                error={errors.title?.message}
-                showStatus
-                isValid={!errors.title && !!field.value}
+                label="Available from (optional)"
+                name="unlockAt"
+                type="datetime-local"
+                fieldProps={{
+                  ...field,
+                  value: field.value ?? '',
+                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                    field.onChange(e.target.value),
+                }}
+                error={errors.unlockAt?.message}
               />
             )}
           />
-
           <Controller
-            name="description"
+            name="dueDate"
             control={control}
             render={({ field }) => (
-              <div>
-                <Label htmlFor="settings-description" className="mb-2 block">
-                  Description
-                </Label>
-                <Textarea
-                  {...field}
-                  id="settings-description"
-                  value={field.value ?? ''}
-                  placeholder="Enter assignment description"
-                  className="min-h-[100px]"
-                />
-                {errors.description && (
-                  <p className="mt-1 text-xs text-red-600" role="alert">
-                    {errors.description.message}
-                  </p>
-                )}
-              </div>
-            )}
-          />
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Controller
-              name="unlockAt"
-              control={control}
-              render={({ field }) => (
-                <InputGroup
-                  label="Available from (optional)"
-                  name="unlockAt"
-                  type="datetime-local"
-                  fieldProps={{
-                    ...field,
-                    value: field.value ?? '',
-                    onChange: (e: React.ChangeEvent<HTMLInputElement>) => field.onChange(e.target.value),
-                  }}
-                  error={errors.unlockAt?.message}
-                />
-              )}
-            />
-            <Controller
-              name="dueDate"
-              control={control}
-              render={({ field }) => (
-                <InputGroup
-                  label="Due Date & Time"
-                  name="dueDate"
-                  type="datetime-local"
-                  fieldProps={{
-                    ...field,
-                    value: field.value ?? '',
-                    onChange: (e: React.ChangeEvent<HTMLInputElement>) => field.onChange(e.target.value),
-                  }}
-                  error={errors.dueDate?.message}
-                />
-              )}
-            />
-          </div>
-
-          <Controller
-            name="allowLateSubmissions"
-            control={control}
-            render={({ field }) => (
-              <SwitchField
-                label="Allow Late Submissions"
-                name="allowLateSubmissions"
-                checked={!!field.value}
-                onCheckedChange={(checked) => field.onChange(!!checked)}
-                description="Students can submit after the deadline, until the cutoff below."
-                descriptionPlacement="inline"
+              <InputGroup
+                label="Due Date & Time"
+                name="dueDate"
+                type="datetime-local"
+                fieldProps={{
+                  ...field,
+                  value: field.value ?? '',
+                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                    field.onChange(e.target.value),
+                }}
+                error={errors.dueDate?.message}
               />
             )}
           />
+        </div>
 
-          {allowLateSubmissions && (
-            <>
-              <Controller
-                name="lateCutoff"
-                control={control}
-                render={({ field }) => (
-                  <InputGroup
-                    label="Late Submission Cutoff (optional)"
-                    name="lateCutoff"
-                    type="datetime-local"
-                    fieldProps={{
-                      ...field,
-                      value: field.value ?? '',
-                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => field.onChange(e.target.value),
-                    }}
-                    min={dueDateValue ?? nowLocalString(timeZone)}
-                    error={errors.lateCutoff?.message}
-                  />
-                )}
-              />
-              <p className="text-muted-foreground text-xs">
-                Leave blank to accept late submissions with no deadline.
-              </p>
-            </>
+        <Controller
+          name="allowLateSubmissions"
+          control={control}
+          render={({ field }) => (
+            <SwitchField
+              label="Allow Late Submissions"
+              name="allowLateSubmissions"
+              checked={!!field.value}
+              onCheckedChange={(checked) => field.onChange(!!checked)}
+              description="Students can submit after the deadline, until the cutoff below."
+              descriptionPlacement="inline"
+            />
           )}
+        />
 
-          <Controller
-            name="isGroup"
-            control={control}
-            render={({ field }) => (
-              <SwitchField
-                label="Group Assignment"
-                name="isGroup"
-                checked={!!field.value}
-                onCheckedChange={(checked) => field.onChange(!!checked)}
-                description="Students submit and are graded as groups for this assignment."
-                descriptionPlacement="inline"
-              />
-            )}
-          />
+        {allowLateSubmissions && (
+          <>
+            <Controller
+              name="lateCutoff"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  label="Late Submission Cutoff (optional)"
+                  name="lateCutoff"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  min={dueDateValue ?? nowLocalString(timeZone)}
+                  error={errors.lateCutoff?.message}
+                />
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              Leave blank to accept late submissions with no deadline.
+            </p>
+          </>
+        )}
 
-          <Controller
-            name="isPublished"
-            control={control}
-            render={({ field }) => (
-              <SwitchField
-                label="Published"
-                name="isPublished"
-                checked={!!field.value}
-                onCheckedChange={(checked) => field.onChange(!!checked)}
-                description="Makes the assignment visible to enrolled students."
-                descriptionPlacement="inline"
-              />
-            )}
-          />
+        <Controller
+          name="isGroup"
+          control={control}
+          render={({ field }) => (
+            <SwitchField
+              label="Group Assignment"
+              name="isGroup"
+              checked={!!field.value}
+              onCheckedChange={(checked) => field.onChange(!!checked)}
+              description="Students submit and are graded as groups for this assignment."
+              descriptionPlacement="inline"
+            />
+          )}
+        />
 
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              disabled={!isValid || isSubmitting || courseIsArchived || !isDirty}
-              title={courseIsArchived ? 'Course is archived' : undefined}
-            >
-              {isSubmitting ? 'Saving…' : 'Save Changes'}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+        <Controller
+          name="isPublished"
+          control={control}
+          render={({ field }) => (
+            <SwitchField
+              label="Published"
+              name="isPublished"
+              checked={!!field.value}
+              onCheckedChange={(checked) => field.onChange(!!checked)}
+              description="Makes the assignment visible to enrolled students."
+              descriptionPlacement="inline"
+            />
+          )}
+        />
+
+        <div className="flex justify-end">
+          <Button
+            type="submit"
+            disabled={!isValid || isSubmitting || courseIsArchived || !isDirty}
+            title={courseIsArchived ? 'Course is archived' : undefined}
+          >
+            {isSubmitting ? 'Saving…' : 'Save Changes'}
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }
