@@ -16,7 +16,7 @@ import { Stepper } from '@/components/ui/stepper';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { Textarea } from '@/components/ui/textarea';
-import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import {
   Collapsible,
   CollapsibleContent,
@@ -474,15 +474,12 @@ export function CreateAssignmentWizardDialog({
                   );
                 })}
 
-                {/* Add-student picker */}
-                <SearchableMultiSelect
+                {/* Add-student picker: single-select that closes on pick, so it doesn't
+                    sit open over the cards. */}
+                <SearchableSelect
                   label="Add a student override"
                   items={pickerItems}
-                  value={[]}
-                  onChange={(ids) => {
-                    const added = ids[ids.length - 1];
-                    if (added) addOverride(added);
-                  }}
+                  onSelect={(studentId) => addOverride(studentId)}
                   placeholder="Select a student to give different dates"
                   searchPlaceholder="Search students..."
                   emptyStateText="No students available."

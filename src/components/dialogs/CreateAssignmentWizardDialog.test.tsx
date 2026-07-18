@@ -41,20 +41,20 @@ vi.mock('@/components/ui/InputGroup', () => ({
   ),
 }));
 
-vi.mock('@/components/ui/SearchableMultiSelect', () => ({
-  SearchableMultiSelect: ({
+vi.mock('@/components/ui/SearchableSelect', () => ({
+  SearchableSelect: ({
     label,
     items,
-    onChange,
+    onSelect,
   }: {
     label: string;
     items: Array<{ id: string; label: string }>;
-    onChange: (next: string[]) => void;
+    onSelect: (id: string) => void;
   }) => (
     <fieldset>
       <legend>{label}</legend>
       {items.map((item) => (
-        <button key={item.id} type="button" onClick={() => onChange([item.id])}>
+        <button key={item.id} type="button" onClick={() => onSelect(item.id)}>
           {item.label}
         </button>
       ))}
