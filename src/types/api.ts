@@ -142,6 +142,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/settings/captcha-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test the configured hCaptcha keys
+         * @description Verifies an hCaptcha token against the configured secret key, so an admin can  confirm their hCaptcha keys actually work before turning captcha loose on real  logins. Returns `{ ok }`. Admin only; never returns the secret.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/captcha-test/route.ts)
+         */
+        post: operations["postAdminSettingsCaptchaTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/settings": {
         parameters: {
             query?: never;
@@ -526,6 +548,28 @@ export interface paths {
         get: operations["getAuthCheckEmail"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/login-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Peek login rate-limit status
+         * @description Read-only login rate-limit status. The login form calls this after a failed  `signIn` to classify the failure, because NextAuth (Auth.js v5) reports any  `authorize` error only as a generic `CredentialsSignin` — so the client can't  otherwise tell a captcha challenge or a temporary block apart from bad credentials.  This does NOT count an attempt (the credentials `authorize` path is the single  source of truth); it only reports the flags that path already set. Public.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/auth/login-check/route.ts)
+         */
+        post: operations["postAuthLoginCheck"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2379,6 +2423,53 @@ export interface operations {
             };
         };
     };
+    postAdminSettingsCaptchaTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The hCaptcha response token from a solved widget */
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Whether the token verified against the stored secret. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: boolean;
+                    };
+                };
+            };
+            /** @description Missing or invalid token. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getAdminSettings: {
         parameters: {
             query?: never;
@@ -3442,6 +3533,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAuthLoginCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description The account being signed into (for the per-account bucket) */
+                    email?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The current rate-limit status for this IP + account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status?: "ok" | "challenge" | "blocked";
+                        /** @description Milliseconds until the challenge/block clears (0 when ok) */
+                        retryAfterMs?: number;
+                    };
                 };
             };
         };

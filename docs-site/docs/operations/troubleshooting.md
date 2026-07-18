@@ -6,6 +6,7 @@ Start by identifying the failing layer:
 - AFCT application: Pages, authentication, or API requests fail
 - PostgreSQL: The application reports database or migration errors
 - Backup service: Scheduled or on-demand backups fail
+- Optional updater: In-app updates do not start or finish
 
 ## Start with the built-in checks
 
@@ -23,7 +24,7 @@ It reports on the Compose file, `.env.production` completeness and permissions, 
 docker compose ps
 ```
 
-All four services should be `Up`, and the application should eventually report `healthy`.
+All four core services should be `Up`, and the application should eventually report `healthy`. When the updater profile is enabled, `afct-updater` should also be healthy.
 
 Common states:
 
@@ -51,6 +52,7 @@ One service at a time:
 docker compose logs --tail=200 nginx
 docker compose logs --tail=200 postgres
 docker compose logs --tail=200 db-backup
+docker compose logs --tail=200 updater
 ```
 
 Use `docker compose ps` to confirm the service names in the current Compose file.
