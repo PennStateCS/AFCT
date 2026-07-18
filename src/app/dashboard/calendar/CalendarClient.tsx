@@ -5,7 +5,6 @@ import type { CalendarDay, Modifiers } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { addMonths, subMonths } from 'date-fns';
 import DayAssignmentsDialog from '@/components/dialogs/DayAssignmentsDialog';
@@ -156,29 +155,25 @@ function CalendarDayButton(props: DayButtonProps) {
       >
         {dayAssignments.slice(0, visibleCount).map((a) => {
           const isDraft = a.isPublished === false;
+          // Visual-only summary chips. They are intentionally NOT links: an
+          // interactive element must not be nested inside the day's button role.
+          // The day button summarizes the count for assistive tech (so these are
+          // aria-hidden), and the real navigable links live in the day dialog
+          // (opened with Enter/click) and the Upcoming Assignments list.
           return (
-            <Link
+            <div
               key={a.id}
-              href={`/dashboard/courses/${a.courseId}/${a.id}`}
-              // Kept out of the tab sequence so the calendar grid stays a
-              // single roving tab stop (arrow keys move between days). These
-              // chips are still clickable, and keyboard users reach the same
-              // links via the day dialog (Enter) and the Upcoming list.
-              tabIndex={-1}
+              aria-hidden="true"
               className={cn(
-                'assignment-link box-border block min-h-[1rem] w-full min-w-0 cursor-pointer truncate overflow-hidden rounded py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white',
-                isDraft
-                  ? 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700'
-                  : 'bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
+                'assignment-link box-border block min-h-[1rem] w-full min-w-0 truncate overflow-hidden rounded py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white',
+                isDraft ? 'bg-amber-600 dark:bg-amber-600' : 'bg-sky-700 dark:bg-sky-600',
                 a.crossedOut && 'line-through opacity-80',
               )}
               title={`${isDraft ? 'Draft — ' : ''}${a.course.code} - ${a.title}`}
-              onClick={(e) => e.stopPropagation()}
             >
-              {isDraft && <span aria-hidden="true">✎ </span>}
+              {isDraft && <span>✎ </span>}
               {`${a.course.code} - ${a.title}`}
-              {isDraft && <span className="sr-only"> (draft)</span>}
-            </Link>
+            </div>
           );
         })}
         {dayAssignments.length > visibleCount && (

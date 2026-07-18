@@ -52,8 +52,7 @@ const renderCalendar = () =>
     />,
   );
 
-const dayCells = () =>
-  screen.getAllByRole('button', { name: /Press Enter to open assignments/ });
+const dayCells = () => screen.getAllByRole('button', { name: /Press Enter to open assignments/ });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -94,16 +93,21 @@ describe('CalendarClient day cells (keyboard model)', () => {
     expect(screen.getByText('day-dialog-open')).toBeInTheDocument();
   });
 
-  it('keeps the grid to a single tab stop: assignment chips are not in the tab order', () => {
+  it('keeps the grid to a single tab stop: assignment chips are non-interactive and hidden from AT', () => {
     renderCalendar();
     // The roving model means exactly one day cell is tabbable.
     const tabbableCells = dayCells().filter((c) => c.getAttribute('tabindex') === '0');
     expect(tabbableCells).toHaveLength(1);
-    // Assignment chips are reachable via the day dialog / upcoming list, not as
-    // extra tab stops that would break the roving grid (they carry tabindex -1).
-    const chips = document.querySelectorAll('a.assignment-link');
+    // Chips are visual-only summaries: no nested interactive element inside the
+    // day's button role. They render as aria-hidden divs (not links), so the real
+    // navigable links live in the day dialog and the Upcoming list.
+    const chips = document.querySelectorAll('.assignment-link');
     expect(chips.length).toBeGreaterThan(0);
-    chips.forEach((chip) => expect(chip.getAttribute('tabindex')).toBe('-1'));
+    chips.forEach((chip) => {
+      expect(chip.tagName).toBe('DIV');
+      expect(chip.getAttribute('aria-hidden')).toBe('true');
+      expect(chip.hasAttribute('href')).toBe(false);
+    });
   });
 
   it('marks today with aria-current="date"', () => {

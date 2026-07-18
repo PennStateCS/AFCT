@@ -18,7 +18,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import { Upload, Trash2 } from 'lucide-react';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSession } from 'next-auth/react';
@@ -44,6 +44,11 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   // Only system admins may see/change the admin flag; the backend enforces this too.
   const { data: session } = useSession();
   const avatarEditorRef = useRef<AvatarCropRef['current']>(null);
+  // Ref (not getElementById) to open the hidden file input, plus a unique id so the
+  // input/button/error associate correctly even with multiple dialog instances.
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const avatarUploadId = useId();
+  const avatarErrorId = `${avatarUploadId}-error`;
   const [avatarDirty, setAvatarDirty] = useState(false);
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
   // Local preview state (keep separate from RHF file)
@@ -180,7 +185,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       // deleteAvatar takes precedence over any editor state
       avatarToUpload = undefined;
     } else if (avatarDirty) {
-      avatarToUpload = await getCroppedAvatarFile() || undefined;
+      avatarToUpload = (await getCroppedAvatarFile()) || undefined;
     } else if (parsed.avatarFile instanceof File) {
       avatarToUpload = parsed.avatarFile;
     }
@@ -230,8 +235,8 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Avatar block */}
           <div className="flex flex-col items-center gap-3">
-            <Label className="text-center w-full">Avatar Image</Label>
-            <div className="flex items-center justify-center gap-4 w-full">
+            <Label className="w-full text-center">Avatar Image</Label>
+            <div className="flex w-full items-center justify-center gap-4">
               <Avatar className="h-20 w-20">
                 <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
                 <AvatarFallback className="bg-secondary text-secondary-foreground">
@@ -247,23 +252,29 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                   render={() => (
                     <>
                       <input
-                        id="avatar-upload"
+                        id={avatarUploadId}
+                        ref={avatarInputRef}
                         type="file"
                         accept="image/*"
                         className="hidden"
+                        aria-invalid={avatarFileErrorMessage ? true : undefined}
+                        aria-describedby={avatarFileErrorMessage ? avatarErrorId : undefined}
                         onChange={(e) => onAvatarPicked(e.target.files?.[0])}
                       />
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => document.getElementById('avatar-upload')?.click()}
+                        onClick={() => avatarInputRef.current?.click()}
+                        aria-describedby={avatarFileErrorMessage ? avatarErrorId : undefined}
                         className="flex items-center gap-2"
                       >
                         <Upload className="h-4 w-4" />
                         Upload Avatar
                       </Button>
                       {avatarFileErrorMessage && (
-                        <p className="mt-1 text-xs text-red-600">{avatarFileErrorMessage}</p>
+                        <p id={avatarErrorId} role="alert" className="mt-1 text-xs text-red-600">
+                          {avatarFileErrorMessage}
+                        </p>
                       )}
                     </>
                   )}
