@@ -30,22 +30,32 @@ export type OverrideRow = {
 };
 
 export type EffectiveDeadline = DeadlineFields & {
-  source: 'base' | 'student-override';
+  source: 'base' | 'student-override' | 'group-override';
 };
 
 const maxDate = (a: Date, b: Date): Date => (a.getTime() >= b.getTime() ? a : b);
 
 /**
- * Resolve the effective deadline fields for `studentId`. A matching STUDENT override wins
- * over the base; null override fields inherit. GROUP overrides are ignored for now (they
- * land with the Group Sets rework).
+ * Resolve the effective deadline fields for `studentId`. Precedence is
+ * student > group > base: a STUDENT override for this student wins, else a GROUP override
+ * for one of the student's groups (`studentGroupIds`), else the base. Null override fields
+ * inherit the base. A student is never targeted more than one way for an assignment
+ * (enforced at assign time), so at most one override actually applies; the precedence is a
+ * safety net. Pass `studentGroupIds` = [] (the default) to ignore group targets.
  */
 export function effectiveDeadline(
   base: DeadlineFields,
   overrides: OverrideRow[],
   studentId: string,
+  studentGroupIds: readonly string[] = [],
 ): EffectiveDeadline {
-  const ov = overrides.find((o) => o.targetType === 'STUDENT' && o.userId === studentId);
+  const studentOv = overrides.find((o) => o.targetType === 'STUDENT' && o.userId === studentId);
+  const groupOv = studentOv
+    ? undefined
+    : overrides.find(
+        (o) => o.targetType === 'GROUP' && o.groupId != null && studentGroupIds.includes(o.groupId),
+      );
+  const ov = studentOv ?? groupOv;
 
   const allowLate = ov?.allowLateSubmissions ?? base.allowLateSubmissions;
   const unlockAt = ov?.unlockAt ?? base.unlockAt;
@@ -62,6 +72,6 @@ export function effectiveDeadline(
     dueDate,
     lateCutoff,
     allowLateSubmissions: allowLate,
-    source: ov ? 'student-override' : 'base',
+    source: studentOv ? 'student-override' : groupOv ? 'group-override' : 'base',
   };
 }
