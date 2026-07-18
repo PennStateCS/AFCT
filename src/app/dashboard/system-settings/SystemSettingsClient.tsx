@@ -78,6 +78,7 @@ import SwitchField from '@/components/ui/SwitchField';
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import FileUploadInput from '@/components/FileUploadInput';
+import { SlidersHorizontal, Cpu, DatabaseBackup, ShieldCheck, Lock, RefreshCw } from 'lucide-react';
 import { useTlsCertificate } from './useTlsCertificate';
 import { useBackups } from './useBackups';
 import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
@@ -657,36 +658,42 @@ export default function SystemSettingsClient() {
                 value="general"
                 className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
               >
+                <SlidersHorizontal aria-hidden="true" />
                 General
               </TabsTrigger>
               <TabsTrigger
                 value="queue"
                 className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
               >
+                <Cpu aria-hidden="true" />
                 Evaluator
               </TabsTrigger>
               <TabsTrigger
                 value="backups"
                 className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
               >
+                <DatabaseBackup aria-hidden="true" />
                 Backups
               </TabsTrigger>
               <TabsTrigger
                 value="captcha"
                 className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
               >
+                <ShieldCheck aria-hidden="true" />
                 Captcha
               </TabsTrigger>
               <TabsTrigger
                 value="tls"
                 className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
               >
+                <Lock aria-hidden="true" />
                 TLS Certificate
               </TabsTrigger>
               <TabsTrigger
                 value="updates"
                 className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
               >
+                <RefreshCw aria-hidden="true" />
                 Updates
               </TabsTrigger>
             </TabsList>
