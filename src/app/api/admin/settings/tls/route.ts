@@ -15,6 +15,7 @@ import {
   CertValidationError,
   type CertInfo,
 } from '@/lib/tls-cert';
+import { requestCertificate, disableAcme, getAcmeState, AcmeError } from '@/lib/acme';
 
 // Audit logging must never break a certificate operation, so swallow its errors.
 async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promise<void> {
@@ -53,21 +54,42 @@ function certMeta(info: CertInfo) {
  *             validTo: { type: string, nullable: true }
  *             selfSigned: { type: boolean, nullable: true }
  *             pendingCsr: { type: boolean }
+ *             acme:
+ *               type: object
+ *               description: Let's Encrypt auto-renewal state (managed=false when not configured).
+ *               properties:
+ *                 managed: { type: boolean }
+ *                 domain: { type: string }
+ *                 email: { type: string }
+ *                 staging: { type: boolean }
  *   403: { description: Caller is not an admin. }
  */
 export const GET = withAdminAuth(
-  () => NextResponse.json({ ...readCertInfo(), pendingCsr: hasPendingCsr() }),
+  () => NextResponse.json({ ...readCertInfo(), pendingCsr: hasPendingCsr(), acme: getAcmeState() }),
   { deniedAction: 'TLS_STATUS_VIEW_DENIED' },
 );
 
 const TlsCertRequestSchema = z.object({
-  action: z.enum(['install', 'generate-csr', 'install-signed', 'self-signed']).optional(),
+  action: z
+    .enum([
+      'install',
+      'generate-csr',
+      'install-signed',
+      'self-signed',
+      'lets-encrypt',
+      'lets-encrypt-disable',
+    ])
+    .optional(),
   cert: z.string().optional(),
   key: z.string().optional(),
   chain: z.string().optional(),
   commonName: z.string().optional(),
   organization: z.string().optional(),
   altNames: z.array(z.string()).optional(),
+  // Let's Encrypt fields.
+  domain: z.string().optional(),
+  email: z.string().optional(),
+  staging: z.boolean().optional(),
 });
 
 /**
@@ -85,17 +107,22 @@ const TlsCertRequestSchema = z.object({
  *         properties:
  *           action:
  *             type: string
- *             enum: [install, generate-csr, install-signed, self-signed]
+ *             enum: [install, generate-csr, install-signed, self-signed, lets-encrypt, lets-encrypt-disable]
  *             description: >-
  *               install (default) = upload cert+key; generate-csr = create a CSR to
  *               be signed externally; install-signed = install the cert returned for
- *               a pending CSR; self-signed = generate a self-signed cert.
+ *               a pending CSR; self-signed = generate a self-signed cert; lets-encrypt
+ *               = obtain a free auto-renewing cert via ACME HTTP-01; lets-encrypt-disable
+ *               = turn off auto-renewal (leaves the current cert in place).
  *           cert: { type: string, description: PEM cert (install / install-signed) }
  *           key: { type: string, description: PEM private key (install) }
  *           chain: { type: string, description: Optional intermediate chain }
  *           commonName: { type: string, description: CSR/self-signed subject CN }
  *           organization: { type: string }
  *           altNames: { type: array, items: { type: string } }
+ *           domain: { type: string, description: Public domain for lets-encrypt (must resolve to this server) }
+ *           email: { type: string, description: Contact email for lets-encrypt }
+ *           staging: { type: boolean, description: Use the Let's Encrypt staging CA for testing }
  * responses:
  *   200:
  *     description: The resulting certificate metadata (plus `csr` for generate-csr).
@@ -146,6 +173,30 @@ export const POST = withAdminAuth(
           auditMeta = { method: 'self-signed', ...certMeta(info) };
           break;
         }
+        case 'lets-encrypt': {
+          const info = await requestCertificate({
+            domain: body.domain ?? '',
+            email: body.email ?? '',
+            staging: body.staging ?? false,
+          });
+          responseBody = { ...info, pendingCsr: hasPendingCsr(), acme: getAcmeState() };
+          auditAction = 'TLS_CERT_INSTALLED';
+          // The domain/email are non-sensitive and already stored; the key is never touched.
+          auditMeta = {
+            method: 'lets-encrypt',
+            domain: body.domain ?? null,
+            staging: body.staging ?? false,
+            ...certMeta(info),
+          };
+          break;
+        }
+        case 'lets-encrypt-disable': {
+          disableAcme();
+          responseBody = { ...readCertInfo(), pendingCsr: hasPendingCsr(), acme: getAcmeState() };
+          auditAction = 'TLS_ACME_DISABLED';
+          auditMeta = { method: 'lets-encrypt' };
+          break;
+        }
         case 'install':
         default: {
           const info = installCert(body.cert ?? '', body.key ?? '', body.chain);
@@ -166,9 +217,10 @@ export const POST = withAdminAuth(
       });
       return NextResponse.json(responseBody);
     } catch (err) {
-      if (err instanceof CertValidationError) {
-        // A rejected certificate is a meaningful operational event; the message is a
-        // validation reason (e.g. "key does not match"), never key material.
+      if (err instanceof CertValidationError || err instanceof AcmeError) {
+        // A rejected certificate or a failed ACME order is a meaningful operational
+        // event; the message is an admin-facing reason (e.g. "key does not match", or
+        // "domain does not point here"), never key material.
         await safeAuditLog(req, {
           userId: user.id,
           action: 'TLS_CERT_REJECTED',

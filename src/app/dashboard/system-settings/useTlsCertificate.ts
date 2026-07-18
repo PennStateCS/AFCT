@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 
+export type AcmeInfo = { managed: false } | { managed: true; domain: string; staging: boolean };
+
 export type TlsInfo = {
   installed: boolean;
   subject?: string;
@@ -12,9 +14,10 @@ export type TlsInfo = {
   selfSigned?: boolean;
   expired?: boolean;
   pendingCsr?: boolean;
+  acme?: AcmeInfo;
 };
 
-export type TlsMethod = 'csr' | 'self-signed' | 'upload' | null;
+export type TlsMethod = 'csr' | 'self-signed' | 'upload' | 'lets-encrypt' | null;
 
 const TLS_QUERY_KEY = ['admin', 'settings', 'tls'] as const;
 
@@ -54,6 +57,11 @@ export function useTlsCertificate() {
   const [csrAltNames, setCsrAltNames] = useState('');
   const [signedCertFile, setSignedCertFile] = useState<File | null>(null);
   const [signedChainFile, setSignedChainFile] = useState<File | null>(null);
+  // Let's Encrypt flow
+  const [leDomain, setLeDomain] = useState('');
+  const [leEmail, setLeEmail] = useState('');
+  const [leStaging, setLeStaging] = useState(false);
+  const [leTos, setLeTos] = useState(false);
 
   const cnMissing = !csrCommonName.trim();
 
@@ -179,6 +187,48 @@ export function useTlsCertificate() {
     }
   };
 
+  const requestLetsEncrypt = async () => {
+    if (!leDomain.trim() || !leEmail.trim()) {
+      showToast.error('Enter the domain and a contact email.');
+      return;
+    }
+    if (!leTos) {
+      showToast.error('You must agree to the Let’s Encrypt terms of service.');
+      return;
+    }
+    setTlsBusy(true);
+    try {
+      const data = await tlsAction({
+        action: 'lets-encrypt',
+        domain: leDomain.trim(),
+        email: leEmail.trim(),
+        staging: leStaging,
+      });
+      setTls(data as TlsInfo);
+      setTlsMethod(null);
+      showToast.success(
+        'Certificate issued. Auto-renewal is on. It may take up to ~15 seconds to take effect.',
+      );
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Failed to obtain a certificate.');
+    } finally {
+      setTlsBusy(false);
+    }
+  };
+
+  const disableLetsEncrypt = async () => {
+    setTlsBusy(true);
+    try {
+      const data = await tlsAction({ action: 'lets-encrypt-disable' });
+      setTls(data as TlsInfo);
+      showToast.success('Auto-renewal turned off. The current certificate stays in place.');
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Failed to turn off auto-renewal.');
+    } finally {
+      setTlsBusy(false);
+    }
+  };
+
   const generateSelfSigned = async () => {
     if (!csrCommonName.trim()) {
       showToast.error('Enter a hostname (Common Name) first.');
@@ -218,11 +268,21 @@ export function useTlsCertificate() {
     setSignedCertFile,
     signedChainFile,
     setSignedChainFile,
+    leDomain,
+    setLeDomain,
+    leEmail,
+    setLeEmail,
+    leStaging,
+    setLeStaging,
+    leTos,
+    setLeTos,
     cnMissing,
     applyCert,
     resetCert,
     generateCsr,
     installSignedCert,
     generateSelfSigned,
+    requestLetsEncrypt,
+    disableLetsEncrypt,
   };
 }

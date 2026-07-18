@@ -376,12 +376,22 @@ export default function SystemSettingsClient() {
     setSignedCertFile,
     signedChainFile,
     setSignedChainFile,
+    leDomain,
+    setLeDomain,
+    leEmail,
+    setLeEmail,
+    leStaging,
+    setLeStaging,
+    leTos,
+    setLeTos,
     cnMissing,
     applyCert,
     resetCert,
     generateCsr,
     installSignedCert,
     generateSelfSigned,
+    requestLetsEncrypt,
+    disableLetsEncrypt,
   } = useTlsCertificate();
 
   // Seed the editable form from the cached settings response, once. Guarded on
@@ -1458,6 +1468,27 @@ export default function SystemSettingsClient() {
                         </p>
                       </>
                     )}
+                    {tls?.acme?.managed && (
+                      <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+                        <Badge variant="success" className="w-fit">
+                          Auto-renewing
+                        </Badge>
+                        <span className="text-muted-foreground">
+                          Let’s Encrypt for {tls.acme.domain}
+                          {tls.acme.staging ? ' (staging)' : ''}. Renews automatically before
+                          expiry.
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={disableLetsEncrypt}
+                          disabled={tlsBusy}
+                        >
+                          Turn off auto-renewal
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1487,6 +1518,23 @@ export default function SystemSettingsClient() {
                     role="group"
                     aria-label="Certificate setup method"
                   >
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        // Prefill the domain from the configured public URL's host.
+                        if (!leDomain && settingsData?.configuredUrl) {
+                          try {
+                            setLeDomain(new URL(settingsData.configuredUrl).hostname);
+                          } catch {
+                            // leave blank if the URL can't be parsed
+                          }
+                        }
+                        setTlsMethod('lets-encrypt');
+                      }}
+                    >
+                      Get a free certificate (Let’s Encrypt)
+                    </Button>
                     <Button type="button" size="sm" onClick={() => setTlsMethod('csr')}>
                       Request a CA-signed certificate
                     </Button>
@@ -1498,6 +1546,96 @@ export default function SystemSettingsClient() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Let's Encrypt (ACME HTTP-01) form (modal) */}
+                <Dialog
+                  open={tlsMethod === 'lets-encrypt'}
+                  onOpenChange={(open) => {
+                    if (!open) setTlsMethod(null);
+                  }}
+                >
+                  <DialogContent className="bg-card sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Get a free certificate (Let’s Encrypt)</DialogTitle>
+                      <DialogDescription>
+                        Automatically obtain and renew a browser-trusted certificate from Let’s
+                        Encrypt. This works only for a public server.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-5">
+                      <div
+                        role="note"
+                        className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                      >
+                        Before you start: this domain must point at this server in public DNS, and
+                        port 80 must be reachable from the internet (that is how Let’s Encrypt
+                        verifies you control the domain). Installing a trusted certificate also
+                        turns on HSTS, which tells browsers to use HTTPS for this domain going
+                        forward.
+                      </div>
+                      <InputGroup
+                        label="Domain"
+                        name="leDomain"
+                        requiredMark
+                        placeholder="afct.example.edu"
+                        value={leDomain}
+                        setValue={setLeDomain}
+                        disabled={tlsBusy}
+                        description="The public hostname visitors use. Should match your configured URL."
+                      />
+                      <InputGroup
+                        label="Contact email"
+                        name="leEmail"
+                        type="email"
+                        requiredMark
+                        placeholder="admin@example.edu"
+                        value={leEmail}
+                        setValue={setLeEmail}
+                        disabled={tlsBusy}
+                        description="Let’s Encrypt uses this only for expiry and policy notices."
+                      />
+                      <SwitchField
+                        id="le-staging"
+                        name="le-staging"
+                        label="Use staging (for testing)"
+                        checked={leStaging}
+                        onCheckedChange={setLeStaging}
+                        disabled={tlsBusy}
+                        descriptionPlacement="inline"
+                        description="Issues an untrusted test certificate from the staging environment. Use this first to confirm setup without spending the weekly rate limit."
+                        boxClassName="border-black"
+                      />
+                      <SwitchField
+                        id="le-tos"
+                        name="le-tos"
+                        label="I agree to the Let’s Encrypt terms of service"
+                        checked={leTos}
+                        onCheckedChange={setLeTos}
+                        disabled={tlsBusy}
+                        descriptionPlacement="inline"
+                        description="Required to request a certificate."
+                        boxClassName="border-black"
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setTlsMethod(null)}
+                        disabled={tlsBusy}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={requestLetsEncrypt}
+                        disabled={tlsBusy || !leDomain.trim() || !leEmail.trim() || !leTos}
+                      >
+                        {tlsBusy ? 'Requesting… (up to a minute)' : 'Request certificate'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
 
                 {/* Generate CSR / self-signed hostname form (modal) */}
                 <Dialog
