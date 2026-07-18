@@ -57,10 +57,10 @@ describe('DueDateCell', () => {
 
   it('shows only the base date when there are no overrides', () => {
     render(<DueDateCell assignment={base} timeZone="UTC" />);
-    expect(screen.queryByRole('button', { name: /override/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /multiple due dates/i })).not.toBeInTheDocument();
   });
 
-  it('shows a +N badge and lists each student in a popover', async () => {
+  it('shows a "Multiple" badge and lists each student in a popover', async () => {
     const user = userEvent.setup();
     const assignment = {
       ...base,
@@ -83,8 +83,8 @@ describe('DueDateCell', () => {
 
     render(<DueDateCell assignment={assignment} timeZone="UTC" />);
 
-    const badge = screen.getByRole('button', { name: /2 due-date overrides/i });
-    expect(badge).toHaveTextContent('+2');
+    const badge = screen.getByRole('button', { name: /multiple due dates \(2 overrides\)/i });
+    expect(badge).toHaveTextContent('Multiple');
 
     await user.click(badge);
 

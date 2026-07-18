@@ -7,7 +7,7 @@ import type { Assignment } from '@prisma/client';
 import type { AssignmentWithProblemCount } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
+import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen, CalendarClock } from 'lucide-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { CompactDate } from '@/components/ui/CompactDate';
@@ -74,10 +74,12 @@ export function DueDateCell({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="border-input text-muted-foreground hover:bg-muted focus-visible:ring-ring/40 rounded-full border px-1.5 py-0.5 text-xs leading-none focus-visible:ring-[3px] focus-visible:outline-none"
-              aria-label={`${overrides.length} due-date override${overrides.length === 1 ? '' : 's'}; show details`}
+              className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 focus-visible:ring-ring/40 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
+              aria-label={`Multiple due dates (${overrides.length} override${overrides.length === 1 ? '' : 's'}); show details`}
             >
-              +{overrides.length}
+              <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+              Multiple
+              <ChevronDown className="h-3 w-3" aria-hidden="true" />
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-72 p-3 text-xs">
