@@ -7,7 +7,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import SelectField from '@/components/ui/SelectField';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
@@ -20,7 +20,6 @@ import {
   DialogDescription,
   DialogClose,
 } from '@/components/ui/dialog';
-import { Controller, useForm } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
 import { AssignmentSettingsCard } from '@/components/assignments/AssignmentSettingsCard';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
@@ -72,11 +71,6 @@ export default function AssignmentDashboardPage({
   initialAssignment = null,
   initialAssignments,
 }: PrivilegeAssignmentViewProps) {
-  const { control } = useForm({
-    defaultValues: {
-      assignmentSelect: initialAssignment?.id || '',
-    },
-  });
   const { timezone } = useEffectiveTimezone();
   const { id, aid } = useParams<{ id: string; aid: string }>();
   const epsSymbol = useEmptyStringSymbol(id);
@@ -400,16 +394,32 @@ export default function AssignmentDashboardPage({
       <Tabs value={tab} onValueChange={handleTabChange}>
         <Card>
           <CardHeader>
-            <CardTitle
-              role="heading"
-              aria-level={1}
-              className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words"
-            >
-              <span className="font-semibold">Assignment:</span>{' '}
-              <span className="min-w-0 [overflow-wrap:anywhere] break-words">
-                {assignment.title}
-              </span>
-            </CardTitle>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <CardTitle
+                role="heading"
+                aria-level={1}
+                className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words"
+              >
+                <span className="font-semibold">Assignment:</span>{' '}
+                <span className="min-w-0 [overflow-wrap:anywhere] break-words">
+                  {assignment.title}
+                </span>
+              </CardTitle>
+              {/* Quick jump to another assignment in this course. */}
+              <div className="w-56 shrink-0">
+                <SearchableSelect
+                  items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
+                  onSelect={(assignmentId) => {
+                    if (id) router.push(`/dashboard/courses/${id}/${assignmentId}`);
+                    else window.location.href = assignmentId;
+                  }}
+                  placeholder={assignmentsLoading ? 'Loading…' : 'Switch assignment'}
+                  searchPlaceholder="Search assignments..."
+                  emptyStateText="No assignments found."
+                  disabled={assignmentsLoading}
+                />
+              </div>
+            </div>
             <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
               {/* Show course name/code as a link to the course page (fallback to courseId) */}
               <Link
@@ -426,44 +436,6 @@ export default function AssignmentDashboardPage({
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="max-w-xs">
-              <Controller
-                control={control}
-                name="assignmentSelect"
-                render={({ field }) => (
-                  <SelectField
-                    label="Assignment"
-                    name="assignmentSelect"
-                    id="assignmentSelect"
-                    value={field.value}
-                    onValueChange={(assignmentId) => {
-                      field.onChange(assignmentId);
-                      const selectedAssignment =
-                        allAssignments.find((a) => a.id === assignmentId) ?? null;
-
-                      if (!selectedAssignment) {
-                        showToast.error('Selected assignment not found');
-                        return;
-                      }
-
-                      if (id) {
-                        router.push(`/dashboard/courses/${id}/${selectedAssignment.id}`);
-                      } else {
-                        window.location.href = selectedAssignment.id;
-                      }
-                    }}
-                    placeholder={assignmentsLoading ? 'Loading...' : 'Choose assignment'}
-                    disabled={assignmentsLoading}
-                    options={allAssignments.map((assignOption) => ({
-                      value: assignOption.id,
-                      label: assignOption.title,
-                    }))}
-                    className="w-full"
-                    triggerClassName="!h-8 text-xs"
-                  />
-                )}
-              />
-            </div>
             {/* Tab selector, matching the underline style used on the course page. */}
             <TabsList aria-label="Assignment sections" className={TAB_BAR_LIST_CLASS}>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="description">
@@ -493,7 +465,7 @@ export default function AssignmentDashboardPage({
                   <AlignLeft className="h-6 w-6" />
                   Description
                 </h2>
-                <p className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
+                <p className="text-muted-foreground min-h-32 resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
                   {assignment.description ?? 'No description.'}
                 </p>
               </div>

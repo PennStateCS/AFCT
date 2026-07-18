@@ -17,7 +17,7 @@ import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-co
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import type { FullCourse, TabType } from '@/types/course';
 import { getInstructors } from '@/lib/course-utils';
-import type { Assignment, Problem, Course } from '@prisma/client';
+import type { Problem, Course } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMemo } from 'react';
 
@@ -32,7 +32,6 @@ interface AdminCourseViewProps {
   onCreateProblem: () => void;
   onEnrollUser: () => void;
   onBulkEnroll?: () => void;
-  onAssignmentEdit: (assignment: Assignment) => void;
   onAssignmentDelete: (assignmentId: string) => void;
   onAssignmentPublishToggle: (assignmentId: string, newValue: boolean) => void;
   onProblemEdit: (problem: Problem) => void;
@@ -52,7 +51,6 @@ export function AdminCourseView({
   onCreateAssignment,
   onCreateProblem,
   onEnrollUser,
-  onAssignmentEdit,
   onAssignmentDelete,
   onAssignmentPublishToggle,
   onProblemEdit,
@@ -71,7 +69,6 @@ export function AdminCourseView({
   const assignmentColumns = useAssignmentColumns(
     course.isArchived,
     onAssignmentDelete,
-    onAssignmentEdit,
     onAssignmentPublishToggle,
     timezone,
   );

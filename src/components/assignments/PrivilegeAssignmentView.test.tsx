@@ -75,30 +75,26 @@ vi.mock('@/components/ui/data-table', () => ({
   ),
 }));
 
-vi.mock('@/components/ui/SelectField', () => ({
-  __esModule: true,
-  default: ({
-    label,
-    value,
-    onValueChange,
-    options,
+vi.mock('@/components/ui/SearchableSelect', () => ({
+  SearchableSelect: ({
+    items,
+    onSelect,
+    placeholder,
     disabled,
   }: {
-    label: string;
-    value?: string;
-    onValueChange?: (v: string) => void;
-    options: Array<{ value: string; label: string }>;
+    items: Array<{ id: string; label: string }>;
+    onSelect: (id: string) => void;
+    placeholder?: string;
     disabled?: boolean;
   }) => (
     <select
-      aria-label={label}
-      value={value}
+      aria-label={placeholder}
       disabled={disabled}
-      onChange={(e) => onValueChange?.(e.target.value)}
+      onChange={(e) => onSelect(e.target.value)}
     >
       <option value="">choose</option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
+      {items.map((o) => (
+        <option key={o.id} value={o.id}>
           {o.label}
         </option>
       ))}
@@ -620,15 +616,7 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
 describe('PrivilegeAssignmentView — assignment switcher', () => {
   it('navigates to the chosen assignment', () => {
     renderView();
-    fireEvent.change(screen.getByLabelText('Assignment'), { target: { value: 'a2' } });
+    fireEvent.change(screen.getByLabelText('Switch assignment'), { target: { value: 'a2' } });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2');
-  });
-
-  it('toasts and does not navigate when the selected assignment is unknown', () => {
-    renderView();
-    // The empty option resolves to no assignment in allAssignments.
-    fireEvent.change(screen.getByLabelText('Assignment'), { target: { value: '' } });
-    expect(toast.error).toHaveBeenCalledWith('Selected assignment not found');
-    expect(nav.push).not.toHaveBeenCalled();
   });
 });

@@ -3,11 +3,10 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import type { Assignment } from '@prisma/client';
 import type { AssignmentWithProblemCount } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen, CalendarClock } from 'lucide-react';
+import { NotebookText, Trash2, ChevronDown, BookOpen, CalendarClock } from 'lucide-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { CompactDate } from '@/components/ui/CompactDate';
@@ -174,7 +173,6 @@ function PublishSwitchCell({
 export function useAssignmentColumns(
   courseIsArchived: boolean,
   handleAssignmentDeleteClick: (id: string) => void,
-  handleAssignmentEditClick: (assignment: Assignment) => void,
   handlePublishToggle: (assignmentId: string, newValue: boolean) => void,
   timeZone: string,
 ): ColumnDef<AssignmentWithProblemCount>[] {
@@ -298,14 +296,6 @@ export function useAssignmentColumns(
                     <BookOpen className="mr-2 h-4 w-4" />
                     View Assignment
                   </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleAssignmentEditClick(row.original)}
-                  className="flex items-center gap-2"
-                  hidden={courseIsArchived}
-                >
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit Assignment
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
 

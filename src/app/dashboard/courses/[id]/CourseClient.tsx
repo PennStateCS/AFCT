@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import type { Assignment, Problem, Course } from '@prisma/client';
+import { useParams } from 'next/navigation';
+import type { Problem, Course } from '@prisma/client';
 
 import { showToast } from '@/lib/toast';
 import type { EnrollableUser } from '@/types/course';
@@ -24,7 +24,6 @@ import type { TabType } from '@/types/course';
 
 export default function CourseClient({ initialCourse }: { initialCourse?: FullCourse | null }) {
   const { id } = useParams();
-  const router = useRouter();
   const courseId = Array.isArray(id) ? id[0] : id;
   // A viewer is a (non-privileged) student when they are NOT a global admin AND
   // their per-course role is not staff (FACULTY/TA). Derive from the initial
@@ -80,15 +79,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
       dialogStates.setConfirmOpen(true);
     },
     [dialogStates],
-  );
-
-  // Editing an assignment now lives on the assignment page's Settings tab, so the table's
-  // Edit action navigates there instead of opening a dialog.
-  const handleAssignmentEditClick = useCallback(
-    (assignment: Assignment) => {
-      router.push(`/dashboard/courses/${courseId}/${assignment.id}?tab=settings`);
-    },
-    [router, courseId],
   );
 
   const handleAssignmentDeleteClick = useCallback(
@@ -185,7 +175,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           onCreateProblem={() => dialogStates.setProblemOpen(true)}
           onEnrollUser={openEnrollDialog}
           onBulkEnroll={openBulkEnrollDialog}
-          onAssignmentEdit={handleAssignmentEditClick}
           onAssignmentDelete={handleAssignmentDeleteClick}
           onAssignmentPublishToggle={handlers.handleAssignmentPublishToggle}
           onProblemEdit={handleProblemEditClick}
