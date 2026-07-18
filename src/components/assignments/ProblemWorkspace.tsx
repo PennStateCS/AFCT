@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Eye, Download, File, FileText, MessageSquare, RotateCcw } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FeedbackDialog } from '@/components/dialogs/FeedbackDialog';
@@ -199,9 +199,8 @@ export default function ProblemWorkspace({
   };
 
   return (
-    <Card className="print:border-0 print:shadow-none">
-      <CardHeader>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-4 print:space-y-2">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <ProblemHeader
             title={problem.title}
             description={problem.description ?? undefined}
@@ -236,9 +235,8 @@ export default function ProblemWorkspace({
             </div>
           ) : null}
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid items-stretch gap-4 lg:grid-cols-[60%_40%]">
+
+      <div className="grid items-stretch gap-4 lg:grid-cols-[60%_40%]">
           <WorkspacePanel
             title="Submissions"
             icon={<FileText className="h-4 w-4" />}
@@ -461,12 +459,11 @@ export default function ProblemWorkspace({
             )}
           </WorkspacePanel>
         </div>
-      </CardContent>
       <FeedbackDialog
         open={feedbackDialogOpen}
         onOpenChange={setFeedbackDialogOpen}
         feedbackText={activeFeedback}
       />
-    </Card>
+    </div>
   );
 }

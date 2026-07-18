@@ -340,18 +340,19 @@ export default function AssignmentDashboardPage({
       <Tabs value={tab} onValueChange={handleTabChange}>
         <Card>
           <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <CardTitle
                 role="heading"
                 aria-level={1}
-                className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words"
+                className="flex min-w-0 flex-wrap items-center gap-2 text-2xl break-words"
               >
                 <span className="font-semibold">Assignment:</span>{' '}
                 <span className="min-w-0 [overflow-wrap:anywhere] break-words">
                   {assignment.title}
                 </span>
               </CardTitle>
-              {/* Publish toggle: server enforces the guards (e.g. no unpublish after submissions). */}
+              {/* Publish toggle sits next to the title; server enforces the guards
+                  (e.g. no unpublish after submissions). */}
               <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
                 <Switch
                   aria-label="Published"
@@ -362,7 +363,7 @@ export default function AssignmentDashboardPage({
                 Published
               </label>
               {/* Quick jump to another assignment in this course. */}
-              <div className="w-56 shrink-0">
+              <div className="ml-auto w-56 shrink-0">
                 <SearchableSelect
                   items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
                   onSelect={(assignmentId) => {

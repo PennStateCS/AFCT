@@ -42,7 +42,7 @@ export function ProblemListCard({
       <CardContent className="p-0">
         <ScrollArea className={scrollAreaClassName}>
           <ul className="divide-border divide-y">
-            {problems.map((problem) => {
+            {problems.map((problem, index) => {
               const isActive = selectedProblemId === problem.id;
               const badgeContent = getBadgeContent ? getBadgeContent(problem.id) : null;
               const gradeBadge =
@@ -96,7 +96,12 @@ export function ProblemListCard({
                         : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                     }`}
                   >
-                    <span className="truncate">{problem.title}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="text-muted-foreground shrink-0 tabular-nums">
+                        {index + 1}.
+                      </span>
+                      <span className="truncate">{problem.title}</span>
+                    </span>
                     {content}
                   </button>
                 </li>
