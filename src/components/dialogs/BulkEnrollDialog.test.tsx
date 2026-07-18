@@ -74,7 +74,7 @@ describe('BulkEnrollDialog', () => {
 
     await waitFor(() => expect(screen.getByText('Matched users (1)')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: 'Enroll' }));
+    await user.click(screen.getByRole('button', { name: /^enroll/i }));
 
     await waitFor(() => expect(screen.getByText('Enrollment complete')).toBeInTheDocument());
 

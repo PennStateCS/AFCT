@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useState, useEffect, useRef } from 'react';
+import { Stepper } from '@/components/ui/stepper';
+import { showToast } from '@/lib/toast';
 import type { EnrollableUser } from '@/types/course';
 import { apiPaths } from '@/lib/api-paths';
 import { BulkEnrollEmailsSchema, BulkEnrollUserIdsSchema } from '@/schemas/bulk';
@@ -27,6 +29,10 @@ type Props = {
   onComplete?: () => void;
 };
 
+// Wizard steps (0-based to match the shared Stepper). "Enroll" happens on the Review
+// step; the final step is a read-only result summary.
+const STEPS = ['Emails', 'Review', 'Done'] as const;
+
 export default function BulkEnrollDialog({
   open,
   setOpen,
@@ -34,18 +40,16 @@ export default function BulkEnrollDialog({
   courseIsArchived,
   onComplete,
 }: Props) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
   const [rawText, setRawText] = useState('');
   const [found, setFound] = useState<EnrollableUser[]>([]);
   const [notFound, setNotFound] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
 
-  const listRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
     if (!open) {
-      setStep(1);
+      setStep(0);
       setRawText('');
       setFound([]);
       setNotFound([]);
@@ -72,14 +76,14 @@ export default function BulkEnrollDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(BulkEnrollEmailsSchema.parse({ emails: parsed })),
       });
-      if (!res.ok) throw new Error('Lookup failed');
+      if (!res.ok) throw new Error('Could not look up those emails. Please try again.');
       const data = await res.json();
       // expected: { found: EnrollableUser[], notFound: string[] }
       setFound(data.found ?? []);
       setNotFound(data.notFound ?? []);
-      setStep(2);
+      setStep(1);
     } catch (err) {
-      alert((err as Error).message || 'Lookup error');
+      showToast.error(err instanceof Error ? err.message : 'Lookup failed.');
     } finally {
       setIsLoading(false);
     }
@@ -96,12 +100,13 @@ export default function BulkEnrollDialog({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || 'Enroll failed');
+        throw new Error(data?.message || 'Could not enroll the selected users. Please try again.');
       }
-      setStep(3);
+      showToast.success(`Enrolled ${found.length} student${found.length === 1 ? '' : 's'}.`);
+      setStep(2);
       onComplete?.();
     } catch (err) {
-      alert((err as Error).message || 'Enroll error');
+      showToast.error(err instanceof Error ? err.message : 'Enroll failed.');
     } finally {
       setIsEnrolling(false);
     }
@@ -109,121 +114,137 @@ export default function BulkEnrollDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent
-        className="bg-card max-w-3xl"
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent className="bg-card sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Bulk Enroll Students</DialogTitle>
-          <DialogDescription>
-            Step {step} of 3 —{' '}
-            {step === 1 ? 'Paste emails' : step === 2 ? 'Review matches' : 'Done'}
+          <DialogDescription className="sr-only">
+            Enroll students in three steps: paste their emails, review the matched accounts, then
+            confirm.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {step === 1 && (
-            <div>
-              <Label htmlFor="emails">Paste emails (one per line or comma-separated)</Label>
+        <Stepper steps={STEPS} current={step} className="mb-2" />
+
+        {/* Stable min-height so the dialog doesn't resize between steps. */}
+        <div className="min-h-[320px] space-y-4" aria-busy={isLoading || isEnrolling}>
+          {step === 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="bulk-enroll-emails">
+                Paste emails (one per line or comma-separated)
+              </Label>
               <Textarea
-                id="emails"
-                className="mt-2 h-64"
+                id="bulk-enroll-emails"
+                aria-describedby="bulk-enroll-help"
+                className="h-64"
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
               />
-              <div className="text-muted-foreground mt-2 text-sm">
-                Note: This tool can only enroll users who already have a system account. If an email
-                is not associated with an existing account it will be listed as not found and will
-                not be enrolled — ask the student to create an account or add them manually. Lookups
-                are case-insensitive, so Email and email@example.com will match the same account.
-              </div>
-              {/* Controls are in the dialog footer to avoid duplication */}
+              <p id="bulk-enroll-help" className="text-muted-foreground text-sm">
+                This tool can only enroll users who already have a system account. Any email without
+                a matching account is listed as not found and is not enrolled; ask that student to
+                create an account or add them manually. Lookups are case-insensitive, so Email and
+                email@example.com match the same account.
+              </p>
             </div>
           )}
 
-          {step === 2 && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="h-96 overflow-auto rounded border p-2" ref={listRef}>
-                <div className="mb-2 font-medium">Matched users ({found.length})</div>
+          {step === 1 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <section
+                className="h-96 overflow-auto rounded-md border p-3"
+                aria-label="Matched users"
+              >
+                <h3 className="mb-2 font-medium">Matched users ({found.length})</h3>
                 {found.length === 0 ? (
-                  <div className="text-muted-foreground text-sm">No matched users.</div>
+                  <p className="text-muted-foreground text-sm">No matched users.</p>
                 ) : (
                   <ul className="space-y-2">
                     {found.map((u) => (
-                      <li key={u.id} className="flex items-center gap-2">
-                        <div>
-                          <div className="text-sm">
-                            {u.firstName} {u.lastName}
-                          </div>
-                          <div className="text-muted-foreground text-xs">{u.email}</div>
+                      <li key={u.id}>
+                        <div className="text-sm">
+                          {u.firstName} {u.lastName}
                         </div>
+                        <div className="text-muted-foreground text-xs break-all">{u.email}</div>
                       </li>
                     ))}
                   </ul>
                 )}
-              </div>
+              </section>
 
-              <div className="h-96 overflow-auto rounded border p-2">
-                <div className="mb-2 font-medium">Not found ({notFound.length})</div>
-                <div className="text-muted-foreground mb-2 text-xs">
+              <section className="h-96 overflow-auto rounded-md border p-3" aria-label="Not found">
+                <h3 className="mb-2 font-medium">Not found ({notFound.length})</h3>
+                <p className="text-muted-foreground mb-2 text-xs">
                   These emails were not matched to existing system accounts and will not be enrolled
                   automatically. Lookups are case-insensitive.
-                </div>
+                </p>
                 {notFound.length === 0 ? (
-                  <div className="text-muted-foreground text-sm">
+                  <p className="text-muted-foreground text-sm">
                     All emails matched existing accounts.
-                  </div>
+                  </p>
                 ) : (
                   <ul className="space-y-1 text-sm">
                     {notFound.map((e) => (
-                      <li key={e} className="bg-muted/10 rounded px-2 py-1">
+                      <li key={e} className="bg-muted/10 rounded px-2 py-1 break-all">
                         {e}
                       </li>
                     ))}
                   </ul>
                 )}
-              </div>
+              </section>
             </div>
           )}
 
-          {step === 3 && (
-            <div className="p-4">
-              <div className="text-lg font-medium">Enrollment complete</div>
-              <div className="text-muted-foreground mt-2 text-sm">
-                {found.length} users were enrolled. {notFound.length} emails were not found.
-              </div>
+          {step === 2 && (
+            <div role="status" className="space-y-2 py-4">
+              <p className="text-lg font-medium">Enrollment complete</p>
+              <p className="text-muted-foreground text-sm">
+                {found.length} student{found.length === 1 ? '' : 's'} enrolled. {notFound.length}{' '}
+                email{notFound.length === 1 ? '' : 's'} not found.
+              </p>
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="secondary">
-              Cancel
+          {step < 2 && (
+            <DialogClose asChild>
+              <Button type="button" variant="ghost">
+                Cancel
+              </Button>
+            </DialogClose>
+          )}
+
+          {step === 1 && (
+            <Button type="button" variant="secondary" onClick={() => setStep(0)}>
+              Back
             </Button>
-          </DialogClose>
+          )}
+
+          {step === 0 && (
+            <Button
+              type="button"
+              onClick={() => void handleNextFromPaste()}
+              disabled={isLoading || !rawText.trim() || courseIsArchived}
+            >
+              {isLoading ? 'Checking…' : 'Next'}
+            </Button>
+          )}
 
           {step === 1 && (
             <Button
-              onClick={handleNextFromPaste}
-              disabled={isLoading || !rawText.trim() || courseIsArchived}
+              type="button"
+              onClick={() => void handleEnroll()}
+              disabled={isEnrolling || found.length === 0}
             >
-              Next
+              {isEnrolling ? 'Enrolling…' : `Enroll ${found.length || ''}`.trim()}
             </Button>
           )}
 
           {step === 2 && (
-            <>
-              <Button variant="default" onClick={() => setStep(1)}>
-                Back
-              </Button>
-              <Button onClick={handleEnroll} disabled={isEnrolling || found.length === 0}>
-                {isEnrolling ? 'Enrolling…' : 'Enroll'}
-              </Button>
-            </>
+            <Button type="button" onClick={() => setOpen(false)}>
+              Done
+            </Button>
           )}
-
-          {step === 3 && <Button onClick={() => setOpen(false)}>Done</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>
