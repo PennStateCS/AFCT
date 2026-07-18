@@ -368,14 +368,16 @@ export default function LoginPage() {
     return (
       <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
         <p className="mb-2 font-semibold text-gray-800">Complete the security check to continue.</p>
-        <HCaptcha
-          sitekey={captchaSiteKey as string}
-          onVerify={handleCaptchaVerify}
-          onExpire={handleCaptchaReset}
-          onError={handleCaptchaReset}
-          reCaptchaCompat={false}
-          theme="light"
-        />
+        <div className="flex justify-center">
+          <HCaptcha
+            sitekey={captchaSiteKey as string}
+            onVerify={handleCaptchaVerify}
+            onExpire={handleCaptchaReset}
+            onError={handleCaptchaReset}
+            reCaptchaCompat={false}
+            theme="light"
+          />
+        </div>
       </div>
     );
   };
