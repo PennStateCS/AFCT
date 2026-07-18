@@ -161,6 +161,24 @@ export default function LoginPage() {
     showToast.error('Invalid email or password.');
   }, [searchParams, requestCaptchaIfAvailable]);
 
+  // Classify a failed sign-in by asking the read-only login-check endpoint (NextAuth
+  // hides the real reason). Returns 'challenge' (show captcha), 'blocked' (rate
+  // limited), or 'ok' (treat as bad credentials). Never throws.
+  const fetchLoginState = async (email: string): Promise<'ok' | 'challenge' | 'blocked'> => {
+    try {
+      const res = await fetch('/api/auth/login-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) return 'ok';
+      const data = (await res.json()) as { status?: string };
+      return data.status === 'challenge' || data.status === 'blocked' ? data.status : 'ok';
+    } catch {
+      return 'ok';
+    }
+  };
+
   // Basic credential flow with minimal client-side validation before delegating to NextAuth.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,10 +207,14 @@ export default function LoginPage() {
     });
 
     if (result?.error) {
-      if (result.error === 'RateLimitExceeded') {
+      // NextAuth (Auth.js v5) reports every authorize failure as a generic error, so
+      // ask the server what actually happened: a rate-limit block, a bot challenge
+      // (show the captcha), or plain bad credentials.
+      const state = await fetchLoginState(trimmedEmail);
+      if (state === 'blocked') {
         showToast.error('Too many login attempts. Please wait a few minutes and try again.');
         setLoginErrors({ password: 'Temporarily locked due to too many attempts.' });
-      } else if (result.error === 'BotChallengeRequired') {
+      } else if (state === 'challenge') {
         const shown = requestCaptchaIfAvailable();
         showToast.error(
           shown

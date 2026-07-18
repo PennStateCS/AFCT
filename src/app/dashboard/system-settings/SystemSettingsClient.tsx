@@ -78,6 +78,7 @@ import SwitchField from '@/components/ui/SwitchField';
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import FileUploadInput from '@/components/FileUploadInput';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { SlidersHorizontal, Cpu, DatabaseBackup, ShieldCheck, Lock, RefreshCw } from 'lucide-react';
 import { useTlsCertificate } from './useTlsCertificate';
 import { useBackups } from './useBackups';
@@ -349,6 +350,28 @@ export default function SystemSettingsClient() {
     Boolean(settingsData?.hcaptchaSecretConfigured),
   );
   const [hcaptchaSecretClear, setHcaptchaSecretClear] = useState(false);
+
+  // "Test captcha" flow: render a real hCaptcha with the saved keys and verify the
+  // solved token against the stored secret so an admin can confirm both keys work.
+  const [captchaTestOpen, setCaptchaTestOpen] = useState(false);
+  const [captchaTestResult, setCaptchaTestResult] = useState<'idle' | 'verifying' | 'ok' | 'fail'>(
+    'idle',
+  );
+
+  const handleCaptchaTestVerify = async (token: string) => {
+    setCaptchaTestResult('verifying');
+    try {
+      const res = await fetch('/api/admin/settings/captcha-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      setCaptchaTestResult(res.ok && data.ok ? 'ok' : 'fail');
+    } catch {
+      setCaptchaTestResult('fail');
+    }
+  };
 
   // Baseline of saved values, for unsaved-changes detection. Seeded synchronously
   // on a warm cache so `loading` (below) is false immediately: no disabled flash.
@@ -1406,6 +1429,67 @@ export default function SystemSettingsClient() {
                   />
                 )}
               </div>
+              {/* Verify the saved keys actually work before relying on them. */}
+              <div className="mt-6 max-w-md space-y-3 border-t pt-5">
+                <h3 className="text-sm font-medium">Verify your keys</h3>
+                {settingsData?.hcaptchaSiteKey && hcaptchaSecretConfigured ? (
+                  <>
+                    <p className="text-muted-foreground text-xs">
+                      Loads a real hCaptcha challenge with your saved site key and checks the result
+                      against your saved secret, so you can confirm bot protection works.
+                    </p>
+                    {!captchaTestOpen ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setCaptchaTestResult('idle');
+                          setCaptchaTestOpen(true);
+                        }}
+                      >
+                        Test captcha
+                      </Button>
+                    ) : (
+                      <div className="space-y-3">
+                        <HCaptcha
+                          sitekey={settingsData.hcaptchaSiteKey}
+                          onVerify={handleCaptchaTestVerify}
+                          onExpire={() => setCaptchaTestResult('idle')}
+                          onError={() => setCaptchaTestResult('fail')}
+                          reCaptchaCompat={false}
+                        />
+                        <div role="status" aria-live="polite">
+                          {captchaTestResult === 'verifying' && (
+                            <span className="text-muted-foreground text-sm">Verifying…</span>
+                          )}
+                          {captchaTestResult === 'ok' && (
+                            <Badge variant="success" className="w-fit">
+                              Your hCaptcha keys are working
+                            </Badge>
+                          )}
+                          {captchaTestResult === 'fail' && (
+                            <div className="space-y-1">
+                              <Badge variant="destructive" className="w-fit">
+                                Verification failed
+                              </Badge>
+                              <p className="text-muted-foreground text-xs">
+                                The challenge did not verify against your saved secret. Check that
+                                the site key and secret key belong to the same hCaptcha site.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-muted-foreground text-xs">
+                    Save a site key and secret key above, then come back here to test them.
+                  </p>
+                )}
+              </div>
+
               <p className="text-muted-foreground mt-3 text-xs">
                 To get keys, sign up at{' '}
                 <a
