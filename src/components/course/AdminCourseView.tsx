@@ -11,7 +11,7 @@ import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
 import { RosterCard } from '@/components/RosterCard';
 import { PrivilegeGradesCard } from '@/components/PrivilegeGradesCard';
-import GroupsCard from '@/components/GroupsCard';
+import { GroupSetsCard } from '@/components/groups/GroupSetsCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
@@ -162,7 +162,7 @@ export function AdminCourseView({
           </CourseTabPanel>
 
           <CourseTabPanel value="groups" active={tab === 'groups'}>
-            <GroupsCard courseId={course.id} />
+            <GroupSetsCard courseId={course.id} courseIsArchived={course.isArchived} />
           </CourseTabPanel>
 
           <CourseTabPanel value="activity" active={tab === 'activity'}>
