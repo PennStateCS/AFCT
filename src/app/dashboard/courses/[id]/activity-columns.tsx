@@ -17,6 +17,9 @@ export interface ActivityUser {
   firstName: string | null;
   lastName: string | null;
   avatar: string | null;
+  cropX: number | null;
+  cropY: number | null;
+  zoom: number | null;
 }
 
 export interface ActivityLog {
@@ -253,6 +256,9 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
           <AvatarImage
             src={activity.user?.avatar ? apiPaths.files.pfp(activity.user.avatar) : undefined}
             alt={`${activity.user?.firstName} ${activity.user?.lastName}`}
+            cropX={activity.user?.cropX ?? 0.5}
+            cropY={activity.user?.cropY ?? 0.5}
+            zoom={activity.user?.zoom ?? 1}
           />
           <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
             {getInitials(activity.user?.firstName, activity.user?.lastName, activity.user?.email)}

@@ -59,6 +59,9 @@ type SubmissionItem = {
   maxPoints?: number | null;
   problemTitle?: string | null;
   avatar?: string | null;
+  cropX?: number | null;
+  cropY?: number | null;
+  zoom?: number | null;
   fileName?: string | null;
   originalFileName?: string | null;
   feedback: string;
@@ -601,6 +604,9 @@ export default function SubmissionsClient() {
                                     : undefined
                                 }
                                 alt={submission.studentEmail || submission.studentId || 'User'}
+                                cropX={submission.cropX ?? 0.5}
+                                cropY={submission.cropY ?? 0.5}
+                                zoom={submission.zoom ?? 1}
                               />
                               <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
                                 {getInitials(

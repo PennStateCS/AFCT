@@ -30,6 +30,7 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import { AvatarCrop, type AvatarCropRef } from '../AvatarCrop';
 
+// cropX/cropY/zoom come from the Prisma `User` type (nullable); no need to redeclare.
 type UserWithAdmin = User & { isAdmin?: boolean };
 
 type EditUserDialogProps = {
@@ -49,13 +50,17 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const avatarUploadId = useId();
   const avatarErrorId = `${avatarUploadId}-error`;
-  const [avatarDirty, setAvatarDirty] = useState(false);
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
   const [serverTimezone, setServerTimezone] = useState('UTC');
+  const [avatarCrop, setAvatarCrop] = useState({
+    cropX: user.cropX ?? 0.5,
+    cropY: user.cropY ?? 0.5,
+    zoom: user.zoom ?? 1,
+  });
 
   // RHF defaults – email is read-only so it isn't in the schema
   const defaults: UpdateUserRaw = useMemo(
@@ -97,7 +102,11 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       });
       // Reset preview from current user
       setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
-      setAvatarDirty(false);
+      setAvatarCrop({
+        cropX: user.cropX ?? 0.5,
+        cropY: user.cropY ?? 0.5,
+        zoom: user.zoom ?? 1,
+      });
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -105,9 +114,13 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepErrors: false,
         keepValues: false,
       });
-      setAvatarDirty(false);
+      setAvatarCrop({
+        cropX: user.cropX ?? 0.5,
+        cropY: user.cropY ?? 0.5,
+        zoom: user.zoom ?? 1,
+      });
     }
-  }, [open, defaults, reset, user.avatar]);
+  }, [open, defaults, reset, user.avatar, user.cropX, user.cropY, user.zoom]);
 
   useEffect(() => {
     if (!open) return;
@@ -142,7 +155,6 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       shouldValidate: true,
     });
     setValue('deleteAvatar', false, { shouldDirty: true });
-    setAvatarDirty(true);
 
     // Set preview Avatar
     if (file) {
@@ -155,20 +167,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const onDeleteAvatar = () => {
     setValue('avatarFile', undefined, { shouldDirty: true });
     setValue('deleteAvatar', true, { shouldDirty: true });
-    setAvatarDirty(false);
     setAvatarPreview('');
-  };
-
-  const getCroppedAvatarFile = async () => {
-    const editor = avatarEditorRef.current;
-    if (!editor) return null;
-    const canvas = editor.getImageScaledToCanvas();
-    return new Promise<File | null>((resolve) => {
-      canvas.toBlob((blob: Blob | null) => {
-        if (!blob) return resolve(null);
-        resolve(new File([blob], 'avatar.png', { type: 'image/png' }));
-      }, 'image/png');
-    });
   };
 
   const resetForm = () =>
@@ -182,10 +181,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     formData.append('lastName', parsed.lastName);
     let avatarToUpload: File | undefined;
     if (parsed.deleteAvatar) {
-      // deleteAvatar takes precedence over any editor state
       avatarToUpload = undefined;
-    } else if (avatarDirty) {
-      avatarToUpload = (await getCroppedAvatarFile()) || undefined;
     } else if (parsed.avatarFile instanceof File) {
       avatarToUpload = parsed.avatarFile;
     }
@@ -195,6 +191,9 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     if (parsed.timezone) formData.append('timezone', parsed.timezone);
     // Only admins can set this; the backend ignores it from non-admins regardless.
     if (viewerIsAdmin) formData.append('isAdmin', parsed.isAdmin ? 'true' : 'false');
+    formData.append('cropX', String(avatarCrop.cropX));
+    formData.append('cropY', String(avatarCrop.cropY));
+    formData.append('zoom', String(avatarCrop.zoom));
 
     const result = await mutateWithToast(
       () => apiClient.patchForm(apiPaths.user(user.id), formData),
@@ -209,6 +208,9 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       lastName: parsed.lastName,
       isAdmin: viewerIsAdmin ? parsed.isAdmin : user.isAdmin,
       avatar: parsed.deleteAvatar ? null : user.avatar,
+      cropX: avatarCrop.cropX,
+      cropY: avatarCrop.cropY,
+      zoom: avatarCrop.zoom,
       inactive: parsed.inactive,
       timezone: parsed.timezone || undefined,
     });
@@ -238,7 +240,13 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             <Label className="w-full text-center">Avatar Image</Label>
             <div className="flex w-full items-center justify-center gap-4">
               <Avatar className="h-20 w-20">
-                <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
+                <AvatarImage
+                  src={avatarPreview || undefined}
+                  alt="User Avatar"
+                  cropX={avatarCrop.cropX}
+                  cropY={avatarCrop.cropY}
+                  zoom={avatarCrop.zoom}
+                />
                 <AvatarFallback className="bg-secondary text-secondary-foreground">
                   {(watch('firstName') || user.firstName || '?').charAt(0)}
                   {(watch('lastName') || user.lastName || '?').charAt(0)}
@@ -299,7 +307,13 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             <AvatarCrop
               avatarPreview={avatarPreview}
               editorRef={avatarEditorRef}
-              onChange={() => setAvatarDirty(true)}
+              cropX={avatarCrop.cropX}
+              cropY={avatarCrop.cropY}
+              zoom={avatarCrop.zoom}
+              onPositionChange={(position) =>
+                setAvatarCrop((prev) => ({ ...prev, cropX: position.x, cropY: position.y }))
+              }
+              onZoomChange={(zoom) => setAvatarCrop((prev) => ({ ...prev, zoom }))}
             />
           ) : null}
 

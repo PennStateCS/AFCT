@@ -6,6 +6,10 @@ export type GradeMatrixStudent = {
   lastName: string | null;
   email: string;
   avatar: string | null;
+  // Avatar framing (applied as a CSS transform at render); null falls back to default.
+  cropX: number | null;
+  cropY: number | null;
+  zoom: number | null;
 };
 
 export type GradeMatrixAssignment = {
@@ -38,7 +42,16 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
   const users = rosterUserIds.length
     ? await prisma.user.findMany({
         where: { id: { in: rosterUserIds } },
-        select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          avatar: true,
+          cropX: true,
+          cropY: true,
+          zoom: true,
+        },
       })
     : [];
 
@@ -52,6 +65,9 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
       lastName: u.lastName,
       email: u.email,
       avatar: u.avatar,
+      cropX: u.cropX,
+      cropY: u.cropY,
+      zoom: u.zoom,
     }));
 
   const assignmentRows = await prisma.assignment.findMany({

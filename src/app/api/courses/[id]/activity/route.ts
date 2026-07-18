@@ -115,7 +115,16 @@ export const GET = withCourseAuth(
           where,
           include: {
             user: {
-              select: { id: true, email: true, firstName: true, lastName: true, avatar: true },
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+                cropX: true,
+                cropY: true,
+                zoom: true,
+              },
             },
             course: { select: { id: true, name: true, code: true } },
             assignment: { select: { id: true, title: true } },

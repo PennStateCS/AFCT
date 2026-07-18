@@ -18,6 +18,14 @@ vi.mock('@/components/ui/InputGroup', () =>
   import('@/test/mocks/ui').then((mod) => mod.inputGroupMock),
 );
 vi.mock('@/components/ui/select', () => import('@/test/mocks/ui').then((mod) => mod.selectMock));
+// The crop editor wraps react-avatar-editor (canvas), which jsdom can't render; stub
+// it out so tests that show an avatar don't touch a real canvas.
+vi.mock('../AvatarCrop', () => ({ AvatarCrop: () => null }));
+
+const { updateSession } = vi.hoisted(() => ({ updateSession: vi.fn() }));
+vi.mock('next-auth/react', () => ({
+  useSession: () => ({ data: null, status: 'authenticated', update: updateSession }),
+}));
 
 const { toastSuccess, toastError } = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
@@ -62,6 +70,7 @@ describe('EditProfileDialog', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
     toastSuccess.mockReset();
     toastError.mockReset();
+    updateSession.mockReset();
   });
 
   afterEach(() => {
@@ -105,15 +114,27 @@ describe('EditProfileDialog', () => {
       payload[key] = value;
     });
 
-    expect(payload).toMatchObject({ firstName: 'Ada', lastName: 'Lovelace' });
+    // The crop values are always sent so the server can persist the framing.
+    expect(payload).toMatchObject({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      cropX: '0.5',
+      cropY: '0.5',
+      zoom: '1',
+    });
     expect(onSave).toHaveBeenCalledWith({
       firstName: 'Ada',
       lastName: 'Lovelace',
       avatar: null,
       timezone: 'UTC',
+      cropX: 0.5,
+      cropY: 0.5,
+      zoom: 1,
     });
     expect(setOpen).toHaveBeenCalledWith(false);
     expect(toastSuccess).toHaveBeenCalledWith('Profile updated!');
+    // The session is refreshed so navbar/sidebar avatars update without a reload.
+    expect(updateSession).toHaveBeenCalled();
   });
 
   it('clears the timezone override when Automatic is chosen', async () => {
@@ -143,5 +164,43 @@ describe('EditProfileDialog', () => {
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ timezone: undefined }),
     );
+  });
+
+  it('shows an error and keeps the dialog open when the save fails', async () => {
+    const userEvents = userEvent.setup();
+    const setOpen = vi.fn();
+
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({}) } as Response);
+
+    renderWithClient(<EditProfileDialog user={user} open setOpen={setOpen} />);
+
+    await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to update profile.'));
+    // Dialog stays open and the session is not refreshed on a failed save.
+    expect(setOpen).not.toHaveBeenCalledWith(false);
+    expect(updateSession).not.toHaveBeenCalled();
+  });
+
+  it('sends deleteAvatar and no file when the avatar is removed', async () => {
+    const userEvents = userEvent.setup();
+    const setOpen = vi.fn();
+    const avatarUser = { ...user, avatar: 'pic.png' };
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ firstName: 'Test', lastName: 'User', avatar: null, timezone: 'UTC' }),
+    } as Response);
+
+    renderWithClient(<EditProfileDialog user={avatarUser} open setOpen={setOpen} />);
+
+    await userEvents.click(screen.getByRole('button', { name: /Delete Avatar/i }));
+    await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const formData = requestInit.body as FormData;
+    expect(formData.get('deleteAvatar')).toBe('true');
+    expect(formData.get('avatar')).toBeNull();
   });
 });

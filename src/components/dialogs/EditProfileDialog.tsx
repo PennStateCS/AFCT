@@ -1,5 +1,4 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { getInitials } from '@/app/utils/initials';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +9,6 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
 import { AvatarCrop, type AvatarCropRef } from '../AvatarCrop';
 import { Trash2, Upload } from 'lucide-react';
@@ -21,6 +19,7 @@ import SelectField from '@/components/ui/SelectField';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 
 import type { SessionUser } from '@/types/next-auth';
 import {
@@ -37,25 +36,39 @@ import { apiPaths } from '@/lib/api-paths';
 // through to the system default, then the browser.
 const AUTO_TIMEZONE = '__auto__';
 
+type ProfileUser = SessionUser & {
+  cropX?: number;
+  cropY?: number;
+  zoom?: number;
+};
+
 type EditProfileDialog = {
-  user: SessionUser;
+  user: ProfileUser;
   open: boolean;
   setOpen: (open: boolean) => void;
-  onSave?: (updatedUser: Partial<SessionUser>) => Promise<void>;
+  onSave?: (updatedUser: Partial<ProfileUser>) => Promise<void>;
 };
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
   const queryClient = useQueryClient();
+  // The navbar/sidebar avatars read from the NextAuth session; update() re-runs the
+  // session callback (which re-reads the user from the DB), so the new photo/crop
+  // appears immediately without a page reload.
+  const { update: updateSession } = useSession();
   const avatarEditorRef = useRef<AvatarCropRef['current']>(null);
-  // Ref (not getElementById) to trigger the hidden file input, and a unique id so
-  // the input/button/error can be associated even if the dialog renders more than once.
+  // Ref (not getElementById) to trigger the hidden file input, and a unique id so the
+  // input/button/error can be associated even if the dialog renders more than once.
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const avatarUploadId = useId();
   const avatarErrorId = `${avatarUploadId}-error`;
-  const [avatarDirty, setAvatarDirty] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
+  const [avatarCrop, setAvatarCrop] = useState({
+    cropX: user.cropX ?? 0.5,
+    cropY: user.cropY ?? 0.5,
+    zoom: user.zoom ?? 1,
+  });
   // What "Automatic" would resolve to on this device, shown for reassurance.
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -66,6 +79,9 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       lastName: user.lastName ?? '',
       timezone: user.timezone ?? '',
       avatarFile: undefined,
+      cropX: user.cropX ?? 0.5,
+      cropY: user.cropY ?? 0.5,
+      zoom: user.zoom ?? 1,
       deleteAvatar: false,
     }),
     [user],
@@ -96,7 +112,11 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       });
       // Reset preview from current user
       setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
-      setAvatarDirty(false);
+      setAvatarCrop({
+        cropX: user.cropX ?? 0.5,
+        cropY: user.cropY ?? 0.5,
+        zoom: user.zoom ?? 1,
+      });
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -104,9 +124,13 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         keepErrors: false,
         keepValues: false,
       });
-      setAvatarDirty(false);
+      setAvatarCrop({
+        cropX: user.cropX ?? 0.5,
+        cropY: user.cropY ?? 0.5,
+        zoom: user.zoom ?? 1,
+      });
     }
-  }, [open, defaults, reset, user.avatar]);
+  }, [open, defaults, reset, user.avatar, user.cropX, user.cropY, user.zoom]);
 
   const handleAvatarUpload = (file?: File) => {
     // Update RHF state and local state
@@ -116,7 +140,6 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       shouldValidate: true,
     });
     setValue('deleteAvatar', false, { shouldDirty: true });
-    setAvatarDirty(true);
 
     // Set preview Avatar
     if (file) {
@@ -128,20 +151,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
   const handleDeleteAvatar = () => {
     setValue('deleteAvatar', true, { shouldDirty: true });
-    setAvatarDirty(false);
     setAvatarPreview('');
-  };
-
-  const getCroppedAvatarFile = async () => {
-    const editor = avatarEditorRef.current;
-    if (!editor) return null;
-    const canvas = editor.getImageScaledToCanvas();
-    return new Promise<File | null>((resolve) => {
-      canvas.toBlob((blob: Blob | null) => {
-        if (!blob) return resolve(null);
-        resolve(new File([blob], 'avatar.png', { type: 'image/png' }));
-      }, 'image/png');
-    });
   };
 
   const resetForm = () =>
@@ -156,9 +166,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     let avatarToUpload: File | undefined;
     if (parsed.deleteAvatar) {
       avatarToUpload = undefined;
-    } else if (avatarDirty) {
-      avatarToUpload = (await getCroppedAvatarFile()) || undefined;
-    } else if (parsed.avatarFile) {
+    } else if (parsed.avatarFile instanceof File) {
       avatarToUpload = parsed.avatarFile;
     }
     if (avatarToUpload) formData.append('avatar', avatarToUpload);
@@ -166,17 +174,27 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     // Always send it: a blank value tells the server to clear the override
     // (Automatic), so the display timezone follows the system/browser again.
     formData.append('timezone', parsed.timezone ?? '');
+    formData.append('cropX', String(avatarCrop.cropX));
+    formData.append('cropY', String(avatarCrop.cropY));
+    formData.append('zoom', String(avatarCrop.zoom));
 
     try {
       // Post new profile data to database
       const res = await fetch(apiPaths.me(), { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Failed to update profile');
 
-      // Use NextAuth's update function to immediately update the session
+      // Refresh the session so the navbar/sidebar avatars (which read from it) reflect
+      // the new photo and crop instantly, no reload needed.
+      await updateSession();
+
+      // Kept for any parent that also wants the updated fields.
       await onSave?.({
         firstName: parsed.firstName,
         lastName: parsed.lastName,
         avatar: parsed.deleteAvatar ? null : user.avatar,
+        cropX: avatarCrop.cropX,
+        cropY: avatarCrop.cropY,
+        zoom: avatarCrop.zoom,
         timezone: parsed.timezone || undefined,
       });
 
@@ -215,93 +233,92 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
           {/* Avatar */}
           <div className="flex flex-col items-center gap-3">
             <Label className="w-full text-center">Avatar Image</Label>
-            <div className="flex w-full items-center justify-center gap-4">
-              <Avatar className="h-20 w-20">
-                <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
-                <AvatarFallback className="bg-secondary text-secondary-foreground">
-                  {getInitials(user.firstName, user.lastName, user.email)}
-                </AvatarFallback>
-              </Avatar>
-
-              <div className="flex w-full max-w-xs flex-col gap-3">
-                <input
-                  id={avatarUploadId}
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  aria-invalid={errors.avatarFile?.message ? true : undefined}
-                  aria-describedby={errors.avatarFile?.message ? avatarErrorId : undefined}
-                  onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
-                />
+            {/* No separate preview: the crop editor below shows the current image. */}
+            <input
+              id={avatarUploadId}
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              aria-invalid={errors.avatarFile?.message ? true : undefined}
+              aria-describedby={errors.avatarFile?.message ? avatarErrorId : undefined}
+              onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
+            />
+            <div className="flex w-full gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => avatarInputRef.current?.click()}
+                aria-describedby={errors.avatarFile?.message ? avatarErrorId : undefined}
+                className="flex flex-1 items-center justify-center gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                Upload Avatar
+              </Button>
+              {avatarPreview && (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => avatarInputRef.current?.click()}
-                  aria-describedby={errors.avatarFile?.message ? avatarErrorId : undefined}
-                  className="flex items-center gap-2"
+                  className="flex flex-1 items-center justify-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
+                  onClick={handleDeleteAvatar}
                 >
-                  <Upload className="h-4 w-4" />
-                  Upload Avatar
+                  <Trash2 className="h-4 w-4" />
+                  Delete Avatar
                 </Button>
-                {errors.avatarFile?.message && (
-                  <p id={avatarErrorId} role="alert" className="mt-1 text-xs text-red-600">
-                    {typeof errors.avatarFile?.message === 'string'
-                      ? errors.avatarFile.message
-                      : String(errors.avatarFile?.message)}
-                  </p>
-                )}
-
-                {avatarPreview && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
-                    onClick={handleDeleteAvatar}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Avatar
-                  </Button>
-                )}
-              </div>
+              )}
             </div>
+            {errors.avatarFile?.message && (
+              <p id={avatarErrorId} role="alert" className="text-xs text-red-600">
+                {typeof errors.avatarFile?.message === 'string'
+                  ? errors.avatarFile.message
+                  : String(errors.avatarFile?.message)}
+              </p>
+            )}
           </div>
 
           {avatarPreview ? (
             <AvatarCrop
               avatarPreview={avatarPreview}
               editorRef={avatarEditorRef}
-              onChange={() => setAvatarDirty(true)}
+              cropX={avatarCrop.cropX}
+              cropY={avatarCrop.cropY}
+              zoom={avatarCrop.zoom}
+              onPositionChange={(position) =>
+                setAvatarCrop((prev) => ({ ...prev, cropX: position.x, cropY: position.y }))
+              }
+              onZoomChange={(zoom) => setAvatarCrop((prev) => ({ ...prev, zoom }))}
             />
           ) : null}
 
-          {/* First Name */}
-          <Controller
-            name="firstName"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                label="First Name"
-                name="firstName"
-                fieldProps={field}
-                error={errors.firstName?.message}
-              />
-            )}
-          />
+          {/* First + last name sit side by side to save vertical space, and stack
+              on very small screens. */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Controller
+              name="firstName"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  label="First Name"
+                  name="firstName"
+                  fieldProps={field}
+                  error={errors.firstName?.message}
+                />
+              )}
+            />
 
-          {/* Last Name */}
-          <Controller
-            name="lastName"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                label="Last Name"
-                name="lastName"
-                fieldProps={field}
-                error={errors.lastName?.message}
-              />
-            )}
-          />
+            <Controller
+              name="lastName"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  label="Last Name"
+                  name="lastName"
+                  fieldProps={field}
+                  error={errors.lastName?.message}
+                />
+              )}
+            />
+          </div>
 
           {/* Timezone */}
           <Controller

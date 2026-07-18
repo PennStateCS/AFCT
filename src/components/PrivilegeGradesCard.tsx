@@ -22,6 +22,9 @@ type StudentRow = {
   email: string;
   firstName?: string;
   lastName?: string;
+  cropX?: number;
+  cropY?: number;
+  zoom?: number;
   [key: string]: unknown;
 };
 
@@ -38,6 +41,9 @@ type ApiStudent = {
   firstName?: string;
   lastName?: string;
   avatar?: string;
+  cropX?: number;
+  cropY?: number;
+  zoom?: number;
 };
 
 type GradesResponse = {
@@ -89,6 +95,9 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           avatar: stu.avatar,
           firstName: stu.firstName,
           lastName: stu.lastName,
+          cropX: stu.cropX,
+          cropY: stu.cropY,
+          zoom: stu.zoom,
         };
         for (const asg of a) {
           const grade = grades?.[stu.id]?.[asg.id];
@@ -206,6 +215,9 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               <AvatarImage
                 src={user.avatar ? apiPaths.files.pfp(String(user.avatar)) : undefined}
                 alt={`${user.firstName} ${user.lastName}`}
+                cropX={user.cropX ?? 0.5}
+                cropY={user.cropY ?? 0.5}
+                zoom={user.zoom ?? 1}
               />
               <AvatarFallback className="bg-secondary text-secondary-foreground">
                 {getInitials(user.firstName, user.lastName, user.email)}

@@ -133,6 +133,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               temporaryPassword: true,
               inactive: true,
               passwordChangedAt: true,
+              cropX: true,
+              cropY: true,
+              zoom: true,
             },
           });
 
@@ -149,6 +152,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             session.user.avatar = freshUser.avatar || undefined;
             session.user.mustChangePassword = freshUser.temporaryPassword;
             session.user.inactive = false;
+            session.user.cropX = freshUser.cropX ?? undefined;
+            session.user.cropY = freshUser.cropY ?? undefined;
+            session.user.zoom = freshUser.zoom ?? undefined;
             // Update the combined name as well
             session.user.name =
               `${freshUser.firstName || ''} ${freshUser.lastName || ''}`.trim() || undefined;

@@ -137,7 +137,17 @@ export const GET = withCourseAuth(
             OR: [{ aboutStudentId: studentId }, { authorId: studentId }],
           },
           include: {
-            author: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+            author: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+                cropX: true,
+                cropY: true,
+                zoom: true,
+              },
+            },
             roster: { select: { role: true } }, // course role for the badge, may be null
           },
           orderBy: { createdAt: 'asc' },
@@ -224,6 +234,9 @@ export const GET = withCourseAuth(
           firstName: comment.author.firstName ?? null,
           lastName: comment.author.lastName ?? null,
           avatar: comment.author.avatar ?? null,
+          cropX: comment.author.cropX ?? null,
+          cropY: comment.author.cropY ?? null,
+          zoom: comment.author.zoom ?? null,
           role: comment.roster?.role ?? null,
         },
       }));

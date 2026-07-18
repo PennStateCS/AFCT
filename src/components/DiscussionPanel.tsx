@@ -22,6 +22,9 @@ export type Comment = {
     role?: string | null;
     avatar?: string | null;
     avatarUrl?: string | null;
+    cropX?: number | null;
+    cropY?: number | null;
+    zoom?: number | null;
   };
 };
 
@@ -136,7 +139,13 @@ export default function DiscussionPanel({
                         {/* avatar */}
                         <div className="flex flex-col items-center gap-2">
                           <Avatar className="h-10 w-10">
-                            <AvatarImage src={authorAvatarSrc(comment.author)} alt={name} />
+                            <AvatarImage
+                              src={authorAvatarSrc(comment.author)}
+                              alt={name}
+                              cropX={comment.author.cropX ?? 0.5}
+                              cropY={comment.author.cropY ?? 0.5}
+                              zoom={comment.author.zoom ?? 1}
+                            />
                             <AvatarFallback className="bg-secondary text-secondary-foreground">
                               {initials(comment.author.firstName, comment.author.lastName)}
                             </AvatarFallback>

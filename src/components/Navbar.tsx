@@ -178,6 +178,9 @@ const Navbar: React.FC = () => {
                   <AvatarImage
                     src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
                     alt={user.name}
+                    cropX={user.cropX ?? 0.5}
+                    cropY={user.cropY ?? 0.5}
+                    zoom={user.zoom ?? 1}
                   />
                   <AvatarFallback className="text-sm text-white">
                     {getInitials(user.firstName, user.lastName, user.email)}

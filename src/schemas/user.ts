@@ -79,6 +79,9 @@ export const UpdateUserSchema = z.object({
   lastName: z.string().trim().min(1, 'Last name is required.').max(60, 'Last name is too long.'),
   isAdmin: z.boolean().default(false),
   avatarFile: ImageFileOptional,
+  cropX: z.number().min(0).max(1).default(0.5),
+  cropY: z.number().min(0).max(1).default(0.5),
+  zoom: z.number().min(0.6).max(2.6).default(1),
   deleteAvatar: z.boolean().default(false),
   inactive: z.boolean(),
   timezone: z.string().trim().optional(),
@@ -105,6 +108,9 @@ export const UserUpdateJsonApiSchema = z.object({
   inactive: z.boolean().optional(),
   timezone: z.string().optional(),
   isAdmin: z.boolean().optional(),
+  cropX: z.number().min(0).max(1).optional(),
+  cropY: z.number().min(0).max(1).optional(),
+  zoom: z.number().min(0.6).max(2.6).optional(),
 });
 
 /**
@@ -117,6 +123,18 @@ export const UserUpdateFormApiSchema = z.object({
   lastName: z.string().optional(),
   inactive: formBoolean,
   deleteAvatar: formBoolean,
+  cropX: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : Number(v)),
+    z.number().min(0).max(1).optional(),
+  ),
+  cropY: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : Number(v)),
+    z.number().min(0).max(1).optional(),
+  ),
+  zoom: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : Number(v)),
+    z.number().min(0.6).max(2.6).optional(),
+  ),
   timezone: z.string().optional(),
   isAdmin: formBooleanOptional,
 });

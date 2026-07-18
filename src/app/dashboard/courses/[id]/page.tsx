@@ -54,6 +54,9 @@ export default async function AdminCoursePage({ params }: Props) {
               firstName: true,
               lastName: true,
               avatar: true,
+              cropX: true,
+              cropY: true,
+              zoom: true,
               // Emails are only for staff; never queried for a student viewer.
               email: isStaff,
             },

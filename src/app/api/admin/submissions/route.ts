@@ -67,6 +67,9 @@ export const POST = withAdminAuth(
               firstName: true,
               lastName: true,
               avatar: true,
+              cropX: true,
+              cropY: true,
+              zoom: true,
             },
           },
           course: {
@@ -132,6 +135,9 @@ export const POST = withAdminAuth(
           ) ?? null,
         maxPoints: submission.assignmentProblem.maxPoints,
         avatar: submission.student.avatar,
+        cropX: submission.student.cropX,
+        cropY: submission.student.cropY,
+        zoom: submission.student.zoom,
         fileName: submission.fileName,
         originalFileName: submission.originalFileName,
       }));
