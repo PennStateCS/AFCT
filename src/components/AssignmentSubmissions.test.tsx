@@ -635,5 +635,46 @@ describe('AssignmentSubmissions — reviewData seeding safety net (M12)', () => 
       fireEvent.keyDown(screen.getByTestId('grade-input'), { key: '2' });
       expect(screen.getByTestId('submission-count')).toHaveTextContent('1');
     });
+
+    it('pages students with the left/right arrow keys', async () => {
+      const twoStudents = [
+        { id: 's1', firstName: 'Ada', lastName: 'Lovelace' },
+        { id: 's2', firstName: 'Alan', lastName: 'Turing' },
+      ];
+      const fetchMock = routeFetch({
+        '/students': () => ({ ok: true, json: async () => twoStudents }),
+        'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+        '/review-data/': () => ({ ok: true, json: async () => emptyReviewData }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      renderWithClient(<AssignmentSubmissions {...baseProps} />);
+
+      // s1 (index 0) selected via the URL.
+      await waitFor(() => expect(screen.getByTestId('selected-index')).toHaveTextContent('0'));
+
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+      await waitFor(() => expect(screen.getByTestId('selected-index')).toHaveTextContent('1'));
+
+      fireEvent.keyDown(window, { key: 'ArrowLeft' });
+      await waitFor(() => expect(screen.getByTestId('selected-index')).toHaveTextContent('0'));
+    });
+
+    it('ignores the arrow keys while typing in a field', async () => {
+      const twoStudents = [
+        { id: 's1', firstName: 'Ada', lastName: 'Lovelace' },
+        { id: 's2', firstName: 'Alan', lastName: 'Turing' },
+      ];
+      const fetchMock = routeFetch({
+        '/students': () => ({ ok: true, json: async () => twoStudents }),
+        'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+        '/review-data/': () => ({ ok: true, json: async () => emptyReviewData }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      renderWithClient(<AssignmentSubmissions {...baseProps} />);
+      await waitFor(() => expect(screen.getByTestId('selected-index')).toHaveTextContent('0'));
+
+      fireEvent.keyDown(screen.getByTestId('comment-input'), { key: 'ArrowRight' });
+      expect(screen.getByTestId('selected-index')).toHaveTextContent('0');
+    });
   });
 });

@@ -207,6 +207,8 @@ export default function StudentNavigator({
         <Button
           variant="secondary"
           onClick={onPrev}
+          aria-keyshortcuts="ArrowLeft"
+          title="Previous student (Left arrow)"
           className="flex w-28 items-center justify-center gap-x-1"
         >
           <ChevronLeft className="h-4 w-4" /> Previous
@@ -292,6 +294,8 @@ export default function StudentNavigator({
         <Button
           variant="secondary"
           onClick={onNext}
+          aria-keyshortcuts="ArrowRight"
+          title="Next student (Right arrow)"
           className="flex w-28 items-center justify-center gap-x-1"
         >
           Next <ChevronRight className="h-4 w-4" />

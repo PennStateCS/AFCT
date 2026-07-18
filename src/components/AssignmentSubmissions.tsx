@@ -63,6 +63,14 @@ const hasSubmissions = (obj: unknown): obj is { submissions: Submission[] } => {
   );
 };
 
+/** True when the key event originates from a text field, so global shortcuts stay dormant. */
+const isTypingTarget = (e: KeyboardEvent): boolean => {
+  if (e.altKey || e.ctrlKey || e.metaKey) return true;
+  const target = e.target as HTMLElement | null;
+  const tag = target?.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!target?.isContentEditable;
+};
+
 const extractSubs = (raw?: SubmissionData): Submission[] => {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -235,12 +243,7 @@ export default function AssignmentSubmissions({
   // the user is typing in a field (comment box, grade input, student search, etc.).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey || e.ctrlKey || e.metaKey) return;
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
-        return;
-      }
+      if (isTypingTarget(e)) return;
       if (e.key >= '1' && e.key <= '9') {
         const problem = visibleProblems[Number(e.key) - 1];
         if (problem) {
@@ -632,6 +635,25 @@ export default function AssignmentSubmissions({
       const nextIndex = prev >= students.length - 1 ? 0 : prev + 1;
       return nextIndex;
     });
+
+  // Left/Right arrows page to the previous/next student (wrapping), unless the user is
+  // typing in a field (so arrow keys still move the cursor there).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e)) return;
+      const count = students.length;
+      if (count === 0) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev <= 0 ? count - 1 : prev - 1));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev >= count - 1 ? 0 : prev + 1));
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [students.length]);
 
   const isStudentDataLoading =
     loadingSubmissions || loadingComments || loadingProblemGrades;
