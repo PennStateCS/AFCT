@@ -1,6 +1,6 @@
 # Production deployment
 
-AFCT is deployed as a Docker Compose stack with four services: nginx, the AFCT application, PostgreSQL, and the backup service.
+AFCT is deployed as a Docker Compose stack with four core services: nginx, the AFCT application, PostgreSQL, and the backup service. An optional updater service supports browser-based upgrades and is disabled by default.
 
 Docker is the supported production method. A non-Docker deployment requires you to reproduce the container configuration, startup order, security boundaries, and backup process yourself.
 

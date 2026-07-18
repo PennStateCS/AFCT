@@ -6,7 +6,7 @@ These instructions cover **Ubuntu** and **Amazon Linux 2023**. Where the command
 
 Review the [system requirements](../requirements.md) before starting. Git is only needed for the manual method.
 
-On Ubuntu the guided installer can install Docker Engine and the Compose plugin for you. On Amazon Linux, install Docker and the Compose plugin first (the section below covers it) — the installer's automatic Docker setup uses Docker's convenience script, which does not support Amazon Linux.
+On Ubuntu the guided installer can install Docker Engine and the Compose plugin for you. On Amazon Linux, install Docker and the Compose plugin first. The section below covers it. The installer's automatic Docker setup uses Docker's convenience script, which does not support Amazon Linux.
 
 ## Configure DNS and the firewall
 
@@ -78,8 +78,8 @@ Do not continue until all three commands succeed.
 
 ## Guided installation (recommended)
 
-:::warning Don't run the installer from a `git clone`
-Download the bundle into a fresh, empty directory as shown below — do **not** run the installer from a checkout of the repository. A clone contains a developer compose file that *builds* the nginx and backup images from local folders, and the installer will fail with an error like `unable to prepare context: path ".../docker/nginx" not found`. The downloaded `docker-compose.yml` pulls the prebuilt published images instead and needs no repository checkout. (A clone is only for the [manual method](#manual-installation).)
+:::warning Use the deployment Compose file
+Download the bundle into a fresh directory as shown below. If you already cloned the repository, run the guided installer from its `deploy/` directory, not the repository root. The root Compose file is for the source-based manual method, while `deploy/docker-compose.yml` pulls the published images used by the installer.
 :::
 
 Create a deployment directory and download the installer bundle:
@@ -95,7 +95,7 @@ curl -fLO "$BASE/docker-compose.yml"
 curl -fLO "$BASE/.env.production.example"
 ```
 
-These come straight from the public repository over HTTPS — no Git checkout or authentication is needed. (`wget "$BASE/install.sh"` and so on work too if you prefer `wget`.)
+These files come from the public repository over HTTPS. No Git checkout or authentication is needed. `wget "$BASE/install.sh"` and the equivalent commands work too.
 
 Run the installer:
 
@@ -103,7 +103,7 @@ Run the installer:
 sh install.sh
 ```
 
-Later, you can refresh these files in place with `sh install.sh self-update` before an update — see [Update AFCT](../../reference/updates.md).
+Later, you can refresh these files in place with `sh install.sh self-update` before an update. See [Update AFCT](../../reference/updates.md).
 
 ### What the installer asks for
 
@@ -162,7 +162,7 @@ Configure these required values:
 - `NEXTAUTH_SECRET`: Generate it once with `openssl rand -base64 64`. Changing it later signs every user out.
 - `NEXTAUTH_URL`: Use the exact public HTTPS address.
 
-hCaptcha is optional. You can set `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY` now, or configure hCaptcha later in **System Settings > Security > hCaptcha**. Do not use hCaptcha test credentials in production.
+hCaptcha is optional. You can set `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY` now, or configure it later in **Admin Menu > System Settings > Captcha**. Do not use hCaptcha test credentials in production.
 
 Protect the environment file:
 
@@ -216,7 +216,7 @@ sh install.sh diagnostics # create a redacted support archive
 
 ### In-app upgrades (optional)
 
-To run upgrades and downgrades from **Admin → System Settings → Updates** instead of the command line, enable the updater sidecar:
+To run upgrades and downgrades from **Admin Menu > System Settings > Updates** instead of the command line, enable the updater sidecar:
 
 ```bash
 sh install.sh enable-updater    # sh install.sh disable-updater to turn it off
@@ -230,6 +230,6 @@ afterward):
 sh install.sh --with-updater
 ```
 
-This is **off by default** because the updater holds the Docker socket (root-equivalent on the host). Once enabled, `update`, `restart`, and `status` include it automatically. Downgrades restore a pre-upgrade database backup and **permanently discard everything created since it**, so treat them as recovery, not a casual undo.
+This is **off by default** because the updater holds the Docker socket, which is effectively root access on the host. Once enabled, `update`, `restart`, and `status` include it automatically. A downgrade restores a pre-upgrade database backup and permanently discards database records created since it. Uploaded files are left in place and can become unreferenced. Treat downgrade as recovery, not a casual undo.
 
 Continue with [HTTPS certificates](../../operations/https-certificates.md), then review [updates](../../reference/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).

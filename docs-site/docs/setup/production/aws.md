@@ -8,17 +8,13 @@ Use this guide when you want to host the production AFCT site on AWS. If you alr
 
 The standard AWS deployment is:
 
-```text
-Users
-  |
-  | HTTPS
-  v
-AWS EC2 instance
-  |- nginx container
-  |- AFCT application container
-  |- PostgreSQL container
-  |- backup service container
-  |- persistent Docker volumes on EBS storage
+```mermaid
+graph TD
+    Users[Users] -->|HTTPS| EC2[EC2 Linux instance]
+    EC2 --> Nginx[nginx]
+    Nginx --> App[AFCT application]
+    App --> DB[(PostgreSQL)]
+    DB -.-> Backup[Backup service]
 ```
 
 This keeps the deployment close to the normal AFCT installer workflow. The EC2 instance behaves like a regular Linux server, so updates, backups, logs, TLS, and diagnostics use the same commands as the Linux guide.
@@ -27,9 +23,9 @@ This keeps the deployment close to the normal AFCT installer workflow. The EC2 i
 
 The default and simplest AWS deployment keeps PostgreSQL in the Docker Compose stack.
 
-Use Amazon RDS for PostgreSQL only if you are comfortable managing an external database connection, RDS security groups, database backups, and recovery outside the default AFCT backup container. RDS is a good fit for longer-running or larger deployments, but it adds setup and operational complexity.
+Use Amazon RDS for PostgreSQL only if you are comfortable maintaining a custom deployment. The standard Compose file starts a bundled PostgreSQL service, waits for it during application startup, and points the backup service at it. Setting `DATABASE_URL` alone does not replace that architecture.
 
-If you use RDS, keep the database private, allow database traffic only from the AFCT EC2 instance, set `DATABASE_URL` to the RDS PostgreSQL connection string, and rely on RDS backup and restore features for the database portion of recovery.
+An RDS deployment needs Compose changes for service dependencies and database environment values, private network access from EC2, a migration plan, and an RDS-native backup and restore process. Keep RDS private and allow database traffic only from the AFCT host. This path is not covered by the guided installer.
 
 ## Prerequisites
 
@@ -58,11 +54,11 @@ Small test deployments can use less, but production systems should leave room fo
 
 Create or update the instance security group with these inbound rules:
 
-| Port | Source | Purpose |
-|---|---|---|
-| 22 | Your administrator IP address only | SSH administration |
-| 80 | Anywhere users need access | HTTP redirect to HTTPS |
-| 443 | Anywhere users need access | AFCT over HTTPS |
+| Port | Source                             | Purpose                |
+| ---- | ---------------------------------- | ---------------------- |
+| 22   | Your administrator IP address only | SSH administration     |
+| 80   | Anywhere users need access         | HTTP redirect to HTTPS |
+| 443  | Anywhere users need access         | AFCT over HTTPS        |
 
 Do not open PostgreSQL to the public internet. In the standard Docker Compose deployment, PostgreSQL is private to the Docker network and does not need a public security-group rule.
 

@@ -23,7 +23,9 @@ Breaking contract changes must use a new version prefix, such as `/api/client/v2
 7. Poll the submission by ID until it reaches `COMPLETED` or `FAILED`.
 8. Revoke the token with `POST /api/client/v1/auth/logout` when the user signs out.
 
-Tokens use a sliding 30-day expiration. Each authenticated request extends the expiration. A token expires after about 30 days without use.
+Tokens use a sliding 30-day expiration. An authenticated request extends the expiry, with writes throttled so the database is not updated on every call. Every token also has an absolute 90-day lifetime from the time it was issued. An active client must sign in again when that limit is reached.
+
+The server stores only a SHA-256 hash of the token. The plaintext token is returned once at login, so the client must protect it like a password.
 
 When an authenticated request returns `401`, stop retrying and ask the user to sign in again.
 
@@ -105,13 +107,12 @@ No authentication is required.
 ```json
 {
   "status": "ok",
-  "uptime": 1234,
-  "environment": "production",
-  "version": "1.0.0"
+  "timestamp": "2026-01-10T15:04:05.000Z",
+  "uptime": 1234
 }
 ```
 
-Use this endpoint to confirm that the server is reachable before attempting login.
+Use this endpoint to confirm that the application process is reachable before attempting login. It is a lightweight liveness check and does not test the database. Environment, build, and version details are intentionally excluded from this public response.
 
 ## Courses and assignments
 
@@ -185,11 +186,11 @@ A missing or inaccessible course returns `404`.
 
 Bearer authentication and `multipart/form-data` are required.
 
-| Field | Required | Description |
-|---|---|---|
-| `assignmentId` | Yes | Assignment identifier |
-| `problemId` | Yes | Problem identifier |
-| `file` | Yes | XML solution file |
+| Field          | Required                    | Description                                                                     |
+| -------------- | --------------------------- | ------------------------------------------------------------------------------- |
+| `assignmentId` | Yes                         | Assignment identifier                                                           |
+| `problemId`    | Yes                         | Problem identifier                                                              |
+| `file`         | No at the HTTP schema level | XML solution file. Native clients should send it for an evaluatable submission. |
 
 Success returns `202 Accepted`:
 
@@ -205,7 +206,7 @@ Common failures:
 - `400`: Missing field, assignment and problem mismatch, or invalid XML
 - `403`: Enrollment or date policy rejects the submission
 - `404`: Assignment is missing or hidden
-- `409`: Submission limit reached or course archived
+- `409`: Submission limit reached, course archived, or concurrent submission conflict
 - `413`: File too large
 - `429`: Resubmission cooldown active
 

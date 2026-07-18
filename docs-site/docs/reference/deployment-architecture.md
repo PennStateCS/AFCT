@@ -1,85 +1,76 @@
 # Deployment architecture
 
-AFCT runs as a Docker Compose application. The supported production stack contains four services: nginx, the AFCT application, PostgreSQL, and the backup service.
+AFCT runs as a Docker Compose application. The supported production stack has four core services: nginx, the AFCT application, PostgreSQL, and the backup service. An optional updater service can be enabled for browser-based upgrades.
 
 ```mermaid
-graph LR
-    User[User browser]
-    User -->|HTTPS on port 443| Nginx[nginx reverse proxy]
-    Nginx -->|HTTP on private Docker network| App[AFCT Next.js application]
-    App -->|SQL on private Docker network| DB[(PostgreSQL)]
+graph TD
+    User[User browser] -->|HTTPS| Nginx[nginx]
+    Nginx -->|Private HTTP| App[AFCT application]
+    App -->|Private SQL| DB[(PostgreSQL)]
     DB -.-> Backup[Backup service]
-    Backup -->|Database dump and uploaded files| Vol[(Backup volume)]
+    Backup --> Archives[(Backup volume)]
+    Updater[Optional updater] -.->|Recreates app| App
 ```
 
 ## Service responsibilities
 
-| Service | Responsibility |
-|---|---|
-| `afct-nginx` | Terminates TLS, redirects HTTP to HTTPS, and forwards requests to the application |
-| `afct-app` | Runs the Next.js interface, API routes, authentication, and evaluator integration |
-| `afct-postgres` | Stores application data |
-| `afct-db-backup` | Creates scheduled database and uploaded-file backups |
+| Compose service | Container        | Responsibility                                                                                       |
+| --------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `nginx`         | `afct-nginx`     | Terminates TLS, redirects HTTP to HTTPS, and forwards requests to the application                    |
+| `app`           | `afct-app`       | Runs the Next.js interface, API routes, authentication, submission worker, and evaluator integration |
+| `postgres`      | `afct-postgres`  | Stores application data                                                                              |
+| `db-backup`     | `afct-db-backup` | Creates scheduled and on-demand database and uploaded-file backups                                   |
+| `updater`       | `afct-updater`   | Optional privileged helper for approved in-app upgrades and downgrades                               |
 
-nginx is the only public-facing service. It listens on ports 80 and 443.
+nginx is the only service with published network ports. It listens on ports 80 and 443. The application uses an internal port on the private Compose network, and PostgreSQL does not publish a host port.
 
-The application and PostgreSQL communicate through the private Docker network. PostgreSQL does not expose a public port. Use `docker exec` for database maintenance instead of publishing the database port.
+Use `docker exec` or another controlled administrative path for database maintenance. Do not expose PostgreSQL to the public internet.
 
 ## Persistent data
 
-Containers are replaceable. Named volumes store:
+Named volumes retain:
 
 - PostgreSQL data
-- Uploaded files
+- Public and private uploaded files
 - Backup archives
-- TLS certificates
+- Active and self-signed TLS certificates
+- Backup and update request files
 
-Stopping or recreating a container does not remove its named volumes.
+Replacing a container does not remove these volumes. Commands that include `--volumes`, `-v`, or `docker volume rm` can permanently delete data.
 
-Commands that include `--volumes`, `-v`, or `docker volume rm` can permanently delete data. Read the command carefully before running it.
+## Backup flow
+
+The backup service reads PostgreSQL over the private network and mounts both upload volumes read-only. Each successful run writes a custom-format PostgreSQL dump and, when uploads exist, a matching archive of the upload volumes.
+
+The application can list and download backup files. It requests a new backup by writing a trigger file. It does not receive database credentials for a browser-driven general restore.
+
+During an approved downgrade, the updater stops the application and asks the backup service to restore the selected database restore point. Uploaded files are not rolled back by that downgrade, so files created later can remain as unreferenced data.
+
+## Optional updater boundary
+
+The updater is in the `updater` Compose profile and is off by default. It mounts the Docker socket and the deployment directory so it can pull an approved application image, change `AFCT_APP_TAG`, and recreate the `app` service.
+
+Treat access to the updater container as host-level administrative access. The main application never mounts the Docker socket. It can only write a structured request to the shared update trigger volume.
+
+An in-app upgrade recreates the application service. nginx, backup, and updater images are refreshed during the next host-side Compose update, even though they use the same configured release tag.
 
 ## AWS EC2 deployment
 
-On AWS, the recommended deployment keeps the same Docker Compose architecture on one EC2 instance:
+The documented AWS path keeps the Compose stack on one EC2 instance. The instance's security group should allow the required web traffic and tightly restricted administrator access. PostgreSQL stays on the private Docker network, and Docker volumes live on the instance's attached storage.
 
-```mermaid
-graph LR
-    User[User browser]
-    User -->|HTTPS| SG[AWS security group]
-    SG --> EC2[EC2 Linux instance]
-    EC2 --> Nginx[nginx container]
-    Nginx --> App[AFCT app container]
-    App --> DB[(PostgreSQL container)]
-    DB -.-> Backup[Backup service]
-    Backup --> EBS[(Persistent EBS-backed Docker volumes)]
-```
+A backup kept only on that instance does not protect against loss of the instance or its disk. Copy backup pairs to protected off-host storage.
 
-The EC2 security group should allow only the public web traffic AFCT needs and SSH access for administrators. PostgreSQL should remain private.
+## External PostgreSQL is a customization
 
-## Optional external PostgreSQL
+The standard Compose file always starts and waits for its bundled `postgres` service, and the standard backup service is configured for that database. Using Amazon RDS or another external PostgreSQL service requires changes to the Compose dependencies, database environment, network rules, migrations, backups, and restore plan.
 
-Some deployments may use an external PostgreSQL service, such as Amazon RDS for PostgreSQL, instead of the bundled PostgreSQL container.
-
-That architecture looks like this:
-
-```mermaid
-graph LR
-    User[User browser]
-    User -->|HTTPS| Nginx[nginx reverse proxy]
-    Nginx --> App[AFCT app container]
-    App -->|Private database connection| RDS[(External PostgreSQL)]
-    App --> Uploads[(Uploaded-file volume)]
-```
-
-Use this only when the deployment administrator is prepared to manage the external database connection, network rules, backups, and restore process. The standard AFCT backup container is designed for the bundled PostgreSQL service.
+That layout can be built by an experienced deployment team, but it is not the out-of-the-box AFCT deployment path.
 
 ## Security boundaries
 
-The production configuration follows these boundaries:
-
-- Only nginx accepts public traffic
-- PostgreSQL remains private
-- The application is not directly exposed
-- Secrets are supplied through `.env.production`
-- The environment file is restricted to the deployment administrator
-- Persistent data remains available when containers are replaced
+- Only nginx accepts public traffic.
+- PostgreSQL stays on a private network.
+- The application container does not control Docker.
+- The optional updater does control Docker and stays disabled unless deliberately enabled.
+- Secrets are supplied through `.env.production`, which should be readable only by the deployment administrator.
+- Uploaded files, database data, certificates, and backups live in persistent volumes.

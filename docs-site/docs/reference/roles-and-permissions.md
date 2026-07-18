@@ -1,156 +1,146 @@
 # Roles and permissions
 
-This page is the authoritative reference for AFCT access control. The role guides explain common workflows, but this page defines who can perform each action.
+This page describes the authorization model implemented by the current AFCT routes and interface.
 
 ## Authorization model
 
-AFCT uses one global flag and one course-specific role.
+AFCT combines one global administrator flag with a role on each course roster.
 
-- `User.isAdmin` grants global administrator access.
+- `User.isAdmin` grants system-wide administrator access.
 - `Roster.role` grants `FACULTY`, `TA`, or `STUDENT` access in one course.
 - There is no global Faculty, TA, or Student role.
 
-A person can hold different roles in different courses. An administrator may also have a roster role, but administrator access remains global.
+A person can hold different roles in different courses. Each account has at most one role in a course because the roster is unique on `(courseId, userId)`. An administrator may also appear on a course roster, but the administrator flag remains global.
 
-Roles are read from the database for each request.
+AFCT reads these values from the database when it authorizes a request. Earlier versions used a global role enum on the user record, but that is no longer the active model.
 
-> Earlier AFCT versions used a global role enum on the user. That model is no longer valid.
+## Role summary
 
-## Principals
+| Principal                      | Scope               | General access                                                                         |
+| ------------------------------ | ------------------- | -------------------------------------------------------------------------------------- |
+| Administrator                  | Entire system       | All active courses, account administration, system settings, logs, status, and updates |
+| Faculty                        | One assigned course | Teaching content, grading, groups, activity, and full roster management                |
+| TA                             | One assigned course | Teaching content, grading, groups, activity, and student enrollment                    |
+| Student                        | One assigned course | Published course content and their own work                                            |
+| Signed-out or inactive account | None                | No authenticated access                                                                |
 
-| Principal | Determined by | Scope |
-|---|---|---|
-| Administrator | `user.isAdmin === true` | Global |
-| Faculty | `Roster.role = FACULTY` | One course |
-| TA | `Roster.role = TA` | One course |
-| Student | `Roster.role = STUDENT` | One course, after publication |
-| Unauthenticated or disabled user | No valid session | No access |
+The term **course staff** means Faculty or TA. The two roles share most teaching permissions, but they are not identical. Faculty can change roster roles and remove eligible members. TAs cannot.
 
-Faculty and TAs currently have the same course permissions. The term **course staff** means Faculty or TA. Administrators count as course staff everywhere.
-
-Each user has at most one roster role in a course because `Roster` is unique on `(courseId, userId)`.
+Administrators bypass normal course-role checks, but lifecycle rules still apply. For example, an archived course is read-only even for an administrator.
 
 ## Course authorization helpers
 
 Course routes use the helpers in [`src/lib/permissions.ts`](https://github.com/PennStateCS/AFCT/blob/main/src/lib/permissions.ts).
 
-| Helper | Access rule | Typical use |
-|---|---|---|
-| `canAccessCourse(user, courseId)` | Administrator, or rostered user when the user is course staff or the course is published | Course reads |
-| `canManageCourse(user, courseId, roles?)` | Administrator, or rostered user with an allowed role | Writes and staff-only reads |
+| Helper                                    | Rule                                                                                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `canAccessCourse(user, courseId)`         | Allows an administrator, Faculty, or TA. Allows an enrolled student only after the course is published.                         |
+| `canManageCourse(user, courseId, roles?)` | Allows an administrator or an enrolled user whose course role is in the supplied role list. The default list is Faculty and TA. |
 
-`canManageCourse` uses the course staff roles by default. Pass the Faculty-only role set when an action must exclude TAs.
-
-Archived and soft-deleted courses add the lifecycle restrictions described below.
+Routes pass a Faculty-only role list for roster role changes and removals. Routes also add checks for archived, deleted, unpublished, or otherwise protected records.
 
 ## Course lifecycle
 
 ### Unpublished
 
-Course staff and administrators can view the course. Students receive `404 Not Found`, even when they are enrolled.
+Administrators and assigned course staff can open the course. Students receive `404 Not Found`, even when they are enrolled.
 
 ### Published
 
-Enrolled students can view the course and its published assignments.
+Enrolled students can open the course and its published assignments. Self-enrollment also requires a valid registration code and an open enrollment window.
+
+An administrator or course staff member can publish or unpublish a course. Unpublishing is blocked once submissions or grades exist.
 
 ### Archived
 
-The course is read-only for everyone, including administrators. Course staff and administrators can view it. Students cannot access it.
+Only an administrator can archive or restore a course. Archived courses are read-only for everyone. Administrators and assigned course staff can view them, while students cannot.
 
-Only administrators can archive or restore a course.
+AFCT also applies an archive safety check based on the stored course dates and activity.
 
 ### Deleted
 
-Deletion depends on the course contents:
+Only an administrator can delete a course. AFCT permanently deletes an empty course. A course with retained content or activity is soft-deleted instead.
 
-- An empty course is permanently deleted.
-- A course with content, enrollment, or submissions is soft-deleted.
-
-A soft-deleted course retains its records but is hidden from every user, including administrators. Course routes return `404 Not Found`. There is no in-app restore.
+A soft-deleted course remains in the database for record integrity but is hidden from every user, including administrators. Course routes return `404 Not Found`, and there is no restore action in the interface.
 
 ## Permission matrix
 
-### Courses
+### Courses and roster
 
-| Action | Administrator | Faculty or TA | Student |
-|---|---|---|---|
-| View course | Yes | Assigned courses | Published, enrolled courses |
-| Create course | Yes | No | No |
-| Duplicate course | Yes | No | No |
-| Delete course | Yes | No | No |
-| Publish or unpublish | Yes | Yes, unless archived | No |
-| Archive | Yes | No | No |
-| Restore | Yes | No | No |
-| Edit settings and dates | Yes | Yes, unless archived | No |
-| Manage roster | Yes | Yes, unless archived | No |
-| Self-enroll by code | Not applicable | Not applicable | Published course, open enrollment window, valid code |
-| Remove self from roster | Not applicable | Not applicable | No |
-
-Course duplication copies settings, assignments, problems, and answer files. It does not copy the roster.
+| Action                                | Administrator     | Faculty                     | TA                          | Student                                        |
+| ------------------------------------- | ----------------- | --------------------------- | --------------------------- | ---------------------------------------------- |
+| View a course                         | Any active course | Assigned course             | Assigned course             | Published and enrolled course                  |
+| Create, duplicate, or delete a course | Yes               | No                          | No                          | No                                             |
+| Archive or restore a course           | Yes               | No                          | No                          | No                                             |
+| Edit settings or publish              | Yes               | Assigned, unarchived course | Assigned, unarchived course | No                                             |
+| View the full roster                  | Yes               | Yes                         | Yes                         | No                                             |
+| Enroll one student or bulk enroll     | Yes               | Yes                         | Yes                         | No                                             |
+| Change a member's course role         | Yes               | Yes                         | No                          | No                                             |
+| Remove an eligible roster member      | Yes               | Yes                         | No                          | No                                             |
+| Self-enroll with a registration code  | Not needed        | Not needed                  | Not needed                  | When publication and enrollment rules allow it |
+| Remove self                           | Not applicable    | No                          | No                          | No                                             |
 
 ### Assignments and problems
 
-| Action | Administrator | Faculty or TA | Student |
-|---|---|---|---|
-| View assignment and problems | Yes | Assigned courses | Published assignment in a published enrolled course |
-| Create, edit, or delete assignment | Yes | Yes, unless archived | No |
-| Configure points, submission limits, and autograding | Yes | Yes, unless archived | No |
-| Upload or replace an answer file | Yes | Yes, unless archived | No |
-| Download an answer file | Yes | Yes | No |
+| Action                                                      | Administrator     | Faculty or TA                                                        | Student                                      |
+| ----------------------------------------------------------- | ----------------- | -------------------------------------------------------------------- | -------------------------------------------- |
+| View an assignment                                          | Any active course | Assigned course                                                      | Published assignment in an accessible course |
+| Create or edit an assignment                                | Yes               | Yes, unless archived                                                 | No                                           |
+| Delete an assignment                                        | Yes               | Yes, unless archived and only when protected activity does not exist | No                                           |
+| Configure problems, points, attempt limits, and autograding | Yes               | Yes, unless archived                                                 | No                                           |
+| Upload, replace, or download an answer file                 | Yes               | Yes, unless the write is blocked by archive state                    | No                                           |
 
-Unpublished assignments return `404 Not Found` to students. They appear as **Draft** to course staff.
+Students receive `404 Not Found` for unpublished assignments. Unpublishing is blocked when submissions or grades exist. Changing between individual and group mode is blocked after submissions exist, and deletion is blocked when submissions or comments exist.
 
-### Submissions and grades
+### Submissions, grades, comments, and groups
 
-| Action | Administrator | Faculty or TA | Student |
-|---|---|---|---|
-| Submit | Test submission | Test submission | Own work, within publication, date, enrollment, and attempt rules |
-| Submit another attempt | Not applicable | Not applicable | Own work, below the limit |
-| View submissions | All | All in assigned course | Own work or own group |
-| Delete a submission | No | No | No |
-| View grades | All | All in assigned course | Own grades |
-| Grade, re-run, or override | Yes | Yes, unless archived | No |
-| Export grades | All courses | Assigned courses | No |
+| Action                                    | Administrator        | Faculty or TA        | Student                                                                                           |
+| ----------------------------------------- | -------------------- | -------------------- | ------------------------------------------------------------------------------------------------- |
+| Submit work                               | Test submission      | Test submission      | Own work, subject to publication, date, cooldown, and attempt rules                               |
+| View submissions                          | All active courses   | Assigned course      | Own work. A result route can also allow a groupmate when a submission record contains a group ID. |
+| Delete a submission                       | No                   | No                   | No                                                                                                |
+| View grades                               | All active courses   | Assigned course      | Own grades                                                                                        |
+| Override or rerun an evaluation           | Yes                  | Yes, unless archived | No                                                                                                |
+| Export grades through the API             | Yes                  | Assigned course      | No                                                                                                |
+| Post or view comments                     | All relevant threads | Assigned course      | Own thread                                                                                        |
+| Delete a comment                          | Yes                  | Assigned course      | No                                                                                                |
+| Manage course groups and problem mappings | Yes                  | Assigned course      | No                                                                                                |
 
-Staff test submissions run through the evaluator but do not count as student work.
+The current course page exposes **Export Grades** only to system administrators, even though the grade export route accepts Faculty and TA access. Staff who do not see the button should ask an administrator for the export.
 
-Manual overrides are recorded in the audit log. Students see results as soon as evaluation finishes. AFCT does not currently have a separate grade-release step.
-
-### Files, comments, and groups
-
-| Action | Administrator | Faculty or TA | Student |
-|---|---|---|---|
-| Download a submission file | All | All in assigned course | Own work or own group |
-| Post a comment | Yes | Yes | With course access |
-| View comments | All | All in assigned course | Own thread or own group thread |
-| Delete a comment | Yes | Yes | No |
-| Group submission and grading | All groups | All groups in assigned course | Own group |
+Manual grade overrides are recorded in the activity log. AFCT does not have a separate grade-release step, so completed evaluation results and later overrides are available to the student through their course view.
 
 Students never receive answer files.
 
-### Accounts and system administration
+Group mode currently controls problem-to-group mappings in the course interface. The main submission, grade, and discussion workflow remains student-specific. Do not assume that saving one student's grade updates every group member.
 
-| Action | Administrator | Faculty or TA | Student |
-|---|---|---|---|
-| Create, disable, unlock, or delete accounts | Yes | No | No |
-| Grant administrator access | Yes | No | No |
-| Reset password | Any account | Student enrolled in an assigned course | No |
-| Assign course roles | Any course | Assigned course | No |
-| View full roster | Any course | Assigned course | No |
-| View classmates' work or grades | Yes | Assigned course | No |
-| Manage system settings, status, queue, or backups | Yes | No | No |
-| View audit records | All | Assigned-course records | No |
+### Accounts and administration
+
+| Action                                                    | Administrator | Faculty or TA   | Student |
+| --------------------------------------------------------- | ------------- | --------------- | ------- |
+| Create, activate, deactivate, or delete accounts          | Yes           | No              | No      |
+| Grant administrator access                                | Yes           | No              | No      |
+| Reset another account's password                          | Yes           | No              | No      |
+| Change own profile name, avatar, or timezone              | Yes           | Yes             | Yes     |
+| Change an account email address                           | No interface  | No              | No      |
+| Manage system settings, status, logs, backups, or updates | Yes           | No              | No      |
+| View course activity                                      | Any course    | Assigned course | No      |
+
+There is no manual account unlock action in the current interface. A temporary lock ends after the configured lockout period. An administrator can reset the password from **User Accounts**.
 
 ## Roster safeguards
 
-- A course must keep at least one Faculty member.
-- A member with submissions cannot be removed.
-- Faculty cannot remove or demote another Faculty member or an administrator.
-- Removing a student keeps the student's work. Re-enrollment reconnects it.
+- Every course must retain at least one Faculty member.
+- A non-admin Faculty member cannot remove another Faculty member.
+- A roster member with submissions cannot be removed.
+- TAs cannot change course roles or remove roster members.
 - Students cannot remove themselves.
+- Only an administrator can change the system administrator flag.
+
+A Faculty member can change another member's course role, including another Faculty member, as long as the change does not remove the course's last Faculty member.
 
 ## Existence hiding
 
-A student receives `404 Not Found` for a course or assignment that is unpublished, archived, soft-deleted, or outside the student's enrollment.
+AFCT often returns `404 Not Found` when a student asks for an unpublished, archived, deleted, or otherwise inaccessible course resource. This keeps hidden resources from being disclosed.
 
-Use `403 Forbidden` when the user is authenticated and rostered but lacks permission for a specific action in a resource they can otherwise access.
+Routes use `403 Forbidden` when the signed-in user can know that the resource exists but lacks permission for the requested action.

@@ -7,8 +7,8 @@ A self-signed certificate is reasonable for restricted testing. A public or inst
 ## Install a certificate in AFCT
 
 1. Sign in as an administrator.
-2. Open **System Settings**.
-3. Find **TLS Certificate**.
+2. Open **Admin Menu > System Settings**.
+3. Select **TLS Certificate**.
 4. Upload the certificate in PEM format.
 5. Upload the matching private key in PEM format.
 6. Add any intermediate or chain certificates supplied by the certificate authority.
@@ -44,4 +44,4 @@ A warning is expected with the default self-signed certificate. A warning on a p
 - An intermediate certificate is missing
 - DNS points to a different server
 
-Check the certificate installed under **System Settings > TLS Certificate** and renew or replace it as needed.
+Check the certificate installed under **Admin Menu > System Settings > TLS Certificate** and renew or replace it as needed.
