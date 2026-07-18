@@ -1,27 +1,10 @@
 import type { NextConfig } from 'next';
 
-// Content-Security-Policy, shipped in REPORT-ONLY mode first: browsers report
-// violations (to the console) without blocking, so we can observe and tune the
-// policy against the real app before switching the header key to the enforcing
-// `Content-Security-Policy`. hCaptcha's script/frame/style/connect origins are
-// allowlisted so the policy already works once enforced. Dev needs 'unsafe-eval'
-// for React Fast Refresh; production drops it. ('unsafe-inline' on script/style
-// is still required until Next.js nonce-based CSP is wired up (tighten later).)
-const isProd = process.env.NODE_ENV === 'production';
-const HCAPTCHA = 'https://hcaptcha.com https://*.hcaptcha.com';
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-  "frame-ancestors 'self'",
-  "form-action 'self'",
-  "img-src 'self' data: blob:",
-  "font-src 'self'",
-  `style-src 'self' 'unsafe-inline' ${HCAPTCHA}`,
-  `script-src 'self' 'unsafe-inline'${isProd ? '' : " 'unsafe-eval'"} ${HCAPTCHA}`,
-  `connect-src 'self' ${HCAPTCHA}`,
-  `frame-src ${HCAPTCHA}`,
-].join('; ');
+// The Content-Security-Policy now lives in the middleware (src/proxy.ts) because it
+// carries a per-request nonce (script-src 'nonce-…' 'strict-dynamic' instead of
+// 'unsafe-inline'), which a static header here can't do. It ships Report-Only until
+// CSP_ENFORCE=true. The static security headers below don't need a nonce, so they
+// stay here.
 
 const nextConfig: NextConfig = {
   // Next 16 no longer runs ESLint during `next build` (lint is enforced via the
@@ -53,10 +36,9 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-DNS-Prefetch-Control', value: 'off' },
-          // Report-only for now (see the note above). HSTS is intentionally left
-          // to nginx (docker/nginx/default.conf), which only sends it with a real
-          // cert to avoid trapping self-signed deployments.
-          { key: 'Content-Security-Policy-Report-Only', value: contentSecurityPolicy },
+          // The Content-Security-Policy is set per-request (with a nonce) in the
+          // middleware, not here. HSTS is left to nginx (docker/nginx/default.conf),
+          // which only sends it with a real cert to avoid trapping self-signed deploys.
         ],
       },
     ];
