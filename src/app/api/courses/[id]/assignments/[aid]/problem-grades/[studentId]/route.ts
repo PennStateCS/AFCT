@@ -47,6 +47,7 @@ export const GET = withCourseAuth(
         return logDenial(req, {
           userId: user.id,
           action: 'PROBLEM_GRADES_ACCESS_DENIED',
+          category: 'GRADE',
           courseId,
         });
       }
@@ -91,7 +92,7 @@ export const GET = withCourseAuth(
       return NextResponse.json({ error: 'Failed to fetch problem grades' }, { status: 500 });
     }
   },
-  { access: 'read', deniedAction: 'PROBLEM_GRADES_ACCESS_DENIED' },
+  { access: 'read', deniedAction: 'PROBLEM_GRADES_ACCESS_DENIED', deniedCategory: 'GRADE' },
 );
 
 /**
@@ -276,10 +277,16 @@ export const POST = withCourseAuth(
       await logError(req, {
         userId: graderId,
         action: 'PROBLEM_GRADE_UPDATE_ERROR',
+        category: 'GRADE',
         error,
       });
       return NextResponse.json({ error: 'Failed to save grades' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED', blockWhenArchived: true },
+  {
+    access: 'manage',
+    deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED',
+    deniedCategory: 'GRADE',
+    blockWhenArchived: true,
+  },
 );

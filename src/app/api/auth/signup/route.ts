@@ -200,7 +200,12 @@ async function logSecurityEvent(
   // solved challenge is routine INFO.
   const severity: LogSeverity = action === 'SIGNUP_CHALLENGE_SOLVED' ? 'INFO' : 'SECURITY';
   try {
-    await createEnhancedActivityLog(prisma, req, { action, severity, metadata });
+    await createEnhancedActivityLog(prisma, req, {
+      action,
+      category: 'USER',
+      severity,
+      metadata,
+    });
   } catch (error) {
     console.error('[signup] security log failure', error);
   }

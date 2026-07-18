@@ -10,7 +10,7 @@ import {
   isCourseArchived,
   isCourseDeleted,
 } from '@/lib/permissions';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, type ActivityCategory } from '@/lib/activity-log-utils';
 import { withServerTiming } from '@/lib/perf-debug';
 import { apiError } from './http';
 
@@ -38,7 +38,7 @@ export type AdminAuthContext = {
  */
 export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
   handler: (req: Request, ctx: Ctx, auth: AdminAuthContext) => Promise<R> | R,
-  opts: { deniedAction: string },
+  opts: { deniedAction: string; deniedCategory?: ActivityCategory },
 ): (req: Request, ctx: Ctx) => Promise<R | NextResponse> {
   return async (req: Request, ctx: Ctx) => {
     const session = await auth();
@@ -53,6 +53,8 @@ export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
         userId: session.user.id,
         action: opts.deniedAction,
         severity: 'SECURITY',
+        // Admin-gate denials are system-level unless the caller says otherwise.
+        category: opts.deniedCategory ?? 'SYSTEM',
         metadata: {},
       });
       return apiError(403, 'Forbidden');
@@ -92,6 +94,7 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
   opts: {
     access: 'manage' | 'read';
     deniedAction: string;
+    deniedCategory?: ActivityCategory;
     roles?: CourseRole[];
     param?: string;
     blockWhenArchived?: boolean;
@@ -136,6 +139,8 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
         userId: session.user.id,
         action: opts.deniedAction,
         severity: 'SECURITY',
+        // Course-gate denials are course-level unless the caller says otherwise.
+        category: opts.deniedCategory ?? 'COURSE',
         courseId,
         metadata: {},
       });

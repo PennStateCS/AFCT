@@ -87,6 +87,7 @@ export const DELETE = withAdminAuth(
       await logError(req, {
         userId: actorId,
         action: 'ABANDONED_FILES_DELETE_ERROR',
+        category: 'SYSTEM',
         error: err,
       });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

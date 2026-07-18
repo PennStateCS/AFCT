@@ -65,5 +65,5 @@ export const GET = withCourseAuth(
       );
     }
   },
-  { access: 'read', deniedAction: 'COURSE_STUDENT_GRADES_ACCESS_DENIED' },
+  { access: 'read', deniedAction: 'COURSE_STUDENT_GRADES_ACCESS_DENIED', deniedCategory: 'GRADE' },
 );

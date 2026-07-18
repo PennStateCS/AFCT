@@ -29,7 +29,7 @@ function displayName(u: {
  *   - { name: q, in: query, description: "Match on action, category, or author name/email", schema: { type: string } }
  *   - { name: field, in: query, description: "Restrict the search to one field", schema: { type: string, enum: [all, action, category, name, email] } }
  *   - { name: severity, in: query, description: "Repeatable; filters to any of the given levels", schema: { type: array, items: { type: string, enum: [INFO, WARNING, ERROR, SECURITY] } } }
- *   - { name: category, in: query, description: "Repeatable; filters to any of the given categories", schema: { type: array, items: { type: string, enum: [SYSTEM, USER, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION] } } }
+ *   - { name: category, in: query, description: "Repeatable; filters to any of the given categories", schema: { type: array, items: { type: string, enum: [SYSTEM, USER, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION, GRADE] } } }
  *   - { name: sortBy, in: query, schema: { type: string, enum: [timestamp, severity, category, action, ipAddress, userLastName, userFirstName] } }
  *   - { name: sortDir, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
  * responses:
@@ -65,7 +65,15 @@ export const GET = withAdminAuth(
       // Severity and category are multi-select (repeated query params). Keep only the
       // known values, in canonical order.
       const SEVERITIES = ['INFO', 'WARNING', 'ERROR', 'SECURITY'] as const;
-      const CATEGORIES = ['SYSTEM', 'USER', 'COURSE', 'ASSIGNMENT', 'PROBLEM', 'SUBMISSION'] as const;
+      const CATEGORIES = [
+        'SYSTEM',
+        'USER',
+        'COURSE',
+        'ASSIGNMENT',
+        'PROBLEM',
+        'SUBMISSION',
+        'GRADE',
+      ] as const;
       const pickValues = <T extends readonly string[]>(raw: string[], allowed: T): T[number][] => {
         const wanted = new Set(raw.map((v) => v.trim().toUpperCase()));
         return allowed.filter((a) => wanted.has(a));

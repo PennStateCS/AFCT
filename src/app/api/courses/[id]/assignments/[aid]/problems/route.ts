@@ -284,6 +284,7 @@ export const POST = withAssignmentAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_ADD_PROBLEMS_ERROR',
+        category: 'PROBLEM',
         courseId,
         assignmentId,
         error: err,
@@ -399,6 +400,7 @@ export const DELETE = withAssignmentAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_REMOVE_PROBLEM_ERROR',
+        category: 'PROBLEM',
         error,
       });
       return NextResponse.json({ error: 'Failed to remove problem.' }, { status: 500 });

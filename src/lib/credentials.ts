@@ -35,7 +35,7 @@ async function logLoginSecurityEvent(
     await createEnhancedActivityLog(
       prisma,
       { ipAddress: metadata.ip ?? null },
-      { userId: userId ?? null, action, severity, metadata },
+      { userId: userId ?? null, action, category: 'SYSTEM', severity, metadata },
     );
   } catch (error) {
     console.error('[auth] security log failure', error);

@@ -49,6 +49,7 @@ export const PATCH = withCourseAuth(
           await createEnhancedActivityLog(prisma, req, {
             userId: user.id,
             action: 'COURSE_UNPUBLISH_REJECTED',
+            category: 'COURSE',
             severity: 'WARNING',
             courseId,
             metadata: { reason },
@@ -89,6 +90,7 @@ export const PATCH = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'COURSE_PUBLISH_ERROR',
+        category: 'COURSE',
         error,
         courseId,
       });

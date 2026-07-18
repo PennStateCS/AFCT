@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
     await logError(req, {
       userId,
       action: 'ASSIGNMENT_RANGE_ERROR',
+      category: 'ASSIGNMENT',
       error,
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

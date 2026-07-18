@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
     await logError(req, {
       userId: actorId,
       action: 'CHANGE_PASSWORD_ERROR',
+      category: 'USER',
       error: err,
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

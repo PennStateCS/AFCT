@@ -137,6 +137,7 @@ export const PUT = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_ERROR',
+        category: 'PROBLEM',
         courseId,
         assignmentId,
         problemId,

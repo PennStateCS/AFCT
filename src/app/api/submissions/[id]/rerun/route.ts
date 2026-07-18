@@ -58,6 +58,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'SUBMISSION_RERUN_DENIED',
+        category: 'SUBMISSION',
         severity: 'SECURITY',
         courseId: submission.courseId,
         metadata: { submissionId: submission.id, studentId: submission.studentId },
@@ -143,6 +144,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     await logError(req, {
       userId: actorId,
       action: 'SUBMISSION_RERUN_ERROR',
+      category: 'SUBMISSION',
       error,
       metadata: { submissionId: id },
     });

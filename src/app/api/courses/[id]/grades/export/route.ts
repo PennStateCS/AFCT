@@ -78,7 +78,7 @@ export const GET = withCourseAuth(
         userId: user.id,
         action: 'GRADES_EXPORTED',
         severity: 'INFO',
-        category: 'SUBMISSION',
+        category: 'GRADE',
         courseId,
         metadata: {
           platform,
@@ -106,9 +106,20 @@ export const GET = withCourseAuth(
       });
     } catch (error) {
       console.error('GET /api/courses/[id]/grades/export error:', error);
-      await logError(req, { userId: user.id, action: 'GRADES_EXPORT_ERROR', error, courseId });
+      await logError(req, {
+        userId: user.id,
+        action: 'GRADES_EXPORT_ERROR',
+        category: 'GRADE',
+        error,
+        courseId,
+      });
       return NextResponse.json({ error: 'Failed to export grades' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GRADES_EXPORT_DENIED', blockWhenArchived: true },
+  {
+    access: 'manage',
+    deniedAction: 'GRADES_EXPORT_DENIED',
+    deniedCategory: 'GRADE',
+    blockWhenArchived: true,
+  },
 );

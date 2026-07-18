@@ -53,6 +53,7 @@ export const DELETE = withCourseAuth(
         return logDenial(req, {
           userId: user.id,
           action: 'ROSTER_REMOVE_DENIED',
+          category: 'COURSE',
           courseId,
           metadata: { targetUserId: userId },
         });
@@ -140,6 +141,7 @@ export const DELETE = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ROSTER_REMOVE_ERROR',
+        category: 'COURSE',
         error: err,
         courseId,
       });
@@ -182,6 +184,7 @@ export const GET = withCourseAuth(
         return logDenial(req, {
           userId: user.id,
           action: 'ROSTER_VIEW_DENIED',
+          category: 'COURSE',
           courseId,
           metadata: { targetUserId },
         });
@@ -323,6 +326,7 @@ export const PATCH = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ROSTER_UPDATE_ERROR',
+        category: 'COURSE',
         error: err,
         courseId,
       });

@@ -8,7 +8,13 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: createLogMock }));
 vi.mock('@/lib/permissions', () => ({ canManageCourse: canManageMock }));
 
-import { logDenial, logError, denyExistence, logStudentImpactAction, logMutation } from './activity';
+import {
+  logDenial,
+  logError,
+  denyExistence,
+  logStudentImpactAction,
+  logMutation,
+} from './activity';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -17,7 +23,12 @@ beforeEach(() => {
 describe('logDenial', () => {
   it('records a SECURITY denial and returns 403 Forbidden', async () => {
     const req = new Request('http://localhost/x');
-    const res = await logDenial(req, { userId: 'u1', action: 'THING_DENIED', courseId: 'c1' });
+    const res = await logDenial(req, {
+      userId: 'u1',
+      action: 'THING_DENIED',
+      category: 'SYSTEM',
+      courseId: 'c1',
+    });
 
     expect(res.status).toBe(403);
     await expect(res.json()).resolves.toEqual({ error: 'Forbidden' });
@@ -28,6 +39,7 @@ describe('logDenial', () => {
         userId: 'u1',
         action: 'THING_DENIED',
         severity: 'SECURITY',
+        category: 'SYSTEM',
         courseId: 'c1',
       }),
     );
@@ -35,7 +47,7 @@ describe('logDenial', () => {
 
   it('defaults userId to null and omits courseId when not provided', async () => {
     const req = new Request('http://localhost/x');
-    await logDenial(req, { action: 'THING_DENIED' });
+    await logDenial(req, { action: 'THING_DENIED', category: 'SYSTEM' });
 
     const data = createLogMock.mock.calls[0][2] as Record<string, unknown>;
     expect(data.userId).toBeNull();
@@ -49,6 +61,7 @@ describe('logError', () => {
     await logError(req, {
       userId: 'u1',
       action: 'THING_ERROR',
+      category: 'SYSTEM',
       error: new Error('boom'),
       metadata: { fileName: 'a.txt' },
     });
@@ -67,7 +80,7 @@ describe('logError', () => {
 
   it('normalizes a non-Error throw to "unknown error"', async () => {
     const req = new Request('http://localhost/x');
-    await logError(req, { action: 'THING_ERROR', error: 'weird' });
+    await logError(req, { action: 'THING_ERROR', category: 'SYSTEM', error: 'weird' });
 
     const data = createLogMock.mock.calls[0][2] as { metadata: { error: string } };
     expect(data.metadata.error).toBe('unknown error');
@@ -96,6 +109,7 @@ describe('logStudentImpactAction', () => {
     await logStudentImpactAction(req, {
       actorId: 'staff1',
       action: 'GRADE_OVERRIDE',
+      category: 'GRADE',
       targetUserId: 'stud1',
       courseId: 'c1',
       before: 80,
@@ -122,6 +136,7 @@ describe('logMutation', () => {
     await logMutation(req, {
       userId: 'u1',
       action: 'UPDATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
       courseId: 'c1',
       assignmentId: 'a1',
       changedFields: { isPublished: { from: false, to: true } },

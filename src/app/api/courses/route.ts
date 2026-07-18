@@ -72,6 +72,7 @@ export async function GET(req: Request) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'COURSES_LIST_DENIED',
+        category: 'COURSE',
         severity: 'SECURITY',
         metadata: {},
       });
@@ -176,6 +177,7 @@ export async function POST(req: Request) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'COURSE_CREATE_DENIED',
+        category: 'COURSE',
         severity: 'SECURITY',
         metadata: {},
       });
@@ -342,6 +344,7 @@ export async function POST(req: Request) {
     await logError(req, {
       userId: actorId,
       action: 'COURSE_CREATE_ERROR',
+      category: 'COURSE',
       error: err,
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

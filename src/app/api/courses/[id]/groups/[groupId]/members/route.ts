@@ -137,6 +137,7 @@ export const POST = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'GROUP_MEMBER_ADD_ERROR',
+        category: 'COURSE',
         error: err,
         courseId,
       });
@@ -246,6 +247,7 @@ export const PATCH = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'GROUP_MEMBERS_UPDATE_ERROR',
+        category: 'COURSE',
         error: err,
         courseId,
       });

@@ -67,6 +67,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       return logDenial(req, {
         userId: session.user.id,
         action: 'SUBMISSION_FILE_DOWNLOAD_DENIED',
+        category: 'SUBMISSION',
         courseId: submission.courseId,
       });
     }
@@ -95,6 +96,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     await logError(req, {
       userId: actorId,
       action: 'SUBMISSION_FILE_DOWNLOAD_ERROR',
+      category: 'SUBMISSION',
       error: err,
       metadata: { fileName: fileName ?? null },
     });

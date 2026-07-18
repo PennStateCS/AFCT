@@ -53,7 +53,7 @@ export const GET = withCourseAuth(
             userId: user.id,
             action: 'COURSE_GRADES_VIEWED',
             severity: 'INFO',
-            category: 'SUBMISSION',
+            category: 'GRADE',
             courseId,
             metadata: {
               studentCount: matrix.students.length,
@@ -78,5 +78,5 @@ export const GET = withCourseAuth(
       );
     }
   },
-  { access: 'manage', deniedAction: 'COURSE_GRADES_ACCESS_DENIED' },
+  { access: 'manage', deniedAction: 'COURSE_GRADES_ACCESS_DENIED', deniedCategory: 'GRADE' },
 );

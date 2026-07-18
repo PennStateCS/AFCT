@@ -2143,7 +2143,7 @@ export interface operations {
                 /** @description Repeatable; filters to any of the given levels */
                 severity?: ("INFO" | "WARNING" | "ERROR" | "SECURITY")[];
                 /** @description Repeatable; filters to any of the given categories */
-                category?: ("SYSTEM" | "USER" | "COURSE" | "ASSIGNMENT" | "PROBLEM" | "SUBMISSION")[];
+                category?: ("SYSTEM" | "USER" | "COURSE" | "ASSIGNMENT" | "PROBLEM" | "SUBMISSION" | "GRADE")[];
                 sortBy?: "timestamp" | "severity" | "category" | "action" | "ipAddress" | "userLastName" | "userFirstName";
                 sortDir?: "asc" | "desc";
             };

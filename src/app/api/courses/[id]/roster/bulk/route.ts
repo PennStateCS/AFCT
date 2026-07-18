@@ -78,6 +78,7 @@ export const POST = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'COURSE_BULK_ENROLL_ERROR',
+        category: 'COURSE',
         error: err,
         courseId,
       });

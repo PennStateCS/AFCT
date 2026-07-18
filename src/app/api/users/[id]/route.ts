@@ -80,6 +80,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'USER_UPDATE_DENIED',
+        category: 'USER',
         severity: 'SECURITY',
         metadata: { targetUserId: userId },
       });
@@ -191,6 +192,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
             await createEnhancedActivityLog(prisma, req, {
               userId: session?.user?.id ?? null,
               action: 'USER_UPDATE_REJECTED',
+              category: 'USER',
               severity: 'WARNING',
               metadata: { targetUserId: userId, reason: 'active-course' },
             });
@@ -235,6 +237,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         await createEnhancedActivityLog(prisma, req, {
           userId: actorId,
           action: 'USER_UPDATE_REJECTED',
+          category: 'USER',
           severity: 'WARNING',
           metadata: { targetUserId: userId, reason: 'last-active-admin' },
         });
@@ -298,6 +301,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     await logError(req, {
       userId: actorId,
       action: 'USER_UPDATE_ERROR',
+      category: 'USER',
       error,
     });
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
@@ -336,6 +340,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'USER_DELETE_DENIED',
+        category: 'USER',
         severity: 'SECURITY',
         metadata: { targetUserId: userId },
       });
@@ -350,6 +355,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       await createEnhancedActivityLog(prisma, req, {
         userId: actorId,
         action: 'USER_DELETE_REJECTED',
+        category: 'USER',
         severity: 'WARNING',
         metadata: { targetUserId: userId, reason: 'self-delete' },
       });
@@ -395,6 +401,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     await logError(req, {
       userId: actorId,
       action: 'USER_DELETE_ERROR',
+      category: 'USER',
       error,
     });
     return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });

@@ -358,6 +358,7 @@ export const PUT = withCourseAuth(
         await createEnhancedActivityLog(prisma, req, {
           userId: session?.user?.id ?? null,
           action: 'COURSE_ARCHIVE_REJECTED',
+          category: 'COURSE',
           severity: 'WARNING',
           courseId: id,
           metadata: { reason },
@@ -373,6 +374,7 @@ export const PUT = withCourseAuth(
         await createEnhancedActivityLog(prisma, req, {
           userId: session?.user?.id ?? null,
           action: 'COURSE_UNPUBLISH_REJECTED',
+          category: 'COURSE',
           severity: 'WARNING',
           courseId: id,
           metadata: { reason },
@@ -402,6 +404,7 @@ export const PUT = withCourseAuth(
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
           action: 'COURSE_FACULTY_EDIT_DENIED',
+          category: 'COURSE',
           severity: 'SECURITY',
           courseId: id,
           metadata: { reason: 'changing the faculty roster is faculty/admin-only' },
@@ -642,6 +645,7 @@ export const PUT = withCourseAuth(
       await logError(req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_UPDATE_ERROR',
+        category: 'COURSE',
         error,
         courseId: id,
       });
@@ -682,6 +686,7 @@ export const DELETE = withCourseAuth(
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'COURSE_DELETE_DENIED',
+        category: 'COURSE',
         severity: 'SECURITY',
         courseId: id,
         metadata: { reason: 'course deletion is admin-only' },
@@ -748,6 +753,7 @@ export const DELETE = withCourseAuth(
       await logError(req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_DELETE_ERROR',
+        category: 'COURSE',
         error,
         courseId: id,
       });
