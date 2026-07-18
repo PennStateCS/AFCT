@@ -300,6 +300,18 @@ export function GroupSetView({
         </div>
       </div>
 
+      {/* Locked notice */}
+      {detail.locked && (
+        <div
+          role="status"
+          className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          This group set has associated submissions or grades. Its groups and memberships can
+          no longer be changed because doing so could affect academic records. Duplicate the
+          group set to create a new arrangement.
+        </div>
+      )}
+
       {/* Summary counts */}
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[

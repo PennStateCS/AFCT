@@ -339,6 +339,12 @@ model GroupSet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Sticky lock: stamped the first time a submission or grade is created for an
+  // assignment using this set, and never cleared. Once set, the set's groups and
+  // memberships are frozen (renaming and duplication stay allowed) so changing them
+  // can't retroactively alter academic records. Read via lib/group-set-service.
+  lockedAt DateTime?
+
   groups      StudentGroup[]
   assignments Assignment[]
 

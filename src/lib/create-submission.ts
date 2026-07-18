@@ -19,6 +19,7 @@ import { errMessage } from '@/lib/errors';
 import { evaluateSubmissionWindow } from '@/lib/submission-window';
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
+import { lockGroupSetIfUsed } from '@/lib/group-set-service';
 
 /** Thrown inside the create transaction when the per-problem cap is already met. */
 class SubmissionCapReachedError extends Error {}
@@ -144,6 +145,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       lateCutoff: true,
       isPublished: true,
       assignedToEveryone: true,
+      groupSetId: true,
       // The overrides that apply to this submitter: their own STUDENT override and/or
       // the GROUP override for a group they belong to (at most one of each; a student is
       // never targeted both ways). Drives the effective window and, for a group target,
@@ -371,7 +373,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
               throw new SubmissionCapReachedError();
             }
           }
-          return tx.submission.create({
+          const created = await tx.submission.create({
             data: {
               courseId: assignment.courseId,
               assignmentId,
@@ -386,6 +388,10 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
               evaluationRaw: Prisma.JsonNull,
             },
           });
+          // A submission for a group assignment locks its set (sticky, atomic with the
+          // submission write). No-op for individual assignments.
+          await lockGroupSetIfUsed(tx, assignment.groupSetId);
+          return created;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );

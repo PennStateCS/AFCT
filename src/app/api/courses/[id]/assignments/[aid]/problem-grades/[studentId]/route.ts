@@ -142,7 +142,7 @@ export const POST = withCourseAuth(
       // The assignment must belong to this course.
       const assignment = await prisma.assignment.findFirst({
         where: { id: assignmentId, courseId },
-        select: { id: true },
+        select: { id: true, groupSetId: true },
       });
       if (!assignment) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
@@ -212,33 +212,44 @@ export const POST = withCourseAuth(
       }
 
       // Apply all changes atomically. Upserts set only `grade`, leaving any existing
-      // feedback intact (a grade-only edit must not erase written feedback).
-      await prisma.$transaction(
-        changes.map((change) =>
-          change.grade === null
-            ? prisma.assignmentProblemGrade.deleteMany({
-                where: { assignmentId, problemId: change.problemId, studentId },
-              })
-            : prisma.assignmentProblemGrade.upsert({
-                where: {
-                  assignmentId_problemId_studentId: {
-                    assignmentId,
-                    problemId: change.problemId,
-                    studentId,
-                  },
-                },
-                create: {
+      // feedback intact (a grade-only edit must not erase written feedback). Setting any
+      // grade (including 0) for a group assignment also stamps the group set's sticky lock
+      // in the same transaction.
+      const gradeOps = changes.map((change) =>
+        change.grade === null
+          ? prisma.assignmentProblemGrade.deleteMany({
+              where: { assignmentId, problemId: change.problemId, studentId },
+            })
+          : prisma.assignmentProblemGrade.upsert({
+              where: {
+                assignmentId_problemId_studentId: {
                   assignmentId,
                   problemId: change.problemId,
                   studentId,
-                  grade: change.grade,
-                  feedback: null,
-                  gradedManually: true,
                 },
-                update: { grade: change.grade, gradedManually: true },
-              }),
-        ),
+              },
+              create: {
+                assignmentId,
+                problemId: change.problemId,
+                studentId,
+                grade: change.grade,
+                feedback: null,
+                gradedManually: true,
+              },
+              update: { grade: change.grade, gradedManually: true },
+            }),
       );
+      const setsAnyGrade = changes.some((c) => c.grade !== null);
+      const lockOps =
+        assignment.groupSetId && setsAnyGrade
+          ? [
+              prisma.groupSet.updateMany({
+                where: { id: assignment.groupSetId, lockedAt: null },
+                data: { lockedAt: new Date() },
+              }),
+            ]
+          : [];
+      await prisma.$transaction([...gradeOps, ...lockOps]);
 
       // Audit each applied change (best-effort; grades are already committed).
       try {

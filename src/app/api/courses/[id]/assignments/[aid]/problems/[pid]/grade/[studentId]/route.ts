@@ -6,6 +6,7 @@ import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
+import { lockGroupSetIfUsed } from '@/lib/group-set-service';
 
 const GradeBody = z.object({
   grade: z.number().nullish(),
@@ -144,7 +145,7 @@ export const POST = withCourseAuth(
           },
         },
         select: {
-          assignment: { select: { courseId: true } },
+          assignment: { select: { courseId: true, groupSetId: true } },
           maxPoints: true,
         },
       });
@@ -209,27 +210,35 @@ export const POST = withCourseAuth(
         return NextResponse.json({ grade: null, feedback: null });
       }
 
-      const saved = await prisma.assignmentProblemGrade.upsert({
-        where: {
-          assignmentId_problemId_studentId: {
+      // The grade write and the group-set lock stamp commit together: entering a grade
+      // (including 0) for a group assignment locks its set. `grade` reached here is a real
+      // number (the null/undefined clear path returned above), so 0 is never treated as "no
+      // grade".
+      const saved = await prisma.$transaction(async (tx) => {
+        const row = await tx.assignmentProblemGrade.upsert({
+          where: {
+            assignmentId_problemId_studentId: {
+              assignmentId,
+              problemId,
+              studentId,
+            },
+          },
+          create: {
             assignmentId,
             problemId,
             studentId,
+            grade,
+            feedback,
+            gradedManually: true,
           },
-        },
-        create: {
-          assignmentId,
-          problemId,
-          studentId,
-          grade,
-          feedback,
-          gradedManually: true,
-        },
-        update: {
-          grade,
-          feedback,
-          gradedManually: true,
-        },
+          update: {
+            grade,
+            feedback,
+            gradedManually: true,
+          },
+        });
+        await lockGroupSetIfUsed(tx, assignmentProblem.assignment.groupSetId);
+        return row;
       });
 
       await createEnhancedActivityLog(prisma, req, {

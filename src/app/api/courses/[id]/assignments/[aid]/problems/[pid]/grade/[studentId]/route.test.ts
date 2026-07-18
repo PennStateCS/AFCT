@@ -9,7 +9,9 @@ const prismaMock = vi.hoisted(() => ({
     deleteMany: vi.fn(),
     upsert: vi.fn(),
   },
+  groupSet: { updateMany: vi.fn() },
   course: { findUnique: vi.fn() },
+  $transaction: vi.fn(),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -31,6 +33,9 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
     vi.clearAllMocks();
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       assignment: { courseId: defaultParams.id, isPublished: true },
@@ -219,6 +224,45 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
       });
 
       expect(res.status).toBe(404);
+    });
+
+    it('locks the group set when a grade is entered on a group assignment', async () => {
+      prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+        assignment: { courseId: defaultParams.id, isPublished: true, groupSetId: 'gs1' },
+        maxPoints: 100,
+      });
+
+      const res = await POST(buildRequest({ grade: 90 }), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(200);
+      expect(prismaMock.groupSet.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'gs1', lockedAt: null } }),
+      );
+    });
+
+    it('locks the group set even when the grade is 0 (no truthiness on 0)', async () => {
+      prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+        assignment: { courseId: defaultParams.id, isPublished: true, groupSetId: 'gs1' },
+        maxPoints: 100,
+      });
+      prismaMock.assignmentProblemGrade.upsert.mockResolvedValue({
+        grade: 0,
+        feedback: null,
+        updatedAt: new Date(),
+      });
+
+      const res = await POST(buildRequest({ grade: 0 }), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(200);
+      // 0 is a real grade: it goes through the upsert path and stamps the lock.
+      expect(prismaMock.assignmentProblemGrade.upsert).toHaveBeenCalled();
+      expect(prismaMock.groupSet.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'gs1', lockedAt: null } }),
+      );
     });
 
     it('rejects non-numeric grades', async () => {

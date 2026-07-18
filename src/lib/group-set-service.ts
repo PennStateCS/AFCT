@@ -1,16 +1,37 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { computeMembershipBasis, GroupSetLockedError } from '@/lib/group-sets';
 
 /**
- * A group set is locked against membership/group edits once any of its groups has a
- * submission (changing groups after students have submitted would orphan or mismatch a
- * group's shared submission set). Renaming and duplication stay allowed.
+ * Stamp a group set's sticky lock the first time a submission or grade is created for an
+ * assignment using it. Idempotent (only the first call sets lockedAt) and never cleared,
+ * so removing the submission/grade later does not unlock. Call it inside the same
+ * transaction as the submission/grade write so the lock and the record commit together.
+ * No-op when the assignment is not a group assignment (groupSetId null).
+ */
+export async function lockGroupSetIfUsed(
+  client: Prisma.TransactionClient,
+  groupSetId: string | null | undefined,
+): Promise<void> {
+  if (!groupSetId) return;
+  await client.groupSet.updateMany({
+    where: { id: groupSetId, lockedAt: null },
+    data: { lockedAt: new Date() },
+  });
+}
+
+/**
+ * A group set is locked against group/membership edits once its sticky lockedAt is set
+ * (stamped by lockGroupSetIfUsed on the first submission or grade for a using-assignment).
+ * The lock is never cleared, so it survives deleting the submission/grade. Renaming and
+ * duplication stay allowed.
  */
 export async function isGroupSetLocked(setId: string): Promise<boolean> {
-  const count = await prisma.submission.count({
-    where: { studentGroup: { groupSetId: setId } },
+  const set = await prisma.groupSet.findUnique({
+    where: { id: setId },
+    select: { lockedAt: true },
   });
-  return count > 0;
+  return set?.lockedAt != null;
 }
 
 /** Throws GroupSetLockedError when the set is locked. */
@@ -19,25 +40,31 @@ export async function assertGroupSetUnlocked(setId: string): Promise<void> {
 }
 
 /**
- * Reasons a group set cannot be deleted: any assignment that references it. (Its
- * submissions/grades hang off those assignments, so the assignment reference is the
- * single gate.) Empty means deletion is allowed.
+ * Reasons a group set cannot be deleted: it is locked (has submissions or grades), or an
+ * assignment references it. Empty means deletion is allowed.
  */
 export async function groupSetDeletionBlockers(setId: string): Promise<string[]> {
-  const assignmentCount = await prisma.assignment.count({ where: { groupSetId: setId } });
-  if (assignmentCount > 0) {
-    return [
-      `This group set is used by ${assignmentCount} assignment${assignmentCount === 1 ? '' : 's'}.`,
-    ];
+  const [set, assignmentCount] = await Promise.all([
+    prisma.groupSet.findUnique({ where: { id: setId }, select: { lockedAt: true } }),
+    prisma.assignment.count({ where: { groupSetId: setId } }),
+  ]);
+  const blockers: string[] = [];
+  if (set?.lockedAt) {
+    blockers.push('This group set has submissions or grades and cannot be deleted.');
   }
-  return [];
+  if (assignmentCount > 0) {
+    blockers.push(
+      `This group set is used by ${assignmentCount} assignment${assignmentCount === 1 ? '' : 's'}.`,
+    );
+  }
+  return blockers;
 }
 
-/** The subset of the given set ids that are locked (have submissions). */
+/** The subset of the given set ids that are locked (lockedAt set). */
 async function lockedSetIds(setIds: string[]): Promise<Set<string>> {
   if (setIds.length === 0) return new Set();
   const locked = await prisma.groupSet.findMany({
-    where: { id: { in: setIds }, groups: { some: { submissions: { some: {} } } } },
+    where: { id: { in: setIds }, lockedAt: { not: null } },
     select: { id: true },
   });
   return new Set(locked.map((s) => s.id));

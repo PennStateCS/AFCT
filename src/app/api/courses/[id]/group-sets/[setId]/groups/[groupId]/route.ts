@@ -126,7 +126,16 @@ export const DELETE = withCourseAuth(
       if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
       await assertGroupSetUnlocked(setId);
 
-      await prisma.studentGroup.delete({ where: { id: groupId } });
+      // Re-check the lock inside the delete transaction so a submission/grade that lands
+      // concurrently can't be raced past the guard.
+      await prisma.$transaction(async (tx) => {
+        const set = await tx.groupSet.findUnique({
+          where: { id: setId },
+          select: { lockedAt: true },
+        });
+        if (set?.lockedAt) throw new GroupSetLockedError();
+        await tx.studentGroup.delete({ where: { id: groupId } });
+      });
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
