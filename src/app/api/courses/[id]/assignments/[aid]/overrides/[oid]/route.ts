@@ -152,7 +152,19 @@ export const DELETE = withCourseAuth(
         return NextResponse.json({ error: 'Override not found' }, { status: 404 });
       }
 
-      await prisma.assignmentOverride.delete({ where: { id: oid } });
+      await prisma.$transaction(async (tx) => {
+        await tx.assignmentOverride.delete({ where: { id: oid } });
+        // When the last group target goes, the assignment is no longer a group
+        // assignment, so un-pin its group set.
+        if (existing.targetType === 'GROUP') {
+          const remaining = await tx.assignmentOverride.count({
+            where: { assignmentId: aid, targetType: 'GROUP' },
+          });
+          if (remaining === 0) {
+            await tx.assignment.update({ where: { id: aid }, data: { groupSetId: null } });
+          }
+        }
+      });
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

@@ -209,15 +209,34 @@ export const AssignmentUpdateApiSchema = z.object({
  * base value". The handler fetches the base assignment and validates the effective window,
  * because inherit-awareness can't live in the schema alone.
  */
-export const OverrideCreateApiSchema = z.object({
-  userId: z.string().min(1, 'A target student is required.'),
+const OverrideDateFields = {
   unlockAt: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
   lateCutoff: z.string().nullable().optional(),
   allowLateSubmissions: z.boolean().nullable().optional(),
-});
+};
 
-export const OverrideUpdateApiSchema = OverrideCreateApiSchema.partial().omit({ userId: true });
+// A target is exactly one of a student (userId) or a group (groupId). The handler
+// enforces the rest: the group belongs to the assignment's group set, and no student is
+// targeted more than one way.
+export const OverrideCreateApiSchema = z
+  .object({
+    userId: z.string().min(1).optional(),
+    groupId: z.string().min(1).optional(),
+    ...OverrideDateFields,
+  })
+  .superRefine((d, ctx) => {
+    if (!!d.userId === !!d.groupId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['userId'],
+        message: 'Provide exactly one target: a student or a group.',
+      });
+    }
+  });
+
+// Updates never change the target, only the dates/late policy.
+export const OverrideUpdateApiSchema = z.object({ ...OverrideDateFields });
 
 /** Types */
 export type UpdateAssignmentInput = z.infer<typeof UpdateAssignmentSchema>;

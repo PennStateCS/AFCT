@@ -41,11 +41,15 @@ export const GET = withCourseAuth(
           id: true,
           targetType: true,
           userId: true,
+          groupId: true,
           unlockAt: true,
           dueDate: true,
           lateCutoff: true,
           allowLateSubmissions: true,
           user: { select: { id: true, firstName: true, lastName: true, email: true } },
+          studentGroup: {
+            select: { id: true, name: true, _count: { select: { memberships: true } } },
+          },
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -75,9 +79,9 @@ export const GET = withCourseAuth(
  *     application/json:
  *       schema:
  *         type: object
- *         required: [userId]
  *         properties:
- *           userId: { type: string }
+ *           userId: { type: string, description: Student target (exactly one of userId or groupId) }
+ *           groupId: { type: string, description: Group target (a StudentGroup in the assignment's group set) }
  *           unlockAt: { type: string, nullable: true }
  *           dueDate: { type: string, nullable: true }
  *           lateCutoff: { type: string, nullable: true }
@@ -104,6 +108,7 @@ export const POST = withCourseAuth(
           lateCutoff: true,
           allowLateSubmissions: true,
           assignedToEveryone: true,
+          groupSetId: true,
         },
       });
       if (!assignment) {
@@ -114,15 +119,8 @@ export const POST = withCourseAuth(
       if (!parsed.ok) return parsed.response;
       const data = parsed.data;
 
-      // The target must be a STUDENT enrolled in the course.
-      const rosterEntry = await prisma.roster.findUnique({
-        where: { courseId_userId: { courseId, userId: data.userId } },
-        select: { role: true },
-      });
-      if (!rosterEntry || rosterEntry.role !== 'STUDENT') {
-        // Not an auth denial of the caller (they can manage the course); the target is
-        // invalid. Record it at SECURITY for audit, but answer 400 like the sibling
-        // group-members route does for a non-enrolled target.
+      const timezone = await resolveCourseTimezone(courseId);
+      const invalidTarget = async (targetMeta: Record<string, string>, message: string) => {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
           action: 'ASSIGNMENT_OVERRIDE_TARGET_INVALID',
@@ -130,46 +128,142 @@ export const POST = withCourseAuth(
           category: 'ASSIGNMENT',
           courseId,
           assignmentId: aid,
-          metadata: { targetUserId: data.userId, reason: 'not a student on the roster' },
+          metadata: targetMeta,
         });
-        return NextResponse.json(
-          { error: 'Target must be a student enrolled in this course.' },
-          { status: 400 },
-        );
-      }
-
-      const timezone = await resolveCourseTimezone(courseId);
-      const resolved = resolveOverrideFields({
-        incoming: data,
-        existing: null,
-        base: assignment,
-        timezone,
-        // Assignee-only rows (no date change) are valid when targeting specific students.
-        allowEmpty: assignment.assignedToEveryone === false,
-      });
-      if (!resolved.ok) {
-        return NextResponse.json({ error: resolved.message }, { status: 400 });
-      }
+        return NextResponse.json({ error: message }, { status: 400 });
+      };
 
       let created;
-      try {
-        created = await prisma.assignmentOverride.create({
-          data: {
-            targetType: 'STUDENT',
-            assignmentId: aid,
-            userId: data.userId,
-            createdById: user.id,
-            ...resolved.fields,
-          },
+      if (data.groupId) {
+        // ── GROUP target ──────────────────────────────────────────────────────
+        const group = await prisma.studentGroup.findFirst({
+          where: { id: data.groupId, groupSet: { courseId } },
+          select: { id: true, groupSetId: true },
         });
-      } catch (err) {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-          return NextResponse.json(
-            { error: 'An override already exists for this student.' },
-            { status: 409 },
+        if (!group) {
+          return invalidTarget(
+            { targetGroupId: data.groupId, reason: 'group not in this course' },
+            'Target group not found in this course.',
           );
         }
-        throw err;
+        // Group targets on one assignment must all come from a single group set.
+        if (assignment.groupSetId && assignment.groupSetId !== group.groupSetId) {
+          return NextResponse.json(
+            { error: "Groups must come from this assignment's group set." },
+            { status: 400 },
+          );
+        }
+        // No double-targeting: none of the group's members may be targeted individually.
+        const memberIds = (
+          await prisma.groupMembership.findMany({
+            where: { groupId: group.id },
+            select: { userId: true },
+          })
+        ).map((m) => m.userId);
+        const studentClash = await prisma.assignmentOverride.findFirst({
+          where: { assignmentId: aid, targetType: 'STUDENT', userId: { in: memberIds } },
+          select: { id: true },
+        });
+        if (studentClash) {
+          return NextResponse.json(
+            { error: 'A student in this group is already assigned individually for this assignment.' },
+            { status: 400 },
+          );
+        }
+
+        const resolved = resolveOverrideFields({
+          incoming: data,
+          existing: null,
+          base: assignment,
+          timezone,
+          allowEmpty: true, // a group target may just assign the group with the base window
+        });
+        if (!resolved.ok) return NextResponse.json({ error: resolved.message }, { status: 400 });
+
+        try {
+          created = await prisma.$transaction(async (tx) => {
+            const row = await tx.assignmentOverride.create({
+              data: {
+                targetType: 'GROUP',
+                assignmentId: aid,
+                groupId: group.id,
+                createdById: user.id,
+                ...resolved.fields,
+              },
+            });
+            // Pin the assignment to this set and stop assigning everyone individually.
+            await tx.assignment.update({
+              where: { id: aid },
+              data: { groupSetId: group.groupSetId, assignedToEveryone: false },
+            });
+            return row;
+          });
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            return NextResponse.json(
+              { error: 'This group is already targeted for this assignment.' },
+              { status: 409 },
+            );
+          }
+          throw err;
+        }
+      } else {
+        // ── STUDENT target ────────────────────────────────────────────────────
+        const userId = data.userId as string;
+        const rosterEntry = await prisma.roster.findUnique({
+          where: { courseId_userId: { courseId, userId } },
+          select: { role: true },
+        });
+        if (!rosterEntry || rosterEntry.role !== 'STUDENT') {
+          return invalidTarget(
+            { targetUserId: userId, reason: 'not a student on the roster' },
+            'Target must be a student enrolled in this course.',
+          );
+        }
+        // No double-targeting: the student must not be in a group targeted on this assignment.
+        const groupClash = await prisma.assignmentOverride.findFirst({
+          where: {
+            assignmentId: aid,
+            targetType: 'GROUP',
+            studentGroup: { memberships: { some: { userId } } },
+          },
+          select: { id: true },
+        });
+        if (groupClash) {
+          return NextResponse.json(
+            { error: 'This student is already assigned through a group for this assignment.' },
+            { status: 400 },
+          );
+        }
+
+        const resolved = resolveOverrideFields({
+          incoming: data,
+          existing: null,
+          base: assignment,
+          timezone,
+          allowEmpty: assignment.assignedToEveryone === false,
+        });
+        if (!resolved.ok) return NextResponse.json({ error: resolved.message }, { status: 400 });
+
+        try {
+          created = await prisma.assignmentOverride.create({
+            data: {
+              targetType: 'STUDENT',
+              assignmentId: aid,
+              userId,
+              createdById: user.id,
+              ...resolved.fields,
+            },
+          });
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            return NextResponse.json(
+              { error: 'An override already exists for this student.' },
+              { status: 409 },
+            );
+          }
+          throw err;
+        }
       }
 
       await createEnhancedActivityLog(prisma, req, {
@@ -182,6 +276,7 @@ export const POST = withCourseAuth(
         metadata: {
           overrideId: created.id,
           targetUserId: created.userId,
+          targetGroupId: created.groupId,
           targetType: created.targetType,
           unlockAt: created.unlockAt ? created.unlockAt.toISOString() : null,
           dueDate: created.dueDate ? created.dueDate.toISOString() : null,

@@ -4625,7 +4625,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    userId: string;
+                    /** @description Student target (exactly one of userId or groupId) */
+                    userId?: string;
+                    /** @description Group target (a StudentGroup in the assignment's group set) */
+                    groupId?: string;
                     unlockAt?: string | null;
                     dueDate?: string | null;
                     lateCutoff?: string | null;

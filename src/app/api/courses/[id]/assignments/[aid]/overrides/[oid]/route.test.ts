@@ -3,8 +3,10 @@ import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
   course: { findUnique: vi.fn() },
-  assignmentOverride: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  assignment: { update: vi.fn() },
+  assignmentOverride: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
   roster: { findFirst: vi.fn() },
+  $transaction: vi.fn(),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -20,7 +22,9 @@ import { PATCH, DELETE } from './route';
 
 const EXISTING = {
   id: 'o1',
+  targetType: 'STUDENT',
   userId: 'stu-1',
+  groupId: null,
   unlockAt: null,
   dueDate: new Date('2026-01-20T23:59:00.000Z'),
   lateCutoff: null,
@@ -47,7 +51,9 @@ beforeEach(() => {
   prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   prismaMock.assignmentOverride.findFirst.mockResolvedValue(EXISTING);
+  prismaMock.assignmentOverride.count.mockResolvedValue(0);
   resolveTzMock.mockResolvedValue('UTC');
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prismaMock));
 });
 
 describe('PATCH override', () => {
@@ -115,5 +121,38 @@ describe('DELETE override', () => {
 
     expect(res.status).toBe(404);
     expect(prismaMock.assignmentOverride.delete).not.toHaveBeenCalled();
+  });
+
+  it('un-pins the group set when the last group target is deleted', async () => {
+    prismaMock.assignmentOverride.findFirst.mockResolvedValue({
+      ...EXISTING,
+      targetType: 'GROUP',
+      userId: null,
+      groupId: 'g1',
+    });
+    prismaMock.assignmentOverride.count.mockResolvedValue(0); // none remain
+
+    const res = await DELETE(new NextRequest('http://localhost/x', { method: 'DELETE' }), ctx);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignment.update).toHaveBeenCalledWith({
+      where: { id: 'a1' },
+      data: { groupSetId: null },
+    });
+  });
+
+  it('keeps the group set pinned when other group targets remain', async () => {
+    prismaMock.assignmentOverride.findFirst.mockResolvedValue({
+      ...EXISTING,
+      targetType: 'GROUP',
+      userId: null,
+      groupId: 'g1',
+    });
+    prismaMock.assignmentOverride.count.mockResolvedValue(2); // others remain
+
+    const res = await DELETE(new NextRequest('http://localhost/x', { method: 'DELETE' }), ctx);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
   });
 });
