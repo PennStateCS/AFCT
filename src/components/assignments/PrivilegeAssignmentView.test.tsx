@@ -371,21 +371,6 @@ describe('PrivilegeAssignmentView — header', () => {
     renderView({ initialAssignment: makeAssignment({ description: null }) });
     expect(screen.getByText('No description.')).toBeInTheDocument();
   });
-
-  it('badges an unpublished assignment as "Not Published"', () => {
-    renderView({ initialAssignment: makeAssignment({ isPublished: false }) });
-    expect(screen.getByText('Not Published')).toBeInTheDocument();
-  });
-
-  it('badges a published, not-yet-due assignment as "Published"', () => {
-    renderView();
-    expect(screen.getByText('Published')).toBeInTheDocument();
-  });
-
-  it('badges a published, past-due assignment as "Past Due"', () => {
-    renderView({ initialAssignment: makeAssignment({ dueDate: '2000-01-01T00:00:00Z' }) });
-    expect(screen.getByText('Past Due')).toBeInTheDocument();
-  });
 });
 
 describe('PrivilegeAssignmentView — tabs', () => {
@@ -458,7 +443,7 @@ describe('PrivilegeAssignmentView — archived course', () => {
       }),
     });
     // `hidden` elements drop out of the a11y tree, so query the DOM directly.
-    for (const label of ['Edit Assignment', 'Create Problem', 'Add Existing Problem']) {
+    for (const label of ['Create Problem', 'Add Existing Problem']) {
       const btn = container.querySelector(`button[aria-label="${label}"]`);
       expect(btn).not.toBeNull();
       expect(btn).toHaveAttribute('hidden');
@@ -585,10 +570,11 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     expect(dialog).toHaveAttribute('data-course-id', 'c1');
   });
 
-  it('opens the Settings tab from the header Edit button', () => {
+  it('opens the Settings tab from the tab bar', async () => {
+    const user = userEvent.setup();
     renderView();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Assignment' }));
-    expect(screen.getByTestId('assignment-settings')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /Settings/ }));
+    expect(await screen.findByTestId('assignment-settings')).toBeInTheDocument();
   });
 
   it('opens the create-problem dialog from the header button', async () => {

@@ -2,12 +2,11 @@
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { Pencil, FileText, Package, Plus, Settings } from 'lucide-react';
+import { FileText, Package, Plus, Settings } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import SelectField from '@/components/ui/SelectField';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -399,17 +398,7 @@ export default function AssignmentDashboardPage({
   return (
     <div className="mx-auto w-full text-sm">
       <Tabs value={tab} onValueChange={handleTabChange}>
-        <Card className="relative">
-          <Button
-            variant="default"
-            aria-label="Edit Assignment"
-            onClick={() => handleTabChange('settings')}
-            className="absolute top-6 right-6"
-            hidden={courseIsArchived}
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit Assignment
-          </Button>
+        <Card>
           <CardHeader>
             <CardTitle
               role="heading"
@@ -420,21 +409,6 @@ export default function AssignmentDashboardPage({
               <span className="min-w-0 [overflow-wrap:anywhere] break-words">
                 {assignment.title}
               </span>
-              {(() => {
-                const pastDue =
-                  assignment.isPublished && new Date(assignment.dueDate) <= new Date();
-                const variant = !assignment.isPublished
-                  ? 'warning'
-                  : pastDue
-                    ? 'danger'
-                    : 'success';
-                const status = !assignment.isPublished
-                  ? 'Not Published'
-                  : pastDue
-                    ? 'Past Due'
-                    : 'Published';
-                return <Badge variant={variant}>{status}</Badge>;
-              })()}
             </CardTitle>
             <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
               {/* Show course name/code as a link to the course page (fallback to courseId) */}
@@ -498,13 +472,13 @@ export default function AssignmentDashboardPage({
             </div>
             {/* Tab selector, matching the underline style used on the course page. */}
             <TabsList aria-label="Assignment sections" className={TAB_BAR_LIST_CLASS}>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="problems">
-                <FileText className="size-3.5 opacity-70" />
-                Problems
-              </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="submissions">
                 <Package className="size-3.5 opacity-70" />
                 Submissions
+              </TabsTrigger>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="problems">
+                <FileText className="size-3.5 opacity-70" />
+                Problems
               </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="settings">
                 <Settings className="size-3.5 opacity-70" />
