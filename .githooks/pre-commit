@@ -1,0 +1,21 @@
+#!/bin/sh
+# Keep src/types/api.ts in sync with the OpenAPI spec automatically.
+#
+# The types file is generated from the @openapi blocks on API routes. If it drifts,
+# CI's docs-check job fails. This hook regenerates and stages it whenever a commit
+# touches something that can change the spec, so the generated file can never fall
+# out of sync locally. It runs only for those commits, so unrelated commits stay fast.
+#
+# Installed via the `prepare` npm script (git config core.hooksPath .githooks).
+set -e
+
+# Did this commit stage an API route or the generator itself?
+if git diff --cached --name-only --diff-filter=ACMR \
+  | grep -qE '^(src/app/api/.*route\.ts|scripts/generate-openapi\.mjs)$'; then
+  echo "[pre-commit] API surface changed; regenerating src/types/api.ts"
+  if ! npm run docs >/dev/null 2>&1; then
+    echo "[pre-commit] 'npm run docs' failed (likely a malformed @openapi block). Fix it and re-commit." >&2
+    exit 1
+  fi
+  git add src/types/api.ts
+fi
