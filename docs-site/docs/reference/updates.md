@@ -21,7 +21,7 @@ sh install.sh self-update
 sh install.sh update
 ```
 
-`self-update` re-downloads the installer, `docker-compose.yml`, and the environment template from the repository (backing up the old copies). It never touches `.env.production` or any data. It needs no Git checkout — the files come straight from the public repository over HTTPS.
+`self-update` downloads the installer, `docker-compose.yml`, and the environment template from the repository, backing up the old copies first. It never touches `.env.production` or application data. It needs no Git checkout because the files come from the public repository over HTTPS.
 
 The equivalent Docker commands work on any platform, including Windows PowerShell:
 
@@ -65,7 +65,7 @@ Confirm that every service is running and the application reports healthy. Then 
 
 ## In-app updates
 
-AFCT can upgrade and downgrade itself from **Admin → System Settings → Updates**, without a shell session. This is handled by a separate privileged helper (the *updater* sidecar) so the application container never touches Docker directly. Because that helper holds the Docker socket, it is **off by default** and must be enabled deliberately.
+AFCT can upgrade and downgrade itself from **Admin Menu > System Settings > Updates** without a shell session. A separate privileged updater service handles the operation, so the application container never touches Docker directly. The updater holds the Docker socket and is therefore **off by default**.
 
 Enable it once, on the host, in the directory that holds `docker-compose.yml`:
 
@@ -82,7 +82,7 @@ sh install.sh disable-updater
 Once enabled, the Updates tab lists the available versions from the project's release manifest. Pick a newer version to **upgrade**: the updater takes a database backup first, swaps to the new image, waits for the health check, and rolls back automatically if the new version does not come up healthy. Each successful upgrade records a restore point for the version you left, so you can **downgrade** back to it later.
 
 :::warning
-Downgrading restores the database from the backup taken at that restore point, which **discards any data created since**. Only downgrade when you accept losing that data. The Updates tab requires an explicit confirmation before it proceeds.
+Downgrading restores the database from the backup taken at that restore point, which discards database records created since. Uploaded files are not rolled back and may become unreferenced. Only downgrade when you accept that result. The Updates tab requires explicit confirmation.
 :::
 
 Only versions listed in the curated release manifest can be selected; the updater validates every request against it, so the app can never be pointed at an arbitrary image.

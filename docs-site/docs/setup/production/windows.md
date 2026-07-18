@@ -35,8 +35,8 @@ Do not continue until WSL 2 is available and all Docker commands succeed.
 
 ## Guided installation (recommended)
 
-:::warning Don't run the installer from a `git clone`
-Download the bundle into a fresh, empty directory as shown below — do **not** run the installer from a checkout of the repository. A clone contains a developer compose file that *builds* the nginx and backup images from local folders, and the installer will fail with an error like `unable to prepare context: path ".../docker/nginx" not found`. The downloaded `docker-compose.yml` pulls the prebuilt published images instead and needs no repository checkout. (A clone is only for the [manual method](#manual-installation).)
+:::warning Use the deployment Compose file
+Download the bundle into a fresh directory as shown below. If you already cloned the repository, run the guided installer from its `deploy/` directory, not the repository root. The root Compose file is for the source-based manual method, while `deploy/docker-compose.yml` pulls the published images used by the installer.
 :::
 
 Create a deployment directory and download the installer bundle:
@@ -130,7 +130,7 @@ $bytes = New-Object byte[] 64
 
 Copy the generated value into `.env.production`. Changing the secret later signs every user out.
 
-hCaptcha is optional. You can set `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY` now, or configure hCaptcha later in **System Settings > Security > hCaptcha**. Do not use hCaptcha test credentials in production.
+hCaptcha is optional. You can set `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY` now, or configure it later in **Admin Menu > System Settings > Captcha**. Do not use hCaptcha test credentials in production.
 
 Limit access to `.env.production`. Do not commit it, attach it to support requests, place it in a public folder, or send it through unencrypted email.
 
@@ -180,7 +180,7 @@ The installer also serves as an operations helper. Run these from the directory 
 
 ### In-app upgrades (optional)
 
-To run upgrades and downgrades from **Admin → System Settings → Updates** instead of the command line, enable the updater sidecar:
+To run upgrades and downgrades from **Admin Menu > System Settings > Updates** instead of the command line, enable the updater sidecar:
 
 ```powershell
 .\install.ps1 enable-updater    # .\install.ps1 disable-updater to turn it off
@@ -194,6 +194,6 @@ afterward):
 .\install.ps1 -WithUpdater
 ```
 
-This is **off by default** because the updater holds the Docker socket (root-equivalent on the host). Once enabled, `update`, `restart`, and `status` include it automatically. Downgrades restore a pre-upgrade database backup and **permanently discard everything created since it**, so treat them as recovery, not a casual undo.
+This is **off by default** because the updater holds the Docker socket, which is effectively root access on the host. Once enabled, `update`, `restart`, and `status` include it automatically. A downgrade restores a pre-upgrade database backup and permanently discards database records created since it. Uploaded files are left in place and can become unreferenced. Treat downgrade as recovery, not a casual undo.
 
 Continue with [HTTPS certificates](../../operations/https-certificates.md), then review [updates](../../reference/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).

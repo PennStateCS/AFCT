@@ -30,17 +30,60 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Guides',
       collapsed: false,
-      items: ['guides/student', 'guides/faculty', 'guides/admin'],
+      items: ['guides/student', 'guides/faculty'],
+    },
+    {
+      type: 'category',
+      label: 'Faculty',
+      items: [
+        {
+          type: 'category',
+          label: 'Course',
+          link: {
+            type: 'doc',
+            id: 'faculty/course',
+          },
+          items: [
+            {
+              type: 'category',
+              label: 'Assignments',
+              link: {
+                type: 'doc',
+                id: 'faculty/assignments',
+              },
+              items: ['faculty/submissions'],
+            },
+            'faculty/problems',
+            'faculty/roster',
+            'faculty/grades',
+            'faculty/groups',
+            'faculty/activity',
+            'faculty/settings',
+          ],
+        },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Admin',
+      link: {
+        type: 'doc',
+        id: 'guides/admin',
+      },
+      items: [
+        'admin/courses',
+        'admin/development-tests',
+        'admin/submission-logs',
+        'admin/system-logs',
+        'admin/system-settings',
+        'admin/system-status',
+        'admin/user-accounts',
+      ],
     },
     {
       type: 'category',
       label: 'Operations',
-      items: [
-        'operations/system-settings',
-        'operations/backups',
-        'operations/https-certificates',
-        'operations/troubleshooting',
-      ],
+      items: ['operations/backups', 'operations/https-certificates', 'operations/troubleshooting'],
     },
     {
       type: 'category',

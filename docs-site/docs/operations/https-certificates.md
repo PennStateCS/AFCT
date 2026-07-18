@@ -16,8 +16,8 @@ Requirements:
 
 Steps:
 
-1. Sign in as an administrator and open **System Settings**.
-2. Find **TLS Certificate** and select **Get a free certificate (Let's Encrypt)**.
+1. Sign in as an administrator and open **Admin Menu > System Settings**.
+2. Select **TLS Certificate**, then select **Get a free certificate (Let's Encrypt)**.
 3. Confirm the domain (prefilled from your configured URL) and enter a contact email. Let's Encrypt uses the email only for expiry and policy notices.
 4. Optionally turn on **Use staging** to run a test issuance first. Staging issues an untrusted test certificate but confirms your DNS and port 80 are set up correctly without spending the weekly rate limit. Turn it off and request again once the test succeeds.
 5. Agree to the Let's Encrypt terms of service and select **Request certificate**. Issuance usually takes under a minute.
@@ -31,8 +31,8 @@ If issuance fails, the previous certificate is kept, so the site stays reachable
 ## Install a certificate in AFCT
 
 1. Sign in as an administrator.
-2. Open **System Settings**.
-3. Find **TLS Certificate**.
+2. Open **Admin Menu > System Settings**.
+3. Select **TLS Certificate**.
 4. Upload the certificate in PEM format.
 5. Upload the matching private key in PEM format.
 6. Add any intermediate or chain certificates supplied by the certificate authority.
@@ -68,4 +68,4 @@ A warning is expected with the default self-signed certificate. A warning on a p
 - An intermediate certificate is missing
 - DNS points to a different server
 
-Check the certificate installed under **System Settings > TLS Certificate** and renew or replace it as needed.
+Check the certificate installed under **Admin Menu > System Settings > TLS Certificate** and renew or replace it as needed.

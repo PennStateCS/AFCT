@@ -31,12 +31,12 @@ Set the DNS record before installation. `NEXTAUTH_URL` must exactly match the ad
 
 ## Software
 
-| Host | Needs |
-|---|---|
-| AWS EC2 | Ubuntu or another Linux distribution, Docker Engine, and the Compose plugin |
-| Linux | Docker Engine with the Compose plugin. The guided installer can install it on supported distributions. |
-| Windows | WSL 2 and Docker Desktop |
-| macOS | Docker Desktop |
+| Host    | Needs                                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------------------ |
+| AWS EC2 | Ubuntu or another Linux distribution, Docker Engine, and the Compose plugin                            |
+| Linux   | Docker Engine with the Compose plugin. The guided installer can install it on supported distributions. |
+| Windows | WSL 2 and Docker Desktop                                                                               |
+| macOS   | Docker Desktop                                                                                         |
 
 Git is only needed for the manual installation method. The guided installer downloads everything it needs with `curl` on Linux and macOS, or `Invoke-WebRequest` on Windows.
 
