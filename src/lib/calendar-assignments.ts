@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 import type { CalendarAssignment } from '@/lib/calendar-shared';
 export { getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
 // Re-exported so existing importers keep working; the implementation now lives in
@@ -39,22 +40,22 @@ export async function getAssignmentsForUserRange(params: {
 
   const assignments = await prisma.assignment.findMany({
     where: {
-      dueDate: {
-        gte: startDate,
-        lte: endDate,
-      },
       // The calendar never includes archived or soft-deleted courses, for anyone.
       course: { isArchived: false, deletedAt: null },
-      // In courses where the viewer is staff, show every assignment; where they
-      // are a student, show only published assignments from published courses; a
-      // student enrolled in an unpublished course gets no access to it at all, and
-      // an unpublished assignment must not surface (title/due date) before release.
+      // In courses where the viewer is staff, show every assignment whose base due is in
+      // range. Where they are a student, show only published assignments from published
+      // courses, and match on the base due OR this student's own override due so an
+      // extension that moves the date into (or out of) the range is handled below.
       OR: [
-        { courseId: { in: staffCourseIdsArr } },
+        { courseId: { in: staffCourseIdsArr }, dueDate: { gte: startDate, lte: endDate } },
         {
           courseId: { in: studentCourseIdsArr },
           isPublished: true,
           course: { isPublished: true },
+          OR: [
+            { dueDate: { gte: startDate, lte: endDate } },
+            { overrides: { some: { userId, dueDate: { gte: startDate, lte: endDate } } } },
+          ],
         },
       ],
     },
@@ -62,10 +63,26 @@ export async function getAssignmentsForUserRange(params: {
       id: true,
       title: true,
       courseId: true,
+      unlockAt: true,
       dueDate: true,
+      allowLateSubmissions: true,
+      lateCutoff: true,
       // Carried through so staff can see (and the UI can mark) unpublished/draft
       // assignments. Students only ever receive published ones (see the OR above).
       isPublished: true,
+      // This viewer's own override (0 or 1 row), to resolve their effective due date.
+      overrides: {
+        where: { userId },
+        select: {
+          targetType: true,
+          userId: true,
+          groupId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+        },
+      },
       course: {
         select: { id: true, code: true, name: true },
       },
@@ -124,25 +141,40 @@ export async function getAssignmentsForUserRange(params: {
   }
 
   const now = new Date();
-  return assignments.map((a) => {
-    if (staffCourseIds.has(a.courseId)) {
+  const results: CalendarAssignment[] = [];
+  for (const a of assignments) {
+    // The resolution-only fields must not leak into the calendar payload.
+    const { unlockAt, allowLateSubmissions, lateCutoff, overrides, ...rest } = a;
+    const isStaff = staffCourseIds.has(a.courseId);
+
+    // Staff see the base due date; a student sees their own effective due date.
+    let dueDate = a.dueDate;
+    if (!isStaff) {
+      dueDate = effectiveDeadline(
+        { unlockAt, dueDate: a.dueDate, allowLateSubmissions, lateCutoff },
+        overrides,
+        userId,
+      ).dueDate;
+      // The widened query can return an assignment whose base due is in range but whose
+      // override moved this student's effective due out of it; drop those.
+      if (dueDate < startDate || dueDate > endDate) continue;
+    }
+
+    const entry = { ...rest, dueDate };
+    if (isStaff) {
       const totalStudents = studentCountByCourse[a.courseId] ?? 0;
       const gradedCount = gradedCountByAssignment[a.id] ?? 0;
       const allGraded = totalStudents > 0 && gradedCount >= totalStudents;
-      const duePassed = new Date(a.dueDate) < now;
-      return {
-        ...a,
-        crossedOut: duePassed && allGraded,
-        totalStudents,
-        gradedCount,
-        allGraded,
-      };
+      const duePassed = dueDate < now;
+      results.push({ ...entry, crossedOut: duePassed && allGraded, totalStudents, gradedCount, allGraded });
+    } else {
+      results.push({
+        ...entry,
+        crossedOut: submissionSet.has(a.id) || gradeSet.has(a.id),
+        studentHasSubmission: submissionSet.has(a.id),
+        studentHasGrade: gradeSet.has(a.id),
+      });
     }
-    return {
-      ...a,
-      crossedOut: submissionSet.has(a.id) || gradeSet.has(a.id),
-      studentHasSubmission: submissionSet.has(a.id),
-      studentHasGrade: gradeSet.has(a.id),
-    };
-  });
+  }
+  return results;
 }

@@ -1,6 +1,7 @@
 // src/lib/student-assignments.ts
 import { prisma } from '@/lib/prisma';
 import type { ProblemType } from '@prisma/client';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 
 export type StudentAssignmentProblem = {
   id: string;
@@ -19,6 +20,8 @@ export type StudentAssignment = {
   id: string;
   title: string;
   description: string | null;
+  /** "Available from" resolved for this student; null means available immediately. */
+  unlockAt: Date | null;
   dueDate: Date | null;
   allowLateSubmissions: boolean;
   lateCutoff: Date | null;
@@ -44,9 +47,23 @@ export async function getStudentCourseAssignments(
       id: true,
       title: true,
       description: true,
+      unlockAt: true,
       dueDate: true,
       allowLateSubmissions: true,
       lateCutoff: true,
+      // Only this student's override (0 or 1 row) so we can resolve their dates.
+      overrides: {
+        where: { userId },
+        select: {
+          targetType: true,
+          userId: true,
+          groupId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+        },
+      },
     },
     orderBy: { dueDate: 'asc' },
   });
@@ -106,13 +123,31 @@ export async function getStudentCourseAssignments(
     });
   }
 
-  return assignments.map((a) => ({
-    id: a.id,
-    title: a.title,
-    description: a.description,
-    dueDate: a.dueDate ?? null,
-    allowLateSubmissions: a.allowLateSubmissions,
-    lateCutoff: a.lateCutoff ?? null,
-    problems: byAssignment[a.id] ?? [],
-  }));
+  const resolved = assignments.map((a) => {
+    const eff = effectiveDeadline(
+      {
+        unlockAt: a.unlockAt,
+        dueDate: a.dueDate,
+        allowLateSubmissions: a.allowLateSubmissions,
+        lateCutoff: a.lateCutoff,
+      },
+      a.overrides,
+      userId,
+    );
+    return {
+      id: a.id,
+      title: a.title,
+      description: a.description,
+      unlockAt: eff.unlockAt,
+      dueDate: eff.dueDate,
+      allowLateSubmissions: eff.allowLateSubmissions,
+      lateCutoff: eff.lateCutoff,
+      problems: byAssignment[a.id] ?? [],
+    };
+  });
+
+  // The DB order is by the base due date; re-sort by each student's effective due so an
+  // extension moves the assignment to its right place in this student's list.
+  resolved.sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0));
+  return resolved;
 }
