@@ -172,6 +172,8 @@ export const GET = withCourseAuth(
           courseId,
         },
         include: {
+          // This caller's own override (0 or 1), to check "assign to specific students".
+          overrides: { where: { userId: user.id }, select: { userId: true } },
           problems: {
             select: {
               maxPoints: true,
@@ -224,6 +226,13 @@ export const GET = withCourseAuth(
 
       // Non-staff members may only see published assignments; hide the rest as 404.
       if (!isStaff && !(assignment as { isPublished?: boolean }).isPublished) {
+        return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+      }
+
+      // "Assign to specific students": a non-staff member not assigned this work can't
+      // see it either. Same 404 mask.
+      const gate = assignment as { assignedToEveryone?: boolean; overrides?: unknown[] };
+      if (!isStaff && gate.assignedToEveryone === false && (gate.overrides?.length ?? 0) === 0) {
         return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
       }
 
@@ -384,6 +393,7 @@ export const PUT = withCourseAuth(
           // rather than re-deriving from a possibly-undefined data.dueDate.
           dueDate,
           unlockAt: unlockState.unlockAt,
+          assignedToEveryone: data.assignedToEveryone,
           allowLateSubmissions,
           lateCutoff,
           isPublished: data.isPublished,
@@ -522,6 +532,7 @@ export const PATCH = withCourseAuth(
         description?: string;
         dueDate?: Date;
         unlockAt?: Date | null;
+        assignedToEveryone?: boolean;
         allowLateSubmissions?: boolean;
         lateCutoff?: Date | null;
         isPublished?: boolean;
@@ -532,6 +543,9 @@ export const PATCH = withCourseAuth(
       if (data.description !== undefined) updateData.description = data.description;
       if (data.dueDate !== undefined) updateData.dueDate = effectiveDueDate;
       if (unlockState.changed) updateData.unlockAt = unlockState.unlockAt;
+      if (data.assignedToEveryone !== undefined) {
+        updateData.assignedToEveryone = data.assignedToEveryone;
+      }
       if (data.allowLateSubmissions !== undefined) {
         updateData.allowLateSubmissions = allowLateSubmissions;
       }

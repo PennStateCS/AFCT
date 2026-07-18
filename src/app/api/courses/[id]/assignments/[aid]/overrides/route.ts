@@ -103,6 +103,7 @@ export const POST = withCourseAuth(
           dueDate: true,
           lateCutoff: true,
           allowLateSubmissions: true,
+          assignedToEveryone: true,
         },
       });
       if (!assignment) {
@@ -143,6 +144,8 @@ export const POST = withCourseAuth(
         existing: null,
         base: assignment,
         timezone,
+        // Assignee-only rows (no date change) are valid when targeting specific students.
+        allowEmpty: assignment.assignedToEveryone === false,
       });
       if (!resolved.ok) {
         return NextResponse.json({ error: resolved.message }, { status: 400 });

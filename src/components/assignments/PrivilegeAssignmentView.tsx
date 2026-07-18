@@ -676,6 +676,7 @@ export default function AssignmentDashboardPage({
                 ? new Date(assignment.unlockAt)
                 : assignment.unlockAt
               : null,
+            assignedToEveryone: assignment.assignedToEveryone ?? true,
           }}
           onSave={() => {
             void invalidateAssignment();

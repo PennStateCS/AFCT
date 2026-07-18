@@ -17,7 +17,13 @@ async function loadOverride(courseId: string, aid: string, oid: string) {
     where: { id: oid, assignmentId: aid, assignment: { courseId } },
     include: {
       assignment: {
-        select: { unlockAt: true, dueDate: true, lateCutoff: true, allowLateSubmissions: true },
+        select: {
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+          assignedToEveryone: true,
+        },
       },
     },
   });
@@ -75,6 +81,7 @@ export const PATCH = withCourseAuth(
         },
         base: existing.assignment,
         timezone,
+        allowEmpty: existing.assignment.assignedToEveryone === false,
       });
       if (!resolved.ok) {
         return NextResponse.json({ error: resolved.message }, { status: 400 });

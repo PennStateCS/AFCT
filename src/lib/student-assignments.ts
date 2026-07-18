@@ -2,6 +2,7 @@
 import { prisma } from '@/lib/prisma';
 import type { ProblemType } from '@prisma/client';
 import { effectiveDeadline } from '@/lib/effective-deadline';
+import { assignedToStudentWhere } from '@/lib/assignment-visibility';
 
 export type StudentAssignmentProblem = {
   id: string;
@@ -42,7 +43,8 @@ export async function getStudentCourseAssignments(
   courseId: string,
 ): Promise<StudentAssignment[]> {
   const assignments = await prisma.assignment.findMany({
-    where: { courseId, isPublished: true },
+    // Published, and assigned to this student (everyone, or via their own override).
+    where: { courseId, isPublished: true, ...assignedToStudentWhere(userId) },
     select: {
       id: true,
       title: true,

@@ -439,6 +439,26 @@ describe('POST /api/submissions', () => {
     expect(prismaMock.submission.create).toHaveBeenCalled();
   });
 
+  it('404-masks a student not assigned an assign-to-specific assignment', async () => {
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      courseId: 'course-1',
+      unlockAt: null,
+      dueDate: FUTURE,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      isPublished: true,
+      assignedToEveryone: false, // only specific students
+      overrides: [], // this student has no override, so is not assigned
+    });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(404);
+    expect(logActions()).toContain('SUBMISSION_NOT_ASSIGNED');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
   it('rejects a submission before the assignment is unlocked', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'assignment-1',

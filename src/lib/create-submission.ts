@@ -142,6 +142,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       allowLateSubmissions: true,
       lateCutoff: true,
       isPublished: true,
+      assignedToEveryone: true,
       // Only this submitter's override (0 or 1 row via the unique index) so the
       // effective window can account for a per-student extension.
       overrides: {
@@ -176,11 +177,25 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     return { ok: false, status: 403, error: 'Forbidden' };
   }
 
+  const submitterIsStaff = await canManageCourse(user, courseId);
+
   // Students may only submit to a published assignment; staff may test unpublished
   // ones. Mask as 404 so an unpublished assignment stays invisible to a student.
-  if (!assignment.isPublished && !(await canManageCourse(user, courseId))) {
+  if (!assignment.isPublished && !submitterIsStaff) {
     await audit('SUBMISSION_UNPUBLISHED_ASSIGNMENT', 'SECURITY', {
       error: 'Submission to an unpublished assignment by a non-staff user.',
+    });
+    return { ok: false, status: 404, error: 'Assignment not found.' };
+  }
+
+  // "Assign to specific students": a student not assigned this work can't submit to it.
+  // Mask as 404, same as unpublished. Staff may always test-submit.
+  const submitterAssigned =
+    assignment.assignedToEveryone !== false ||
+    assignment.overrides.some((o) => o.userId === user.id);
+  if (!submitterAssigned && !submitterIsStaff) {
+    await audit('SUBMISSION_NOT_ASSIGNED', 'SECURITY', {
+      error: 'Submission to an assignment the student is not assigned.',
     });
     return { ok: false, status: 404, error: 'Assignment not found.' };
   }
@@ -198,7 +213,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
 
   // Per-problem cap (staff exempt; `<= 0` is unlimited). Fast path; the authoritative
   // check runs again inside the serializable transaction below.
-  const isCourseStaff = await canManageCourse(user, courseId);
+  const isCourseStaff = submitterIsStaff;
   if (!isCourseStaff && link.maxSubmissions > 0) {
     const priorCount = await prisma.submission.count({
       where: { assignmentId, problemId, studentId: user.id },

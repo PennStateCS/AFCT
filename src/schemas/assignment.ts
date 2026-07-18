@@ -74,6 +74,7 @@ const BaseAssignmentFormSchemaObject = z
     description: z.string().trim().max(20000, 'Description is too long.').optional(),
     dueDate: DateTimeLocalForm,
     unlockAt: DateTimeLocalFormOptional,
+    assignedToEveryone: z.boolean().default(true),
     allowLateSubmissions: z.boolean().default(false),
     lateCutoff: DateTimeLocalFormOptional,
     isPublished: z.boolean(),
@@ -176,7 +177,17 @@ const OverrideFormItem = z.object({
  */
 export const AssignmentWizardFormSchema = BaseAssignmentFormSchemaObject.extend({
   overrides: z.array(OverrideFormItem).default([]),
-}).superRefine(validateLateSubmissionStrings);
+}).superRefine((data, ctx) => {
+  validateLateSubmissionStrings(data, ctx);
+  // "Assign to specific students" needs at least one student.
+  if (data.assignedToEveryone === false && (data.overrides?.length ?? 0) === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['overrides'],
+      message: 'Add at least one student, or assign to everyone.',
+    });
+  }
+});
 
 /**
  * Server (API) schemas for the assignment create/update routes. Dates stay as
@@ -188,6 +199,7 @@ export const AssignmentCreateApiSchema = z.object({
   description: z.string().max(20000, 'Description is too long.').optional(),
   dueDate: z.string().min(1, 'A due date is required.'),
   unlockAt: z.string().optional(),
+  assignedToEveryone: z.boolean().optional(),
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().optional(),
   isPublished: z.boolean().optional(),
@@ -199,6 +211,7 @@ export const AssignmentUpdateApiSchema = z.object({
   description: z.string().optional(),
   dueDate: z.string().optional(),
   unlockAt: z.string().nullable().optional(),
+  assignedToEveryone: z.boolean().optional(),
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().nullable().optional(),
   isPublished: z.boolean().optional(),

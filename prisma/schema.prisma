@@ -188,16 +188,21 @@ model Roster {
 }
 
 model Assignment {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
-  dueDate     DateTime
+  id                 String    @id @default(cuid())
+  title              String
+  description        String?
+  dueDate            DateTime
   // "Available from" for the whole class. Null means available immediately. Per-student
   // extensions can override this via AssignmentOverride; the effective value is resolved
   // in lib/effective-deadline. Interpreted in the course timezone like dueDate.
-  unlockAt    DateTime?
-  isPublished Boolean   @default(false)
-  isGroup     Boolean   @default(false) // Whether this assignment is group-based
+  unlockAt           DateTime?
+  // When true the assignment is assigned to every student in the course. When false it is
+  // assigned only to students who have an AssignmentOverride row, so staff can target one
+  // or a few students (Canvas "assign to specific students"). A student is "assigned" iff
+  // assignedToEveryone OR they have an override row.
+  assignedToEveryone Boolean   @default(true)
+  isPublished        Boolean   @default(false)
+  isGroup            Boolean   @default(false) // Whether this assignment is group-based
 
   // Late submission controls. Defaults to false to match the app (the create form
   // and API both default this off; the value is always sent explicitly).

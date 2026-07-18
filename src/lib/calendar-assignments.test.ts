@@ -56,9 +56,14 @@ describe('getAssignmentsForUserRange', () => {
         courseId: { in: ['student-course'] },
         isPublished: true,
         course: { isPublished: true },
-        OR: [
-          { dueDate: { gte: range.startDate, lte: range.endDate } },
-          { overrides: { some: { userId: 'u1', dueDate: { gte: range.startDate, lte: range.endDate } } } },
+        AND: [
+          {
+            OR: [
+              { dueDate: { gte: range.startDate, lte: range.endDate } },
+              { overrides: { some: { userId: 'u1', dueDate: { gte: range.startDate, lte: range.endDate } } } },
+            ],
+          },
+          { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: 'u1' } } }] },
         ],
       },
     ]);
@@ -89,9 +94,14 @@ describe('getAssignmentsForUserRange', () => {
         courseId: { in: [] },
         isPublished: true,
         course: { isPublished: true },
-        OR: [
-          { dueDate: { gte: range.startDate, lte: range.endDate } },
-          { overrides: { some: { userId: 'admin1', dueDate: { gte: range.startDate, lte: range.endDate } } } },
+        AND: [
+          {
+            OR: [
+              { dueDate: { gte: range.startDate, lte: range.endDate } },
+              { overrides: { some: { userId: 'admin1', dueDate: { gte: range.startDate, lte: range.endDate } } } },
+            ],
+          },
+          { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: 'admin1' } } }] },
         ],
       },
     ]);

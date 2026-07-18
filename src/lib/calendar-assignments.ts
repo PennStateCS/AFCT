@@ -52,9 +52,16 @@ export async function getAssignmentsForUserRange(params: {
           courseId: { in: studentCourseIdsArr },
           isPublished: true,
           course: { isPublished: true },
-          OR: [
-            { dueDate: { gte: startDate, lte: endDate } },
-            { overrides: { some: { userId, dueDate: { gte: startDate, lte: endDate } } } },
+          AND: [
+            // Base due OR this student's override due falls in the range.
+            {
+              OR: [
+                { dueDate: { gte: startDate, lte: endDate } },
+                { overrides: { some: { userId, dueDate: { gte: startDate, lte: endDate } } } },
+              ],
+            },
+            // And the assignment is actually assigned to this student.
+            { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId } } }] },
           ],
         },
       ],

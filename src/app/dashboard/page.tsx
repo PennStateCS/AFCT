@@ -125,9 +125,16 @@ export default async function DashboardPage() {
           where: {
             courseId: { in: courseIds },
             isPublished: true,
-            OR: [
-              { dueDate: { gt: now } },
-              { overrides: { some: { userId: id, dueDate: { gt: now } } } },
+            AND: [
+              // Base due OR this user's override due is in the future.
+              {
+                OR: [
+                  { dueDate: { gt: now } },
+                  { overrides: { some: { userId: id, dueDate: { gt: now } } } },
+                ],
+              },
+              // And this user is actually assigned it (everyone, or via their override).
+              { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: id } } }] },
             ],
           },
           select: {

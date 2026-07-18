@@ -169,6 +169,7 @@ export const POST = withCourseAuth(
           description: data.description,
           dueDate,
           unlockAt: unlockState.unlockAt,
+          assignedToEveryone: data.assignedToEveryone ?? true,
           allowLateSubmissions,
           lateCutoff: lateCutoffDate,
           isPublished: data.isPublished || false,

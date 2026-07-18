@@ -34,7 +34,10 @@ type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 
 const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> = [
   { title: 'Details', fields: ['title', 'description'] },
-  { title: 'Assign To', fields: ['unlockAt', 'dueDate', 'allowLateSubmissions', 'lateCutoff', 'overrides'] },
+  {
+    title: 'Assign To',
+    fields: ['assignedToEveryone', 'unlockAt', 'dueDate', 'allowLateSubmissions', 'lateCutoff', 'overrides'],
+  },
   { title: 'Options', fields: ['isPublished', 'isGroup'] },
   { title: 'Review', fields: [] },
 ];
@@ -82,6 +85,7 @@ export function CreateAssignmentWizardDialog({
       description: '',
       unlockAt: undefined,
       dueDate: defaultDueLocalString(timeZone),
+      assignedToEveryone: true,
       allowLateSubmissions: false,
       lateCutoff: undefined,
       isPublished: false,
@@ -111,6 +115,7 @@ export function CreateAssignmentWizardDialog({
 
   const baseAllowLate = watch('allowLateSubmissions');
   const baseDue = watch('dueDate');
+  const assignedToEveryone = watch('assignedToEveryone');
   const overrides = watch('overrides') ?? [];
 
   const students = useRosterStudentOptions(courseId, open);
@@ -152,6 +157,7 @@ export function CreateAssignmentWizardDialog({
       description: raw.description || undefined,
       dueDate: raw.dueDate,
       unlockAt: raw.unlockAt || undefined,
+      assignedToEveryone: raw.assignedToEveryone,
       allowLateSubmissions: raw.allowLateSubmissions,
       lateCutoff: raw.allowLateSubmissions ? raw.lateCutoff : null,
       isPublished: raw.isPublished,
@@ -192,7 +198,11 @@ export function CreateAssignmentWizardDialog({
   };
 
   const review = step === LAST_STEP ? getValues() : null;
-  const everyoneLabel = overrides.length > 0 ? 'Everyone else' : 'Everyone';
+  const everyoneLabel = !assignedToEveryone
+    ? 'Default dates'
+    : overrides.length > 0
+      ? 'Everyone else'
+      : 'Everyone';
 
   return (
     <Dialog
@@ -280,6 +290,32 @@ export function CreateAssignmentWizardDialog({
                 <h3 id="assign-to-heading" className="sr-only">
                   Assign to and due dates
                 </h3>
+
+                <Controller
+                  control={control}
+                  name="assignedToEveryone"
+                  render={({ field }) => (
+                    <SwitchField
+                      label="Assign to everyone in the course"
+                      name="assignedToEveryone"
+                      checked={field.value !== false}
+                      onCheckedChange={(checked) => field.onChange(!!checked)}
+                      description="Turn off to assign only to the students you add below."
+                      descriptionPlacement="inline"
+                    />
+                  )}
+                />
+                {!assignedToEveryone && (
+                  <p className="text-muted-foreground text-xs">
+                    Only the students added below are assigned this work. The dates on the first
+                    card are the defaults each of them inherits.
+                  </p>
+                )}
+                {errors.overrides?.message && (
+                  <p className="text-xs text-red-600" role="alert">
+                    {errors.overrides.message}
+                  </p>
+                )}
 
                 {/* Everyone (base) card */}
                 <div

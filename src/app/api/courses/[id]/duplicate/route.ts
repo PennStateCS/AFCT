@@ -360,6 +360,7 @@ export const POST = withAdminAuth(
                     description: a.description ?? undefined,
                     dueDate: a.dueDate,
                     unlockAt: a.unlockAt,
+                    assignedToEveryone: a.assignedToEveryone,
                     isPublished: false,
                     courseId: newCourse.id,
                   },

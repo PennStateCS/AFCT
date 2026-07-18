@@ -42,8 +42,11 @@ export function resolveOverrideFields(opts: {
   existing: OverrideFields | null;
   base: OverrideBaseFields;
   timezone: string;
+  // When the assignment is assigned to specific students, an all-null row is a valid
+  // "assigned, inherits base dates" marker, so the has-change requirement is relaxed.
+  allowEmpty?: boolean;
 }): ResolveOverrideResult {
-  const { incoming, existing, base, timezone } = opts;
+  const { incoming, existing, base, timezone, allowEmpty } = opts;
 
   const pickDate = (
     key: 'unlockAt' | 'dueDate' | 'lateCutoff',
@@ -63,6 +66,7 @@ export function resolveOverrideFields(opts: {
       : incoming.allowLateSubmissions;
 
   if (
+    !allowEmpty &&
     unlockAt === null &&
     dueDate === null &&
     lateCutoff === null &&
