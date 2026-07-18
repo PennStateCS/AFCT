@@ -79,6 +79,8 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/submissions/${sid}`,
   assignmentStudentContext: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/student-context`,
+  assignmentStudentGroup: (courseId: string, aid: string, studentId: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/student-group/${studentId}`,
   assignmentOverrides: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/overrides`,
   assignmentOverride: (courseId: string, aid: string, oid: string) =>

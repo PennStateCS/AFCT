@@ -76,6 +76,8 @@ export const queryKeys = {
       ['course', courseId, 'assignment', assignmentId, 'problem-grades', studentId] as const,
     reviewData: (courseId: string, assignmentId: string, studentId: string) =>
       ['course', courseId, 'assignment', assignmentId, 'review-data', studentId] as const,
+    studentGroup: (courseId: string, assignmentId: string, studentId: string) =>
+      ['course', courseId, 'assignment', assignmentId, 'student-group', studentId] as const,
   },
 
   /** Calendar: assignments due in a date range (self-scoped to the caller). */

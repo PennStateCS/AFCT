@@ -24,6 +24,17 @@ export type StudentNavigatorStudent = {
   lastName?: string | null;
 };
 
+type StudentGroupInfo = {
+  isGroup: boolean;
+  group: { id: string; name: string } | null;
+  members: { id: string; firstName: string | null; lastName: string | null }[];
+};
+
+/** "First Last" (falls back to "Student"). */
+function memberName(m: { firstName: string | null; lastName: string | null }): string {
+  return `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student';
+}
+
 export type StudentNavigatorProps = {
   students: StudentNavigatorStudent[];
   selectedIndex: number;
@@ -77,6 +88,20 @@ export default function StudentNavigator({
 
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStatus = selectedStudent ? (gradeStatuses?.[selectedStudent.id] ?? false) : false;
+  const selectedStudentId = selectedStudent?.id ?? null;
+
+  // Whether the selected student submits this assignment individually or as a group,
+  // plus their groupmates (for the group case). Drives the Individual/Group indicator.
+  const groupQuery = useQuery<StudentGroupInfo>({
+    queryKey: queryKeys.assignment.studentGroup(courseId, assignmentId, selectedStudentId ?? ''),
+    queryFn: () =>
+      fetchJson<StudentGroupInfo>(
+        apiPaths.assignmentStudentGroup(courseId, assignmentId, selectedStudentId as string),
+      ),
+    enabled: !!assignmentId && !!selectedStudentId,
+    staleTime: 30_000,
+  });
+  const groupInfo = groupQuery.data ?? null;
 
   const formatPoints = (value: number) => {
     if (!Number.isFinite(value)) return 'Infinity';
@@ -148,9 +173,25 @@ export default function StudentNavigator({
                   ? formatDateTimeInTimeZone(assignment.lateCutoff, timezone)
                   : 'Never'}
               </span>
+              {groupInfo ? (
+                <>
+                  <span className="text-muted-foreground mx-2">•</span>
+                  <span>
+                    <span className="font-semibold">Type:</span>{' '}
+                    {groupInfo.isGroup
+                      ? `Group${groupInfo.group ? ` (${groupInfo.group.name})` : ''}`
+                      : 'Individual'}
+                  </span>
+                </>
+              ) : null}
             </>
           ) : null}
         </span>
+        {groupInfo?.isGroup && groupInfo.members.length > 0 ? (
+          <span className="text-muted-foreground block text-xs">
+            With: {groupInfo.members.map(memberName).join(', ')}
+          </span>
+        ) : null}
         <span className="block">
           Student {students.length === 0 ? 0 : selectedIndex + 1} of {students.length}
           {assignmentTotals ? (
