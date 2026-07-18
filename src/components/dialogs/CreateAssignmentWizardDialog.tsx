@@ -222,11 +222,20 @@ export function CreateAssignmentWizardDialog({
           className="mb-2"
         />
 
+        {/* Announce step changes to screen readers (the Stepper is visual). */}
+        <div className="sr-only" role="status" aria-live="polite">
+          {`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]?.title ?? ''}`}
+        </div>
+
         <form
           onSubmit={step === LAST_STEP ? handleSubmit(onSubmit) : (e) => e.preventDefault()}
           className="space-y-4"
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && step < LAST_STEP) {
+            // Enter advances the wizard from a single-line field, but must not do so from
+            // a textarea (where Enter inserts a newline) or any editable rich control.
+            const el = e.target as HTMLElement;
+            const isMultiline = el.tagName === 'TEXTAREA' || el.isContentEditable;
+            if (e.key === 'Enter' && step < LAST_STEP && !isMultiline) {
               e.preventDefault();
               void next();
             }
