@@ -115,6 +115,36 @@ describe('proxy', () => {
     });
   });
 
+  describe('content-security-policy', () => {
+    const cspOf = (res: Response) => res.headers.get('content-security-policy-report-only') ?? '';
+
+    it('sets a report-only CSP with a per-request nonce on a public page (no token read)', async () => {
+      const res = await proxy(req('/login'));
+      expect(res.status).toBe(200);
+      expect(getTokenMock).not.toHaveBeenCalled();
+      const csp = cspOf(res);
+      expect(csp).toMatch(/script-src[^;]*'nonce-[^']+'/);
+      expect(csp).toContain("'strict-dynamic'");
+      // The old weakness: inline scripts must no longer be allowed.
+      expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+    });
+
+    it('gives each request a fresh nonce', async () => {
+      const a = cspOf(await proxy(req('/login')));
+      const b = cspOf(await proxy(req('/login')));
+      const nonceOf = (csp: string) => csp.match(/'nonce-([^']+)'/)?.[1];
+      expect(nonceOf(a)).toBeTruthy();
+      expect(nonceOf(a)).not.toBe(nonceOf(b));
+    });
+
+    it('attaches the CSP to authenticated pass-through responses too', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1' });
+      const res = await proxy(req('/dashboard/courses/c1'));
+      expect(res.status).toBe(200);
+      expect(cspOf(res)).toMatch(/'nonce-[^']+'/);
+    });
+  });
+
   describe('idle-timeout enforcement', () => {
     const IDLE = 20 * 60_000;
     const expired = { id: 'u1', lastActivity: Date.now() - IDLE - 5_000, idleTimeoutMs: IDLE };

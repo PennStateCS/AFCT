@@ -43,12 +43,83 @@ function isPublicApi(pathname: string): boolean {
   );
 }
 
+// Content-Security-Policy for a given per-request nonce. Built in one place so the
+// request-header copy (which Next reads to stamp the nonce onto its own <script>
+// tags) and the browser-facing response header are identical. Scripts are locked to
+// 'self' + the per-request nonce + 'strict-dynamic' (Next's nonce'd loader pulls
+// chunks, and the trust propagates to the hCaptcha script it injects) instead of the
+// old 'unsafe-inline', so an injected inline script can't run. style-src keeps
+// 'unsafe-inline' (React inline style={} and Next's injected styles need it; style
+// XSS is low-risk). Dev keeps 'unsafe-eval' for React Fast Refresh.
+function buildCsp(nonce: string): string {
+  const isProd = process.env.NODE_ENV === 'production';
+  const hcaptcha = 'https://hcaptcha.com https://*.hcaptcha.com';
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'self'",
+    "form-action 'self'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    `style-src 'self' 'unsafe-inline' ${hcaptcha}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isProd ? '' : " 'unsafe-eval'"} ${hcaptcha}`,
+    `connect-src 'self' ${hcaptcha}`,
+    `frame-src ${hcaptcha}`,
+  ].join('; ');
+}
+
+// Enforce the policy in production; keep it Report-Only in development so Next's HMR
+// and error-overlay inline scripts aren't blocked while you work. Set CSP_ENFORCE=false
+// in production to fall back to Report-Only (e.g. to debug a violation without breaking
+// the page); set CSP_ENFORCE=true in dev to preview enforcement.
+const CSP_ENFORCE =
+  process.env.CSP_ENFORCE === 'true' ||
+  (process.env.NODE_ENV === 'production' && process.env.CSP_ENFORCE !== 'false');
+
+// Generate a nonce, return the request headers Next reads it from plus a helper that
+// stamps the browser-facing (enforced or report-only) header onto a response.
+function prepareCsp(req: NextRequest) {
+  const nonce = btoa(crypto.randomUUID());
+  const csp = buildCsp(nonce);
+  const requestHeaders = new Headers(req.headers);
+  // A request header is invisible to the browser (so it doesn't enforce anything);
+  // Next uses it only to discover the nonce and apply it to its script tags.
+  requestHeaders.set('content-security-policy', csp);
+  requestHeaders.set('x-nonce', nonce);
+  const responseHeader = CSP_ENFORCE
+    ? 'content-security-policy'
+    : 'content-security-policy-report-only';
+  return {
+    pass: () => {
+      const res = NextResponse.next({ request: { headers: requestHeaders } });
+      res.headers.set(responseHeader, csp);
+      return res;
+    },
+    withCsp: (res: NextResponse) => {
+      res.headers.set(responseHeader, csp);
+      return res;
+    },
+  };
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
+  const { pass, withCsp } = prepareCsp(req);
+
+  const isApi = pathname.startsWith('/api/');
+  const isDashboard = pathname.startsWith('/dashboard');
+
+  // Non-API, non-dashboard pages (/, /login, /change-password, ...) aren't gated by
+  // the edge auth net; they only receive the CSP + nonce so the policy covers every
+  // rendered page (the login page's hCaptcha included).
+  if (!isApi && !isDashboard) {
+    return pass();
+  }
 
   // Public API routes bypass the net entirely (and skip the token read).
-  if (pathname.startsWith('/api/') && isPublicApi(pathname)) {
-    return NextResponse.next();
+  if (isApi && isPublicApi(pathname)) {
+    return pass();
   }
 
   const token = await getToken({
@@ -64,36 +135,40 @@ export async function proxy(req: NextRequest) {
   // the activity heartbeat go through `/api/auth/*`, which is allowlisted above,
   // so an expired session can still end itself.
   if (token && isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, Date.now())) {
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (isApi) {
+      return withCsp(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
     }
     const loginUrl = new URL('/login', req.url);
     loginUrl.searchParams.set('callbackUrl', pathname + search);
-    return NextResponse.redirect(loginUrl);
+    return withCsp(NextResponse.redirect(loginUrl));
   }
 
   // Admin namespace: only short-circuit when we can POSITIVELY confirm a non-admin.
   if (pathname.startsWith('/api/admin')) {
     if (token && token.isAdmin !== true) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return withCsp(NextResponse.json({ error: 'Forbidden' }, { status: 403 }));
     }
-    return NextResponse.next();
+    return pass();
   }
 
   // Everything else the matcher covers requires a signed-in session.
   if (!token) {
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (isApi) {
+      return withCsp(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
     }
     // Page route: bounce to login, remembering where they were headed.
     const loginUrl = new URL('/login', req.url);
     loginUrl.searchParams.set('callbackUrl', pathname + search);
-    return NextResponse.redirect(loginUrl);
+    return withCsp(NextResponse.redirect(loginUrl));
   }
 
-  return NextResponse.next();
+  return pass();
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/dashboard/:path*'],
+  // Run on every route so the CSP + nonce cover all pages, except Next's own static
+  // assets, image optimizer, and the favicon (no HTML to protect there). The auth net
+  // still only gates /api/* and /dashboard/* (keyed on the pathname above); other
+  // matched paths just receive the CSP header.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
