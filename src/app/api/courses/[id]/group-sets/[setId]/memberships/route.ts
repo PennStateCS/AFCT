@@ -5,8 +5,13 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
 import { AssignMembershipsSchema } from '@/schemas/group-set';
-import { assertGroupSetUnlocked, computeMembershipBasis, GroupSetLockedError } from '@/lib/group-sets';
-import { activeStudentIds, findGroupSet, loadGroupSetDetail } from '@/lib/group-set-service';
+import { computeMembershipBasis, GroupSetLockedError } from '@/lib/group-sets';
+import {
+  activeStudentIds,
+  assertGroupSetUnlocked,
+  findGroupSet,
+  loadGroupSetDetail,
+} from '@/lib/group-set-service';
 
 /**
  * Atomically assigns, moves, and removes students within a group set. Each
@@ -59,7 +64,7 @@ export const POST = withCourseAuth(
 
       const set = await findGroupSet(courseId, setId);
       if (!set) return NextResponse.json({ error: 'Group set not found' }, { status: 404 });
-      assertGroupSetUnlocked();
+      await assertGroupSetUnlocked(setId);
 
       // Reject duplicate userIds so an ambiguous assign+remove can't slip through.
       const seen = new Set<string>();

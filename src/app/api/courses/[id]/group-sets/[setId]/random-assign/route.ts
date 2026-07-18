@@ -3,7 +3,8 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
 import { RandomAssignPreviewSchema } from '@/schemas/group-set';
-import { assertGroupSetUnlocked, GroupSetLockedError, planRandomAssignment } from '@/lib/group-sets';
+import { GroupSetLockedError, planRandomAssignment } from '@/lib/group-sets';
+import { assertGroupSetUnlocked } from '@/lib/group-set-service';
 import {
   activeStudentIds,
   findGroupSet,
@@ -52,7 +53,7 @@ export const POST = withCourseAuth(
 
       const set = await findGroupSet(courseId, setId);
       if (!set) return NextResponse.json({ error: 'Group set not found' }, { status: 404 });
-      assertGroupSetUnlocked();
+      await assertGroupSetUnlocked(setId);
 
       const detail = await loadGroupSetDetail(courseId, setId);
       if (!detail) return NextResponse.json({ error: 'Group set not found' }, { status: 404 });

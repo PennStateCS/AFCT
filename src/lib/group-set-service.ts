@@ -1,5 +1,47 @@
 import { prisma } from '@/lib/prisma';
-import { computeMembershipBasis, isGroupSetLocked } from '@/lib/group-sets';
+import { computeMembershipBasis, GroupSetLockedError } from '@/lib/group-sets';
+
+/**
+ * A group set is locked against membership/group edits once any of its groups has a
+ * submission (changing groups after students have submitted would orphan or mismatch a
+ * group's shared submission set). Renaming and duplication stay allowed.
+ */
+export async function isGroupSetLocked(setId: string): Promise<boolean> {
+  const count = await prisma.submission.count({
+    where: { studentGroup: { groupSetId: setId } },
+  });
+  return count > 0;
+}
+
+/** Throws GroupSetLockedError when the set is locked. */
+export async function assertGroupSetUnlocked(setId: string): Promise<void> {
+  if (await isGroupSetLocked(setId)) throw new GroupSetLockedError();
+}
+
+/**
+ * Reasons a group set cannot be deleted: any assignment that references it. (Its
+ * submissions/grades hang off those assignments, so the assignment reference is the
+ * single gate.) Empty means deletion is allowed.
+ */
+export async function groupSetDeletionBlockers(setId: string): Promise<string[]> {
+  const assignmentCount = await prisma.assignment.count({ where: { groupSetId: setId } });
+  if (assignmentCount > 0) {
+    return [
+      `This group set is used by ${assignmentCount} assignment${assignmentCount === 1 ? '' : 's'}.`,
+    ];
+  }
+  return [];
+}
+
+/** The subset of the given set ids that are locked (have submissions). */
+async function lockedSetIds(setIds: string[]): Promise<Set<string>> {
+  if (setIds.length === 0) return new Set();
+  const locked = await prisma.groupSet.findMany({
+    where: { id: { in: setIds }, groups: { some: { submissions: { some: {} } } } },
+    select: { id: true },
+  });
+  return new Set(locked.map((s) => s.id));
+}
 
 /**
  * Server-side data access + DTO shaping for course group sets. Pairs with the
@@ -87,10 +129,11 @@ export async function loadGroupSetSummaries(courseId: string): Promise<GroupSetS
       groups: { select: { _count: { select: { memberships: true } } } },
     },
   });
+  const locked = await lockedSetIds(sets.map((s) => s.id));
   return sets.map((s) => ({
     id: s.id,
     name: s.name,
-    locked: isGroupSetLocked(),
+    locked: locked.has(s.id),
     groupCount: s._count.groups,
     assignedCount: s.groups.reduce((sum, g) => sum + g._count.memberships, 0),
   }));
@@ -155,7 +198,7 @@ export async function loadGroupSetDetail(
   return {
     id: set.id,
     name: set.name,
-    locked: isGroupSetLocked(),
+    locked: await isGroupSetLocked(setId),
     groups,
     eligibleStudents: await fetchEligibleStudents(courseId),
     basis: computeMembershipBasis(basisPairs),

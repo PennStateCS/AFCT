@@ -144,10 +144,17 @@ export const UpdateAssignmentSchema = BaseAssignmentFormSchemaObject.partial()
 /** Export a form-only schema for UI, if you want the bare form without publish logic */
 export const AssignmentFormSchema = AssignmentFormSchemaWithValidation;
 
-/** One per-student override card in the create wizard (dates as datetime-local strings). */
+/**
+ * One override card in the create wizard (dates as datetime-local strings). A card targets
+ * EITHER a student (userId + studentName) OR a group (groupId + groupName), never both. The
+ * server enforces the exactly-one-target rule; the form just carries whichever it holds.
+ */
 const OverrideFormItem = z.object({
-  userId: z.string().min(1),
+  userId: z.string().min(1).optional(),
   studentName: z.string().optional(),
+  groupId: z.string().min(1).optional(),
+  groupName: z.string().optional(),
+  groupMemberCount: z.number().optional(),
   unlockAt: DateTimeLocalFormOptional,
   dueDate: DateTimeLocalFormOptional,
   allowLateSubmissions: z.boolean().optional(),
@@ -161,14 +168,18 @@ const OverrideFormItem = z.object({
  */
 export const AssignmentWizardFormSchema = BaseAssignmentFormSchemaObject.extend({
   overrides: z.array(OverrideFormItem).default([]),
+  // The group set a group target is drawn from. Set when the staff member picks a set in
+  // the Assign-To section; the server pins the assignment's set when a group override is
+  // created, so this is a UI convenience rather than something sent on assignment create.
+  groupSetId: z.string().nullable().optional(),
 }).superRefine((data, ctx) => {
   validateLateSubmissionStrings(data, ctx);
-  // "Assign to specific students" needs at least one student.
+  // "Assign to specific students" needs at least one target (a student or a group).
   if (data.assignedToEveryone === false && (data.overrides?.length ?? 0) === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['overrides'],
-      message: 'Add at least one student, or assign to everyone.',
+      message: 'Add at least one student or group, or assign to everyone.',
     });
   }
 });

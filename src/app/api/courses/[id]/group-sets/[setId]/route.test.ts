@@ -9,7 +9,11 @@ const prismaMock = vi.hoisted(() => ({
 }));
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
-const serviceMock = vi.hoisted(() => ({ findGroupSet: vi.fn(), loadGroupSetDetail: vi.fn() }));
+const serviceMock = vi.hoisted(() => ({
+  findGroupSet: vi.fn(),
+  loadGroupSetDetail: vi.fn(),
+  groupSetDeletionBlockers: vi.fn(() => []),
+}));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -27,7 +31,7 @@ beforeEach(() => {
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   serviceMock.findGroupSet.mockResolvedValue({ id: 'gs1', courseId: 'c1', name: 'Project 1' });
   prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
-    fn({ groupSet: { delete: vi.fn() } }),
+    fn({ groupSet: { delete: vi.fn() }, assignment: { count: vi.fn(async () => 0) } }),
   );
 });
 
@@ -78,5 +82,14 @@ describe('DELETE set', () => {
     serviceMock.findGroupSet.mockResolvedValue(null);
     const res = await DELETE(new NextRequest('http://localhost/x', { method: 'DELETE' }), ctx);
     expect(res.status).toBe(404);
+  });
+
+  it('409 when an assignment references the set', async () => {
+    serviceMock.groupSetDeletionBlockers.mockResolvedValue([
+      'This group set is used by 1 assignment.',
+    ]);
+    const res = await DELETE(new NextRequest('http://localhost/x', { method: 'DELETE' }), ctx);
+    expect(res.status).toBe(409);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });

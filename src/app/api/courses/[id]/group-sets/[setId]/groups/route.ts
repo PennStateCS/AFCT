@@ -6,8 +6,8 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
 import { GroupNameBodySchema } from '@/schemas/group-set';
-import { normalizeName, assertGroupSetUnlocked, GroupSetLockedError } from '@/lib/group-sets';
-import { findGroupSet } from '@/lib/group-set-service';
+import { normalizeName, GroupSetLockedError } from '@/lib/group-sets';
+import { findGroupSet, assertGroupSetUnlocked } from '@/lib/group-set-service';
 
 /**
  * Creates a group inside a set. Blocked when the set is locked. Group names are
@@ -43,7 +43,7 @@ export const POST = withCourseAuth(
 
       const set = await findGroupSet(courseId, setId);
       if (!set) return NextResponse.json({ error: 'Group set not found' }, { status: 404 });
-      assertGroupSetUnlocked();
+      await assertGroupSetUnlocked(setId);
 
       const clash = await prisma.studentGroup.findFirst({
         where: { groupSetId: setId, name: { equals: name, mode: 'insensitive' } },

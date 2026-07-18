@@ -6,8 +6,8 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
 import { RenameGroupSetSchema } from '@/schemas/group-set';
-import { normalizeName, groupSetDeletionBlockers } from '@/lib/group-sets';
-import { findGroupSet, loadGroupSetDetail } from '@/lib/group-set-service';
+import { normalizeName } from '@/lib/group-sets';
+import { findGroupSet, groupSetDeletionBlockers, loadGroupSetDetail } from '@/lib/group-set-service';
 
 /**
  * Full detail for one group set: its groups, each group's members (with an
@@ -155,16 +155,16 @@ export const DELETE = withCourseAuth(
       const set = await findGroupSet(courseId, setId);
       if (!set) return NextResponse.json({ error: 'Group set not found' }, { status: 404 });
 
-      // Re-check dependencies inside the transaction so a concurrently-added
-      // dependency can't be raced past the guard. Currently there are none.
-      const blockers = groupSetDeletionBlockers();
+      // Block deletion when an assignment references the set. Re-checked inside the
+      // transaction so a concurrently-added reference can't be raced past the guard.
+      const blockers = await groupSetDeletionBlockers(setId);
       if (blockers.length > 0) {
         return NextResponse.json({ error: blockers.join(' ') }, { status: 409 });
       }
 
       await prisma.$transaction(async (tx) => {
-        const stillBlocked = groupSetDeletionBlockers();
-        if (stillBlocked.length > 0) throw new Error('DEP_CONFLICT');
+        const stillBlocked = await tx.assignment.count({ where: { groupSetId: setId } });
+        if (stillBlocked > 0) throw new Error('DEP_CONFLICT');
         await tx.groupSet.delete({ where: { id: setId } });
       });
 

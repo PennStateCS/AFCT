@@ -170,7 +170,8 @@ export function CreateAssignmentWizardDialog({
     const results = await Promise.allSettled(
       (raw.overrides ?? []).map((o) =>
         apiClient.post(apiPaths.assignmentOverrides(courseId, created.id), {
-          userId: o.userId,
+          // A row targets exactly one of a student or a group.
+          ...(o.groupId ? { groupId: o.groupId } : { userId: o.userId }),
           unlockAt: o.unlockAt || undefined,
           dueDate: o.dueDate || undefined,
           allowLateSubmissions: o.allowLateSubmissions ?? undefined,
@@ -317,7 +318,9 @@ export function CreateAssignmentWizardDialog({
                     const effAllow = o.allowLateSubmissions ?? review.allowLateSubmissions;
                     return (
                       <React.Fragment key={i}>
-                        <dt className="text-muted-foreground">{o.studentName}</dt>
+                        <dt className="text-muted-foreground">
+                          {o.groupId ? o.groupName : o.studentName}
+                        </dt>
                         <dd>
                           {formatWindow({
                             unlockAt: o.unlockAt || review.unlockAt,

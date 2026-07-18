@@ -38,21 +38,37 @@ function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): strin
 
 type OverrideApi = {
   id: string;
+  targetType?: 'STUDENT' | 'GROUP';
   userId: string | null;
+  groupId?: string | null;
   unlockAt: string | null;
   dueDate: string | null;
   lateCutoff: string | null;
   allowLateSubmissions: boolean | null;
   user?: { firstName: string | null; lastName: string | null; email: string } | null;
+  studentGroup?: { id: string; name: string; _count?: { memberships: number } } | null;
 };
 
 function overrideStudentName(u: OverrideApi['user']): string {
   return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim() || u?.email || 'Student';
 }
 
+/** A loaded override targets a group when it carries a groupId (or studentGroup payload). */
+function isGroupOverride(o: OverrideApi): boolean {
+  return !!(o.groupId ?? o.studentGroup?.id);
+}
+
+/** Diff key: student rows by user, group rows by group, so both kinds diff independently. */
+function overrideKey(o: { userId?: string | null; groupId?: string | null }): string | null {
+  if (o.groupId) return `g:${o.groupId}`;
+  if (o.userId) return `s:${o.userId}`;
+  return null;
+}
+
 type AssignmentWithUnlock = Assignment & {
   unlockAt?: Date | string | null;
   assignedToEveryone?: boolean;
+  groupSetId?: string | null;
 };
 
 type Props = {
@@ -101,14 +117,27 @@ export function AssignmentSettingsCard({
       lateCutoff: toLocal(assignment.lateCutoff),
       isPublished: assignment.isPublished ?? false,
       courseId,
-      overrides: loadedOverrides.map((o) => ({
-        userId: o.userId ?? '',
-        studentName: overrideStudentName(o.user),
-        unlockAt: toLocal(o.unlockAt),
-        dueDate: toLocal(o.dueDate),
-        allowLateSubmissions: o.allowLateSubmissions ?? undefined,
-        lateCutoff: toLocal(o.lateCutoff),
-      })),
+      groupSetId: assignment.groupSetId ?? null,
+      overrides: loadedOverrides.map((o) =>
+        isGroupOverride(o)
+          ? {
+              groupId: o.groupId ?? o.studentGroup?.id ?? '',
+              groupName: o.studentGroup?.name ?? 'Group',
+              groupMemberCount: o.studentGroup?._count?.memberships,
+              unlockAt: toLocal(o.unlockAt),
+              dueDate: toLocal(o.dueDate),
+              allowLateSubmissions: o.allowLateSubmissions ?? undefined,
+              lateCutoff: toLocal(o.lateCutoff),
+            }
+          : {
+              userId: o.userId ?? '',
+              studentName: overrideStudentName(o.user),
+              unlockAt: toLocal(o.unlockAt),
+              dueDate: toLocal(o.dueDate),
+              allowLateSubmissions: o.allowLateSubmissions ?? undefined,
+              lateCutoff: toLocal(o.lateCutoff),
+            },
+      ),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -116,6 +145,7 @@ export function AssignmentSettingsCard({
       assignment.assignedToEveryone,
       assignment.description,
       assignment.dueDate,
+      assignment.groupSetId,
       assignment.isPublished,
       assignment.title,
       assignment.unlockAt,
@@ -165,32 +195,48 @@ export function AssignmentSettingsCard({
       return;
     }
 
-    // 2. Diff the per-student overrides against what was loaded (keyed by student).
-    const origByUser = new Map(
-      loadedOverrides.filter((o) => o.userId).map((o) => [o.userId as string, o]),
-    );
-    const formByUser = new Map((raw.overrides ?? []).map((o) => [o.userId, o]));
+    // 2. Diff the overrides against what was loaded. Both kinds of target are keyed so
+    // they diff independently: student rows by `s:${userId}`, group rows by `g:${groupId}`.
+    const origByKey = new Map<string, OverrideApi>();
+    for (const o of loadedOverrides) {
+      const key = overrideKey({ userId: o.userId, groupId: o.groupId ?? o.studentGroup?.id });
+      if (key) origByKey.set(key, o);
+    }
+    type FormOverride = NonNullable<FormValues['overrides']>[number];
+    const formByKey = new Map<string, FormOverride>();
+    for (const o of raw.overrides ?? []) {
+      const key = overrideKey(o);
+      if (key) formByKey.set(key, o);
+    }
 
     const ops: Promise<unknown>[] = [];
-    for (const [userId, orig] of origByUser) {
-      if (!formByUser.has(userId)) {
+    for (const [key, orig] of origByKey) {
+      if (!formByKey.has(key)) {
         ops.push(apiClient.del(apiPaths.assignmentOverride(courseId, assignment.id, orig.id)));
       }
     }
-    for (const [userId, o] of formByUser) {
+    for (const [key, o] of formByKey) {
       const body = {
         unlockAt: o.unlockAt || null,
         dueDate: o.dueDate || null,
         allowLateSubmissions: o.allowLateSubmissions ?? null,
         lateCutoff: o.allowLateSubmissions ? o.lateCutoff || null : null,
       };
-      const orig = origByUser.get(userId);
+      const orig = origByKey.get(key);
       if (orig) {
+        // The target never changes on update, only the dates/late policy.
         ops.push(
           apiClient.patch(apiPaths.assignmentOverride(courseId, assignment.id, orig.id), body),
         );
       } else {
-        ops.push(apiClient.post(apiPaths.assignmentOverrides(courseId, assignment.id), { userId, ...body }));
+        // New target: send exactly one of a group or a student.
+        const target = o.groupId ? { groupId: o.groupId } : { userId: o.userId };
+        ops.push(
+          apiClient.post(apiPaths.assignmentOverrides(courseId, assignment.id), {
+            ...target,
+            ...body,
+          }),
+        );
       }
     }
     const failed = (await Promise.allSettled(ops)).filter((r) => r.status === 'rejected').length;

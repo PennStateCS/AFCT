@@ -8,7 +8,7 @@ const prismaMock = vi.hoisted(() => ({
 }));
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
-const serviceMock = vi.hoisted(() => ({ findGroupSet: vi.fn() }));
+const serviceMock = vi.hoisted(() => ({ findGroupSet: vi.fn(), assertGroupSetUnlocked: vi.fn() }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));

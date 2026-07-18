@@ -150,35 +150,14 @@ export function planRandomAssignment(input: RandomAssignPlanInput): RandomAssign
   return { operations, skippedInactive };
 }
 
-// ─── Lock seam (assignment integration lands later) ───────────────────────────
+// ─── Lock ─────────────────────────────────────────────────────────────────────
 
-/**
- * Whether a group set is locked against membership changes. Locking becomes real
- * when the assignment-integration phase attaches submissions/grades to a set; for
- * now no set is ever locked. Centralized here so that phase flips one function.
- */
-export function isGroupSetLocked(): boolean {
-  return false;
-}
-
+// The lock/deletion checks themselves need the DB (they look at submissions and
+// assignment references), so they live in group-set-service.ts. This is just the
+// shared error type.
 export class GroupSetLockedError extends Error {
-  constructor(message = 'This group set is locked and cannot be changed.') {
+  constructor(message = 'This group set is locked because it has submissions and cannot be changed.') {
     super(message);
     this.name = 'GroupSetLockedError';
   }
-}
-
-/** Throws GroupSetLockedError when a set is locked. Currently never throws. */
-export function assertGroupSetUnlocked(): void {
-  if (isGroupSetLocked()) throw new GroupSetLockedError();
-}
-
-/**
- * Reasons a group set cannot be deleted. Currently none exist because group sets
- * are not yet referenced by submissions, grades, or assignments. The
- * assignment-integration phase adds real checks here; the route calls this inside
- * the delete transaction.
- */
-export function groupSetDeletionBlockers(): string[] {
-  return [];
 }

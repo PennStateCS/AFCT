@@ -10,6 +10,7 @@ const serviceMock = vi.hoisted(() => ({
   findGroupSet: vi.fn(),
   activeStudentIds: vi.fn(),
   loadGroupSetDetail: vi.fn(),
+  assertGroupSetUnlocked: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));

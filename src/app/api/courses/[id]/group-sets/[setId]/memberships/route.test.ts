@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { GroupSetLockedError } from '@/lib/group-sets';
 
 const prismaMock = vi.hoisted(() => ({
   studentGroup: { findMany: vi.fn() },
@@ -14,6 +15,7 @@ const serviceMock = vi.hoisted(() => ({
   findGroupSet: vi.fn(),
   activeStudentIds: vi.fn(),
   loadGroupSetDetail: vi.fn(),
+  assertGroupSetUnlocked: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -108,5 +110,11 @@ describe('POST memberships', () => {
     serviceMock.findGroupSet.mockResolvedValue(null);
     const res = await post({ operations: [{ userId: 'u1', groupId: 'g1' }] });
     expect(res.status).toBe(404);
+  });
+
+  it('409 when the set is locked (has submissions)', async () => {
+    serviceMock.assertGroupSetUnlocked.mockRejectedValue(new GroupSetLockedError());
+    const res = await post({ operations: [{ userId: 'u1', groupId: 'g1' }] });
+    expect(res.status).toBe(409);
   });
 });

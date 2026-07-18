@@ -6,8 +6,6 @@ import {
   suggestDuplicateName,
   computeMembershipBasis,
   planRandomAssignment,
-  isGroupSetLocked,
-  groupSetDeletionBlockers,
 } from './group-sets';
 
 // Deterministic shuffle for tests: identity (no reordering).
@@ -179,9 +177,3 @@ describe('planRandomAssignment', () => {
   });
 });
 
-describe('lock + deletion seams', () => {
-  it('reports unlocked and no deletion blockers for now', () => {
-    expect(isGroupSetLocked()).toBe(false);
-    expect(groupSetDeletionBlockers()).toEqual([]);
-  });
-});

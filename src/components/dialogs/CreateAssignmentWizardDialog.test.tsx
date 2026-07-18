@@ -106,6 +106,26 @@ const ok = (data: unknown) => ({
 
 const students = [{ id: 'stu-1', firstName: 'Sam', lastName: 'Student', email: 's@example.com' }];
 
+const groupSets = [
+  { id: 'gs-1', name: 'Project Teams', locked: false, groupCount: 1, assignedCount: 1 },
+];
+const groupSetDetail = {
+  id: 'gs-1',
+  name: 'Project Teams',
+  locked: false,
+  basis: 'b1',
+  eligibleStudents: [],
+  groups: [
+    {
+      id: 'grp-1',
+      name: 'Team A',
+      members: [
+        { id: 'stu-2', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', inactive: false },
+      ],
+    },
+  ],
+};
+
 let studentsResp: () => ReturnType<typeof ok>;
 let assignmentResp: () => ReturnType<typeof ok>;
 let overrideResp: () => ReturnType<typeof ok>;
@@ -114,6 +134,9 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   const u = String(url);
   const method = (init?.method ?? 'GET').toUpperCase();
   if (method === 'GET' && u.includes('/students')) return studentsResp() as unknown as Response;
+  // Group-set detail (has an id segment) before the group-set list.
+  if (method === 'GET' && u.includes('/group-sets/')) return ok(groupSetDetail) as unknown as Response;
+  if (method === 'GET' && u.includes('/group-sets')) return ok(groupSets) as unknown as Response;
   if (method === 'POST' && u.includes('/overrides')) return overrideResp() as unknown as Response;
   if (method === 'POST' && u.includes('/assignments')) return assignmentResp() as unknown as Response;
   throw new Error(`Unexpected fetch: ${method} ${u}`);
@@ -197,6 +220,28 @@ describe('CreateAssignmentWizardDialog', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith('Assignment created');
     expect(onCreate).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('creates the assignment then posts a group override with { groupId }', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.type(screen.getByLabelText('Title'), 'Homework 1');
+    await clickNext(user); // -> Assign To
+
+    // Pick a group set, then add one of its groups as a target.
+    await user.click(await screen.findByRole('button', { name: 'Project Teams (1 group)' }));
+    await user.click(await screen.findByRole('button', { name: 'Team A (1 member)' }));
+
+    await clickNext(user); // -> Options
+    await clickNext(user); // -> Review
+    await user.click(screen.getByRole('button', { name: /create assignment/i }));
+
+    await waitFor(() => expect(postCalls('/overrides').length).toBe(1));
+    const overridePost = postCalls('/overrides')[0];
+    const body = JSON.parse((overridePost[1] as RequestInit).body as string);
+    expect(body).toMatchObject({ groupId: 'grp-1' });
+    expect(body).not.toHaveProperty('userId');
   });
 
   it('shows an error toast and does not close when assignment creation fails', async () => {

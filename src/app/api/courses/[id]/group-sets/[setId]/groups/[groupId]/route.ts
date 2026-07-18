@@ -6,7 +6,8 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
 import { GroupNameBodySchema } from '@/schemas/group-set';
-import { normalizeName, assertGroupSetUnlocked, GroupSetLockedError } from '@/lib/group-sets';
+import { normalizeName, GroupSetLockedError } from '@/lib/group-sets';
+import { assertGroupSetUnlocked } from '@/lib/group-set-service';
 
 /** Loads a group and confirms it belongs to the given set and course. */
 function findGroupInSet(courseId: string, setId: string, groupId: string) {
@@ -123,7 +124,7 @@ export const DELETE = withCourseAuth(
     try {
       const group = await findGroupInSet(courseId, setId, groupId);
       if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
-      assertGroupSetUnlocked();
+      await assertGroupSetUnlocked(setId);
 
       await prisma.studentGroup.delete({ where: { id: groupId } });
 
