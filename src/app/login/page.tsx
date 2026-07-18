@@ -569,6 +569,8 @@ export default function LoginPage() {
 
                 <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
 
+                {renderCaptchaGate()}
+
                 <Button
                   type="submit"
                   disabled={loading}
@@ -577,8 +579,6 @@ export default function LoginPage() {
                 >
                   {loading ? 'Signing up...' : 'Create Account'}
                 </Button>
-
-                {renderCaptchaGate()}
 
                 <div className="text-center text-sm text-gray-600">
                   <span className="font-semibold text-gray-500">Already have an account?</span>{' '}
