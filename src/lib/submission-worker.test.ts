@@ -10,6 +10,7 @@ const prismaMock = vi.hoisted(() => ({
     findMany: vi.fn(),
   },
   assignmentProblemGrade: { upsert: vi.fn(), updateMany: vi.fn(), createMany: vi.fn() },
+  groupMembership: { findMany: vi.fn() },
 }));
 const executeMock = vi.hoisted(() => vi.fn());
 const getEvaluatorConfigMock = vi.hoisted(() => vi.fn());
@@ -228,7 +229,7 @@ describe('evaluateSubmission', () => {
     );
   });
 
-  it('updates an existing non-manual grade in place rather than creating', async () => {
+  it('updates an existing non-manual grade in place (createMany is a no-op via skipDuplicates)', async () => {
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
     executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
     prismaMock.assignmentProblemGrade.updateMany.mockResolvedValue({ count: 1 }); // a non-manual row existed
@@ -238,7 +239,36 @@ describe('evaluateSubmission', () => {
     expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ grade: 10 }) }),
     );
-    expect(prismaMock.assignmentProblemGrade.createMany).not.toHaveBeenCalled();
+    // createMany runs but skips the existing row via skipDuplicates.
+    expect(prismaMock.assignmentProblemGrade.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDuplicates: true }),
+    );
+  });
+
+  it('fans a group submission grade out to every group member', async () => {
+    const groupSub = { ...makeSubmission(), studentGroupId: 'grp-1' };
+    prismaMock.submission.findUnique.mockResolvedValue(groupSub);
+    prismaMock.groupMembership.findMany.mockResolvedValue([
+      { userId: 'm1' },
+      { userId: 'm2' },
+      { userId: 'm3' },
+    ]);
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+
+    await evaluateSubmission('sub-1');
+
+    // Non-manual rows for all three members are updated, and createMany covers all three.
+    expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ studentId: { in: ['m1', 'm2', 'm3'] } }),
+      }),
+    );
+    const createArg = prismaMock.assignmentProblemGrade.createMany.mock.calls[0]![0];
+    expect(createArg.data.map((r: { studentId: string }) => r.studentId)).toEqual([
+      'm1',
+      'm2',
+      'm3',
+    ]);
   });
 
   it('does not autograde when the problem has the autograder disabled', async () => {

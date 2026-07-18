@@ -354,33 +354,42 @@ async function evaluateSubmission(id: string) {
     if (submission.assignmentProblem.autograderEnabled === true) {
       const earnedPoints = evaluation.correct ? submission.assignmentProblem.maxPoints : 0;
 
-      // Never overwrite a manually-entered grade. Update only a non-manual row;
-      // create one only when none exists (`skipDuplicates` no-ops if a manual row
-      // appeared concurrently). Together this makes autograde skip any row a TA set.
-      const graded = await prisma.assignmentProblemGrade.updateMany({
+      // A group submission's grade fans out to every current group member (each gets a
+      // per-student row, defaulting to the group's grade); an individual submission grades
+      // only the submitter. Never overwrite a manually-entered grade: update only
+      // non-manual rows, and create rows only where none exists (skipDuplicates no-ops on
+      // any manual row a TA set). Together this makes autograde skip any hand-set grade.
+      const gradeAssignmentId = submission.assignmentId;
+      const gradeProblemId = submission.problemId;
+      const gradeTargetIds = submission.studentGroupId
+        ? (
+            await prisma.groupMembership.findMany({
+              where: { groupId: submission.studentGroupId },
+              select: { userId: true },
+            })
+          ).map((m) => m.userId)
+        : [submission.studentId];
+
+      await prisma.assignmentProblemGrade.updateMany({
         where: {
-          assignmentId: submission.assignmentId,
-          problemId: submission.problemId,
-          studentId: submission.studentId,
+          assignmentId: gradeAssignmentId,
+          problemId: gradeProblemId,
+          studentId: { in: gradeTargetIds },
           gradedManually: false,
         },
         data: { grade: earnedPoints, feedback: evaluation.feedback },
       });
-      if (graded.count === 0) {
-        await prisma.assignmentProblemGrade.createMany({
-          data: [
-            {
-              assignmentId: submission.assignmentId,
-              problemId: submission.problemId,
-              studentId: submission.studentId,
-              grade: earnedPoints,
-              feedback: evaluation.feedback,
-              gradedManually: false,
-            },
-          ],
-          skipDuplicates: true,
-        });
-      }
+      await prisma.assignmentProblemGrade.createMany({
+        data: gradeTargetIds.map((studentId) => ({
+          assignmentId: gradeAssignmentId,
+          problemId: gradeProblemId,
+          studentId,
+          grade: earnedPoints,
+          feedback: evaluation.feedback,
+          gradedManually: false,
+        })),
+        skipDuplicates: true,
+      });
 
       await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {
         studentId: submission.studentId,
