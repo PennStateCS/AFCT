@@ -13,7 +13,59 @@ export type LmsStudentRow = {
   [key: string]: unknown;
 };
 
-const escapeCsvCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+// Canvas silently drops an assignment column whose title *contains* one of these
+// phrases (case-insensitive substring). Source: Instructure "How do I import grades".
+const CANVAS_RESERVED_SUBSTRINGS = [
+  'Current Score',
+  'Current Points',
+  'Current Grade',
+  'Final Score',
+  'Final Points',
+  'Final Grade',
+  'Override Score',
+  'Override Grade',
+  'Override Status',
+];
+// Canvas also reserves these as identity column names; an exact title match collides.
+// (Substring matching here would false-positive, e.g. "id" inside "Bridge".)
+const CANVAS_RESERVED_COLUMN_NAMES = [
+  'Student',
+  'ID',
+  'SIS User ID',
+  'SIS Login ID',
+  'Section',
+  'Integration ID',
+  'Root Account',
+];
+
+/**
+ * Returns the assignment titles Canvas would ignore on import because they collide
+ * with a reserved phrase (substring) or reserved identity column (exact). Used to warn
+ * staff before a Canvas export so they can rename the assignment or edit the CSV.
+ */
+export function findCanvasReservedTitleConflicts(titles: string[]): string[] {
+  const substrings = CANVAS_RESERVED_SUBSTRINGS.map((s) => s.toLowerCase());
+  const exactNames = new Set(CANVAS_RESERVED_COLUMN_NAMES.map((s) => s.toLowerCase()));
+  return titles.filter((title) => {
+    const t = title.trim().toLowerCase();
+    return exactNames.has(t) || substrings.some((s) => t.includes(s));
+  });
+}
+
+// A spreadsheet treats a cell starting with any of these as a formula.
+const FORMULA_START = /^[=+\-@\t\r]/;
+// Plain (optionally negative) numbers are safe data, not injection; leave them alone.
+const NUMERIC = /^-?\d+(\.\d+)?$/;
+
+const escapeCsvCell = (value: unknown) => {
+  let s = String(value ?? '');
+  // CSV / formula injection guard: user-controlled text (e.g. a student's name set to
+  // `=HYPERLINK(...)`) would run as a formula when the export is opened in Excel/Sheets.
+  // Prefix such cells with an apostrophe so they render as literal text. Numbers pass
+  // through untouched so grades like "-5" stay numeric.
+  if (FORMULA_START.test(s) && !NUMERIC.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+};
 
 const toGradeCell = (value: unknown) => {
   if (value === null || value === undefined || value === '') return '';
@@ -58,7 +110,11 @@ export function buildLmsGradesCsv(
       'Availability',
       ...assignmentHeaders,
     ],
-	brightspace: ['OrgDefinedId', 'Username', 'Last Name', 'First Name', ...brightspaceHeaders, 'End-of-Line Indicator'],
+    // Brightspace only accepts the identity columns (OrgDefinedId / Username), the
+    // "<item> Points Grade" columns, and the End-of-Line Indicator; extra fields like
+    // names are disallowed. We prefill Username with email (a best guess) and leave
+    // OrgDefinedId blank for faculty to fill from a Brightspace gradebook export.
+    brightspace: ['OrgDefinedId', 'Username', ...brightspaceHeaders, 'End-of-Line Indicator'],
     moodle: ['email', ...assignmentHeaders],
     generic: ['Student Name', 'Email', ...assignmentHeaders],
   };
@@ -86,11 +142,14 @@ export function buildLmsGradesCsv(
     }
 
     if (platform === 'brightspace') {
-      return ['', '', lastName, firstName, ...gradeCells, '#'];
-	}
+      // OrgDefinedId blank (unknown), Username = email (best guess), then the Points
+      // Grade cells and the required end-of-line "#". Brightspace needs a valid
+      // Username OR OrgDefinedId, so faculty may need to correct these before import.
+      return ['', email, ...gradeCells, '#'];
+    }
 
     if (platform === 'moodle') {
-      return [email,  ...gradeCells];
+      return [email, ...gradeCells];
     }
 
     return [student.name ?? `${firstName} ${lastName}`.trim(), email, ...gradeCells];

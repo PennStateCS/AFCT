@@ -14,14 +14,16 @@ const CATEGORY_STYLE: Record<string, string> = {
     'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-200 dark:border-green-800',
   SUBMISSION:
     'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-800',
+  GRADE:
+    'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-200 dark:border-teal-800',
 };
 
 const DEFAULT_STYLE = CATEGORY_STYLE.SYSTEM;
 
 export function CategoryBadge({ category }: { category?: string | null }) {
-  if (!category) {
-    return <span className="text-muted-foreground text-xs italic">N/A</span>;
-  }
+  // No category set: render blank (categories are read straight from the log; unset
+  // entries just show nothing rather than a placeholder).
+  if (!category) return null;
 
   return (
     <span

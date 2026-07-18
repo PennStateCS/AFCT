@@ -411,6 +411,7 @@ export const POST = withAdminAuth(
       await logError(req, {
         userId: actorId,
         action: 'COURSE_DUPLICATE_ERROR',
+        category: 'COURSE',
         error: err,
         courseId: courseId,
       });

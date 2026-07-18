@@ -223,6 +223,7 @@ export const POST = withAdminAuth(
       await logError(req, {
         userId: user.id,
         action: 'USER_BULK_CREATE_ERROR',
+        category: 'USER',
         error,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

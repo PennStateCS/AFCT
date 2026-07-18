@@ -61,6 +61,7 @@ export const DELETE = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'GROUP_MEMBER_REMOVE_ERROR',
+        category: 'COURSE',
         error: err,
         courseId,
       });

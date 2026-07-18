@@ -82,6 +82,7 @@ export const PATCH = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'GROUP_UPDATE_ERROR',
+        category: 'COURSE',
         error: err,
         courseId,
       });
@@ -135,6 +136,7 @@ export const DELETE = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'GROUP_DELETE_ERROR',
+        category: 'COURSE',
         error: err,
         courseId,
       });

@@ -33,7 +33,15 @@ type LogRow = {
 const DEFAULT_PAGE_SIZE = 10;
 
 const SEVERITIES: Severity[] = ['INFO', 'WARNING', 'ERROR', 'SECURITY'];
-const CATEGORIES = ['SYSTEM', 'USER', 'COURSE', 'ASSIGNMENT', 'PROBLEM', 'SUBMISSION'] as const;
+const CATEGORIES = [
+  'SYSTEM',
+  'USER',
+  'COURSE',
+  'ASSIGNMENT',
+  'PROBLEM',
+  'SUBMISSION',
+  'GRADE',
+] as const;
 
 // Search scope options (server-side): restrict the text search to one field.
 const SEARCH_FIELDS = [

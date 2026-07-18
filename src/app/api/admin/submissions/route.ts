@@ -142,6 +142,7 @@ export const POST = withAdminAuth(
       await logError(req, {
         userId: user.id,
         action: 'ADMIN_SUBMISSIONS_ERROR',
+        category: 'SUBMISSION',
         error,
       });
       return NextResponse.json({ error: 'Failed to fetch submissions' }, { status: 500 });

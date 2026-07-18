@@ -91,6 +91,7 @@ export const POST = withAdminAuth(
       await logError(req, {
         userId: user.id,
         action: 'ADMIN_RESET_PASSWORD_ERROR',
+        category: 'USER',
         error,
       });
       return NextResponse.json({ error: 'Failed to reset password' }, { status: 500 });

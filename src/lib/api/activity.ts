@@ -1,9 +1,6 @@
 import type { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import {
-  createEnhancedActivityLog,
-  type EnhancedActivityLogData,
-} from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, type EnhancedActivityLogData } from '@/lib/activity-log-utils';
 import { canManageCourse, type PermissionUser } from '@/lib/permissions';
 import { apiError } from './http';
 
@@ -19,9 +16,8 @@ export async function logDenial(
     action: string;
     courseId?: string | null;
     assignmentId?: string | null;
-    // Pass this when the action name has no domain keyword (e.g. COMMENT_*,
-    // SOLUTION_*, REVIEW_DATA_*), otherwise it mis-infers to SYSTEM.
-    category?: EnhancedActivityLogData['category'];
+    // The domain this denial is about (explicit; categories are never inferred).
+    category: EnhancedActivityLogData['category'];
     metadata?: EnhancedActivityLogData['metadata'];
   },
 ): Promise<NextResponse> {
@@ -29,7 +25,7 @@ export async function logDenial(
     userId: data.userId ?? null,
     action: data.action,
     severity: 'SECURITY',
-    ...(data.category ? { category: data.category } : {}),
+    category: data.category,
     ...(data.courseId ? { courseId: data.courseId } : {}),
     ...(data.assignmentId ? { assignmentId: data.assignmentId } : {}),
     metadata: data.metadata ?? {},
@@ -49,7 +45,8 @@ export async function logError(
     userId?: string | null;
     action: string;
     error: unknown;
-    category?: EnhancedActivityLogData['category'];
+    // The domain this failure is about (explicit; categories are never inferred).
+    category: EnhancedActivityLogData['category'];
     courseId?: string | null;
     assignmentId?: string | null;
     problemId?: string | null;
@@ -60,7 +57,7 @@ export async function logError(
     userId: data.userId ?? null,
     action: data.action,
     severity: 'ERROR',
-    ...(data.category ? { category: data.category } : {}),
+    category: data.category,
     ...(data.courseId ? { courseId: data.courseId } : {}),
     ...(data.assignmentId ? { assignmentId: data.assignmentId } : {}),
     ...(data.problemId ? { problemId: data.problemId } : {}),
@@ -79,11 +76,10 @@ export async function logError(
  * the single home for invariant #6's 404-vs-403 masking. Not logged (it's not a
  * privilege escalation, just a scoped not-found).
  */
-export async function denyExistence(
-  user: PermissionUser,
-  courseId: string,
-): Promise<NextResponse> {
-  return (await canManageCourse(user, courseId)) ? apiError(403, 'Forbidden') : apiError(404, 'Not found');
+export async function denyExistence(user: PermissionUser, courseId: string): Promise<NextResponse> {
+  return (await canManageCourse(user, courseId))
+    ? apiError(403, 'Forbidden')
+    : apiError(404, 'Not found');
 }
 
 /**
@@ -99,6 +95,7 @@ export async function logStudentImpactAction(
     actorId: string;
     action: string;
     targetUserId: string;
+    category: EnhancedActivityLogData['category'];
     courseId?: string | null;
     assignmentId?: string | null;
     before?: unknown;
@@ -117,6 +114,7 @@ export async function logStudentImpactAction(
     userId: data.actorId,
     action: data.action,
     severity: data.severity ?? 'INFO',
+    category: data.category,
     courseId: data.courseId ?? null,
     assignmentId: data.assignmentId ?? null,
     metadata: metadata as EnhancedActivityLogData['metadata'],
@@ -133,6 +131,7 @@ export async function logMutation(
   data: {
     userId: string;
     action: string;
+    category: EnhancedActivityLogData['category'];
     courseId?: string | null;
     assignmentId?: string | null;
     problemId?: string | null;
@@ -149,6 +148,7 @@ export async function logMutation(
     userId: data.userId,
     action: data.action,
     severity: 'INFO',
+    category: data.category,
     courseId: data.courseId ?? null,
     assignmentId: data.assignmentId ?? null,
     problemId: data.problemId ?? null,

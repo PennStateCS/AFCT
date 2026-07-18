@@ -13,7 +13,7 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { GradeBreakdownDialog } from '@/components/dialogs/GradeBreakdownDialog';
 import { formatTimeInTimeZone } from '@/lib/date';
 import { GradesLmsExportDialog } from '@/components/dialogs/GradesLmsExportDialog';
-import { buildLmsGradesCsv, type LmsPlatform } from '@/lib/lms-grade-export';
+import { findCanvasReservedTitleConflicts, type LmsPlatform } from '@/lib/lms-grade-export';
 import { useSession } from 'next-auth/react';
 import { apiPaths } from '@/lib/api-paths';
 
@@ -154,53 +154,38 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       const selectedForExport = assignments.filter((assignment) =>
         assignmentIds.includes(assignment.id),
       );
-      if (!selectedForExport) {
+      if (selectedForExport.length === 0) {
         showToast.error('Please select an assignment to export.');
         return;
       }
 
-      //const exportAssignments = [{ id: selectedForExport.id, title: selectedForExport.title }];
-      const exportAssignments = selectedForExport.map((assignment) => ({
-        id: assignment.id,
-        title: assignment.title,
-      }));
-      const { csvContent, filenamePrefix } = buildLmsGradesCsv(
-        platform,
-        students,
-        exportAssignments,
-      );
-      const assignmentSlug = (selectedForExport[0]?.title ?? '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
+      // Canvas ignores columns whose title contains a reserved word; warn (don't block)
+      // so staff know those grades won't import.
+      if (platform === 'canvas') {
+        const conflicts = findCanvasReservedTitleConflicts(
+          selectedForExport.map((assignment) => assignment.title),
+        );
+        if (conflicts.length > 0) {
+          showToast.warning(
+            `Canvas will ignore these columns because their titles contain reserved words: ${conflicts.join(
+              ', ',
+            )}. Rename the assignment or edit the CSV before importing.`,
+          );
+        }
+      }
 
-      // Download CSV
-      const timestamp = new Date().toISOString().replace('T', '_').replace(/:/g, '-').split('.')[0];
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      // The CSV is generated (and the export audited) server-side; just trigger the
+      // download. The server names the file via Content-Disposition.
+      const params = new URLSearchParams({ platform, assignments: assignmentIds.join(',') });
       const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute(
-        'download',
-        `${filenamePrefix}-${assignmentSlug || assignmentIds[0]}-${timestamp}.csv`,
-      );
+      link.href = `${apiPaths.courseGradesExport(courseId)}?${params.toString()}`;
+      document.body.appendChild(link);
       link.click();
+      link.remove();
 
       showToast.success(`Grades exported for ${platform}`);
-
-      // Record the export in the audit log (best-effort; never block the download).
-      void fetch(apiPaths.courseGrades(courseId), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform,
-          wholeGradebook: selectedForExport.length === assignments.length,
-          assignmentCount: exportAssignments.length,
-          studentCount: students.length,
-        }),
-      }).catch(() => {});
     },
-    [students, assignments, courseId],
+    [assignments, courseId],
   );
 
   const [dialogOpen, setDialogOpen] = useState(false);

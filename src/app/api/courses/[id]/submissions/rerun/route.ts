@@ -52,6 +52,7 @@ export const POST = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'COURSE_SUBMISSIONS_RERUN_ERROR',
+        category: 'SUBMISSION',
         error,
         courseId,
       });

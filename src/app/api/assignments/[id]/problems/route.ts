@@ -80,6 +80,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'ASSIGNMENT_PROBLEMS_LIST_DENIED',
+        category: 'PROBLEM',
         severity: 'SECURITY',
         courseId: assignment.courseId,
         metadata: {},

@@ -100,10 +100,11 @@ describe('createEnhancedActivityLog', () => {
 
   const ctx = { ipAddress: '1.2.3.4', userAgent: 'agent' };
 
-  it('writes a row with derived category, IP/UA, and passed metadata', async () => {
+  it('writes a row with the given category, IP/UA, and passed metadata', async () => {
     const { prisma, create } = makePrisma();
     await createEnhancedActivityLog(prisma, ctx, {
       action: 'CREATE_COURSE',
+      category: 'COURSE',
       severity: 'INFO',
       metadata: { extra: 1 },
     });
@@ -119,7 +120,7 @@ describe('createEnhancedActivityLog', () => {
     });
   });
 
-  it('honors an explicit category over the derived one', async () => {
+  it('stores the explicit category as-is (no inference)', async () => {
     const { prisma, create } = makePrisma();
     await createEnhancedActivityLog(prisma, ctx, {
       action: 'COMMENT_CREATED',
@@ -140,6 +141,7 @@ describe('createEnhancedActivityLog', () => {
     await createEnhancedActivityLog(prisma, ctx, {
       userId: 'u1',
       action: 'CREATE_COURSE',
+      category: 'COURSE',
       severity: 'INFO',
     });
     const { data } = create.mock.calls[0][0];
@@ -152,6 +154,7 @@ describe('createEnhancedActivityLog', () => {
     await createEnhancedActivityLog(prisma, ctx, {
       userId: 'ghost',
       action: 'CREATE_COURSE',
+      category: 'COURSE',
       severity: 'INFO',
     });
     expect(create.mock.calls[0][0].data.userId).toBeNull();
@@ -171,6 +174,7 @@ describe('createEnhancedActivityLog', () => {
     });
     await createEnhancedActivityLog(prisma, ctx, {
       action: 'SUBMISSION_CREATED',
+      category: 'SUBMISSION',
       severity: 'INFO',
       courseId: 'c1',
       assignmentId: 'a1',
@@ -198,6 +202,7 @@ describe('createEnhancedActivityLog', () => {
     await createEnhancedActivityLog(prisma, ctx, {
       userId: 'u1',
       action: 'SUBMISSION_CREATED',
+      category: 'SUBMISSION',
       severity: 'INFO',
       courseId: 'c1',
       includeDisplayMetadata: false,
@@ -217,7 +222,11 @@ describe('createEnhancedActivityLog', () => {
       new Prisma.PrismaClientKnownRequestError('fk', { code: 'P2003', clientVersion: 'x' }),
     );
     await expect(
-      createEnhancedActivityLog(prisma, ctx, { action: 'CREATE_COURSE', severity: 'INFO' }),
+      createEnhancedActivityLog(prisma, ctx, {
+        action: 'CREATE_COURSE',
+        category: 'COURSE',
+        severity: 'INFO',
+      }),
     ).resolves.toBeUndefined();
   });
 
@@ -226,6 +235,7 @@ describe('createEnhancedActivityLog', () => {
     (prisma.course.findUnique as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db blip'));
     await createEnhancedActivityLog(prisma, ctx, {
       action: 'CREATE_COURSE',
+      category: 'COURSE',
       severity: 'INFO',
       courseId: 'c1',
     });

@@ -81,6 +81,7 @@ async function assertAssignmentMutable(
       await createEnhancedActivityLog(prisma, req, {
         userId,
         action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        category: 'ASSIGNMENT',
         severity: 'WARNING',
         courseId,
         assignmentId,
@@ -93,6 +94,7 @@ async function assertAssignmentMutable(
       await createEnhancedActivityLog(prisma, req, {
         userId,
         action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        category: 'ASSIGNMENT',
         severity: 'WARNING',
         courseId,
         assignmentId,
@@ -109,6 +111,7 @@ async function assertAssignmentMutable(
       await createEnhancedActivityLog(prisma, req, {
         userId,
         action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
+        category: 'ASSIGNMENT',
         severity: 'WARNING',
         courseId,
         assignmentId,
@@ -402,6 +405,7 @@ export const PUT = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_UPDATE_ERROR',
+        category: 'ASSIGNMENT',
         courseId,
         assignmentId: id,
         error,
@@ -541,6 +545,7 @@ export const PATCH = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_UPDATE_ERROR',
+        category: 'ASSIGNMENT',
         courseId,
         assignmentId: id,
         error,
@@ -627,6 +632,7 @@ export const DELETE = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_DELETE_ERROR',
+        category: 'ASSIGNMENT',
         courseId,
         assignmentId: id,
         error,

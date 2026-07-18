@@ -99,6 +99,7 @@ export const GET = withCourseAuth(
         return logDenial(req, {
           userId: user.id,
           action: 'SUBMISSIONS_ACCESS_DENIED',
+          category: 'SUBMISSION',
           courseId,
         });
       }

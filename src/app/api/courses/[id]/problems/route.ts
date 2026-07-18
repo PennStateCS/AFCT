@@ -163,6 +163,7 @@ export const POST = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'PROBLEM_CREATE_ERROR',
+        category: 'PROBLEM',
         courseId,
         error,
       });

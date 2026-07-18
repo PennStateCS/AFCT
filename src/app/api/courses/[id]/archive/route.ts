@@ -51,6 +51,7 @@ export const PATCH = withCourseAuth(
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
           action: 'COURSE_ARCHIVE_DENIED',
+          category: 'COURSE',
           severity: 'SECURITY',
           courseId,
           metadata: { reason: 'archive/un-archive is admin-only', isArchived },
@@ -81,6 +82,7 @@ export const PATCH = withCourseAuth(
           await createEnhancedActivityLog(prisma, req, {
             userId: user.id,
             action: 'COURSE_ARCHIVE_REJECTED',
+            category: 'COURSE',
             severity: 'WARNING',
             courseId,
             metadata: { reason },
@@ -121,6 +123,7 @@ export const PATCH = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'COURSE_ARCHIVE_ERROR',
+        category: 'COURSE',
         error,
         courseId,
       });

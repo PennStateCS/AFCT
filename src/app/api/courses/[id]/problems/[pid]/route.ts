@@ -179,6 +179,7 @@ export const PUT = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'PROBLEM_UPDATE_ERROR',
+        category: 'PROBLEM',
         courseId,
         problemId,
         error: err,
@@ -265,6 +266,7 @@ export const DELETE = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'PROBLEM_DELETE_ERROR',
+        category: 'PROBLEM',
         courseId,
         problemId,
         error: err,

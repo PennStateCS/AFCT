@@ -13,7 +13,8 @@ export type ActivityCategory =
   | 'COURSE' // Course CRUD, enrollment
   | 'ASSIGNMENT' // Assignment CRUD, publishing
   | 'PROBLEM' // Problem CRUD
-  | 'SUBMISSION'; // Submission CRUD, grading
+  | 'SUBMISSION' // Submission CRUD
+  | 'GRADE'; // Grade entry, gradebook view/export
 
 export type LogSeverity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
 
@@ -56,7 +57,12 @@ export interface EnhancedActivityLogData {
   userId?: string | null;
   action: string;
   timestamp?: Date;
-  category?: ActivityCategory;
+  /**
+   * Required and explicit at every call site: an entry's category is a deliberate
+   * classification of what the action is about, not something to guess from the action
+   * name. It is stored as-is and read back directly (no inference).
+   */
+  category: ActivityCategory;
   /**
    * Required and explicit at every call site: the severity of an entry is a
    * deliberate classification, not something to guess from the action name.
@@ -75,42 +81,6 @@ export interface EnhancedActivityLogData {
    * course names or assignment titles based on the provided foreign keys.
    */
   includeDisplayMetadata?: boolean;
-}
-
-/**
- * Determines the activity category from the action string
- */
-export function getActivityCategory(action: string): ActivityCategory {
-  const upperAction = action.toUpperCase();
-
-  if (
-    upperAction.includes('LOGIN') ||
-    upperAction.includes('LOGOUT') ||
-    upperAction.includes('SESSION')
-  ) {
-    return 'SYSTEM';
-  }
-  if (
-    upperAction.includes('USER') ||
-    upperAction.includes('PASSWORD') ||
-    upperAction.includes('PROFILE')
-  ) {
-    return 'USER';
-  }
-  if (upperAction.includes('COURSE') || upperAction.includes('ENROLL')) {
-    return 'COURSE';
-  }
-  if (upperAction.includes('ASSIGNMENT')) {
-    return 'ASSIGNMENT';
-  }
-  if (upperAction.includes('PROBLEM')) {
-    return 'PROBLEM';
-  }
-  if (upperAction.includes('SUBMISSION') || upperAction.includes('GRADE')) {
-    return 'SUBMISSION';
-  }
-
-  return 'SYSTEM'; // Default fallback
 }
 
 /**
@@ -238,7 +208,10 @@ async function resolveEntityDisplay(
   try {
     const [courseRecord, assignmentRecord, problemRecord, submissionRecord] = await Promise.all([
       ids.courseId
-        ? prisma.course.findUnique({ where: { id: ids.courseId }, select: { name: true, code: true } })
+        ? prisma.course.findUnique({
+            where: { id: ids.courseId },
+            select: { name: true, code: true },
+          })
         : Promise.resolve(null),
       ids.assignmentId
         ? prisma.assignment.findUnique({ where: { id: ids.assignmentId }, select: { title: true } })
@@ -302,7 +275,7 @@ export async function createEnhancedActivityLog(
   reqOrContext: Request | { ipAddress?: string | null; userAgent?: string | null },
   data: EnhancedActivityLogData,
 ): Promise<void> {
-  const category = data.category || getActivityCategory(data.action);
+  const category = data.category;
   const ipAddress =
     reqOrContext instanceof Request ? getClientIp(reqOrContext) : (reqOrContext.ipAddress ?? null);
   const userAgent =

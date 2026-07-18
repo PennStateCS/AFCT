@@ -78,7 +78,12 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
       })),
     });
   } catch (error) {
-    await logError(req, { userId: user.id, action: 'CLIENT_SUBMISSIONS_LIST_ERROR', error });
+    await logError(req, {
+      userId: user.id,
+      action: 'CLIENT_SUBMISSIONS_LIST_ERROR',
+      category: 'SUBMISSION',
+      error,
+    });
     return apiError(500, 'Server error');
   }
 });
@@ -137,7 +142,12 @@ export const POST = withClientAuth(async (req, _ctx, { user }) => {
       { status: 202 },
     );
   } catch (error) {
-    await logError(req, { userId: user.id, action: 'CLIENT_SUBMISSION_CREATE_ERROR', error });
+    await logError(req, {
+      userId: user.id,
+      action: 'CLIENT_SUBMISSION_CREATE_ERROR',
+      category: 'SUBMISSION',
+      error,
+    });
     return apiError(500, 'Server error');
   }
 });
