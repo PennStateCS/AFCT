@@ -2,7 +2,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { FileText, Package, Plus, Settings } from 'lucide-react';
+import { AlignLeft, FileText, Package, Plus, Settings } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -89,7 +89,7 @@ export default function AssignmentDashboardPage({
   const [createProblemOpen, setCreateProblemOpen] = useState(false);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
-  const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
+  const [tab, setTab] = useState(searchParams.get('tab') || 'description');
 
   // Assignment shell, cached and keyed to this course/assignment via the shared
   // queryKeys.assignment.shell key, so this privileged view and the embedded
@@ -426,12 +426,6 @@ export default function AssignmentDashboardPage({
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="min-w-0">
-              <span className="font-semibold">Description:</span>
-              <p className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
-                {assignment.description ?? 'No description.'}
-              </p>
-            </div>
             <div className="max-w-xs">
               <Controller
                 control={control}
@@ -472,6 +466,10 @@ export default function AssignmentDashboardPage({
             </div>
             {/* Tab selector, matching the underline style used on the course page. */}
             <TabsList aria-label="Assignment sections" className={TAB_BAR_LIST_CLASS}>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="description">
+                <AlignLeft className="size-3.5 opacity-70" />
+                Description
+              </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="submissions">
                 <Package className="size-3.5 opacity-70" />
                 Submissions
@@ -485,6 +483,21 @@ export default function AssignmentDashboardPage({
                 Settings
               </TabsTrigger>
             </TabsList>
+            <TabsContent value="description">
+              <div className="space-y-4">
+                <h2
+                  role="heading"
+                  aria-level={2}
+                  className="flex items-center gap-2 text-2xl font-semibold"
+                >
+                  <AlignLeft className="h-6 w-6" />
+                  Description
+                </h2>
+                <p className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
+                  {assignment.description ?? 'No description.'}
+                </p>
+              </div>
+            </TabsContent>
             <TabsContent
               value="problems"
               className="animate-fade-in-up transition-opacity duration-300"

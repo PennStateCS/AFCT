@@ -374,8 +374,15 @@ describe('PrivilegeAssignmentView — header', () => {
 });
 
 describe('PrivilegeAssignmentView — tabs', () => {
-  it('defaults to the Problems tab and lists the assignment problems', () => {
+  it('defaults to the Description tab and shows the description', () => {
     renderView();
+    expect(screen.getByText('Do the thing.')).toBeInTheDocument();
+  });
+
+  it('lists the assignment problems on the Problems tab', async () => {
+    const user = userEvent.setup();
+    renderView();
+    await user.click(screen.getByRole('tab', { name: /Problems/ }));
     const table = screen.getByTestId('data-table');
     expect(within(table).getByText('Problem One')).toBeInTheDocument();
     expect(within(table).getByText('Problem Two')).toBeInTheDocument();
@@ -399,6 +406,10 @@ describe('PrivilegeAssignmentView — tabs', () => {
 });
 
 describe('PrivilegeAssignmentView — queries', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('fetches the course problem pool for the picker on the Problems tab', async () => {
     renderView();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=problems'));
@@ -436,6 +447,10 @@ describe('PrivilegeAssignmentView — queries', () => {
 });
 
 describe('PrivilegeAssignmentView — archived course', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('hides the management buttons when the course is archived', () => {
     const { container } = renderView({
       initialAssignment: makeAssignment({
@@ -452,6 +467,10 @@ describe('PrivilegeAssignmentView — archived course', () => {
 });
 
 describe('PrivilegeAssignmentView — add problems', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('POSTs the selected problems, toasts success, and refetches the assignment', async () => {
     renderView();
     const addBtn = screen.getByRole('button', { name: 'Add Existing Problem' });
@@ -488,6 +507,10 @@ describe('PrivilegeAssignmentView — add problems', () => {
 });
 
 describe('PrivilegeAssignmentView — remove problem', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('confirms, DELETEs, toasts success, and refetches', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'remove-p1' }));
@@ -537,6 +560,10 @@ describe('PrivilegeAssignmentView — remove problem', () => {
 });
 
 describe('PrivilegeAssignmentView — render viewer', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('opens the submission viewer with the solution file for a problem that has one', () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'render-p1' }));
@@ -555,6 +582,10 @@ describe('PrivilegeAssignmentView — render viewer', () => {
 });
 
 describe('PrivilegeAssignmentView — description & edit dialogs', () => {
+  beforeEach(() => {
+    searchState.value = 'tab=problems';
+  });
+
   it('opens the description dialog with the problem description', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'desc-p1' }));
