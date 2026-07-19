@@ -87,11 +87,7 @@ vi.mock('@/components/ui/SearchableSelect', () => ({
     placeholder?: string;
     disabled?: boolean;
   }) => (
-    <select
-      aria-label={placeholder}
-      disabled={disabled}
-      onChange={(e) => onSelect(e.target.value)}
-    >
+    <select aria-label={placeholder} disabled={disabled} onChange={(e) => onSelect(e.target.value)}>
       <option value="">choose</option>
       {items.map((o) => (
         <option key={o.id} value={o.id}>
@@ -380,7 +376,7 @@ describe('PrivilegeAssignmentView — tabs', () => {
   it('orders the tabs Assignment, Due Date(s), Problems, Submissions', () => {
     renderView();
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent?.trim());
-    expect(tabs).toEqual(['Assignment', 'Due Date(s)', 'Problems', 'Submissions']);
+    expect(tabs).toEqual(['Assignment', 'Due Dates', 'Problems', 'Submissions']);
   });
 
   it('lists the assignment problems on the Problems tab', async () => {
@@ -516,7 +512,9 @@ describe('PrivilegeAssignmentView — remove problem', () => {
         expect.objectContaining({ method: 'DELETE' }),
       ),
     );
-    const call = fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === 'DELETE');
+    const call = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit)?.method === 'DELETE',
+    );
     expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ problemId: 'p1' });
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith('"Problem One" removed from assignment'),
@@ -544,9 +542,9 @@ describe('PrivilegeAssignmentView — remove problem', () => {
       }),
     );
     await waitFor(() => expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument());
-    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === 'DELETE')).toBe(
-      false,
-    );
+    expect(
+      fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === 'DELETE'),
+    ).toBe(false);
   });
 });
 

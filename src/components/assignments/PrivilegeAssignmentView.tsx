@@ -401,7 +401,7 @@ export default function AssignmentDashboardPage({
               </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="settings">
                 <Settings className="size-3.5 opacity-70" />
-                Due Date(s)
+                Due Dates
               </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="problems">
                 <FileText className="size-3.5 opacity-70" />
