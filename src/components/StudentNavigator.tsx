@@ -158,7 +158,7 @@ export default function StudentNavigator({
     : null;
 
   return (
-    <div className="flex w-full items-center justify-between gap-2">
+    <div className="flex w-full flex-col items-start gap-3">
       {/* Polite live region: announces the newly selected student on navigation,
           since focus stays on the Prev/Next/dropdown control while the panel changes. */}
       <span className="sr-only" aria-live="polite">
@@ -222,8 +222,8 @@ export default function StudentNavigator({
           ) : null}
         </span>
       </div>
-      {/* Prev / student picker / Next joined into one segmented control. */}
-      <div className="ml-auto flex items-center">
+      {/* Prev / student picker / Next joined into one segmented control, below the info. */}
+      <div className="flex items-center">
         <Button
           variant="secondary"
           onClick={onPrev}
