@@ -314,12 +314,13 @@ model Problem {
   description       String?
   fileName          String?
   originalFileName  String?
-  maxSubmissions    Int?
-  maxPoints         Int          @default(100)
-  autograderEnabled Boolean      @default(true)
   type              ProblemType?
+  // FA/PDA state cap and FA determinism are intrinsic to the problem definition.
   maxStates         Int?
   isDeterministic   Boolean?
+  // NOTE: maxPoints / maxSubmissions / autograderEnabled are per-assignment and live on
+  // AssignmentProblem (a problem can be worth different points, allow a different number
+  // of submissions, or be autograded in one assignment but not another). They are NOT here.
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

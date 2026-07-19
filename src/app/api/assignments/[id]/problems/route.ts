@@ -108,8 +108,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
             title: true,
             description: true,
             type: true,
-            maxPoints: true,
-            maxSubmissions: true,
             maxStates: true,
             isDeterministic: true,
           },

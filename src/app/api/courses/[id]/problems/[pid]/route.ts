@@ -40,11 +40,8 @@ const uploadsDir = path.join('/private', 'uploads', 'solutions');
  *           title: { type: string }
  *           description: { type: string }
  *           type: { type: string }
- *           maxPoints: { type: string }
- *           maxSubmissions: { type: string }
  *           maxStates: { type: string }
  *           isDeterministic: { type: string, enum: ['true', 'false'] }
- *           autograderEnabled: { type: string, enum: ['true', 'false'] }
  *           file: { type: string, format: binary, description: Optional new solution file }
  * responses:
  *   200: { description: The updated problem. }
@@ -145,11 +142,8 @@ export const PUT = withCourseAuth(
           type: type as ProblemType,
           fileName,
           originalFileName,
-          maxSubmissions: data.maxSubmissions ?? null,
-          maxPoints: data.maxPoints ?? undefined,
           maxStates: ['FA', 'PDA'].includes(type) ? (data.maxStates ?? 0) || null : null,
           isDeterministic: type === 'FA' ? (data.isDeterministic ?? false) : null,
-          autograderEnabled: data.autograderEnabled ?? false,
         },
       });
 
@@ -166,8 +160,6 @@ export const PUT = withCourseAuth(
           problemId,
           problemTitle: updatedProblem.title,
           problemType: type,
-          maxPoints: updatedProblem.maxPoints,
-          autograderEnabled: updatedProblem.autograderEnabled,
           fileName,
           fileUpdated: !!file,
         },

@@ -173,19 +173,21 @@ vi.mock('@/components/assignments/AssignmentSettingsCard', () => ({
   AssignmentSettingsCard: () => <div data-testid="assignment-settings" />,
 }));
 
-vi.mock('@/components/dialogs/EditProblemDialog', () => ({
-  EditProblemDialog: ({
+vi.mock('@/components/dialogs/AssignmentProblemSettingsDialog', () => ({
+  AssignmentProblemSettingsDialog: ({
     open,
-    problem,
+    problemId,
+    courseId,
   }: {
     open: boolean;
-    problem: { id: string; courseId?: string };
+    problemId: string;
+    courseId?: string;
   }) =>
     open ? (
       <div
-        data-testid="edit-problem-dialog"
-        data-problem-id={problem.id}
-        data-course-id={problem.courseId}
+        data-testid="problem-settings-dialog"
+        data-problem-id={problemId}
+        data-course-id={courseId}
       />
     ) : null,
 }));
@@ -582,10 +584,10 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     expect(screen.getByText('Desc one')).toBeInTheDocument();
   });
 
-  it('opens the edit-problem dialog with the course id injected', () => {
+  it('opens the problem-settings dialog with the ids injected', () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'edit-p1' }));
-    const dialog = screen.getByTestId('edit-problem-dialog');
+    const dialog = screen.getByTestId('problem-settings-dialog');
     expect(dialog).toHaveAttribute('data-problem-id', 'p1');
     expect(dialog).toHaveAttribute('data-course-id', 'c1');
   });

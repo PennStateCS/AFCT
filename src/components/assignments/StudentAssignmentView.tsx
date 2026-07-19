@@ -281,10 +281,10 @@ export default function StudentAssignmentPage({
   const selectedProblemDetails = selectedProblem
     ? {
         ...selectedProblem.problem,
-        maxPoints: selectedProblem.maxPoints ?? selectedProblem.problem.maxPoints,
-        maxSubmissions: selectedProblem.maxSubmissions ?? selectedProblem.problem.maxSubmissions,
-        autograderEnabled:
-          selectedProblem.autograderEnabled ?? selectedProblem.problem.autograderEnabled,
+        // Points / submission cap / autograding are per-assignment (on the link).
+        maxPoints: selectedProblem.maxPoints,
+        maxSubmissions: selectedProblem.maxSubmissions,
+        autograderEnabled: selectedProblem.autograderEnabled,
       }
     : null;
 

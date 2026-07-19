@@ -62,7 +62,7 @@ const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> =
   { title: 'Details', fields: ['title', 'description'] },
   {
     title: 'Type',
-    fields: ['type', 'maxStates', 'isUnlimitedStates', 'isDeterministic', 'autograderEnabled'],
+    fields: ['type', 'maxStates', 'isUnlimitedStates', 'isDeterministic'],
   },
   { title: 'Answer File', fields: ['file'] },
   { title: 'Review', fields: [] },
@@ -70,7 +70,8 @@ const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> =
 const LAST_STEP = STEPS.length - 1;
 
 // A four-step wizard (Details, Type, Answer File, Review) mirroring the create-assignment
-// wizard. Defaults to FA + Unlimited, 100 states (disabled when unlimited).
+// wizard. Creates the bank problem definition only. Points, submission caps and autograding
+// are per-assignment and set when the problem is added to an assignment, not here.
 export function CreateProblemDialog({
   open,
   setOpen,
@@ -86,10 +87,6 @@ export function CreateProblemDialog({
       title: '',
       description: '',
       type: 'FA',
-      isUnlimitedSubmissions: true,
-      maxSubmissions: 100,
-      maxPoints: 100,
-      autograderEnabled: true,
       isUnlimitedStates: true,
       maxStates: 100,
       isDeterministic: false,
@@ -151,12 +148,6 @@ export function CreateProblemDialog({
       formData.append('title', values.title);
       formData.append('description', values.description ?? '');
       formData.append('type', values.type);
-      formData.append(
-        'maxSubmissions',
-        values.isUnlimitedSubmissions ? '-1' : String(values.maxSubmissions ?? 0),
-      );
-      formData.append('maxPoints', String(values.maxPoints));
-      formData.append('autograderEnabled', String(!!values.autograderEnabled));
       formData.append('courseId', values.courseId);
 
       if (values.type === 'FA' || values.type === 'PDA') {
@@ -387,20 +378,6 @@ export function CreateProblemDialog({
                     )}
                   />
                 )}
-
-                <Controller
-                  control={control}
-                  name="autograderEnabled"
-                  render={({ field }) => (
-                    <SwitchField
-                      label="Automatically Graded"
-                      name="autograderEnabled"
-                      id="autograderEnabled"
-                      checked={!!field.value}
-                      onCheckedChange={(checked) => field.onChange(!!checked)}
-                    />
-                  )}
-                />
               </>
             )}
 
@@ -471,8 +448,6 @@ export function CreateProblemDialog({
                       <dd>{review.isDeterministic ? 'Yes' : 'No'}</dd>
                     </>
                   )}
-                  <dt className="text-muted-foreground">Automatically graded</dt>
-                  <dd>{review.autograderEnabled ? 'Yes' : 'No'}</dd>
                   <dt className="text-muted-foreground">Answer file</dt>
                   <dd>{review.file?.name ?? 'None'}</dd>
                 </dl>

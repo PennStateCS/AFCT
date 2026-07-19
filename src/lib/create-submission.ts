@@ -117,9 +117,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       problem: {
         select: {
           fileName: true,
-          maxPoints: true,
           maxStates: true,
-          autograderEnabled: true,
           isDeterministic: true,
           type: true,
         },

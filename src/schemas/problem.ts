@@ -30,17 +30,14 @@ const FileRequired = z
 /**
  * Base object schema for add/edit Problem (without effects)
  */
+// The intrinsic problem definition only. maxPoints / maxSubmissions / autograderEnabled
+// are per-assignment and live on AssignmentProblem (see ProblemAssociationSettingsSchema),
+// so they are deliberately NOT part of the bank create/edit form.
 const BaseProblemObject = z.object({
   title: z.string().trim().min(3, 'Title must be at least 3 characters.').max(200, 'Title is too long.'),
   description: z.string().trim().max(20000).optional(),
   type: ProblemTypeEnum,
-  isUnlimitedSubmissions: z.boolean().default(true),
-  maxSubmissions: z
-    .union([z.coerce.number().int(), z.null()])
-    .optional(),
   isUnlimitedStates: z.boolean().default(true),
-  maxPoints: z.coerce.number().int(),
-  autograderEnabled: z.boolean().default(true),
   maxStates: z
     .union([z.coerce.number().int(), z.null()])
     .optional(),
@@ -138,12 +135,10 @@ const problemApiScalars = {
     .max(200, 'Title is too long.'),
   description: z.string().trim().max(20000, 'Description is too long.').optional(),
   type: ProblemTypeEnum,
+  // Optional context for the activity log when a problem is created inside an assignment.
   assignmentId: z.string().trim().optional(),
-  maxPoints: formIntOptional({ min: 0 }),
-  maxSubmissions: formIntOptional(),
   maxStates: formIntOptional(),
   isDeterministic: formBooleanOptional,
-  autograderEnabled: formBooleanOptional,
 };
 
 export const ProblemCreateApiSchema = z.object(problemApiScalars);

@@ -88,9 +88,9 @@ describe('CreateProblemDialog', () => {
     await user.type(screen.getByLabelText('Title'), 'DFA #1');
     await clickNext(user);
 
-    // Step 2: Type (autograder on by default)
-    expect(screen.getByLabelText('Automatically Graded')).toBeInTheDocument();
-    expect(screen.getByLabelText('Automatically Graded')).toBeChecked();
+    // Step 2: Type. Points / submissions / autograding are per-assignment, so they are
+    // NOT on the bank create wizard.
+    expect(screen.queryByLabelText('Automatically Graded')).not.toBeInTheDocument();
     await clickNext(user);
 
     // Step 3: Answer File

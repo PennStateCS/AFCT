@@ -25,7 +25,7 @@ import { showToast } from '@/lib/toast';
 import { AssignmentSettingsCard } from '@/components/assignments/AssignmentSettingsCard';
 import { AssignmentTypeCard } from '@/components/assignments/AssignmentTypeCard';
 import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsForm';
-import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
+import { AssignmentProblemSettingsDialog } from '@/components/dialogs/AssignmentProblemSettingsDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TAB_BAR_LIST_CLASS, TAB_BAR_TRIGGER_CLASS } from '@/components/course/course-tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
@@ -352,8 +352,6 @@ export default function AssignmentDashboardPage({
 
   const assignmentSettingsForDialog = assignmentProblemForDialog
     ? {
-        assignmentId: aid,
-        courseId: id,
         maxPoints: assignmentProblemForDialog.maxPoints,
         maxSubmissions: assignmentProblemForDialog.maxSubmissions,
         autograderEnabled: assignmentProblemForDialog.autograderEnabled,
@@ -614,22 +612,16 @@ export default function AssignmentDashboardPage({
         onConfirm={handleConfirmRemoveProblem}
         onCancel={() => setProblemToRemove(null)}
       />
-      {problemToEdit && (
-        <EditProblemDialog
-          courseIsArchived={courseIsArchived}
+      {problemToEdit && assignmentSettingsForDialog && (
+        <AssignmentProblemSettingsDialog
           open={editProblemDialogOpen}
           setOpen={setEditProblemDialogOpen}
-          assignmentSettings={assignmentSettingsForDialog}
-          // `problemToEdit` is always set here (guarded by the `&&` above).
-          problem={{
-            ...problemToEdit,
-            description: problemToEdit.description ?? null,
-            // Preserve string type when present so FA/PDA fields render
-            type: typeof problemToEdit.type === 'string' ? problemToEdit.type : null,
-            maxStates: problemToEdit.maxStates ?? null,
-            isDeterministic:
-              (problemToEdit as Problem & { isDeterministic?: boolean }).isDeterministic ?? null,
-          }}
+          courseId={id}
+          assignmentId={aid}
+          problemId={problemToEdit.id}
+          problemTitle={problemToEdit.title}
+          settings={assignmentSettingsForDialog}
+          courseIsArchived={courseIsArchived}
           onSaved={() => {
             void invalidateAssignment();
           }}

@@ -7288,13 +7288,9 @@ export interface operations {
                     title: string;
                     description?: string;
                     type: string;
-                    maxPoints?: string;
-                    maxSubmissions?: string;
                     maxStates?: string;
                     /** @enum {string} */
                     isDeterministic?: "true" | "false";
-                    /** @enum {string} */
-                    autograderEnabled?: "true" | "false";
                     /**
                      * Format: binary
                      * @description Optional new solution file
@@ -7450,8 +7446,6 @@ export interface operations {
                     /** @description Problem type (e.g. FA, PDA, RE, CFG) */
                     type: string;
                     assignmentId?: string;
-                    maxPoints?: string;
-                    maxSubmissions?: string;
                     /** @description FA/PDA only */
                     maxStates?: string;
                     /**
@@ -7459,8 +7453,6 @@ export interface operations {
                      * @enum {string}
                      */
                     isDeterministic?: "true" | "false";
-                    /** @enum {string} */
-                    autograderEnabled?: "true" | "false";
                     /**
                      * Format: binary
                      * @description Solution definition (XML)

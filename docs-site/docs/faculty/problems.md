@@ -15,14 +15,16 @@ The answer file is the solution AFCT uses to display the expected model and, whe
 
 ## Create a problem
 
+Create Problem is a short guided wizard with four steps: Details, Type, Answer File, and Review.
+
 1. Open the course and select **Problems**.
 2. Select **Create Problem**.
-3. Enter a clear title and an optional description.
-4. Choose the problem type.
-5. For a finite automaton or push-down automaton, choose a state limit or leave it unlimited.
-6. For a finite automaton, turn on **Deterministic** when the student's answer must be deterministic.
-7. Choose whether the problem is **Automatically Graded**.
-8. Upload the answer file and select **Create Problem**.
+3. On **Details**, enter a clear title and an optional description.
+4. On **Type**, choose the problem type. For a finite automaton or push-down automaton, choose a state limit or leave it unlimited; for a finite automaton, turn on **Deterministic** when the student's answer must be deterministic.
+5. On **Answer File**, upload the answer file.
+6. On **Review**, confirm your choices and select **Create Problem**.
+
+A problem in the bank is only the definition. Points, the accepted-submission limit, and automatic grading are set per assignment, not on the problem itself (see below).
 
 You can also create a problem from inside an assignment. In that case, AFCT adds the new problem to the course bank and to the open assignment.
 
@@ -36,9 +38,9 @@ Open **Manage** to:
 - **Edit Problem** details and replace the answer file
 - **Delete Problem** when the problem is not used by an assignment
 
-When editing a problem from the course bank, you can also change its default maximum points, maximum submissions, and automatic grading setting. If you change the problem type, you must upload a new answer file of the matching type.
+Editing a problem from the course bank uses the same wizard and changes the definition only: title, description, type, state limit, deterministic requirement, and answer file. If you change the problem type, you must upload a new answer file of the matching type.
 
-When editing a problem from an assignment, the points, submission limit, and automatic grading setting apply only to that assignment.
+Points, the accepted-submission limit, and automatic grading belong to each assignment, not to the bank problem. Set them when you add the problem to an assignment, or change them later from the assignment's **Problems** tab (**Manage** the problem and open its settings). The same problem can carry different values in different assignments.
 
 ## Before publishing
 
