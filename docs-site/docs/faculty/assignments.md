@@ -1,79 +1,96 @@
 # Assignments
 
-The **Assignments** page contains the work students complete in a course. An assignment holds its own instructions, an availability window and deadline, and one or more problems from the course problem bank. One assignment can have different due dates for different students.
+The **Assignments** page holds the work students complete in a course. An assignment has its own instructions, a schedule (availability window and deadline), and one or more problems from the course problem bank. Every assignment is either **individual** or **group**, can be assigned to everyone or to specific students or groups, and can give individual targets their own dates.
 
 ## Create an assignment
 
 Select **Create Assignment** to open the wizard. It has four steps.
 
 1. **Details** - enter a title and optional description.
-2. **Assign To** - set who the assignment is for and when it is due (see below).
-3. **Options** - choose whether to **Publish Now**, and turn on **Group Assignment** if problem availability should be assigned by course group.
+2. **Type** - choose **Individual** (each student submits and is graded on their own) or **Group** (students submit and are graded together as a group). For a group assignment, pick the [group set](groups.md) it runs in.
+3. **Assign To** - choose who it is for and set the default schedule (see below).
 4. **Review** - check the summary, then select **Create Assignment**.
 
-All dates are interpreted in the course timezone. If you do not publish immediately, you can finish adding and checking problems before students see the assignment.
+All dates are interpreted in the course timezone. New assignments are created **unpublished** so you can add and check problems first, then publish with the **Published** switch when you are ready.
 
-### Assign To and due dates
+### Type: individual or group
 
-The **Assign To** step starts with an **Everyone** card that sets the default dates for the whole class:
+An assignment is one or the other, not a mix:
+
+- **Individual** - assigned to students; each submits on their own.
+- **Group** - tied to one group set; students submit and are graded together as their group. A student who is not in any group of that set is not assigned the work.
+
+You set the type when you create the assignment, and you can change it later on the assignment's **Type** tab. Switching between individual and group resets who the assignment is for (back to everyone) and removes any date overrides, so you rebuild those afterward on **Assign To**. The app asks you to confirm before applying the change.
+
+### Assign To and the schedule
+
+**Assign to** - by default the assignment goes to **All students** (individual) or **All groups** in the set (group). Use **Edit students** / **Edit groups** to pick a specific subset instead; anyone not selected does not see the assignment at all. Group targets always come from the assignment's single group set.
+
+The default schedule applies to everyone assigned unless a target has an override:
 
 - **Available from** (optional) - before this time the assignment is locked. Students see that it exists and when it opens, but not its description or problems. Leave it blank to make the assignment available immediately.
 - **Due** - the on-time deadline.
 - **Allow late submissions** - accept work after the due date.
-- **Available until** (optional) - when late submissions are on, this is the last moment late work is accepted. **Leave it blank to accept late submissions with no deadline.** When set, it must be on or after the due date.
+- **Accept until** (optional) - when late submissions are on, the last moment late work is accepted. Leave it blank to accept late work with no deadline; when set, it must be on or after the due date.
 
-**Give a student different dates.** Use **Add a student override** and pick a student. A card appears where you can set that student's own available-from, due date, and late policy. Any field you leave blank inherits the Everyone value, so you can change only the due date and keep the rest. Once an override exists, the base card is relabeled **Everyone else**.
+## The assignment page
 
-**Assign to specific students only.** Turn off **Assign to everyone in the course** to assign the work to just the students you add. Students who are not added do not see the assignment at all. The dates on the first card become the defaults those students inherit.
+Open an assignment (select its title, or **Manage → View Assignment**). It has five tabs: **Details**, **Type**, **Assign To**, **Problems**, and **Submissions**.
 
-## Add problems
+### Details
 
-Select the assignment title, then use the **Problems** tab on the assignment page.
+Edit the title and description.
+
+### Type
+
+Shows whether the assignment is individual or group, and for a group its group set. You can switch the type here (see [Type](#type-individual-or-group) above for what a switch resets).
+
+### Assign To
+
+The same audience selector and default schedule as the create wizard, plus a **Date overrides** section for giving one student or group different dates.
+
+To add an override, use **Add override** and pick an assigned target - only students or groups that are actually assigned this assignment are listed. A row appears where you can set any of **Available from**, **Due**, **Late submissions**, and **Accept until**. Any field you leave blank inherits the default schedule, so you can change only the due date and keep the rest. Remove a row to drop the override; the target falls back to the default schedule.
+
+Select **Save changes** to apply your edits to the audience, schedule, and overrides together.
+
+### Problems
 
 - **Create Problem** creates a new problem in the course bank and adds it to this assignment.
-- **Add Existing Problem** reuses a problem that is already in the course bank.
+- **Add Existing Problem** reuses a problem already in the course bank.
 
-For a group assignment, a problem can be available to every group or assigned to a specific course group. Set up the groups first on the [Groups](groups.md) page.
-
-In the current implementation, group mode controls which problems appear for a selected student's group. Submissions, grades, and discussions in the normal course workflow remain attached to the selected student rather than being copied automatically to every group member.
-
-Each problem has settings for this assignment:
+Each problem has per-assignment settings:
 
 - **Max Points** controls how much the problem contributes to the assignment grade.
 - **Max Submissions** can be a fixed number or unlimited.
 - **Automatic Grading** controls whether AFCT sends submissions for that problem to the autograder.
 
-These assignment settings can differ from the defaults in the problem bank. Removing a problem from an assignment does not delete it from the course.
+These settings can differ from the defaults in the problem bank. Every assigned student (or group) gets the same set of problems. Removing a problem from an assignment does not delete it from the course.
 
-## Review the assignment list
+### Submissions
 
-The table shows the due date, total points, number of problems, late-work settings, submission and comment counts, and publication status.
+Once students begin working, use the **Submissions** tab to review files, rerun the autograder, discuss a problem, and enter grades. See [Submissions](submissions.md).
 
-When an assignment has per-student due dates, the **Due Date** cell shows a **Multiple** badge next to the base date. Select it to see each student's dates in a popover.
+## Group assignments
 
-Use the **Published** switch to show or hide an assignment. AFCT asks for confirmation before applying the change. Select an assignment title, or choose **Manage** then **View Assignment**, to open it.
+When an assignment is a group assignment:
 
-## Edit an assignment
+- Each group shares one submission set per problem. Any member can submit, and every member sees the group's submissions.
+- Autograding grades the whole group: each member receives the group's grade, which you can override for an individual student on the [Submissions](submissions.md) tab.
+- Only students who belong to a group in the set are assigned the work.
 
-Open the assignment and use its **Settings** tab. It holds all of the assignment's settings - title, description, the availability window and due dates, the assign-to targets, and late policy and publication - and saves them in place.
+Once a group in the set has submitted work, the group set is locked: you can still rename or duplicate it, but you cannot change its groups or memberships, and you cannot delete a group set that an assignment uses. Plan the groups before students begin submitting.
+
+## The assignment list
+
+The table shows each assignment's due date, **Type** (Individual or Group), total points, number of problems, late-work settings, submission and comment counts, and publication status. You can filter by type.
+
+When an assignment has date overrides, the **Due Date** cell shows a **Multiple** badge next to the base date; select it to see each target's effective dates in a popover.
+
+Use the **Published** switch to show or hide an assignment. AFCT asks for confirmation before applying the change.
 
 Keep these safeguards in mind:
 
 - You cannot unpublish an assignment after it has submissions or grades.
 - You cannot delete an assignment after it has submissions or discussion comments.
-- Removing a student from the course also removes any due-date overrides they had.
+- Removing a student from the course also removes any assignee row and date overrides they had.
 - An archived course is read-only.
-
-## Group assignments
-
-In the **Assign To** section you can target whole groups as well as individual students. Pick a [group set](groups.md), then add the groups you want to assign. Each group, like each student, can have its own availability window and due dates.
-
-When an assignment is assigned to a group:
-
-- The group shares one submission set per problem. Any member can submit, and every member sees the group's submissions.
-- Autograding grades the whole group: each member receives the group's grade, which you can override for an individual student on the [Submissions](submissions.md) tab.
-- A student is assigned at most one way per assignment. Adding a group whose member is already assigned individually (or a student who is already in an assigned group) is rejected.
-
-Once a group in the set has submitted work, the group set is locked: you can still rename or duplicate it, but you cannot change its groups or memberships, and you cannot delete a group set that an assignment uses. Plan the groups before students begin submitting.
-
-When students begin working, use the assignment's [Submissions](submissions.md) tab to review files, rerun the autograder, discuss a problem, and enter grades.

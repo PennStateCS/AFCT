@@ -36,7 +36,7 @@ When autograding is enabled, the result and feedback appear after evaluation fin
 
 Comments belong to a specific assignment, problem, and student. You can add a comment and read replies in your thread. Students cannot delete comments.
 
-For group assignments, coordinate with your group and follow the problem list assigned to your group. In the current course workflow, your submissions, grades, and discussion are still shown under your own student record. Access to another student's individual work remains restricted.
+For group assignments, you and your group share one set of submissions per problem: any member can submit, everyone sees the group's work, and autograding gives the whole group the same grade (a grader can adjust an individual member's grade). Coordinate with your group so you do not submit over each other. Access to another group's work remains restricted.
 
 ## Update your profile
 
