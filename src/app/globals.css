@@ -619,15 +619,19 @@ html {
   }
 }
 
-/* Push the native date/time picker icon to the far right of the field so it
-   sits at the edge instead of directly after the value. Unlayered so it wins
-   over the browser's default calendar-indicator placement. */
-input[type='date']::-webkit-calendar-picker-indicator,
-input[type='datetime-local']::-webkit-calendar-picker-indicator,
-input[type='time']::-webkit-calendar-picker-indicator,
-input[type='month']::-webkit-calendar-picker-indicator,
-input[type='week']::-webkit-calendar-picker-indicator {
-  margin-inline-start: auto;
+/* Keep the native date/time picker icon at the far right edge of the field.
+   The shared Input component sets `display: flex` on the input element (shadcn),
+   which replaces Chrome's internal date-input layout with one where the icon
+   hugs the value text; no pseudo-element rule (margin auto, flex on the edit
+   region) can fix it from inside. Restoring block display brings back the
+   native layout, which right-aligns the icon. Unlayered so it beats the `flex`
+   utility in Tailwind's layered CSS. */
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'],
+input[type='month'],
+input[type='week'] {
+  display: block;
 }
 
 /* Respect the OS "reduce motion" preference: collapse animations, transitions,

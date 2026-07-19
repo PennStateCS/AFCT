@@ -86,7 +86,13 @@ export function OverrideLatePolicyField({
           onChange(next === 'allow' ? true : next === 'block' ? false : undefined)
         }
       >
-        <SelectTrigger id={fieldId} aria-describedby={descriptionId} className="h-11 w-full">
+        <SelectTrigger
+          id={fieldId}
+          aria-describedby={descriptionId}
+          // bg-card + border-black so it reads like the InputGroup date fields beside it
+          // (the default border-input gray made the whole control look gray).
+          className="bg-card h-11 w-full border-black"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

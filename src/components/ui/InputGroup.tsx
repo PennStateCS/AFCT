@@ -159,7 +159,9 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           aria-describedby={describedByAttr || undefined}
           className={cn(
             'h-11 transition-all duration-150',
-            'border-black',
+            // Explicit white surface: the base Input is bg-transparent, which reads
+            // gray when a field sits on a tinted panel (e.g. the override rows).
+            'bg-card border-black',
             error && 'border-red-500',
             type === 'number' && 'appearance-auto',
             inputPaddingRight,

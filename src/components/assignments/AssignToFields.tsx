@@ -539,6 +539,7 @@ export function AssignToFields({
             searchPlaceholder="Search audience..."
             emptyStateText="Everyone in the audience already has an override."
             restoreFocusAfterSelect={false}
+            triggerClassName="bg-card border-black"
           />
         }
         contentClassName="p-0"
