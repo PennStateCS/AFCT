@@ -51,7 +51,6 @@ export type StudentNavigatorProps = {
   onPrev: () => void;
   onNext: () => void;
   gradeStatuses?: Record<string, boolean | undefined>;
-  assignmentTotals?: { earned: number; available: number };
   courseId: string;
   assignmentId: string;
 };
@@ -63,7 +62,6 @@ export default function StudentNavigator({
   onPrev,
   onNext,
   gradeStatuses,
-  assignmentTotals,
   courseId,
   assignmentId,
 }: StudentNavigatorProps) {
@@ -119,11 +117,6 @@ export default function StudentNavigator({
   const showAllowLate = eff ? eff.allowLateSubmissions : (assignment?.allowLateSubmissions ?? false);
   const showLateCutoff = eff ? eff.lateCutoff : (assignment?.lateCutoff ?? null);
   const isOverridden = !!eff && eff.source !== 'base';
-
-  const formatPoints = (value: number) => {
-    if (!Number.isFinite(value)) return 'Infinity';
-    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  };
 
   const filteredStudents = useMemo(() => {
     const f = studentFilter.trim().toLowerCase();
@@ -209,11 +202,6 @@ export default function StudentNavigator({
         {groupInfo?.isGroup && groupInfo.members.length > 0 ? (
           <span className="text-muted-foreground block text-xs">
             With: {groupInfo.members.map(memberName).join(', ')}
-          </span>
-        ) : null}
-        {assignmentTotals ? (
-          <span className="block">
-            {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)} pts
           </span>
         ) : null}
       </div>
