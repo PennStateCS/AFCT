@@ -90,6 +90,7 @@ export function updateCourseAfterAssignmentCreate(
         ...newAssignment,
         problemCount: 0,
         maxPoints: 0,
+        isGroup: newAssignment.groupSetId != null,
         submissionCount: 0,
         commentCount: 0,
         hasSubmissionsOrComments: false,

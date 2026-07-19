@@ -152,7 +152,7 @@ export const GET = withCourseAuth(
         id: string;
         unlockAt?: Date | null;
         assignedToEveryone?: boolean;
-        isGroup?: boolean;
+        groupSetId?: string | null;
         problems?: Array<{ maxPoints?: number | null }>;
         _count?: { problems?: number };
         overrides?: OverrideRowRaw[];
@@ -241,7 +241,8 @@ export const GET = withCourseAuth(
             dueDate: assignment.dueDate,
             unlockAt: assignment.unlockAt ?? null,
             assignedToEveryone: assignment.assignedToEveryone ?? true,
-            isGroup: assignment.isGroup ?? false,
+            // Individual vs group is derived from the set link (no stored flag).
+            isGroup: assignment.groupSetId != null,
             allowLateSubmissions: assignment.allowLateSubmissions,
             lateCutoff: assignment.lateCutoff,
             maxPoints: totalProblemPoints,

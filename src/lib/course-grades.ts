@@ -83,9 +83,9 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
       dueDate: true,
       assignedToEveryone: true,
       problems: { select: { maxPoints: true } },
-      // Individual (userId) and group (groupId) override targets, used to decide who is
+      // Individual (userId) and group (groupId) assignee rows, used to decide who is
       // actually assigned each assignment.
-      overrides: { select: { userId: true, groupId: true } },
+      assignees: { select: { userId: true, groupId: true } },
     },
     orderBy: { dueDate: 'asc' },
   });
@@ -127,16 +127,16 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
     else groupIdsByStudent.set(m.userId, [m.groupId]);
   }
 
-  // Compute "assigned" per (student, assignment) from the already-loaded overrides and
-  // memberships (no per-cell queries): everyone, an individual override, or a group
-  // override on a group the student belongs to.
+  // Compute "assigned" per (student, assignment) from the already-loaded assignees and
+  // memberships (no per-cell queries): everyone, an individual assignee row, or a group
+  // assignee row on a group the student belongs to.
   for (const a of assignmentRows) {
     for (const s of studentIds) {
       const studentAssigned = assigned[s];
       if (studentAssigned) {
         studentAssigned[a.id] = isStudentAssigned(
           { assignedToEveryone: a.assignedToEveryone },
-          a.overrides ?? [],
+          a.assignees ?? [],
           s,
           groupIdsByStudent.get(s) ?? [],
         );

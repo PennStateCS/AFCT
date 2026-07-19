@@ -12,6 +12,9 @@ const prismaMock = vi.hoisted(() => ({
   assignment: {
     findMany: vi.fn(),
   },
+  assignmentAssignee: {
+    deleteMany: vi.fn(),
+  },
   assignmentOverride: {
     deleteMany: vi.fn(),
   },
@@ -297,7 +300,11 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
 
     expect(res.status).toBe(200);
     expect(prismaMock.roster.deleteMany).toHaveBeenCalled();
-    // The user's due-date overrides in this course are cleared alongside the roster row.
+    // The user's audience rows and due-date overrides in this course are cleared alongside
+    // the roster row.
+    expect(prismaMock.assignmentAssignee.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u2', assignmentId: { in: ['a1'] } },
+    });
     expect(prismaMock.assignmentOverride.deleteMany).toHaveBeenCalledWith({
       where: { userId: 'u2', assignmentId: { in: ['a1'] } },
     });
