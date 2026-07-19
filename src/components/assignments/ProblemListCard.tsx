@@ -58,6 +58,20 @@ export function ProblemListCard({
     { earned: 0, available: 0 },
   );
 
+  // Size every grade/total bubble to the widest label so they line up. Using the character
+  // count in tabular (equal-width) digits keeps it font-agnostic.
+  const gradeLabels = problems
+    .filter((p) => p.maxGrade !== undefined && p.maxGrade !== null)
+    .map((p) => `${p.grade !== null && p.grade !== undefined ? p.grade : '-'}/${p.maxGrade}`);
+  const totalLabel = `${totals.earned}/${totals.available}`;
+  const badgeChars = Math.max(
+    0,
+    ...gradeLabels.map((s) => s.length),
+    ...(showTotal ? [totalLabel.length] : []),
+  );
+  const badgeClass = 'justify-center border border-slate-300 bg-white text-xs font-medium tabular-nums text-slate-700';
+  const badgeStyle = badgeChars > 0 ? { minWidth: `${badgeChars}ch` } : undefined;
+
   return (
     <Card className={className}>
       <CardHeader>
@@ -76,7 +90,8 @@ export function ProblemListCard({
                     key="grade"
                     variant="secondary"
                     title="Grade Earned / Max Points"
-                    className="border border-slate-300 bg-white text-xs font-medium text-slate-700"
+                    className={badgeClass}
+                    style={badgeStyle}
                   >
                     {problem.grade !== null && problem.grade !== undefined ? problem.grade : '-'}/
                     {problem.maxGrade}
@@ -143,7 +158,8 @@ export function ProblemListCard({
             <Badge
               variant="secondary"
               title="Total Earned / Total Points"
-              className="border border-slate-300 bg-white text-xs font-medium text-slate-700"
+              className={badgeClass}
+              style={badgeStyle}
             >
               {totals.earned}/{totals.available}
             </Badge>
