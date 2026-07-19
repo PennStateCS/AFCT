@@ -226,12 +226,12 @@ describe('CreateAssignmentWizardDialog', () => {
     const { setOpen, onCreate } = renderDialog();
 
     await user.type(screen.getByLabelText('Title'), 'Homework 1');
-    await clickNext(user); // -> Assign To
+    await clickNext(user); // -> Type
+    await clickNext(user); // -> Assign To (Individual is the default type)
 
     // Assigned to everyone by default; add a date override for one student via the
-    // "Add date override" picker, then proceed.
+    // "Add override" picker, then proceed.
     await user.click(await screen.findByRole('button', { name: 'Sam Student' }));
-    await clickNext(user); // -> Options
     await clickNext(user); // -> Review
 
     // Reaching Review must not have submitted yet.
@@ -243,7 +243,8 @@ describe('CreateAssignmentWizardDialog', () => {
 
     const assignmentPost = postCalls('/assignments').find((c) => !String(c[0]).includes('/overrides'));
     const body = JSON.parse((assignmentPost?.[1] as RequestInit).body as string);
-    expect(body).toMatchObject({ title: 'Homework 1' });
+    // Defaults: individual, and always created unpublished.
+    expect(body).toMatchObject({ title: 'Homework 1', isGroup: false, isPublished: false });
     expect(body).toHaveProperty('dueDate');
 
     await waitFor(() => expect(postCalls('/overrides').length).toBe(1));
@@ -262,6 +263,9 @@ describe('CreateAssignmentWizardDialog', () => {
     renderDialog();
 
     await user.type(screen.getByLabelText('Title'), 'Homework 1');
+    await clickNext(user); // -> Type
+    // Choose Group in the Type step.
+    await user.click(screen.getByRole('radio', { name: /group/i }));
     await clickNext(user); // -> Assign To
 
     // Assign to specific targets: turn off "everyone", pick a group set, then check one
@@ -270,9 +274,17 @@ describe('CreateAssignmentWizardDialog', () => {
     await user.click(await screen.findByRole('button', { name: 'Project Teams (1 group)' }));
     await user.click(await screen.findByRole('checkbox', { name: 'Team A (1 member)' }));
 
-    await clickNext(user); // -> Options
     await clickNext(user); // -> Review
     await user.click(screen.getByRole('button', { name: /create assignment/i }));
+
+    // The assignment itself is created as a group assignment.
+    await waitFor(() => expect(postCalls('/assignments').length).toBeGreaterThan(0));
+    const assignmentPost = postCalls('/assignments').find(
+      (c) => !String(c[0]).includes('/overrides'),
+    );
+    expect(JSON.parse((assignmentPost?.[1] as RequestInit).body as string)).toMatchObject({
+      isGroup: true,
+    });
 
     await waitFor(() => expect(postCalls('/overrides').length).toBe(1));
     const overridePost = postCalls('/overrides')[0];

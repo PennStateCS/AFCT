@@ -5895,6 +5895,8 @@ export interface operations {
                     /** @description Required when allowLateSubmissions is true */
                     lateCutoff?: string;
                     isPublished?: boolean;
+                    /** @description Individual (false) or group (true) assignment */
+                    isGroup?: boolean;
                 };
             };
         };

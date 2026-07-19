@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Stepper } from '@/components/ui/stepper';
 import InputGroup from '@/components/ui/InputGroup';
-import SwitchField from '@/components/ui/SwitchField';
 import { Textarea } from '@/components/ui/textarea';
 import { AssignToFields } from '@/components/assignments/AssignToFields';
 import { toast } from 'sonner';
@@ -31,11 +30,11 @@ type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 
 const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> = [
   { title: 'Details', fields: ['title', 'description'] },
+  { title: 'Type', fields: ['isGroup'] },
   {
     title: 'Assign To',
     fields: ['assignedToEveryone', 'unlockAt', 'dueDate', 'allowLateSubmissions', 'lateCutoff', 'overrides'],
   },
-  { title: 'Options', fields: ['isPublished'] },
   { title: 'Review', fields: [] },
 ];
 const LAST_STEP = STEPS.length - 1;
@@ -107,7 +106,9 @@ export function CreateAssignmentWizardDialog({
       assignedToEveryone: true,
       allowLateSubmissions: false,
       lateCutoff: undefined,
+      // Assignments are created unpublished for now; staff publish them later.
       isPublished: false,
+      isGroup: false,
       courseId,
       overrides: [],
     }),
@@ -154,7 +155,9 @@ export function CreateAssignmentWizardDialog({
       assignedToEveryone: raw.assignedToEveryone,
       allowLateSubmissions: raw.allowLateSubmissions,
       lateCutoff: raw.allowLateSubmissions ? raw.lateCutoff : null,
-      isPublished: raw.isPublished,
+      isGroup: raw.isGroup,
+      // Always created unpublished for now; there is no publish step.
+      isPublished: false,
     };
 
     let created: Assignment;
@@ -210,8 +213,8 @@ export function CreateAssignmentWizardDialog({
         <DialogHeader>
           <DialogTitle>Create Assignment</DialogTitle>
           <DialogDescription className="sr-only">
-            Create an assignment in four steps: details, who it is assigned to and when it is due,
-            options, then review.
+            Create an assignment in four steps: details, individual or group type, who it is
+            assigned to and when it is due, then review.
           </DialogDescription>
         </DialogHeader>
 
@@ -285,26 +288,63 @@ export function CreateAssignmentWizardDialog({
             )}
 
             {step === 1 && (
-              <AssignToFields control={control} errors={errors} courseId={courseId} active={open} />
+              <Controller
+                control={control}
+                name="isGroup"
+                render={({ field }) => (
+                  <fieldset className="space-y-3">
+                    <legend className="text-sm font-medium">Assignment type</legend>
+                    <p className="text-muted-foreground text-sm">
+                      Choose whether students complete this assignment on their own or together as a
+                      group.
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {(
+                        [
+                          {
+                            value: false,
+                            label: 'Individual',
+                            desc: 'Each student submits and is graded on their own.',
+                          },
+                          {
+                            value: true,
+                            label: 'Group',
+                            desc: 'Students submit and are graded together as a group.',
+                          },
+                        ] as const
+                      ).map((opt) => {
+                        const selected = !!field.value === opt.value;
+                        return (
+                          <label
+                            key={opt.label}
+                            className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
+                              selected
+                                ? 'border-primary bg-primary/5 ring-primary/30 ring-1'
+                                : 'hover:bg-muted/40'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="isGroup"
+                              className="accent-primary mt-1"
+                              checked={selected}
+                              onChange={() => field.onChange(opt.value)}
+                            />
+                            <span>
+                              <span className="block text-sm font-medium">{opt.label}</span>
+                              <span className="text-muted-foreground block text-xs">{opt.desc}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                )}
+              />
             )}
 
             {step === 2 && (
-              <>
-                <Controller
-                  control={control}
-                  name="isPublished"
-                  render={({ field }) => (
-                    <SwitchField
-                      label="Publish now"
-                      name="isPublished"
-                      checked={!!field.value}
-                      onCheckedChange={(checked) => field.onChange(!!checked)}
-                      description="Makes the assignment visible to enrolled students."
-                      descriptionPlacement="inline"
-                    />
-                  )}
-                />
-              </>
+              <AssignToFields control={control} errors={errors} courseId={courseId} active={open} />
             )}
 
             {step === LAST_STEP && review && (
@@ -312,6 +352,8 @@ export function CreateAssignmentWizardDialog({
                 <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words">
                   <dt className="text-muted-foreground">Title</dt>
                   <dd className="font-medium">{review.title}</dd>
+                  <dt className="text-muted-foreground">Type</dt>
+                  <dd>{review.isGroup ? 'Group' : 'Individual'}</dd>
                   <dt className="text-muted-foreground">{everyoneLabel}</dt>
                   <dd>
                     {formatWindow({
@@ -341,11 +383,9 @@ export function CreateAssignmentWizardDialog({
                       </React.Fragment>
                     );
                   })}
-                  <dt className="text-muted-foreground">Publish</dt>
-                  <dd>{review.isPublished ? 'Now' : 'Later'}</dd>
                 </dl>
                 <p className="text-muted-foreground text-xs">
-                  Add problems to the assignment after creating it.
+                  Created unpublished. Add problems and publish it after creating it.
                 </p>
               </div>
             )}

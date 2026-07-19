@@ -172,6 +172,8 @@ export const AssignmentWizardFormSchema = BaseAssignmentFormSchemaObject.extend(
   // the Assign-To section; the server pins the assignment's set when a group override is
   // created, so this is a UI convenience rather than something sent on assignment create.
   groupSetId: z.string().nullable().optional(),
+  // Individual vs group classification (the wizard's Type step). Defaults to individual.
+  isGroup: z.boolean().default(false),
 }).superRefine((data, ctx) => {
   validateLateSubmissionStrings(data, ctx);
   // "Assign to specific students" needs at least one target (a student or a group).
@@ -200,6 +202,7 @@ export const AssignmentCreateApiSchema = z.object({
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().nullable().optional(),
   isPublished: z.boolean().optional(),
+  isGroup: z.boolean().optional(),
 });
 
 export const AssignmentUpdateApiSchema = z.object({
