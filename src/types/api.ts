@@ -1139,7 +1139,7 @@ export interface paths {
         };
         /**
          * Get a student's group membership for an assignment
-         * @description Whether a student submits this assignment individually or as a group, and (for a group)  the group's name plus the student's groupmates. Drives the "Individual / Group" indicator  on the staff Submissions view. Course staff (faculty or TAs) or a system admin.
+         * @description Whether a student submits this assignment individually or as a group, the group's name +  groupmates (for a group), and the student's EFFECTIVE schedule (their own or their group's  date override resolved against the base). Drives the per-student due/late line and the  Individual / Group indicator on the staff Submissions view. Course staff or a system admin.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/student-group/[studentId]/route.ts)
          */

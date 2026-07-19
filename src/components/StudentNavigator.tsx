@@ -24,10 +24,19 @@ export type StudentNavigatorStudent = {
   lastName?: string | null;
 };
 
+type EffectiveSchedule = {
+  unlockAt: string | null;
+  dueDate: string;
+  lateCutoff: string | null;
+  allowLateSubmissions: boolean;
+  source: 'base' | 'student-override' | 'group-override';
+};
+
 type StudentGroupInfo = {
   isGroup: boolean;
   group: { id: string; name: string } | null;
   members: { id: string; firstName: string | null; lastName: string | null }[];
+  effective?: EffectiveSchedule;
 };
 
 /** "First Last" (falls back to "Student"). */
@@ -103,6 +112,14 @@ export default function StudentNavigator({
   });
   const groupInfo = groupQuery.data ?? null;
 
+  // Prefer the selected student's effective schedule (their own or their group's date
+  // override); fall back to the assignment base while that per-student read loads.
+  const eff = groupInfo?.effective ?? null;
+  const showDueDate = eff?.dueDate ?? assignment?.dueDate ?? null;
+  const showAllowLate = eff ? eff.allowLateSubmissions : (assignment?.allowLateSubmissions ?? false);
+  const showLateCutoff = eff ? eff.lateCutoff : (assignment?.lateCutoff ?? null);
+  const isOverridden = !!eff && eff.source !== 'base';
+
   const formatPoints = (value: number) => {
     if (!Number.isFinite(value)) return 'Infinity';
     return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -159,18 +176,20 @@ export default function StudentNavigator({
             <>
               <span>
                 <span className="font-semibold">Due:</span>{' '}
-                {assignment.dueDate ? formatDateTimeInTimeZone(assignment.dueDate, timezone) : '—'}
+                {showDueDate ? formatDateTimeInTimeZone(showDueDate, timezone) : '—'}
+                {isOverridden ? (
+                  <span className="text-primary ml-1 text-xs font-medium">(override)</span>
+                ) : null}
               </span>
               <span className="text-muted-foreground mx-2">•</span>
               <span>
-                <span className="font-semibold">Allow Late:</span>{' '}
-                {assignment.allowLateSubmissions ? 'Yes' : 'No'}
+                <span className="font-semibold">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}
               </span>
               <span className="text-muted-foreground mx-2">•</span>
               <span>
                 <span className="font-semibold">Late Cutoff:</span>{' '}
-                {assignment.allowLateSubmissions && assignment.lateCutoff
-                  ? formatDateTimeInTimeZone(assignment.lateCutoff, timezone)
+                {showAllowLate && showLateCutoff
+                  ? formatDateTimeInTimeZone(showLateCutoff, timezone)
                   : 'Never'}
               </span>
               {groupInfo ? (
