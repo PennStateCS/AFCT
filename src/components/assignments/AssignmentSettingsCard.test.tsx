@@ -314,8 +314,8 @@ describe('AssignmentSettingsCard', () => {
 
     await screen.findByRole('heading', { name: /date overrides \(0\)/i });
 
-    // The "Add date override" picker lists eligible students (popover mocked open).
-    const option = await screen.findByRole('option', { name: 'Alice Anderson' });
+    // The "Add date override" picker lists eligible students as option buttons.
+    const option = await screen.findByRole('button', { name: 'Alice Anderson' });
     await user.click(option);
 
     expect(await screen.findByRole('heading', { name: /date overrides \(1\)/i })).toBeInTheDocument();
