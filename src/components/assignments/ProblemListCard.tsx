@@ -23,6 +23,9 @@ export type ProblemListCardProps = {
   scrollAreaClassName?: string;
   /** When set, the leading number for the first 9 problems is announced as a 1-9 keyboard shortcut. */
   numberShortcuts?: boolean;
+  /** Show the "submissions used / allowed" badge next to the grade. Default true; the staff
+   * submissions view hides it since attempts aren't relevant when grading. */
+  showSubmissionUsage?: boolean;
 };
 
 export function ProblemListCard({
@@ -35,6 +38,7 @@ export function ProblemListCard({
   className = '',
   scrollAreaClassName = 'h-[520px]',
   numberShortcuts = false,
+  showSubmissionUsage = true,
 }: ProblemListCardProps) {
   return (
     <Card className={className}>
@@ -69,7 +73,7 @@ export function ProblemListCard({
                   : `${submissionsCount}/${problem.maxSubmissions}`
                 : `${submissionsCount}/∞`;
               const usageBadge =
-                hasMaxSubmissions || submissionsCount > 0 ? (
+                showSubmissionUsage && (hasMaxSubmissions || submissionsCount > 0) ? (
                   <Badge
                     key="usage"
                     variant="secondary"
