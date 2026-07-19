@@ -152,6 +152,7 @@ export const GET = withCourseAuth(
         id: string;
         unlockAt?: Date | null;
         assignedToEveryone?: boolean;
+        isGroup?: boolean;
         problems?: Array<{ maxPoints?: number | null }>;
         _count?: { problems?: number };
         overrides?: OverrideRowRaw[];
@@ -240,6 +241,7 @@ export const GET = withCourseAuth(
             dueDate: assignment.dueDate,
             unlockAt: assignment.unlockAt ?? null,
             assignedToEveryone: assignment.assignedToEveryone ?? true,
+            isGroup: assignment.isGroup ?? false,
             allowLateSubmissions: assignment.allowLateSubmissions,
             lateCutoff: assignment.lateCutoff,
             maxPoints: totalProblemPoints,

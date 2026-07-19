@@ -338,6 +338,8 @@ describe('GET /api/courses/[id]', () => {
         hasSubmissionsOrComments: true,
         allowLateSubmissions: true,
         lateCutoff: '2026-09-05T00:00:00.000Z',
+        // Individual/Group classification defaults to individual (false).
+        isGroup: false,
       }),
     );
     expect(body.viewerRole).toBe('FACULTY');

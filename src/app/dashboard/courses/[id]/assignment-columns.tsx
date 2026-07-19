@@ -198,6 +198,14 @@ export function useAssignmentColumns(
       cell: ({ row }) => <DueDateCell assignment={row.original} timeZone={timeZone} />,
     },
     {
+      id: 'isGroup',
+      header: 'Type',
+      accessorFn: (row) => (row.isGroup ? 'Group' : 'Individual'),
+      cell: ({ row }) => <div>{row.original.isGroup ? 'Group' : 'Individual'}</div>,
+      enableSorting: true,
+      meta: { priority: 2, filterVariant: 'multiselect', filterLabel: 'Type' },
+    },
+    {
       accessorKey: 'maxPoints',
       header: () => 'Points',
       meta: { priority: 2 },

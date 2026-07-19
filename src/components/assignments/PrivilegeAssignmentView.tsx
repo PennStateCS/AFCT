@@ -504,6 +504,7 @@ export default function AssignmentDashboardPage({
                 assignment={{
                   ...assignment,
                   groupSetId: assignment.groupSetId ?? null,
+                  isGroup: assignment.isGroup ?? false,
                   description: assignment.description ?? null,
                   createdAt: assignment.createdAt ?? new Date(),
                   updatedAt: assignment.updatedAt ?? new Date(),

@@ -202,6 +202,11 @@ model Assignment {
   assignedToEveryone Boolean   @default(true)
   isPublished        Boolean   @default(false)
 
+  // Explicit Individual vs Group classification, shown and filtered on the course page.
+  // Defaults to individual (the common case). Currently independent of groupSetId; the
+  // create wizard / assignment page will wire the two together later.
+  isGroup            Boolean   @default(false)
+
   // When set, this is a group assignment tied to one group set: students are assigned
   // via their group in that set and submit as a group. Null means an individual
   // assignment. Group targeting itself is expressed as GROUP AssignmentOverride rows
