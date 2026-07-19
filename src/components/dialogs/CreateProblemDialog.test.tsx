@@ -34,6 +34,10 @@ globalWithReact.React = React;
 const originalFetch = global.fetch;
 const fetchMock = vi.fn();
 
+const clickNext = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+};
+
 describe('CreateProblemDialog', () => {
   beforeEach(() => {
     fetchMock.mockReset();
@@ -44,7 +48,7 @@ describe('CreateProblemDialog', () => {
     global.fetch = originalFetch;
   });
 
-  it('submits problem details and uploads the file', async () => {
+  it('walks the wizard, uploads the file, and submits on review', async () => {
     const user = userEvent.setup();
     const setOpen = vi.fn();
     const onCreated = vi.fn();
@@ -80,27 +84,33 @@ describe('CreateProblemDialog', () => {
       />,
     );
 
+    // Step 1: Details
     await user.type(screen.getByLabelText('Title'), 'DFA #1');
-    // switch should exist and be checked by default
+    await clickNext(user);
+
+    // Step 2: Type (autograder on by default)
     expect(screen.getByLabelText('Automatically Graded')).toBeInTheDocument();
     expect(screen.getByLabelText('Automatically Graded')).toBeChecked();
+    await clickNext(user);
 
-    // Find and upload file using the file input ID
+    // Step 3: Answer File
     const fileInput = document.getElementById('answer-file') as HTMLInputElement;
-    if (fileInput) {
-      await user.upload(fileInput, file);
-    }
+    await user.upload(fileInput, file);
 
-    // The file onChange validates asynchronously (reads the file text), so wait
-    // for the form to become valid before submitting.
+    // The file onChange validates asynchronously (reads the file text), so wait for the
+    // Next button to enable (it is gated on a file being present) before advancing.
+    const nextButton = screen.getByRole('button', { name: 'Next' });
+    await waitFor(() => expect(nextButton).toBeEnabled());
+    await user.click(nextButton);
+
+    // Step 4: Review + submit
     const createButton = screen.getByRole('button', { name: 'Create Problem' });
     await waitFor(() => expect(createButton).toBeEnabled());
     await user.click(createButton);
 
-    // Expect 1 call for problem creation (useMaxUploadSize is mocked and doesn't fetch)
+    // One call for problem creation (useMaxUploadSize is mocked and doesn't fetch)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    // Check the problem creation call (the only call)
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(requestInit.method).toBe('POST');
 
@@ -114,12 +124,11 @@ describe('CreateProblemDialog', () => {
       title: 'DFA #1',
       courseId: 'course-1',
     });
-    // File may or may not be present depending on mock setup
     expect(onCreated).toHaveBeenCalledWith({ id: 'prob-1' }, true);
     expect(setOpen).toHaveBeenCalledWith(false);
   });
 
-  it('prevents submission when the course is archived', async () => {
+  it('disables the answer-file upload when the course is archived', async () => {
     const user = userEvent.setup();
 
     render(
@@ -132,10 +141,12 @@ describe('CreateProblemDialog', () => {
       />,
     );
 
+    // Advance to the Answer File step.
     await user.type(screen.getByLabelText('Title'), 'DFA #1');
-    const fileInput = document.getElementById('answer-file') as HTMLInputElement;
-    await user.upload(fileInput, new File(['test'], 'answer.jff'));
+    await clickNext(user);
+    await clickNext(user);
 
-    expect(screen.getByRole('button', { name: 'Create Problem' })).toBeDisabled();
+    const fileInput = document.getElementById('answer-file') as HTMLInputElement;
+    expect(fileInput).toBeDisabled();
   });
 });
