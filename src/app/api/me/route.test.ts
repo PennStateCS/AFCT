@@ -34,10 +34,15 @@ beforeEach(() => {
   existsSyncMock.mockReturnValue(true);
 });
 
-const makeFile = (size = 1024, name = 'avatar.png') =>
-  Object.assign(new File([new Uint8Array(size)], name, { type: 'image/png' }), {
-    arrayBuffer: async () => new Uint8Array(size).buffer,
+// A valid PNG magic-byte header, so uploads pass the signature check in avatar-upload.
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const makeFile = (size = 1024, name = 'avatar.png') => {
+  const bytes = new Uint8Array(Math.max(size, PNG_SIGNATURE.length));
+  bytes.set(PNG_SIGNATURE);
+  return Object.assign(new File([bytes], name, { type: 'image/png' }), {
+    arrayBuffer: async () => bytes.buffer,
   });
+};
 
 describe('GET /api/me', () => {
   it('returns 401 when not authenticated', async () => {

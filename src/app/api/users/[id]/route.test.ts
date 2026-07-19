@@ -24,6 +24,11 @@ vi.mock('fs/promises', () => ({
 
 import { PATCH, DELETE, GET, POST } from './route';
 
+// A minimal valid PNG (8-byte magic header + padding) so uploads pass the
+// magic-byte signature check in avatar-upload.
+const pngBytes = () =>
+  Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]);
+
 beforeEach(() => {
   vi.clearAllMocks();
   getSystemUploadLimitMock.mockResolvedValue({ maxBytes: 1024 * 1024, maxMb: 1 });
@@ -378,7 +383,7 @@ describe('PATCH /api/users/[id]', () => {
       timezone: null,
     });
 
-    const avatarBuffer = Buffer.from('fake-image-data');
+    const avatarBuffer = pngBytes();
     const formData = new FormData();
     formData.append('firstName', 'A');
     formData.append('avatar', new Blob([avatarBuffer], { type: 'image/png' }), 'avatar.png');
@@ -408,7 +413,7 @@ describe('PATCH /api/users/[id]', () => {
       timezone: null,
     });
 
-    const avatarBuffer = Buffer.from('new-image-data');
+    const avatarBuffer = pngBytes();
     const formData = new FormData();
     formData.append('avatar', new Blob([avatarBuffer], { type: 'image/png' }), 'new.png');
 
@@ -439,7 +444,7 @@ describe('PATCH /api/users/[id]', () => {
     });
     unlinkMock.mockRejectedValue(new Error('fs error'));
 
-    const avatarBuffer = Buffer.from('new-image-data');
+    const avatarBuffer = pngBytes();
     const formData = new FormData();
     formData.append('avatar', new Blob([avatarBuffer], { type: 'image/png' }), 'new.png');
 
