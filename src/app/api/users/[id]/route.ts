@@ -10,6 +10,11 @@ import { isAdmin } from '@/lib/permissions';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { safeStoredFilename, resolveInsideDir, safeUnlinkInDir } from '@/lib/safe-upload';
+import { readAndValidateAvatar } from '@/lib/avatar-upload';
+import {
+  evaluateAvatarUploadRateLimit,
+  formatRetryAfterSeconds,
+} from '@/lib/security/rate-limiter';
 import { readFormData, readJson } from '@/lib/api/request';
 import { UserUpdateJsonApiSchema, UserUpdateFormApiSchema } from '@/schemas/user';
 
@@ -124,12 +129,27 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
     }
 
-    const { maxBytes, maxMb } = await getSystemUploadLimit();
-    if (avatarFile && avatarFile.size > 0 && avatarFile.size > maxBytes) {
-      return NextResponse.json(
-        { error: `File exceeds max upload size (${maxMb} MB).` },
-        { status: 413 },
-      );
+    const uploadLimit = await getSystemUploadLimit();
+
+    // Validate the avatar (size + MIME + magic-byte signature) and throttle
+    // replacements BEFORE touching disk or the database, so no bytes are written
+    // for a request that will be rejected. The decoded buffer is written later,
+    // just before the DB update, once every business rule has passed.
+    let avatarBuffer: Buffer | null = null;
+    const hasAvatarUpload = !!avatarFile && avatarFile.size > 0;
+    if (hasAvatarUpload) {
+      const decision = evaluateAvatarUploadRateLimit({ identifier: actorId });
+      if (decision.status === 'blocked') {
+        return NextResponse.json(
+          { error: 'Too many avatar changes. Please try again later.' },
+          { status: 429, headers: { 'Retry-After': formatRetryAfterSeconds(decision.retryAfterMs) } },
+        );
+      }
+      const validated = await readAndValidateAvatar(avatarFile as File, uploadLimit);
+      if (!validated.ok) {
+        return NextResponse.json({ error: validated.error }, { status: validated.status });
+      }
+      avatarBuffer = validated.buffer;
     }
 
     // Retrieve current user record
@@ -145,24 +165,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       },
     });
 
+    // Resolve the avatar column value without writing yet: a new random name when
+    // replacing, null when clearing, or undefined to leave it untouched.
     let avatarFilename: string | null | undefined;
-
-    // Write the new avatar, then remove the previous file so uploads don't pile up.
-    // Stored under a random UUID + sanitized extension (userId prefix for
-    // readability), never a path derived from the client-supplied avatar.name, and
-    // written non-executable.
-    if (avatarFile && avatarFile.size > 0) {
-      const bytes = Buffer.from(await avatarFile.arrayBuffer());
-      avatarFilename = safeStoredFilename(avatarFile.name, `${userId}-`);
-      await writeFile(resolveInsideDir(pfpsDir, avatarFilename), bytes, { mode: 0o644 });
-
-      if (userRecord?.avatar) {
-        await safeUnlinkInDir(pfpsDir, userRecord.avatar);
-      }
-    }
-
-    if (deleteAvatar && userRecord?.avatar) {
-      await safeUnlinkInDir(pfpsDir, userRecord.avatar);
+    if (avatarBuffer) {
+      avatarFilename = safeStoredFilename(avatarFile?.name, `${userId}-`);
+    } else if (deleteAvatar && userRecord?.avatar) {
       avatarFilename = null;
     }
 
@@ -248,20 +256,42 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       }
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: dataToUpdate,
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        isAdmin: true,
-        inactive: true,
-        avatar: true,
-        timezone: true,
-      },
-    });
+    // Now that every rejection path has passed, persist the new avatar to disk
+    // (random UUID + sanitized extension, never a client-derived path, written
+    // non-executable). The old file is removed only AFTER the DB commit succeeds,
+    // and the new file is cleaned up if the commit fails, so a failed or rejected
+    // replacement never orphans a multi-MB upload.
+    if (avatarBuffer && avatarFilename) {
+      await writeFile(resolveInsideDir(pfpsDir, avatarFilename), avatarBuffer, { mode: 0o644 });
+    }
+
+    let updatedUser;
+    try {
+      updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: dataToUpdate,
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          isAdmin: true,
+          inactive: true,
+          avatar: true,
+          timezone: true,
+        },
+      });
+    } catch (updateError) {
+      if (avatarBuffer && avatarFilename) {
+        await safeUnlinkInDir(pfpsDir, avatarFilename);
+      }
+      throw updateError;
+    }
+
+    // Commit succeeded: drop the previous file when it was replaced or cleared.
+    if ((avatarBuffer || (deleteAvatar && avatarFilename === null)) && userRecord?.avatar) {
+      await safeUnlinkInDir(pfpsDir, userRecord.avatar);
+    }
 
     // Record exactly what changed (before → after). Admin-flag and active-status
     // changes especially matter when an admin edits another account.

@@ -25,6 +25,9 @@ vi.mock('@/hooks/use-effective-timezone', () => ({
 // fails under the test JSX transform; stub it to plain elements.
 vi.mock('@/components/ui/collapsible', () => ({
   Collapsible: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children }: { children?: React.ReactNode; asChild?: boolean }) => (
+    <>{children}</>
+  ),
   CollapsibleContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 

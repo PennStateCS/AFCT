@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useController, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,6 +10,7 @@ import type { Assignment } from '@prisma/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import SwitchField from '@/components/ui/SwitchField';
+import { InheritableLateField } from '@/components/ui/InheritableLateField';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -206,6 +207,31 @@ export function AssignmentSettingsCard({
   const [dateOverrideKeys, setDateOverrideKeys] = useState<Set<string>>(new Set());
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+
+  // Focus management + announcements for adding/removing override rows: on add, focus
+  // moves into the new row's first field; on remove, focus returns to the "Add" control.
+  const [announcement, setAnnouncement] = useState('');
+  const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
+  const [removeFocusTick, setRemoveFocusTick] = useState(0);
+  const rowRefs = useRef(new Map<string, HTMLLIElement>());
+  const addControlRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pendingFocusKey) return;
+    const el = rowRefs.current.get(pendingFocusKey);
+    const target =
+      el?.querySelector<HTMLElement>('input, textarea, select') ??
+      el?.querySelector<HTMLElement>('button');
+    target?.focus();
+    setPendingFocusKey(null);
+  }, [pendingFocusKey]);
+
+  useEffect(() => {
+    if (removeFocusTick === 0) return;
+    addControlRef.current
+      ?.querySelector<HTMLElement>('button, input, [tabindex]:not([tabindex="-1"])')
+      ?.focus();
+  }, [removeFocusTick]);
   const [pendingSave, setPendingSave] = useState<{ data: FormValues; removed: number } | null>(
     null,
   );
@@ -424,6 +450,9 @@ export function AssignmentSettingsCard({
         });
       }
       markDateOverride(`g:${id}`);
+      const g = groups.find((x) => x.id === id);
+      setPendingFocusKey(`g:${id}`);
+      setAnnouncement(`Added a date override for group ${g?.name ?? 'Group'}. Editing its dates.`);
     } else {
       const idx = fields.findIndex((f) => f.userId === id);
       if (idx < 0) {
@@ -438,10 +467,19 @@ export function AssignmentSettingsCard({
         });
       }
       markDateOverride(`s:${id}`);
+      const s = students.find((x) => x.id === id);
+      setPendingFocusKey(`s:${id}`);
+      setAnnouncement(
+        `Added a date override for ${s ? getStudentName(s) : 'the student'}. Editing its dates.`,
+      );
     }
   };
 
   const removeDateOverride = (index: number, key: string) => {
+    const removed = fields[index];
+    const label = removed?.groupId
+      ? `group ${removed.groupName ?? 'Group'}`
+      : (removed?.studentName ?? 'the student');
     if (assignedToEveryone) {
       // Purely a date exception on top of "everyone"; drop the row (access stays via everyone).
       remove(index);
@@ -462,6 +500,8 @@ export function AssignmentSettingsCard({
       });
     }
     clearSessionKey(key);
+    setAnnouncement(`Removed the date override for ${label}.`);
+    setRemoveFocusTick((t) => t + 1);
   };
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -750,7 +790,13 @@ export function AssignmentSettingsCard({
                 }
 
                 return (
-                  <li key={f.id}>
+                  <li
+                    key={f.id}
+                    ref={(el) => {
+                      if (el) rowRefs.current.set(key, el);
+                      else rowRefs.current.delete(key);
+                    }}
+                  >
                     <Collapsible
                       open={isOpen}
                       onOpenChange={(open) => toggleExpanded(key, open)}
@@ -822,13 +868,11 @@ export function AssignmentSettingsCard({
                           control={control}
                           name={`overrides.${index}.allowLateSubmissions`}
                           render={({ field }) => (
-                            <SwitchField
-                              label="Allow late submissions"
+                            <InheritableLateField
                               name={`overrides.${index}.allowLateSubmissions`}
-                              checked={!!field.value}
-                              onCheckedChange={(checked) => field.onChange(!!checked)}
-                              description="Accept submissions after the due date until the deadline below."
-                              descriptionPlacement="inline"
+                              value={field.value}
+                              onChange={field.onChange}
+                              description="Accept submissions after the due date until the deadline below. Use assignment default to inherit the base setting."
                             />
                           )}
                         />
@@ -847,14 +891,21 @@ export function AssignmentSettingsCard({
             </ul>
           )}
 
-          <SearchableSelect
-            label="Add date override"
-            items={overrideCandidates}
-            onSelect={addDateOverride}
-            placeholder="Give a student or group different dates"
-            searchPlaceholder="Search..."
-            emptyStateText="Everyone in the audience already has an override."
-          />
+          <div ref={addControlRef}>
+            <SearchableSelect
+              label="Add date override"
+              items={overrideCandidates}
+              onSelect={addDateOverride}
+              placeholder="Give a student or group different dates"
+              searchPlaceholder="Search..."
+              emptyStateText="Everyone in the audience already has an override."
+            />
+          </div>
+
+          {/* Announces override additions/removals to assistive technology. */}
+          <p className="sr-only" role="status" aria-live="polite">
+            {announcement}
+          </p>
         </section>
 
         <div className="bg-background sticky bottom-0 flex justify-end gap-2 border-t py-3">
