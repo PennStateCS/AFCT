@@ -24,38 +24,18 @@ export function AvatarCrop({
   const [crop, setCrop] = useState({ x: cropX, y: cropY, scale: zoom });
   const internalEditorRef = useRef<AvatarEditorRef | null>(null);
 
-  // The crop position/zoom is stored (the original image is uploaded and framed at
-  // render), so it must be adjustable without a pointer: arrow keys nudge the crop
-  // (Shift = bigger steps).
-  const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-  const nudgeCrop = (dx: number, dy: number) => {
+  // The crop is repositioned without a pointer via two native range sliders
+  // (horizontal + vertical), so no `role="application"` is needed; native inputs
+  // are announced and operated correctly by every screen reader. Pointer users can
+  // still drag the image directly.
+  const setPosition = (x: number, y: number) => {
     setCrop((c) => {
-      const next = { x: clamp01(c.x + dx), y: clamp01(c.y + dy), scale: c.scale };
-      onPositionChange?.(next);
+      const next = { x, y, scale: c.scale };
+      onPositionChange?.({ x: next.x, y: next.y });
       return next;
     });
   };
-  const handleCropKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const step = e.shiftKey ? 0.1 : 0.02;
-    switch (e.key) {
-      case 'ArrowLeft':
-        e.preventDefault();
-        nudgeCrop(-step, 0);
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        nudgeCrop(step, 0);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        nudgeCrop(0, -step);
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
-        nudgeCrop(0, step);
-        break;
-    }
-  };
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
 
   // Update crop whenever the incoming preview or crop params change.
   useEffect(() => {
@@ -64,16 +44,7 @@ export function AvatarCrop({
 
   return (
     <div className="space-y-4">
-      {/* role="application" keeps screen readers in pass-through mode so the
-          arrow keys reach the handler instead of moving the virtual cursor. */}
-      <div
-        role="application"
-        tabIndex={0}
-        aria-label="Avatar crop area"
-        aria-describedby="avatar-crop-hint"
-        onKeyDown={handleCropKeyDown}
-        className="mx-auto grid h-[260px] w-[260px] place-items-center rounded-2xl overflow-hidden focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none"
-      >
+      <div className="mx-auto grid h-[260px] w-[260px] place-items-center overflow-hidden rounded-2xl">
         <AvatarEditor
           ref={editorRef ?? internalEditorRef}
           image={avatarPreview}
@@ -95,14 +66,51 @@ export function AvatarCrop({
           }}
         />
       </div>
-      <p id="avatar-crop-hint" className="sr-only">
-        Drag the image, or focus the crop area and use the arrow keys to reposition
-        it. Hold Shift for larger steps. Use the zoom slider below to resize.
+      <p className="text-muted-foreground text-center text-xs">
+        Drag the image to reposition it, or use the sliders below.
       </p>
+
+      {/* Position: two labeled native sliders (no application role needed). */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="crop-x" className="w-full text-center">
+            Horizontal
+          </Label>
+          <input
+            id="crop-x"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={crop.x}
+            aria-valuetext={pct(crop.x)}
+            onChange={(e) => setPosition(parseFloat(e.target.value), crop.y)}
+            className="bg-primary-foreground accent-primary h-2 w-full cursor-pointer rounded-lg"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="crop-y" className="w-full text-center">
+            Vertical
+          </Label>
+          <input
+            id="crop-y"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={crop.y}
+            aria-valuetext={pct(crop.y)}
+            onChange={(e) => setPosition(crop.x, parseFloat(e.target.value))}
+            className="bg-primary-foreground accent-primary h-2 w-full cursor-pointer rounded-lg"
+          />
+        </div>
+      </div>
 
       {/* Zoom Bar */}
       <div className="space-y-2">
-        <Label htmlFor="zoom" className="text-center w-full">Zoom</Label>
+        <Label htmlFor="zoom" className="w-full text-center">
+          Zoom
+        </Label>
         <input
           id="zoom"
           type="range"
@@ -115,7 +123,7 @@ export function AvatarCrop({
             setCrop((c) => ({ ...c, scale: nextZoom }));
             onZoomChange?.(nextZoom);
           }}
-          className="h-2 w-full cursor-pointer rounded-lg bg-primary-foreground accent-primary"
+          className="bg-primary-foreground accent-primary h-2 w-full cursor-pointer rounded-lg"
         />
       </div>
     </div>
