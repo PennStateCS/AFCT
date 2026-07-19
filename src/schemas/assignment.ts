@@ -184,6 +184,14 @@ export const AssignmentWizardFormSchema = BaseAssignmentFormSchemaObject.extend(
       message: 'Add at least one student or group, or assign to everyone.',
     });
   }
+  // A group assignment must be pinned to a group set (chosen in the Type step).
+  if (data.isGroup && !data.groupSetId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['groupSetId'],
+      message: 'Select a group set for this group assignment.',
+    });
+  }
 });
 
 /**

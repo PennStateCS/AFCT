@@ -20,17 +20,19 @@ import { toast } from 'sonner';
 
 import { useForm, Controller, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { AssignmentWizardFormSchema } from '@/schemas/assignment';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
+import type { GroupSetSummaryDTO } from '@/lib/group-set-service';
 import type { Assignment } from '@prisma/client';
 
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 
 const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> = [
   { title: 'Details', fields: ['title', 'description'] },
-  { title: 'Type', fields: ['isGroup'] },
+  { title: 'Type', fields: ['isGroup', 'groupSetId'] },
   {
     title: 'Assign To',
     fields: ['assignedToEveryone', 'unlockAt', 'dueDate', 'allowLateSubmissions', 'lateCutoff', 'overrides'],
@@ -122,6 +124,7 @@ export function CreateAssignmentWizardDialog({
     watch,
     trigger,
     getValues,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(AssignmentWizardFormSchema),
@@ -134,6 +137,17 @@ export function CreateAssignmentWizardDialog({
   // Review step still reads these two to summarize what was chosen.
   const assignedToEveryone = watch('assignedToEveryone');
   const overrides = watch('overrides') ?? [];
+  const isGroup = watch('isGroup');
+
+  // Group sets for the course, so the Type step can offer one to pin group work to. Shares
+  // the ['course', id, 'group-sets'] cache with AssignToFields (step 3), so they dedupe.
+  const groupSetsQuery = useQuery({
+    queryKey: ['course', courseId, 'group-sets'],
+    queryFn: () => apiClient.get<GroupSetSummaryDTO[]>(apiPaths.courseGroupSets(courseId)),
+    enabled: open && !!courseId,
+    staleTime: 30_000,
+  });
+  const groupSets = groupSetsQuery.data ?? [];
 
   const resetForm = () => {
     setStep(0);
@@ -195,6 +209,7 @@ export function CreateAssignmentWizardDialog({
   };
 
   const review = step === LAST_STEP ? getValues() : null;
+  const reviewGroupSetName = groupSets.find((s) => s.id === review?.groupSetId)?.name;
   const everyoneLabel = !assignedToEveryone
     ? 'Default dates'
     : overrides.length > 0
@@ -288,6 +303,7 @@ export function CreateAssignmentWizardDialog({
             )}
 
             {step === 1 && (
+              <div className="space-y-5">
               <Controller
                 control={control}
                 name="isGroup"
@@ -328,7 +344,11 @@ export function CreateAssignmentWizardDialog({
                               name="isGroup"
                               className="accent-primary mt-1"
                               checked={selected}
-                              onChange={() => field.onChange(opt.value)}
+                              onChange={() => {
+                                field.onChange(opt.value);
+                                // Switching back to Individual drops any chosen group set.
+                                if (!opt.value) setValue('groupSetId', null, { shouldValidate: true });
+                              }}
                             />
                             <span>
                               <span className="block text-sm font-medium">{opt.label}</span>
@@ -341,6 +361,67 @@ export function CreateAssignmentWizardDialog({
                   </fieldset>
                 )}
               />
+
+              {/* Group assignments pick which group set they run in. Not stored on the
+                  assignment itself; the Assign-To step (3) uses this selection. */}
+              {isGroup && (
+                <Controller
+                  control={control}
+                  name="groupSetId"
+                  render={({ field }) => (
+                    <fieldset className="space-y-2">
+                      <legend className="text-sm font-medium">Group set</legend>
+                      <p className="text-muted-foreground text-sm">
+                        Students submit and are graded as their group in the chosen set.
+                      </p>
+                      {groupSetsQuery.isPending ? (
+                        <p className="text-muted-foreground text-sm">Loading group sets…</p>
+                      ) : groupSets.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                          This course has no group sets yet. Create one on the course&apos;s Groups
+                          tab first.
+                        </p>
+                      ) : (
+                        <div role="radiogroup" aria-label="Group set" className="grid gap-2">
+                          {groupSets.map((gs) => {
+                            const selected = field.value === gs.id;
+                            return (
+                              <label
+                                key={gs.id}
+                                className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition ${
+                                  selected
+                                    ? 'border-primary bg-primary/5 ring-primary/30 ring-1'
+                                    : 'hover:bg-muted/40'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="groupSetId"
+                                  className="accent-primary"
+                                  checked={selected}
+                                  onChange={() => field.onChange(gs.id)}
+                                />
+                                <span>
+                                  <span className="block text-sm font-medium">{gs.name}</span>
+                                  <span className="text-muted-foreground block text-xs">
+                                    {gs.groupCount} {gs.groupCount === 1 ? 'group' : 'groups'}
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {errors.groupSetId && (
+                        <p className="text-xs text-red-600" role="alert">
+                          {errors.groupSetId.message}
+                        </p>
+                      )}
+                    </fieldset>
+                  )}
+                />
+              )}
+              </div>
             )}
 
             {step === 2 && (
@@ -353,7 +434,11 @@ export function CreateAssignmentWizardDialog({
                   <dt className="text-muted-foreground">Title</dt>
                   <dd className="font-medium">{review.title}</dd>
                   <dt className="text-muted-foreground">Type</dt>
-                  <dd>{review.isGroup ? 'Group' : 'Individual'}</dd>
+                  <dd>
+                    {review.isGroup
+                      ? `Group${reviewGroupSetName ? ` · ${reviewGroupSetName}` : ''}`
+                      : 'Individual'}
+                  </dd>
                   <dt className="text-muted-foreground">{everyoneLabel}</dt>
                   <dd>
                     {formatWindow({

@@ -264,8 +264,9 @@ describe('CreateAssignmentWizardDialog', () => {
 
     await user.type(screen.getByLabelText('Title'), 'Homework 1');
     await clickNext(user); // -> Type
-    // Choose Group in the Type step.
-    await user.click(screen.getByRole('radio', { name: /group/i }));
+    // Choose Group, then pick the group set it runs in (required to advance).
+    await user.click(screen.getByRole('radio', { name: /^Group/ }));
+    await user.click(await screen.findByRole('radio', { name: /Project Teams/ }));
     await clickNext(user); // -> Assign To
 
     // Assign to specific targets: turn off "everyone", pick a group set, then check one
@@ -312,6 +313,22 @@ describe('CreateAssignmentWizardDialog', () => {
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Bad assignment'));
     expect(postCalls('/overrides')).toHaveLength(0);
     expect(setOpen).not.toHaveBeenCalledWith(false);
+  });
+
+  it('requires a group set before leaving the Type step for a group assignment', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.type(screen.getByLabelText('Title'), 'Homework 1');
+    await clickNext(user); // -> Type
+    await user.click(screen.getByRole('radio', { name: /^Group/ }));
+    // The group set list loads, but leave it unselected and try to advance.
+    await screen.findByRole('radio', { name: /Project Teams/ });
+    await clickNext(user);
+
+    // Held on Type: a validation message shows and Assign To never mounts.
+    expect(await screen.findByText(/select a group set/i)).toBeInTheDocument();
+    expect(screen.queryByText('Assignment audience')).not.toBeInTheDocument();
   });
 
   it('holds on the Details step when the title is missing', async () => {
