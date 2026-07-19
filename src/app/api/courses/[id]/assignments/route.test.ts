@@ -1,11 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const prismaMock = vi.hoisted(() => ({
-  course: { findUnique: vi.fn() },
-  assignment: { findMany: vi.fn(), create: vi.fn() },
-  roster: { findFirst: vi.fn() },
-}));
+const prismaMock = vi.hoisted(() => {
+  const mock = {
+    course: { findUnique: vi.fn() },
+    assignment: { findMany: vi.fn(), create: vi.fn() },
+    assignmentAssignee: { createMany: vi.fn() },
+    roster: { findFirst: vi.fn(), findMany: vi.fn() },
+    groupSet: { findFirst: vi.fn() },
+    studentGroup: { findMany: vi.fn() },
+    $transaction: vi.fn(),
+  };
+  // The create handler writes the assignment (+ any assignees) in one transaction; run the
+  // callback against this same mock so `prismaMock.assignment.create` assertions still hold.
+  mock.$transaction.mockImplementation(async (cb: (tx: typeof mock) => unknown) => cb(mock));
+  return mock;
+});
 
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
@@ -248,6 +258,92 @@ describe('POST /api/courses/[id]/assignments', () => {
         data: expect.objectContaining({ allowLateSubmissions: true, lateCutoff: null }),
       }),
     );
+  });
+
+  it('persists groupSetId for a group assignment assigned to all groups', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    (prismaMock.groupSet.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'gs1' });
+    (prismaMock.assignment.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'a1',
+      title: 'New',
+      description: null,
+      isPublished: false,
+      groupSetId: 'gs1',
+      assignedToEveryone: true,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      courseId: 'c1',
+    });
+
+    const res = await post({ title: 'New', dueDate: '2026-01-10', groupSetId: 'gs1' });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ groupSetId: 'gs1' }) }),
+    );
+    // No audience rows for "everyone".
+    expect(prismaMock.assignmentAssignee.createMany).not.toHaveBeenCalled();
+  });
+
+  it('writes assignee rows for an individual assignment assigned to specific students', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    (prismaMock.roster.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { userId: 'stu-1' },
+    ]);
+    (prismaMock.assignment.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'a1',
+      title: 'New',
+      description: null,
+      isPublished: false,
+      groupSetId: null,
+      assignedToEveryone: false,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      courseId: 'c1',
+    });
+
+    const res = await post({
+      title: 'New',
+      dueDate: '2026-01-10',
+      assignedToEveryone: false,
+      assignees: [{ userId: 'stu-1' }],
+    });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignmentAssignee.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [expect.objectContaining({ targetType: 'STUDENT', userId: 'stu-1', assignmentId: 'a1' })],
+      }),
+    );
+  });
+
+  it('rejects a subset assignment with no assignees', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const res = await post({ title: 'New', dueDate: '2026-01-10', assignedToEveryone: false });
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.assignment.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a group target on an individual assignment', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const res = await post({
+      title: 'New',
+      dueDate: '2026-01-10',
+      assignedToEveryone: false,
+      assignees: [{ groupId: 'g1' }],
+    });
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.assignment.create).not.toHaveBeenCalled();
   });
 
   it('returns 400 when the late cutoff precedes the due date', async () => {

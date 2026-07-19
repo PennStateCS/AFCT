@@ -88,6 +88,7 @@ model User {
   commentsAbout       Comment[]                @relation("CommentsAboutStudent") // Comments about this student's work
   commentsAuthored    Comment[]                @relation("CommentAuthor") // Comments this user wrote
   clientTokens        ClientApiToken[] // Bearer tokens issued to the native (Java) client
+  assignmentAssignees AssignmentAssignee[]     @relation("AssigneeTarget") // assignments this student is individually assigned
   assignmentOverrides AssignmentOverride[]     @relation("OverrideTarget") // deadline overrides targeting this student
   overridesCreated    AssignmentOverride[]     @relation("OverrideCreatedBy") // overrides this user created
 
@@ -195,17 +196,18 @@ model Assignment {
   // extensions can override this via AssignmentOverride; the effective value is resolved
   // in lib/effective-deadline. Interpreted in the course timezone like dueDate.
   unlockAt           DateTime?
-  // When true the assignment is assigned to every student in the course. When false it is
-  // assigned only to students who have an AssignmentOverride row, so staff can target one
-  // or a few students (Canvas "assign to specific students"). A student is "assigned" iff
-  // assignedToEveryone OR they have an override row.
+  // When true the assignment is assigned to everyone (every student for an individual
+  // assignment; every group in the set for a group assignment). When false it is assigned
+  // only to the targets named in AssignmentAssignee. A student is "assigned" iff
+  // assignedToEveryone OR an assignee row names them / a group they belong to. See
+  // lib/assignment-visibility for the single definition.
   assignedToEveryone Boolean   @default(true)
   isPublished        Boolean   @default(false)
 
-  // When set, this is a group assignment tied to one group set: students are assigned
-  // via their group in that set and submit as a group. Null means an individual
-  // assignment. Group targeting itself is expressed as GROUP AssignmentOverride rows
-  // pointing at StudentGroups within this set.
+  // Individual vs group is the single fact groupSetId carries: null = individual
+  // assignment; set = group assignment tied to that one group set (students are assigned
+  // via their group in the set and submit as a group). No mixing sets on one assignment.
+  // The Individual/Group label shown on the course page is derived from this, not stored.
   groupSet   GroupSet? @relation(fields: [groupSetId], references: [id], onDelete: SetNull)
   groupSetId String?
 
@@ -223,6 +225,7 @@ model Assignment {
   problems     AssignmentProblem[]
   comments     Comment[]
   activityLogs ActivityLog[]
+  assignees    AssignmentAssignee[]
   overrides    AssignmentOverride[]
 
   @@index([courseId])
@@ -233,16 +236,45 @@ model Assignment {
   @@index([groupSetId])
 }
 
-// A per-target deadline override for one assignment (Canvas "Assign To"). The
-// assignment's own dueDate/unlockAt/lateCutoff/allowLateSubmissions are the "Everyone"
-// default; a row here supersedes those for one student. Every field is nullable and
-// null means "inherit the assignment's value", so an override can move only the due
-// date and keep the base late policy. Resolution + the inherit rule live in
-// lib/effective-deadline.
+// Assignment audience membership (Canvas "assign to specific students / groups"). Rows
+// exist only when Assignment.assignedToEveryone is false; each names one assigned STUDENT
+// or one assigned GROUP (a StudentGroup in the assignment's group set). Rows carry NO
+// dates -- date/late exceptions are AssignmentOverride rows, an independent concern, so
+// changing who is assigned and changing someone's dates never interfere. A student is
+// "assigned" iff assignedToEveryone, a STUDENT row names them, or a GROUP row names a
+// group they belong to (lib/assignment-visibility).
+model AssignmentAssignee {
+  id         String             @id @default(cuid())
+  targetType OverrideTargetType
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId String
+
+  user   User?   @relation("AssigneeTarget", fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+
+  studentGroup StudentGroup? @relation("AssigneeGroupTarget", fields: [groupId], references: [id], onDelete: Cascade)
+  groupId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([assignmentId, userId]) // at most one assignee row per (assignment, student)
+  @@unique([assignmentId, groupId]) // at most one per (assignment, group)
+  @@index([userId])
+  @@index([groupId])
+}
+
+// A per-target date/late EXCEPTION for one assignment (Canvas "Assign To" dates). This is
+// strictly about WHEN, never WHO: membership lives in AssignmentAssignee. A row supersedes
+// the assignment's base dueDate/unlockAt/lateCutoff/allowLateSubmissions for one target;
+// every field is nullable and null means "inherit the assignment's value", so an override
+// can move only the due date and keep the base late policy. At least one field must be
+// set (a no-op override is meaningless -- enforced by the AssignmentOverride_has_change
+// CHECK). Resolution + the inherit rule live in lib/effective-deadline.
 //
-// A target is either a STUDENT (userId set) or a GROUP (groupId set, pointing at a
-// StudentGroup within the assignment's groupSet). GROUP rows assign every member of the
-// group and give them a shared window; the group also owns their submission set.
+// A target is either a STUDENT (userId set) or a GROUP (groupId set, a StudentGroup within
+// the assignment's groupSet); it must already be assigned (validated on write).
 model AssignmentOverride {
   id         String             @id @default(cuid())
   targetType OverrideTargetType
@@ -365,6 +397,7 @@ model StudentGroup {
   updatedAt DateTime @updatedAt
 
   memberships         GroupMembership[]
+  assignmentAssignees AssignmentAssignee[] @relation("AssigneeGroupTarget")
   assignmentOverrides AssignmentOverride[] @relation("OverrideGroupTarget")
   submissions         Submission[]
 

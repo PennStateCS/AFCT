@@ -123,36 +123,20 @@ describe('DELETE override', () => {
     expect(prismaMock.assignmentOverride.delete).not.toHaveBeenCalled();
   });
 
-  it('un-pins the group set when the last group target is deleted', async () => {
+  it('deleting a group override never touches the assignment type/audience', async () => {
+    // An override is only a date exception; deleting it must not change groupSetId or
+    // otherwise re-type the assignment (that regressed once and is now guarded).
     prismaMock.assignmentOverride.findFirst.mockResolvedValue({
       ...EXISTING,
       targetType: 'GROUP',
       userId: null,
       groupId: 'g1',
     });
-    prismaMock.assignmentOverride.count.mockResolvedValue(0); // none remain
 
     const res = await DELETE(new NextRequest('http://localhost/x', { method: 'DELETE' }), ctx);
 
     expect(res.status).toBe(200);
-    expect(prismaMock.assignment.update).toHaveBeenCalledWith({
-      where: { id: 'a1' },
-      data: { groupSetId: null },
-    });
-  });
-
-  it('keeps the group set pinned when other group targets remain', async () => {
-    prismaMock.assignmentOverride.findFirst.mockResolvedValue({
-      ...EXISTING,
-      targetType: 'GROUP',
-      userId: null,
-      groupId: 'g1',
-    });
-    prismaMock.assignmentOverride.count.mockResolvedValue(2); // others remain
-
-    const res = await DELETE(new NextRequest('http://localhost/x', { method: 'DELETE' }), ctx);
-
-    expect(res.status).toBe(200);
+    expect(prismaMock.assignmentOverride.delete).toHaveBeenCalledWith({ where: { id: 'o1' } });
     expect(prismaMock.assignment.update).not.toHaveBeenCalled();
   });
 });

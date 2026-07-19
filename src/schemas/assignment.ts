@@ -167,11 +167,17 @@ const OverrideFormItem = z.object({
  * window is validated server-side (it needs the base row to resolve inherited fields).
  */
 export const AssignmentWizardFormSchema = BaseAssignmentFormSchemaObject.extend({
+  // The audience: one row per assigned student or group (no dates). Maps to AssignmentAssignee.
   overrides: z.array(OverrideFormItem).default([]),
+  // Per-student/group date exceptions (assignment page only; the wizard leaves this empty).
+  // Maps to AssignmentOverride rows. Shares the OverrideFormItem shape but carries dates.
+  dateOverrides: z.array(OverrideFormItem).default([]),
   // The group set a group target is drawn from. Set when the staff member picks a set in
   // the Assign-To section; the server pins the assignment's set when a group override is
   // created, so this is a UI convenience rather than something sent on assignment create.
   groupSetId: z.string().nullable().optional(),
+  // Individual vs group classification (the wizard's Type step). Defaults to individual.
+  isGroup: z.boolean().default(false),
 }).superRefine((data, ctx) => {
   validateLateSubmissionStrings(data, ctx);
   // "Assign to specific students" needs at least one target (a student or a group).
@@ -182,6 +188,14 @@ export const AssignmentWizardFormSchema = BaseAssignmentFormSchemaObject.extend(
       message: 'Add at least one student or group, or assign to everyone.',
     });
   }
+  // A group assignment must be pinned to a group set (chosen in the Type step).
+  if (data.isGroup && !data.groupSetId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['groupSetId'],
+      message: 'Select a group set for this group assignment.',
+    });
+  }
 });
 
 /**
@@ -189,6 +203,16 @@ export const AssignmentWizardFormSchema = BaseAssignmentFormSchemaObject.extend(
  * strings (parsed in the course timezone server-side); field rules mirror the
  * routes they replaced. Distinct from the `*Form` schemas above.
  */
+/** One audience target on create: exactly one of a student (userId) or a group (groupId). */
+const AssigneeApiItem = z
+  .object({
+    userId: z.string().min(1).optional(),
+    groupId: z.string().min(1).optional(),
+  })
+  .refine((a) => !!a.userId !== !!a.groupId, {
+    message: 'Each assignee is exactly one of a student or a group.',
+  });
+
 export const AssignmentCreateApiSchema = z.object({
   title: z.string().min(1, 'Missing required fields').max(200, 'Title is too long.'),
   description: z.string().max(20000, 'Description is too long.').optional(),
@@ -200,6 +224,11 @@ export const AssignmentCreateApiSchema = z.object({
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().nullable().optional(),
   isPublished: z.boolean().optional(),
+  // Set for a group assignment (the group set it runs in); null/absent for individual.
+  groupSetId: z.string().nullable().optional(),
+  // The audience when assignedToEveryone is false: students (individual) or groups (group).
+  // The handler validates each target and materializes AssignmentAssignee rows.
+  assignees: z.array(AssigneeApiItem).optional(),
 });
 
 export const AssignmentUpdateApiSchema = z.object({
@@ -207,7 +236,9 @@ export const AssignmentUpdateApiSchema = z.object({
   description: z.string().optional(),
   dueDate: z.string().optional(),
   unlockAt: z.string().nullable().optional(),
-  assignedToEveryone: z.boolean().optional(),
+  // NOTE: assignedToEveryone and groupSetId are intentionally NOT here. The audience
+  // (assignedToEveryone + assignees) is changed only via the assignees route, and the type
+  // (groupSetId) only via the type route, so those invariants stay guarded.
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().nullable().optional(),
   isPublished: z.boolean().optional(),
@@ -248,6 +279,37 @@ export const OverrideCreateApiSchema = z
 
 // Updates never change the target, only the dates/late policy.
 export const OverrideUpdateApiSchema = z.object({ ...OverrideDateFields });
+
+/**
+ * Change an assignment's individual/group type. `groupSetId` null makes it individual; a
+ * set id makes it a group assignment tied to that set. Switching type resets the audience
+ * and clears every assignee + override (they reference the old type's targets), so the
+ * handler does that in one transaction.
+ */
+export const AssignmentTypeApiSchema = z.object({
+  groupSetId: z.string().min(1).nullable(),
+});
+
+/**
+ * Replace an assignment's audience (who is assigned). `assignedToEveryone` true clears the
+ * explicit list (everyone / all groups); false requires at least one assignee, each a
+ * student (individual assignment) or a group (group assignment). Validated + materialized
+ * in the handler, which also drops overrides for anyone no longer assigned.
+ */
+export const AssigneesPutApiSchema = z
+  .object({
+    assignedToEveryone: z.boolean(),
+    assignees: z.array(AssigneeApiItem).default([]),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.assignedToEveryone && data.assignees.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['assignees'],
+        message: 'Assign to at least one student or group, or assign to everyone.',
+      });
+    }
+  });
 
 /** Types */
 export type UpdateAssignmentInput = z.infer<typeof UpdateAssignmentSchema>;

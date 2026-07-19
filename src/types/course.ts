@@ -14,6 +14,9 @@ export type AssignmentOverrideSummary = {
 
 export type AssignmentWithProblemCount = Assignment & {
   problemCount: number;
+  // Individual (false) vs group (true), derived server-side from groupSetId. The course
+  // table's Type column/filter reads this.
+  isGroup: boolean;
   maxPoints?: number;
   allowLateSubmissions?: boolean;
   lateCutoff?: string | Date | null;

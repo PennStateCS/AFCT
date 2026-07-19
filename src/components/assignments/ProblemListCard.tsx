@@ -23,6 +23,11 @@ export type ProblemListCardProps = {
   scrollAreaClassName?: string;
   /** When set, the leading number for the first 9 problems is announced as a 1-9 keyboard shortcut. */
   numberShortcuts?: boolean;
+  /** Show the "submissions used / allowed" badge next to the grade. Default true; the staff
+   * submissions view hides it since attempts aren't relevant when grading. */
+  showSubmissionUsage?: boolean;
+  /** Show a footer badge totalling earned / max points across all problems. Default false. */
+  showTotal?: boolean;
 };
 
 export function ProblemListCard({
@@ -35,15 +40,46 @@ export function ProblemListCard({
   className = '',
   scrollAreaClassName = 'h-[520px]',
   numberShortcuts = false,
+  showSubmissionUsage = true,
+  showTotal = false,
 }: ProblemListCardProps) {
+  // Earned (ungraded counts as 0) and max points summed across every problem.
+  const totals = problems.reduce(
+    (acc, p) => ({
+      earned:
+        acc.earned +
+        (typeof p.grade === 'number' && Number.isFinite(p.grade) ? Math.max(0, p.grade) : 0),
+      available:
+        acc.available +
+        (typeof p.maxGrade === 'number' && Number.isFinite(p.maxGrade)
+          ? Math.max(0, p.maxGrade)
+          : 0),
+    }),
+    { earned: 0, available: 0 },
+  );
+
+  // Size every grade/total bubble to the widest label so they line up. Using the character
+  // count in tabular (equal-width) digits keeps it font-agnostic.
+  const gradeLabels = problems
+    .filter((p) => p.maxGrade !== undefined && p.maxGrade !== null)
+    .map((p) => `${p.grade !== null && p.grade !== undefined ? p.grade : '-'}/${p.maxGrade}`);
+  const totalLabel = `${totals.earned}/${totals.available}`;
+  const badgeChars = Math.max(
+    0,
+    ...gradeLabels.map((s) => s.length),
+    ...(showTotal ? [totalLabel.length] : []),
+  );
+  const badgeClass = 'justify-center border border-slate-300 bg-white text-xs font-medium tabular-nums text-slate-700';
+  const badgeStyle = badgeChars > 0 ? { minWidth: `${badgeChars}ch` } : undefined;
+
   return (
     <Card className={className}>
       <CardHeader>
         <CardTitle className="text-lg">{title}</CardTitle>
         {description ? <p className="text-muted-foreground text-sm">{description}</p> : null}
       </CardHeader>
-      <CardContent className="p-0">
-        <ScrollArea className={scrollAreaClassName}>
+      <CardContent className={showTotal ? 'flex min-h-0 flex-1 flex-col p-0' : 'p-0'}>
+        <ScrollArea className={showTotal ? 'min-h-0 flex-1' : scrollAreaClassName}>
           <ul className="divide-border divide-y">
             {problems.map((problem, index) => {
               const isActive = selectedProblemId === problem.id;
@@ -54,7 +90,8 @@ export function ProblemListCard({
                     key="grade"
                     variant="secondary"
                     title="Grade Earned / Max Points"
-                    className="border border-slate-300 bg-white text-xs font-medium text-slate-700"
+                    className={badgeClass}
+                    style={badgeStyle}
                   >
                     {problem.grade !== null && problem.grade !== undefined ? problem.grade : '-'}/
                     {problem.maxGrade}
@@ -69,7 +106,7 @@ export function ProblemListCard({
                   : `${submissionsCount}/${problem.maxSubmissions}`
                 : `${submissionsCount}/∞`;
               const usageBadge =
-                hasMaxSubmissions || submissionsCount > 0 ? (
+                showSubmissionUsage && (hasMaxSubmissions || submissionsCount > 0) ? (
                   <Badge
                     key="usage"
                     variant="secondary"
@@ -116,6 +153,18 @@ export function ProblemListCard({
             })}
           </ul>
         </ScrollArea>
+        {showTotal ? (
+          <div className="flex justify-end border-t px-3 py-2">
+            <Badge
+              variant="secondary"
+              title="Total Earned / Total Points"
+              className={badgeClass}
+              style={badgeStyle}
+            >
+              {totals.earned}/{totals.available}
+            </Badge>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

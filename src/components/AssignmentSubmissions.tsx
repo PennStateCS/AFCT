@@ -204,33 +204,6 @@ export default function AssignmentSubmissions({
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStudentId = selectedStudent?.id ?? null;
 
-  const assignmentTotals = useMemo(() => {
-    if (!selectedStudent) return null;
-
-    const totalEarned = assignmentProblems.reduce((sum, problem) => {
-      const gradeValue = problemGrades[problem.id];
-      const safeGrade =
-        typeof gradeValue === 'number' && Number.isFinite(gradeValue) ? Math.max(0, gradeValue) : 0;
-      return sum + safeGrade;
-    }, 0);
-
-    const hasUnlimited = assignmentProblems.some(
-      (problem) => typeof problem.maxPoints === 'number' && problem.maxPoints < 0,
-    );
-
-    const totalAvailable = hasUnlimited
-      ? Number.POSITIVE_INFINITY
-      : assignmentProblems.reduce((sum, problem) => {
-          const max =
-            typeof problem.maxPoints === 'number' && Number.isFinite(problem.maxPoints)
-              ? Math.max(0, problem.maxPoints)
-              : 0;
-          return sum + max;
-        }, 0);
-
-    return { earned: totalEarned, available: totalAvailable };
-  }, [assignmentProblems, problemGrades, selectedStudent]);
-
   const handleSelectProblem = useCallback(
     (problemId: string) => {
       setSelectedProblemId(problemId);
@@ -684,7 +657,7 @@ export default function AssignmentSubmissions({
               <FileText className="h-6 w-6" /> Submissions
             </h2>
 
-            <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="mt-4 flex flex-col items-start gap-2 border-b pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <StudentNavigator
                 students={students}
                 selectedIndex={selectedIndex}
@@ -692,7 +665,6 @@ export default function AssignmentSubmissions({
                 onPrev={goPrev}
                 onNext={goNext}
                 gradeStatuses={studentGradeStatuses}
-                assignmentTotals={assignmentTotals ?? undefined}
                 courseId={courseId}
                 assignmentId={assignmentId}
               />
@@ -742,6 +714,8 @@ export default function AssignmentSubmissions({
                     className="h-full"
                     scrollAreaClassName="max-h-[520px]"
                     numberShortcuts
+                    showSubmissionUsage={false}
+                    showTotal
                   />
                 );
 

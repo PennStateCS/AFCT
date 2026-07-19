@@ -152,19 +152,9 @@ export const DELETE = withCourseAuth(
         return NextResponse.json({ error: 'Override not found' }, { status: 404 });
       }
 
-      await prisma.$transaction(async (tx) => {
-        await tx.assignmentOverride.delete({ where: { id: oid } });
-        // When the last group target goes, the assignment is no longer a group
-        // assignment, so un-pin its group set.
-        if (existing.targetType === 'GROUP') {
-          const remaining = await tx.assignmentOverride.count({
-            where: { assignmentId: aid, targetType: 'GROUP' },
-          });
-          if (remaining === 0) {
-            await tx.assignment.update({ where: { id: aid }, data: { groupSetId: null } });
-          }
-        }
-      });
+      // An override is only a date exception (WHEN); deleting it never changes the
+      // assignment's type or audience (WHO) -- the target just falls back to the base dates.
+      await prisma.assignmentOverride.delete({ where: { id: oid } });
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

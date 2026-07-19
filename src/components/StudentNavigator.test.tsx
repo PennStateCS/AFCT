@@ -91,7 +91,7 @@ describe('StudentNavigator', () => {
       expect(screen.queryByText('Loading assignment...')).not.toBeInTheDocument();
     });
     expect(screen.queryByText('Due:')).not.toBeInTheDocument();
-    // The student counter (unrelated UI) still renders.
-    expect(screen.getByText(/Student 1 of 1/)).toBeInTheDocument();
+    // The student picker (unrelated UI) still renders, now with its "N of M" position.
+    expect(screen.getByText('1 of 1')).toBeInTheDocument();
   });
 });

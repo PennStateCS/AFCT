@@ -152,8 +152,14 @@ export const GET = withCourseAuth(
           courseId,
         },
         include: {
-          // This caller's own override (0 or 1), used both to check "assign to specific
-          // students" and to resolve their effective unlock date for the content lock.
+          // This caller's own individual assignee row (0 or 1), used to check "assign to
+          // specific students" membership.
+          assignees: {
+            where: { userId: user.id },
+            select: { userId: true, groupId: true },
+          },
+          // This caller's own date override (0 or 1), used to resolve their effective
+          // unlock date for the content lock.
           overrides: {
             where: { userId: user.id },
             select: {
@@ -225,13 +231,13 @@ export const GET = withCourseAuth(
       // see it either. Same 404 mask.
       const gate = assignment as unknown as {
         assignedToEveryone?: boolean;
-        overrides?: Array<{ userId: string | null }>;
+        assignees?: Array<{ userId: string | null; groupId?: string | null }>;
       };
       if (
         !isStaff &&
         !isStudentAssigned(
           { assignedToEveryone: gate.assignedToEveryone ?? true },
-          gate.overrides ?? [],
+          gate.assignees ?? [],
           user.id,
         )
       ) {
@@ -417,7 +423,6 @@ export const PUT = withCourseAuth(
           // rather than re-deriving from a possibly-undefined data.dueDate.
           dueDate,
           unlockAt: unlockState.unlockAt,
-          assignedToEveryone: data.assignedToEveryone,
           allowLateSubmissions,
           lateCutoff,
           isPublished: data.isPublished,
@@ -552,7 +557,6 @@ export const PATCH = withCourseAuth(
         description?: string;
         dueDate?: Date;
         unlockAt?: Date | null;
-        assignedToEveryone?: boolean;
         allowLateSubmissions?: boolean;
         lateCutoff?: Date | null;
         isPublished?: boolean;
@@ -562,9 +566,6 @@ export const PATCH = withCourseAuth(
       if (data.description !== undefined) updateData.description = data.description;
       if (data.dueDate !== undefined) updateData.dueDate = effectiveDueDate;
       if (unlockState.changed) updateData.unlockAt = unlockState.unlockAt;
-      if (data.assignedToEveryone !== undefined) {
-        updateData.assignedToEveryone = data.assignedToEveryone;
-      }
       if (data.allowLateSubmissions !== undefined) {
         updateData.allowLateSubmissions = allowLateSubmissions;
       }

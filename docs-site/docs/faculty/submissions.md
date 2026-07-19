@@ -12,7 +12,7 @@ The **Submissions** tab is inside an assignment. It brings a student's submitted
 
 The student menu uses a green marker when every problem has a grade and a red marker when one or more grades are missing. The top of the workspace also shows the due date, late-work policy, selected student's total, and position in the roster.
 
-For group assignments, AFCT shows the problems available to the selected student's group. The workspace still loads submissions, grades, and discussion for the selected student. Saving a grade here does not automatically write the same grade to every group member.
+For group assignments, the group shares one submission set per problem, so the work you review for a student is their group's work. Autograding grades the whole group, but you can override an individual member's grade here without changing the rest of the group.
 
 ## Review submitted work
 

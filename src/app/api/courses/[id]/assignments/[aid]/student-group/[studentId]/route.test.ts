@@ -26,7 +26,14 @@ beforeEach(() => {
   authMock.mockResolvedValue({ user: { id: 'staff', role: 'FACULTY' } });
   prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
-  prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+  prismaMock.assignment.findFirst.mockResolvedValue({
+    id: 'a1',
+    unlockAt: null,
+    dueDate: new Date('2026-01-10T23:59:00.000Z'),
+    lateCutoff: null,
+    allowLateSubmissions: false,
+    overrides: [],
+  });
 });
 
 describe('GET student-group', () => {
@@ -36,12 +43,47 @@ describe('GET student-group', () => {
     expect((await call()).status).toBe(403);
   });
 
-  it('reports individual when the student is not group-assigned', async () => {
+  it('reports individual with the base effective schedule when not group-assigned', async () => {
     resolveGroupMock.mockResolvedValue(null);
     const res = await call();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ isGroup: false, group: null, members: [] });
+    const body = await res.json();
+    expect(body).toMatchObject({ isGroup: false, group: null, members: [] });
+    expect(body.effective).toMatchObject({
+      source: 'base',
+      dueDate: new Date('2026-01-10T23:59:00.000Z').toISOString(),
+      allowLateSubmissions: false,
+    });
     expect(prismaMock.studentGroup.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('applies the student override to the effective schedule', async () => {
+    resolveGroupMock.mockResolvedValue(null);
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      unlockAt: null,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      lateCutoff: null,
+      allowLateSubmissions: false,
+      overrides: [
+        {
+          targetType: 'STUDENT',
+          userId: 'stu-1',
+          groupId: null,
+          unlockAt: null,
+          dueDate: new Date('2026-01-20T23:59:00.000Z'),
+          lateCutoff: null,
+          allowLateSubmissions: true,
+        },
+      ],
+    });
+    const res = await call();
+    const body = await res.json();
+    expect(body.effective).toMatchObject({
+      source: 'student-override',
+      dueDate: new Date('2026-01-20T23:59:00.000Z').toISOString(),
+      allowLateSubmissions: true,
+    });
   });
 
   it('reports the group and the groupmates (excluding the selected student)', async () => {
