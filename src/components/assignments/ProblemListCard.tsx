@@ -64,8 +64,8 @@ export function ProblemListCard({
         <CardTitle className="text-lg">{title}</CardTitle>
         {description ? <p className="text-muted-foreground text-sm">{description}</p> : null}
       </CardHeader>
-      <CardContent className={showTotal ? 'flex h-full flex-col p-0' : 'p-0'}>
-        <ScrollArea className={scrollAreaClassName}>
+      <CardContent className={showTotal ? 'flex min-h-0 flex-1 flex-col p-0' : 'p-0'}>
+        <ScrollArea className={showTotal ? 'min-h-0 flex-1' : scrollAreaClassName}>
           <ul className="divide-border divide-y">
             {problems.map((problem, index) => {
               const isActive = selectedProblemId === problem.id;
@@ -139,7 +139,7 @@ export function ProblemListCard({
           </ul>
         </ScrollArea>
         {showTotal ? (
-          <div className="mt-auto flex justify-end border-t px-3 py-2">
+          <div className="flex justify-end border-t px-3 py-2">
             <Badge
               variant="secondary"
               title="Total Earned / Total Points"
