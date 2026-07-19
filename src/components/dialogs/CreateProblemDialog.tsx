@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
-import { Checkbox } from '@/components/ui/checkbox';
+import { LimitField } from '@/components/ui/LimitField';
 import SwitchField from '@/components/ui/SwitchField';
 import { Stepper } from '@/components/ui/stepper';
 
@@ -106,6 +106,7 @@ export function CreateProblemDialog({
     watch,
     trigger,
     getValues,
+    setValue,
     setError,
     clearErrors,
     formState: { errors, isSubmitting, isValid },
@@ -347,36 +348,25 @@ export function CreateProblemDialog({
                     control={control}
                     name="maxStates"
                     render={({ field }) => (
-                      <div>
-                        <InputGroup
-                          label="Max States"
-                          name="maxStates"
-                          type="number"
-                          fieldProps={{
-                            ...field,
-                            value: isUnlimitedStates ? '' : String(field.value || ''),
-                          }}
-                          min={1}
-                          max={1_000}
-                          disabled={isUnlimitedStates}
-                          error={errors.maxStates?.message}
-                        />
-                        <div className="mt-1 flex items-center gap-2">
-                          <Controller
-                            control={control}
-                            name="isUnlimitedStates"
-                            render={({ field: uf }) => (
-                              <>
-                                <Checkbox
-                                  checked={!!uf.value}
-                                  onCheckedChange={(val) => uf.onChange(!!val)}
-                                />
-                                <span className="text-muted-foreground text-sm">Unlimited</span>
-                              </>
-                            )}
-                          />
-                        </div>
-                      </div>
+                      <LimitField
+                        label="Max States"
+                        name="maxStates"
+                        unlimited={!!isUnlimitedStates}
+                        onUnlimitedChange={(unlimited) =>
+                          setValue('isUnlimitedStates', unlimited, { shouldValidate: true })
+                        }
+                        value={
+                          isUnlimitedStates
+                            ? ''
+                            : ((field.value as number | string | null | undefined) ?? '')
+                        }
+                        onValueChange={field.onChange}
+                        onValueBlur={field.onBlur}
+                        min={1}
+                        max={1_000}
+                        placeholder="e.g. 12"
+                        error={errors.maxStates?.message}
+                      />
                     )}
                   />
                 )}

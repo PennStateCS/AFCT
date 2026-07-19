@@ -13,8 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import InputGroup from '@/components/ui/InputGroup';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
+import { LimitField } from '@/components/ui/LimitField';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -118,6 +117,7 @@ export function EditProblemDialog({
     reset,
     watch,
     setError,
+    setValue,
     formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
@@ -381,56 +381,35 @@ export function EditProblemDialog({
                   ) : null}
                 </div>
 
-                <div>
-                  <Label htmlFor="assignment-max-submissions" className="mb-2 block">
-                    Max Submissions
-                  </Label>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Input
-                      id="assignment-max-submissions"
-                      type="number"
-                      min={1}
-                      step="1"
-                      value={
-                        assignmentConfig.maxSubmissions === -1
-                          ? ''
-                          : assignmentConfig.maxSubmissions
-                      }
-                      disabled={assignmentConfig.maxSubmissions === -1}
-                      onChange={(event) => {
-                        const next = Number(event.target.value);
-                        if (!Number.isFinite(next)) return;
-                        setAssignmentConfig((prev) => ({
-                          ...prev,
-                          maxSubmissions: Math.max(1, Math.floor(next)),
-                        }));
-                      }}
-                      className="sm:flex-1"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="assignment-unlimited-submissions"
-                        checked={assignmentConfig.maxSubmissions === -1}
-                        onCheckedChange={(checked) =>
-                          setAssignmentConfig((prev) => ({
-                            ...prev,
-                            maxSubmissions: checked
-                              ? -1
-                              : Math.max(1, prev.maxSubmissions === -1 ? 1 : prev.maxSubmissions),
-                          }))
-                        }
-                      />
-                      <Label htmlFor="assignment-unlimited-submissions" className="text-sm">
-                        Unlimited
-                      </Label>
-                    </div>
-                  </div>
-                  {assignmentConfig.maxSubmissions !== -1 && assignmentConfig.maxSubmissions < 1 ? (
-                    <p className="mt-1 text-xs text-red-600">
-                      Max submissions must be at least 1 or unlimited.
-                    </p>
-                  ) : null}
-                </div>
+                <LimitField
+                  label="Max Submissions"
+                  name="assignment-max-submissions"
+                  unlimited={assignmentConfig.maxSubmissions === -1}
+                  onUnlimitedChange={(unlimited) =>
+                    setAssignmentConfig((prev) => ({
+                      ...prev,
+                      maxSubmissions: unlimited
+                        ? -1
+                        : Math.max(1, prev.maxSubmissions === -1 ? 1 : prev.maxSubmissions),
+                    }))
+                  }
+                  value={assignmentConfig.maxSubmissions === -1 ? '' : assignmentConfig.maxSubmissions}
+                  onValueChange={(v) => {
+                    const next = Number(v);
+                    if (!Number.isFinite(next)) return;
+                    setAssignmentConfig((prev) => ({
+                      ...prev,
+                      maxSubmissions: Math.max(1, Math.floor(next)),
+                    }));
+                  }}
+                  min={1}
+                  placeholder="e.g. 5"
+                  error={
+                    assignmentConfig.maxSubmissions !== -1 && assignmentConfig.maxSubmissions < 1
+                      ? 'Max submissions must be at least 1 or unlimited.'
+                      : undefined
+                  }
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -462,36 +441,25 @@ export function EditProblemDialog({
                   control={control}
                   name="maxSubmissions"
                   render={({ field }) => (
-                    <div>
-                      <InputGroup
-                        label="Problem Max Submissions"
-                        name="maxSubmissions"
-                        type="number"
-                        fieldProps={{
-                          ...field,
-                          value: isUnlimitedSubmissions ? '' : String(field.value || ''),
-                        }}
-                        min={1}
-                        max={1_000}
-                        disabled={isUnlimitedSubmissions}
-                        error={errors.maxSubmissions?.message}
-                      />
-                      <div className="mt-1 flex items-center gap-2">
-                        <Controller
-                          control={control}
-                          name="isUnlimitedSubmissions"
-                          render={({ field: uf }) => (
-                            <>
-                              <Checkbox
-                                checked={!!uf.value}
-                                onCheckedChange={(val) => uf.onChange(!!val)}
-                              />
-                              <span className="text-muted-foreground text-sm">Unlimited</span>
-                            </>
-                          )}
-                        />
-                      </div>
-                    </div>
+                    <LimitField
+                      label="Problem Max Submissions"
+                      name="maxSubmissions"
+                      unlimited={!!isUnlimitedSubmissions}
+                      onUnlimitedChange={(unlimited) =>
+                        setValue('isUnlimitedSubmissions', unlimited, { shouldValidate: true })
+                      }
+                      value={
+                        isUnlimitedSubmissions
+                          ? ''
+                          : ((field.value as number | string | null | undefined) ?? '')
+                      }
+                      onValueChange={field.onChange}
+                      onValueBlur={field.onBlur}
+                      min={1}
+                      max={1_000}
+                      placeholder="e.g. 5"
+                      error={errors.maxSubmissions?.message}
+                    />
                   )}
                 />
 
@@ -542,38 +510,21 @@ export function EditProblemDialog({
               control={control}
               name="maxStates"
               render={({ field }) => (
-                <div>
-                  <InputGroup
-                    label="Max States"
-                    name="maxStates"
-                    type="number"
-                    fieldProps={{
-                      ...field,
-                      value: isUnlimitedStates ? '' : String(Math.abs(Number(field.value ?? 0)) || ''),
-                      onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                        field.onChange(e.target.value),
-                    }}
-                    min={1}
-                    max={1_000}
-                    disabled={isUnlimitedStates}
-                    error={errors.maxStates?.message}
-                  />
-                  <div className="mt-1 flex items-center gap-2">
-                    <Controller
-                      control={control}
-                      name="isUnlimitedStates"
-                      render={({ field: uf }) => (
-                        <>
-                          <Checkbox
-                            checked={!!uf.value}
-                            onCheckedChange={(val) => uf.onChange(!!val)}
-                          />
-                          <span className="text-muted-foreground text-sm">Unlimited</span>
-                        </>
-                      )}
-                    />
-                  </div>
-                </div>
+                <LimitField
+                  label="Max States"
+                  name="maxStates"
+                  unlimited={!!isUnlimitedStates}
+                  onUnlimitedChange={(unlimited) =>
+                    setValue('isUnlimitedStates', unlimited, { shouldValidate: true })
+                  }
+                  value={isUnlimitedStates ? '' : Math.abs(Number(field.value ?? 0)) || ''}
+                  onValueChange={field.onChange}
+                  onValueBlur={field.onBlur}
+                  min={1}
+                  max={1_000}
+                  placeholder="e.g. 12"
+                  error={errors.maxStates?.message}
+                />
               )}
             />
           )}
