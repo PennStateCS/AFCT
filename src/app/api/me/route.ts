@@ -10,6 +10,11 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { readAndValidateAvatar } from '@/lib/avatar-upload';
+import {
+  evaluateAvatarUploadRateLimit,
+  formatRetryAfterSeconds,
+} from '@/lib/security/rate-limiter';
 import { readFormData } from '@/lib/api/request';
 import { UserProfileApiSchema } from '@/schemas/profile';
 
@@ -80,7 +85,7 @@ export async function POST(req: Request) {
     const { firstName, lastName, deleteAvatar, cropX, cropY, zoom } = parsed.data;
     const timezoneRaw = parsed.data.timezone ?? '';
     const avatar = parsed.form.get('avatar') as File | null;
-    const { maxBytes, maxMb } = await getSystemUploadLimit();
+    const uploadLimit = await getSystemUploadLimit();
 
     if (!existsSync(uploadDir)) {
       await mkdir(uploadDir, { recursive: true });
@@ -95,62 +100,76 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    // Validate (size + MIME + magic-byte signature) and throttle replacements
+    // before anything is written; the decoded buffer is persisted later, just
+    // before the DB update, and the old file is removed only after that commits.
     let avatarFileName: string | null = currentUser.avatar || null;
+    let avatarBuffer: Buffer | null = null;
 
     if (avatar && avatar.size > 0) {
-      if (avatar.size > maxBytes) {
+      const decision = evaluateAvatarUploadRateLimit({ identifier: currentUser.id });
+      if (decision.status === 'blocked') {
         return NextResponse.json(
-          { error: `File exceeds max upload size (${maxMb} MB).` },
-          { status: 413 },
+          { error: 'Too many avatar changes. Please try again later.' },
+          { status: 429, headers: { 'Retry-After': formatRetryAfterSeconds(decision.retryAfterMs) } },
         );
       }
-      // Reject anything that isn't an image (defense-in-depth; avatars are also
-      // served as octet-stream attachments so an odd file can't execute).
-      if (avatar.type && !avatar.type.startsWith('image/')) {
-        return NextResponse.json({ error: 'Avatar must be an image file.' }, { status: 400 });
+      const validated = await readAndValidateAvatar(avatar, uploadLimit);
+      if (!validated.ok) {
+        return NextResponse.json({ error: validated.error }, { status: validated.status });
       }
+      avatarBuffer = validated.buffer;
       // Store under a random, non-client-derived name (userId prefix + UUID +
-      // sanitized extension) and write through the traversal-safe resolver,
-      // matching the other upload paths.
-      const bytes = await avatar.arrayBuffer();
-      const buffer = Buffer.from(bytes);
+      // sanitized extension), matching the other upload paths.
       avatarFileName = safeStoredFilename(avatar.name, `${currentUser.id}_`);
-
-      if (currentUser.avatar) {
-        await deleteFileIfExists(currentUser.avatar);
-      }
-
-      await writeFile(resolveInsideDir(uploadDir, avatarFileName), buffer);
     }
 
     if (deleteAvatar && currentUser.avatar) {
-      await deleteFileIfExists(currentUser.avatar);
       avatarFileName = null;
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        firstName,
-        lastName,
-        avatar: avatarFileName,
-        timezone: timezoneRaw || null,
-        cropX,
-        cropY,
-        zoom,
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        avatar: true,
-        timezone: true,
-        cropX: true,
-        cropY: true,
-        zoom: true,
-      },
-    });
+    // Write the validated bytes only now, through the traversal-safe resolver.
+    if (avatarBuffer && avatarFileName) {
+      await writeFile(resolveInsideDir(uploadDir, avatarFileName), avatarBuffer);
+    }
+
+    let updatedUser;
+    try {
+      updatedUser = await prisma.user.update({
+        where: { id: session.user.id },
+        data: {
+          firstName,
+          lastName,
+          avatar: avatarFileName,
+          timezone: timezoneRaw || null,
+          cropX,
+          cropY,
+          zoom,
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          timezone: true,
+          cropX: true,
+          cropY: true,
+          zoom: true,
+        },
+      });
+    } catch (updateError) {
+      // Don't leave the just-written file orphaned if the commit fails.
+      if (avatarBuffer && avatarFileName) {
+        await deleteFileIfExists(avatarFileName);
+      }
+      throw updateError;
+    }
+
+    // Commit succeeded: drop the previous file when it was replaced or cleared.
+    if ((avatarBuffer || (deleteAvatar && avatarFileName === null)) && currentUser.avatar) {
+      await deleteFileIfExists(currentUser.avatar);
+    }
 
     // Log profile update
     await createEnhancedActivityLog(prisma, req, {

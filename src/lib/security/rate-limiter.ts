@@ -66,6 +66,19 @@ const CHECK_EMAIL_IP_CONFIG: BucketConfig = {
   frictionDelayMs: 0,
 };
 
+// Per-user cap on avatar replacements. Generous enough for normal edits, but it
+// stops one account from churning many multi-MB uploads (each replacement writes a
+// file to private storage). Keyed on the actor's user id; never challenges.
+const AVATAR_UPLOAD_CONFIG: BucketConfig = {
+  windowMs: 10 * 60 * 1000,
+  maxAttempts: 20,
+  frictionThreshold: Number.MAX_SAFE_INTEGER,
+  challengeThreshold: Number.MAX_SAFE_INTEGER,
+  challengeCooldownMs: 0,
+  blockDurationMs: 10 * 60 * 1000,
+  frictionDelayMs: 0,
+};
+
 const HUMAN_DELAY_THRESHOLD_MS = 600;
 
 export type LimitReason = 'ip' | 'account';
@@ -316,6 +329,20 @@ export const evaluateCheckEmailRateLimit = (params: { ip?: string }): RateLimitD
       key: bucketKey('check-email:ip', params.ip),
       config: CHECK_EMAIL_IP_CONFIG,
       reason: 'ip' as LimitReason,
+    },
+  ]);
+
+/**
+ * Per-user limit for avatar replacements (both self-serve `/api/me` and admin
+ * `/api/users/[id]`). Returns `blocked` once a user exceeds the window budget, so
+ * the endpoints can't be used to churn large uploads. Keyed on the actor's id.
+ */
+export const evaluateAvatarUploadRateLimit = (params: { identifier?: string }): RateLimitDecision =>
+  ensureEvaluations([
+    {
+      key: bucketKey('avatar-upload', params.identifier),
+      config: AVATAR_UPLOAD_CONFIG,
+      reason: 'account' as LimitReason,
     },
   ]);
 

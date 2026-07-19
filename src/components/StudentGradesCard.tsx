@@ -3,9 +3,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Loader2, Table } from 'lucide-react';
 import { formatDateInTimeZone } from '@/lib/date';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -104,79 +105,78 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
           <div className="text-muted-foreground text-sm">No graded assignments available yet.</div>
         ) : (
           <div className="space-y-2">
-            {assignmentRows.map((assignment) => (
-              <div
-                key={assignment.id}
-                className="border-border/80 bg-card hover:border-primary hover:bg-primary/5 overflow-hidden rounded-xl border border-l-4 border-l-blue-600 shadow-sm transition hover:shadow-md"
-              >
-                <CardHeader className="p-0">
-                  <div
-                    className="flex cursor-pointer items-center justify-between gap-3 px-3 py-1"
-                    onClick={() => router.push(`/dashboard/courses/${courseId}/${assignment.id}`)}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-col gap-1">
-                        <CardTitle className="text-sm leading-none">{assignment.title}</CardTitle>
-                        <div className="text-muted-foreground flex flex-wrap gap-2 text-xs">
-                          {assignment.dueDate ? (
+            {assignmentRows.map((assignment) => {
+              const isExpanded = expandedAssignments.includes(assignment.id);
+              return (
+                <Collapsible
+                  key={assignment.id}
+                  open={isExpanded}
+                  onOpenChange={(open) =>
+                    setExpandedAssignments((current) =>
+                      open
+                        ? [...current, assignment.id]
+                        : current.filter((id) => id !== assignment.id),
+                    )
+                  }
+                  className="border-border/80 bg-card hover:border-primary hover:bg-primary/5 overflow-hidden rounded-xl border border-l-4 border-l-blue-600 shadow-sm transition hover:shadow-md"
+                >
+                  <CardHeader className="p-0">
+                    <div className="flex items-center justify-between gap-3 px-3 py-1">
+                      {/* Real link so keyboard users can open the assignment. */}
+                      <Link
+                        href={`/dashboard/courses/${courseId}/${assignment.id}`}
+                        className="hover:text-primary focus-visible:ring-primary-300 min-w-0 flex-1 rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <CardTitle className="text-sm leading-none">{assignment.title}</CardTitle>
+                          <div className="text-muted-foreground flex flex-wrap gap-2 text-xs">
+                            {assignment.dueDate ? (
+                              <span className="border-border rounded-full border px-2 py-1 whitespace-nowrap">
+                                Due {formatDateInTimeZone(assignment.dueDate, timezone)}
+                              </span>
+                            ) : null}
                             <span className="border-border rounded-full border px-2 py-1 whitespace-nowrap">
-                              Due {formatDateInTimeZone(assignment.dueDate, timezone)}
+                              {assignment.problems.length} Problems
                             </span>
-                          ) : null}
-                          <span className="border-border rounded-full border px-2 py-1 whitespace-nowrap">
-                            {assignment.problems.length} Problems
-                          </span>
+                          </div>
                         </div>
+                      </Link>
+                      <div className="flex items-center gap-2 text-right">
+                        <p className="grid grid-cols-[4rem_minmax(4rem,auto)_4rem] items-center gap-2 text-xs tracking-[0.12em] uppercase">
+                          <span className="text-foreground text-sm font-semibold">Grade</span>
+                          <span className="text-foreground text-left text-sm font-semibold">
+                            {(assignment.grade === null ? '-' : `${assignment.grade}`) +
+                              `/${assignment.maxPoints}`}
+                          </span>
+                          <span className="text-muted-foreground text-right text-sm">
+                            {assignment.grade !== null && assignment.percentage !== null
+                              ? `${assignment.percentage}%`
+                              : '-%'}
+                          </span>
+                        </p>
+                        {/* CollapsibleTrigger wires aria-expanded + aria-controls to the panel. */}
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="icon"
+                            title={isExpanded ? 'Hide details' : 'Show details'}
+                            aria-label={
+                              isExpanded
+                                ? `Hide details for ${assignment.title}`
+                                : `Show details for ${assignment.title}`
+                            }
+                            className="h-7 w-7 p-1"
+                          >
+                            <ChevronDown
+                              className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            />
+                          </Button>
+                        </CollapsibleTrigger>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-right">
-                      <p className="grid grid-cols-[4rem_minmax(4rem,auto)_4rem] items-center gap-2 text-xs tracking-[0.12em] uppercase">
-                        <span className="text-foreground text-sm font-semibold">Grade</span>
-                        <span className="text-foreground text-left text-sm font-semibold">
-                          {(assignment.grade === null ? '-' : `${assignment.grade}`) +
-                            `/${assignment.maxPoints}`}
-                        </span>
-                        <span className="text-muted-foreground text-right text-sm">
-                          {assignment.grade !== null && assignment.percentage !== null
-                            ? `${assignment.percentage}%`
-                            : '-%'}
-                        </span>
-                      </p>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="icon"
-                        title={
-                          expandedAssignments.includes(assignment.id)
-                            ? 'Hide details'
-                            : 'Show details'
-                        }
-                        aria-label={
-                          expandedAssignments.includes(assignment.id)
-                            ? 'Hide details'
-                            : 'Show details'
-                        }
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setExpandedAssignments((current) =>
-                            current.includes(assignment.id)
-                              ? current.filter((id) => id !== assignment.id)
-                              : [...current, assignment.id],
-                          );
-                        }}
-                        className="h-7 w-7 p-1"
-                      >
-                        <ChevronDown
-                          className={`h-3 w-3 transition-transform ${
-                            expandedAssignments.includes(assignment.id) ? 'rotate-180' : ''
-                          }`}
-                        />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
+                  </CardHeader>
 
-                <Collapsible open={expandedAssignments.includes(assignment.id)}>
                   <CollapsibleContent className="border-border border-t bg-slate-50 px-2 py-2">
                     <div className="space-y-1">
                       {assignment.problems.map((problem, index) => (
@@ -231,8 +231,8 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>
