@@ -237,9 +237,9 @@ export default function StudentNavigator({
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 relative flex w-[320px] items-center justify-between gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
+              className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 relative flex w-[320px] items-center gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
             >
-              <span className="flex items-center gap-2 truncate">
+              <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                 {selectedStudent ? (
                   <span
                     className={`h-2.5 w-2.5 rounded-full ${selectedStatus ? 'bg-green-500' : 'bg-red-500'}`}
@@ -256,7 +256,13 @@ export default function StudentNavigator({
                   </span>
                 ) : null}
               </span>
-              <ChevronDown className="h-4 w-4" />
+              {/* Position of the selected student in the roster, right-aligned. */}
+              {selectedStudent ? (
+                <span className="text-muted-foreground shrink-0 text-xs">
+                  {selectedIndex + 1} of {students.length}
+                </span>
+              ) : null}
+              <ChevronDown className="h-4 w-4 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="bg-card text-foreground border-border w-[320px] rounded-md border p-2 shadow-lg">
