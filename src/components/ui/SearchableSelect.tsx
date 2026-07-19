@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useId, useMemo, useState } from 'react';
+import React, { useId, useMemo, useRef, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -43,6 +43,7 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false);
   const generatedId = useId();
   const triggerId = id ?? generatedId;
+  const listRef = useRef<HTMLDivElement>(null);
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -54,6 +55,47 @@ export function SearchableSelect({
     onSelect(itemId);
     setSearch('');
     setOpen(false);
+  };
+
+  // Roving keyboard navigation over the option buttons (real focus, not a listbox
+  // with aria-activedescendant, which the previous roles implied but weren't wired).
+  const optionButtons = () =>
+    Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('[data-option]') ?? []);
+  const focusOptionAt = (index: number) => {
+    const buttons = optionButtons();
+    if (buttons.length === 0) return;
+    const clamped = Math.max(0, Math.min(index, buttons.length - 1));
+    buttons[clamped]?.focus();
+  };
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusOptionAt(0);
+    } else if (e.key === 'Enter') {
+      // Enter in the search box picks the first match (keyboard shortcut).
+      const first = filteredItems[0];
+      if (first) {
+        e.preventDefault();
+        pick(first.id);
+      }
+    }
+  };
+  const handleOptionKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const buttons = optionButtons();
+    const current = buttons.indexOf(e.currentTarget);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusOptionAt(current + 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusOptionAt(current - 1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      focusOptionAt(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      focusOptionAt(buttons.length - 1);
+    }
   };
 
   return (
@@ -95,11 +137,15 @@ export function SearchableSelect({
             aria-label={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             className="mb-2 h-9 shrink-0 text-sm"
           />
+          {/* A labeled group of option buttons (no listbox/option roles, since this
+              uses real focus + arrow-key navigation rather than aria-activedescendant). */}
           <div
-            role="listbox"
-            aria-label={label ?? 'Options'}
+            ref={listRef}
+            role="group"
+            aria-label={label ? `${label} options` : 'Options'}
             className="min-h-0 flex-1 overflow-auto rounded border"
           >
             {filteredItems.length === 0 ? (
@@ -109,10 +155,10 @@ export function SearchableSelect({
                 <button
                   key={item.id}
                   type="button"
-                  role="option"
-                  aria-selected={false}
+                  data-option
                   onClick={() => pick(item.id)}
-                  className="hover:bg-muted/50 flex w-full cursor-pointer items-center px-3 py-2 text-left text-sm"
+                  onKeyDown={handleOptionKeyDown}
+                  className="hover:bg-muted/50 focus-visible:bg-muted flex w-full cursor-pointer items-center px-3 py-2 text-left text-sm focus-visible:outline-none"
                 >
                   <span className="truncate">{item.label}</span>
                 </button>
