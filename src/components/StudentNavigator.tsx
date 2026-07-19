@@ -211,16 +211,11 @@ export default function StudentNavigator({
             With: {groupInfo.members.map(memberName).join(', ')}
           </span>
         ) : null}
-        <span className="block">
-          Student {students.length === 0 ? 0 : selectedIndex + 1} of {students.length}
-          {assignmentTotals ? (
-            <span>
-              <span className="text-muted-foreground mx-2">•</span>
-              {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)}{' '}
-              pts
-            </span>
-          ) : null}
-        </span>
+        {assignmentTotals ? (
+          <span className="block">
+            {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)} pts
+          </span>
+        ) : null}
       </div>
       {/* Prev / student picker / Next joined into one segmented control, below the info. */}
       <div className="flex items-center">
