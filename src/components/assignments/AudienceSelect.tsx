@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { ChevronDown, Plus, X } from 'lucide-react';
+import { ChevronDown, Pencil, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type AudienceItem = { id: string; label: string };
@@ -22,10 +22,11 @@ export function AudienceSelect({
   value,
   onChange,
   allLabel,
-  addLabel = 'Add',
+  addLabel = 'Edit',
   searchPlaceholder = 'Search…',
   emptyStateText = 'No options.',
   emptySelectionText = 'None selected',
+  allSelected,
   error,
   id,
 }: {
@@ -39,6 +40,9 @@ export function AudienceSelect({
   searchPlaceholder?: string;
   emptyStateText?: string;
   emptySelectionText?: string;
+  /** Force the "All …" pill regardless of item counts (e.g. an assigned-to-everyone
+   * assignment whose roster is still loading). Falls back to a count check when omitted. */
+  allSelected?: boolean;
   error?: string;
   id?: string;
 }) {
@@ -50,7 +54,7 @@ export function AudienceSelect({
 
   const selectedSet = useMemo(() => new Set(value), [value]);
   const labelById = useMemo(() => new Map(items.map((i) => [i.id, i.label])), [items]);
-  const allSelected = items.length > 0 && value.length >= items.length;
+  const isAll = allSelected ?? (items.length > 0 && value.length >= items.length);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -73,7 +77,7 @@ export function AudienceSelect({
         <Label htmlFor={triggerId} className="text-sm font-medium">
           {label}
         </Label>
-        {!allSelected && items.length > 0 ? (
+        {!isAll && items.length > 0 ? (
           <button
             type="button"
             onClick={selectAll}
@@ -87,10 +91,10 @@ export function AudienceSelect({
       <div
         className={cn(
           'flex flex-wrap items-center gap-1.5 rounded-md border p-2',
-          error ? 'border-red-500' : 'border-input',
+          error ? 'border-red-500' : 'border-black',
         )}
       >
-        {allSelected ? (
+        {isAll ? (
           <span className="bg-primary/10 text-primary rounded-full px-2.5 py-1 text-xs font-medium">
             {allLabel}
           </span>
@@ -100,14 +104,14 @@ export function AudienceSelect({
           value.map((v) => (
             <span
               key={v}
-              className="bg-muted flex items-center gap-1 rounded-full py-1 pr-1 pl-2.5 text-xs"
+              className="bg-primary/10 text-primary flex items-center gap-1 rounded-full py-1 pr-1 pl-2.5 text-xs font-medium"
             >
               <span className="max-w-[12rem] truncate">{labelById.get(v) ?? v}</span>
               <button
                 type="button"
                 onClick={() => removeOne(v)}
                 aria-label={`Remove ${labelById.get(v) ?? v}`}
-                className="hover:bg-muted-foreground/20 rounded-full p-0.5"
+                className="hover:bg-primary/20 rounded-full p-0.5"
               >
                 <X className="h-3 w-3" aria-hidden="true" />
               </button>
@@ -126,7 +130,7 @@ export function AudienceSelect({
                 error && 'border-red-500',
               )}
             >
-              <Plus className="h-3 w-3" aria-hidden="true" /> {addLabel}
+              <Pencil className="h-3 w-3" aria-hidden="true" /> {addLabel}
               <ChevronDown className="h-3 w-3" aria-hidden="true" />
             </button>
           </PopoverTrigger>

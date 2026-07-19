@@ -68,32 +68,12 @@ vi.mock('@/components/ui/SelectField', () => ({
   ),
 }));
 
-vi.mock('@/components/ui/SearchableSelect', () => ({
-  SearchableSelect: ({
+// The audience selector, reduced to one "Assign only {label}" button per member so a test
+// can restrict the audience to a single student/group (which materializes an override row).
+vi.mock('@/components/assignments/AudienceSelect', () => ({
+  AudienceSelect: ({
     label,
     items,
-    onSelect,
-  }: {
-    label: string;
-    items: Array<{ id: string; label: string }>;
-    onSelect: (id: string) => void;
-  }) => (
-    <fieldset>
-      <legend>{label}</legend>
-      {items.map((item) => (
-        <button key={item.id} type="button" onClick={() => onSelect(item.id)}>
-          {item.label}
-        </button>
-      ))}
-    </fieldset>
-  ),
-}));
-
-vi.mock('@/components/ui/SearchableMultiSelect', () => ({
-  SearchableMultiSelect: ({
-    label,
-    items,
-    value,
     onChange,
   }: {
     label: string;
@@ -104,20 +84,9 @@ vi.mock('@/components/ui/SearchableMultiSelect', () => ({
     <fieldset>
       <legend>{label}</legend>
       {items.map((item) => (
-        <label key={item.id}>
-          {item.label}
-          <input
-            type="checkbox"
-            aria-label={item.label}
-            checked={(value ?? []).includes(item.id)}
-            onChange={() => {
-              const set = new Set(value ?? []);
-              if (set.has(item.id)) set.delete(item.id);
-              else set.add(item.id);
-              onChange(Array.from(set));
-            }}
-          />
-        </label>
+        <button key={item.id} type="button" onClick={() => onChange([item.id])}>
+          Assign only {item.label}
+        </button>
       ))}
     </fieldset>
   ),
@@ -165,7 +134,10 @@ const ok = (data: unknown) => ({
   text: async () => JSON.stringify(data),
 });
 
-const students = [{ id: 'stu-1', firstName: 'Sam', lastName: 'Student', email: 's@example.com' }];
+const students = [
+  { id: 'stu-1', firstName: 'Sam', lastName: 'Student', email: 's@example.com' },
+  { id: 'stu-2', firstName: 'Pat', lastName: 'Pupil', email: 'p@example.com' },
+];
 
 const groupSets = [
   { id: 'gs-1', name: 'Project Teams', locked: false, groupCount: 1, assignedCount: 1 },
@@ -248,7 +220,7 @@ afterAll(() => {
 });
 
 describe('CreateAssignmentWizardDialog', () => {
-  it('creates the assignment then posts a per-student override', async () => {
+  it('creates the assignment with assignee rows for a restricted audience', async () => {
     const user = userEvent.setup();
     const { setOpen, onCreate } = renderDialog();
 
@@ -256,9 +228,9 @@ describe('CreateAssignmentWizardDialog', () => {
     await clickNext(user); // -> Type
     await clickNext(user); // -> Assign To (Individual is the default type)
 
-    // Assigned to everyone by default; add a date override for one student via the
-    // "Add override" picker, then proceed.
-    await user.click(await screen.findByRole('button', { name: 'Sam Student' }));
+    // Restrict the audience from "all students" to just one student; that student rides in
+    // the create body as an assignee (WHO is assigned), not a separate override call.
+    await user.click(await screen.findByRole('button', { name: 'Assign only Sam Student' }));
     await clickNext(user); // -> Review
 
     // Reaching Review must not have submitted yet.
@@ -270,22 +242,25 @@ describe('CreateAssignmentWizardDialog', () => {
 
     const assignmentPost = postCalls('/assignments').find((c) => !String(c[0]).includes('/overrides'));
     const body = JSON.parse((assignmentPost?.[1] as RequestInit).body as string);
-    // Defaults: individual, and always created unpublished.
-    expect(body).toMatchObject({ title: 'Homework 1', isGroup: false, isPublished: false });
+    // Individual (no groupSetId), unpublished, restricted audience with the one assignee.
+    expect(body).toMatchObject({
+      title: 'Homework 1',
+      isPublished: false,
+      assignedToEveryone: false,
+      assignees: [{ userId: 'stu-1' }],
+    });
+    expect(body.groupSetId).toBeUndefined();
     expect(body).toHaveProperty('dueDate');
 
-    await waitFor(() => expect(postCalls('/overrides').length).toBe(1));
-    const overridePost = postCalls('/overrides')[0];
-    expect(JSON.parse((overridePost[1] as RequestInit).body as string)).toMatchObject({
-      userId: 'stu-1',
-    });
+    // No separate override calls anymore; the audience is in the create body.
+    expect(postCalls('/overrides')).toHaveLength(0);
 
     expect(toastSuccessMock).toHaveBeenCalledWith('Assignment created');
     expect(onCreate).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
   });
 
-  it('creates a group assignment for the chosen group set (all groups by default)', async () => {
+  it('creates a group assignment pinned to the chosen group set (all groups by default)', async () => {
     const user = userEvent.setup();
     renderDialog();
 
@@ -298,17 +273,43 @@ describe('CreateAssignmentWizardDialog', () => {
     await clickNext(user); // -> Review
     await user.click(screen.getByRole('button', { name: /create assignment/i }));
 
-    // The assignment is created as a group assignment assigned to everyone (all groups);
-    // no per-group override rows are needed for the default audience.
+    // Created as a group assignment (groupSetId pinned) assigned to everyone (all groups);
+    // no assignee rows are needed for the default audience.
     await waitFor(() => expect(postCalls('/assignments').length).toBeGreaterThan(0));
     const assignmentPost = postCalls('/assignments').find(
       (c) => !String(c[0]).includes('/overrides'),
     );
-    expect(JSON.parse((assignmentPost?.[1] as RequestInit).body as string)).toMatchObject({
-      isGroup: true,
-      assignedToEveryone: true,
-    });
+    const body = JSON.parse((assignmentPost?.[1] as RequestInit).body as string);
+    expect(body).toMatchObject({ groupSetId: 'gs-1', assignedToEveryone: true });
+    expect(body.assignees).toBeUndefined();
     expect(postCalls('/overrides')).toHaveLength(0);
+  });
+
+  it('clears the audience when the Type is switched (no cross-type assignees)', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.type(screen.getByLabelText('Title'), 'Homework 1');
+    await clickNext(user); // -> Type
+    await user.click(screen.getByRole('radio', { name: /^Group/ }));
+    await user.selectOptions(await screen.findByLabelText('Group set'), 'gs-1');
+    await clickNext(user); // -> Assign To
+
+    // Restrict to one group (materializes a group assignee row + assignedToEveryone false).
+    await user.click(await screen.findByRole('button', { name: /Assign only Team A/ }));
+
+    // Go back and switch to Individual; the group audience must not carry over.
+    await user.click(screen.getByRole('button', { name: /^back$/i }));
+    await user.click(screen.getByRole('radio', { name: /^Individual/ }));
+    await clickNext(user); // -> Assign To (individual, everyone)
+    await clickNext(user); // -> Review
+    await user.click(screen.getByRole('button', { name: /create assignment/i }));
+
+    await waitFor(() => expect(postCalls('/assignments').length).toBeGreaterThan(0));
+    const body = JSON.parse((postCalls('/assignments')[0][1] as RequestInit).body as string);
+    expect(body).toMatchObject({ assignedToEveryone: true });
+    expect(body.groupSetId).toBeUndefined();
+    expect(body.assignees).toBeUndefined();
   });
 
   it('shows an error toast and does not close when assignment creation fails', async () => {

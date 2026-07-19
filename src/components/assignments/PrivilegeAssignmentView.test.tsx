@@ -376,7 +376,7 @@ describe('PrivilegeAssignmentView — tabs', () => {
   it('orders the tabs Assignment, Due Date(s), Problems, Submissions', () => {
     renderView();
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent?.trim());
-    expect(tabs).toEqual(['Assignment', 'Due Dates', 'Problems', 'Submissions']);
+    expect(tabs).toEqual(['Details', 'Type', 'Assign To', 'Problems', 'Submissions']);
   });
 
   it('lists the assignment problems on the Problems tab', async () => {
@@ -590,10 +590,10 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     expect(dialog).toHaveAttribute('data-course-id', 'c1');
   });
 
-  it('opens the Settings tab from the tab bar', async () => {
+  it('opens the Assign To tab from the tab bar', async () => {
     const user = userEvent.setup();
     renderView();
-    await user.click(screen.getByRole('tab', { name: /Due Date/ }));
+    await user.click(screen.getByRole('tab', { name: /Assign To/ }));
     expect(await screen.findByTestId('assignment-settings')).toBeInTheDocument();
   });
 
