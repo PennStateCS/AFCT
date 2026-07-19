@@ -684,7 +684,7 @@ export default function AssignmentSubmissions({
               <FileText className="h-6 w-6" /> Submissions
             </h2>
 
-            <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="mt-4 flex flex-col items-start gap-2 border-b pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <StudentNavigator
                 students={students}
                 selectedIndex={selectedIndex}
