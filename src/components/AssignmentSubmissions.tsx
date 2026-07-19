@@ -715,6 +715,7 @@ export default function AssignmentSubmissions({
                     scrollAreaClassName="max-h-[520px]"
                     numberShortcuts
                     showSubmissionUsage={false}
+                    showTotal
                   />
                 );
 
