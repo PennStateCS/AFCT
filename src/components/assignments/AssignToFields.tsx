@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import SwitchField from '@/components/ui/SwitchField';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
-import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
+import { AudienceSelect, type AudienceItem } from '@/components/assignments/AudienceSelect';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { CourseDateTimeField } from '@/components/dialogs/CourseDateTimeField';
 import {
@@ -24,7 +24,7 @@ import {
 } from '@/components/dialogs/useRosterStudentOptions';
 import { apiClient } from '@/lib/api/fetch-client';
 import { apiPaths } from '@/lib/api-paths';
-import type { GroupSetSummaryDTO, GroupSetDetailDTO } from '@/lib/group-set-service';
+import type { GroupSetDetailDTO } from '@/lib/group-set-service';
 import { CalendarClock, CalendarRange, ChevronDown, Users, X } from 'lucide-react';
 import type { AssignmentWizardFormSchema } from '@/schemas/assignment';
 import {
@@ -90,7 +90,8 @@ export function AssignToFields({
   courseId: string;
   active: boolean;
 }) {
-  const { fields, append, remove, update } = useFieldArray({ control, name: 'overrides' });
+  const { fields, append, remove, update, replace } = useFieldArray({ control, name: 'overrides' });
+  const { field: assignedToEveryoneField } = useController({ control, name: 'assignedToEveryone' });
   const sectionIdPrefix = useId();
   const regionHeadingId = `${sectionIdPrefix}-assign-to`;
   const audienceHeadingId = `${sectionIdPrefix}-audience`;
@@ -119,6 +120,9 @@ export function AssignToFields({
   const baseAllowLate = useWatch({ control, name: 'allowLateSubmissions' });
   const baseDue = useWatch({ control, name: 'dueDate' });
   const assignedToEveryone = useWatch({ control, name: 'assignedToEveryone' });
+  // Individual vs group assignment (chosen in the wizard's Type step). Drives whether the
+  // audience selector lists students or groups.
+  const isGroup = !!useWatch({ control, name: 'isGroup' });
   const overrides = (useWatch({ control, name: 'overrides' }) ?? []) as FormOverride[];
 
   // The selected group set lives in the form so the wizard can pin it after creation.
@@ -126,18 +130,8 @@ export function AssignToFields({
   const groupSetId = groupSetField.value ?? '';
 
   const students = useRosterStudentOptions(courseId, active);
-  const eligibleCount = students.length;
 
-  // Group sets for the course, then the groups within the chosen set.
-  const groupSetsQuery = useQuery({
-    queryKey: ['course', courseId, 'group-sets'],
-    queryFn: () => apiClient.get<GroupSetSummaryDTO[]>(apiPaths.courseGroupSets(courseId)),
-    enabled: active && !!courseId,
-    staleTime: 30_000,
-  });
-  const groupSets = groupSetsQuery.data ?? [];
-  const selectedSet = groupSets.find((s) => s.id === groupSetId);
-
+  // The chosen group set (from the Type step) and the groups within it.
   const groupSetDetailQuery = useQuery({
     queryKey: ['course', courseId, 'group-set', groupSetId],
     queryFn: () => apiClient.get<GroupSetDetailDTO>(apiPaths.courseGroupSet(courseId, groupSetId)),
@@ -181,74 +175,9 @@ export function AssignToFields({
       return next;
     });
 
-  // ── Assigned-student computation (for the "Assigned to X of N" summary) ───
-  const assignedStudentSet = (rows: FormOverride[]): Set<string> => {
-    const set = new Set<string>();
-    for (const r of rows) {
-      if (r.userId) set.add(r.userId);
-      else if (r.groupId) for (const id of groupMemberIdsById.get(r.groupId) ?? []) set.add(id);
-    }
-    return set;
-  };
-
   // ── Audience selectors (everyone off) ────────────────────────────────────
   const studentRows = fields.filter((f) => !!f.userId);
   const groupRows = fields.filter((f) => !!f.groupId);
-  const selectedStudentIds = studentRows.map((f) => f.userId as string);
-  const selectedGroupIds = groupRows.map((f) => f.groupId as string);
-
-  const setStudentAudience = (nextIds: string[]) => {
-    const next = new Set(nextIds);
-    const removals: number[] = [];
-    fields.forEach((f, i) => {
-      if (f.userId && !next.has(f.userId)) {
-        removals.push(i);
-        clearSessionKey(`s:${f.userId}`);
-      }
-    });
-    if (removals.length) remove(removals);
-    const existing = new Set(fields.filter((f) => f.userId).map((f) => f.userId));
-    for (const id of nextIds) {
-      if (!existing.has(id)) {
-        const s = students.find((x) => x.id === id);
-        append({
-          userId: id,
-          studentName: s ? getStudentName(s) : 'Student',
-          unlockAt: undefined,
-          dueDate: undefined,
-          allowLateSubmissions: undefined,
-          lateCutoff: undefined,
-        });
-      }
-    }
-  };
-
-  const setGroupAudience = (nextIds: string[]) => {
-    const next = new Set(nextIds);
-    const removals: number[] = [];
-    fields.forEach((f, i) => {
-      if (f.groupId && !next.has(f.groupId)) {
-        removals.push(i);
-        clearSessionKey(`g:${f.groupId}`);
-      }
-    });
-    if (removals.length) remove(removals);
-    const existing = new Set(fields.filter((f) => f.groupId).map((f) => f.groupId));
-    for (const id of nextIds) {
-      if (!existing.has(id)) {
-        const g = groups.find((x) => x.id === id);
-        append({
-          groupId: id,
-          groupName: g?.name ?? 'Group',
-          groupMemberCount: g?.members.length,
-          unlockAt: undefined,
-          dueDate: undefined,
-          allowLateSubmissions: undefined,
-          lateCutoff: undefined,
-        });
-      }
-    }
-  };
 
   // ── Date-override list (rows carrying a date exception, or session-added) ──
   const isShownOverride = (f: (typeof fields)[number], o: FormOverride | undefined): boolean => {
@@ -265,49 +194,88 @@ export function AssignToFields({
       return an.localeCompare(bn);
     });
 
-  const shownKeys = new Set(
-    overrideRows.map(({ f }) => overrideKey({ userId: f.userId, groupId: f.groupId })),
+
+  // The audience selector operates on students (individual) or groups (group). Members held
+  // out as a date exception are auto-removed from it (they appear in the overrides list).
+  const allMembers: AudienceItem[] = isGroup
+    ? groups.map((g) => ({ id: g.id, label: `${g.name} (${memberCountLabel(g.members.length)})` }))
+    : students.map((s) => ({ id: s.id, label: getStudentName(s) }));
+
+  const exceptionMemberIds = new Set(
+    overrideRows.map(({ f }) => (isGroup ? f.groupId : f.userId)).filter((v): v is string => !!v),
   );
 
-  // Candidates for "Add date override": audience members not already overridden.
-  const overrideCandidates: { id: string; label: string }[] = [];
-  if (assignedToEveryone) {
-    for (const s of students) {
-      if (!shownKeys.has(`s:${s.id}`)) {
-        overrideCandidates.push({ id: `s:${s.id}`, label: getStudentName(s) });
-      }
+  const audienceMemberIds = assignedToEveryone
+    ? allMembers.map((m) => m.id)
+    : isGroup
+      ? groupRows.map((f) => f.groupId as string)
+      : studentRows.map((f) => f.userId as string);
+
+  const selectedAudienceIds = audienceMemberIds.filter((id) => !exceptionMemberIds.has(id));
+
+  const makeAudienceRow = (memberId: string): FormOverride => {
+    if (isGroup) {
+      const g = groups.find((x) => x.id === memberId);
+      return {
+        groupId: memberId,
+        groupName: g?.name ?? 'Group',
+        groupMemberCount: g?.members.length,
+        unlockAt: undefined,
+        dueDate: undefined,
+        allowLateSubmissions: undefined,
+        lateCutoff: undefined,
+      };
     }
-    if (groupSetId) {
-      for (const g of groups) {
-        if (!shownKeys.has(`g:${g.id}`)) {
-          overrideCandidates.push({
-            id: `g:${g.id}`,
-            label: `${g.name} (${memberCountLabel(g.members.length)})`,
-          });
-        }
-      }
+    const s = students.find((x) => x.id === memberId);
+    return {
+      userId: memberId,
+      studentName: s ? getStudentName(s) : 'Student',
+      unlockAt: undefined,
+      dueDate: undefined,
+      allowLateSubmissions: undefined,
+      lateCutoff: undefined,
+    };
+  };
+
+  // Apply a new audience selection, preserving every exception row. When no member is
+  // excluded (everyone is covered by the default schedule or an exception) it collapses to
+  // the "assigned to everyone" shortcut; otherwise the selected members become explicit rows.
+  const setSelectedAudience = (nextIds: string[]) => {
+    const exceptionRows = fields.filter((f, i) => isShownOverride(f, overrides[i]));
+    const covered = new Set<string>([...nextIds, ...exceptionMemberIds]);
+    const everyoneCovered = allMembers.length > 0 && allMembers.every((m) => covered.has(m.id));
+    if (everyoneCovered) {
+      assignedToEveryoneField.onChange(true);
+      replace(exceptionRows);
+      return;
     }
-  } else {
-    for (const f of studentRows) {
-      if (!shownKeys.has(`s:${f.userId}`)) {
-        overrideCandidates.push({ id: `s:${f.userId}`, label: f.studentName ?? 'Student' });
+    assignedToEveryoneField.onChange(false);
+    const audienceOnly = nextIds
+      .filter((id) => !exceptionMemberIds.has(id))
+      .map((id) => makeAudienceRow(id));
+    replace([...exceptionRows, ...audienceOnly]);
+  };
+
+  // Candidates for "Add date override": members currently on the default schedule.
+  const overrideCandidates: { id: string; label: string }[] = selectedAudienceIds.map(
+    (memberId) => {
+      if (isGroup) {
+        const g = groups.find((x) => x.id === memberId);
+        return {
+          id: `g:${memberId}`,
+          label: `${g?.name ?? 'Group'} (${memberCountLabel(g?.members.length ?? 0)})`,
+        };
       }
-    }
-    for (const f of groupRows) {
-      if (!shownKeys.has(`g:${f.groupId}`)) {
-        overrideCandidates.push({
-          id: `g:${f.groupId}`,
-          label: `${f.groupName ?? 'Group'} (${memberCountLabel(f.groupMemberCount)})`,
-        });
-      }
-    }
-  }
+      const s = students.find((x) => x.id === memberId);
+      return { id: `s:${memberId}`, label: s ? getStudentName(s) : 'Student' };
+    },
+  );
 
   const addDateOverride = (rawId: string) => {
-    const isGroup = rawId.startsWith('g:');
+    const isGroupTarget = rawId.startsWith('g:');
     const id = rawId.slice(2);
     let displayName = 'Student';
-    if (isGroup) {
+    if (isGroupTarget) {
       const idx = fields.findIndex((f) => f.groupId === id);
       const g = groups.find((x) => x.id === id);
       displayName = g?.name ?? 'Group';
@@ -339,7 +307,7 @@ export function AssignToFields({
       }
       markDateOverride(`s:${id}`);
     }
-    const key = `${isGroup ? 'g' : 's'}:${id}`;
+    const key = `${isGroupTarget ? 'g' : 's'}:${id}`;
     setLiveMessage(`Date override added for ${displayName}.`);
     setFocusTargetId(overrideTriggerId(key));
   };
@@ -378,89 +346,37 @@ export function AssignToFields({
         Assign to and due dates
       </h3>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(17rem,0.8fr)_minmax(28rem,1.4fr)]">
-        <DueDateSection
-          id={audienceHeadingId}
-          icon={<Users className="h-4 w-4" />}
-          title="Assignment audience"
-          description="Choose who can access this assignment."
-          contentClassName="space-y-3"
-        >
-          <Controller
-            control={control}
-            name="assignedToEveryone"
-            render={({ field }) => (
-              <SwitchField
-                label="Assign to everyone in the course"
-                name="assignedToEveryone"
-                checked={field.value !== false}
-                onCheckedChange={(checked) => field.onChange(!!checked)}
-                description="Turn off to choose students or groups."
-                descriptionPlacement="inline"
-                boxClassName="bg-muted/15"
-              />
-            )}
-          />
-
-          {assignedToEveryone ? (
-            <div className="bg-muted/35 rounded-lg px-3 py-2 text-sm">
-              <span className="font-medium">
-                {eligibleCount > 0
-                  ? `All ${eligibleCount} eligible students`
-                  : 'All eligible students'}
-              </span>
-              <p className="text-muted-foreground mt-0.5 text-xs">
-                Date overrides can still be added below.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <SearchableMultiSelect
-                label="Students"
-                items={students.map((s) => ({ id: s.id, label: getStudentName(s) }))}
-                value={selectedStudentIds}
-                onChange={setStudentAudience}
-                placeholder="Select students"
-                searchPlaceholder="Search students..."
-                emptyStateText="No students in this course."
-              />
-              <SearchableSelect
-                label="Group set (optional)"
-                items={groupSets.map((s) => ({
-                  id: s.id,
-                  label: `${s.name} (${s.groupCount} ${s.groupCount === 1 ? 'group' : 'groups'})`,
-                }))}
-                onSelect={(setId) => groupSetField.onChange(setId)}
-                placeholder={selectedSet ? selectedSet.name : 'Choose a group set'}
-                searchPlaceholder="Search group sets..."
-                emptyStateText="No group sets in this course."
-              />
-              {groupSetId ? (
-                <SearchableMultiSelect
-                  label="Groups"
-                  items={groups.map((g) => ({
-                    id: g.id,
-                    label: `${g.name} (${memberCountLabel(g.members.length)})`,
-                  }))}
-                  value={selectedGroupIds}
-                  onChange={setGroupAudience}
-                  placeholder="Select groups"
-                  searchPlaceholder="Search groups..."
-                  emptyStateText="No groups in this set."
-                />
-              ) : null}
-              {audienceEmpty ? (
-                <p className="text-sm text-red-600" role="alert">
-                  Select at least one student or group, or assign the work to everyone.
-                </p>
-              ) : (
-                <p className="text-muted-foreground text-xs">
-                  {`Assigned to ${assignedStudentSet(overrides).size} of ${eligibleCount} eligible students.`}
-                </p>
-              )}
-            </div>
-          )}
-        </DueDateSection>
+      <DueDateSection
+        id={audienceHeadingId}
+        icon={<Users className="h-4 w-4" />}
+        title="Assigned to"
+        description={
+          isGroup
+            ? 'Choose which groups get this assignment. Groups with a date exception are listed below.'
+            : 'Choose which students get this assignment. Students with a date exception are listed below.'
+        }
+        contentClassName="space-y-2"
+      >
+        <AudienceSelect
+          id={`${sectionIdPrefix}-audience-select`}
+          label={isGroup ? 'Groups' : 'Students'}
+          items={allMembers}
+          value={selectedAudienceIds}
+          onChange={setSelectedAudience}
+          allLabel={isGroup ? 'All groups' : 'All students'}
+          addLabel={isGroup ? 'Add group' : 'Add student'}
+          searchPlaceholder={isGroup ? 'Search groups…' : 'Search students…'}
+          emptyStateText={isGroup ? 'No groups in this set.' : 'No students in this course.'}
+          emptySelectionText={isGroup ? 'No groups selected' : 'No students selected'}
+          error={
+            audienceEmpty
+              ? isGroup
+                ? 'Select at least one group.'
+                : 'Select at least one student.'
+              : undefined
+          }
+        />
+      </DueDateSection>
 
         <DueDateSection
           id={defaultDatesHeadingId}
@@ -522,7 +438,6 @@ export function AssignToFields({
             </p>
           ) : null}
         </DueDateSection>
-      </div>
 
       <DueDateSection
         id={overridesHeadingId}
@@ -568,15 +483,15 @@ export function AssignToFields({
             </div>
             <ul className="divide-y">
               {overrideRows.map(({ f, index, o }) => {
-                const isGroup = !!f.groupId;
+                const isGroupRow = !!f.groupId;
                 const key = overrideKey({ userId: f.userId, groupId: f.groupId }) ?? f.id;
-                const displayName = isGroup
+                const displayName = isGroupRow
                   ? (f.groupName ?? 'Group')
                   : (f.studentName ?? 'Student');
-                const targetLabel = isGroup ? `group ${displayName}` : displayName;
+                const targetLabel = isGroupRow ? `group ${displayName}` : displayName;
                 const isOpen = expandedKeys.has(key);
                 const overrideAllowLate = o?.allowLateSubmissions;
-                const groupMembers = isGroup
+                const groupMembers = isGroupRow
                   ? (groups.find((g) => g.id === f.groupId)?.members ?? []).map(
                       (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || m.email,
                     )
@@ -611,7 +526,7 @@ export function AssignToFields({
                               <span className="block truncate text-sm font-medium">
                                 {displayName}
                               </span>
-                              {isGroup ? (
+                              {isGroupRow ? (
                                 <span className="text-muted-foreground block text-xs">
                                   {memberCountLabel(f.groupMemberCount)}
                                 </span>

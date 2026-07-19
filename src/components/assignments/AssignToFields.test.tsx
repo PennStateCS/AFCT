@@ -71,6 +71,33 @@ vi.mock('@/components/ui/SearchableMultiSelect', () => ({
   ),
 }));
 
+// The audience chips multiselect, reduced to Clear / Select all buttons plus the error.
+vi.mock('@/components/assignments/AudienceSelect', () => ({
+  AudienceSelect: ({
+    label,
+    items,
+    onChange,
+    error,
+  }: {
+    label: string;
+    items: Array<{ id: string; label: string }>;
+    value: string[];
+    onChange: (next: string[]) => void;
+    error?: string;
+  }) => (
+    <fieldset>
+      <legend>{label}</legend>
+      <button type="button" onClick={() => onChange([])}>
+        Clear audience
+      </button>
+      <button type="button" onClick={() => onChange(items.map((i) => i.id))}>
+        Select all audience
+      </button>
+      {error ? <p role="alert">{error}</p> : null}
+    </fieldset>
+  ),
+}));
+
 vi.mock('@/components/ui/switch', () => ({
   Switch: ({
     id,
@@ -181,15 +208,13 @@ describe('AssignToFields', () => {
     ).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('blocks with an empty-state message when everyone is off and no targets are chosen', async () => {
+  it('shows an error when the audience is cleared to no one', async () => {
     const user = userEvent.setup();
     renderFields();
 
-    await user.click(screen.getByRole('switch', { name: /assign to everyone in the course/i }));
+    await user.click(screen.getByRole('button', { name: /clear audience/i }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(
-      'Select at least one student or group, or assign the work to everyone.',
-    );
+    expect(alert).toHaveTextContent(/select at least one student/i);
   });
 });

@@ -41,6 +41,33 @@ vi.mock('@/components/ui/InputGroup', () => ({
   ),
 }));
 
+vi.mock('@/components/ui/SelectField', () => ({
+  __esModule: true,
+  default: ({
+    label,
+    options = [],
+    value,
+    onValueChange,
+  }: {
+    label: string;
+    options?: Array<{ value: string; label: React.ReactNode }>;
+    value?: string;
+    onValueChange?: (v: string) => void;
+  }) => (
+    <label>
+      {label}
+      <select aria-label={label} value={value ?? ''} onChange={(e) => onValueChange?.(e.target.value)}>
+        <option value="" />
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  ),
+}));
+
 vi.mock('@/components/ui/SearchableSelect', () => ({
   SearchableSelect: ({
     label,
@@ -258,7 +285,7 @@ describe('CreateAssignmentWizardDialog', () => {
     expect(setOpen).toHaveBeenCalledWith(false);
   });
 
-  it('creates the assignment then posts a group override with { groupId }', async () => {
+  it('creates a group assignment for the chosen group set (all groups by default)', async () => {
     const user = userEvent.setup();
     renderDialog();
 
@@ -266,32 +293,22 @@ describe('CreateAssignmentWizardDialog', () => {
     await clickNext(user); // -> Type
     // Choose Group, then pick the group set it runs in (required to advance).
     await user.click(screen.getByRole('radio', { name: /^Group/ }));
-    await user.click(await screen.findByRole('radio', { name: /Project Teams/ }));
-    await clickNext(user); // -> Assign To
-
-    // Assign to specific targets: turn off "everyone", pick a group set, then check one
-    // of its groups as the audience target.
-    await user.click(screen.getByRole('switch', { name: /assign to everyone in the course/i }));
-    await user.click(await screen.findByRole('button', { name: 'Project Teams (1 group)' }));
-    await user.click(await screen.findByRole('checkbox', { name: 'Team A (1 member)' }));
-
+    await user.selectOptions(await screen.findByLabelText('Group set'), 'gs-1');
+    await clickNext(user); // -> Assign To (defaults to all groups)
     await clickNext(user); // -> Review
     await user.click(screen.getByRole('button', { name: /create assignment/i }));
 
-    // The assignment itself is created as a group assignment.
+    // The assignment is created as a group assignment assigned to everyone (all groups);
+    // no per-group override rows are needed for the default audience.
     await waitFor(() => expect(postCalls('/assignments').length).toBeGreaterThan(0));
     const assignmentPost = postCalls('/assignments').find(
       (c) => !String(c[0]).includes('/overrides'),
     );
     expect(JSON.parse((assignmentPost?.[1] as RequestInit).body as string)).toMatchObject({
       isGroup: true,
+      assignedToEveryone: true,
     });
-
-    await waitFor(() => expect(postCalls('/overrides').length).toBe(1));
-    const overridePost = postCalls('/overrides')[0];
-    const body = JSON.parse((overridePost[1] as RequestInit).body as string);
-    expect(body).toMatchObject({ groupId: 'grp-1' });
-    expect(body).not.toHaveProperty('userId');
+    expect(postCalls('/overrides')).toHaveLength(0);
   });
 
   it('shows an error toast and does not close when assignment creation fails', async () => {
@@ -322,8 +339,8 @@ describe('CreateAssignmentWizardDialog', () => {
     await user.type(screen.getByLabelText('Title'), 'Homework 1');
     await clickNext(user); // -> Type
     await user.click(screen.getByRole('radio', { name: /^Group/ }));
-    // The group set list loads, but leave it unselected and try to advance.
-    await screen.findByRole('radio', { name: /Project Teams/ });
+    // The group set dropdown loads, but leave it unselected and try to advance.
+    await screen.findByLabelText('Group set');
     await clickNext(user);
 
     // Held on Type: a validation message shows and Assign To never mounts.

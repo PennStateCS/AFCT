@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Stepper } from '@/components/ui/stepper';
 import InputGroup from '@/components/ui/InputGroup';
+import SelectField from '@/components/ui/SelectField';
 import { Textarea } from '@/components/ui/textarea';
 import { AssignToFields } from '@/components/assignments/AssignToFields';
 import { toast } from 'sonner';
@@ -325,7 +326,7 @@ export function CreateAssignmentWizardDialog({
                           {
                             value: true,
                             label: 'Group',
-                            desc: 'Students submit and are graded together as a group.',
+                            desc: 'Students submit and are graded together as a group. A faculty member or TA can override an individual member’s grade.',
                           },
                         ] as const
                       ).map((opt) => {
@@ -369,11 +370,7 @@ export function CreateAssignmentWizardDialog({
                   control={control}
                   name="groupSetId"
                   render={({ field }) => (
-                    <fieldset className="space-y-2">
-                      <legend className="text-sm font-medium">Group set</legend>
-                      <p className="text-muted-foreground text-sm">
-                        Students submit and are graded as their group in the chosen set.
-                      </p>
+                    <div className="space-y-1">
                       {groupSetsQuery.isPending ? (
                         <p className="text-muted-foreground text-sm">Loading group sets…</p>
                       ) : groupSets.length === 0 ? (
@@ -382,42 +379,26 @@ export function CreateAssignmentWizardDialog({
                           tab first.
                         </p>
                       ) : (
-                        <div role="radiogroup" aria-label="Group set" className="grid gap-2">
-                          {groupSets.map((gs) => {
-                            const selected = field.value === gs.id;
-                            return (
-                              <label
-                                key={gs.id}
-                                className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition ${
-                                  selected
-                                    ? 'border-primary bg-primary/5 ring-primary/30 ring-1'
-                                    : 'hover:bg-muted/40'
-                                }`}
-                              >
-                                <input
-                                  type="radio"
-                                  name="groupSetId"
-                                  className="accent-primary"
-                                  checked={selected}
-                                  onChange={() => field.onChange(gs.id)}
-                                />
-                                <span>
-                                  <span className="block text-sm font-medium">{gs.name}</span>
-                                  <span className="text-muted-foreground block text-xs">
-                                    {gs.groupCount} {gs.groupCount === 1 ? 'group' : 'groups'}
-                                  </span>
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
+                        <SelectField
+                          label="Group set"
+                          name="groupSetId"
+                          placeholder="Choose a group set"
+                          description="Students submit and are graded as their group in the chosen set."
+                          value={field.value ?? undefined}
+                          onValueChange={(v) => field.onChange(v)}
+                          triggerClassName="bg-card border-black"
+                          options={groupSets.map((gs) => ({
+                            value: gs.id,
+                            label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,
+                          }))}
+                        />
                       )}
                       {errors.groupSetId && (
                         <p className="text-xs text-red-600" role="alert">
                           {errors.groupSetId.message}
                         </p>
                       )}
-                    </fieldset>
+                    </div>
                   )}
                 />
               )}
