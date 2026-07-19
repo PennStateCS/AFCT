@@ -536,7 +536,15 @@ export default function DashboardSidebarMenu() {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton className="hover:bg-secondary data-[state=open]:bg-secondary/70 data-[state=open]:text-secondary-foreground h-14 bg-[#525252] px-3 py-3 transition-colors">
+                <SidebarMenuButton
+                  className={cn(
+                    'hover:bg-secondary data-[state=open]:bg-secondary/70 data-[state=open]:text-secondary-foreground h-14 bg-[#525252] px-3 py-3 transition-colors',
+                    // In the icon rail the button shrinks to 32px; drop the padding and
+                    // center so the 32px avatar fills the tile as a clean circle instead
+                    // of overflowing an 8px-padded 16px box behind the (hidden) name.
+                    'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:!p-0',
+                  )}
+                >
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarImage
                       src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
@@ -549,11 +557,21 @@ export default function DashboardSidebarMenu() {
                       {getInitials(user.firstName, user.lastName, user.email)}
                     </AvatarFallback>
                   </Avatar>
-                  {user.name}
-                  <ChevronUp className="ml-auto" />
+                  {!collapsed && (
+                    <>
+                      <span className="truncate">{user.name}</span>
+                      <ChevronUp className="ml-auto" />
+                    </>
+                  )}
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" className="w-[var(--radix-popper-anchor-width)]">
+              {/* min-w (not w) so the menu still fills the trigger when the sidebar is
+                  expanded, but grows to fit its items when collapsed (the trigger is
+                  then only 32px wide, which would otherwise squish the menu). */}
+              <DropdownMenuContent
+                side="top"
+                className="min-w-[max(var(--radix-popper-anchor-width),12rem)]"
+              >
                 {/* Section header, not an action. A Label keeps it out of the menu's
                     focus/arrow-key order; overrides preserve the exact resting look. */}
                 <DropdownMenuLabel className="font-normal [&_svg:not([class*='text-'])]:text-muted-foreground">

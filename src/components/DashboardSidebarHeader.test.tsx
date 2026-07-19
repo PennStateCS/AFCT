@@ -54,13 +54,13 @@ vi.mock('@/components/ui/tooltip', () => {
   return {
     TooltipProvider: PassThrough,
     TooltipTrigger: PassThrough,
-    TooltipContent: ({ children }: { children: React.ReactNode }) => (
-      <div data-testid="tooltip-content">{children}</div>
-    ),
-    Tooltip: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
-      <div data-testid="tooltip" data-open={open === undefined ? 'undefined' : String(open)}>
+    TooltipContent: ({ children, hidden }: { children: React.ReactNode; hidden?: boolean }) => (
+      <div data-testid="tooltip-content" data-hidden={hidden ? 'true' : 'false'}>
         {children}
       </div>
+    ),
+    Tooltip: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="tooltip">{children}</div>
     ),
   };
 });
@@ -84,17 +84,17 @@ describe('DashboardSidebarHeader', () => {
     expect(screen.getByTestId('sidebar-menu-button').dataset.active).toBe('true');
   });
 
-  it('keeps the tooltip closed while expanded', () => {
+  it('hides the tooltip content while expanded', () => {
     render(<DashboardSidebarHeader />);
 
-    expect(screen.getByTestId('tooltip').dataset.open).toBe('false');
+    expect(screen.getByTestId('tooltip-content').dataset.hidden).toBe('true');
   });
 
-  it('lets the tooltip manage visibility when collapsed', () => {
+  it('shows the tooltip content when collapsed', () => {
     useSidebarMock.mockReturnValue({ state: 'collapsed' });
 
     render(<DashboardSidebarHeader />);
 
-    expect(screen.getByTestId('tooltip').dataset.open).toBe('undefined');
+    expect(screen.getByTestId('tooltip-content').dataset.hidden).toBe('false');
   });
 });

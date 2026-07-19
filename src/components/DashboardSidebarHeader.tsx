@@ -24,7 +24,10 @@ export default function DashboardSidebarHeader() {
       <SidebarMenu>
         <SidebarMenuItem>
           <TooltipProvider delayDuration={100}>
-            <Tooltip open={collapsed ? undefined : false}>
+            {/* Leave the tooltip uncontrolled and hide its content when expanded
+                (the label is already visible), rather than toggling `open` between
+                false and undefined, which warns about controlled/uncontrolled switch. */}
+            <Tooltip>
               <TooltipTrigger asChild>
                 <SidebarMenuButton
                   asChild
@@ -43,6 +46,7 @@ export default function DashboardSidebarHeader() {
               </TooltipTrigger>
               <TooltipContent
                 side="right"
+                hidden={!collapsed}
                 className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                 sideOffset={10}
               >
