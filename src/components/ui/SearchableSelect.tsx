@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useId, useMemo, useState } from 'react';
+import React, { useId, useMemo, useRef, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -22,6 +22,10 @@ interface SearchableSelectProps {
   searchPlaceholder?: string;
   emptyStateText?: string;
   disabled?: boolean;
+  /** Let a caller move focus elsewhere after a pick instead of returning to the trigger. */
+  restoreFocusAfterSelect?: boolean;
+  className?: string;
+  triggerClassName?: string;
 }
 
 /**
@@ -38,11 +42,15 @@ export function SearchableSelect({
   emptyStateText = 'No results found.',
   id,
   disabled,
+  restoreFocusAfterSelect = true,
+  className,
+  triggerClassName,
 }: SearchableSelectProps) {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const generatedId = useId();
   const triggerId = id ?? generatedId;
+  const selectedRef = useRef(false);
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -51,13 +59,14 @@ export function SearchableSelect({
   }, [items, search]);
 
   const pick = (itemId: string) => {
+    selectedRef.current = true;
     onSelect(itemId);
     setSearch('');
     setOpen(false);
   };
 
   return (
-    <div className="flex flex-col">
+    <div className={cn('flex flex-col', className)}>
       {label ? (
         <Label htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
           {label}
@@ -78,6 +87,7 @@ export function SearchableSelect({
             className={cn(
               'border-input text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/40 flex h-11 w-full items-center justify-between rounded-md border bg-transparent px-3 text-sm shadow-xs transition-all duration-150 focus-visible:ring-[3px] focus-visible:outline-none',
               disabled && 'cursor-not-allowed opacity-60',
+              triggerClassName,
             )}
           >
             <span className="min-w-0 flex-1 truncate text-left">{placeholder}</span>
@@ -88,6 +98,10 @@ export function SearchableSelect({
           align="start"
           collisionPadding={8}
           aria-label={label ? `${label} options` : 'Options'}
+          onCloseAutoFocus={(event) => {
+            if (selectedRef.current && !restoreFocusAfterSelect) event.preventDefault();
+            selectedRef.current = false;
+          }}
           className="bg-popover flex max-h-72 w-[var(--radix-popover-trigger-width)] flex-col p-2"
         >
           <Input
@@ -98,7 +112,7 @@ export function SearchableSelect({
             className="mb-2 h-9 shrink-0 text-sm"
           />
           <div
-            role="listbox"
+            role="group"
             aria-label={label ?? 'Options'}
             className="min-h-0 flex-1 overflow-auto rounded border"
           >
@@ -109,8 +123,6 @@ export function SearchableSelect({
                 <button
                   key={item.id}
                   type="button"
-                  role="option"
-                  aria-selected={false}
                   onClick={() => pick(item.id)}
                   className="hover:bg-muted/50 flex w-full cursor-pointer items-center px-3 py-2 text-left text-sm"
                 >

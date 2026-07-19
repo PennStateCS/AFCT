@@ -161,18 +161,24 @@ describe('AssignToFields', () => {
     // Freshly added rows auto-expand: the inline editor is visible.
     expect(screen.getByLabelText('Available from')).toBeInTheDocument();
     expect(screen.getByText('Date overrides (1)')).toBeInTheDocument();
+    const overrideTrigger = screen.getByRole('button', {
+      name: 'Edit date override for Sam Student',
+    });
+    expect(overrideTrigger).toHaveFocus();
 
     // Collapse the row: it now shows a one-line summary with a Default badge for each
     // inherited date field (Available from + Due are both blank -> inherit).
-    await user.click(screen.getByRole('button', { name: 'Edit date override for Sam Student' }));
+    await user.click(overrideTrigger);
     expect(screen.getAllByText('Default').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Late: default')).toBeInTheDocument();
+    expect(screen.getByText('Default: closes at due')).toBeInTheDocument();
     expect(screen.queryByLabelText('Available from')).not.toBeInTheDocument();
 
     // Expand again: badges/summary give way to the editor.
     await user.click(screen.getByRole('button', { name: 'Edit date override for Sam Student' }));
     expect(screen.getByLabelText('Available from')).toBeInTheDocument();
-    expect(screen.queryByText('Late: default')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Edit date override for Sam Student' }),
+    ).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('blocks with an empty-state message when everyone is off and no targets are chosen', async () => {

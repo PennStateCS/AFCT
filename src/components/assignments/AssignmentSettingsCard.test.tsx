@@ -189,9 +189,11 @@ describe('AssignmentSettingsCard', () => {
 
     await user.click(screen.getByRole('switch', { name: /assign to everyone/i }));
 
-    expect(await screen.findByText(/assigned to all 2 eligible students/i)).toBeInTheDocument();
+    expect(await screen.findByText(/all 2 eligible students/i)).toBeInTheDocument();
     // The override survives the audience change.
-    expect(screen.getByRole('button', { name: /edit date override for Alice/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /edit date override for Alice/i }),
+    ).toBeInTheDocument();
   });
 
   it('restores audience selections when toggling everyone off, on, then off again', async () => {
@@ -315,13 +317,20 @@ describe('AssignmentSettingsCard', () => {
     await screen.findByRole('heading', { name: /date overrides \(0\)/i });
 
     // The "Add date override" picker lists eligible students (popover mocked open).
-    const option = await screen.findByRole('option', { name: 'Alice Anderson' });
+    const option = await screen.findByRole('button', { name: 'Alice Anderson' });
     await user.click(option);
 
-    expect(await screen.findByRole('heading', { name: /date overrides \(1\)/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /date overrides \(1\)/i }),
+    ).toBeInTheDocument();
+    const overrideTrigger = screen.getByRole('button', {
+      name: /edit date override for Alice/i,
+    });
+    await waitFor(() => expect(overrideTrigger).toHaveFocus());
 
     // Remove it (everyone is on, so the row is dropped entirely).
     await user.click(screen.getByRole('button', { name: /remove date override for Alice/i }));
     expect(screen.getByRole('heading', { name: /date overrides \(0\)/i })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add override' })).toHaveFocus());
   });
 });

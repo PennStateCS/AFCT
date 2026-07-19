@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import {
   Controller,
   useController,
@@ -25,8 +25,12 @@ import {
 import { apiClient } from '@/lib/api/fetch-client';
 import { apiPaths } from '@/lib/api-paths';
 import type { GroupSetSummaryDTO, GroupSetDetailDTO } from '@/lib/group-set-service';
-import { ChevronDown, X } from 'lucide-react';
+import { CalendarClock, CalendarRange, ChevronDown, Users, X } from 'lucide-react';
 import type { AssignmentWizardFormSchema } from '@/schemas/assignment';
+import {
+  DueDateSection,
+  OverrideLatePolicyField,
+} from '@/components/assignments/DueDateFormPrimitives';
 
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 type FormOverride = NonNullable<FormValues['overrides']>[number];
@@ -87,11 +91,30 @@ export function AssignToFields({
   active: boolean;
 }) {
   const { fields, append, remove, update } = useFieldArray({ control, name: 'overrides' });
+  const sectionIdPrefix = useId();
+  const regionHeadingId = `${sectionIdPrefix}-assign-to`;
+  const audienceHeadingId = `${sectionIdPrefix}-audience`;
+  const defaultDatesHeadingId = `${sectionIdPrefix}-default-dates`;
+  const overridesHeadingId = `${sectionIdPrefix}-overrides`;
+  const addOverrideId = `${sectionIdPrefix}-add-override`;
+  const overrideTriggerId = (key: string) =>
+    `${sectionIdPrefix}-override-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
   // Rows the user has designated as date overrides this session (so a freshly-added one
   // shows in the list before any date is typed). Rows with dates show on their own.
   const [dateOverrideKeys, setDateOverrideKeys] = useState<Set<string>>(new Set());
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [focusTargetId, setFocusTargetId] = useState<string | null>(null);
+  const [liveMessage, setLiveMessage] = useState('');
+
+  useEffect(() => {
+    if (!focusTargetId) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(focusTargetId)?.focus();
+      setFocusTargetId(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [fields, focusTargetId]);
 
   const baseAllowLate = useWatch({ control, name: 'allowLateSubmissions' });
   const baseDue = useWatch({ control, name: 'dueDate' });
@@ -123,7 +146,11 @@ export function AssignToFields({
   });
   const groups = groupSetDetailQuery.data?.groups ?? [];
   const groupMemberIdsById = new Map<string, string[]>();
-  for (const g of groups) groupMemberIdsById.set(g.id, g.members.map((m) => m.id));
+  for (const g of groups)
+    groupMemberIdsById.set(
+      g.id,
+      g.members.map((m) => m.id),
+    );
 
   // ── Session state helpers ────────────────────────────────────────────────
   const clearSessionKey = (key: string) => {
@@ -279,10 +306,12 @@ export function AssignToFields({
   const addDateOverride = (rawId: string) => {
     const isGroup = rawId.startsWith('g:');
     const id = rawId.slice(2);
+    let displayName = 'Student';
     if (isGroup) {
       const idx = fields.findIndex((f) => f.groupId === id);
+      const g = groups.find((x) => x.id === id);
+      displayName = g?.name ?? 'Group';
       if (idx < 0) {
-        const g = groups.find((x) => x.id === id);
         append({
           groupId: id,
           groupName: g?.name ?? 'Group',
@@ -296,8 +325,9 @@ export function AssignToFields({
       markDateOverride(`g:${id}`);
     } else {
       const idx = fields.findIndex((f) => f.userId === id);
+      const s = students.find((x) => x.id === id);
+      displayName = s ? getStudentName(s) : 'Student';
       if (idx < 0) {
-        const s = students.find((x) => x.id === id);
         append({
           userId: id,
           studentName: s ? getStudentName(s) : 'Student',
@@ -309,15 +339,19 @@ export function AssignToFields({
       }
       markDateOverride(`s:${id}`);
     }
+    const key = `${isGroup ? 'g' : 's'}:${id}`;
+    setLiveMessage(`Date override added for ${displayName}.`);
+    setFocusTargetId(overrideTriggerId(key));
   };
 
   const removeDateOverride = (index: number, key: string) => {
+    const f = fields[index];
+    const displayName = f?.groupId ? (f.groupName ?? 'Group') : (f?.studentName ?? 'Student');
     if (assignedToEveryone) {
       // Purely a date exception on top of "everyone"; drop the row (access stays via everyone).
       remove(index);
     } else {
       // Keep the audience membership: clear the dates but keep the row.
-      const f = fields[index];
       if (!f) return;
       update(index, {
         userId: f.userId,
@@ -332,296 +366,341 @@ export function AssignToFields({
       });
     }
     clearSessionKey(key);
+    setLiveMessage(`Date override removed for ${displayName}. Assignment access was not changed.`);
+    setFocusTargetId(addOverrideId);
   };
 
   const audienceEmpty = !assignedToEveryone && fields.length === 0;
 
   return (
-    <div className="space-y-8" role="region" aria-labelledby="assign-to-heading">
-      <h3 id="assign-to-heading" className="sr-only">
+    <div className="space-y-5" role="region" aria-labelledby={regionHeadingId}>
+      <h3 id={regionHeadingId} className="sr-only">
         Assign to and due dates
       </h3>
 
-      {/* ── 1. Assignment audience ───────────────────────────────────────── */}
-      <section className="space-y-3" aria-labelledby="audience-heading">
-        <h4 id="audience-heading" className="text-base font-semibold">
-          Assignment audience
-        </h4>
-        <Controller
-          control={control}
-          name="assignedToEveryone"
-          render={({ field }) => (
-            <SwitchField
-              label="Assign to everyone in the course"
-              name="assignedToEveryone"
-              checked={field.value !== false}
-              onCheckedChange={(checked) => field.onChange(!!checked)}
-              description="Turn off to assign only to the students and groups you choose."
-              descriptionPlacement="inline"
-            />
-          )}
-        />
-
-        {assignedToEveryone ? (
-          <p className="text-muted-foreground text-sm">
-            {eligibleCount > 0
-              ? `Assigned to all ${eligibleCount} eligible students.`
-              : 'Assigned to all eligible students.'}
-          </p>
-        ) : (
-          <div className="space-y-3">
-            <SearchableMultiSelect
-              label="Students"
-              items={students.map((s) => ({ id: s.id, label: getStudentName(s) }))}
-              value={selectedStudentIds}
-              onChange={setStudentAudience}
-              placeholder="Select students to assign"
-              searchPlaceholder="Search students..."
-              emptyStateText="No students in this course."
-            />
-            <SearchableSelect
-              label="Group set (optional)"
-              items={groupSets.map((s) => ({
-                id: s.id,
-                label: `${s.name} (${s.groupCount} ${s.groupCount === 1 ? 'group' : 'groups'})`,
-              }))}
-              onSelect={(setId) => groupSetField.onChange(setId)}
-              placeholder={selectedSet ? selectedSet.name : 'Assign to whole groups (optional)'}
-              searchPlaceholder="Search group sets..."
-              emptyStateText="No group sets in this course."
-            />
-            {groupSetId && (
-              <SearchableMultiSelect
-                label="Groups"
-                items={groups.map((g) => ({
-                  id: g.id,
-                  label: `${g.name} (${memberCountLabel(g.members.length)})`,
-                }))}
-                value={selectedGroupIds}
-                onChange={setGroupAudience}
-                placeholder="Select groups to assign"
-                searchPlaceholder="Search groups..."
-                emptyStateText="No groups in this set."
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(17rem,0.8fr)_minmax(28rem,1.4fr)]">
+        <DueDateSection
+          id={audienceHeadingId}
+          icon={<Users className="h-4 w-4" />}
+          title="Assignment audience"
+          description="Choose who can access this assignment."
+          contentClassName="space-y-3"
+        >
+          <Controller
+            control={control}
+            name="assignedToEveryone"
+            render={({ field }) => (
+              <SwitchField
+                label="Assign to everyone in the course"
+                name="assignedToEveryone"
+                checked={field.value !== false}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Turn off to choose students or groups."
+                descriptionPlacement="inline"
+                boxClassName="bg-muted/15"
               />
             )}
-            {audienceEmpty ? (
-              <p className="text-sm text-red-600" role="alert">
-                Select at least one student or group, or assign the work to everyone.
-              </p>
-            ) : (
-              <p className="text-muted-foreground text-sm">
-                {`Assigned to ${assignedStudentSet(overrides).size} of ${eligibleCount} eligible students.`}
-              </p>
-            )}
-          </div>
-        )}
-      </section>
+          />
 
-      {/* ── 2. Default dates ─────────────────────────────────────────────── */}
-      <section className="space-y-3" aria-labelledby="default-dates-heading">
-        <h4 id="default-dates-heading" className="text-base font-semibold">
-          Default dates
-        </h4>
-        <div className="grid gap-4 md:grid-cols-2">
-          <CourseDateTimeField
-            control={control}
-            name="unlockAt"
-            label="Available from (optional)"
-            error={errors.unlockAt?.message}
-          />
-          <CourseDateTimeField
-            control={control}
-            name="dueDate"
-            label="Due"
-            error={errors.dueDate?.message}
-            requiredMark
-          />
-        </div>
-        <Controller
-          control={control}
-          name="allowLateSubmissions"
-          render={({ field }) => (
-            <SwitchField
-              label="Allow late submissions"
-              name="allowLateSubmissions"
-              checked={!!field.value}
-              onCheckedChange={(checked) => field.onChange(!!checked)}
-              description="Accept submissions after the due date until the deadline below."
-              descriptionPlacement="inline"
-            />
+          {assignedToEveryone ? (
+            <div className="bg-muted/35 rounded-lg px-3 py-2 text-sm">
+              <span className="font-medium">
+                {eligibleCount > 0
+                  ? `All ${eligibleCount} eligible students`
+                  : 'All eligible students'}
+              </span>
+              <p className="text-muted-foreground mt-0.5 text-xs">
+                Date overrides can still be added below.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <SearchableMultiSelect
+                label="Students"
+                items={students.map((s) => ({ id: s.id, label: getStudentName(s) }))}
+                value={selectedStudentIds}
+                onChange={setStudentAudience}
+                placeholder="Select students"
+                searchPlaceholder="Search students..."
+                emptyStateText="No students in this course."
+              />
+              <SearchableSelect
+                label="Group set (optional)"
+                items={groupSets.map((s) => ({
+                  id: s.id,
+                  label: `${s.name} (${s.groupCount} ${s.groupCount === 1 ? 'group' : 'groups'})`,
+                }))}
+                onSelect={(setId) => groupSetField.onChange(setId)}
+                placeholder={selectedSet ? selectedSet.name : 'Choose a group set'}
+                searchPlaceholder="Search group sets..."
+                emptyStateText="No group sets in this course."
+              />
+              {groupSetId ? (
+                <SearchableMultiSelect
+                  label="Groups"
+                  items={groups.map((g) => ({
+                    id: g.id,
+                    label: `${g.name} (${memberCountLabel(g.members.length)})`,
+                  }))}
+                  value={selectedGroupIds}
+                  onChange={setGroupAudience}
+                  placeholder="Select groups"
+                  searchPlaceholder="Search groups..."
+                  emptyStateText="No groups in this set."
+                />
+              ) : null}
+              {audienceEmpty ? (
+                <p className="text-sm text-red-600" role="alert">
+                  Select at least one student or group, or assign the work to everyone.
+                </p>
+              ) : (
+                <p className="text-muted-foreground text-xs">
+                  {`Assigned to ${assignedStudentSet(overrides).size} of ${eligibleCount} eligible students.`}
+                </p>
+              )}
+            </div>
           )}
-        />
-        {baseAllowLate ? (
-          <>
+        </DueDateSection>
+
+        <DueDateSection
+          id={defaultDatesHeadingId}
+          icon={<CalendarClock className="h-4 w-4" />}
+          title="Default schedule"
+          description="These dates apply unless a student or group has an override."
+          contentClassName="space-y-4"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
             <CourseDateTimeField
               control={control}
-              name="lateCutoff"
-              label="Available until (optional)"
-              error={errors.lateCutoff?.message}
-              min={baseDue || undefined}
+              name="unlockAt"
+              label="Available from (optional)"
+              error={errors.unlockAt?.message}
             />
-            <p className="text-muted-foreground text-xs">
-              Leave blank to accept late submissions with no deadline.
+            <CourseDateTimeField
+              control={control}
+              name="dueDate"
+              label="Due"
+              error={errors.dueDate?.message}
+              requiredMark
+            />
+          </div>
+          <div className="grid items-start gap-4 sm:grid-cols-2">
+            <Controller
+              control={control}
+              name="allowLateSubmissions"
+              render={({ field }) => (
+                <SwitchField
+                  label="Allow late submissions"
+                  name="allowLateSubmissions"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                  description="Accept work after the due date."
+                  descriptionPlacement="inline"
+                />
+              )}
+            />
+            {baseAllowLate ? (
+              <CourseDateTimeField
+                control={control}
+                name="lateCutoff"
+                label="Accept until (optional)"
+                error={errors.lateCutoff?.message}
+                min={baseDue || undefined}
+              />
+            ) : (
+              <div className="bg-muted/35 rounded-lg px-3 py-2 text-sm sm:mt-6">
+                <span className="font-medium">Closes at the due date</span>
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  Students cannot submit after it passes.
+                </p>
+              </div>
+            )}
+          </div>
+          {baseAllowLate ? (
+            <p className="text-muted-foreground -mt-2 text-xs">
+              Leave “Accept until” blank to allow late work without a cutoff.
             </p>
-          </>
-        ) : (
-          <p className="text-muted-foreground text-xs">Closes at the due date.</p>
-        )}
-      </section>
+          ) : null}
+        </DueDateSection>
+      </div>
 
-      {/* ── 3. Date overrides ────────────────────────────────────────────── */}
-      <section className="space-y-3" aria-labelledby="overrides-heading">
-        <h4 id="overrides-heading" className="text-base font-semibold">
-          Date overrides ({overrideRows.length})
-        </h4>
-        <p className="text-muted-foreground text-xs">
-          Give specific students or groups different dates. Any date left blank inherits the
-          default above.
+      <DueDateSection
+        id={overridesHeadingId}
+        icon={<CalendarRange className="h-4 w-4" />}
+        title={`Date overrides (${overrideRows.length})`}
+        description="Give selected students or groups different dates. Blank fields use the default schedule."
+        action={
+          <SearchableSelect
+            id={addOverrideId}
+            label="Add override"
+            items={overrideCandidates}
+            onSelect={addDateOverride}
+            placeholder="Select a student or group"
+            searchPlaceholder="Search audience..."
+            emptyStateText="Everyone in the audience already has an override."
+            restoreFocusAfterSelect={false}
+          />
+        }
+        contentClassName="p-0"
+      >
+        <p className="sr-only" aria-live="polite" aria-atomic="true">
+          {liveMessage}
         </p>
-
         {overrideRows.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No date overrides. Everyone uses the default dates.
-          </p>
+          <div className="m-4 rounded-lg border border-dashed px-4 py-6 text-center">
+            <p className="text-sm font-medium">No date overrides</p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Everyone currently follows the default schedule.
+            </p>
+          </div>
         ) : (
-          <ul className="space-y-2">
-            {overrideRows.map(({ f, index, o }) => {
-              const isGroup = !!f.groupId;
-              const key = overrideKey({ userId: f.userId, groupId: f.groupId }) ?? f.id;
-              const displayName = isGroup ? (f.groupName ?? 'Group') : (f.studentName ?? 'Student');
-              const targetLabel = isGroup ? `group ${displayName}` : displayName;
-              const isOpen = expandedKeys.has(key);
-              const overrideAllowLate = o?.allowLateSubmissions;
-              // Names of the group's members, when the set detail is loaded.
-              const groupMembers = isGroup
-                ? (groups.find((g) => g.id === f.groupId)?.members ?? []).map(
-                    (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || m.email,
-                  )
-                : [];
+          <>
+            <div
+              className="text-muted-foreground hidden grid-cols-[minmax(11rem,1.2fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_2.5rem] gap-3 border-b px-4 py-2 text-[11px] font-medium tracking-wide uppercase md:grid"
+              aria-hidden="true"
+            >
+              <span>Student or group</span>
+              <span>Available from</span>
+              <span>Due</span>
+              <span>Late work</span>
+              <span />
+            </div>
+            <ul className="divide-y">
+              {overrideRows.map(({ f, index, o }) => {
+                const isGroup = !!f.groupId;
+                const key = overrideKey({ userId: f.userId, groupId: f.groupId }) ?? f.id;
+                const displayName = isGroup
+                  ? (f.groupName ?? 'Group')
+                  : (f.studentName ?? 'Student');
+                const targetLabel = isGroup ? `group ${displayName}` : displayName;
+                const isOpen = expandedKeys.has(key);
+                const overrideAllowLate = o?.allowLateSubmissions;
+                const groupMembers = isGroup
+                  ? (groups.find((g) => g.id === f.groupId)?.members ?? []).map(
+                      (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || m.email,
+                    )
+                  : [];
 
-              let lateText: string;
-              if (overrideAllowLate === undefined || overrideAllowLate === null) {
-                lateText = 'Late: default';
-              } else if (overrideAllowLate) {
-                lateText = o?.lateCutoff
-                  ? `Late until ${formatLocal(o.lateCutoff)}`
-                  : 'Late: no deadline';
-              } else {
-                lateText = 'No late submissions';
-              }
+                let lateText: string;
+                if (overrideAllowLate === undefined || overrideAllowLate === null) {
+                  lateText = baseAllowLate ? 'Default: allowed' : 'Default: closes at due';
+                } else if (overrideAllowLate) {
+                  lateText = o?.lateCutoff
+                    ? `Until ${formatLocal(o.lateCutoff)}`
+                    : 'Allowed, no cutoff';
+                } else {
+                  lateText = 'Closes at due';
+                }
 
-              return (
-                <li key={f.id}>
-                  <Collapsible
-                    open={isOpen}
-                    onOpenChange={(open) => toggleExpanded(key, open)}
-                    className="rounded-lg border"
-                  >
-                    <div className="flex items-center justify-between gap-2 p-3">
-                      <CollapsibleTrigger
-                        className="flex min-w-0 flex-1 flex-col gap-1 text-left sm:flex-row sm:items-center sm:gap-3"
-                        aria-label={`Edit date override for ${targetLabel}`}
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <ChevronDown
-                            className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                            aria-hidden="true"
-                          />
-                          <span className="truncate text-sm font-medium">{displayName}</span>
-                          {isGroup && (
-                            <span className="text-muted-foreground shrink-0 text-xs">
-                              {memberCountLabel(f.groupMemberCount)}
+                return (
+                  <li key={f.id}>
+                    <Collapsible open={isOpen} onOpenChange={(open) => toggleExpanded(key, open)}>
+                      <div className="hover:bg-muted/20 flex items-stretch gap-1 px-2 sm:px-3">
+                        <CollapsibleTrigger
+                          id={overrideTriggerId(key)}
+                          className="focus-visible:ring-ring grid min-w-0 flex-1 gap-2 rounded-md px-2 py-3 text-left focus-visible:ring-2 focus-visible:outline-none md:grid-cols-[minmax(11rem,1.2fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)] md:items-center md:gap-3"
+                          aria-label={`Edit date override for ${targetLabel}`}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <ChevronDown
+                              className={`text-muted-foreground h-4 w-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                              aria-hidden="true"
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium">
+                                {displayName}
+                              </span>
+                              {isGroup ? (
+                                <span className="text-muted-foreground block text-xs">
+                                  {memberCountLabel(f.groupMemberCount)}
+                                </span>
+                              ) : null}
                             </span>
-                          )}
-                        </span>
-                        {!isOpen && (
-                          <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-xs sm:pl-0">
-                            <span className="inline-flex items-center gap-1">
-                              From:{' '}
-                              {o?.unlockAt ? (
-                                formatLocal(o.unlockAt)
-                              ) : (
-                                <Badge variant="neutral">Default</Badge>
-                              )}
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              Due:{' '}
-                              {o?.dueDate ? (
-                                formatLocal(o.dueDate)
-                              ) : (
-                                <Badge variant="neutral">Default</Badge>
-                              )}
-                            </span>
-                            <span>{lateText}</span>
                           </span>
-                        )}
-                      </CollapsibleTrigger>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeDateOverride(index, key)}
-                        aria-label={`Remove date override for ${targetLabel}`}
-                      >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </div>
-                    <CollapsibleContent className="space-y-3 border-t p-4 pt-3">
-                      {isGroup && groupMembers.length > 0 && (
-                        <p className="text-muted-foreground text-xs">
-                          <span className="font-medium">Members:</span> {groupMembers.join(', ')}
-                        </p>
-                      )}
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <CourseDateTimeField
-                          control={control}
-                          name={`overrides.${index}.unlockAt`}
-                          label="Available from"
-                        />
-                        <CourseDateTimeField
-                          control={control}
-                          name={`overrides.${index}.dueDate`}
-                          label="Due"
-                        />
+                          <span className="text-muted-foreground pl-6 text-xs md:pl-0">
+                            <span className="font-medium md:sr-only">Available: </span>
+                            {o?.unlockAt ? (
+                              formatLocal(o.unlockAt)
+                            ) : (
+                              <Badge variant="neutral">Default</Badge>
+                            )}
+                          </span>
+                          <span className="text-muted-foreground pl-6 text-xs md:pl-0">
+                            <span className="font-medium md:sr-only">Due: </span>
+                            {o?.dueDate ? (
+                              formatLocal(o.dueDate)
+                            ) : (
+                              <Badge variant="neutral">Default</Badge>
+                            )}
+                          </span>
+                          <span className="text-muted-foreground pl-6 text-xs md:pl-0">
+                            <span className="font-medium md:sr-only">Late work: </span>
+                            {lateText}
+                          </span>
+                        </CollapsibleTrigger>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="my-2 h-9 w-9 shrink-0"
+                          onClick={() => removeDateOverride(index, key)}
+                          aria-label={`Remove date override for ${targetLabel}`}
+                        >
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </Button>
                       </div>
-                      <Controller
-                        control={control}
-                        name={`overrides.${index}.allowLateSubmissions`}
-                        render={({ field }) => (
-                          <SwitchField
-                            label="Allow late submissions"
-                            name={`overrides.${index}.allowLateSubmissions`}
-                            checked={!!field.value}
-                            onCheckedChange={(checked) => field.onChange(!!checked)}
-                            description="Accept submissions after the due date until the deadline below."
-                            descriptionPlacement="inline"
+                      <CollapsibleContent className="bg-muted/10 border-t px-4 py-4">
+                        {groupMembers.length > 0 ? (
+                          <p className="text-muted-foreground mb-3 text-xs">
+                            <span className="font-medium">Members:</span> {groupMembers.join(', ')}
+                          </p>
+                        ) : null}
+                        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
+                          <CourseDateTimeField
+                            control={control}
+                            name={`overrides.${index}.unlockAt`}
+                            label="Available from"
                           />
-                        )}
-                      />
-                      {overrideAllowLate && (
-                        <CourseDateTimeField
-                          control={control}
-                          name={`overrides.${index}.lateCutoff`}
-                          label="Available until (optional)"
-                        />
-                      )}
-                    </CollapsibleContent>
-                  </Collapsible>
-                </li>
-              );
-            })}
-          </ul>
+                          <CourseDateTimeField
+                            control={control}
+                            name={`overrides.${index}.dueDate`}
+                            label="Due"
+                          />
+                          <Controller
+                            control={control}
+                            name={`overrides.${index}.allowLateSubmissions`}
+                            render={({ field }) => (
+                              <OverrideLatePolicyField
+                                id={`${overrideTriggerId(key)}-late-policy`}
+                                value={field.value}
+                                onChange={field.onChange}
+                                defaultAllowsLate={!!baseAllowLate}
+                              />
+                            )}
+                          />
+                          {overrideAllowLate ? (
+                            <CourseDateTimeField
+                              control={control}
+                              name={`overrides.${index}.lateCutoff`}
+                              label="Accept until (optional)"
+                            />
+                          ) : (
+                            <div className="text-muted-foreground flex min-h-11 items-center text-xs xl:mt-6">
+                              {overrideAllowLate === false
+                                ? 'This override closes at its due date.'
+                                : 'Late-work behavior follows the assignment default.'}
+                            </div>
+                          )}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
-
-        <SearchableSelect
-          label="Add date override"
-          items={overrideCandidates}
-          onSelect={addDateOverride}
-          placeholder="Give a student or group different dates"
-          searchPlaceholder="Search..."
-          emptyStateText="Everyone in the audience already has an override."
-        />
-      </section>
+      </DueDateSection>
     </div>
   );
 }
