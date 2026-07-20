@@ -205,6 +205,10 @@ export function GradeBreakdownDialog({
             <Input
               type="number"
               className="w-24"
+              // The "Grade" column header does not say WHICH problem this box belongs
+              // to, and a screen reader tabbing form controls never hears the row. Name
+              // each input after its problem, and state the ceiling while we are here.
+              aria-label={`Grade for ${r.title}, maximum ${r.maxPoints} points`}
               min={0}
               max={r.maxPoints}
               value={r.grade === null ? '' : String(r.grade)}
