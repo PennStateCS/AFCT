@@ -89,10 +89,13 @@ Several triggers render visible text that is **not** their accessible name, so
 multiselect is the example that blocked workflow 1. Where that bites, either match on
 text (`locator('button', { hasText: ... })`) or add a real `aria-label` to the component.
 
-## Related: the integration suite
+## Related: the database suite
 
-`npm run test:integration` runs `src/**/*.integration.test.ts` against the same
-`afct_test` database via `vitest.integration.config.ts`. Those are Vitest, not
-Playwright, and exist for questions only a real Postgres can answer (claim exclusivity,
-constraints, cascades). They are excluded from the default `vitest run` so CI stays
-database-free.
+`npm run test:db` runs `src/**/*.db.test.ts` against the same `afct_test` database via
+`vitest.db.config.ts`. Those are Vitest, not Playwright, and exist for questions only a
+real Postgres can answer (claim exclusivity, constraints, cascades). They are excluded
+from the default `vitest run` so CI stays database-free.
+
+The name is `.db.test.ts`, not `.integration.test.ts`, because this repo already uses
+`*.integration.test.tsx` for component tests that render real primitives - those need no
+database and must stay in the default run.

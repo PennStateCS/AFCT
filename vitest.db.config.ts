@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 import path from 'path';
 
 /**
- * Integration tests: real Postgres, no Prisma mock.
+ * Database tests: real Postgres, no Prisma mock.
  *
  * The unit suite mocks Prisma at runtime, which is fast and covers most things but
  * structurally cannot answer questions about the *database*: whether two concurrent
@@ -12,15 +12,15 @@ import path from 'path';
  * Keep this suite small and about database behavior specifically. Anything provable
  * with a mock belongs in the unit suite, which needs no infrastructure.
  *
- * Run with `npm run test:integration` (resets + seeds afct_test first). These are
- * excluded from the default `vitest run`, so CI stays database-free.
+ * Run with `npm run test:db`. These are excluded from the default `vitest run`, so
+ * CI stays database-free.
  */
 export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['src/**/*.integration.test.ts'],
-    setupFiles: ['src/test/integration-setup.ts'],
+    include: ['src/**/*.db.test.ts'],
+    setupFiles: ['src/test/db-setup.ts'],
     // Concurrency tests coordinate on shared rows; running files in parallel against
     // one database makes failures depend on interleaving between unrelated suites.
     fileParallelism: false,
