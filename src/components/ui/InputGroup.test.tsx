@@ -32,11 +32,14 @@ describe('InputGroup', () => {
       'courseName-desc',
     );
     expect(screen.getByText('Course name is required')).toHaveAttribute('id', 'courseName-error');
-    // The required "*" is intentionally not rendered right now (required marking is
-    // being reworked); requiredMark is accepted but a no-op.
-    expect(
-      screen.queryByText((text, node) => node?.tagName === 'SPAN' && text.trim() === '*'),
-    ).not.toBeInTheDocument();
+    // Required is conveyed both ways: a visible "*" for sighted users (aria-hidden, so
+    // it isn't read as "asterisk") and aria-required on the input for assistive tech.
+    const marker = screen.getByText(
+      (text, node) => node?.tagName === 'SPAN' && text.trim() === '*',
+    );
+    expect(marker).toBeInTheDocument();
+    expect(marker).toHaveAttribute('aria-hidden', 'true');
+    expect(input).toHaveAttribute('aria-required', 'true');
   });
 
   it('delegates change and blur events to the provided field props', () => {

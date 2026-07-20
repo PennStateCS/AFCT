@@ -169,8 +169,15 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <CollapsibleTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-          <Info className="h-4 w-4" />
+        {/* Icon-only trigger: name it for assistive tech and reflect its open state. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          aria-label={expanded ? 'Hide activity details' : 'Show activity details'}
+          aria-expanded={expanded}
+        >
+          <Info className="h-4 w-4" aria-hidden="true" />
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="relative z-10">

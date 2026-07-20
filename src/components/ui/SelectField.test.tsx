@@ -58,6 +58,29 @@ describe('SelectField', () => {
     expect(screen.getByText('Pick a timezone')).toHaveAttribute('id', 'timezone-desc');
   });
 
+  it('marks a required field both visibly and programmatically', () => {
+    render(
+      <SelectField
+        label="Timezone"
+        name="timezone"
+        value=""
+        onValueChange={() => {}}
+        requiredMark
+        placeholder="Select timezone"
+      />,
+    );
+
+    // Visible "*" for sighted users, aria-required on the trigger for assistive tech.
+    const marker = screen.getByText(
+      (text, node) => node?.tagName === 'SPAN' && text.trim() === '*',
+    );
+    expect(marker).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('combobox', { name: 'Timezone' })).toHaveAttribute(
+      'aria-required',
+      'true',
+    );
+  });
+
   it('renders provided options and notifies on selection', async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();

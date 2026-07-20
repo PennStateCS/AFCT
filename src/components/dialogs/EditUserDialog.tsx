@@ -365,14 +365,20 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             )}
           />
 
-          {/* Email (read-only) */}
+          {/* Email (read-only). The label is tied to the input with htmlFor so the field
+              still has an accessible name; `readOnly` (not `disabled`) keeps it
+              focusable and reachable by screen readers. */}
           <div>
-            <label className="mb-2 block text-sm font-medium">Email</label>
+            <label htmlFor="edit-user-email" className="mb-2 block text-sm font-medium">
+              Email
+            </label>
             <input
+              id="edit-user-email"
+              name="email"
               type="email"
               value={user.email}
-              disabled
               readOnly
+              aria-readonly="true"
               className="w-full cursor-not-allowed rounded border bg-gray-200 p-2 text-sm opacity-70"
             />
           </div>

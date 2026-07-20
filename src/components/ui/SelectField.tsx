@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Label } from '@/components/ui/label';
+import { RequiredMark } from '@/components/ui/required-mark';
 import {
   Select,
   SelectTrigger,
@@ -23,8 +24,8 @@ export interface SelectFieldProps extends Omit<React.ComponentProps<typeof Selec
   placeholder?: string;
   description?: string;
   error?: string;
-  // Accepted for API compatibility, but the required "*" is currently not rendered
-  // (required marking is being reworked). Re-enable the asterisk in the label below.
+  // Marks the field required: renders the visible "*" next to the label and sets
+  // aria-required on the trigger, so the requirement is conveyed both ways.
   requiredMark?: boolean;
   additionalDescribedBy?: string | string[];
   options?: SelectFieldOption[];
@@ -43,8 +44,8 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
       placeholder,
       description,
       error,
-      // Destructured (and ignored) so it isn't forwarded onto the Select/DOM; the
-      // required "*" is intentionally not rendered right now. See the prop comment.
+      // Destructured so it isn't forwarded onto the Select/DOM; it drives the label's
+      // marker and the trigger's aria-required below.
       requiredMark: _requiredMark,
       additionalDescribedBy,
       options,
@@ -81,9 +82,14 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
 
     return (
       <div className={cn('flex flex-col', className)}>
-        <Label id={labelId} htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
-          {label}
-        </Label>
+        {/* The marker sits beside the label, not inside it, so the label text stays the
+            bare field name for both the accessible name and label-based queries. */}
+        <div className="flex items-center">
+          <Label id={labelId} htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
+            {label}
+          </Label>
+          {_requiredMark && <RequiredMark className="mb-1.5" />}
+        </div>
 
         <Select name={name} disabled={disabled} {...selectProps}>
           <SelectTrigger
@@ -91,6 +97,7 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
             id={triggerId}
             aria-label={label}
             aria-labelledby={labelId}
+            aria-required={_requiredMark || undefined}
             aria-invalid={!!error || undefined}
             aria-describedby={describedByAttr || undefined}
             disabled={disabled}
