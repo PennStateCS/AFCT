@@ -2,7 +2,7 @@
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { AlignLeft, FileText, Package, Plus, Settings } from 'lucide-react';
+import { AlignLeft, FileText, Package, Plus, Shapes, Users } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { showToast } from '@/lib/toast';
 import { AssignmentSettingsCard } from '@/components/assignments/AssignmentSettingsCard';
+import { AssignmentTypeCard } from '@/components/assignments/AssignmentTypeCard';
 import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsForm';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -106,10 +107,34 @@ export default function AssignmentDashboardPage({
   const assignment = assignmentQuery.data ?? null;
   const loading = assignmentQuery.isPending;
 
+  // Invalidate the whole course->assignment prefix (the shell plus its sibling queries:
+  // assignees, overrides, etc.) so a type change or audience edit doesn't leave the Assign
+  // To tab reading stale sub-queries.
   const invalidateAssignment = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: queryKeys.assignment.shell(id, aid) }),
+    () => queryClient.invalidateQueries({ queryKey: ['course', id, 'assignment', aid] }),
     [queryClient, id, aid],
   );
+
+  // Stable prop for the Assign To card. Built here (not inline in JSX) so unrelated parent
+  // re-renders don't mint fresh Date objects, which would retrigger the card's reset() and
+  // wipe unsaved edits. Recomputes only when the query data itself changes.
+  const settingsAssignment = useMemo(() => {
+    if (!assignment) return null;
+    const toDate = (v: Date | string | null | undefined): Date | null =>
+      v ? (typeof v === 'string' ? new Date(v) : v) : null;
+    return {
+      ...assignment,
+      groupSetId: assignment.groupSetId ?? null,
+      description: assignment.description ?? null,
+      createdAt: assignment.createdAt ?? new Date(),
+      updatedAt: assignment.updatedAt ?? new Date(),
+      dueDate: toDate(assignment.dueDate) ?? new Date(),
+      allowLateSubmissions: assignment.allowLateSubmissions ?? false,
+      lateCutoff: toDate(assignment.lateCutoff),
+      unlockAt: toDate(assignment.unlockAt),
+      assignedToEveryone: assignment.assignedToEveryone ?? true,
+    };
+  }, [assignment]);
 
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
@@ -397,11 +422,15 @@ export default function AssignmentDashboardPage({
             <TabsList aria-label="Assignment sections" className={TAB_BAR_LIST_CLASS}>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="description">
                 <AlignLeft className="size-3.5 opacity-70" />
-                Assignment
+                Details
+              </TabsTrigger>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="type">
+                <Shapes className="size-3.5 opacity-70" />
+                Type
               </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="settings">
-                <Settings className="size-3.5 opacity-70" />
-                Due Dates
+                <Users className="size-3.5 opacity-70" />
+                Assign To
               </TabsTrigger>
               <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="problems">
                 <FileText className="size-3.5 opacity-70" />
@@ -420,7 +449,7 @@ export default function AssignmentDashboardPage({
                   className="flex items-center gap-2 text-2xl font-semibold"
                 >
                   <AlignLeft className="h-6 w-6" />
-                  Assignment
+                  Details
                 </h2>
                 <AssignmentBasicsForm
                   courseId={id}
@@ -431,6 +460,15 @@ export default function AssignmentDashboardPage({
                   onSaved={() => void invalidateAssignment()}
                 />
               </div>
+            </TabsContent>
+            <TabsContent value="type">
+              <AssignmentTypeCard
+                courseId={id}
+                assignmentId={assignment.id}
+                groupSetId={assignment.groupSetId ?? null}
+                courseIsArchived={courseIsArchived}
+                onChanged={() => void invalidateAssignment()}
+              />
             </TabsContent>
             <TabsContent
               value="problems"
@@ -496,38 +534,18 @@ export default function AssignmentDashboardPage({
               />
             </TabsContent>
             <TabsContent value="settings">
-              <AssignmentSettingsCard
-                courseId={id}
-                courseIsArchived={courseIsArchived}
-                // Edit the dates in the COURSE's zone (what the server stores them in).
-                timeZone={assignment.course?.timezone ?? timezone}
-                assignment={{
-                  ...assignment,
-                  groupSetId: assignment.groupSetId ?? null,
-                  description: assignment.description ?? null,
-                  createdAt: assignment.createdAt ?? new Date(),
-                  updatedAt: assignment.updatedAt ?? new Date(),
-                  dueDate:
-                    typeof assignment.dueDate === 'string'
-                      ? new Date(assignment.dueDate)
-                      : assignment.dueDate,
-                  allowLateSubmissions: assignment.allowLateSubmissions ?? false,
-                  lateCutoff: assignment.lateCutoff
-                    ? typeof assignment.lateCutoff === 'string'
-                      ? new Date(assignment.lateCutoff)
-                      : assignment.lateCutoff
-                    : null,
-                  unlockAt: assignment.unlockAt
-                    ? typeof assignment.unlockAt === 'string'
-                      ? new Date(assignment.unlockAt)
-                      : assignment.unlockAt
-                    : null,
-                  assignedToEveryone: assignment.assignedToEveryone ?? true,
-                }}
-                onSaved={() => {
-                  void invalidateAssignment();
-                }}
-              />
+              {settingsAssignment ? (
+                <AssignmentSettingsCard
+                  courseId={id}
+                  courseIsArchived={courseIsArchived}
+                  // Edit the dates in the COURSE's zone (what the server stores them in).
+                  timeZone={assignment.course?.timezone ?? timezone}
+                  assignment={settingsAssignment}
+                  onSaved={() => {
+                    void invalidateAssignment();
+                  }}
+                />
+              ) : null}
             </TabsContent>
           </CardContent>
         </Card>

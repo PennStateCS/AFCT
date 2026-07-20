@@ -106,6 +106,12 @@ export const GET = withCourseAuth(
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, description: Required when allowLateSubmissions is true }
  *           isPublished: { type: boolean }
+ *           assignedToEveryone: { type: boolean, description: "When false, only the assignees below are assigned" }
+ *           groupSetId: { type: string, nullable: true, description: "Set for a group assignment (the group set it runs in)" }
+ *           assignees:
+ *             type: array
+ *             description: "Audience when assignedToEveryone is false; each item is one student (userId) or group (groupId)"
+ *             items: { type: object, properties: { userId: { type: string }, groupId: { type: string } } }
  * responses:
  *   201: { description: The created assignment. }
  *   400: { description: "Missing fields, or an inconsistent late-submission window." }
@@ -158,18 +164,96 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: unlockState.message }, { status: 400 });
       }
 
-      const created = await prisma.assignment.create({
-        data: {
-          title: data.title,
-          description: data.description,
-          dueDate,
-          unlockAt: unlockState.unlockAt,
-          assignedToEveryone: data.assignedToEveryone ?? true,
-          allowLateSubmissions,
-          lateCutoff: lateCutoffDate,
-          isPublished: data.isPublished || false,
-          courseId,
-        },
+      // Individual vs group + audience. groupSetId set => group assignment (its assignees
+      // are groups in that set); no groupSetId => individual (assignees are enrolled
+      // students). "Assigned to everyone" carries no assignee rows.
+      const groupSetId = data.groupSetId ?? null;
+      if (groupSetId) {
+        const set = await prisma.groupSet.findFirst({
+          where: { id: groupSetId, courseId },
+          select: { id: true },
+        });
+        if (!set) {
+          return NextResponse.json({ error: 'Group set not found in this course.' }, { status: 400 });
+        }
+      }
+
+      const assignedToEveryone = data.assignedToEveryone ?? true;
+      const assigneeInputs = assignedToEveryone ? [] : (data.assignees ?? []);
+      const assigneeRows: Array<{ targetType: 'STUDENT' | 'GROUP'; userId?: string; groupId?: string }> =
+        [];
+
+      if (!assignedToEveryone) {
+        if (assigneeInputs.length === 0) {
+          return NextResponse.json(
+            { error: 'Assign to at least one student or group, or assign to everyone.' },
+            { status: 400 },
+          );
+        }
+        if (groupSetId) {
+          const groupIds = assigneeInputs.map((a) => a.groupId).filter((v): v is string => !!v);
+          if (groupIds.length !== assigneeInputs.length) {
+            return NextResponse.json(
+              { error: 'A group assignment can only be assigned to groups.' },
+              { status: 400 },
+            );
+          }
+          const found = await prisma.studentGroup.findMany({
+            where: { id: { in: groupIds }, groupSetId },
+            select: { id: true },
+          });
+          const ok = new Set(found.map((g) => g.id));
+          if (groupIds.some((id) => !ok.has(id))) {
+            return NextResponse.json(
+              { error: "A group is not in this assignment's group set." },
+              { status: 400 },
+            );
+          }
+          for (const id of new Set(groupIds)) assigneeRows.push({ targetType: 'GROUP', groupId: id });
+        } else {
+          const userIds = assigneeInputs.map((a) => a.userId).filter((v): v is string => !!v);
+          if (userIds.length !== assigneeInputs.length) {
+            return NextResponse.json(
+              { error: 'An individual assignment can only be assigned to students.' },
+              { status: 400 },
+            );
+          }
+          const found = await prisma.roster.findMany({
+            where: { courseId, userId: { in: userIds }, role: 'STUDENT' },
+            select: { userId: true },
+          });
+          const ok = new Set(found.map((r) => r.userId));
+          if (userIds.some((id) => !ok.has(id))) {
+            return NextResponse.json(
+              { error: 'A target is not a student enrolled in this course.' },
+              { status: 400 },
+            );
+          }
+          for (const id of new Set(userIds)) assigneeRows.push({ targetType: 'STUDENT', userId: id });
+        }
+      }
+
+      const created = await prisma.$transaction(async (tx) => {
+        const assignment = await tx.assignment.create({
+          data: {
+            title: data.title,
+            description: data.description,
+            dueDate,
+            unlockAt: unlockState.unlockAt,
+            assignedToEveryone,
+            allowLateSubmissions,
+            lateCutoff: lateCutoffDate,
+            isPublished: data.isPublished || false,
+            groupSetId,
+            courseId,
+          },
+        });
+        if (assigneeRows.length > 0) {
+          await tx.assignmentAssignee.createMany({
+            data: assigneeRows.map((r) => ({ ...r, assignmentId: assignment.id })),
+          });
+        }
+        return assignment;
       });
 
       await createEnhancedActivityLog(prisma, req, {
@@ -190,6 +274,9 @@ export const POST = withCourseAuth(
           unlockAt: created.unlockAt ? created.unlockAt.toISOString() : null,
           allowLateSubmissions: created.allowLateSubmissions,
           lateCutoff: created.lateCutoff ? created.lateCutoff.toISOString() : null,
+          groupSetId: created.groupSetId,
+          assignedToEveryone: created.assignedToEveryone,
+          assigneeCount: assigneeRows.length,
         },
       });
 

@@ -24,10 +24,19 @@ export type StudentNavigatorStudent = {
   lastName?: string | null;
 };
 
+type EffectiveSchedule = {
+  unlockAt: string | null;
+  dueDate: string;
+  lateCutoff: string | null;
+  allowLateSubmissions: boolean;
+  source: 'base' | 'student-override' | 'group-override';
+};
+
 type StudentGroupInfo = {
   isGroup: boolean;
   group: { id: string; name: string } | null;
   members: { id: string; firstName: string | null; lastName: string | null }[];
+  effective?: EffectiveSchedule;
 };
 
 /** "First Last" (falls back to "Student"). */
@@ -42,7 +51,6 @@ export type StudentNavigatorProps = {
   onPrev: () => void;
   onNext: () => void;
   gradeStatuses?: Record<string, boolean | undefined>;
-  assignmentTotals?: { earned: number; available: number };
   courseId: string;
   assignmentId: string;
 };
@@ -54,7 +62,6 @@ export default function StudentNavigator({
   onPrev,
   onNext,
   gradeStatuses,
-  assignmentTotals,
   courseId,
   assignmentId,
 }: StudentNavigatorProps) {
@@ -103,10 +110,13 @@ export default function StudentNavigator({
   });
   const groupInfo = groupQuery.data ?? null;
 
-  const formatPoints = (value: number) => {
-    if (!Number.isFinite(value)) return 'Infinity';
-    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  };
+  // Prefer the selected student's effective schedule (their own or their group's date
+  // override); fall back to the assignment base while that per-student read loads.
+  const eff = groupInfo?.effective ?? null;
+  const showDueDate = eff?.dueDate ?? assignment?.dueDate ?? null;
+  const showAllowLate = eff ? eff.allowLateSubmissions : (assignment?.allowLateSubmissions ?? false);
+  const showLateCutoff = eff ? eff.lateCutoff : (assignment?.lateCutoff ?? null);
+  const isOverridden = !!eff && eff.source !== 'base';
 
   const filteredStudents = useMemo(() => {
     const f = studentFilter.trim().toLowerCase();
@@ -141,7 +151,7 @@ export default function StudentNavigator({
     : null;
 
   return (
-    <div className="flex w-full items-center justify-between gap-2">
+    <div className="flex w-full flex-col items-start gap-3">
       {/* Polite live region: announces the newly selected student on navigation,
           since focus stays on the Prev/Next/dropdown control while the panel changes. */}
       <span className="sr-only" aria-live="polite">
@@ -159,18 +169,20 @@ export default function StudentNavigator({
             <>
               <span>
                 <span className="font-semibold">Due:</span>{' '}
-                {assignment.dueDate ? formatDateTimeInTimeZone(assignment.dueDate, timezone) : '—'}
+                {showDueDate ? formatDateTimeInTimeZone(showDueDate, timezone) : '—'}
+                {isOverridden ? (
+                  <span className="text-primary ml-1 text-xs font-medium">(override)</span>
+                ) : null}
               </span>
               <span className="text-muted-foreground mx-2">•</span>
               <span>
-                <span className="font-semibold">Allow Late:</span>{' '}
-                {assignment.allowLateSubmissions ? 'Yes' : 'No'}
+                <span className="font-semibold">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}
               </span>
               <span className="text-muted-foreground mx-2">•</span>
               <span>
                 <span className="font-semibold">Late Cutoff:</span>{' '}
-                {assignment.allowLateSubmissions && assignment.lateCutoff
-                  ? formatDateTimeInTimeZone(assignment.lateCutoff, timezone)
+                {showAllowLate && showLateCutoff
+                  ? formatDateTimeInTimeZone(showLateCutoff, timezone)
                   : 'Never'}
               </span>
               {groupInfo ? (
@@ -192,19 +204,9 @@ export default function StudentNavigator({
             With: {groupInfo.members.map(memberName).join(', ')}
           </span>
         ) : null}
-        <span className="block">
-          Student {students.length === 0 ? 0 : selectedIndex + 1} of {students.length}
-          {assignmentTotals ? (
-            <span>
-              <span className="text-muted-foreground mx-2">•</span>
-              {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)}{' '}
-              pts
-            </span>
-          ) : null}
-        </span>
       </div>
-      {/* Prev / student picker / Next joined into one segmented control. */}
-      <div className="ml-auto flex items-center">
+      {/* Prev / student picker / Next joined into one segmented control, below the info. */}
+      <div className="flex items-center">
         <Button
           variant="secondary"
           onClick={onPrev}
@@ -218,9 +220,9 @@ export default function StudentNavigator({
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 relative flex w-[320px] items-center justify-between gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
+              className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 relative flex w-[320px] items-center gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
             >
-              <span className="flex items-center gap-2 truncate">
+              <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                 {selectedStudent ? (
                   <span
                     className={`h-2.5 w-2.5 rounded-full ${selectedStatus ? 'bg-green-500' : 'bg-red-500'}`}
@@ -237,7 +239,13 @@ export default function StudentNavigator({
                   </span>
                 ) : null}
               </span>
-              <ChevronDown className="h-4 w-4" />
+              {/* Position of the selected student in the roster, right-aligned. */}
+              {selectedStudent ? (
+                <span className="text-muted-foreground shrink-0 text-xs">
+                  {selectedIndex + 1} of {students.length}
+                </span>
+              ) : null}
+              <ChevronDown className="h-4 w-4 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="bg-card text-foreground border-border w-[320px] rounded-md border p-2 shadow-lg">

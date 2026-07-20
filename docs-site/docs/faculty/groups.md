@@ -32,8 +32,8 @@ Use the actions in the group table to:
 - **Edit** the group name
 - **Delete** a group you no longer need
 
-Create groups before configuring a group assignment. When you add a problem to a group assignment, you can make it available to all students or limit it to a specific group.
+Create groups before configuring a group assignment. On an [assignment](assignments.md) of type **Group**, you pick one group set and assign the work to all of its groups or to specific groups; each group submits and is graded together.
 
-Be careful when changing membership after an assignment has been configured. Membership determines which group-mapped problems appear for a student. In the current workflow, submissions, grades, and discussions remain attached to individual student records.
+Be careful when changing membership after an assignment has been configured: membership decides which group a student submits with. Once a group has submitted work its set is locked, so plan the groups before students begin.
 
 Archived courses are read-only. Restore the course before changing group names or membership.

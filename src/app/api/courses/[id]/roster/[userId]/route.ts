@@ -95,8 +95,12 @@ export const DELETE = withCourseAuth(
                 throw new RosterHasSubmissionsError();
               }
 
-              // Drop this user's per-assignment due-date overrides in the course so they
-              // don't orphan (or silently reactivate if the user is re-enrolled later).
+              // Drop this user's per-assignment audience rows and due-date overrides in the
+              // course so they don't orphan (or silently reactivate if the user is
+              // re-enrolled later).
+              await tx.assignmentAssignee.deleteMany({
+                where: { userId, assignmentId: { in: assignmentIdList } },
+              });
               await tx.assignmentOverride.deleteMany({
                 where: { userId, assignmentId: { in: assignmentIdList } },
               });

@@ -834,6 +834,34 @@ export interface paths {
         patch: operations["patchCoursesByIdArchive"];
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/assignees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List an assignment's assignees
+         * @description Lists an assignment's audience (its AssignmentAssignee rows). Empty when the assignment  is assigned to everyone. Course staff (faculty or TAs) or a system admin.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/assignees/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidAssignees"];
+        /**
+         * Replace an assignment's audience
+         * @description Replaces an assignment's audience. Course staff (faculty or TAs) or a system admin.  `assignedToEveryone` true clears the explicit list; false assigns only the given targets  (students for an individual assignment, groups for a group assignment). Overrides for  anyone no longer assigned are dropped in the same transaction.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/assignees/route.ts)
+         */
+        put: operations["putCoursesByIdAssignmentsByAidAssignees"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/overrides/{oid}": {
         parameters: {
             query?: never;
@@ -1111,7 +1139,7 @@ export interface paths {
         };
         /**
          * Get a student's group membership for an assignment
-         * @description Whether a student submits this assignment individually or as a group, and (for a group)  the group's name plus the student's groupmates. Drives the "Individual / Group" indicator  on the staff Submissions view. Course staff (faculty or TAs) or a system admin.
+         * @description Whether a student submits this assignment individually or as a group, the group's name +  groupmates (for a group), and the student's EFFECTIVE schedule (their own or their group's  date override resolved against the base). Drives the per-student due/late line and the  Individual / Group indicator on the staff Submissions view. Course staff or a system admin.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/student-group/[studentId]/route.ts)
          */
@@ -1139,6 +1167,28 @@ export interface paths {
          */
         get: operations["getCoursesByIdAssignmentsByAidSubmissionsBySid"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change an assignment's individual/group type
+         * @description Changes an assignment's individual/group type. Course staff (faculty or TAs) or a system  admin. `groupSetId: null` makes it individual; a set id makes it a group assignment tied  to that set. Because assignees and date overrides reference the old type's targets,  switching resets the audience to everyone and clears all assignees + overrides in one  transaction (staff rebuild them on the Assign To tab).
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/type/route.ts)
+         */
+        put: operations["putCoursesByIdAssignmentsByAidType"];
         post?: never;
         delete?: never;
         options?: never;
@@ -4443,6 +4493,140 @@ export interface operations {
             };
         };
     };
+    getCoursesByIdAssignmentsByAidAssignees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The assignment's assignee rows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    putCoursesByIdAssignmentsByAidAssignees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    assignedToEveryone: boolean;
+                    /** @description Required when assignedToEveryone is false; each item is one student (userId) or group (groupId) */
+                    assignees?: {
+                        userId?: string;
+                        groupId?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description The updated assignment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid audience for this assignment's type. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     deleteCoursesByIdAssignmentsByAidOverridesByOid: {
         parameters: {
             query?: never;
@@ -5815,6 +5999,79 @@ export interface operations {
             };
         };
     };
+    putCoursesByIdAssignmentsByAidType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Null for individual; a group set id for group */
+                    groupSetId: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated assignment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group set not found in this course. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getCoursesByIdAssignments: {
         parameters: {
             query?: never;
@@ -5895,6 +6152,15 @@ export interface operations {
                     /** @description Required when allowLateSubmissions is true */
                     lateCutoff?: string;
                     isPublished?: boolean;
+                    /** @description When false, only the assignees below are assigned */
+                    assignedToEveryone?: boolean;
+                    /** @description Set for a group assignment (the group set it runs in) */
+                    groupSetId?: string | null;
+                    /** @description Audience when assignedToEveryone is false; each item is one student (userId) or group (groupId) */
+                    assignees?: {
+                        userId?: string;
+                        groupId?: string;
+                    }[];
                 };
             };
         };

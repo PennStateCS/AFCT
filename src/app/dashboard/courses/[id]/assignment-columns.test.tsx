@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
-import { MaxPointsCell, DueDateCell } from './assignment-columns';
+import type { AccessorFnColumnDef } from '@tanstack/react-table';
+import { MaxPointsCell, DueDateCell, useAssignmentColumns } from './assignment-columns';
 import type { AssignmentWithProblemCount } from '@/types/course';
 
 // Fresh QueryClient per test (retry off, no lingering cache) so each render starts
@@ -93,5 +94,25 @@ describe('DueDateCell', () => {
     expect(screen.getByText('Everyone')).toBeInTheDocument();
     // The late-only override surfaces its late deadline.
     expect(screen.getByText(/late until/i)).toBeInTheDocument();
+  });
+});
+
+describe('useAssignmentColumns — Type (individual/group) column', () => {
+  const getTypeColumn = () => {
+    const { result } = renderHook(() => useAssignmentColumns(false, vi.fn(), vi.fn(), 'UTC'));
+    const col = result.current.find((c) => c.id === 'isGroup');
+    if (!col) throw new Error('Type column not found');
+    return col as AccessorFnColumnDef<AssignmentWithProblemCount, string>;
+  };
+
+  it('classifies rows as Group or Individual for sorting/filtering', () => {
+    const col = getTypeColumn();
+    expect(col.accessorFn({ isGroup: true } as AssignmentWithProblemCount, 0)).toBe('Group');
+    expect(col.accessorFn({ isGroup: false } as AssignmentWithProblemCount, 0)).toBe('Individual');
+  });
+
+  it('exposes a multiselect filter labeled Type', () => {
+    const col = getTypeColumn();
+    expect(col.meta).toMatchObject({ filterVariant: 'multiselect', filterLabel: 'Type' });
   });
 });

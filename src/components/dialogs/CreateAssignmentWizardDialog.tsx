@@ -14,28 +14,30 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Stepper } from '@/components/ui/stepper';
 import InputGroup from '@/components/ui/InputGroup';
-import SwitchField from '@/components/ui/SwitchField';
+import SelectField from '@/components/ui/SelectField';
 import { Textarea } from '@/components/ui/textarea';
 import { AssignToFields } from '@/components/assignments/AssignToFields';
 import { toast } from 'sonner';
 
 import { useForm, Controller, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { AssignmentWizardFormSchema } from '@/schemas/assignment';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
+import type { GroupSetSummaryDTO } from '@/lib/group-set-service';
 import type { Assignment } from '@prisma/client';
 
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 
 const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> = [
   { title: 'Details', fields: ['title', 'description'] },
+  { title: 'Type', fields: ['isGroup', 'groupSetId'] },
   {
     title: 'Assign To',
     fields: ['assignedToEveryone', 'unlockAt', 'dueDate', 'allowLateSubmissions', 'lateCutoff', 'overrides'],
   },
-  { title: 'Options', fields: ['isPublished'] },
   { title: 'Review', fields: [] },
 ];
 const LAST_STEP = STEPS.length - 1;
@@ -107,7 +109,9 @@ export function CreateAssignmentWizardDialog({
       assignedToEveryone: true,
       allowLateSubmissions: false,
       lateCutoff: undefined,
+      // Assignments are created unpublished for now; staff publish them later.
       isPublished: false,
+      isGroup: false,
       courseId,
       overrides: [],
     }),
@@ -121,6 +125,7 @@ export function CreateAssignmentWizardDialog({
     watch,
     trigger,
     getValues,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(AssignmentWizardFormSchema),
@@ -133,6 +138,17 @@ export function CreateAssignmentWizardDialog({
   // Review step still reads these two to summarize what was chosen.
   const assignedToEveryone = watch('assignedToEveryone');
   const overrides = watch('overrides') ?? [];
+  const isGroup = watch('isGroup');
+
+  // Group sets for the course, so the Type step can offer one to pin group work to. Shares
+  // the ['course', id, 'group-sets'] cache with AssignToFields (step 3), so they dedupe.
+  const groupSetsQuery = useQuery({
+    queryKey: ['course', courseId, 'group-sets'],
+    queryFn: () => apiClient.get<GroupSetSummaryDTO[]>(apiPaths.courseGroupSets(courseId)),
+    enabled: open && !!courseId,
+    staleTime: 30_000,
+  });
+  const groupSets = groupSetsQuery.data ?? [];
 
   const resetForm = () => {
     setStep(0);
@@ -146,6 +162,12 @@ export function CreateAssignmentWizardDialog({
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const onSubmit = async (raw: FormValues) => {
+    // Audience (WHO): only when not "everyone". Each row targets one student or one group;
+    // the create route validates them and writes the AssignmentAssignee rows.
+    const assignees = raw.assignedToEveryone
+      ? undefined
+      : (raw.overrides ?? []).map((o) => (o.groupId ? { groupId: o.groupId } : { userId: o.userId }));
+
     const basePayload = {
       title: raw.title,
       description: raw.description || undefined,
@@ -154,7 +176,11 @@ export function CreateAssignmentWizardDialog({
       assignedToEveryone: raw.assignedToEveryone,
       allowLateSubmissions: raw.allowLateSubmissions,
       lateCutoff: raw.allowLateSubmissions ? raw.lateCutoff : null,
-      isPublished: raw.isPublished,
+      // A group assignment is pinned to the set chosen in the Type step; individual is null.
+      groupSetId: raw.isGroup ? (raw.groupSetId ?? undefined) : undefined,
+      assignees,
+      // Always created unpublished for now; there is no publish step.
+      isPublished: false,
     };
 
     let created: Assignment;
@@ -165,38 +191,25 @@ export function CreateAssignmentWizardDialog({
       return; // stay open so the user can retry without duplicating anything
     }
 
-    // The assignment exists now; push the overrides. A failure here doesn't undo the
-    // assignment (it can be edited later), so warn rather than error.
-    const results = await Promise.allSettled(
-      (raw.overrides ?? []).map((o) =>
-        apiClient.post(apiPaths.assignmentOverrides(courseId, created.id), {
-          // A row targets exactly one of a student or a group.
-          ...(o.groupId ? { groupId: o.groupId } : { userId: o.userId }),
-          unlockAt: o.unlockAt || undefined,
-          dueDate: o.dueDate || undefined,
-          allowLateSubmissions: o.allowLateSubmissions ?? undefined,
-          lateCutoff: o.allowLateSubmissions ? o.lateCutoff || undefined : undefined,
-        }),
-      ),
-    );
-    const failed = results.filter((r) => r.status === 'rejected').length;
-    if (failed > 0) {
-      toast.warning(`Assignment created, but ${failed} override(s) could not be saved.`);
-    } else {
-      toast.success('Assignment created');
-    }
-
+    // Date overrides are added later on the assignment's page.
+    toast.success('Assignment created');
     onCreate?.(created);
     resetForm();
     setOpen(false);
   };
 
   const review = step === LAST_STEP ? getValues() : null;
-  const everyoneLabel = !assignedToEveryone
-    ? 'Default dates'
-    : overrides.length > 0
-      ? 'Everyone else'
-      : 'Everyone';
+  const reviewGroupSetName = groupSets.find((s) => s.id === review?.groupSetId)?.name;
+  // Everyone assigned shows "All students"/"All groups"; a restricted audience lists the
+  // chosen members (each follows the schedule below; per-target dates are set later).
+  const assignToSummary = assignedToEveryone
+    ? isGroup
+      ? 'All groups'
+      : 'All students'
+    : overrides
+        .map((o) => (o.groupId ? o.groupName : o.studentName))
+        .filter(Boolean)
+        .join(', ') || (isGroup ? 'No groups selected' : 'No students selected');
 
   return (
     <Dialog
@@ -206,12 +219,12 @@ export function CreateAssignmentWizardDialog({
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="bg-card sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Create Assignment</DialogTitle>
           <DialogDescription className="sr-only">
-            Create an assignment in four steps: details, who it is assigned to and when it is due,
-            options, then review.
+            Create an assignment in four steps: details, individual or group type, who it is
+            assigned to and when it is due, then review.
           </DialogDescription>
         </DialogHeader>
 
@@ -285,26 +298,114 @@ export function CreateAssignmentWizardDialog({
             )}
 
             {step === 1 && (
-              <AssignToFields control={control} errors={errors} courseId={courseId} active={open} />
+              <div className="space-y-5">
+              <Controller
+                control={control}
+                name="isGroup"
+                render={({ field }) => (
+                  <fieldset className="space-y-3">
+                    <legend className="text-sm font-medium">Assignment type</legend>
+                    <p className="text-muted-foreground text-sm">
+                      Choose whether students complete this assignment on their own or together as a
+                      group.
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {(
+                        [
+                          {
+                            value: false,
+                            label: 'Individual',
+                            desc: 'Each student submits and is graded on their own.',
+                          },
+                          {
+                            value: true,
+                            label: 'Group',
+                            desc: 'Students submit and are graded together as a group. A faculty member or TA can override an individual member’s grade.',
+                          },
+                        ] as const
+                      ).map((opt) => {
+                        const selected = !!field.value === opt.value;
+                        return (
+                          <label
+                            key={opt.label}
+                            className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
+                              selected
+                                ? 'border-primary bg-primary/5 ring-primary/30 ring-1'
+                                : 'hover:bg-muted/40'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="isGroup"
+                              className="accent-primary mt-1"
+                              checked={selected}
+                              onChange={() => {
+                                field.onChange(opt.value);
+                                // The audience is type-specific (students vs groups), so reset
+                                // it to "everyone" on any type switch to avoid carrying
+                                // cross-type rows into the create payload.
+                                setValue('assignedToEveryone', true, { shouldValidate: true });
+                                setValue('overrides', [], { shouldValidate: true });
+                                // Switching back to Individual drops any chosen group set.
+                                if (!opt.value) setValue('groupSetId', null, { shouldValidate: true });
+                              }}
+                            />
+                            <span>
+                              <span className="block text-sm font-medium">{opt.label}</span>
+                              <span className="text-muted-foreground block text-xs">{opt.desc}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                )}
+              />
+
+              {/* Group assignments pick which group set they run in. Not stored on the
+                  assignment itself; the Assign-To step (3) uses this selection. */}
+              {isGroup && (
+                <Controller
+                  control={control}
+                  name="groupSetId"
+                  render={({ field }) => (
+                    <div className="space-y-1">
+                      {groupSetsQuery.isPending ? (
+                        <p className="text-muted-foreground text-sm">Loading group sets…</p>
+                      ) : groupSets.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                          This course has no group sets yet. Create one on the course&apos;s Groups
+                          tab first.
+                        </p>
+                      ) : (
+                        <SelectField
+                          label="Group set"
+                          name="groupSetId"
+                          placeholder="Choose a group set"
+                          description="Students submit and are graded as their group in the chosen set."
+                          value={field.value ?? undefined}
+                          onValueChange={(v) => field.onChange(v)}
+                          triggerClassName="bg-card border-black"
+                          options={groupSets.map((gs) => ({
+                            value: gs.id,
+                            label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,
+                          }))}
+                        />
+                      )}
+                      {errors.groupSetId && (
+                        <p className="text-xs text-red-600" role="alert">
+                          {errors.groupSetId.message}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                />
+              )}
+              </div>
             )}
 
             {step === 2 && (
-              <>
-                <Controller
-                  control={control}
-                  name="isPublished"
-                  render={({ field }) => (
-                    <SwitchField
-                      label="Publish now"
-                      name="isPublished"
-                      checked={!!field.value}
-                      onCheckedChange={(checked) => field.onChange(!!checked)}
-                      description="Makes the assignment visible to enrolled students."
-                      descriptionPlacement="inline"
-                    />
-                  )}
-                />
-              </>
+              <AssignToFields control={control} errors={errors} courseId={courseId} active={open} />
             )}
 
             {step === LAST_STEP && review && (
@@ -312,7 +413,15 @@ export function CreateAssignmentWizardDialog({
                 <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words">
                   <dt className="text-muted-foreground">Title</dt>
                   <dd className="font-medium">{review.title}</dd>
-                  <dt className="text-muted-foreground">{everyoneLabel}</dt>
+                  <dt className="text-muted-foreground">Type</dt>
+                  <dd>
+                    {review.isGroup
+                      ? `Group${reviewGroupSetName ? ` · ${reviewGroupSetName}` : ''}`
+                      : 'Individual'}
+                  </dd>
+                  <dt className="text-muted-foreground">Assign to</dt>
+                  <dd>{assignToSummary}</dd>
+                  <dt className="text-muted-foreground">Schedule</dt>
                   <dd>
                     {formatWindow({
                       unlockAt: review.unlockAt,
@@ -321,31 +430,9 @@ export function CreateAssignmentWizardDialog({
                       lateCutoff: review.lateCutoff,
                     })}
                   </dd>
-                  {(review.overrides ?? []).map((o, i) => {
-                    // Resolve each override against the base so a partial change (e.g. same
-                    // due date but late now allowed) shows its full effective window.
-                    const effAllow = o.allowLateSubmissions ?? review.allowLateSubmissions;
-                    return (
-                      <React.Fragment key={i}>
-                        <dt className="text-muted-foreground">
-                          {o.groupId ? o.groupName : o.studentName}
-                        </dt>
-                        <dd>
-                          {formatWindow({
-                            unlockAt: o.unlockAt || review.unlockAt,
-                            dueDate: o.dueDate || review.dueDate,
-                            allowLate: effAllow,
-                            lateCutoff: effAllow ? o.lateCutoff || review.lateCutoff : undefined,
-                          })}
-                        </dd>
-                      </React.Fragment>
-                    );
-                  })}
-                  <dt className="text-muted-foreground">Publish</dt>
-                  <dd>{review.isPublished ? 'Now' : 'Later'}</dd>
                 </dl>
                 <p className="text-muted-foreground text-xs">
-                  Add problems to the assignment after creating it.
+                  Created unpublished. Add problems and publish it after creating it.
                 </p>
               </div>
             )}

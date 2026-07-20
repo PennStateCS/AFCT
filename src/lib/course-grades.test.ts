@@ -27,24 +27,24 @@ describe('getCourseGradeMatrix — assigned map', () => {
   it('marks students assigned via everyone, individual override, and group override', async () => {
     prismaMock.assignment.findMany.mockResolvedValue([
       // Assigned to everyone: both students assigned.
-      { id: 'a1', title: 'A1', dueDate: null, assignedToEveryone: true, problems: [], overrides: [] },
-      // Not everyone, individual override for s1 only.
+      { id: 'a1', title: 'A1', dueDate: null, assignedToEveryone: true, problems: [], assignees: [] },
+      // Not everyone, individual assignee for s1 only.
       {
         id: 'a2',
         title: 'A2',
         dueDate: null,
         assignedToEveryone: false,
         problems: [],
-        overrides: [{ userId: 's1', groupId: null }],
+        assignees: [{ userId: 's1', groupId: null }],
       },
-      // Not everyone, group override on g1 (s2 is a member).
+      // Not everyone, group assignee on g1 (s2 is a member).
       {
         id: 'a3',
         title: 'A3',
         dueDate: null,
         assignedToEveryone: false,
         problems: [],
-        overrides: [{ userId: null, groupId: 'g1' }],
+        assignees: [{ userId: null, groupId: 'g1' }],
       },
     ]);
     prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 's2', groupId: 'g1' }]);

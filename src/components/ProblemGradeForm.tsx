@@ -59,20 +59,23 @@ export default function ProblemGradeForm({
   return (
     <div className="flex flex-col gap-2">
       <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
-        <Input
-          type="number"
-          inputMode="decimal"
-          value={gradeValue}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={isLoading ? '-' : sanitizedCurrent === null ? '-' : ''}
-          className="w-28"
-          aria-label="Problem grade"
-          disabled={disabled || isLoading || isSaving}
-        />
-        <Button type="submit" size="sm" className="whitespace-nowrap" disabled={disableButton}>
-          {isSaving ? 'Saving…' : 'Save Grade'}
-        </Button>
+        {/* Input + button joined into one segmented control. */}
+        <div className="flex w-fit items-stretch">
+          <Input
+            type="number"
+            inputMode="decimal"
+            value={gradeValue}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={isLoading ? '-' : sanitizedCurrent === null ? '-' : ''}
+            className="w-24 rounded-r-none border-r-0 focus-visible:z-10"
+            aria-label="Problem grade"
+            disabled={disabled || isLoading || isSaving}
+          />
+          <Button type="submit" className="rounded-l-none whitespace-nowrap" disabled={disableButton}>
+            {isSaving ? 'Saving…' : 'Save Grade'}
+          </Button>
+        </div>
         {error ? <p className="text-destructive text-xs">{error}</p> : null}
       </form>
     </div>
