@@ -443,24 +443,21 @@ export default function DashboardSidebarMenu() {
               </CollapsibleSidebarGroup>
             ))}
 
-        {/* Calendar gets its own section (it is not an "other page"). */}
-        <CollapsibleSidebarGroup
-          sectionId="calendar"
-          label="Calendar"
-          collapsed={collapsed}
-          open={isOpen('calendar')}
-          onToggle={() => toggle('calendar')}
-        >
-          <SidebarMenu>
-            <SidebarNavItem
-              href="/dashboard/calendar"
-              label="Calendar"
-              icon={Calendar}
-              active={pathname === '/dashboard/calendar'}
-              collapsed={collapsed}
-            />
-          </SidebarMenu>
-        </CollapsibleSidebarGroup>
+        {/* Calendar is a single destination, so it is a plain top-level link rather than
+            a collapsible section wrapping one item. */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarNavItem
+                href="/dashboard/calendar"
+                label="Calendar"
+                icon={Calendar}
+                active={pathname === '/dashboard/calendar'}
+                collapsed={collapsed}
+              />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       {/* Footer menu for user account actions */}
