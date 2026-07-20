@@ -14,7 +14,7 @@ import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { computeLateSubmissionState, resolveUnlockAt } from '@/lib/assignment-late-window';
 import { effectiveDeadline } from '@/lib/effective-deadline';
-import { isStudentAssigned } from '@/lib/assignment-visibility';
+import { overridesForStudentWhere } from '@/lib/assignment-visibility';
 
 // Types
 interface AssignmentWithProblemsAndCourse {
@@ -152,16 +152,23 @@ export const GET = withCourseAuth(
           courseId,
         },
         include: {
-          // This caller's own individual assignee row (0 or 1), used to check "assign to
-          // specific students" membership.
+          // The assignee rows that name this caller: their own individual row, or a GROUP
+          // row for a group they belong to. Filtering by both means any row returned
+          // proves membership (a group-assigned student was previously missed here,
+          // because only individual rows were selected).
           assignees: {
-            where: { userId: user.id },
+            where: {
+              OR: [
+                { userId: user.id },
+                { studentGroup: { memberships: { some: { userId: user.id } } } },
+              ],
+            },
             select: { userId: true, groupId: true },
           },
-          // This caller's own date override (0 or 1), used to resolve their effective
-          // unlock date for the content lock.
+          // This caller's date overrides (their own and their group's), used to resolve
+          // their effective unlock date for the content lock.
           overrides: {
-            where: { userId: user.id },
+            where: overridesForStudentWhere(user.id),
             select: {
               targetType: true,
               userId: true,
@@ -227,20 +234,17 @@ export const GET = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
       }
 
-      // "Assign to specific students": a non-staff member not assigned this work can't
-      // see it either. Same 404 mask.
+      // "Assign to specific students/groups": a non-staff member not assigned this work
+      // can't see it either. Same 404 mask. The assignee rows were already filtered to
+      // ones naming this caller (individually or via one of their groups), so any row
+      // present proves membership.
       const gate = assignment as unknown as {
         assignedToEveryone?: boolean;
         assignees?: Array<{ userId: string | null; groupId?: string | null }>;
       };
-      if (
-        !isStaff &&
-        !isStudentAssigned(
-          { assignedToEveryone: gate.assignedToEveryone ?? true },
-          gate.assignees ?? [],
-          user.id,
-        )
-      ) {
+      const isAssigned =
+        (gate.assignedToEveryone ?? true) !== false || (gate.assignees ?? []).length > 0;
+      if (!isStaff && !isAssigned) {
         return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
       }
 
@@ -254,6 +258,9 @@ export const GET = withCourseAuth(
         lateCutoff: Date | null;
         overrides: Parameters<typeof effectiveDeadline>[1];
       };
+      // The overrides were filtered to this caller's own plus their groups', so any group
+      // id present is one of theirs and can be passed straight through.
+      const callerOverrides = av.overrides ?? [];
       const eff = effectiveDeadline(
         {
           unlockAt: av.unlockAt,
@@ -261,8 +268,9 @@ export const GET = withCourseAuth(
           allowLateSubmissions: av.allowLateSubmissions,
           lateCutoff: av.lateCutoff,
         },
-        av.overrides ?? [],
+        callerOverrides,
         user.id,
+        callerOverrides.map((o) => o.groupId).filter((gid): gid is string => gid != null),
       );
       const locked = !isStaff && !!eff.unlockAt && eff.unlockAt.getTime() > Date.now();
 

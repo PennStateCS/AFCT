@@ -12,12 +12,16 @@ const prismaMock = vi.hoisted(() => ({
 const authMock = vi.hoisted(() => vi.fn());
 const logMock = vi.hoisted(() => vi.fn());
 const resolveGroupMock = vi.hoisted(() => vi.fn());
+const contentGateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: logMock }));
 vi.mock('@/lib/assignment-groups', () => ({
   resolveStudentSubmissionGroupId: resolveGroupMock,
+}));
+vi.mock('@/lib/assignment-student-gate', () => ({
+  resolveStudentContentGate: contentGateMock,
 }));
 
 import { Prisma } from '@prisma/client';
@@ -30,6 +34,8 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     vi.clearAllMocks();
 
     authMock.mockResolvedValue({ user: { id: 'faculty-1', role: 'FACULTY' } });
+    // Assigned and unlocked by default; the gating tests override this.
+    contentGateMock.mockResolvedValue({ assigned: true, locked: false, unlockAt: null });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: params.aid, isPublished: true });
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'FACULTY' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
@@ -85,6 +91,48 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
 
     expect(res.status).toBe(200);
+  });
+
+  it('404-masks an assignment the student is not assigned', async () => {
+    // Published and their own id is not enough: they must actually be assigned it.
+    authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT', course: { isPublished: true } });
+    contentGateMock.mockResolvedValue({ assigned: false, locked: true, unlockAt: null });
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.assignmentProblem.findMany).not.toHaveBeenCalled();
+  });
+
+  it('withholds problem content before the student unlock time', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT', course: { isPublished: true } });
+    contentGateMock.mockResolvedValue({
+      assigned: true,
+      locked: true,
+      unlockAt: new Date('2099-01-01T00:00:00.000Z'),
+    });
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      submissions: {},
+      comments: [],
+      problemGrades: {},
+      isGroup: false,
+      locked: true,
+    });
+    expect(prismaMock.assignmentProblem.findMany).not.toHaveBeenCalled();
+  });
+
+  it('does not gate staff on assignment membership or unlock', async () => {
+    // Default auth in beforeEach is faculty.
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(200);
+    expect(contentGateMock).not.toHaveBeenCalled();
   });
 
   it('404-masks an unpublished assignment for the owning student', async () => {

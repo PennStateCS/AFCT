@@ -11,6 +11,8 @@ import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
+import { assignedToStudentWhere, overridesForStudentWhere } from '@/lib/assignment-visibility';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import { CourseUpdateApiSchema } from '@/schemas/course';
 import {
@@ -97,8 +99,13 @@ export const GET = withCourseAuth(
           ...(includeAssignments
             ? {
                 assignments: {
-                  // Students only ever see published assignments here.
-                  where: isStaff ? {} : { isPublished: true },
+                  // Students only ever see published assignments that are actually
+                  // assigned to them (everyone, an individual assignee row, or a group
+                  // they belong to). Without the membership filter an excluded student
+                  // could read every published assignment's id and description.
+                  where: isStaff
+                    ? {}
+                    : { isPublished: true, ...assignedToStudentWhere(user.id) },
                   include: {
                     problems: {
                       select: {
@@ -108,6 +115,25 @@ export const GET = withCourseAuth(
                     _count: {
                       select: { problems: true },
                     },
+                    // Non-staff: their own (and their group's) date overrides, used only
+                    // to resolve the effective unlock time for the content lock below.
+                    // Never serialized -- peers' names/dates must not reach a student.
+                    ...(isStaff
+                      ? {}
+                      : {
+                          overrides: {
+                            where: overridesForStudentWhere(user.id),
+                            select: {
+                              targetType: true,
+                              userId: true,
+                              groupId: true,
+                              unlockAt: true,
+                              dueDate: true,
+                              lateCutoff: true,
+                              allowLateSubmissions: true,
+                            },
+                          },
+                        }),
                     // Per-student due-date overrides, staff-only (peers' names + dates
                     // must never reach a student). Feeds the "overrides" badge/popover.
                     ...(isStaff
@@ -141,16 +167,26 @@ export const GET = withCourseAuth(
 
       // The findUnique uses conditional includes, so widen to the relations and
       // _count that may be present for the requested view.
+      // Two different override selects land here: the staff one (carries `user` for the
+      // badge) and the student one (carries the target columns so their own effective
+      // unlock can be resolved). Both shapes are covered with optional fields.
       type OverrideRowRaw = {
         unlockAt: Date | null;
         dueDate: Date | null;
         lateCutoff: Date | null;
         allowLateSubmissions: boolean | null;
-        user: { firstName: string | null; lastName: string | null; email: string };
+        user?: { firstName: string | null; lastName: string | null; email: string };
+        targetType?: 'STUDENT' | 'GROUP';
+        userId?: string | null;
+        groupId?: string | null;
       };
       type AssignmentRow = Record<string, unknown> & {
         id: string;
+        description?: string | null;
+        dueDate?: Date;
         unlockAt?: Date | null;
+        allowLateSubmissions?: boolean;
+        lateCutoff?: Date | null;
         assignedToEveryone?: boolean;
         groupSetId?: string | null;
         problems?: Array<{ maxPoints?: number | null }>;
@@ -228,16 +264,50 @@ export const GET = withCourseAuth(
             ])
           : [new Map<string, number>(), new Map<string, number>()];
 
+        const now = new Date();
+
         assignmentsWithProblemCount = assignmentRows.map((assignment) => {
           const totalProblemPoints = sumProblemPoints(assignment.problems);
 
           const submissionCount = submissionCountMap.get(assignment.id) ?? 0;
           const commentCount = commentCountMap.get(assignment.id) ?? 0;
 
+          // Content lock: before a student's effective unlock time they may see that the
+          // assignment exists and when it opens, but not its prompt. Staff always see it.
+          // The selected overrides are already scoped to this student, so any group id
+          // present is one of theirs.
+          const studentOverrides = (isStaff ? [] : (assignment.overrides ?? [])).map((o) => ({
+            targetType: o.targetType ?? 'STUDENT',
+            userId: o.userId ?? null,
+            groupId: o.groupId ?? null,
+            unlockAt: o.unlockAt,
+            dueDate: o.dueDate,
+            lateCutoff: o.lateCutoff,
+            allowLateSubmissions: o.allowLateSubmissions,
+          }));
+          const eff =
+            isStaff || !assignment.dueDate
+              ? null
+              : effectiveDeadline(
+                  {
+                    unlockAt: assignment.unlockAt ?? null,
+                    dueDate: assignment.dueDate,
+                    allowLateSubmissions: assignment.allowLateSubmissions ?? false,
+                    lateCutoff: assignment.lateCutoff ?? null,
+                  },
+                  studentOverrides,
+                  user.id,
+                  studentOverrides
+                    .map((o) => o.groupId)
+                    .filter((gid): gid is string => gid != null),
+                );
+          const locked = !!eff?.unlockAt && eff.unlockAt.getTime() > now.getTime();
+
           return {
             id: assignment.id,
             title: assignment.title,
-            description: assignment.description,
+            description: locked ? null : assignment.description,
+            locked,
             dueDate: assignment.dueDate,
             unlockAt: assignment.unlockAt ?? null,
             assignedToEveryone: assignment.assignedToEveryone ?? true,
@@ -251,15 +321,20 @@ export const GET = withCourseAuth(
             updatedAt: assignment.updatedAt,
             courseId: assignment.courseId,
             problemCount: assignment._count?.problems ?? 0,
-            // Staff-only; empty for students (overrides not selected for them).
-            overrides: (assignment.overrides ?? []).map((o) => ({
-              studentName:
-                `${o.user.firstName ?? ''} ${o.user.lastName ?? ''}`.trim() || o.user.email,
-              unlockAt: o.unlockAt,
-              dueDate: o.dueDate,
-              lateCutoff: o.lateCutoff,
-              allowLateSubmissions: o.allowLateSubmissions,
-            })),
+            // Staff-only. Students also have overrides selected now (to resolve their own
+            // unlock time above), but those must never be serialized, and they carry no
+            // `user` relation, so this stays strictly gated on isStaff.
+            overrides: isStaff
+              ? (assignment.overrides ?? []).map((o) => ({
+                  studentName:
+                    `${o.user?.firstName ?? ''} ${o.user?.lastName ?? ''}`.trim() ||
+                    (o.user?.email ?? ''),
+                  unlockAt: o.unlockAt,
+                  dueDate: o.dueDate,
+                  lateCutoff: o.lateCutoff,
+                  allowLateSubmissions: o.allowLateSubmissions,
+                }))
+              : [],
             submissionCount,
             commentCount,
             hasSubmissionsOrComments: submissionCount > 0 || commentCount > 0,

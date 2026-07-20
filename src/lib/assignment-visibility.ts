@@ -21,6 +21,18 @@ export function assignedToStudentWhere(userId: string): Prisma.AssignmentWhereIn
   };
 }
 
+/**
+ * The AssignmentOverride rows that apply to one student: their own STUDENT override plus
+ * any GROUP override on a group they belong to. Filtering by this means every row returned
+ * is already relevant to that student, so callers can derive the group ids straight from
+ * the result instead of doing a second membership read.
+ */
+export function overridesForStudentWhere(userId: string): Prisma.AssignmentOverrideWhereInput {
+  return {
+    OR: [{ userId }, { studentGroup: { memberships: { some: { userId } } } }],
+  };
+}
+
 export function isStudentAssigned(
   assignment: { assignedToEveryone: boolean },
   assignees: Array<{ userId: string | null; groupId?: string | null }>,

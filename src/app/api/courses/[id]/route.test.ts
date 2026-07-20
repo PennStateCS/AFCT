@@ -171,8 +171,14 @@ describe('GET /api/courses/[id]', () => {
     // Pick the handler's fetch (the one with `include`), not the wrapper's
     // soft-delete `select` probe that now runs first.
     const include = prismaMock.course.findUnique.mock.calls.find((c) => c[0]?.include)?.[0].include;
-    // Students only get published assignments, and never the problem bank.
-    expect(include.assignments.where).toEqual({ isPublished: true });
+    // Students only get published assignments that are assigned to them (published alone
+    // would leak every assignment's id and description), and never the problem bank.
+    expect(include.assignments.where.isPublished).toBe(true);
+    expect(include.assignments.where.OR).toEqual([
+      { assignedToEveryone: true },
+      { assignees: { some: { userId: 'stu-1' } } },
+      { assignees: { some: { studentGroup: { memberships: { some: { userId: 'stu-1' } } } } } },
+    ]);
     expect(include.problems).toBeUndefined();
 
     // The response totals must not leak counts of hidden data.

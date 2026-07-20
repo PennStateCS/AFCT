@@ -6,6 +6,7 @@ import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logDenial } from '@/lib/api/activity';
 import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 
 // Types
 interface Submission {
@@ -103,6 +104,21 @@ export const GET = withCourseAuth(
           category: 'SUBMISSION',
           courseId,
         });
+      }
+
+      // Published + own-id is not enough: this payload carries problem titles,
+      // descriptions and constraints. The student must also be assigned the work and be
+      // past their effective unlock time. Not assigned is masked as 404; still locked
+      // returns the empty by-problem map.
+      if (!isStaff) {
+        const gate = await resolveStudentContentGate(assignment.id, user.id);
+        if (!gate.assigned) {
+          return NextResponse.json(
+            { error: 'Assignment not found for this course' },
+            { status: 404 },
+          );
+        }
+        if (gate.locked) return NextResponse.json({});
       }
 
       // Get all problems linked to the assignment

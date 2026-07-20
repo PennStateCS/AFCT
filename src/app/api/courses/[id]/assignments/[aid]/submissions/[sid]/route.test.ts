@@ -10,12 +10,16 @@ const prismaMock = vi.hoisted(() => ({
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const resolveGroupMock = vi.hoisted(() => vi.fn());
+const contentGateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/assignment-groups', () => ({
   resolveStudentSubmissionGroupId: resolveGroupMock,
+}));
+vi.mock('@/lib/assignment-student-gate', () => ({
+  resolveStudentContentGate: contentGateMock,
 }));
 
 import { GET } from './route';
@@ -25,6 +29,8 @@ beforeEach(() => {
   prismaMock.roster.findFirst.mockResolvedValue(null);
   // Individual submission by default; the group-aware test overrides this.
   resolveGroupMock.mockResolvedValue(null);
+  // Assigned and unlocked by default; the gating tests override this.
+  contentGateMock.mockResolvedValue({ assigned: true, locked: false, unlockAt: null });
 });
 
 describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
@@ -271,6 +277,70 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     );
 
     expect(res.status).toBe(200);
+  });
+
+  it('404-masks an assignment the student is not assigned', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    contentGateMock.mockResolvedValue({ assigned: false, locked: true, unlockAt: null });
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-a'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-a' }) },
+    );
+
+    expect(res.status).toBe(404);
+    // Problem content must not even be queried.
+    expect(prismaMock.assignmentProblem.findMany).not.toHaveBeenCalled();
+  });
+
+  it('withholds problem content before the student unlock time', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    contentGateMock.mockResolvedValue({
+      assigned: true,
+      locked: true,
+      unlockAt: new Date('2099-01-01T00:00:00.000Z'),
+    });
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-a'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-a' }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({});
+    expect(prismaMock.assignmentProblem.findMany).not.toHaveBeenCalled();
+  });
+
+  it('does not gate staff on assignment membership or unlock', async () => {
+    authMock.mockResolvedValue({ user: { id: 'fac-1', role: 'FACULTY' } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'FACULTY' });
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      {
+        problem: {
+          id: 'p1',
+          title: 'P1',
+          description: null,
+          type: null,
+          maxStates: null,
+          isDeterministic: null,
+          originalFileName: null,
+        },
+      },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([]);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-a'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-a' }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(contentGateMock).not.toHaveBeenCalled();
   });
 
   it('404-masks an unpublished assignment for the owning student', async () => {
