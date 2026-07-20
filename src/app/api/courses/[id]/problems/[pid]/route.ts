@@ -74,6 +74,8 @@ export const PUT = withCourseAuth(
 
       let fileName = existingProblem.fileName;
       let originalFileName = existingProblem.originalFileName;
+      // The previous solution file, kept until the database update commits.
+      let replacedFileName: string | null = null;
 
       // Handle file update if a new file is provided
       if (file && file.size > 0) {
@@ -116,36 +118,51 @@ export const PUT = withCourseAuth(
 
         fs.mkdirSync(uploadsDir, { recursive: true });
 
-        // Delete old file if it exists (resolve it inside the uploads dir so a
-        // legacy/unsafe stored name can't be used to unlink outside it).
-        if (existingProblem.fileName) {
-          try {
-            fs.unlinkSync(resolveInsideDir(uploadsDir, existingProblem.fileName));
-          } catch (err) {
-            console.warn('Could not delete old file:', err);
-          }
-        }
-
-        // Store under a random UUID + sanitized extension, never a path derived
-        // from client input; keep the original name only as display metadata.
+        // Write the replacement FIRST, under its own random name, and leave the old
+        // file alone until the database has committed. Deleting first meant a failed
+        // update destroyed the answer key while the row still pointed at it.
         const buffer = Buffer.from(await file.arrayBuffer());
         fileName = safeStoredFilename(file.name);
         originalFileName = file.name;
         fs.writeFileSync(resolveInsideDir(uploadsDir, fileName), buffer, { mode: 0o644 });
+        replacedFileName = existingProblem.fileName;
       }
 
-      const updatedProblem = await prisma.problem.update({
-        where: { id: problemId },
-        data: {
-          title,
-          description: data.description ?? null,
-          type: type as ProblemType,
-          fileName,
-          originalFileName,
-          maxStates: ['FA', 'PDA'].includes(type) ? (data.maxStates ?? 0) || null : null,
-          isDeterministic: type === 'FA' ? (data.isDeterministic ?? false) : null,
-        },
-      });
+      let updatedProblem;
+      try {
+        updatedProblem = await prisma.problem.update({
+          where: { id: problemId },
+          data: {
+            title,
+            description: data.description ?? null,
+            type: type as ProblemType,
+            fileName,
+            originalFileName,
+            maxStates: ['FA', 'PDA'].includes(type) ? (data.maxStates ?? 0) || null : null,
+            isDeterministic: type === 'FA' ? (data.isDeterministic ?? false) : null,
+          },
+        });
+      } catch (dbErr) {
+        // The row still references the old file, so roll back by removing the new one
+        // rather than leaving it orphaned on disk.
+        if (fileName && fileName !== existingProblem.fileName) {
+          try {
+            fs.unlinkSync(resolveInsideDir(uploadsDir, fileName));
+          } catch {
+            // Best effort: a stray file is preferable to masking the real error.
+          }
+        }
+        throw dbErr;
+      }
+
+      // Committed: only now is the superseded file safe to remove.
+      if (replacedFileName && replacedFileName !== fileName) {
+        try {
+          fs.unlinkSync(resolveInsideDir(uploadsDir, replacedFileName));
+        } catch (err) {
+          console.warn('Could not delete superseded solution file:', err);
+        }
+      }
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

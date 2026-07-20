@@ -181,23 +181,29 @@ function CollapsibleSidebarGroup({
     <SidebarGroup>
       {/* Color/size go on SidebarGroupLabel's className so tailwind-merge overrides its
           dimmed `text-sidebar-foreground/70 text-xs` base, matching the submenu items. */}
+      {/* The toggle sits inside a heading (WAI-ARIA accordion pattern) so screen reader
+          users can jump between sidebar sections by heading, not just by button.
+          Tailwind's preflight strips the h3's default margin/size, so this is
+          semantics-only with no visual change. */}
       <SidebarGroupLabel asChild className="text-sidebar-foreground text-sm">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-controls={contentId}
-          className="hover:bg-secondary/60 flex w-full items-center gap-1 whitespace-nowrap"
-        >
-          <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
-          <ChevronDown
-            aria-hidden="true"
-            className={cn(
-              'ml-auto h-4 w-4 shrink-0 transition-transform',
-              open ? '' : '-rotate-90',
-            )}
-          />
-        </button>
+        <h3>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-controls={contentId}
+            className="hover:bg-secondary/60 flex w-full items-center gap-1 whitespace-nowrap"
+          >
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
+            <ChevronDown
+              aria-hidden="true"
+              className={cn(
+                'ml-auto h-4 w-4 shrink-0 transition-transform',
+                open ? '' : '-rotate-90',
+              )}
+            />
+          </button>
+        </h3>
       </SidebarGroupLabel>
       {/* Kept mounted and toggled with `hidden` so the toggle's aria-controls
           always references an existing element (a conditional render would leave
@@ -365,6 +371,18 @@ export default function DashboardSidebarMenu() {
       // that link does (always for admins) even with no past courses of its own.
       section.courses.length > 0 || (section.bucket === 'past' && showArchivedCoursesLink),
   );
+  // The section holding the page you are actually on must be open, whatever the stored
+  // preference says. Past Courses defaults to collapsed, so navigating straight to a past
+  // course (or the archived list) would otherwise hide the very item you are viewing.
+  const activeCourseId = pathname.startsWith('/dashboard/courses/')
+    ? (pathname.split('/')[3] ?? null)
+    : null;
+  const activeSectionBucket: string | null =
+    pathname === '/dashboard/archived-courses'
+      ? 'past'
+      : (courseSections.find((s) => s.courses.some((c) => c.id === activeCourseId))?.bucket ??
+        null);
+
   const isDev = process.env.NODE_ENV !== 'production';
   const resolvedAdminMenu = (
     isDev
@@ -406,8 +424,12 @@ export default function DashboardSidebarMenu() {
           </CollapsibleSidebarGroup>
         )}
 
-        {/* Course sections: bucketed by date; an empty section is omitted. */}
-        {courseSections.length === 0
+        {/* Course sections: bucketed by date; an empty section is omitted.
+            The query status is checked BEFORE the section list, not only when it is
+            empty: an admin always has a Past Courses section (it carries the Archived
+            Courses link), so a length check alone meant admins never saw the loading
+            skeleton or the retry on failure. */}
+        {coursesPending || coursesFailed || courseSections.length === 0
           ? !collapsed && (
               <SidebarGroup>
                 <SidebarGroupContent>
@@ -472,7 +494,7 @@ export default function DashboardSidebarMenu() {
                 sectionId={section.bucket}
                 label={section.label}
                 collapsed={collapsed}
-                open={isOpen(section.bucket)}
+                open={isOpen(section.bucket) || section.bucket === activeSectionBucket}
                 onToggle={() => toggle(section.bucket)}
               >
                 <SidebarMenu>

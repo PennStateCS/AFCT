@@ -116,3 +116,50 @@ describe('readJson', () => {
     }
   });
 });
+
+describe('readJson body size limit', () => {
+  const Schema = z.object({ a: z.string() });
+
+  it('accepts a normal small body', async () => {
+    const res = await readJson(jsonReq(JSON.stringify({ a: 'ok' })), Schema);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.a).toBe('ok');
+  });
+
+  it('rejects an oversized body with 413 rather than parsing it', async () => {
+    // Well past the 64 KB default for a JSON route.
+    const huge = JSON.stringify({ a: 'x'.repeat(200_000) });
+    const res = await readJson(jsonReq(huge), Schema);
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.response.status).toBe(413);
+  });
+
+  it('rejects on a declared Content-Length over the cap, before reading the body', async () => {
+    // Content-Length is attacker-controlled, so this is only the cheap first gate; the
+    // streaming check below is what actually bounds memory.
+    const req = new Request('http://localhost/x', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-length': '10000000' },
+      body: JSON.stringify({ a: 'small' }),
+    });
+    const res = await readJson(req, Schema);
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.response.status).toBe(413);
+  });
+
+  it('honours a per-route override', async () => {
+    const res = await readJson(jsonReq(JSON.stringify({ a: 'abcdefghij' })), Schema, {
+      maxBytes: 8,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.response.status).toBe(413);
+  });
+
+  it('still reports malformed JSON as 400', async () => {
+    const res = await readJson(jsonReq('{ not json'), Schema);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.response.status).toBe(400);
+  });
+});

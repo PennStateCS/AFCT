@@ -327,6 +327,54 @@ describe('DashboardSidebarMenu', () => {
     expect(await screen.findByText('No courses')).toBeInTheDocument();
   });
 
+  it('shows the loading and error states to admins too', async () => {
+    // Admins always have a Past Courses section (it carries the Archived Courses link),
+    // so a "no sections" check alone hid these states from them entirely.
+    // Default session in beforeEach is an admin.
+    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('offline'));
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    expect(await screen.findByText('Could not load courses.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByText('Past Courses')).toBeNull();
+  });
+
+  it('force-opens the section holding the course you are viewing', async () => {
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
+    });
+    // A past course, whose section is collapsed by default.
+    setNavCourses([
+      {
+        id: 'past-1',
+        code: 'CS001',
+        isPublished: true,
+        isArchived: false,
+        startDate: '2000-01-01',
+        endDate: '2000-12-31',
+      },
+    ]);
+    usePathnameMock.mockReturnValue('/dashboard/courses/past-1');
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    // Without the override this section would render collapsed, hiding the very
+    // course being viewed.
+    const toggle = await screen.findByRole('button', { name: /Past Courses/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('force-opens Past Courses on the archived-courses page', async () => {
+    usePathnameMock.mockReturnValue('/dashboard/archived-courses');
+    setNavCourses([]);
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    const toggle = await screen.findByRole('button', { name: /Past Courses/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('offers a retry instead of "No courses" when the nav request fails', async () => {
     useSessionMock.mockReturnValue({
       data: { user: { id: 'fac-1', email: 'fac@example.com', role: 'FACULTY' } },

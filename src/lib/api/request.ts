@@ -10,6 +10,73 @@ import type { ZodType } from 'zod';
 import { apiError } from './http';
 
 /**
+ * Default ceiling for a JSON body. Every JSON route in this app sends small objects
+ * (credentials, ids, settings), so 64 KB is generous. File uploads go through
+ * multipart routes, which have their own size checks against the configured upload
+ * limit -- this bound deliberately does not apply to them.
+ */
+export const MAX_JSON_BODY_BYTES = 64 * 1024;
+
+/**
+ * Read a request body as text without letting it grow past `maxBytes`.
+ *
+ * Two gates, because either alone is insufficient:
+ *  1. `Content-Length`, when present, is rejected up front so an oversized body is
+ *     refused before a single byte is buffered.
+ *  2. The stream is then read incrementally and aborted the moment the running total
+ *     exceeds the cap, because `Content-Length` is optional (chunked encoding) and is
+ *     attacker-controlled anyway.
+ *
+ * Returns 413 rather than 400: the body was well-formed, just too large.
+ */
+async function readBodyText(
+  req: Request,
+  maxBytes: number,
+): Promise<{ ok: true; text: string } | { ok: false; response: NextResponse }> {
+  const tooLarge = () => ({
+    ok: false as const,
+    response: apiError(413, 'Request body too large'),
+  });
+
+  const declared = Number(req.headers.get('content-length') ?? '');
+  if (Number.isFinite(declared) && declared > maxBytes) return tooLarge();
+
+  const body = req.body;
+  // No stream to meter (e.g. a mocked Request in tests): fall back to text(), which the
+  // Content-Length check above has already bounded when the header was present.
+  if (!body) {
+    try {
+      const text = await req.text();
+      if (Buffer.byteLength(text) > maxBytes) return tooLarge();
+      return { ok: true, text };
+    } catch {
+      return { ok: false, response: apiError(400, 'Invalid JSON body') };
+    }
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return tooLarge();
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, response: apiError(400, 'Invalid JSON body') };
+  }
+
+  return { ok: true, text: Buffer.concat(chunks).toString('utf8') };
+}
+
+/**
  * Parse and validate a JSON request body against a Zod schema. Returns a discriminated
  * result: `{ ok: true, data }` with the typed, validated body, or `{ ok: false,
  * response }` (a ready-to-return **400** for malformed JSON or a schema mismatch).
@@ -18,10 +85,14 @@ import { apiError } from './http';
 export async function readJson<T>(
   req: Request,
   schema: ZodType<T>,
+  { maxBytes = MAX_JSON_BODY_BYTES }: { maxBytes?: number } = {},
 ): Promise<{ ok: true; data: T } | { ok: false; response: NextResponse }> {
+  const oversize = await readBodyText(req, maxBytes);
+  if (!oversize.ok) return oversize;
+
   let raw: unknown;
   try {
-    raw = await req.json();
+    raw = JSON.parse(oversize.text);
   } catch {
     return { ok: false, response: apiError(400, 'Invalid JSON body') };
   }

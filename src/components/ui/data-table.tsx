@@ -65,6 +65,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { usePersistentColumnVisibility } from '@/components/ui/use-persistent-column-visibility';
+import { escapeCsvCell } from '@/lib/csv';
 
 type ColumnAlign = 'left' | 'center' | 'right';
 
@@ -651,20 +652,19 @@ export function DataTable<TData, TValue>({
 
     const visibleColumns = table.getAllLeafColumns().filter((col) => col.id !== 'actions');
 
-    const headers = visibleColumns.map((col) => col.id);
+    // Every cell goes through escapeCsvCell: it quotes (so embedded commas/newlines are
+    // safe) AND neutralizes leading =, +, -, @, tab and CR, which a spreadsheet would
+    // otherwise execute as a formula. Table values include user-controlled text such as
+    // student names and course titles, so quoting alone was not enough. Non-string values
+    // were also previously emitted raw, which broke the row on anything containing a comma.
+    const headers = visibleColumns.map((col) => escapeCsvCell(col.id));
     const csvRows = [headers.join(',')];
 
     rows.forEach((row) => {
       const values = row
         .getVisibleCells()
         .filter((cell) => visibleColumns.includes(cell.column))
-        .map((cell) => {
-          const val = cell.getValue();
-          if (typeof val === 'string') {
-            return `"${val.replace(/"/g, '""')}"`;
-          }
-          return val ?? '';
-        });
+        .map((cell) => escapeCsvCell(cell.getValue()));
       csvRows.push(values.join(','));
     });
 

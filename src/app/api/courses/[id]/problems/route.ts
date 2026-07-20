@@ -119,18 +119,30 @@ export const POST = withCourseAuth(
       fs.writeFileSync(fullPath, buffer, { mode: 0o644 });
 
       // Create the problem record in the database
-      const problem = await prisma.problem.create({
-        data: {
-          title,
-          description: data.description ?? null,
-          type: type as ProblemType,
-          courseId,
-          fileName,
-          originalFileName: file.name,
-          maxStates: ['FA', 'PDA'].includes(type) ? (data.maxStates ?? 0) || null : null,
-          isDeterministic: type === 'FA' ? (data.isDeterministic ?? false) : null,
-        },
-      });
+      let problem;
+      try {
+        problem = await prisma.problem.create({
+          data: {
+            title,
+            description: data.description ?? null,
+            type: type as ProblemType,
+            courseId,
+            fileName,
+            originalFileName: file.name,
+            maxStates: ['FA', 'PDA'].includes(type) ? (data.maxStates ?? 0) || null : null,
+            isDeterministic: type === 'FA' ? (data.isDeterministic ?? false) : null,
+          },
+        });
+      } catch (dbErr) {
+        // No row references this file, so remove it instead of leaving it orphaned in
+        // the uploads volume forever.
+        try {
+          fs.unlinkSync(fullPath);
+        } catch {
+          // Best effort: a stray file is preferable to masking the real error.
+        }
+        throw dbErr;
+      }
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
