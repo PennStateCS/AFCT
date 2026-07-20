@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 import { safeSignOut } from '@/lib/safe-signout';
 import { getCourseDateBucket } from '@/lib/course-status';
 
@@ -98,6 +99,20 @@ const adminMenu = [
 const SIDEBAR_SECTIONS_KEY = 'afct.sidebarSections';
 const SECTION_DEFAULT_OPEN: Record<string, boolean> = { past: false };
 
+// The only sections that persist state. Anything else in storage (a stale id from a
+// renamed section, or hand-edited junk) is discarded rather than trusted.
+const PERSISTED_SECTION_IDS = new Set(['admin', 'upcoming', 'current', 'past']);
+
+/** Keep only known section ids with boolean values. */
+function sanitizeSectionState(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (PERSISTED_SECTION_IDS.has(key) && typeof value === 'boolean') out[key] = value;
+  }
+  return out;
+}
+
 function useSidebarSections() {
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
 
@@ -106,10 +121,7 @@ function useSidebarSections() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SIDEBAR_SECTIONS_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') setOpenMap(parsed as Record<string, boolean>);
-      }
+      if (raw) setOpenMap(sanitizeSectionState(JSON.parse(raw)));
     } catch {
       // ignore malformed/unavailable storage
     }
@@ -214,6 +226,8 @@ function SidebarNavItem({
   active: boolean;
   collapsed: boolean;
 }) {
+  const { isMobile, setOpenMobile } = useSidebar();
+
   return (
     <SidebarMenuItem>
       <TooltipProvider delayDuration={100}>
@@ -224,6 +238,11 @@ function SidebarNavItem({
                 href={href}
                 aria-label={ariaLabel ?? label}
                 aria-current={active ? 'page' : undefined}
+                // The dashboard layout persists across routes, so the mobile drawer would
+                // otherwise stay open on top of the page the user just navigated to.
+                onClick={() => {
+                  if (isMobile) setOpenMobile(false);
+                }}
                 className="flex min-w-0 items-center gap-2"
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -259,8 +278,13 @@ export default function DashboardSidebarMenu() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   // Cached courses list for sidebar nav, fetched client-side and revalidated.
-  const { data: courses = [] } = useQuery<Course[]>({
-    queryKey: ['courses', 'nav'],
+  const {
+    data: courses = [],
+    isPending: coursesPending,
+    isError: coursesFailed,
+    refetch: refetchCourses,
+  } = useQuery<Course[]>({
+    queryKey: queryKeys.courses.nav(),
     queryFn: async () => {
       const res = await fetch(apiPaths.myCourses({ view: 'nav' }));
       if (!res.ok) throw new Error('Failed to fetch courses');
@@ -388,20 +412,56 @@ export default function DashboardSidebarMenu() {
               <SidebarGroup>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        asChild
-                        aria-disabled={true}
-                        className={cn('text-sidebar-foreground/60 cursor-default')}
-                      >
-                        <div className={cn('flex w-full items-center gap-2')}>
-                          <Book className="h-4 w-4 shrink-0" />
-                          <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                            No courses
-                          </span>
+                    {/* Loading, failed and genuinely-empty are three different states;
+                        showing "No courses" for all three both flashed on first load and
+                        hid failures behind a plausible-looking answer. */}
+                    {coursesPending ? (
+                      <SidebarMenuItem>
+                        <div
+                          className="flex w-full flex-col gap-2 px-2 py-1.5"
+                          role="status"
+                          aria-label="Loading courses"
+                        >
+                          {[0, 1, 2].map((i) => (
+                            <span
+                              key={i}
+                              aria-hidden="true"
+                              className="bg-sidebar-foreground/10 h-4 w-full animate-pulse rounded"
+                            />
+                          ))}
                         </div>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
+                      </SidebarMenuItem>
+                    ) : coursesFailed ? (
+                      <SidebarMenuItem>
+                        <div className="flex w-full flex-col items-start gap-1 px-2 py-1.5">
+                          <span className="text-sidebar-foreground/70 text-sm">
+                            Could not load courses.
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void refetchCourses()}
+                            className="text-sidebar-foreground focus-visible:ring-ring rounded text-sm underline focus-visible:ring-2 focus-visible:outline-none"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      </SidebarMenuItem>
+                    ) : (
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          aria-disabled={true}
+                          className={cn('text-sidebar-foreground/60 cursor-default')}
+                        >
+                          <div className={cn('flex w-full items-center gap-2')}>
+                            <Book className="h-4 w-4 shrink-0" />
+                            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                              No courses
+                            </span>
+                          </div>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
@@ -467,6 +527,9 @@ export default function DashboardSidebarMenu() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
+                  // Without this the button's name was the user's name twice (avatar alt
+                  // plus the visible span) and never said what activating it does.
+                  aria-label={`Open account menu for ${user.name}`}
                   className={cn(
                     'hover:bg-secondary data-[state=open]:bg-secondary/70 data-[state=open]:text-secondary-foreground h-14 bg-[#525252] px-3 py-3 transition-colors',
                     // In the icon rail the button shrinks to 32px; drop the padding and
@@ -476,9 +539,11 @@ export default function DashboardSidebarMenu() {
                   )}
                 >
                   <Avatar className="h-8 w-8 shrink-0">
+                    {/* Decorative: the button carries the name, so an alt here would only
+                        duplicate it. */}
                     <AvatarImage
                       src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
-                      alt={user.name}
+                      alt=""
                       cropX={user.cropX ?? 0.5}
                       cropY={user.cropY ?? 0.5}
                       zoom={user.zoom ?? 1}

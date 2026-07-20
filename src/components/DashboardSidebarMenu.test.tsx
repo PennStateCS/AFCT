@@ -312,7 +312,7 @@ describe('DashboardSidebarMenu', () => {
     );
   });
 
-  it('renders a placeholder message when no courses are visible', () => {
+  it('renders a placeholder message once an empty course list resolves', async () => {
     useSessionMock.mockReturnValue({
       data: { user: { id: 'fac-1', email: 'fac@example.com', role: 'FACULTY' } },
     });
@@ -320,7 +320,25 @@ describe('DashboardSidebarMenu', () => {
 
     renderWithClient(<DashboardSidebarMenu />);
 
-    expect(screen.getByText('No courses')).toBeInTheDocument();
+    // Loading shows a skeleton first; "No courses" is only the resolved-empty answer.
+    expect(screen.getByRole('status', { name: 'Loading courses' })).toBeInTheDocument();
+    expect(screen.queryByText('No courses')).toBeNull();
+
+    expect(await screen.findByText('No courses')).toBeInTheDocument();
+  });
+
+  it('offers a retry instead of "No courses" when the nav request fails', async () => {
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'fac-1', email: 'fac@example.com', role: 'FACULTY' } },
+    });
+    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('offline'));
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    // A failure must not masquerade as "you have no courses".
+    expect(await screen.findByText('Could not load courses.')).toBeInTheDocument();
+    expect(screen.queryByText('No courses')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
   it('hides the admin menu for non-admin users', () => {

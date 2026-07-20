@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { columns } from './course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -23,11 +23,11 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
 
   // Cached courses list: the SSR-provided list seeds the cache and is treated as
   // fresh, so navigating back to Courses is instant with no refetch on mount.
+  const queryClient = useQueryClient();
   const {
     data: courses = [],
     isLoading,
     isError,
-    refetch,
   } = useQuery({
     queryKey: coursesListQueryKey,
     queryFn: async () => {
@@ -41,10 +41,13 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
     staleTime: 30_000,
   });
 
-  // Full refresh (referentially stable so table columns stay memoized).
+  // Full refresh (referentially stable so table columns stay memoized). Creating,
+  // archiving, restoring or deleting a course moves it between the active list, the
+  // archived list and the sidebar nav, so invalidate the whole ['courses'] prefix rather
+  // than only this table's own query -- the sidebar used to keep showing the stale set.
   const refresh = useCallback(() => {
-    void refetch();
-  }, [refetch]);
+    void queryClient.invalidateQueries({ queryKey: ['courses'] });
+  }, [queryClient]);
 
   const columnsMemo = useMemo(() => columns(refresh, refresh, timezone), [refresh, timezone]);
 

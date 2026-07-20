@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { columns } from '../courses/course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -28,11 +28,11 @@ export default function ArchivedCoursesClient({
 }) {
   const { timezone } = useEffectiveTimezone();
 
+  const queryClient = useQueryClient();
   const {
     data: courses = [],
     isLoading,
     isError,
-    refetch,
   } = useQuery({
     queryKey: archivedCoursesQueryKey,
     queryFn: async () => {
@@ -46,9 +46,11 @@ export default function ArchivedCoursesClient({
     staleTime: 30_000,
   });
 
+  // Restoring or deleting moves a course between this list, the active list and the
+  // sidebar nav, so invalidate the whole ['courses'] prefix rather than only this query.
   const refresh = useCallback(() => {
-    void refetch();
-  }, [refetch]);
+    void queryClient.invalidateQueries({ queryKey: ['courses'] });
+  }, [queryClient]);
 
   const columnsMemo = useMemo(() => {
     const cols = columns(refresh, refresh, timezone);
