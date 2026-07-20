@@ -40,7 +40,8 @@ const arg = (p: Record<string, any>) => ({ row: { original: p } });
 
 // The placeholder the code renders for a missing value; read from the code so this
 // test never hardcodes its exact (em-dash) bytes.
-const DASH = find(cols(), 'assignmentMaxPoints').cell(arg(problem({})));
+// Missing per-assignment values render as an empty cell (null), not a placeholder.
+const BLANK = find(cols(), 'assignmentMaxPoints').cell(arg(problem({})));
 
 describe('buildProblemColumns', () => {
   it('includes the expected columns', () => {
@@ -78,15 +79,15 @@ describe('buildProblemColumns', () => {
     const subs = find(cols(), 'assignmentMaxSubmissions');
     expect(subs.cell(arg(problem({ assignmentMaxSubmissions: -1 })))).toBe('Unlimited');
     expect(subs.cell(arg(problem({ assignmentMaxSubmissions: 3 })))).toBe(3);
-    expect(typeof DASH).toBe('string');
-    expect(subs.cell(arg(problem({})))).toBe(DASH); // missing → dash placeholder
+    expect(BLANK).toBeNull();
+    expect(subs.cell(arg(problem({})))).toBeNull(); // missing → blank cell
   });
 
   it('renders the autograder and deterministic flags', () => {
     const ag = find(cols(), 'assignmentAutograderEnabled');
     expect(ag.cell(arg(problem({ assignmentAutograderEnabled: true })))).toBe('On');
     expect(ag.cell(arg(problem({ assignmentAutograderEnabled: false })))).toBe('Off');
-    expect(ag.cell(arg(problem({})))).toBe(DASH);
+    expect(ag.cell(arg(problem({})))).toBeNull();
 
     const det = find(cols(), 'isDeterministic');
     expect(det.cell(arg(problem({ isDeterministic: true })))).toBe('Yes');

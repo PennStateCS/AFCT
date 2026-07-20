@@ -64,6 +64,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       header: 'Description',
       cell: ({ row }: { row: { original: Problem } }) => {
         const desc = row.original.description;
+        // No description: render nothing so the cell reads as empty.
         return desc ? (
           <button
             type="button"
@@ -73,9 +74,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
           >
             View Description
           </button>
-        ) : (
-          <span className="text-muted-foreground text-xs">â€”</span>
-        );
+        ) : null;
       },
       meta: { priority: 2 },
       enableSorting: false,
@@ -107,7 +106,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       cell: ({ row }: { row: { original: Problem & { assignmentMaxPoints?: number } } }) =>
         typeof row.original.assignmentMaxPoints === 'number'
           ? row.original.assignmentMaxPoints
-          : 'â€”',
+          : null,
       meta: { priority: 1 },
       enableSorting: true,
     },
@@ -116,7 +115,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       header: 'Max Submissions',
       cell: ({ row }: { row: { original: Problem & { assignmentMaxSubmissions?: number } } }) => {
         const value = row.original.assignmentMaxSubmissions;
-        if (typeof value !== 'number') return 'â€”';
+        if (typeof value !== 'number') return null;
         return value === -1 ? 'Unlimited' : value;
       },
       meta: { priority: 1 },
@@ -144,7 +143,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
         row: { original: Problem & { assignmentAutograderEnabled?: boolean } };
       }) => {
         const value = row.original.assignmentAutograderEnabled;
-        if (typeof value !== 'boolean') return 'â€”';
+        if (typeof value !== 'boolean') return null;
         return value ? 'On' : 'Off';
       },
       meta: {
