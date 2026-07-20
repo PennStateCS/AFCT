@@ -84,7 +84,11 @@ export const POST = withCourseAuth(
         );
       }
 
-      const xml = await file.text();
+      // Pull the bytes across once and reuse them for both validation and the write.
+      // This used to be file.text() here and file.arrayBuffer() again below, which
+      // buffered the whole upload twice.
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const xml = buffer.toString('utf8');
       const validation = validateStructureXML(xml, type);
       if (!validation.isValid) {
         await createEnhancedActivityLog(prisma, req, {
@@ -112,11 +116,10 @@ export const POST = withCourseAuth(
       // Write uploaded file to disk under a random UUID + sanitized extension:
       // never a path derived from the client-supplied file.name. Written
       // non-executable; the original name is kept only as display metadata below.
-      fs.mkdirSync(uploadsDir, { recursive: true });
-      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.promises.mkdir(uploadsDir, { recursive: true });
       const fileName = safeStoredFilename(file.name);
       const fullPath = resolveInsideDir(uploadsDir, fileName);
-      fs.writeFileSync(fullPath, buffer, { mode: 0o644 });
+      await fs.promises.writeFile(fullPath, buffer, { mode: 0o644 });
 
       // Create the problem record in the database
       let problem;
@@ -137,7 +140,7 @@ export const POST = withCourseAuth(
         // No row references this file, so remove it instead of leaving it orphaned in
         // the uploads volume forever.
         try {
-          fs.unlinkSync(fullPath);
+          await fs.promises.unlink(fullPath);
         } catch {
           // Best effort: a stray file is preferable to masking the real error.
         }

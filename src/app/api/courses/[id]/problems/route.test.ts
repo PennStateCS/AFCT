@@ -17,11 +17,12 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/upload-limits', () => ({ getSystemUploadLimit: uploadLimitMock }));
 vi.mock('@/app/utils/xmlStructureValidate', () => ({ validateStructureXML: validateMock }));
-vi.mock('fs', () => ({
-  default: { mkdirSync: vi.fn(), writeFileSync: vi.fn() },
-  mkdirSync: vi.fn(),
-  writeFileSync: vi.fn(),
-}));
+vi.mock('fs', () => {
+  const api = {
+    promises: { mkdir: vi.fn(), writeFile: vi.fn(), unlink: vi.fn() },
+  };
+  return { default: api, ...api };
+});
 
 import { POST } from './route';
 

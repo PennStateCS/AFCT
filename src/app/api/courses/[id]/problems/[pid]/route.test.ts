@@ -20,9 +20,9 @@ const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const uploadLimitMock = vi.hoisted(() => vi.fn());
 const validateMock = vi.hoisted(() => vi.fn());
-const unlinkSyncMock = vi.hoisted(() => vi.fn());
-const writeFileSyncMock = vi.hoisted(() => vi.fn());
-const mkdirSyncMock = vi.hoisted(() => vi.fn());
+const unlinkMock = vi.hoisted(() => vi.fn());
+const writeFileMock = vi.hoisted(() => vi.fn());
+const mkdirMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -31,9 +31,7 @@ vi.mock('@/lib/upload-limits', () => ({ getSystemUploadLimit: uploadLimitMock })
 vi.mock('@/app/utils/xmlStructureValidate', () => ({ validateStructureXML: validateMock }));
 vi.mock('fs', () => {
   const api = {
-    mkdirSync: mkdirSyncMock,
-    writeFileSync: writeFileSyncMock,
-    unlinkSync: unlinkSyncMock,
+    promises: { mkdir: mkdirMock, writeFile: writeFileMock, unlink: unlinkMock },
   };
   return { default: api, ...api };
 });
@@ -116,7 +114,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.submission.deleteMany).toHaveBeenCalledWith({ where: { problemId: 'p1' } });
     expect(prismaMock.problem.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
-    expect(unlinkSyncMock).toHaveBeenCalled();
+    expect(unlinkMock).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
   });
 
@@ -130,7 +128,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
     const res = await DELETE(req, params());
 
     expect(res.status).toBe(200);
-    expect(unlinkSyncMock).not.toHaveBeenCalled();
+    expect(unlinkMock).not.toHaveBeenCalled();
   });
 
   it('tolerates a file deletion error and still succeeds', async () => {
@@ -141,7 +139,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
       fileName: 'file.jff',
     });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    unlinkSyncMock.mockImplementation(() => {
+    unlinkMock.mockImplementation(() => {
       throw Object.assign(new Error('missing'), { code: 'ENOENT' });
     });
 
@@ -249,7 +247,7 @@ describe('PUT /api/courses/[id]/problems/[pid]', () => {
     const res = await PUT(putReq({ title: 'Updated', type: 'FA', maxPoints: '10' }), params());
 
     expect(res.status).toBe(200);
-    expect(writeFileSyncMock).not.toHaveBeenCalled();
+    expect(writeFileMock).not.toHaveBeenCalled();
     expect(prismaMock.problem.update).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
   });
@@ -268,8 +266,8 @@ describe('PUT /api/courses/[id]/problems/[pid]', () => {
     const res = await PUT(putReq({ title: 'Updated', type: 'FA' }, file), params());
 
     expect(res.status).toBe(200);
-    expect(unlinkSyncMock).toHaveBeenCalled(); // old file removed
-    expect(writeFileSyncMock).toHaveBeenCalled(); // new file written
+    expect(unlinkMock).toHaveBeenCalled(); // old file removed
+    expect(writeFileMock).toHaveBeenCalled(); // new file written
   });
 
   it('returns 400 when the uploaded file fails structure validation', async () => {

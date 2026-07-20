@@ -93,7 +93,9 @@ export const PUT = withCourseAuth(
             { status: 413 },
           );
         }
-        const xml = await file.text();
+        // One pass over the upload: these bytes serve both the XML check and the write.
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const xml = buffer.toString('utf8');
         const validation = validateStructureXML(xml, type);
         if (!validation.isValid) {
           await createEnhancedActivityLog(prisma, req, {
@@ -116,15 +118,16 @@ export const PUT = withCourseAuth(
           return NextResponse.json({ error: validation.error }, { status: 400 });
         }
 
-        fs.mkdirSync(uploadsDir, { recursive: true });
+        await fs.promises.mkdir(uploadsDir, { recursive: true });
 
         // Write the replacement FIRST, under its own random name, and leave the old
         // file alone until the database has committed. Deleting first meant a failed
         // update destroyed the answer key while the row still pointed at it.
-        const buffer = Buffer.from(await file.arrayBuffer());
         fileName = safeStoredFilename(file.name);
         originalFileName = file.name;
-        fs.writeFileSync(resolveInsideDir(uploadsDir, fileName), buffer, { mode: 0o644 });
+        await fs.promises.writeFile(resolveInsideDir(uploadsDir, fileName), buffer, {
+          mode: 0o644,
+        });
         replacedFileName = existingProblem.fileName;
       }
 
@@ -147,7 +150,7 @@ export const PUT = withCourseAuth(
         // rather than leaving it orphaned on disk.
         if (fileName && fileName !== existingProblem.fileName) {
           try {
-            fs.unlinkSync(resolveInsideDir(uploadsDir, fileName));
+            await fs.promises.unlink(resolveInsideDir(uploadsDir, fileName));
           } catch {
             // Best effort: a stray file is preferable to masking the real error.
           }
@@ -158,7 +161,7 @@ export const PUT = withCourseAuth(
       // Committed: only now is the superseded file safe to remove.
       if (replacedFileName && replacedFileName !== fileName) {
         try {
-          fs.unlinkSync(resolveInsideDir(uploadsDir, replacedFileName));
+          await fs.promises.unlink(resolveInsideDir(uploadsDir, replacedFileName));
         } catch (err) {
           console.warn('Could not delete superseded solution file:', err);
         }
@@ -245,7 +248,7 @@ export const DELETE = withCourseAuth(
 
       if (existingProblem.fileName) {
         try {
-          fs.unlinkSync(resolveInsideDir(uploadsDir, existingProblem.fileName));
+          await fs.promises.unlink(resolveInsideDir(uploadsDir, existingProblem.fileName));
         } catch (err) {
           console.warn('Could not delete problem file:', err);
         }

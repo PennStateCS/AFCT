@@ -5,7 +5,6 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { writeFile, unlink, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
@@ -21,15 +20,16 @@ import { invalidateSessionUser } from '@/lib/session-user-cache';
 
 const uploadDir = path.join('/private', 'uploads', 'pfps');
 
-// Utility to delete a file if it exists
+// Utility to delete a file if it exists. Just attempt the unlink and forgive ENOENT
+// rather than probing first: the probe was a blocking call, and checking then acting
+// races anyway if something else removes the file in between.
 async function deleteFileIfExists(filename: string) {
   const filePath = path.join(uploadDir, filename);
-  if (existsSync(filePath)) {
-    try {
-      await unlink(filePath);
-    } catch (err) {
-      console.warn(`Could not delete file ${filename}:`, err);
-    }
+  try {
+    await unlink(filePath);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return;
+    console.warn(`Could not delete file ${filename}:`, err);
   }
 }
 
@@ -88,9 +88,9 @@ export async function POST(req: Request) {
     const avatar = parsed.form.get('avatar') as File | null;
     const uploadLimit = await getSystemUploadLimit();
 
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
+    // recursive:true is already a no-op when the directory exists, so the existence
+    // probe bought nothing but a blocking syscall.
+    await mkdir(uploadDir, { recursive: true });
 
     const currentUser = await prisma.user.findUnique({
       where: { id: session.user.id },
