@@ -159,6 +159,24 @@ export function getUserColumns(
       },
     },
     {
+      // Filter-only, hidden by default (see defaultColumnVisibility in UsersClient).
+      // Lock is orthogonal to Active/Inactive - a user can be active AND locked - so it
+      // gets its own filter dimension rather than being folded into the Status filter,
+      // which would wrongly make "Active" and "Locked" mutually exclusive.
+      id: 'lockStatus',
+      accessorFn: (row) => (isLockedNow(row.lockedUntil) ? 'locked' : 'unlocked'),
+      header: () => <span className="sr-only">Lock status</span>,
+      cell: () => null,
+      meta: {
+        filterVariant: 'multiselect',
+        filterLabel: 'Lock',
+        filterOptions: [
+          { label: 'Locked', value: 'locked' },
+          { label: 'Not locked', value: 'unlocked' },
+        ],
+      },
+    },
+    {
       accessorKey: 'temporaryPassword',
       header: 'Password Status',
       meta: {
@@ -208,6 +226,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
 
   async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
@@ -241,6 +260,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         throw new Error(body?.error || 'Failed to unlock account.');
       }
       showToast.success('Account unlocked.');
+      setUnlockConfirmOpen(false);
       onUserUpdate();
     } catch (error) {
       showToast.error(error instanceof Error ? error.message : 'Failed to unlock account.');
@@ -297,6 +317,16 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         cancelText="Cancel"
       />
 
+      <ConfirmDialog
+        open={unlockConfirmOpen}
+        onCancel={() => setUnlockConfirmOpen(false)}
+        onConfirm={handleUnlock}
+        title="Unlock Account"
+        description={`Unlock ${user.firstName} ${user.lastName}? They will be able to sign in again immediately. Repeated failed logins can re-lock the account.`}
+        confirmText="Unlock"
+        cancelText="Cancel"
+      />
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -332,7 +362,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
           </DropdownMenuItem>
 
           <DropdownMenuItem
-            onClick={handleUnlock}
+            onClick={() => setUnlockConfirmOpen(true)}
             disabled={!isLockedNow(user.lockedUntil)}
             className="hover:bg-secondary flex items-center gap-2"
           >

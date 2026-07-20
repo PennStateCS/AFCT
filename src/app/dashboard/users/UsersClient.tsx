@@ -94,7 +94,7 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
           data={users}
           loading={isLoading}
           tableLabel="Users table"
-          defaultColumnVisibility={{ isAdmin: false }}
+          defaultColumnVisibility={{ isAdmin: false, lockStatus: false }}
           defaultSorting={[{ id: 'lastName', desc: false }]}
         />
       </CardContent>
