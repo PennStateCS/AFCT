@@ -3,6 +3,7 @@ import AssignmentClient from './AssignmentClient';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { AssignmentWithDetails } from '@/lib/assignment-details';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 
 export const metadata: Metadata = {
   title: 'Assignment',
@@ -68,9 +69,21 @@ export default async function AssignmentPage({ params }: PageProps) {
     });
 
     if (assignment) {
-      // Staff (admin or course FACULTY/TA) see any assignment; an enrolled student
-      // sees it only once published.
-      const hasStudentAccess = enrollment?.role === 'STUDENT' && assignment.isPublished;
+      // Staff (admin or course FACULTY/TA) see any assignment. For a student, being
+      // enrolled and the assignment being published is NOT sufficient: they must also be
+      // in the assignment's audience, and past their effective unlock time. This payload
+      // carries the title, description and problem list, so getting it wrong hands a
+      // classmate the contents of work that was deliberately scoped away from them.
+      //
+      // The same resolver backs the API routes that serve this content, so the page and
+      // the API cannot drift. They previously did: the API answered 404 while this page
+      // rendered the assignment anyway, which made both "assign to specific students"
+      // and "lock until unlockAt" bypassable by opening the URL directly.
+      let hasStudentAccess = enrollment?.role === 'STUDENT' && assignment.isPublished;
+      if (hasStudentAccess) {
+        const gate = await resolveStudentContentGate(assignment.id, session.user.id);
+        hasStudentAccess = gate.assigned && !gate.locked;
+      }
 
       if (isStaff || hasStudentAccess) {
         const totalProblemPoints = assignment.problems.reduce((sum, ap) => {

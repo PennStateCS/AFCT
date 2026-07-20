@@ -8,10 +8,14 @@ const prismaMock = vi.hoisted(() => ({
 }));
 const authMock = vi.hoisted(() => vi.fn());
 const getCourseRoleMock = vi.hoisted(() => vi.fn());
+const contentGateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/permissions', () => ({ getCourseRole: getCourseRoleMock }));
+vi.mock('@/lib/assignment-student-gate', () => ({
+  resolveStudentContentGate: contentGateMock,
+}));
 vi.mock('@/components/navbar/AssignmentBreadcrumbSource', () => ({
   __esModule: true,
   default: ({
@@ -35,6 +39,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
   getCourseRoleMock.mockResolvedValue('STUDENT');
+  // Assigned by default; the audience-specific cases override it.
+  contentGateMock.mockResolvedValue({ assigned: true, locked: false, unlockAt: null });
 });
 
 describe('AssignmentLayout', () => {
@@ -125,5 +131,59 @@ describe('AssignmentLayout', () => {
 
     const element = result as React.ReactElement<any>;
     expect(element.props.children[0].props.assignmentTitle).toBe('Draft');
+  });
+
+  it('hides the breadcrumb from a student the assignment is not assigned to', async () => {
+    // Published is not enough. Work scoped to specific classmates must not have its
+    // title readable by the rest of the course, and the breadcrumb is a third surface
+    // (alongside the page and the API) that renders it.
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Make-up Exam',
+      isPublished: true,
+    });
+    contentGateMock.mockResolvedValue({ assigned: false, locked: true, unlockAt: null });
+
+    const result = await AssignmentLayout({
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      children: <div data-testid="children">Child</div>,
+    });
+    const element = result as React.ReactElement<any>;
+    expect(element.props.children[0]).toBeNull();
+  });
+
+  it('still shows the breadcrumb before unlock, since the title is not the secret', async () => {
+    // A student who IS assigned already sees the assignment listed with its opening
+    // date; the unlock gate hides the body, not the existence.
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Locked Lab',
+      isPublished: true,
+    });
+    contentGateMock.mockResolvedValue({ assigned: true, locked: true, unlockAt: new Date() });
+
+    const result = await AssignmentLayout({
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      children: <div data-testid="children">Child</div>,
+    });
+    const element = result as React.ReactElement<any>;
+    expect(element.props.children[0]?.props.assignmentTitle).toBe('Locked Lab');
+  });
+
+  it('does not consult the audience gate for staff', async () => {
+    getCourseRoleMock.mockResolvedValue('FACULTY');
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Unpublished Draft',
+      isPublished: false,
+    });
+
+    const result = await AssignmentLayout({
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      children: <div data-testid="children">Child</div>,
+    });
+    const element = result as React.ReactElement<any>;
+    expect(element.props.children[0]?.props.assignmentTitle).toBe('Unpublished Draft');
+    expect(contentGateMock).not.toHaveBeenCalled();
   });
 });

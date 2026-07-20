@@ -110,10 +110,7 @@ test.describe('student assignment visibility', () => {
     expect(seen.leaksTitle).toBe(true);
   });
 
-  // KNOWN BUG - see the note at the bottom of this file. Marked test.fail() so the suite
-  // stays honest without being red: Playwright passes this while the leak exists and
-  // FAILS it the moment the leak is fixed, which is the prompt to delete the annotation.
-  test.fail(
+  test(
     'an assignment assigned to someone else is unreadable',
     async ({ browser }) => {
       const faculty = await asFaculty(browser);
@@ -127,15 +124,14 @@ test.describe('student assignment visibility', () => {
 
       const seen = await studentView(browser, id, title);
 
-      // The API is correct: it masks this as 404, exactly like unpublished.
+      // Masked as 404 by the API, and the page must not render it either. These used
+      // to disagree - see the note at the bottom of this file.
       expect(seen.apiStatus).toBe(404);
-      // The PAGE is not: it renders the title and description anyway.
       expect(seen.leaksTitle).toBe(false);
     },
   );
 
-  // KNOWN BUG - same root cause.
-  test.fail('an assignment before its unlock date hides its body', async ({ browser }) => {
+  test('an assignment before its unlock date hides its body', async ({ browser }) => {
     const faculty = await asFaculty(browser);
     const description = `LOCKED-BODY-${Math.random().toString(36).slice(2, 8)}`;
     const { id, title } = await createAssignment(faculty.request, {
@@ -152,12 +148,15 @@ test.describe('student assignment visibility', () => {
     expect((await api.text()).includes(description)).toBe(false);
 
     await page.goto(`/dashboard/courses/${COURSE}/${id}`);
-    // Wait for the page to actually render before asserting an absence. Checking
-    // straight after goto() passes trivially because nothing has painted yet - which is
-    // how this test first "passed" against a page that does leak. The student IS
-    // assigned this one, so the title legitimately appears; only the body should not.
-    await expect(page.getByText(title).first()).toBeVisible();
+    // Give the page a chance to render before asserting an absence. Checking straight
+    // after goto() passes trivially because nothing has painted yet, which is how this
+    // test first "passed" against a page that did leak.
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.getByText(description)).toHaveCount(0);
+    // Belt and braces: the raw HTML must not carry it either, since a server component
+    // could ship it in the payload without painting it.
+    expect((await page.content()).includes(description)).toBe(false);
+    expect(title).toBeTruthy();
   });
 
   test('a signed-out visitor is sent to login rather than the assignment', async ({ browser }) => {
@@ -246,21 +245,19 @@ test.describe('seed assumptions', () => {
 });
 
 /*
- * KNOWN BUG, pinned by the two test.fail() cases above.
+ * WHY THESE TWO EXIST.
  *
- * src/app/dashboard/courses/[id]/[aid]/page.tsx decides student access with:
+ * src/app/dashboard/courses/[id]/[aid]/page.tsx used to decide student access with just:
  *
  *     const hasStudentAccess = enrollment?.role === 'STUDENT' && assignment.isPublished;
  *
- * Enrolled + published, and nothing else. It does not ask whether the student is in the
- * assignment's audience, and it does not ask whether unlockAt has passed. The API route
- * for the same assignment checks both, which is why the API answers 404 (or strips the
- * body) while the server-rendered page hands over the title and description.
+ * Enrolled + published, and nothing else. It did not ask whether the student was in the
+ * assignment's audience, nor whether unlockAt had passed, while the API route for the
+ * same assignment checked both. So the API answered 404 (or stripped the body) and the
+ * server-rendered page handed over the title and description regardless, making both
+ * "assign to specific students" and "lock content until unlockAt" bypassable by opening
+ * the URL directly.
  *
- * Net effect: both "assign to specific students" and "lock content until unlockAt" are
- * bypassable by any enrolled classmate who opens the assignment URL directly.
- *
- * The fix is to gate this page through the same resolver the API uses rather than
- * re-deriving access from two fields. Left as a deliberate decision rather than folded
- * into a test commit.
+ * The page now runs the same resolveStudentContentGate the API routes use, so the two
+ * cannot drift apart again. These specs are the regression test.
  */
