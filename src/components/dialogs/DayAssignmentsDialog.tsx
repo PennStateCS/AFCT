@@ -102,7 +102,7 @@ export default function DayAssignmentsDialog({
                           : 'bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
                         a.crossedOut && 'line-through opacity-80',
                       )}
-                      title={`${isDraft ? 'Draft — ' : ''}${a.course.code} - ${a.title}`}
+                      title={`${isDraft ? 'Draft: ' : ''}${a.course.code} - ${a.title}`}
                       onClick={() => {
                         onClose?.();
                       }}

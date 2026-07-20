@@ -168,7 +168,7 @@ function CalendarDayButton(props: DayButtonProps) {
                 isDraft ? 'bg-amber-600 dark:bg-amber-600' : 'bg-sky-700 dark:bg-sky-600',
                 a.crossedOut && 'line-through opacity-80',
               )}
-              title={`${isDraft ? 'Draft — ' : ''}${a.course.code} - ${a.title}`}
+              title={`${isDraft ? 'Draft: ' : ''}${a.course.code} - ${a.title}`}
             >
               {isDraft && <span>✎ </span>}
               {`${a.course.code} - ${a.title}`}

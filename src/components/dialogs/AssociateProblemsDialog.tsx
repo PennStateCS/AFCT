@@ -326,10 +326,15 @@ export function AssociateProblemsDialog({
               />
             </div>
           </div>
-          {configError ? <p className="text-xs text-red-600">{configError}</p> : null}
+          {configError ? (
+            <p role="alert" className="text-xs text-red-600">
+              {configError}
+            </p>
+          ) : null}
 
           <DialogFooter>
             <Button
+              type="button"
               variant="secondary"
               onClick={() => {
                 setInternalOpen(false);
@@ -339,6 +344,7 @@ export function AssociateProblemsDialog({
               Cancel
             </Button>
             <Button
+              type="button"
               variant="default"
               disabled={courseIsArchived || selectableProblems.length === 0}
               onClick={handleAdd}

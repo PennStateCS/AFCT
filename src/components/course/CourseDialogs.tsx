@@ -119,7 +119,7 @@ export function CourseDialogs({
       <ConfirmDialog
         open={confirmOpen}
         title={pendingDelete?.type === 'assignment' ? 'Delete Assignment?' : 'Delete Problem?'}
-        description="Are you sure you want to delete this item? This cannot be undone."
+        description="Are you sure you want to delete this item? This action cannot be undone."
         onConfirm={onConfirm}
         onCancel={onCancel}
       />

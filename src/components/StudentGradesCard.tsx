@@ -100,7 +100,9 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
             <Loader2 className="h-4 w-4 animate-spin" /> Loading grades...
           </div>
         ) : error ? (
-          <div className="text-destructive text-sm">{error}</div>
+          <div role="alert" className="text-destructive text-sm">
+          {error}
+        </div>
         ) : assignments.length === 0 ? (
           <div className="text-muted-foreground text-sm">No graded assignments available yet.</div>
         ) : (

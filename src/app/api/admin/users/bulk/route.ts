@@ -226,7 +226,7 @@ export const POST = withAdminAuth(
         category: 'USER',
         error,
       });
-      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },
   { deniedAction: 'USER_BULK_CREATE_DENIED' },

@@ -47,7 +47,7 @@ export function useBackups() {
   const { mutate: triggerBackup, isPending: backupNowBusy } = useMutation({
     mutationFn: (_beforeCount: number) => fetchJson(apiPaths.admin.backups(), { method: 'POST' }),
     onSuccess: (_data, beforeCount) => {
-      showToast.success('Backup requested — it should appear within a minute.');
+      showToast.success('Backup requested. It should appear within a minute.');
       // The backup container runs the request on its next tick; poll until the
       // new backup shows up (or we give up after ~1 minute).
       let tries = 0;

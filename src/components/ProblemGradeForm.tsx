@@ -70,13 +70,19 @@ export default function ProblemGradeForm({
             placeholder={isLoading ? '-' : sanitizedCurrent === null ? '-' : ''}
             className="w-24 rounded-r-none border-r-0 focus-visible:z-10"
             aria-label="Problem grade"
+            aria-invalid={!!error || undefined}
+            aria-describedby={error ? 'problem-grade-error' : undefined}
             disabled={disabled || isLoading || isSaving}
           />
           <Button type="submit" className="rounded-l-none whitespace-nowrap" disabled={disableButton}>
             {isSaving ? 'Saving…' : 'Save Grade'}
           </Button>
         </div>
-        {error ? <p className="text-destructive text-xs">{error}</p> : null}
+        {error ? (
+        <p id="problem-grade-error" role="alert" className="text-destructive text-xs">
+          {error}
+        </p>
+      ) : null}
       </form>
     </div>
   );

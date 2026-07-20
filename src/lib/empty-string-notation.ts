@@ -24,8 +24,8 @@ export const EMPTY_STRING_NOTATION_OPTIONS: {
   value: EmptyStringNotation;
   label: string;
 }[] = [
-  { value: 'EPSILON', label: 'ε — epsilon' },
-  { value: 'LAMBDA', label: 'λ — lambda' },
+  { value: 'EPSILON', label: 'ε (epsilon)' },
+  { value: 'LAMBDA', label: 'λ (lambda)' },
 ];
 
 /** True when the value is a known notation. */

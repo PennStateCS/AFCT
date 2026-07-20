@@ -77,7 +77,7 @@ export function CreateGroupSetDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="bg-card sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Create group set</DialogTitle>
+          <DialogTitle>Create Group Set</DialogTitle>
           <DialogDescription className="sr-only">
             Create a new group set in this course.
           </DialogDescription>

@@ -398,7 +398,7 @@ export const GET = withCourseAuth(
       return NextResponse.json(response);
     } catch (error) {
       console.error('GET /api/courses/[id] error:', error);
-      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },
   { access: 'read', deniedAction: 'COURSE_VIEW_DENIED' },
@@ -873,7 +873,7 @@ export const DELETE = withCourseAuth(
         error,
         courseId: id,
       });
-      return apiError(500, 'Internal Server Error');
+      return apiError(500, 'Internal server error');
     }
   },
   { access: 'manage', deniedAction: 'COURSE_DELETE_DENIED' },

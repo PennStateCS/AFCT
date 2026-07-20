@@ -534,7 +534,7 @@ export function GroupSetView({
       <ConfirmDialog
         open={deleteSetOpen}
         title="Delete group set"
-        description={`Delete "${detail.name}" and all of its groups? This cannot be undone.`}
+        description={`Delete "${detail.name}" and all of its groups? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={() => void confirmDeleteSet()}

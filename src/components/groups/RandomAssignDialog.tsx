@@ -138,7 +138,7 @@ export function RandomAssignDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="bg-card sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Assign students randomly</DialogTitle>
+          <DialogTitle>Assign Students Randomly</DialogTitle>
           <DialogDescription>
             Selected students are spread across the {detail.groups.length} existing group
             {detail.groups.length === 1 ? '' : 's'} as evenly as possible. Existing groups are not

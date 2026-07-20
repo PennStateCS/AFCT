@@ -81,7 +81,7 @@ export function DuplicateGroupSetDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="bg-card sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Duplicate group set</DialogTitle>
+          <DialogTitle>Duplicate Group Set</DialogTitle>
           <DialogDescription className="sr-only">
             Create an independent copy of this group set.
           </DialogDescription>

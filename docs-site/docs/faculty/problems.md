@@ -26,7 +26,7 @@ Create Problem is a short guided wizard with four steps: Details, Type, Answer F
 
 A problem in the bank is only the definition. Points, the accepted-submission limit, and automatic grading are set per assignment, not on the problem itself (see below).
 
-You can also create a problem from inside an assignment. In that case, AFCT adds the new problem to the course bank and to the open assignment.
+You can also create a problem from inside an assignment. In that case, AFCT adds the new problem to the problem bank and to the open assignment.
 
 ## Review and edit a problem
 
@@ -38,7 +38,7 @@ Open **Manage** to:
 - **Edit Problem** details and replace the answer file
 - **Delete Problem** when the problem is not used by an assignment
 
-Editing a problem from the course bank uses the same wizard and changes the definition only: title, description, type, state limit, deterministic requirement, and answer file. If you change the problem type, you must upload a new answer file of the matching type.
+Editing a problem from the problem bank uses the same wizard and changes the definition only: title, description, type, state limit, deterministic requirement, and answer file. If you change the problem type, you must upload a new answer file of the matching type.
 
 Points, the accepted-submission limit, and automatic grading belong to each assignment, not to the bank problem. Set them when you add the problem to an assignment, or change them later from the assignment's **Problems** tab (**Manage** the problem and open its settings). The same problem can carry different values in different assignments.
 

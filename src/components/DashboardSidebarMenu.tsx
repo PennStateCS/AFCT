@@ -455,7 +455,7 @@ export default function DashboardSidebarMenu() {
                       </SidebarMenuItem>
                     ) : coursesFailed ? (
                       <SidebarMenuItem>
-                        <div className="flex w-full flex-col items-start gap-1 px-2 py-1.5">
+                        <div role="alert" className="flex w-full flex-col items-start gap-1 px-2 py-1.5">
                           <span className="text-sidebar-foreground/70 text-sm">
                             Could not load courses.
                           </span>
@@ -470,18 +470,14 @@ export default function DashboardSidebarMenu() {
                       </SidebarMenuItem>
                     ) : (
                       <SidebarMenuItem>
-                        <SidebarMenuButton
-                          asChild
-                          aria-disabled={true}
-                          className={cn('text-sidebar-foreground/60 cursor-default')}
-                        >
-                          <div className={cn('flex w-full items-center gap-2')}>
-                            <Book className="h-4 w-4 shrink-0" />
-                            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                              No courses
-                            </span>
-                          </div>
-                        </SidebarMenuButton>
+                        {/* Plain text, not a button: aria-disabled on a generic div is
+                            invalid and this is not an interactive control. */}
+                        <div className="text-sidebar-foreground/60 flex w-full items-center gap-2 px-2 py-1.5 text-sm">
+                          <Book aria-hidden="true" className="h-4 w-4 shrink-0" />
+                          <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                            No courses
+                          </span>
+                        </div>
                       </SidebarMenuItem>
                     )}
                   </SidebarMenu>

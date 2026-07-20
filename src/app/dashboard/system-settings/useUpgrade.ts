@@ -74,7 +74,7 @@ export function useUpgrade(enabled: boolean) {
         body: JSON.stringify({ tag }),
       }),
     onSuccess: () => {
-      showToast.success('Upgrade requested — AFCT will update and restart shortly.');
+      showToast.success('Upgrade requested. AFCT will update and restart shortly.');
       void refetch();
     },
     onError: (err) => {
@@ -90,7 +90,7 @@ export function useUpgrade(enabled: boolean) {
         body: JSON.stringify({ action: 'downgrade', tag: v.tag, restorePoint: v.restorePoint }),
       }),
     onSuccess: () => {
-      showToast.success('Downgrade requested — AFCT will restore and restart shortly.');
+      showToast.success('Downgrade requested. AFCT will restore and restart shortly.');
       void refetch();
     },
     onError: (err) => {

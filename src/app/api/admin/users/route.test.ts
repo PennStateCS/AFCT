@@ -224,6 +224,6 @@ describe('POST /api/users', () => {
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.error).toBe('Internal Server Error');
+    expect(body.error).toBe('Internal server error');
   });
 });

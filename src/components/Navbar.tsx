@@ -174,10 +174,11 @@ const Navbar: React.FC = () => {
                     {user.isAdmin && <Badge userRole="ADMIN" className="text-xs" />}
                   </div>
                 </span>
-                <Avatar className="h-11 w-11" aria-label="User avatar">
+                <Avatar className="h-11 w-11">
                   <AvatarImage
                     src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
-                    alt={user.name}
+                    /* Decorative: the trigger button already carries the name. */
+                    alt=""
                     cropX={user.cropX ?? 0.5}
                     cropY={user.cropY ?? 0.5}
                     zoom={user.zoom ?? 1}

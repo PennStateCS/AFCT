@@ -24,7 +24,7 @@ You set the type when you create the assignment, and you can change it later on 
 
 ### Assign To and the schedule
 
-**Assign to** - by default the assignment goes to **All students** (individual) or **All groups** in the set (group). Use **Edit students** / **Edit groups** to pick a specific subset instead; anyone not selected does not see the assignment at all. Group targets always come from the assignment's single group set.
+**Assign To** - by default the assignment goes to **All students** (individual) or **All groups** in the set (group). Use **Edit students** / **Edit groups** to pick a specific subset instead; anyone not selected does not see the assignment at all. Group targets always come from the assignment's single group set.
 
 The default schedule applies to everyone assigned unless a target has an override:
 
@@ -55,8 +55,8 @@ Select **Save changes** to apply your edits to the audience, schedule, and overr
 
 ### Problems
 
-- **Create Problem** creates a new problem in the course bank and adds it to this assignment.
-- **Add Existing Problem** reuses a problem already in the course bank.
+- **Create Problem** creates a new problem in the problem bank and adds it to this assignment.
+- **Add Existing Problem** reuses a problem already in the problem bank.
 
 Each problem has per-assignment settings:
 

@@ -291,7 +291,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               className="flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1 hover:bg-neutral-300"
               title="View grade breakdown"
               onClick={handleClick}
-              aria-label={`View breakdown for ${user.firstName} ${user.l} on ${a.title}`}
+              aria-label={`View breakdown for ${user.firstName} ${user.lastName} on ${a.title}`}
             >
               <span className="text-sm">
                 {val === null || val === undefined ? '-' : String(val)}
@@ -342,7 +342,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               Grades
             </h2>
             <div className="text-muted-foreground flex items-center gap-1 text-sm">
-              <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+              <div aria-hidden="true" className="h-2 w-2 rounded-full bg-blue-500"></div>
               Click a grade to view/edit details
             </div>
           </div>

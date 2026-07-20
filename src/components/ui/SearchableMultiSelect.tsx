@@ -148,6 +148,9 @@ export function SearchableMultiSelect({
                     className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
                   >
                     <Checkbox
+                      // Radix renders a <button role="checkbox">, which takes no name
+                      // from a wrapping <label>, so name it explicitly.
+                      aria-label={item.label}
                       checked={!!checked}
                       onCheckedChange={() => toggleSelection(item.id)}
                     />

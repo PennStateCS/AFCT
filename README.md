@@ -51,6 +51,6 @@ Developer and user documentation is available at: **<https://pennstatecs.github.
 | ------------------- | ----------- | --------------------------------------------- |
 | Jesse Burdick-Pless | RIT         | [jb4411](https://github.com/jb4411)           |
 | Jeffrey Chiampi     | PSU         | [jdc308](https://github.com/jdc308)           |
-| Edwin Kismal        | PSU         | [EdwinKimsal](https://github.com/EdwinKimsal) |
+| Edwin Kimsal        | PSU         | [EdwinKimsal](https://github.com/EdwinKimsal) |
 | Adam Manowski       | PSU         | [astermaxed](https://github.com/astermaxed)   |
 | Andrew Sutton       | PSU         | [asutton24](https://github.com/asutton24)     |
