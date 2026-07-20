@@ -7,7 +7,7 @@ Automated coverage lives elsewhere and does not replace this:
 
 - `npm test` - unit suite (Prisma mocked)
 - `npm run test:db` - real-Postgres behaviour (claim exclusivity, constraints)
-- `npm run e2e` - browser smoke suite (see `e2e/README.md`)
+- `npm run e2e` - browser smoke suite (`e2e/`)
 
 ## Before you start
 
