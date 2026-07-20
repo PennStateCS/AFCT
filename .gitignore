@@ -94,3 +94,8 @@ private/uploads/*
 
 # stray local source archive
 src.zip
+
+# Playwright e2e artifacts
+/test-results/
+/e2e-report/
+/playwright-report/
