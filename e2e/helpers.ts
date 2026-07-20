@@ -47,70 +47,140 @@ export function unique(prefix: string) {
   return `${prefix} ${suffix}`;
 }
 
-/** The course ids currently linked from a signed-in user's dashboard. */
-export async function courseIdsFor(page: Page, role: Role): Promise<string[]> {
-  await signIn(page, role);
-  // NOT waitForLoadState('networkidle'): this app polls (session heartbeats), so the
-  // network never goes idle and that wait simply burns the timeout. Wait for the thing
-  // we actually need instead.
-  await page
-    .locator('a[href^="/dashboard/courses/"]')
-    .first()
-    .waitFor({ state: 'attached', timeout: 30_000 })
-    .catch(() => {
-      /* a user with no courses is a legitimate answer; fall through to an empty list */
-    });
-  const hrefs = await page
-    .getByRole('link')
-    .evaluateAll((els) =>
-      els.map((e) => (e as HTMLAnchorElement).getAttribute('href') ?? '').filter(Boolean),
-    );
-  return [
-    ...new Set(
-      hrefs
-        .map((h) => /^\/dashboard\/courses\/([^/]+)$/.exec(h)?.[1])
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
+/** A user's own id, read from the session. */
+async function userIdOf(browser: Browser, role: Role): Promise<string> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await signIn(page, role);
+    const res = await page.request.get('/api/me');
+    if (!res.ok()) throw new Error(`/api/me failed for ${role}: ${res.status()}`);
+    return ((await res.json()) as { id: string }).id;
+  } finally {
+    await context.close();
+  }
 }
 
 /**
- * Resolve a course that `staff` manages AND `student` is enrolled in.
+ * Build a course owned by `staff` with `student` enrolled, and return its id.
  *
- * The seed uses cuid()s, so every re-seed changes every id. Hard-coding one made the
- * specs pass until the next `npm run e2e:db` and then fail with a confusing 403, so the
- * fixture is discovered at run time instead. Also returns a course the student is NOT in,
- * for the negative case.
+ * These specs used to hunt for a seeded course that happened to have both people on it.
+ * That was wrong twice over: the seed's cuids change on every re-seed, and its roster
+ * assignment is randomised, so whether any such course exists is luck. A run that found
+ * one passed; the next found faculty2 teaching one course and the student in three
+ * others, and failed for a reason that had nothing to do with the code under test.
+ *
+ * Owning the fixture makes the specs deterministic and independent of seed changes. The
+ * test database is reset before each run, so nothing accumulates.
  */
-export async function resolveCourses(
-  browser: Browser,
-  staff: Role = 'faculty2',
-  student: Role = 'student',
-): Promise<{ shared: string; notEnrolled: string | null }> {
-  // A context per role, not one page reused. Navigating to /login while already
-  // authenticated redirects straight back to the dashboard, so the second sign-in never
-  // finds the email field and simply hangs until the hook times out.
-  const inFreshContext = async (role: Role) => {
-    const context = await browser.newContext();
-    try {
-      return await courseIdsFor(await context.newPage(), role);
-    } finally {
-      await context.close();
+export async function createFixtureCourse(browser: Browser): Promise<string> {
+  const [staffId, studentId] = await Promise.all([
+    userIdOf(browser, 'faculty2'),
+    userIdOf(browser, 'student'),
+  ]);
+
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await signIn(page, 'admin');
+
+    const now = Date.now();
+    const iso = (daysFromNow: number) => new Date(now + daysFromNow * 86_400_000).toISOString();
+
+    const courseName = unique('E2E Fixture Course');
+    // Letters then digits: the code format is validated.
+    const courseCode = `TSTE ${Math.floor(Math.random() * 900 + 100)}`;
+
+    const created = await page.request.post('/api/courses', {
+      data: {
+        name: courseName,
+        code: courseCode,
+        semester: 'Summer 2026',
+        credits: 3,
+        startDate: iso(-7),
+        endDate: iso(120),
+        registrationOpenAt: iso(-14),
+        registrationCloseAt: iso(60),
+        timezone: 'America/New_York',
+        instructorIds: [staffId],
+      },
+    });
+    if (!created.ok()) {
+      throw new Error(`fixture course create failed: ${created.status()} ${await created.text()}`);
     }
-  };
+    // The create route wraps its payload: { success, message, course: {...} }.
+    const courseId = ((await created.json()) as { course: { id: string } }).course.id;
 
-  const studentCourses = await inFreshContext(student);
-  const staffCourses = await inFreshContext(staff);
-
-  const shared = staffCourses.find((id) => studentCourses.includes(id));
-  if (!shared) {
-    throw new Error(
-      `No seeded course has both ${staff} as staff and ${student} enrolled. ` +
-        `staff=[${staffCourses}] student=[${studentCourses}]`,
+    // Enrol a second student as well: the "assigned to someone else" case needs a real
+    // classmate to point the audience at, and an empty audience is rejected by
+    // validation, so "assigned to nobody" is not a reachable state to test with.
+    const users = (await (await page.request.get('/api/admin/users/list')).json()) as unknown;
+    const userList = (Array.isArray(users) ? users : ((users as { users?: unknown[] }).users ?? [])) as
+      Array<{ id: string; email: string }>;
+    const classmate = userList.find(
+      (u) => u.email?.startsWith('student') && u.id !== studentId,
     );
+
+    // A course cannot be created published (the create schema enforces it), and an
+    // unpublished course is invisible to students - which showed up as a puzzling 403
+    // on every student assertion until the fixture started publishing it.
+    const published = await page.request.put(`/api/courses/${courseId}`, {
+      data: {
+        name: courseName,
+        code: courseCode,
+        semester: 'Summer 2026',
+        credits: 3,
+        startDate: iso(-7),
+        endDate: iso(120),
+        registrationOpenAt: iso(-14),
+        registrationCloseAt: iso(60),
+        timezone: 'America/New_York',
+        isPublished: true,
+        isArchived: false,
+      },
+    });
+    if (!published.ok()) {
+      throw new Error(`fixture publish failed: ${published.status()} ${await published.text()}`);
+    }
+
+    const enrolled = await page.request.post(`/api/courses/${courseId}/roster/bulk`, {
+      data: { userIds: [studentId, ...(classmate ? [classmate.id] : [])] },
+    });
+    if (!enrolled.ok()) {
+      throw new Error(`fixture enrol failed: ${enrolled.status()} ${await enrolled.text()}`);
+    }
+
+    return courseId;
+  } finally {
+    await context.close();
   }
-  return {
-    shared,
-    notEnrolled: staffCourses.find((id) => !studentCourses.includes(id)) ?? null,
-  };
+}
+
+/** A course the student cannot read at all, for negative cases. */
+export async function courseWithoutStudent(browser: Browser): Promise<string | null> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await signIn(page, 'admin');
+    const res = await page.request.get('/api/courses');
+    if (!res.ok()) return null;
+    const body = (await res.json()) as unknown;
+    const all = (Array.isArray(body) ? body : ((body as { courses?: unknown[] }).courses ?? [])) as
+      Array<{ id: string }>;
+
+    const studentContext = await browser.newContext();
+    try {
+      const studentPage = await studentContext.newPage();
+      await signIn(studentPage, 'student');
+      for (const course of all) {
+        const seen = await studentPage.request.get(`/api/courses/${course.id}`);
+        if (!seen.ok()) return course.id;
+      }
+    } finally {
+      await studentContext.close();
+    }
+    return null;
+  } finally {
+    await context.close();
+  }
 }

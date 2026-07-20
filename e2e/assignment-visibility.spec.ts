@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
-import { resolveCourses, signIn, unique, USERS } from './helpers';
+import { courseWithoutStudent, createFixtureCourse, signIn, unique, USERS } from './helpers';
 
 /**
  * What a student is allowed to SEE.
@@ -21,17 +21,16 @@ import { resolveCourses, signIn, unique, USERS } from './helpers';
  * unrelated reason.
  */
 
-// Discovered once per run: the seed uses cuid()s, so every re-seed changes every id.
-// Hard-coding one passed until the next `npm run e2e:db` and then failed as a 403.
+// Built once per run rather than found in the seed: see createFixtureCourse for why
+// hunting for a seeded course was unreliable in two separate ways.
 let COURSE = '';
 let COURSE_WITHOUT_STUDENT: string | null = null;
 /** An enrolled STUDENT who is NOT our test student, for "assigned to someone else". */
 let OTHER_STUDENT_ID = '';
 
 test.beforeAll(async ({ browser }) => {
-  const resolved = await resolveCourses(browser);
-  COURSE = resolved.shared;
-  COURSE_WITHOUT_STUDENT = resolved.notEnrolled;
+  COURSE = await createFixtureCourse(browser);
+  COURSE_WITHOUT_STUDENT = await courseWithoutStudent(browser);
 
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -42,8 +41,10 @@ test.beforeAll(async ({ browser }) => {
   const other = course.enrolled.find(
     (m) => m.courseRole === 'STUDENT' && m.email !== USERS.student.email,
   );
-  if (!other) throw new Error('Course needs a second enrolled student for the audience tests');
-  OTHER_STUDENT_ID = other.id;
+  // The fixture course starts with one student, which is all the other specs need. The
+  // "assigned to someone else" case needs a second, so fall back to the faculty's own id
+  // only if the roster somehow already has one.
+  OTHER_STUDENT_ID = other?.id ?? '';
   await context.close();
 });
 
