@@ -6,6 +6,7 @@ import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 import { getCourseDateBucket } from '@/lib/course-status';
+import { assignedToStudentWhere } from '@/lib/assignment-visibility';
 import { effectiveDeadline } from '@/lib/effective-deadline';
 
 export const metadata: Metadata = {
@@ -102,6 +103,16 @@ export default async function DashboardPage() {
 
   const courseIds = courses.map((c) => c.id);
 
+  // Split the courses by the viewer's role in each, using the same staff test as the
+  // cards above. Upcoming Assignments is cross-course and one person can be a student in
+  // one course and staff in another, so the audience filter has to be applied per course
+  // rather than to the whole query.
+  const staffCourseIds = rosterEntries
+    .filter((entry) => viewerIsAdmin || entry.role === 'FACULTY' || entry.role === 'TA')
+    .map((entry) => entry.courseId)
+    .filter((courseId) => courseIds.includes(courseId));
+  const studentCourseIds = courseIds.filter((courseId) => !staffCourseIds.includes(courseId));
+
   // The dashboard cards show only in-progress courses, matching the sidebar's
   // "Current Courses" bucket. Upcoming courses live in the sidebar's Upcoming
   // section; they still feed the (cross-course) Upcoming Assignments list above.
@@ -123,18 +134,28 @@ export default async function DashboardPage() {
       ? []
       : await prisma.assignment.findMany({
           where: {
-            courseId: { in: courseIds },
             isPublished: true,
+            // Audience, per course. In a course they teach, staff see everything they
+            // set; in a course they are a student in, they see only work assigned to
+            // them - directly, via a group, or to everyone.
+            //
+            // This used to be a single "assignedToEveryone OR I have an override" test,
+            // which under-showed badly in both directions: a student assigned by an
+            // assignee row without a date override never saw their own assignment, and
+            // neither did the instructor who scoped it to them.
+            OR: [
+              { courseId: { in: staffCourseIds } },
+              { courseId: { in: studentCourseIds }, ...assignedToStudentWhere(id) },
+            ],
+            // Base due OR this user's override due is in the future, so an extension
+            // still surfaces once the base date has passed.
             AND: [
-              // Base due OR this user's override due is in the future.
               {
                 OR: [
                   { dueDate: { gt: now } },
                   { overrides: { some: { userId: id, dueDate: { gt: now } } } },
                 ],
               },
-              // And this user is actually assigned it (everyone, or via their override).
-              { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: id } } }] },
             ],
           },
           select: {

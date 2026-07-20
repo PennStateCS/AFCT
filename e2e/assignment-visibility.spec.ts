@@ -68,6 +68,16 @@ async function createAssignment(
   return { id: ((await res.json()) as Created).id, title };
 }
 
+/** The id of an enrolled member of the fixture course, by email. */
+async function enrolledStudentId(facultyPage: Page, email: string): Promise<string> {
+  const course = (await (await facultyPage.request.get(`/api/courses/${COURSE}`)).json()) as {
+    enrolled: Array<{ id: string; email: string }>;
+  };
+  const found = course.enrolled.find((m) => m.email === email);
+  if (!found) throw new Error(`${email} is not on the fixture course roster`);
+  return found.id;
+}
+
 /** A faculty page that can create fixtures. */
 async function asFaculty(browser: Browser): Promise<Page> {
   const page = await (await browser.newContext()).newPage();
@@ -166,6 +176,74 @@ test.describe('student assignment visibility', () => {
     const anon = await (await browser.newContext()).newPage();
     await anon.goto(`/dashboard/courses/${COURSE}/${id}`);
     await expect(anon).toHaveURL(/\/login/);
+  });
+});
+
+test.describe('dashboard upcoming assignments', () => {
+  /** The visible dashboard text for a signed-in role. */
+  async function dashboardText(browser: Browser, role: 'student' | 'faculty2') {
+    const page = await (await browser.newContext()).newPage();
+    await signIn(page, role);
+    await page.goto('/dashboard');
+    // The list renders after hydration; wait for the section rather than a fixed pause.
+    await page
+      .getByRole('heading', { name: /Upcoming Assignments/i })
+      .first()
+      .waitFor({ timeout: 30_000 })
+      .catch(() => {
+        /* an empty dashboard is a legitimate state; the assertions below still hold */
+      });
+    return page.content();
+  }
+
+  test('a student sees work assigned to them by name, not just to everyone', async ({
+    browser,
+  }) => {
+    // The audience filter used to be "assignedToEveryone OR I have a date override", so
+    // being named directly as an assignee was not enough and the student never saw their
+    // own assignment here.
+    const faculty = await asFaculty(browser);
+    const studentId = await enrolledStudentId(faculty, USERS.student.email);
+    const { title } = await createAssignment(faculty.request, {
+      isPublished: true,
+      assignedToEveryone: false,
+      assignees: [{ targetType: 'STUDENT', userId: studentId }],
+    });
+
+    expect(await dashboardText(browser, 'student')).toContain(title);
+  });
+
+  test('the instructor sees an assignment they scoped to one student', async ({ browser }) => {
+    // Same root cause seen from the other side: staff went through the student audience
+    // test too, so an instructor could not see work they had just assigned.
+    const faculty = await asFaculty(browser);
+    const studentId = await enrolledStudentId(faculty, USERS.student.email);
+    const { title } = await createAssignment(faculty.request, {
+      isPublished: true,
+      assignedToEveryone: false,
+      assignees: [{ targetType: 'STUDENT', userId: studentId }],
+    });
+
+    expect(await dashboardText(browser, 'faculty2')).toContain(title);
+  });
+
+  test('a student still does not see work assigned only to a classmate', async ({ browser }) => {
+    // The guard on the fix above: widening the filter must not turn into a disclosure.
+    const faculty = await asFaculty(browser);
+    const { title } = await createAssignment(faculty.request, {
+      isPublished: true,
+      assignedToEveryone: false,
+      assignees: [{ targetType: 'STUDENT', userId: OTHER_STUDENT_ID }],
+    });
+
+    expect(await dashboardText(browser, 'student')).not.toContain(title);
+  });
+
+  test('a student does not see an unpublished assignment', async ({ browser }) => {
+    const faculty = await asFaculty(browser);
+    const { title } = await createAssignment(faculty.request, { isPublished: false });
+
+    expect(await dashboardText(browser, 'student')).not.toContain(title);
   });
 });
 
