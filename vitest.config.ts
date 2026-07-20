@@ -16,6 +16,12 @@ export default defineConfig({
     // left the two telling apart only by file extension.
     exclude: ['**/node_modules/**', '**/*.db.test.ts'],
     setupFiles: ['src/test/setup.ts'],
+    // Vitest defaults to 5s. The userEvent-driven dialog tests take ~1.7s on an idle
+    // machine, which sounds fine until 261 files run in parallel and they intermittently
+    // cross 5s - producing 0, 1, 5 or 14 "failures" from identical code depending on
+    // load. They are slow because userEvent yields to the event loop per keystroke, not
+    // because anything is wrong, so give them room rather than chasing phantom bugs.
+    testTimeout: 20_000,
     // Auto-restore env vars stubbed with vi.stubEnv between tests, so those stubs
     // need no manual teardown. (Globals are intentionally NOT auto-unstubbed:
     // some suites set a module-level vi.stubGlobal that must persist.)
