@@ -23,6 +23,12 @@ const eslintConfig = [
       'src/generated/**',
       'src/types/api.ts', // generated from the OpenAPI spec by `npm run docs:types`
       'docs-site/**', // its own project (docusaurus); local builds leave artifacts here
+      // Playwright artifacts. These are gitignored, but ESLint's flat config does not
+      // read .gitignore, so without this a local `npm run e2e` leaves a bundled HTML
+      // report behind and the next lint run fails on minified vendor code.
+      'e2e-report/**',
+      'playwright-report/**',
+      'test-results/**',
     ],
   },
   ...nextCoreWebVitals,

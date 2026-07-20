@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Browser, type Page } from '@playwright/test';
 
 /**
  * Seeded accounts. The dev seed gives every user the same password, which is fine
@@ -45,4 +45,72 @@ export async function signIn(page: Page, role: Role) {
 export function unique(prefix: string) {
   const suffix = Math.random().toString(36).slice(2, 8);
   return `${prefix} ${suffix}`;
+}
+
+/** The course ids currently linked from a signed-in user's dashboard. */
+export async function courseIdsFor(page: Page, role: Role): Promise<string[]> {
+  await signIn(page, role);
+  // NOT waitForLoadState('networkidle'): this app polls (session heartbeats), so the
+  // network never goes idle and that wait simply burns the timeout. Wait for the thing
+  // we actually need instead.
+  await page
+    .locator('a[href^="/dashboard/courses/"]')
+    .first()
+    .waitFor({ state: 'attached', timeout: 30_000 })
+    .catch(() => {
+      /* a user with no courses is a legitimate answer; fall through to an empty list */
+    });
+  const hrefs = await page
+    .getByRole('link')
+    .evaluateAll((els) =>
+      els.map((e) => (e as HTMLAnchorElement).getAttribute('href') ?? '').filter(Boolean),
+    );
+  return [
+    ...new Set(
+      hrefs
+        .map((h) => /^\/dashboard\/courses\/([^/]+)$/.exec(h)?.[1])
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+}
+
+/**
+ * Resolve a course that `staff` manages AND `student` is enrolled in.
+ *
+ * The seed uses cuid()s, so every re-seed changes every id. Hard-coding one made the
+ * specs pass until the next `npm run e2e:db` and then fail with a confusing 403, so the
+ * fixture is discovered at run time instead. Also returns a course the student is NOT in,
+ * for the negative case.
+ */
+export async function resolveCourses(
+  browser: Browser,
+  staff: Role = 'faculty2',
+  student: Role = 'student',
+): Promise<{ shared: string; notEnrolled: string | null }> {
+  // A context per role, not one page reused. Navigating to /login while already
+  // authenticated redirects straight back to the dashboard, so the second sign-in never
+  // finds the email field and simply hangs until the hook times out.
+  const inFreshContext = async (role: Role) => {
+    const context = await browser.newContext();
+    try {
+      return await courseIdsFor(await context.newPage(), role);
+    } finally {
+      await context.close();
+    }
+  };
+
+  const studentCourses = await inFreshContext(student);
+  const staffCourses = await inFreshContext(staff);
+
+  const shared = staffCourses.find((id) => studentCourses.includes(id));
+  if (!shared) {
+    throw new Error(
+      `No seeded course has both ${staff} as staff and ${student} enrolled. ` +
+        `staff=[${staffCourses}] student=[${studentCourses}]`,
+    );
+  }
+  return {
+    shared,
+    notEnrolled: staffCourses.find((id) => !studentCourses.includes(id)) ?? null,
+  };
 }
