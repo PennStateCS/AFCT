@@ -72,9 +72,10 @@ type Course = {
   endDate: string;
 };
 
-// The dated sidebar course sections, in display order. Archived courses are
-// excluded (they live on the Archived Courses page); each section is hidden when
-// it has no courses, and courses within a section are alphabetized by code.
+// The dated sidebar course sections, in display order. Archived courses are folded into
+// Past Courses (they are finished too), which also carries the Archived Courses page
+// link. A section is hidden when it has nothing to show, and courses within a section are
+// alphabetized by code.
 const COURSE_SECTIONS = [
   { bucket: 'upcoming', label: 'Upcoming Courses' },
   { bucket: 'current', label: 'Current Courses' },
@@ -196,6 +197,61 @@ function CollapsibleSidebarGroup({
   );
 }
 
+// One sidebar link. In the icon rail the label is hidden and surfaced as a tooltip
+// instead, so every nav row renders identically wherever it appears.
+function SidebarNavItem({
+  href,
+  label,
+  ariaLabel,
+  icon: Icon,
+  active,
+  collapsed,
+}: {
+  href: string;
+  label: string;
+  ariaLabel?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  active: boolean;
+  collapsed: boolean;
+}) {
+  return (
+    <SidebarMenuItem>
+      <TooltipProvider delayDuration={100}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SidebarMenuButton asChild isActive={active} className={cn(menuButtonStyles)}>
+              <Link
+                href={href}
+                aria-label={ariaLabel ?? label}
+                aria-current={active ? 'page' : undefined}
+                className="flex min-w-0 items-center gap-2"
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span
+                  aria-hidden={collapsed}
+                  className={
+                    collapsed ? 'hidden' : 'overflow-hidden text-ellipsis whitespace-nowrap'
+                  }
+                >
+                  {label}
+                </span>
+              </Link>
+            </SidebarMenuButton>
+          </TooltipTrigger>
+          <TooltipContent
+            side="right"
+            hidden={!collapsed}
+            className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+            sideOffset={10}
+          >
+            {label}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </SidebarMenuItem>
+  );
+}
+
 export default function DashboardSidebarMenu() {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -259,21 +315,32 @@ export default function DashboardSidebarMenu() {
     updatedAt: new Date(), // updatedAt is not exposed from session
   };
 
-  // The server (nav API) already scopes which courses are returned per the
-  // viewer's per-course role; here we only drop archived ones (they live on the
-  // Archived Courses page), then bucket by date into the sidebar sections.
-  const visibleCourses = courses.filter((c) => !c.isArchived);
+  // The server (nav API) already scopes which courses are returned per the viewer's
+  // per-course role. Archived courses are finished, so they sit with the past ones
+  // rather than in a section of their own.
+  const nonArchived = courses.filter((c) => !c.isArchived);
+  const archived = courses.filter((c) => c.isArchived);
   // Admins can view every archived course, so they always get the link. Everyone
   // else (students, faculty, TAs) only sees it when they're a member of an
   // archived course; the nav list is already scoped to the viewer's courses, so
   // an archived entry here means exactly that.
-  const showArchivedCoursesLink = isAdmin || courses.some((c) => c.isArchived);
+  const showArchivedCoursesLink = isAdmin || archived.length > 0;
+  const coursesByBucket: Record<string, Course[]> = {
+    upcoming: nonArchived.filter((c) => getCourseDateBucket(c) === 'upcoming'),
+    current: nonArchived.filter((c) => getCourseDateBucket(c) === 'current'),
+    past: [...nonArchived.filter((c) => getCourseDateBucket(c) === 'past'), ...archived],
+  };
   const courseSections = COURSE_SECTIONS.map((section) => ({
     ...section,
-    courses: visibleCourses
-      .filter((c) => getCourseDateBucket(c) === section.bucket)
+    courses: (coursesByBucket[section.bucket] ?? [])
+      .slice()
       .sort((a, b) => a.code.localeCompare(b.code)),
-  })).filter((section) => section.courses.length > 0);
+  })).filter(
+    (section) =>
+      // Past Courses also hosts the Archived Courses link, so it stays visible whenever
+      // that link does (always for admins) even with no past courses of its own.
+      section.courses.length > 0 || (section.bucket === 'past' && showArchivedCoursesLink),
+  );
   const isDev = process.env.NODE_ENV !== 'production';
   const resolvedAdminMenu = (
     isDev
@@ -288,61 +355,30 @@ export default function DashboardSidebarMenu() {
 
   return (
     <>
-      {/* Sidebar navigation content */}
-      <SidebarContent className="sidebar-scroll">
+      {/* Sidebar navigation content. Exposed as the primary navigation landmark so screen
+          reader users can jump to it; the shadcn container is otherwise generic divs. */}
+      <SidebarContent className="sidebar-scroll" role="navigation" aria-label="Primary">
         {/* Admin menu: system administrators only */}
         {isAdmin && (
           <CollapsibleSidebarGroup
             sectionId="admin"
-            label="Admin Menu"
+            label="Administration"
             collapsed={collapsed}
             open={isOpen('admin')}
             onToggle={() => toggle('admin')}
           >
-              <SidebarMenu>
-                {resolvedAdminMenu.map(({ title, url, icon: Icon }) => (
-                  <SidebarMenuItem key={url}>
-                    <TooltipProvider delayDuration={100}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={pathname === url}
-                            className={cn(menuButtonStyles)}
-                          >
-                            <Link
-                              href={url}
-                              aria-label={title}
-                              aria-current={pathname === url ? 'page' : undefined}
-                              className="flex min-w-0 items-center gap-2"
-                            >
-                              <Icon className="h-4 w-4 shrink-0" />
-                              <span
-                                aria-hidden={collapsed}
-                                className={
-                                  collapsed
-                                    ? 'hidden'
-                                    : 'overflow-hidden text-ellipsis whitespace-nowrap'
-                                }
-                              >
-                                {title}
-                              </span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </TooltipTrigger>
-                        <TooltipContent
-                          side="right"
-                          hidden={!collapsed}
-                          className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
-                          sideOffset={10}
-                        >
-                          {title}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
+            <SidebarMenu>
+              {resolvedAdminMenu.map(({ title, url, icon }) => (
+                <SidebarNavItem
+                  key={url}
+                  href={url}
+                  label={title}
+                  icon={icon}
+                  active={pathname === url}
+                  collapsed={collapsed}
+                />
+              ))}
+            </SidebarMenu>
           </CollapsibleSidebarGroup>
         )}
 
@@ -379,154 +415,51 @@ export default function DashboardSidebarMenu() {
                 open={isOpen(section.bucket)}
                 onToggle={() => toggle(section.bucket)}
               >
-                  <SidebarMenu>
-                    {section.courses.map((course) => (
-                      <SidebarMenuItem key={course.id}>
-                        <TooltipProvider delayDuration={100}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <SidebarMenuButton
-                                asChild
-                                isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
-                                className={cn(menuButtonStyles)}
-                              >
-                                <Link
-                                  href={`/dashboard/courses/${course.id}`}
-                                  aria-label={`${course.code}: ${course.name}`}
-                                  aria-current={
-                                    pathname.startsWith(`/dashboard/courses/${course.id}`)
-                                      ? 'page'
-                                      : undefined
-                                  }
-                                  className="flex min-w-0 items-center gap-2"
-                                >
-                                  <Book className="h-4 w-4 shrink-0" />
-                                  <span
-                                    aria-hidden={collapsed}
-                                    className={
-                                      collapsed
-                                        ? 'hidden'
-                                        : 'overflow-hidden text-ellipsis whitespace-nowrap'
-                                    }
-                                  >
-                                    {course.code}
-                                  </span>
-                                </Link>
-                              </SidebarMenuButton>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              side="right"
-                              hidden={!collapsed}
-                              className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
-                              sideOffset={10}
-                            >
-                              {course.code}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
+                <SidebarMenu>
+                  {section.courses.map((course) => (
+                    <SidebarNavItem
+                      key={course.id}
+                      href={`/dashboard/courses/${course.id}`}
+                      label={course.code}
+                      ariaLabel={`${course.code}: ${course.name}`}
+                      icon={Book}
+                      active={pathname.startsWith(`/dashboard/courses/${course.id}`)}
+                      collapsed={collapsed}
+                    />
+                  ))}
+
+                  {/* The archived-courses page lives with the past courses. Always for
+                      admins; others only when they're in an archived course. */}
+                  {section.bucket === 'past' && showArchivedCoursesLink && (
+                    <SidebarNavItem
+                      href="/dashboard/archived-courses"
+                      label="Archived Courses"
+                      icon={Library}
+                      active={pathname === '/dashboard/archived-courses'}
+                      collapsed={collapsed}
+                    />
+                  )}
+                </SidebarMenu>
               </CollapsibleSidebarGroup>
             ))}
 
-        {/* Features */}
+        {/* Calendar gets its own section (it is not an "other page"). */}
         <CollapsibleSidebarGroup
-          sectionId="other-pages"
-          label="Other Pages"
+          sectionId="calendar"
+          label="Calendar"
           collapsed={collapsed}
-          open={isOpen('other-pages')}
-          onToggle={() => toggle('other-pages')}
+          open={isOpen('calendar')}
+          onToggle={() => toggle('calendar')}
         >
-            <SidebarMenu>
-              <SidebarMenuItem key="features-calendar">
-                <TooltipProvider delayDuration={100}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={pathname === '/dashboard/calendar'}
-                        className={cn(menuButtonStyles)}
-                      >
-                        <Link
-                          href="/dashboard/calendar"
-                          aria-label="Calendar"
-                          aria-current={pathname === '/dashboard/calendar' ? 'page' : undefined}
-                          className="flex min-w-0 items-center gap-2"
-                        >
-                          <Calendar className="h-4 w-4 shrink-0" />
-                          <span
-                            aria-hidden={collapsed}
-                            className={
-                              collapsed
-                                ? 'hidden'
-                                : 'overflow-hidden text-ellipsis whitespace-nowrap'
-                            }
-                          >
-                            Calendar
-                          </span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="right"
-                      hidden={!collapsed}
-                      className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
-                      sideOffset={10}
-                    >
-                      Calendar
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </SidebarMenuItem>
-
-              {/* Archived Courses: always for admins; others only when enrolled
-                  in an archived course */}
-              {showArchivedCoursesLink && (
-              <SidebarMenuItem key="features-archived-courses">
-                <TooltipProvider delayDuration={100}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={pathname === '/dashboard/archived-courses'}
-                        className={cn(menuButtonStyles)}
-                      >
-                        <Link
-                          href="/dashboard/archived-courses"
-                          aria-label="Archived Courses"
-                          aria-current={
-                            pathname === '/dashboard/archived-courses' ? 'page' : undefined
-                          }
-                          className="flex min-w-0 items-center gap-2"
-                        >
-                          <Library className="h-4 w-4 shrink-0" />
-                          <span
-                            aria-hidden={collapsed}
-                            className={
-                              collapsed
-                                ? 'hidden'
-                                : 'overflow-hidden text-ellipsis whitespace-nowrap'
-                            }
-                          >
-                            Archived Courses
-                          </span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="right"
-                      hidden={!collapsed}
-                      className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
-                      sideOffset={10}
-                    >
-                      Archived Courses
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </SidebarMenuItem>
-              )}
-            </SidebarMenu>
+          <SidebarMenu>
+            <SidebarNavItem
+              href="/dashboard/calendar"
+              label="Calendar"
+              icon={Calendar}
+              active={pathname === '/dashboard/calendar'}
+              collapsed={collapsed}
+            />
+          </SidebarMenu>
         </CollapsibleSidebarGroup>
       </SidebarContent>
 

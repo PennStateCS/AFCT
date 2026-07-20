@@ -282,7 +282,7 @@ export const userColumns = (
       },
       cell: ({ row }) => (
         <Badge
-          role={(row.original as RosterUser).role as 'FACULTY' | 'TA' | 'STUDENT' | undefined}
+          userRole={(row.original as RosterUser).role as 'FACULTY' | 'TA' | 'STUDENT' | undefined}
           className="w-20"
         />
       ),

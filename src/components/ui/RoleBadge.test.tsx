@@ -8,7 +8,7 @@ import { Badge, type BadgeProps } from './RoleBadge';
 
 describe('RoleBadge', () => {
   it('normalizes role names and applies the matching colors', () => {
-    render(<Badge role={'faculty' as unknown as BadgeProps['role']} data-testid="badge" />);
+    render(<Badge userRole={'faculty' as unknown as BadgeProps['userRole']} data-testid="badge" />);
 
     const badge = screen.getByTestId('badge');
 
@@ -17,7 +17,7 @@ describe('RoleBadge', () => {
   });
 
   it('keeps the TA acronym uppercase', () => {
-    render(<Badge role={'ta' as unknown as BadgeProps['role']} data-testid="badge" />);
+    render(<Badge userRole={'ta' as unknown as BadgeProps['userRole']} data-testid="badge" />);
 
     const badge = screen.getByTestId('badge');
 
@@ -28,7 +28,7 @@ describe('RoleBadge', () => {
   it('falls back to the provided variant styles when the role is unknown', () => {
     render(
       <Badge
-        role={'guest' as unknown as BadgeProps['role']}
+        userRole={'guest' as unknown as BadgeProps['userRole']}
         variant="outline"
         data-testid="badge"
       />,
@@ -42,7 +42,7 @@ describe('RoleBadge', () => {
 
   it('prefers custom children over derived labels', () => {
     render(
-      <Badge role={'admin' as unknown as BadgeProps['role']} data-testid="badge">
+      <Badge userRole={'admin' as unknown as BadgeProps['userRole']} data-testid="badge">
         Owner
       </Badge>,
     );

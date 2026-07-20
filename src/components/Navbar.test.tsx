@@ -123,15 +123,16 @@ function renderNavbar(withLabels?: {
 }
 
 describe('Navbar', () => {
-  it('renders a placeholder nav while the session is loading', () => {
+  it('renders a placeholder header while the session is loading', () => {
     useSessionMock.mockReturnValue({ status: 'loading' });
     usePathnameMock.mockReturnValue('/');
 
     const { container } = render(<Navbar />);
 
-    const nav = container.querySelector('nav');
-    expect(nav).not.toBeNull();
-    expect(nav?.textContent).toBe('');
+    // The bar is a <header>; the breadcrumb inside is the only navigation landmark.
+    const bar = container.querySelector('header');
+    expect(bar).not.toBeNull();
+    expect(bar?.textContent).toBe('');
   });
 
   it('returns null when no user data is available', () => {

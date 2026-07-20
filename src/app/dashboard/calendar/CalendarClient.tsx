@@ -149,10 +149,9 @@ function CalendarDayButton(props: DayButtonProps) {
       >
         {day.date.getDate()}
       </span>
-      <div
-        onClick={() => openCurrentDay()}
-        className="grid min-h-0 w-full min-w-0 cursor-default content-start gap-1 overflow-hidden p-1"
-      >
+      {/* Layout only: a click here bubbles to the day cell's own onClick, so a handler
+          on this div would open the day twice. */}
+      <div className="grid min-h-0 w-full min-w-0 cursor-default content-start gap-1 overflow-hidden p-1">
         {dayAssignments.slice(0, visibleCount).map((a) => {
           const isDraft = a.isPublished === false;
           // Visual-only summary chips. They are intentionally NOT links: an

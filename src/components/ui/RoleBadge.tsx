@@ -3,7 +3,12 @@ import React from 'react';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: 'default' | 'destructive' | 'outline';
-  role?: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
+  /**
+   * Which course/system role this badge shows. Named `userRole`, not `role`, so it does
+   * not shadow the DOM `role` attribute inherited from HTMLAttributes (that collision
+   * both blocked setting a real ARIA role and read as an invalid one to auditors).
+   */
+  userRole?: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
 }
 
 const roleStyles: Record<string, string> = {
@@ -27,8 +32,8 @@ function normalizeRole(role?: string): keyof typeof roleStyles | undefined {
 }
 
 export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
-  ({ className, variant = 'default', role, children, ...props }, ref) => {
-    const normalizedRole = normalizeRole(role);
+  ({ className, variant = 'default', userRole, children, ...props }, ref) => {
+    const normalizedRole = normalizeRole(userRole);
     const variantClass = normalizedRole ? roleStyles[normalizedRole] : badgeVariants[variant];
     const defaultLabel =
       normalizedRole === 'TA'

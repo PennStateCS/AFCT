@@ -109,7 +109,7 @@ const Navbar: React.FC = () => {
 
   if (status === 'loading') {
     return (
-      <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm" />
+      <header className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm" />
     );
   }
 
@@ -119,7 +119,7 @@ const Navbar: React.FC = () => {
 
   return (
     <div>
-      <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-3 text-white shadow-sm sm:p-4">
+      <header className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-3 text-white shadow-sm sm:p-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
         <EnhancedSidebarTrigger />
         <Breadcrumb aria-label="Breadcrumb">
@@ -171,7 +171,7 @@ const Navbar: React.FC = () => {
                     {`${user.firstName} ${user.lastName}`}
                   </span>
                   <div className="ml-2 flex items-center gap-2 text-right sm:gap-4">
-                    {user.isAdmin && <Badge role="ADMIN" className="text-xs" />}
+                    {user.isAdmin && <Badge userRole="ADMIN" className="text-xs" />}
                   </div>
                 </span>
                 <Avatar className="h-11 w-11" aria-label="User avatar">
@@ -245,7 +245,7 @@ const Navbar: React.FC = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </nav>
+    </header>
     <ChangePasswordDialog open={changePasswordOpen} setOpen={setChangePasswordOpen} onChangePassword={() => Promise.resolve()} />
     <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
   </div>

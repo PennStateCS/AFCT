@@ -155,7 +155,7 @@ describe('DashboardSidebarMenu', () => {
   it('renders admin navigation links for privileged users', () => {
     renderWithClient(<DashboardSidebarMenu />);
 
-    expect(screen.getByText('Admin Menu')).toBeInTheDocument();
+    expect(screen.getByText('Administration')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'User Accounts' })).toHaveAttribute(
       'href',
       '/dashboard/users',
@@ -272,6 +272,9 @@ describe('DashboardSidebarMenu', () => {
     setNavCourses([{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: true }]);
     renderWithClient(<DashboardSidebarMenu />);
 
+    // The link now lives under Past Courses, which starts collapsed.
+    fireEvent.click(await screen.findByRole('button', { name: /Past Courses/ }));
+
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Archived Courses' })).toHaveAttribute(
         'href',
@@ -294,13 +297,15 @@ describe('DashboardSidebarMenu', () => {
     expect(screen.queryByRole('link', { name: 'Archived Courses' })).toBeNull();
   });
 
-  it('always shows the Archived Courses link for admins, even with none', async () => {
-    // Default session is an admin; no archived courses in the nav list.
+  it('always shows Past Courses with the Archived Courses link for admins, even with none', async () => {
+    // Default session is an admin; no past or archived courses in the nav list.
     renderWithClient(<DashboardSidebarMenu />);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/me/courses?view=nav');
     });
+    // Admins always have access to archived courses, so the section stays available.
+    fireEvent.click(await screen.findByRole('button', { name: /Past Courses/ }));
     expect(screen.getByRole('link', { name: 'Archived Courses' })).toHaveAttribute(
       'href',
       '/dashboard/archived-courses',
@@ -325,10 +330,10 @@ describe('DashboardSidebarMenu', () => {
 
     renderWithClient(<DashboardSidebarMenu />);
 
-    expect(screen.queryByText('Admin Menu')).toBeNull();
+    expect(screen.queryByText('Administration')).toBeNull();
   });
 
-  it('does not list archived courses', async () => {
+  it('lists archived courses under Past Courses', async () => {
     useSessionMock.mockReturnValue({
       data: { user: { id: 'user-1', email: 'user@example.com', role: 'FACULTY' } },
     });
@@ -339,7 +344,13 @@ describe('DashboardSidebarMenu', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/me/courses?view=nav');
     });
-    expect(screen.queryByRole('link', { name: 'CS101' })).toBeNull();
+    // Archived courses are finished, so they belong with the past ones (collapsed
+    // by default).
+    fireEvent.click(await screen.findByRole('button', { name: /Past Courses/ }));
+    expect(screen.getByRole('link', { name: /CS101/ })).toHaveAttribute(
+      'href',
+      '/dashboard/courses/course-1',
+    );
   });
 
   it('calls safeSignOut when the user selects Sign out', () => {
@@ -367,7 +378,7 @@ describe('DashboardSidebarMenu — collapsible sections', () => {
   it('renders each section label as an expanded toggle by default', () => {
     renderWithClient(<DashboardSidebarMenu />);
 
-    const adminToggle = screen.getByRole('button', { name: /Admin Menu/ });
+    const adminToggle = screen.getByRole('button', { name: /Administration/ });
     expect(adminToggle).toHaveAttribute('aria-expanded', 'true');
     // Content is present while expanded.
     expect(screen.getByRole('link', { name: 'User Accounts' })).toBeInTheDocument();
@@ -376,7 +387,7 @@ describe('DashboardSidebarMenu — collapsible sections', () => {
   it('collapses a section on click, hiding its content', () => {
     renderWithClient(<DashboardSidebarMenu />);
 
-    const adminToggle = screen.getByRole('button', { name: /Admin Menu/ });
+    const adminToggle = screen.getByRole('button', { name: /Administration/ });
     fireEvent.click(adminToggle);
 
     expect(adminToggle).toHaveAttribute('aria-expanded', 'false');
@@ -386,7 +397,7 @@ describe('DashboardSidebarMenu — collapsible sections', () => {
   it('persists the collapsed state to localStorage', () => {
     renderWithClient(<DashboardSidebarMenu />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Admin Menu/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Administration/ }));
 
     const stored = JSON.parse(localStorage.getItem('afct.sidebarSections') || '{}');
     expect(stored.admin).toBe(false);
@@ -417,7 +428,7 @@ describe('DashboardSidebarMenu — collapsible sections', () => {
 
     renderWithClient(<DashboardSidebarMenu />);
 
-    expect(screen.getByRole('button', { name: /Admin Menu/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /Administration/ })).toHaveAttribute(
       'aria-expanded',
       'false',
     );
@@ -431,7 +442,7 @@ describe('DashboardSidebarMenu — collapsible sections', () => {
 
     // No toggle button, but the links still render (icon rail shows everything).
     // The link mock doesn't forward aria-label, so match by href rather than name.
-    expect(screen.queryByRole('button', { name: /Admin Menu/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Administration/ })).toBeNull();
     expect(container.querySelector('a[href="/dashboard/users"]')).not.toBeNull();
   });
 });
