@@ -60,6 +60,32 @@ export type VerifyCredentialsResult =
   | { ok: false; reason: 'challenge_required'; retryAfterMs: number };
 
 /**
+ * Persist an auto-expiring lock onto the user row when the in-memory account limiter
+ * blocks them. Best-effort and non-blocking: a login attempt must not fail because this
+ * write failed, and the in-memory limiter is already rejecting them regardless.
+ *
+ * The `where` only matches a user who is not already locked into the future, so exactly
+ * the transition into a lock writes; every subsequent blocked attempt updates zero rows.
+ * Email is unique, so this touches at most one row and does nothing for an unknown
+ * address (no account-existence signal).
+ */
+async function persistAccountLock(email: string, retryAfterMs: number): Promise<void> {
+  if (!Number.isFinite(retryAfterMs) || retryAfterMs <= 0) return;
+  const lockedUntil = new Date(Date.now() + retryAfterMs);
+  try {
+    await prisma.user.updateMany({
+      where: {
+        email,
+        OR: [{ lockedUntil: null }, { lockedUntil: { lte: new Date() } }],
+      },
+      data: { lockedUntil },
+    });
+  } catch (error) {
+    console.error('[credentials] failed to persist account lock:', error);
+  }
+}
+
+/**
  * Verify an email + password. Returns a discriminated result rather than throwing,
  * so each caller can map it to its own transport (NextAuth throws sentinel errors;
  * the client endpoint returns 401/429/428). Security logging happens here, once.
@@ -93,6 +119,12 @@ export async function verifyCredentials(params: {
 
   if (rateDecision.status === 'blocked') {
     void logLoginSecurityEvent('LOGIN_RATE_LIMIT', { ip: ipAddress, identifier: emailInput });
+    // The in-memory bucket just blocked this account. Persist the lock to the user row
+    // so it survives a restart and is visible to every instance and to the admin UI.
+    // Guarded so only the transition into a lock writes: once lockedUntil is in the
+    // future, this matches zero rows and does nothing (and the read gate below
+    // short-circuits future attempts before they even reach here).
+    void persistAccountLock(emailInput, rateDecision.retryAfterMs);
     return { ok: false, reason: 'rate_limited', retryAfterMs: rateDecision.retryAfterMs };
   }
 
@@ -123,6 +155,7 @@ export async function verifyCredentials(params: {
       isAdmin: true,
       avatar: true,
       temporaryPassword: true,
+      lockedUntil: true,
       password: true,
     },
   });
@@ -134,6 +167,20 @@ export async function verifyCredentials(params: {
       reason: 'unknown or inactive account',
     });
     return { ok: false, reason: 'invalid' };
+  }
+
+  // Durable lock check, before the password compare: an account locked out by earlier
+  // failed attempts stays locked until the instant passes, even across a restart. Same
+  // `rate_limited` reason as the in-memory limiter, so a locked account and a
+  // rate-limited one are indistinguishable to the caller.
+  if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    const retryAfterMs = user.lockedUntil.getTime() - Date.now();
+    void logLoginSecurityEvent(
+      'LOGIN_RATE_LIMIT',
+      { ip: ipAddress, identifier: emailInput, reason: 'account locked' },
+      user.id,
+    );
+    return { ok: false, reason: 'rate_limited', retryAfterMs };
   }
 
   const valid = await bcrypt.compare(password, user.password);

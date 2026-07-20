@@ -14,6 +14,9 @@ export type UserListItem = {
   timezone: string | null;
   inactive: boolean;
   lastLogin: Date | null;
+  // Auto-expiring login lock. A future value means the account is locked out; the admin
+  // UI shows a countdown and an unlock action. Past/null means not locked.
+  lockedUntil: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -35,6 +38,7 @@ export async function getUsersList(): Promise<UserListItem[]> {
       timezone: true,
       inactive: true,
       lastLogin: true,
+      lockedUntil: true,
       createdAt: true,
       updatedAt: true,
     },

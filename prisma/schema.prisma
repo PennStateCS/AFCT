@@ -78,6 +78,14 @@ model User {
   // log purges; stamped in the NextAuth signIn event.
   lastLogin DateTime?
 
+  // Auto-expiring account lockout. Set to a future instant when repeated failed
+  // logins trip the per-account limit; the login gate rejects until it passes, then
+  // it clears itself (no sweeper needed). Persisted here rather than in the in-memory
+  // rate limiter so the lock survives a restart/deploy and is global across instances.
+  // Only the lock DECISION lives here; the per-attempt counting stays in the rate
+  // limiter. An admin can clear it early. Null = not locked.
+  lockedUntil DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

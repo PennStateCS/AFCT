@@ -436,6 +436,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/unlock-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock a locked-out account (admin)
+         * @description Clears an account's auto-expiring login lock ahead of its expiry, so a user locked  out by failed attempts can sign in again immediately. System administrators only.  Idempotent: clearing an already-unlocked account is a no-op success.   This only lifts the login gate; it does not reset the in-memory rate-limiter counters  for the current instance, so a fresh burst of bad passwords can re-lock the account.  That is intentional - the durable lock is the thing an admin manages.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/unlock-account/route.ts)
+         */
+        post: operations["postAdminUnlockAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/users/bulk": {
         parameters: {
             query?: never;
@@ -3352,6 +3374,72 @@ export interface operations {
                 };
             };
             /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminUnlockAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The user to unlock */
+                    userId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Account unlocked (or already unlocked). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success?: boolean;
+                        wasLocked?: boolean;
+                    };
+                };
+            };
+            /** @description Missing userId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Target user not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unlock failed. */
             500: {
                 headers: {
                     [name: string]: unknown;

@@ -123,6 +123,7 @@ export const apiPaths = {
     usersBulk: () => '/api/admin/users/bulk',
     usersList: () => '/api/admin/users/list',
     resetPassword: () => '/api/admin/reset-password',
+    unlockAccount: () => '/api/admin/unlock-account',
     logs: () => '/api/admin/logs',
     logsExport: () => '/api/admin/logs/export',
     logsExportFields: () => '/api/admin/logs/export/fields',
