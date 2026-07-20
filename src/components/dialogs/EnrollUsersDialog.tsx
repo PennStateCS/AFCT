@@ -113,22 +113,35 @@ export function EnrollUserDialog({
     return false;
   };
 
+  /** Add/remove one user from the pending selection. */
+  const toggleSelection = (userId: string) => {
+    if (courseIsArchived) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (handleListNav(e)) return;
-    if (e.key === 'Enter' && selectedIdx >= 0 && filteredUsers[selectedIdx] && !courseIsArchived) {
-      handleEnroll(filteredUsers[selectedIdx]);
+    // Enter ticks the highlighted row rather than enrolling it outright. The dialog
+    // presents a multi-select with an Enroll button, so having Enter silently enroll one
+    // person and close contradicted what the UI showed -- and made a stray highlight
+    // (hover moves it) act on the wrong user.
+    if (e.key === 'Enter') {
+      const user = selectedIdx >= 0 ? filteredUsers[selectedIdx] : undefined;
+      if (user) {
+        e.preventDefault();
+        toggleSelection(user.id);
+      }
     }
   };
 
-  // Enroll the user(s)
-  const handleEnroll = (user?: EnrollableUser) => {
-    // If a user is passed (single click), enroll just that user
-    if (user && !courseIsArchived) {
-      onEnroll(user);
-      setOpen(false);
-      return;
-    }
-    // Otherwise, enroll all selected users
+  // Enroll everyone currently ticked. Confirming is always an explicit press of the
+  // Enroll button; no keyboard path enrolls implicitly.
+  const handleEnroll = () => {
     if (selectedIds.size > 0 && !courseIsArchived) {
       filteredUsers.forEach((u) => {
         if (selectedIds.has(u.id)) onEnroll(u);
@@ -193,9 +206,11 @@ export function EnrollUserDialog({
                         onFocus={() => setSelectedIdx(idx)}
                         onKeyDown={(e) => {
                           if (handleListNav(e)) return;
-                          if (e.key === 'Enter' && !courseIsArchived) {
+                          // Space already toggles a native checkbox; make Enter agree
+                          // instead of enrolling and closing behind the user's back.
+                          if (e.key === 'Enter') {
                             e.preventDefault();
-                            handleEnroll(user);
+                            toggleSelection(user.id);
                           }
                         }}
                         onChange={(e) => {

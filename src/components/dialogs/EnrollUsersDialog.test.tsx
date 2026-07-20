@@ -86,6 +86,37 @@ describe('EnrollUsersDialog', () => {
     expect(alan).toHaveAttribute('tabindex', '-1');
   });
 
+  it('Enter ticks the highlighted user instead of enrolling and closing', async () => {
+    const user = userEvent.setup();
+    const onEnroll = vi.fn();
+    const setOpen = vi.fn();
+
+    render(
+      <EnrollUserDialog
+        open
+        setOpen={setOpen}
+        courseIsArchived={false}
+        users={users}
+        onEnroll={onEnroll}
+      />,
+    );
+
+    screen.getByLabelText('Search users').focus();
+    await user.keyboard('{ArrowDown}'); // highlight + focus Ada
+    await user.keyboard('{Enter}');
+
+    // Enter selects; it must not enroll behind the user's back or close the dialog.
+    expect(screen.getByLabelText(/Ada\s+Lovelace/)).toBeChecked();
+    expect(onEnroll).not.toHaveBeenCalled();
+    expect(setOpen).not.toHaveBeenCalled();
+
+    // Confirming is an explicit press of Enroll.
+    await user.click(screen.getByRole('button', { name: 'Enroll' }));
+    expect(onEnroll).toHaveBeenCalledTimes(1);
+    expect(onEnroll).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));
+    expect(setOpen).toHaveBeenCalledWith(false);
+  });
+
   it('does not put an inert tab stop on each row label', () => {
     render(
       <EnrollUserDialog

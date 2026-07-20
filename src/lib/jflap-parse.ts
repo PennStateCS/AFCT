@@ -178,3 +178,60 @@ export function toElements(parsed: Parsed, eps: string, honorPositions?: boolean
   }));
   return [...nodes, ...edges];
 }
+
+/**
+ * A plain-text description of a parsed machine, for the non-visual alternative to the
+ * graph. Viewing automata is a core function of AFCT, so the canvas cannot be the only
+ * representation: a screen reader user needs the states, which one is initial, which are
+ * final, and every transition with its label.
+ *
+ * Pure and DOM-free so it can be unit tested and reused (summary line, expandable detail).
+ */
+export type MachineDescription = {
+  /** One-line gist, suitable for aria-describedby on the graph container. */
+  summary: string;
+  stateNames: string[];
+  initialState: string | null;
+  finalStates: string[];
+  /** Human-readable transitions, e.g. "q0 to q1 on a". */
+  transitionLines: string[];
+  /** True when the file parsed but contains nothing to show. */
+  isEmpty: boolean;
+};
+
+const MACHINE_NOUN: Record<MachineType, string> = {
+  fa: 'Finite automaton',
+  pda: 'Push-down automaton',
+  tm: 'Turing machine',
+  unknown: 'Automaton',
+};
+
+export function describeMachine(parsed: Parsed, eps: string): MachineDescription {
+  const nameById = new Map(parsed.states.map((s) => [s.id, s.name || s.id]));
+  const nameOf = (id: string) => nameById.get(id) ?? id;
+
+  const stateNames = parsed.states.map((s) => s.name || s.id);
+  const initialState = parsed.states.find((s) => s.initial)?.name ?? null;
+  const finalStates = parsed.states.filter((s) => s.final).map((s) => s.name || s.id);
+
+  // Keep the original XML order so the text matches the order the file declares.
+  const transitionLines = [...parsed.transitions]
+    .sort((a, b) => a.__idx - b.__idx)
+    .map((t) => `${nameOf(t.from)} to ${nameOf(t.to)} on ${labelFor(t, parsed.type, eps)}`);
+
+  const isEmpty = parsed.states.length === 0;
+  const noun = MACHINE_NOUN[parsed.type] ?? MACHINE_NOUN.unknown;
+
+  const summary = isEmpty
+    ? `${noun} with no states.`
+    : `${noun} with ${parsed.states.length} ${parsed.states.length === 1 ? 'state' : 'states'} ` +
+      `and ${parsed.transitions.length} ${parsed.transitions.length === 1 ? 'transition' : 'transitions'}. ` +
+      `Initial state ${initialState ?? 'not set'}. ` +
+      `${
+        finalStates.length === 0
+          ? 'No final states.'
+          : `Final ${finalStates.length === 1 ? 'state' : 'states'} ${finalStates.join(', ')}.`
+      }`;
+
+  return { summary, stateNames, initialState, finalStates, transitionLines, isEmpty };
+}
