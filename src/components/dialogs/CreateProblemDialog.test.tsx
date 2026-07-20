@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -148,5 +148,63 @@ describe('CreateProblemDialog', () => {
 
     const fileInput = document.getElementById('answer-file') as HTMLInputElement;
     expect(fileInput).toBeDisabled();
+  });
+
+  it('adds an assignment-settings step and associates the new problem with those settings', async () => {
+    const user = userEvent.setup();
+    const onCreated = vi.fn();
+
+    const fileContent = '<structure><type>FA</type></structure>';
+    const file = new File([fileContent], 'answer.jff', { type: 'text/plain' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(fileContent) });
+
+    fetchMock.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'prob-1' }),
+        text: async () => JSON.stringify({ id: 'prob-1' }),
+      } as unknown as Response),
+    );
+
+    render(
+      <CreateProblemDialog
+        open
+        setOpen={vi.fn()}
+        courseId="course-1"
+        courseIsArchived={false}
+        assignmentId="assignment-1"
+        onCreated={onCreated}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Title'), 'DFA #1');
+    await clickNext(user); // -> Type
+    await clickNext(user); // -> Answer File
+
+    const fileInput = document.getElementById('answer-file') as HTMLInputElement;
+    await user.upload(fileInput, file);
+    const nextButton = screen.getByRole('button', { name: 'Next' });
+    await waitFor(() => expect(nextButton).toBeEnabled());
+    await user.click(nextButton); // -> Assignment Settings
+
+    // This step only exists in the assignment flow.
+    fireEvent.change(screen.getByLabelText('Max Points'), { target: { value: '25' } });
+    expect(screen.getByLabelText('Automatically Graded')).toBeChecked();
+    await clickNext(user); // -> Review
+
+    const createButton = screen.getByRole('button', { name: 'Create Problem' });
+    await waitFor(() => expect(createButton).toBeEnabled());
+    await user.click(createButton);
+
+    // Problem create, then the association carrying the per-assignment settings.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const [assocUrl, assocInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(assocUrl).toContain('/assignments/assignment-1/problems');
+    const body = JSON.parse(assocInit.body as string);
+    expect(body.problemIds).toEqual(['prob-1']);
+    expect(body.problemSettings).toEqual([
+      { problemId: 'prob-1', maxPoints: 25, maxSubmissions: -1, autograderEnabled: true },
+    ]);
   });
 });

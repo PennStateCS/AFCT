@@ -58,7 +58,10 @@ const TYPE_LABELS: Record<string, string> = {
   RE: 'Regular Expression',
 };
 
-const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> = [
+type WizardStep = { title: string; fields: FieldPath<FormValues>[] };
+
+// Bank create: the problem definition only.
+const BANK_STEPS: ReadonlyArray<WizardStep> = [
   { title: 'Details', fields: ['title', 'description'] },
   {
     title: 'Type',
@@ -67,11 +70,14 @@ const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> =
   { title: 'Answer File', fields: ['file'] },
   { title: 'Review', fields: [] },
 ];
-const LAST_STEP = STEPS.length - 1;
+// When created from an assignment, an extra step gathers the per-assignment link settings
+// (points, accepted submissions, autograding) so create + associate happen in one flow.
+const SETTINGS_STEP: WizardStep = { title: 'Assignment Settings', fields: [] };
 
-// A four-step wizard (Details, Type, Answer File, Review) mirroring the create-assignment
-// wizard. Creates the bank problem definition only. Points, submission caps and autograding
-// are per-assignment and set when the problem is added to an assignment, not here.
+// A guided wizard mirroring the create-assignment wizard. From the course bank it creates
+// the problem definition only (Details, Type, Answer File, Review). Opened from an
+// assignment it adds an Assignment Settings step and associates the new problem with that
+// assignment using those settings.
 export function CreateProblemDialog({
   open,
   setOpen,
@@ -81,6 +87,32 @@ export function CreateProblemDialog({
   onCreated,
 }: CreateProblemDialogProps) {
   const [step, setStep] = useState(0);
+  const inAssignment = !!assignmentId;
+
+  // The wizard gains an "Assignment Settings" step (before Review) when opened from an
+  // assignment. Answer File stays at index 2 in both shapes, so its gates are unaffected.
+  const STEPS = useMemo<ReadonlyArray<WizardStep>>(
+    () => (inAssignment ? [...BANK_STEPS.slice(0, 3), SETTINGS_STEP, BANK_STEPS[3]!] : BANK_STEPS),
+    [inAssignment],
+  );
+  const LAST_STEP = STEPS.length - 1;
+
+  // Per-assignment link settings, gathered only in the assignment flow. Kept as local state
+  // (not on the strict ProblemFormSchema form) since they belong to AssignmentProblem, not
+  // the bank problem. Defaults mirror the "Add existing problem" dialog: 100 points,
+  // unlimited submissions, autograder on.
+  const [linkMaxPoints, setLinkMaxPoints] = useState('100');
+  const [linkUnlimited, setLinkUnlimited] = useState(true);
+  const [linkMaxSubmissions, setLinkMaxSubmissions] = useState('1');
+  const [linkAutograder, setLinkAutograder] = useState(true);
+
+  const linkPointsValue = Number(linkMaxPoints);
+  const linkPointsInvalid = !Number.isFinite(linkPointsValue) || linkPointsValue < 0;
+  const linkSubmissionsValue = Number(linkMaxSubmissions);
+  const linkSubmissionsInvalid =
+    !linkUnlimited && (!Number.isInteger(linkSubmissionsValue) || linkSubmissionsValue < 1);
+  const isSettingsStep = STEPS[step]?.title === 'Assignment Settings';
+  const settingsInvalid = linkPointsInvalid || linkSubmissionsInvalid;
 
   const defaults: FormValues = useMemo(
     () => ({
@@ -123,6 +155,10 @@ export function CreateProblemDialog({
   const resetForm = () => {
     setStep(0);
     reset(defaults, { keepDirty: false, keepTouched: false, keepErrors: false, keepValues: false });
+    setLinkMaxPoints('100');
+    setLinkUnlimited(true);
+    setLinkMaxSubmissions('1');
+    setLinkAutograder(true);
   };
 
   // Reset the form and return to step 1 each time the dialog opens.
@@ -134,6 +170,8 @@ export function CreateProblemDialog({
   const next = async () => {
     // The answer file is required to leave its step (the form schema treats it as optional).
     if (step === 2 && !file) return;
+    // The assignment-settings step validates its own local fields (not RHF fields).
+    if (isSettingsStep && settingsInvalid) return;
     const ok = await trigger(STEPS[step]?.fields ?? []);
     if (ok) setStep((s) => Math.min(s + 1, LAST_STEP));
   };
@@ -184,12 +222,20 @@ export function CreateProblemDialog({
         throw err;
       }
 
-      // If we were opened in the context of an assignment, automatically add the
-      // created problem to it (best-effort).
+      // If we were opened in the context of an assignment, associate the created problem
+      // with it using the per-assignment settings gathered in the wizard (best-effort).
       if (created?.id && assignmentId) {
         try {
           await apiClient.post(apiPaths.assignmentProblems(courseId, assignmentId), {
             problemIds: [created.id],
+            problemSettings: [
+              {
+                problemId: created.id,
+                maxPoints: Math.max(0, linkPointsValue),
+                maxSubmissions: linkUnlimited ? -1 : Math.max(1, Math.floor(linkSubmissionsValue)),
+                autograderEnabled: linkAutograder,
+              },
+            ],
           });
         } catch (err) {
           console.error('Failed to add created problem to assignment:', err);
@@ -228,7 +274,8 @@ export function CreateProblemDialog({
         <DialogHeader>
           <DialogTitle>Create Problem</DialogTitle>
           <DialogDescription className="sr-only">
-            Create a problem in four steps: details, type, the answer file, then review.
+            Create a problem step by step: details, type, the answer file
+            {inAssignment ? ', assignment settings' : ''}, then review.
           </DialogDescription>
         </DialogHeader>
 
@@ -429,6 +476,47 @@ export function CreateProblemDialog({
               />
             )}
 
+            {isSettingsStep && (
+              <div className="space-y-4">
+                <p className="text-muted-foreground text-sm">
+                  How this problem counts in this assignment. You can change these later on the
+                  assignment&rsquo;s Problems tab.
+                </p>
+                <InputGroup
+                  label="Max Points"
+                  name="new-problem-max-points"
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={linkMaxPoints}
+                  setValue={setLinkMaxPoints}
+                  error={linkPointsInvalid ? 'Max points must be zero or greater.' : undefined}
+                />
+                <LimitField
+                  label="Accepted Submissions"
+                  name="new-problem-max-submissions"
+                  unlimited={linkUnlimited}
+                  onUnlimitedChange={setLinkUnlimited}
+                  value={linkMaxSubmissions}
+                  onValueChange={setLinkMaxSubmissions}
+                  min={1}
+                  placeholder="e.g. 5"
+                  error={
+                    linkSubmissionsInvalid
+                      ? 'Enter a number of at least 1, or choose Unlimited.'
+                      : undefined
+                  }
+                />
+                <SwitchField
+                  label="Automatically Graded"
+                  name="new-problem-autograder"
+                  id="new-problem-autograder"
+                  checked={linkAutograder}
+                  onCheckedChange={(checked) => setLinkAutograder(!!checked)}
+                />
+              </div>
+            )}
+
             {step === LAST_STEP && review && (
               <div className="space-y-3">
                 <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words">
@@ -450,6 +538,16 @@ export function CreateProblemDialog({
                   )}
                   <dt className="text-muted-foreground">Answer file</dt>
                   <dd>{review.file?.name ?? 'None'}</dd>
+                  {inAssignment && (
+                    <>
+                      <dt className="text-muted-foreground">Max points</dt>
+                      <dd>{Math.max(0, linkPointsValue)}</dd>
+                      <dt className="text-muted-foreground">Accepted submissions</dt>
+                      <dd>{linkUnlimited ? 'Unlimited' : String(linkMaxSubmissions)}</dd>
+                      <dt className="text-muted-foreground">Automatically graded</dt>
+                      <dd>{linkAutograder ? 'Yes' : 'No'}</dd>
+                    </>
+                  )}
                 </dl>
               </div>
             )}
@@ -473,7 +571,7 @@ export function CreateProblemDialog({
                 key="problem-next"
                 type="button"
                 onClick={() => void next()}
-                disabled={step === 2 && !file}
+                disabled={(step === 2 && !file) || (isSettingsStep && settingsInvalid)}
               >
                 Next
               </Button>
