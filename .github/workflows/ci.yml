@@ -77,6 +77,60 @@ jobs:
       - name: Run tests
         run: npm test
 
+  # The `*.db.test.ts` suite, against a real Postgres. These cover what the mocked
+  # tests structurally cannot: whether two concurrent conditional updates really
+  # produce one winner, whether constraints and cascades behave as the services
+  # assume. Separate job so a database problem never masquerades as a unit failure.
+  test-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        # Same major + digest as docker-compose.dev.yml and deploy/docker-compose.yml.
+        # Testing transaction and constraint behavior against a different Postgres than
+        # we actually run would defeat the point of these tests.
+        image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+        env:
+          POSTGRES_DB: afct_test
+          POSTGRES_USER: afct_user
+          POSTGRES_PASSWORD: afct_pass
+        ports:
+          - 5432:5432
+        # Without this the job races the database and fails on connection refused.
+        options: >-
+          --health-cmd "pg_isready -U afct_user -d afct_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # The suite's setup file refuses any database not named afct_test.
+      DATABASE_URL: postgresql://afct_user:afct_pass@localhost:5432/afct_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        env:
+          DISABLE_ERD: 'true'
+
+      # `migrate deploy`, not `db push`: it applies the committed migration files, so a
+      # migration that is broken or missing fails here rather than in production.
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Run database tests
+        run: npm run test:db
+
   docs-check:
     runs-on: ubuntu-latest
     timeout-minutes: 15

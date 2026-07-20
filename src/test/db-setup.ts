@@ -1,5 +1,5 @@
 /**
- * Points the integration suite at the throwaway `afct_test` database before any module
+ * Points the database suite at the throwaway `afct_test` database before any module
  * imports `@/lib/prisma` (which reads DATABASE_URL when it constructs the adapter).
  *
  * The guard is not ceremony: these tests truncate tables. If DATABASE_URL were left
@@ -14,7 +14,7 @@ const dbName = parsed.pathname.replace(/^\//, '');
 
 if (dbName !== 'afct_test') {
   throw new Error(
-    `Integration tests refuse to run against database "${dbName}". ` +
+    `Database tests refuse to run against database "${dbName}". ` +
       `They delete rows, so they only ever target "afct_test". ` +
       `Unset DATABASE_URL or point it at afct_test.`,
   );
