@@ -158,10 +158,16 @@ export default function DiscussionPanel({
                             isMine ? 'ml-auto' : ''
                           }`}
                         >
-                          {/* Delete button - inside bubble top right */}
+                          {/* Delete button - inside bubble top right.
+                              `title` alone is an unreliable accessible name (and never
+                              surfaces on touch), so the name is an aria-label. The hit
+                              area was 16x16; 32x32 matches the icon buttons in the
+                              tables and clears the 24x24 minimum target size. */}
                           <button
+                            type="button"
+                            aria-label="Delete comment"
                             onClick={() => setCommentToDelete(comment.id)}
-                            className="text-muted-foreground absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-xs opacity-70 transition-colors hover:bg-red-100 hover:text-red-600 hover:opacity-100"
+                            className="text-muted-foreground absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full text-xs opacity-70 transition-colors hover:bg-red-100 hover:text-red-600 hover:opacity-100"
                             title="Delete comment"
                             disabled={deletingComments[comment.id]}
                             hidden={
