@@ -9,7 +9,7 @@ import type { UserListItem } from '@/lib/users-list';
 import { Button } from '@/components/ui/button';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
-import { AdminResetPasswordDialog } from '@/components/dialogs/AdminResetPasswordDialog';
+import { ResetPasswordDialog } from '@/components/dialogs/ResetPasswordDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -163,9 +163,9 @@ export function getUserColumns(
 
 // Extract the cell component to fix React hooks violation
 function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpdate: () => void }) {
-  const [editOpen, setEditOpen] = useState(false);
+  const [editUserOpen, setEditUserOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
@@ -202,7 +202,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
       }
 
       showToast.success('User deleted successfully.');
-      setConfirmOpen(false);
+      setConfirmDeleteOpen(false);
       onUserUpdate();
     } catch {
       showToast.error('Unexpected Error: Failed to delete user');
@@ -213,14 +213,14 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
     <>
       <EditUserDialog
         user={user as unknown as User}
-        open={editOpen}
-        setOpen={setEditOpen}
+        open={editUserOpen}
+        setOpen={setEditUserOpen}
         onSave={async () => {
           onUserUpdate();
         }}
       />
 
-      <AdminResetPasswordDialog
+      <ResetPasswordDialog
         open={resetOpen}
         setOpen={setResetOpen}
         onResetPassword={handlePasswordReset}
@@ -228,8 +228,8 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
       />
 
       <ConfirmDialog
-        open={confirmOpen}
-        onCancel={() => setConfirmOpen(false)}
+        open={confirmDeleteOpen}
+        onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={handleDelete}
         title="Delete User"
         description={`Are you sure you want to delete ${user.firstName} ${user.lastName}?`}
@@ -256,7 +256,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
-            onClick={() => setEditOpen(true)}
+            onClick={() => setEditUserOpen(true)}
             className="hover:bg-secondary flex items-center gap-2"
           >
             <Pencil className="h-4 w-4" />
@@ -274,7 +274,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
-            onClick={() => setConfirmOpen(true)}
+            onClick={() => setConfirmDeleteOpen(true)}
             disabled={!user.inactive}
             className="hover:bg-secondary flex items-center gap-2 text-red-600 focus:text-red-600"
           >

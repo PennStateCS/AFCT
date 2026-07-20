@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import CourseEditUserDialog from './CourseEditUserDialog';
+import EditRoleDialog from './EditRoleDialog';
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
@@ -67,7 +67,7 @@ describe('CourseEditUserDialog', () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
 
     renderWithClient(
-      <CourseEditUserDialog
+      <EditRoleDialog
         open
         setOpen={setOpen}
         courseId="c1"
@@ -99,7 +99,7 @@ describe('CourseEditUserDialog', () => {
     } as Response);
 
     renderWithClient(
-      <CourseEditUserDialog
+      <EditRoleDialog
         open
         setOpen={setOpen}
         courseId="c1"

@@ -15,7 +15,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
 import { isStrongPassword, passwordRules } from '@/lib/password-policy';
-import { AdminResetPasswordSchema } from '@/schemas/password';
+import { ResetPasswordSchema } from '@/schemas/password';
 
 type Props = {
   open: boolean;
@@ -24,7 +24,7 @@ type Props = {
   targetUserName?: string;
 };
 
-export function AdminResetPasswordDialog({
+export function ResetPasswordDialog({
   open,
   setOpen,
   onResetPassword,
@@ -56,7 +56,7 @@ export function AdminResetPasswordDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const parsed = AdminResetPasswordSchema.safeParse({ newPassword, confirmNewPassword });
+    const parsed = ResetPasswordSchema.safeParse({ newPassword, confirmNewPassword });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? 'Please review the password fields.');
       return;

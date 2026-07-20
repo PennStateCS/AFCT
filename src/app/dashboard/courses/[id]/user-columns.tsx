@@ -1,15 +1,24 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, Edit, Lock, Pencil, Trash2 } from 'lucide-react';
 import type { User } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import CourseEditUserDialog from '@/components/dialogs/CourseEditUserDialog';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
+import { EditRoleDialog } from '@/components/dialogs/EditRoleDialog';
+import { ResetPasswordDialog } from '@/components/dialogs/ResetPasswordDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/RoleBadge';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import { roleSortingFn } from '@/lib/roles';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -27,6 +36,9 @@ type ActionsCellProps = {
   viewerRole?: string | null;
   // whether the viewer is a global site admin
   viewerIsAdmin?: boolean;
+  onEditRole?: (user: RosterUser) => void;
+  onResetPassword?: (user: RosterUser) => void;
+  onDeleteUser?: (user: RosterUser) => void;
 };
 
 function ActionsCell({
@@ -37,19 +49,38 @@ function ActionsCell({
   facultyCount,
   viewerRole,
   viewerIsAdmin,
+  onEditRole,
+  onResetPassword,
+  onDeleteUser,
 }: ActionsCellProps) {
   void facultyCount;
-  const [open, setOpen] = useState(false);
-
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [courseEditOpen, setCourseEditOpen] = useState(false);
-
-  // Use preloaded viewer role instead of fetching per-row
-  const currentCourseRole = viewerRole ?? null;
+  const [editUserOpen, setEditUserOpen] = useState(false);
+  const [ editRoleOpen, setEditRoleOpen ] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   // Treat site ADMIN as having course management privileges
   const isSiteAdmin = Boolean(viewerIsAdmin);
-  const isCourseAdmin = currentCourseRole === 'FACULTY' || isSiteAdmin;
+
+  async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
+    try {
+      const res = await fetch(apiPaths.admin.resetPassword(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, newPassword, isTemporary }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to reset password.');
+      }
+
+      setResetOpen(false);
+      onChange();
+    } catch (error) {
+      showToast.error(error instanceof Error ? error.message : 'Failed to reset password.');
+    }
+  }
 
   const handleDelete = async () => {
     try {
@@ -75,16 +106,6 @@ function ActionsCell({
     }
   };
 
-  const handleSave = async (updatedUser: Partial<User>) => {
-    const res = await fetch(apiPaths.user(String(updatedUser.id)), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedUser),
-    });
-    if (res.ok) onChange();
-    setOpen(false);
-  };
-
   // Treat the user as a roster item: course role (in `role`) and optional flags
   const rUser = user as RosterUser;
   const courseRole = rUser.role ?? null;
@@ -103,8 +124,7 @@ function ActionsCell({
     if (viewer === 'FACULTY') return target !== 'FACULTY';
     return false;
   };
-
-  const viewerCanDelete = canViewerDeleteUser(currentCourseRole, courseRole);
+  const viewerCanDelete = canViewerDeleteUser(courseRole, courseRole);
 
   const deleteTitle = viewerCanDelete
     ? `Remove ${user.firstName} ${user.lastName}?`
@@ -125,84 +145,106 @@ function ActionsCell({
 
   return (
     <div className="flex items-center gap-2">
-      <EditUserDialog user={user} open={open} setOpen={setOpen} onSave={handleSave} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="secondary"
+            aria-label={`Manage ${user.firstName} ${user.lastName}`}
+            className="inline-flex items-center gap-2"
+          >
+            Manage
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[12rem]">
+          <DropdownMenuLabel className="font-medium">Manage user</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {isSiteAdmin ? (
+            <DropdownMenuItem
+              onClick={() => setEditUserOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit User
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            onClick={() => setEditRoleOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit Role
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => setResetOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Lock className="h-4 w-4" />
+            Reset Password
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setConfirmDeleteOpen(true)}
+            disabled={removeDisabled}
+            title={removeTitle}
+            className={`flex items-center gap-2 ${removeDisabled ? 'cursor-not-allowed text-muted-foreground' : 'text-destructive focus:text-destructive'}`}
+          >
+            <Trash2 className="h-4 w-4" />
+            Remove User
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      {/* Edit button: visible to instructors or site ADMINs */}
-      {isCourseAdmin && (
-        <Button
-          variant="secondary"
-          onClick={() => setCourseEditOpen(true)}
-          disabled={courseIsArchived}
-          title={courseIsArchived ? 'Cannot edit an archived course' : undefined}
-          aria-label={`Edit ${user.firstName} ${user.lastName}`}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      )}
+      <EditUserDialog
+        user={user}
+        open={editUserOpen}
+        setOpen={setEditUserOpen}
+        onSave={async () => {
+          onChange();
+        }}
+      />
 
-      {/* Inline delete button for Faculty only (Manage dropdown provides remove action for instructors) */}
-      {currentCourseRole === 'FACULTY' && (
-        <Button
-          variant="destructive"
-          disabled={removeDisabled}
-          title={removeTitle}
-          aria-label={`Remove ${user.firstName} ${user.lastName} from course`}
-          onClick={() => {
-            if (removeDisabled) return;
-            setConfirmOpen(true);
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      )}
+      <EditRoleDialog
+        open={editRoleOpen}
+        setOpen={setEditRoleOpen}
+        courseId={courseId}
+        userId={user.id}
+        onSaved={onChange}
+      />
+
+      <ResetPasswordDialog
+        open={resetOpen}
+        setOpen={setResetOpen}
+        onResetPassword={handlePasswordReset}
+        targetUserName={`${user.firstName} ${user.lastName}`}
+      />
 
       <ConfirmDialog
-        open={confirmOpen}
-        onCancel={() => setConfirmOpen(false)}
+        open={confirmDeleteOpen}
+        onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={async () => {
           if (courseIsArchived) {
             showToast.error('Cannot remove user from archived course');
-            setConfirmOpen(false);
+            setConfirmDeleteOpen(false);
             return;
           }
           if (!viewerCanDelete) {
             showToast.error('You do not have permission to remove this user');
-            setConfirmOpen(false);
+            setConfirmDeleteOpen(false);
             return;
           }
           if (hasSubmissions) {
             showToast.error('This user cannot be removed from the course');
-            setConfirmOpen(false);
+            setConfirmDeleteOpen(false);
             return;
           }
           await handleDelete();
-          setConfirmOpen(false);
+          setConfirmDeleteOpen(false);
         }}
         title={deleteTitle}
         description={deleteDescription}
         confirmText="Remove"
         cancelText="Cancel"
-      />
-      <CourseEditUserDialog
-        open={courseEditOpen}
-        setOpen={setCourseEditOpen}
-        courseId={courseId}
-        userId={user.id}
-        onSaved={onChange}
-        initialRoster={{
-          role: courseRole,
-          user: {
-            id: user.id,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            avatar: user.avatar,
-            role: user.role,
-          },
-          hasSubmissions: user.hasSubmissions,
-        }}
-        initialViewerCourseRole={currentCourseRole}
-        initialViewerDefaultRole={isSiteAdmin ? 'ADMIN' : null}
       />
     </div>
   );
@@ -215,10 +257,13 @@ export const userColumns = (
   facultyCount?: number,
   viewerRole?: string | null,
   viewerIsAdmin?: boolean,
+  onEditRole?: (user: RosterUser) => void,
+  onResetPassword?: (user: RosterUser) => void,
+  onDeleteUser?: (user: RosterUser) => void,
 ): ColumnDef<User>[] => {
   const currentCourseRole = viewerRole ?? null;
   const isSiteAdmin = Boolean(viewerIsAdmin);
-  const viewerHasActions = isSiteAdmin || currentCourseRole === 'FACULTY';
+  const viewerHasActions = isSiteAdmin || currentCourseRole === 'FACULTY' || currentCourseRole === 'TA';
 
   const cols: ColumnDef<User>[] = [
     {
@@ -292,8 +337,8 @@ export const userColumns = (
 
   if (viewerHasActions) {
     cols.push({
-      id: 'actions',
-      header: 'Actions',
+      id: 'manage',
+      header: 'Manage',
       meta: { priority: 1 },
       cell: ({ row }) => (
         <ActionsCell
@@ -304,6 +349,9 @@ export const userColumns = (
           facultyCount={facultyCount}
           viewerRole={viewerRole}
           viewerIsAdmin={viewerIsAdmin}
+          onEditRole={onEditRole}
+          onResetPassword={onResetPassword}
+          onDeleteUser={onDeleteUser}
         />
       ),
     });

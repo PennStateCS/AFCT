@@ -21,8 +21,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 
 // The action dialogs are heavy and irrelevant here.
 vi.mock('@/components/dialogs/EditUserDialog', () => ({ EditUserDialog: () => null }));
-vi.mock('@/components/dialogs/AdminResetPasswordDialog', () => ({
-  AdminResetPasswordDialog: () => null,
+vi.mock('@/components/dialogs/ResetPasswordDialog', () => ({
+  ResetPasswordDialog: () => null,
 }));
 vi.mock('@/components/dialogs/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
 
