@@ -54,14 +54,18 @@ function cleanupFile(filePath: string | null, onError?: (err: unknown) => void):
   }
 }
 
-/** Persist an uploaded submission file under the submissions dir; returns its path. */
-function storeSubmissionFile(storedName: string, buffer: Buffer): string {
+/**
+ * Persist an uploaded submission file at an already-resolved path.
+ *
+ * The caller resolves the path first and records it, so that a write which fails partway
+ * through still leaves a path for the cleanup handler to unlink. Returning the path from
+ * here instead would mean a partial file had no recorded location and leaked.
+ */
+function storeSubmissionFile(filePath: string, buffer: Buffer): void {
   if (!fs.existsSync(SUBMISSION_UPLOAD_DIR)) {
     fs.mkdirSync(SUBMISSION_UPLOAD_DIR, { recursive: true });
   }
-  const filePath = resolveInsideDir(SUBMISSION_UPLOAD_DIR, storedName);
   fs.writeFileSync(filePath, buffer, { mode: 0o644 });
-  return filePath;
 }
 
 /**
@@ -376,7 +380,10 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       // Random UUID + whitelisted extension; never a client-controlled path.
       fileName = safeStoredFilename(originalFileName);
       const buffer = Buffer.from(await file.arrayBuffer());
-      uploadedFilePath = storeSubmissionFile(fileName, buffer);
+      // Record the destination BEFORE writing: a write that throws partway through has
+      // still created the file, and the cleanup handler can only remove a path it knows.
+      uploadedFilePath = resolveInsideDir(SUBMISSION_UPLOAD_DIR, fileName);
+      storeSubmissionFile(uploadedFilePath, buffer);
     }
 
     // Re-check the cap inside a serializable transaction so concurrent submits can't
@@ -426,11 +433,29 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
 
     ctx.submissionId = submission.id;
 
-    if (fileName) {
-      await audit('SUBMISSION_FILE_STORED', 'INFO', { fileName, originalFileName });
+    // ---- Past this point the transaction has COMMITTED. ----
+    //
+    // The submission exists and cannot be rolled back, so nothing after it may report
+    // failure or touch the stored file. Audit writes are ordinary database writes and
+    // can fail on their own (a logging outage, a constraint problem); letting one
+    // escape used to mean the shared catch below deleted the file out from under a
+    // committed row AND returned 500, so the caller would retry and burn another slot
+    // against the submission cap. The student ended up with a queued submission whose
+    // file was gone and a wasted attempt.
+    //
+    // A missing audit entry is a real but lesser problem than a corrupted submission,
+    // so record it to the console and still report success.
+    try {
+      if (fileName) {
+        await audit('SUBMISSION_FILE_STORED', 'INFO', { fileName, originalFileName });
+      }
+      await audit('SUBMISSION_CREATED', 'INFO', { fileName, status: 'PENDING' });
+    } catch (auditError) {
+      console.error(
+        `[createSubmission] Submission ${submission.id} was created, but writing its audit log failed:`,
+        auditError,
+      );
     }
-
-    await audit('SUBMISSION_CREATED', 'INFO', { fileName, status: 'PENDING' });
 
     return { ok: true, submission };
   } catch (error: unknown) {

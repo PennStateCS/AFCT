@@ -545,20 +545,62 @@ function baseAssignment() {
   };
 }
 
-describe('failure after the row is committed', () => {
-  it('deletes the file of an already-committed submission when a later audit write fails', async () => {
-    const { tx } = setup();
-    // The insert succeeds and COMMITS; the audit call after it throws.
+describe('once the transaction has committed', () => {
+  const anyFile = () => new File(['<structure></structure>'], 'a.jff');
+
+  it('still reports success when a post-commit audit write fails', async () => {
+    const { created, tx } = setup();
     auditMock.mockImplementation(async (_p, _r, opts: { action: string }) => {
       if (opts.action === 'SUBMISSION_CREATED') throw new Error('activity log down');
     });
 
+    const res = await call({ file: anyFile() });
+
+    // The row committed, so the submission genuinely exists. Reporting 500 would make
+    // the caller retry and burn another slot against the cap for a submission that was
+    // already accepted.
+    expect(tx.submission.create).toHaveBeenCalledTimes(1);
+    expect(res).toEqual({ ok: true, submission: created });
+  });
+
+  it('does not delete the stored file when a post-commit audit write fails', async () => {
+    // The committed row references this file; deleting it leaves the worker a queued
+    // submission with nothing to evaluate.
+    setup();
+    auditMock.mockImplementation(async (_p, _r, opts: { action: string }) => {
+      if (opts.action === 'SUBMISSION_CREATED') throw new Error('activity log down');
+    });
+
+    await call({ file: anyFile() });
+
+    expect(fsMock.unlinkSync).not.toHaveBeenCalled();
+  });
+
+  it('survives a failure in the earlier SUBMISSION_FILE_STORED audit too', async () => {
+    const { created } = setup();
+    auditMock.mockImplementation(async (_p, _r, opts: { action: string }) => {
+      if (opts.action === 'SUBMISSION_FILE_STORED') throw new Error('activity log down');
+    });
+
+    const res = await call({ file: anyFile() });
+
+    expect(res).toEqual({ ok: true, submission: created });
+    expect(fsMock.unlinkSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('partial file writes', () => {
+  it('cleans up a file whose write threw partway through', async () => {
+    // writeFileSync can create the file and then fail. The path is recorded before the
+    // write precisely so this partial file still gets removed.
+    setup();
+    fsMock.writeFileSync.mockImplementation(() => {
+      throw new Error('disk full mid-write');
+    });
+
     const res = await call({ file: new File(['<structure></structure>'], 'a.jff') });
 
-    // The row was created and its transaction committed - it cannot be rolled back here.
-    expect(tx.submission.create).toHaveBeenCalledTimes(1);
-    // ...but the outer catch treats the whole call as failed and deletes the file.
-    expect(fsMock.unlinkSync).toHaveBeenCalledWith(expect.stringContaining('stored-uuid.jff'));
     expect(res).toMatchObject({ ok: false, status: 500 });
+    expect(fsMock.unlinkSync).toHaveBeenCalledWith(expect.stringContaining('stored-uuid.jff'));
   });
 });
