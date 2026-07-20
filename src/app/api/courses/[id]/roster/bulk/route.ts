@@ -45,18 +45,28 @@ export const POST = withCourseAuth(
       if (!userIds.length)
         return NextResponse.json({ error: 'No users provided' }, { status: 400 });
 
-      // Enroll all users as STUDENT. Upsert on the (courseId, userId) unique key is
-      // atomic against the constraint, so a concurrent self-join creating the same
-      // row no longer aborts the whole batch with a P2002 (the old findFirst+create
-      // was a check-then-act race).
+      // Enroll all users as STUDENT. Every row gets the same role, so this is two
+      // set-based statements instead of one upsert per user: a 300-student paste was
+      // 300 sequential round trips.
+      //
+      // `skipDuplicates` keeps the insert atomic against the (courseId, userId) unique
+      // key, so a concurrent self-join creating the same row does not abort the batch
+      // with a P2002. The updateMany then resets anyone who was already on the roster
+      // under a different role, which is what makes re-running this safe. New rows are
+      // already STUDENT, so it is harmless to include them.
+      //
+      // Note: do NOT "parallelize" this with Promise.all inside the transaction. An
+      // interactive transaction runs on a single connection, so the queries serialize
+      // anyway and interleaving them risks deadlock.
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        for (const uid of userIds) {
-          await tx.roster.upsert({
-            where: { courseId_userId: { courseId, userId: uid } },
-            create: { courseId, userId: uid, role: 'STUDENT' },
-            update: { role: 'STUDENT' },
-          });
-        }
+        await tx.roster.createMany({
+          data: userIds.map((userId) => ({ courseId, userId, role: 'STUDENT' as const })),
+          skipDuplicates: true,
+        });
+        await tx.roster.updateMany({
+          where: { courseId, userId: { in: userIds } },
+          data: { role: 'STUDENT' },
+        });
       });
 
       // Log bulk enrollment action

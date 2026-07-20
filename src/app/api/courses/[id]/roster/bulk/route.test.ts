@@ -81,13 +81,17 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     expect(res.status).toBe(400);
   });
 
-  it('bulk enrolls users via upsert on the (courseId, userId) key', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-
-    const tx = { roster: { upsert: vi.fn() } };
+  const bulkTx = () => {
+    const tx = { roster: { createMany: vi.fn(), updateMany: vi.fn() } };
     prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
       cb(tx),
     );
+    return tx;
+  };
+
+  it('bulk enrolls users, skipping rows that already exist', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    const tx = bulkTx();
 
     const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
@@ -97,23 +101,17 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(200);
-    expect(tx.roster.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { courseId_userId: { courseId: 'c1', userId: 'u1' } },
-        create: expect.objectContaining({ role: 'STUDENT' }),
-        update: { role: 'STUDENT' },
-      }),
-    );
+    // skipDuplicates is what keeps a concurrent self-join from aborting the batch.
+    expect(tx.roster.createMany).toHaveBeenCalledWith({
+      data: [{ courseId: 'c1', userId: 'u1', role: 'STUDENT' }],
+      skipDuplicates: true,
+    });
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('upserts every user to the STUDENT role', async () => {
+  it('resets every listed user to STUDENT in a fixed number of queries', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-
-    const tx = { roster: { upsert: vi.fn() } };
-    prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
-      cb(tx),
-    );
+    const tx = bulkTx();
 
     const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
@@ -123,13 +121,15 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(200);
-    expect(tx.roster.upsert).toHaveBeenCalledTimes(4);
-    expect(tx.roster.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ role: 'STUDENT' }),
-        update: { role: 'STUDENT' },
-      }),
-    );
+    // Two statements for four users, and still two for four hundred: that is the point.
+    expect(tx.roster.createMany).toHaveBeenCalledTimes(1);
+    expect(tx.roster.createMany.mock.calls[0][0].data).toHaveLength(4);
+    // Anyone already on the roster under another role gets demoted to STUDENT, which
+    // is what makes re-running the bulk add idempotent.
+    expect(tx.roster.updateMany).toHaveBeenCalledWith({
+      where: { courseId: 'c1', userId: { in: ['u1', 'u2', 'u3', 'u4'] } },
+      data: { role: 'STUDENT' },
+    });
   });
 
   it('returns 400 when userIds is missing entirely (defaults to [])', async () => {
