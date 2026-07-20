@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { bestStartNodePosition } from '@/lib/jflap-layout';
-import { parseJflap, toElements, type MachineType } from '@/lib/jflap-parse';
+import { parseJflap, toElements, type MachineType, type Parsed } from '@/lib/jflap-parse';
 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
 
@@ -94,6 +94,9 @@ export function useJffCytoscape({
   const [error, setError] = useState<string | null>(null);
   const [honorPositions, setHonorPositions] = useState(honorPositionsDefault);
   const [type, setType] = useState<MachineType>('unknown');
+  // Kept so the viewer can render a text description of the machine; the canvas alone
+  // is not a usable representation for a screen reader.
+  const [parsed, setParsed] = useState<Parsed | null>(null);
 
   // Customization variables
   const FIT_PADDING = 80;
@@ -167,6 +170,7 @@ export function useJffCytoscape({
 
         const parsed = parseJflap(text);
         setType(parsed.type);
+        setParsed(parsed);
         const elements = toElements(parsed, epsSymbol, honorPositions);
 
         if (!containerRef.current) {
@@ -578,6 +582,7 @@ export function useJffCytoscape({
     containerRef,
     error,
     type,
+    parsed,
     honorPositions,
     toggleHonorPositions: () => setHonorPositions((p) => !p),
     zoomIn,

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { type MachineType } from '@/lib/jflap-parse';
+import { describeMachine, type MachineType } from '@/lib/jflap-parse';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import {
   Grid,
@@ -57,7 +57,15 @@ export function JffCytoscapeViewer({
     downloadSVG,
     downloadPNG,
     copyPNG,
+    parsed,
   } = useJffCytoscape({ src, title, epsSymbol, darkMode, honorPositionsDefault });
+
+  // Non-visual alternative. The canvas is unreadable to a screen reader, and reading
+  // automata is the point of this viewer, so the same machine is also published as text:
+  // a one-line summary attached to the graph, plus the full state/transition listing.
+  const description = parsed ? describeMachine(parsed, epsSymbol) : null;
+  const summaryId = 'jff-graph-summary';
+  const [showText, setShowText] = useState(false);
 
   const [grid, setGrid] = useState(showGridDefault);
 
@@ -204,13 +212,69 @@ export function JffCytoscapeViewer({
         </div>
       </div>
 
+      {/* The rendered graph. role="img" + a description keeps a screen reader from
+          wandering into cytoscape's internals while still conveying what it shows. */}
       <div
         ref={containerRef}
         style={{ height, ...backgroundStyle }}
         className="bg-card relative overflow-hidden"
+        role="img"
+        aria-label={title ? `Diagram of ${title}` : 'Automaton diagram'}
+        aria-describedby={description ? summaryId : undefined}
       >
         {error ? <div className="p-4 text-sm text-red-600">{error}</div> : null}
       </div>
+
+      {description ? (
+        <div className="border-t px-3 py-2">
+          <p id={summaryId} className="text-muted-foreground text-xs">
+            {description.summary}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setShowText((v) => !v)}
+            aria-expanded={showText}
+            aria-controls="jff-text-representation"
+            className="text-foreground focus-visible:ring-ring mt-1 rounded text-xs underline focus-visible:ring-2 focus-visible:outline-none"
+          >
+            {showText ? 'Hide text representation' : 'Show text representation'}
+          </button>
+
+          {/* Kept mounted so aria-controls always resolves. */}
+          <div id="jff-text-representation" hidden={!showText} className="mt-2 text-xs">
+            {description.isEmpty ? (
+              <p className="text-muted-foreground">
+                This file contains no states, so there is nothing to describe.
+              </p>
+            ) : (
+              <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
+                <dt className="text-muted-foreground">States</dt>
+                <dd>{description.stateNames.join(', ')}</dd>
+
+                <dt className="text-muted-foreground">Initial state</dt>
+                <dd>{description.initialState ?? 'Not set'}</dd>
+
+                <dt className="text-muted-foreground">Final states</dt>
+                <dd>{description.finalStates.length ? description.finalStates.join(', ') : 'None'}</dd>
+
+                <dt className="text-muted-foreground">Transitions</dt>
+                <dd>
+                  {description.transitionLines.length === 0 ? (
+                    'None'
+                  ) : (
+                    <ul className="list-none space-y-0.5">
+                      {description.transitionLines.map((line, i) => (
+                        <li key={`${line}-${i}`}>{line}</li>
+                      ))}
+                    </ul>
+                  )}
+                </dd>
+              </dl>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
