@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { canManageCourse } from '@/lib/permissions';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
@@ -54,8 +55,39 @@ export const GET = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
 
-      if (!assignment.isPublished && !(await canManageCourse(user, courseId))) {
+      const isStaff = await canManageCourse(user, courseId);
+
+      if (!assignment.isPublished && !isStaff) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      // Published is not enough. Course membership got the caller this far, but a
+      // student must also be in the assignment's audience and past their unlock time -
+      // the same two gates the assignment, review-data and submission routes apply.
+      // Without them, any enrolled student who guesses a published assignment id learns
+      // it exists and gets its problem ids back, which are then useful keys for probing
+      // elsewhere.
+      if (!isStaff) {
+        const gate = await resolveStudentContentGate(assignment.id, userId);
+
+        // Not in the audience: mask exactly as if it did not exist.
+        if (!gate.assigned) {
+          return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+        }
+
+        // Assigned but not open yet: the assignment legitimately exists for them, so
+        // answer with an empty context rather than an error the client has to special
+        // case. Nothing here is theirs yet anyway.
+        if (gate.locked) {
+          return NextResponse.json({
+            assignmentGrade: null,
+            problemGrades: {},
+            submissionCount: 0,
+            submissionsByProblem: {},
+            commentsByProblem: {},
+            locked: true,
+          });
+        }
       }
 
       const problemIds = assignment.problems.map((problem) => problem.problemId);

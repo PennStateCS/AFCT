@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMock = vi.hoisted(() => vi.fn());
+const contentGateMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   assignment: { findFirst: vi.fn() },
   roster: { findFirst: vi.fn() },
@@ -11,6 +12,9 @@ const prismaMock = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/assignment-student-gate', () => ({
+  resolveStudentContentGate: contentGateMock,
+}));
 
 import { GET } from './route';
 
@@ -19,6 +23,8 @@ const url = 'http://localhost/api/courses/c1/assignments/a1/student-context';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  // Assigned and open by default; the audience/unlock cases override it.
+  contentGateMock.mockResolvedValue({ assigned: true, locked: false, unlockAt: null });
 });
 
 describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
@@ -166,5 +172,52 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
     const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
     expect(res.status).toBe(500);
+  });
+
+  it('masks an assignment the student is not assigned as 404', async () => {
+    // Course membership plus published used to be the whole check, so any enrolled
+    // student who guessed a published id got back the assignment's problem ids.
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      isPublished: true,
+      problems: [{ problemId: 'p1' }, { problemId: 'p2' }],
+    });
+    contentGateMock.mockResolvedValue({ assigned: false, locked: true, unlockAt: null });
+
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+
+    expect(res.status).toBe(404);
+    // Nothing was queried for a caller who should not know it exists.
+    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty locked context before the student unlock time', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      isPublished: true,
+      problems: [{ problemId: 'p1' }],
+    });
+    contentGateMock.mockResolvedValue({ assigned: true, locked: true, unlockAt: new Date() });
+
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    const body = await res.json();
+
+    // 200 rather than 404: it legitimately exists for them, it just is not open yet.
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({ locked: true, submissionCount: 0, problemGrades: {} });
+    // The problem ids must not come back either - they are useful keys elsewhere.
+    expect(body.submissionsByProblem).toEqual({});
   });
 });
