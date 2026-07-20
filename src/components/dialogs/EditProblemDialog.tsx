@@ -29,6 +29,7 @@ import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
+import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
 
 type EditProblemDialogProps = {
   courseIsArchived: boolean;
@@ -230,12 +231,12 @@ export function EditProblemDialog({
           onSubmit={step === LAST_STEP ? handleSubmit(onSubmit) : (e) => e.preventDefault()}
           className="space-y-4"
           onKeyDown={(e) => {
-            const el = e.target as HTMLElement;
-            const isMultiline = el.tagName === 'TEXTAREA' || el.isContentEditable;
-            if (e.key === 'Enter' && step < LAST_STEP && !isMultiline) {
-              e.preventDefault();
-              void next();
-            }
+            // Enter advances only from a single-line text input; every other control
+            // (select, file, radio, combobox, textarea) keeps its native Enter behavior.
+            if (e.key !== 'Enter' || step >= LAST_STEP) return;
+            if (!shouldEnterAdvanceStep(e.target)) return;
+            e.preventDefault();
+            void next();
           }}
         >
           <div className="min-h-[320px] space-y-4">

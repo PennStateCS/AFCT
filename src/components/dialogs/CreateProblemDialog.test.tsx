@@ -150,6 +150,31 @@ describe('CreateProblemDialog', () => {
     expect(fileInput).toBeDisabled();
   });
 
+  it('does not advance the wizard when Enter is pressed on the problem-type select', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <CreateProblemDialog
+        open
+        setOpen={vi.fn()}
+        courseId="course-1"
+        courseIsArchived={false}
+        onCreated={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Title'), 'DFA #1');
+    await clickNext(user); // -> Type
+
+    const typeSelect = screen.getByLabelText('Problem Type');
+    typeSelect.focus();
+    await user.keyboard('{Enter}');
+
+    // Still on the Type step: Enter belongs to the select, not the wizard.
+    expect(screen.getByLabelText('Problem Type')).toBeInTheDocument();
+    expect(document.getElementById('answer-file')).toBeNull();
+  });
+
   it('adds an assignment-settings step and associates the new problem with those settings', async () => {
     const user = userEvent.setup();
     const onCreated = vi.fn();

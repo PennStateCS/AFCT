@@ -29,6 +29,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
 import { CourseDateTimeField } from './CourseDateTimeField';
+import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
 type FormValues = z.input<typeof CreateCourseFormSchema>;
@@ -174,11 +175,12 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
           onSubmit={step === LAST_STEP ? handleSubmit(onSubmit) : (e) => e.preventDefault()}
           className="space-y-4"
           onKeyDown={(e) => {
-            // Enter advances the wizard instead of submitting a half-built course.
-            if (e.key === 'Enter' && step < LAST_STEP) {
-              e.preventDefault();
-              void next();
-            }
+            // Enter advances only from a single-line text input; every other control
+            // (select, file, radio, combobox, textarea) keeps its native Enter behavior.
+            if (e.key !== 'Enter' || step >= LAST_STEP) return;
+            if (!shouldEnterAdvanceStep(e.target)) return;
+            e.preventDefault();
+            void next();
           }}
         >
           {/* A stable min-height keeps the dialog from resizing between steps. */}

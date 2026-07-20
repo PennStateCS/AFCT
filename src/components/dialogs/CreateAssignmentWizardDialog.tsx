@@ -28,6 +28,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import type { GroupSetSummaryDTO } from '@/lib/group-set-service';
 import type { Assignment } from '@prisma/client';
+import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
 
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 
@@ -244,14 +245,12 @@ export function CreateAssignmentWizardDialog({
           onSubmit={step === LAST_STEP ? handleSubmit(onSubmit) : (e) => e.preventDefault()}
           className="space-y-4"
           onKeyDown={(e) => {
-            // Enter advances the wizard from a single-line field, but must not do so from
-            // a textarea (where Enter inserts a newline) or any editable rich control.
-            const el = e.target as HTMLElement;
-            const isMultiline = el.tagName === 'TEXTAREA' || el.isContentEditable;
-            if (e.key === 'Enter' && step < LAST_STEP && !isMultiline) {
-              e.preventDefault();
-              void next();
-            }
+            // Enter advances only from a single-line text input; every other control
+            // (select, file, radio, combobox, textarea) keeps its native Enter behavior.
+            if (e.key !== 'Enter' || step >= LAST_STEP) return;
+            if (!shouldEnterAdvanceStep(e.target)) return;
+            e.preventDefault();
+            void next();
           }}
         >
           <div className="min-h-[320px] space-y-4">
