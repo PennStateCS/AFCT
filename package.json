@@ -29,6 +29,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "docs:api": "node scripts/generate-openapi.mjs",
     "docs:types": "openapi-typescript docs-dist/openapi.json -o src/types/api.ts",
     "docs": "npm run docs:api && npm run docs:types",

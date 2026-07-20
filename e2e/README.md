@@ -88,3 +88,11 @@ Several triggers render visible text that is **not** their accessible name, so
 `getByRole('button', { name: <visible text> })` silently matches nothing. The faculty
 multiselect is the example that blocked workflow 1. Where that bites, either match on
 text (`locator('button', { hasText: ... })`) or add a real `aria-label` to the component.
+
+## Related: the integration suite
+
+`npm run test:integration` runs `src/**/*.integration.test.ts` against the same
+`afct_test` database via `vitest.integration.config.ts`. Those are Vitest, not
+Playwright, and exist for questions only a real Postgres can answer (claim exclusivity,
+constraints, cascades). They are excluded from the default `vitest run` so CI stays
+database-free.

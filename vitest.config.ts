@@ -6,6 +6,10 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // Integration specs need a real Postgres and live in their own project
+    // (vitest.integration.config.ts, run via `npm run test:integration`). CI runs this
+    // config with no database, so they must never be collected here.
+    exclude: ['**/node_modules/**', '**/*.integration.test.ts'],
     setupFiles: ['src/test/setup.ts'],
     // Auto-restore env vars stubbed with vi.stubEnv between tests, so those stubs
     // need no manual teardown. (Globals are intentionally NOT auto-unstubbed:

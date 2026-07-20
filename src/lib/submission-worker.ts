@@ -204,6 +204,48 @@ async function reapStuckSubmissions() {
   }
 }
 
+/**
+ * Claim a submission for this worker. Returns false if someone else already has it.
+ *
+ * The `status: 'PENDING'` guard in the WHERE is the entire claim: Postgres evaluates it
+ * under row lock, so of two workers racing the same row exactly one sees PENDING and
+ * updates it, and the loser matches zero rows. There is no SELECT-then-UPDATE window to
+ * lose. Incrementing `attempts` in the same statement is what makes the fencing token
+ * below meaningful.
+ *
+ * Exported so the exclusivity can be tested against a real database - the guarantee is
+ * a property of Postgres, and a mocked updateMany would assert nothing.
+ */
+export async function claimSubmission(id: string): Promise<boolean> {
+  const claimed = await prisma.submission.updateMany({
+    where: { id, status: 'PENDING' },
+    data: { status: 'PROCESSING', attempts: { increment: 1 } },
+  });
+  return claimed.count > 0;
+}
+
+/**
+ * A post-claim write, fenced on the `attempts` value the row carried when we claimed it.
+ *
+ * If the row was reaped and re-claimed by another worker while we were evaluating, the
+ * re-claim incremented `attempts`, so our stale write matches nothing instead of
+ * clobbering the new owner's result. Returns false when that happens.
+ *
+ * `claimedAttempts === null` means we never learned the token (we failed before reading
+ * the row), so the write is unfenced - there is nothing to be stale relative to.
+ */
+export async function writeIfStillOwned(
+  id: string,
+  claimedAttempts: number | null,
+  data: Prisma.SubmissionUpdateManyMutationInput,
+): Promise<boolean> {
+  const written = await prisma.submission.updateMany({
+    where: claimedAttempts !== null ? { id, attempts: claimedAttempts } : { id },
+    data,
+  });
+  return written.count > 0;
+}
+
 async function runWorkerLoop() {
   // Scale down: if concurrency was lowered, retire this loop.
   if (loopCount > desiredWorkers) {
@@ -271,15 +313,8 @@ async function runWorkerLoop() {
       return;
     }
 
-    // The PENDING guard in the WHERE is the actual claim: the row flips to
-    // PROCESSING in a single statement, so only one worker can win it.
-    const claimed = await prisma.submission.updateMany({
-      where: { id: nextSubmission.id, status: 'PENDING' },
-      data: { status: 'PROCESSING', attempts: { increment: 1 } },
-    });
-
-    // count === 0 means another loop/instance beat us to it. Move on.
-    if (claimed.count === 0) {
+    // false means another loop/instance beat us to it. Move on.
+    if (!(await claimSubmission(nextSubmission.id))) {
       scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
       return;
     }
@@ -328,20 +363,17 @@ async function evaluateSubmission(id: string) {
     const evalConfig = await getEvaluatorConfig();
     const evaluation = await runJavaEvaluator(submission, evalConfig);
 
-    const written = await prisma.submission.updateMany({
-      where: { id, attempts: claimedAttempts },
-      data: {
-        feedback: evaluation.feedback,
-        correct: evaluation.correct,
-        evaluationRaw:
-          evaluation.evaluationRaw === null
-            ? Prisma.JsonNull
-            : (evaluation.evaluationRaw as Prisma.InputJsonValue),
-        status: evaluation.status,
-      },
+    const written = await writeIfStillOwned(id, claimedAttempts, {
+      feedback: evaluation.feedback,
+      correct: evaluation.correct,
+      evaluationRaw:
+        evaluation.evaluationRaw === null
+          ? Prisma.JsonNull
+          : (evaluation.evaluationRaw as Prisma.InputJsonValue),
+      status: evaluation.status,
     });
 
-    if (written.count === 0) {
+    if (!written) {
       // The row was reran/reaped and re-claimed by another worker while we
       // evaluated; discard our stale result rather than overwrite theirs.
       console.warn(
@@ -425,18 +457,18 @@ async function evaluateSubmission(id: string) {
 
     console.error(`[SubmissionWorker] Failed submission ${id}:`, error);
 
-    await prisma.submission.updateMany({
-      // Fenced on the claim attempts (when known) so a stale worker can't flip a
-      // row another worker has since re-claimed.
-      where: claimedAttempts !== null ? { id, attempts: claimedAttempts } : { id },
-      data: giveUp
+    // Fenced so a stale worker can't flip a row another worker has since re-claimed.
+    await writeIfStillOwned(
+      id,
+      claimedAttempts,
+      giveUp
         ? {
             status: 'FAILED',
             feedback: 'Autograder failed while processing this submission.',
             evaluationRaw: message as Prisma.InputJsonValue,
           }
         : { status: 'PENDING' },
-    });
+    );
   }
 }
 
