@@ -17,6 +17,7 @@ import {
 } from '@/lib/security/rate-limiter';
 import { readFormData } from '@/lib/api/request';
 import { UserProfileApiSchema } from '@/schemas/profile';
+import { invalidateSessionUser } from '@/lib/session-user-cache';
 
 const uploadDir = path.join('/private', 'uploads', 'pfps');
 
@@ -165,6 +166,10 @@ export async function POST(req: Request) {
       }
       throw updateError;
     }
+
+    // Name/avatar/crop are served from the session cache, so refresh it immediately
+    // instead of letting the user stare at their old avatar for the TTL.
+    invalidateSessionUser(session.user.id);
 
     // Commit succeeded: drop the previous file when it was replaced or cleared.
     if ((avatarBuffer || (deleteAvatar && avatarFileName === null)) && currentUser.avatar) {

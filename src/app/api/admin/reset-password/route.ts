@@ -7,6 +7,7 @@ import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
+import { invalidateSessionUser } from '@/lib/session-user-cache';
 
 const ResetPasswordBody = z.object({
   userId: z.string().min(1),
@@ -64,6 +65,9 @@ export const POST = withAdminAuth(
           passwordChangedAt: new Date(),
         },
       });
+      // A reset must terminate this user's existing sessions immediately, so drop the
+      // cached session row rather than waiting for it to expire.
+      invalidateSessionUser(userId);
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

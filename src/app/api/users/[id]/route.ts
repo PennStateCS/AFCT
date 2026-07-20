@@ -17,6 +17,7 @@ import {
 } from '@/lib/security/rate-limiter';
 import { readFormData, readJson } from '@/lib/api/request';
 import { UserUpdateJsonApiSchema, UserUpdateFormApiSchema } from '@/schemas/user';
+import { invalidateSessionUser } from '@/lib/session-user-cache';
 
 // Avatars are stored here; the client-supplied name is never used to build a path.
 const pfpsDir = path.join('/private', 'uploads', 'pfps');
@@ -293,6 +294,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       await safeUnlinkInDir(pfpsDir, userRecord.avatar);
     }
 
+    // This edit can flip isAdmin or inactive, so the cached session row must go now:
+    // a de-admined or disabled account should not keep working until the TTL lapses.
+    invalidateSessionUser(userId);
+
     // Record exactly what changed (before → after). Admin-flag and active-status
     // changes especially matter when an admin edits another account.
     const AUDITED_USER_FIELDS = [
@@ -411,6 +416,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     await prisma.user.delete({
       where: { id: userId },
     });
+    invalidateSessionUser(userId);
 
     // Log activity: record who was deleted, since the user row is now gone.
     await createEnhancedActivityLog(prisma, req, {

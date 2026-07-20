@@ -7,6 +7,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getClientIpFromHeaders } from '@/lib/ip-utils';
 import { getClientIp } from '@/lib/security/rate-limiter';
 import { verifyCredentials } from '@/lib/credentials';
+import { getSessionUser } from '@/lib/session-user-cache';
 import { isSessionIdleExpired } from '@/lib/session-timeout';
 import { getServerIdleTimeoutMs } from '@/lib/session-timeout.server';
 import { requireAuthSecret } from '@/lib/auth-secret';
@@ -123,21 +124,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // and, critically, to catch an account that has since been deleted or
         // disabled so a stale JWT can't keep granting access (especially admin).
         try {
-          const freshUser = await prisma.user.findUnique({
-            where: { id: token.id as string },
-            select: {
-              firstName: true,
-              lastName: true,
-              isAdmin: true,
-              avatar: true,
-              temporaryPassword: true,
-              inactive: true,
-              passwordChangedAt: true,
-              cropX: true,
-              cropY: true,
-              zoom: true,
-            },
-          });
+          // Served from a seconds-long cache so one dashboard load's parallel API
+          // calls share a single read. Deactivation, password changes and admin
+          // changes evict the entry, so revocation stays effectively immediate;
+          // the TTL is only the backstop. See lib/session-user-cache.
+          const freshUser = await getSessionUser(token.id as string);
 
           // Revoke a session whose password changed after the token was issued
           // (a reset/change must terminate existing sessions, not just future ones).

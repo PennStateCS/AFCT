@@ -8,6 +8,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 import { readJson } from '@/lib/api/request';
+import { invalidateSessionUser } from '@/lib/session-user-cache';
 
 const ChangePasswordBody = z.object({
   oldPassword: z.string().min(1),
@@ -109,6 +110,8 @@ export async function POST(req: NextRequest) {
       where: { id: userId },
       data: { password: hashedPassword, temporaryPassword: false, passwordChangedAt: new Date() },
     });
+    // Revoke sibling sessions right away rather than at TTL.
+    invalidateSessionUser(userId);
 
     await createEnhancedActivityLog(prisma, req, {
       userId,
