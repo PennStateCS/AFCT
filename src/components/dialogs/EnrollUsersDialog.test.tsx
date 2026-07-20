@@ -54,6 +54,54 @@ describe('EnrollUsersDialog', () => {
     expect(setOpen).toHaveBeenCalledWith(false);
   });
 
+  it('moves real focus through the list with the arrow keys', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <EnrollUserDialog
+        open
+        setOpen={vi.fn()}
+        courseIsArchived={false}
+        users={users}
+        onEnroll={vi.fn()}
+      />,
+    );
+
+    const ada = screen.getByLabelText(/Ada\s+Lovelace/);
+    const alan = screen.getByLabelText(/Alan\s+Turing/);
+
+    // Arrowing from the search box focuses the row itself, so a screen reader
+    // announces who Enter would act on (the old code only repainted a highlight).
+    screen.getByLabelText('Search users').focus();
+    await user.keyboard('{ArrowDown}');
+    expect(ada).toHaveFocus();
+
+    await user.keyboard('{ArrowDown}');
+    expect(alan).toHaveFocus();
+
+    // Wraps around, and the list stays a single tab stop (roving tabindex).
+    await user.keyboard('{ArrowDown}');
+    expect(ada).toHaveFocus();
+    expect(ada).toHaveAttribute('tabindex', '0');
+    expect(alan).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('does not put an inert tab stop on each row label', () => {
+    render(
+      <EnrollUserDialog
+        open
+        setOpen={vi.fn()}
+        courseIsArchived={false}
+        users={users}
+        onEnroll={vi.fn()}
+      />,
+    );
+
+    for (const label of document.querySelectorAll('label[for^="enroll-checkbox-"]')) {
+      expect(label.hasAttribute('tabindex')).toBe(false);
+    }
+  });
+
   it('disables the enroll button when the course is archived', async () => {
     const user = userEvent.setup();
 
