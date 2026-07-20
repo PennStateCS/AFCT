@@ -35,6 +35,22 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+          # Bounds fork bombs from a hostile submission; generous enough for Node plus
+          # a JVM per concurrent evaluation and its cfganalyzer child.
+          pids: 512
+
+    # This container grades student-supplied files (the Java evaluator and the native
+    # cfganalyzer run here), so it gets the tightest posture of the stack. The image
+    # already runs as the non-root `node` user, listens on 3000 (no privileged port)
+    # and never chowns in production, so it needs no Linux capabilities at all.
+    # nginx/postgres/updater are deliberately NOT hardened this way: their entrypoints
+    # start as root to bind :443, chown the data dir, or drive the Docker socket.
+    cap_drop:
+      - ALL
+    security_opt:
+      # Blocks privilege escalation through setuid binaries if the evaluator is ever
+      # exploited by a malicious submission.
+      - no-new-privileges:true
 
     env_file:
       - .env.production
@@ -54,6 +70,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+    networks:
+      - frontend
+      - backend
 
     expose:
       - '3000'
@@ -96,6 +116,9 @@ services:
     depends_on:
       app:
         condition: service_healthy
+
+    networks:
+      - frontend
 
     ports:
       - '80:80'
@@ -145,6 +168,9 @@ services:
       - -c
       - log_lock_waits=on
 
+    networks:
+      - backend
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -182,6 +208,9 @@ services:
       BACKUP_ENABLED: 'true'
       BACKUP_HOUR: '2'
       BACKUP_RETENTION_DAYS: '14'
+
+    networks:
+      - backend
 
     volumes:
       - db_backups:/backups
@@ -226,6 +255,11 @@ services:
       AFCT_APP_SERVICE: app
       AFCT_APP_CONTAINER: afct-app
 
+    # Needs registry egress to pull the new image, so it sits on the external-facing
+    # network. It has no reason to reach the database.
+    networks:
+      - frontend
+
     volumes:
       # The Docker socket: the whole reason this service exists. Keep it OFF the
       # app container.
@@ -250,6 +284,22 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+# Two networks so the database is not reachable from -- and cannot reach -- the
+# outside world:
+#   frontend: normal bridge, has egress. nginx (public edge), the app (needs outbound
+#             for Let's Encrypt/ACME and hCaptcha siteverify) and the updater (image
+#             pulls) live here.
+#   backend:  internal, no gateway and therefore no internet in either direction.
+#             Postgres and the backup sidecar sit only here; the app joins it to reach
+#             the DB. If the evaluator running in the app container is ever exploited,
+#             Postgres is still unreachable from the internet and cannot call out.
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres_data:
