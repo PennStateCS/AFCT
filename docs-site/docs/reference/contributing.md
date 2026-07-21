@@ -1,7 +1,7 @@
 # Contributing changes
 
 This guide is for anyone writing code for AFCT, especially student research assistants.
-It explains how to work in a branch, open a pull request, and — most importantly — how to
+It explains how to work in a branch, open a pull request, and, most importantly, how to
 check your work **before** it reaches `main` so the automated jobs pass on the first try.
 
 ## Why jobs fail after a merge

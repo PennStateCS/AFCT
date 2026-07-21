@@ -48,7 +48,7 @@ The secret is write-only and is not displayed after saving. Use **Remove saved s
 
 ## TLS Certificate
 
-AFCT creates a self-signed certificate during the first startup, so HTTPS works immediately — but browsers show a warning because the certificate is not trusted. A self-signed certificate is reasonable for restricted testing; a public or institution-facing deployment should install a certificate from a trusted certificate authority.
+AFCT creates a self-signed certificate during the first startup, so HTTPS works immediately, but browsers show a warning because the certificate is not trusted. A self-signed certificate is reasonable for restricted testing; a public or institution-facing deployment should install a certificate from a trusted certificate authority.
 
 The **TLS Certificate** tab shows the current certificate (trusted, self-signed, or expired, plus the domain and expiry) and supports four setup methods:
 
@@ -57,7 +57,7 @@ The **TLS Certificate** tab shows the current certificate (trusted, self-signed,
 - Create a self-signed certificate
 - Upload an existing PEM certificate and private key
 
-A new certificate normally becomes active within about 15 seconds — no container restart is needed. If a certificate is invalid, AFCT rejects it and keeps the current one, so the site stays reachable. The private key is never displayed after it is uploaded.
+A new certificate normally becomes active within about 15 seconds, and no container restart is needed. If a certificate is invalid, AFCT rejects it and keeps the current one, so the site stays reachable. The private key is never displayed after it is uploaded.
 
 ### Get a free certificate with Let's Encrypt
 
@@ -66,7 +66,7 @@ If the server is reachable from the public internet, AFCT can obtain and automat
 Requirements:
 
 - A domain name that resolves to this server in public DNS.
-- Port 80 reachable from the internet — Let's Encrypt fetches a one-time file over plain HTTP at that domain to confirm you control it.
+- Port 80 reachable from the internet. Let's Encrypt fetches a one-time file over plain HTTP at that domain to confirm you control it.
 - The domain should match your configured URL (`NEXTAUTH_URL`).
 
 Steps:

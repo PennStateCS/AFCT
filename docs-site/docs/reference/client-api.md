@@ -6,7 +6,7 @@ Breaking contract changes must use a new version prefix, such as `/api/client/v2
 
 ## Full API reference
 
-The complete, auto-generated **[API Reference](/api-reference/afct-dashboard-api)** documents every AFCT endpoint — both the browser/dashboard API and this client API — with request and response schemas, parameters, and status codes. It is generated from the OpenAPI annotations in the server code, so it always matches the deployed build (run `npm run docs` at the repo root to regenerate it).
+The complete, auto-generated **[API Reference](/api-reference/afct-dashboard-api)** documents every AFCT endpoint (both the browser/dashboard API and this client API) with request and response schemas, parameters, and status codes. It is generated from the OpenAPI annotations in the server code, so it always matches the deployed build (run `npm run docs` at the repo root to regenerate it).
 
 This page is the hand-written guide to the stable native-client surface (`/api/client/v1`): how to authenticate, the typical request flow, and the guarantees a client can rely on. Use it for orientation, and the API Reference for the exact shape of each request and response.
 

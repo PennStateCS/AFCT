@@ -18,7 +18,7 @@ upgrade to it:
 - A GitHub Release for the tag.
 
 By contrast, the `main` tag is a **rolling** build that moves forward on every merge. It
-is not a release — the installer deploys published releases only.
+is not a release; the installer deploys published releases only.
 
 A release is cut by pushing a `vX.Y.Z` git tag. That is the only trigger for the
 `.github/workflows/release.yml` workflow; ordinary pushes to `main` never cut a release.
@@ -34,7 +34,7 @@ A release is cut by pushing a `vX.Y.Z` git tag. That is the only trigger for the
    gh run list --branch main --workflow ci.yml --limit 5
    ```
 
-3. **Avoid `[skip ci]` commits — this is the common footgun.** The deploy pipeline
+3. **Avoid `[skip ci]` commits; this is the common footgun.** The deploy pipeline
    appends automated `chore(release): pin prod image to sha256:… [skip ci]` commits to
    `main`. GitHub honors `[skip ci]` for **all** workflows, including a tag push, so if
    your tag points at one of those bot commits the release workflow **silently never
@@ -91,7 +91,7 @@ gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -
 ```
 
 When it finishes, the new version appears in `deploy/versions.json`, in the GitHub
-Releases list, and — for existing installs — in the in-app Updates tab.
+Releases list, and (for existing installs) in the in-app Updates tab.
 
 ## Deploying the release
 
@@ -104,7 +104,7 @@ AFCT_APP_TAG=v0.1.3 sh install.sh
 
 **Existing install (in-app).** In the app, go to **Admin → System Settings → Updates**,
 pick the version, and click **Upgrade**. The stack backs up the database, pulls the new
-images, recreates, and health-checks — rolling back automatically if the new version is
+images, recreates, and health-checks, rolling back automatically if the new version is
 unhealthy.
 
 **Host-side completion.** The in-app updater can't replace itself or apply a changed
@@ -122,7 +122,7 @@ See [Update AFCT](./updates.md) for the operator-facing update flow and
 ## Rolling back
 
 - **In-app:** the Updates tab lists restore points; downgrading restores the database
-  backup taken before that version and runs the older image. This is destructive — it
+  backup taken before that version and runs the older image. This is destructive: it
   discards everything created since that backup.
 - **By pin:** set `AFCT_APP_TAG` back to a previously released tag and re-run
   `sh install.sh update`.

@@ -3,9 +3,9 @@
 AFCT throttles authentication to slow down password guessing and account enumeration.
 Two independent layers work together, plus an optional captcha step:
 
-- **Per-account lockout** — tied to the email being signed in to. Admin-configurable,
+- **Per-account lockout**, tied to the email being signed in to. Admin-configurable,
   and the resulting lock is persisted so it survives a restart.
-- **Per-IP rate limiting** — tied to the client IP. Fixed limits, held in memory.
+- **Per-IP rate limiting**, tied to the client IP. Fixed limits, held in memory.
 
 For each sign-in attempt the strictest outcome across the buckets wins: if either the
 account or the IP bucket is **blocked**, the attempt is blocked; otherwise a **challenge**
@@ -20,10 +20,10 @@ Relevant code: `src/lib/security/rate-limiter.ts` (the buckets), `src/lib/login-
 Failed sign-ins to one account are counted in a per-account bucket keyed on the email
 address, over a rolling 15-minute window. Within that window the response escalates:
 
-1. **Friction** after a few failures — a short randomized server-side delay.
-2. **Captcha challenge** after more failures — the login form must solve an hCaptcha
+1. **Friction** after a few failures: a short randomized server-side delay.
+2. **Captcha challenge** after more failures: the login form must solve an hCaptcha
    (only when hCaptcha is configured; see the Captcha tab in System Settings).
-3. **Lockout** once the attempts reach the configured maximum — the account is blocked
+3. **Lockout** once the attempts reach the configured maximum: the account is blocked
    for the configured duration.
 
 Two parts of this are **admin-configurable** in **System Settings → General**, and
@@ -41,7 +41,7 @@ disable protection (`getLoginLockoutPolicy`).
 ### Persisted lock
 
 When an account trips the lockout, AFCT also writes the lock to the `User.lockedUntil`
-column — a future instant. The login gate rejects the attempt **before** checking the
+column, a future instant. The login gate rejects the attempt **before** checking the
 password whenever `lockedUntil` is in the future, then the lock clears itself once that
 instant passes (no background sweeper). Persisting it this way means a lock:
 
@@ -71,7 +71,7 @@ Attempts from one client IP are counted in per-IP buckets. These limits are **fi
 
 The login form calls `/api/auth/login-check` to *peek* at the current state (without
 counting an attempt) so it can tell the user whether a failed sign-in was a captcha
-challenge, a temporary block, or just a wrong password — NextAuth otherwise reports only
+challenge, a temporary block, or just a wrong password. NextAuth otherwise reports only
 a generic error. The authoritative counting happens in the credentials `authorize` path.
 
 ## Deployment caveat: single instance
@@ -85,5 +85,5 @@ supported deployment (a single app container) but has two consequences:
   lockout non-global. To scale horizontally, back the buckets with a shared store (e.g.
   Redis) or put a platform rate limiter in front of auth.
 
-The persisted account lock (`User.lockedUntil`) is the exception — it lives in the
+The persisted account lock (`User.lockedUntil`) is the exception: it lives in the
 database, so that portion already behaves correctly across restarts and instances.
