@@ -142,9 +142,10 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
-      // Prism bundles bash/json/yaml by default but not powershell, which several
-      // Windows setup pages use; register it so those blocks highlight.
-      additionalLanguages: ['powershell'],
+      // prism-react-renderer's default bundle is small: JSON highlights, but bash
+      // and powershell do not, and the setup guides are almost all shell. Register
+      // them so those ```bash / ```powershell blocks actually highlight.
+      additionalLanguages: ['bash', 'powershell'],
     },
   } satisfies Preset.ThemeConfig,
 };

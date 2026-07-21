@@ -28,55 +28,61 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Student Guide',
-      items: ['student/overview', 'student/client'],
-    },
-    {
-      type: 'category',
-      label: 'Faculty Guide',
+      label: 'Guides',
       items: [
         {
           type: 'category',
-          label: 'Course',
-          link: {
-            type: 'doc',
-            id: 'faculty/course',
-          },
+          label: 'Student Guide',
+          items: ['student/overview', 'student/client'],
+        },
+        {
+          type: 'category',
+          label: 'Faculty Guide',
           items: [
             {
               type: 'category',
-              label: 'Assignments',
+              label: 'Course',
               link: {
                 type: 'doc',
-                id: 'faculty/assignments',
+                id: 'faculty/course',
               },
-              items: ['faculty/submissions'],
+              items: [
+                {
+                  type: 'category',
+                  label: 'Assignments',
+                  link: {
+                    type: 'doc',
+                    id: 'faculty/assignments',
+                  },
+                  items: ['faculty/submissions'],
+                },
+                'faculty/problems',
+                'faculty/roster',
+                'faculty/grades',
+                'faculty/groups',
+                'faculty/activity',
+                'faculty/settings',
+              ],
             },
-            'faculty/problems',
-            'faculty/roster',
-            'faculty/grades',
-            'faculty/groups',
-            'faculty/activity',
-            'faculty/settings',
           ],
         },
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Admin Guide',
-      link: {
-        type: 'doc',
-        id: 'guides/admin',
-      },
-      items: [
-        'admin/courses',
-        'admin/development-tests',
-        'admin/submission-logs',
-        'admin/system-logs',
-        'admin/system-settings',
-        'admin/system-status',
-        'admin/user-accounts',
+        {
+          type: 'category',
+          label: 'Admin Guide',
+          link: {
+            type: 'doc',
+            id: 'guides/admin',
+          },
+          items: [
+            'admin/courses',
+            'admin/development-tests',
+            'admin/submission-logs',
+            'admin/system-logs',
+            'admin/system-settings',
+            'admin/system-status',
+            'admin/user-accounts',
+          ],
+        },
       ],
     },
     {

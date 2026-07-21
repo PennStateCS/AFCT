@@ -63,6 +63,14 @@ net, so prefer committing from the command line.
 Run these from the repository root **before you push**. They are the same checks CI runs,
 so if they pass locally they will almost always pass in the cloud.
 
+:::tip Running the dev environment in Docker?
+If you develop inside the Docker dev container (the common setup), run these commands
+**inside the container**, not on your host. The prefix is `docker exec afct-dev`. See
+[If your dev environment runs in Docker](#if-your-dev-environment-runs-in-docker) below
+for the exact commands. The commands themselves are identical; only where you run them
+changes.
+:::
+
 | Run this locally                     | What it checks                              | Matching CI job |
 | ------------------------------------ | ------------------------------------------- | --------------- |
 | `npm run typecheck:all`              | TypeScript types (app + tests)              | `typecheck`     |
@@ -90,6 +98,37 @@ at a time.
 If that whole sequence passes, five of the six CI jobs will pass. The sixth is the
 database job, covered next.
 
+### If your dev environment runs in Docker
+
+Most people develop AFCT inside the Docker dev stack (`npm run docker:dev`). In that
+setup the dependencies and the generated Prisma client live **inside** the `afct-dev`
+container, in a Docker volume, not on your host. So running `npm run typecheck:all` on
+your host machine will fail or behave oddly. Run the same checks inside the container by
+prefixing each with `docker exec afct-dev`:
+
+```bash
+docker exec afct-dev npm run typecheck:all
+docker exec afct-dev npm run lint -- --max-warnings=0
+docker exec afct-dev npm test
+docker exec afct-dev npm run build
+docker exec afct-dev npm run docs
+```
+
+Or all at once (the container's shell stops at the first failure):
+
+```bash
+docker exec afct-dev sh -c "npm run typecheck:all && npm run lint -- --max-warnings=0 && npm test && npm run build && npm run docs"
+```
+
+The commands are exactly the same as the host commands above. The only difference is the
+`docker exec afct-dev` prefix that runs them inside the container, where the dependencies
+already are. The dev stack must be running (`npm run docker:dev`) for these to work.
+
+:::note About `npm run docs`
+`npm run docs` can change `src/types/api.ts`. Because your source is bind-mounted into the
+container, the regenerated file appears on your host too, so you can commit it normally.
+:::
+
 ### The database test job
 
 `npm run test:db` runs tests against a **real** Postgres database named `afct_test`. It is
@@ -113,6 +152,24 @@ docker stop afct-test-db
 On Windows PowerShell, set the URL with
 `$env:DATABASE_URL="postgresql://afct_user:afct_pass@localhost:5433/afct_test"` instead of
 `export`.
+
+If you already run the Docker dev stack, you don't need a separate container. Create an
+`afct_test` database in the dev Postgres and run the DB tests inside the `afct-dev`
+container against it:
+
+```bash
+# Create the test database in the running dev Postgres (safe to re-run)
+docker exec afct-dev-postgres psql -U afct_user -d afct -c "CREATE DATABASE afct_test" || true
+
+# Apply migrations and run the DB tests inside the app container, pointed at afct_test
+docker exec -e DATABASE_URL=postgres://afct_user:afct_pass@postgres:5432/afct_test \
+  afct-dev npx prisma migrate deploy
+docker exec -e DATABASE_URL=postgres://afct_user:afct_pass@postgres:5432/afct_test \
+  afct-dev npm run test:db
+```
+
+Inside the container the database host is `postgres` (the Compose service name), not
+`localhost`.
 
 If you can't run this locally, that's acceptable **as long as you still open a pull
 request and let CI run it** before merging. What you must not do is skip it entirely and
@@ -166,8 +223,11 @@ git checkout -b your-name/short-description
 
 # ... make changes, commit ...
 
-# Check everything before pushing
+# Check everything before pushing (on your host)
 npm run typecheck:all && npm run lint -- --max-warnings=0 && npm test && npm run build && npm run docs
+
+# Or, if you develop in Docker, run the same checks inside the container:
+docker exec afct-dev sh -c "npm run typecheck:all && npm run lint -- --max-warnings=0 && npm test && npm run build && npm run docs"
 
 # Push and open a pull request, wait for green CI, then merge
 git push -u origin your-name/short-description
