@@ -24,6 +24,7 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { useState } from 'react';
 
+
 type RosterUser = User & { role?: string; hasSubmissions?: boolean };
 
 type ActionsCellProps = {
@@ -31,36 +32,25 @@ type ActionsCellProps = {
   onChange: () => void;
   courseId: string;
   courseIsArchived: boolean;
-  facultyCount?: number;
-  // viewer's course role preloaded from course API
   viewerRole?: string | null;
-  // whether the viewer is a global site admin
-  viewerIsAdmin?: boolean;
-  onEditRole?: (user: RosterUser) => void;
-  onResetPassword?: (user: RosterUser) => void;
-  onDeleteUser?: (user: RosterUser) => void;
+  viewerIsAdmin?: boolean | null;
 };
+
 
 function ActionsCell({
   user,
   onChange,
   courseId,
   courseIsArchived,
-  facultyCount,
   viewerRole,
   viewerIsAdmin,
-  onEditRole,
-  onResetPassword,
-  onDeleteUser,
 }: ActionsCellProps) {
-  void facultyCount;
+  console.log(viewerIsAdmin);
+  console.log(viewerRole);
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [ editRoleOpen, setEditRoleOpen ] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-
-  // Treat site ADMIN as having course management privileges
-  const isSiteAdmin = Boolean(viewerIsAdmin);
 
   async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
@@ -110,34 +100,15 @@ function ActionsCell({
   const rUser = user as RosterUser;
   const courseRole = rUser.role ?? null;
   const hasSubmissions = Boolean(rUser.hasSubmissions);
+  const isPrivileged = viewerIsAdmin || viewerRole === 'FACULTY' || viewerRole === 'TA';
 
-  // Helper to determine whether the viewer (role `viewer`) can delete a target with course role `target`.
-  // Site ADMIN users can delete any roster member. Otherwise fall back to course role rules.
-  const canViewerDeleteUser = (
-    viewer: string | null | undefined,
-    target: string | null,
-  ): boolean => {
-    // Site admin can remove anyone
-    if (isSiteAdmin) return true;
-    if (!viewer) return false;
-    // Faculty can remove anyone except other faculty
-    if (viewer === 'FACULTY') return target !== 'FACULTY';
-    return false;
-  };
-  const viewerCanDelete = canViewerDeleteUser(courseRole, courseRole);
+  const deleteTitle = `Remove ${user.firstName} ${user.lastName}?`;
+  const deleteDescription = `This will remove the user from the roster for this course. This action cannot be undone.`
 
-  const deleteTitle = viewerCanDelete
-    ? `Remove ${user.firstName} ${user.lastName}?`
-    : 'This user cannot be removed from the course';
-
-  const deleteDescription = viewerCanDelete
-    ? `This will remove the user from the roster for this course. This action cannot be undone.`
-    : 'Contact the instructor to remove this user.';
-  // compute UI flags used in JSX
-  const removeDisabled = courseIsArchived || hasSubmissions || !viewerCanDelete;
+  const removeDisabled = courseIsArchived || hasSubmissions || !isPrivileged;
   const removeTitle = courseIsArchived
     ? 'Cannot delete user from archived course'
-    : !viewerCanDelete
+    : !isPrivileged
       ? 'You do not have permission to remove this user'
       : hasSubmissions
         ? 'This user cannot be removed from the course'
@@ -151,6 +122,7 @@ function ActionsCell({
             variant="secondary"
             aria-label={`Manage ${user.firstName} ${user.lastName}`}
             className="inline-flex items-center gap-2"
+            disabled={courseRole === 'FACULTY' && !viewerIsAdmin}
           >
             Manage
             <ChevronDown className="h-4 w-4" />
@@ -159,7 +131,7 @@ function ActionsCell({
         <DropdownMenuContent align="end" className="min-w-[12rem]">
           <DropdownMenuLabel className="font-medium">{`${user.firstName} ${user.lastName}`}</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {isSiteAdmin ? (
+          {viewerIsAdmin ? (
             <DropdownMenuItem
               onClick={() => setEditUserOpen(true)}
               className="flex items-center gap-2"
@@ -228,7 +200,7 @@ function ActionsCell({
             setConfirmDeleteOpen(false);
             return;
           }
-          if (!viewerCanDelete) {
+          if (!isPrivileged) {
             showToast.error('You do not have permission to remove this user');
             setConfirmDeleteOpen(false);
             return;
@@ -250,20 +222,16 @@ function ActionsCell({
   );
 }
 
+
 export const userColumns = (
   onChange: () => void,
   courseId: string,
   courseIsArchived: boolean,
-  facultyCount?: number,
   viewerRole?: string | null,
-  viewerIsAdmin?: boolean,
-  onEditRole?: (user: RosterUser) => void,
-  onResetPassword?: (user: RosterUser) => void,
-  onDeleteUser?: (user: RosterUser) => void,
+  viewerIsAdmin?: boolean | null,
 ): ColumnDef<User>[] => {
   const currentCourseRole = viewerRole ?? null;
-  const isSiteAdmin = Boolean(viewerIsAdmin);
-  const viewerHasActions = isSiteAdmin || currentCourseRole === 'FACULTY' || currentCourseRole === 'TA';
+  const viewerHasActions = viewerIsAdmin || currentCourseRole === 'FACULTY' || currentCourseRole === 'TA';
 
   const cols: ColumnDef<User>[] = [
     {
@@ -346,12 +314,8 @@ export const userColumns = (
           onChange={onChange}
           courseId={courseId}
           courseIsArchived={courseIsArchived}
-          facultyCount={facultyCount}
           viewerRole={viewerRole}
           viewerIsAdmin={viewerIsAdmin}
-          onEditRole={onEditRole}
-          onResetPassword={onResetPassword}
-          onDeleteUser={onDeleteUser}
         />
       ),
     });

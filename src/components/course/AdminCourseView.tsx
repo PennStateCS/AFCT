@@ -90,9 +90,8 @@ export function AdminCourseView({
         onRefreshCourse,
         course.id,
         course.isArchived,
-        facultyCount,
         course.viewerRole,
-        course.viewerIsAdmin,
+        course.viewerIsAdmin
       ),
     [
       onRefreshCourse,
