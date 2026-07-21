@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import EditRoleDialog from './EditRoleDialog';
+import { EditRoleDialog } from './EditRoleDialog';
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({

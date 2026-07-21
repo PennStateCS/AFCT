@@ -16,7 +16,6 @@ import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import type { FullCourse, TabType } from '@/types/course';
-import { getInstructors } from '@/lib/course-utils';
 import type { Problem, Course } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMemo } from 'react';
@@ -83,7 +82,6 @@ export function AdminCourseView({
   // Memoize roster columns so a re-render doesn't recreate the array (and its
   // cell components), which would force RosterCard's DataTable and its rows to
   // re-render.
-  const facultyCount = getInstructors(enrolled).length;
   const rosterColumns = useMemo(
     () =>
       userColumns(
@@ -97,7 +95,6 @@ export function AdminCourseView({
       onRefreshCourse,
       course.id,
       course.isArchived,
-      facultyCount,
       course.viewerRole,
       course.viewerIsAdmin,
     ],

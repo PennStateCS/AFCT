@@ -14,7 +14,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Pencil, Trash2, Lock, LockOpen, User2, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, Lock, LockOpen, ChevronDown } from 'lucide-react';
 import { CompactDate } from '@/components/ui/CompactDate';
 
 import {
@@ -331,7 +331,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         <DropdownMenuTrigger asChild>
           <Button
             variant="secondary"
-            aria-label={`Manage ${user.firstName} ${user.lastName}`}
+            aria-label={`Manage user ${user.firstName} ${user.lastName}`}
             className="inline-flex items-center gap-2"
           >
             Manage
