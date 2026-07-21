@@ -28,14 +28,9 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Guides',
-      collapsed: false,
-      items: ['guides/faculty'],
-    },
-    {
-      type: 'category',
       label: 'Student Guide',
-      items: ['student/overview'],
+      collapsed: false,
+      items: ['student/overview', 'student/client'],
     },
     {
       type: 'category',
@@ -95,7 +90,7 @@ const sidebars: SidebarsConfig = {
       label: 'Developer Guide',
       items: [
         'reference/creating-a-release',
-        'reference/deployment-architecture',
+        'reference/system-architecture',
         'reference/updates',
         'reference/roles-and-permissions',
         'reference/login-protection',

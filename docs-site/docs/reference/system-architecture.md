@@ -1,4 +1,4 @@
-# Deployment architecture
+# System Architecture
 
 AFCT runs as a Docker Compose application. The supported production stack has four core services: nginx, the AFCT application, PostgreSQL, and the backup service. An optional updater service can be enabled for browser-based upgrades.
 

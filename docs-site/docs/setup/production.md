@@ -43,4 +43,4 @@ Use these guides for routine administration:
 - [Update AFCT](../reference/updates.md)
 - [Manage backups and recovery](../operations/backups.md)
 - [Troubleshoot a deployment](../operations/troubleshooting.md)
-- [Understand the deployment architecture](../reference/deployment-architecture.md)
+- [Understand the system architecture](../reference/system-architecture.md)

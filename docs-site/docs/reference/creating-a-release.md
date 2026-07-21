@@ -117,7 +117,7 @@ sh install.sh update        # pull + recreate the whole stack, incl. the updater
 ```
 
 See [Update AFCT](./updates.md) for the operator-facing update flow and
-[Deployment architecture](./deployment-architecture.md) for how the images fit together.
+[System architecture](./system-architecture.md) for how the images fit together.
 
 ## Rolling back
 

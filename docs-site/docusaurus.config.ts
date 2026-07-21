@@ -22,6 +22,8 @@ const config: Config = {
     // The docs are plain Markdown moved in from docs/; compile .md as CommonMark
     // so stray < and { in prose can't break the MDX compiler.
     format: 'detect',
+    // Render ```mermaid fenced blocks as diagrams (needs @docusaurus/theme-mermaid).
+    mermaid: true,
     hooks: {
       onBrokenMarkdownLinks: 'throw',
     },
@@ -32,7 +34,7 @@ const config: Config = {
     locales: ['en'],
   },
 
-  themes: ['docusaurus-theme-openapi-docs'],
+  themes: ['docusaurus-theme-openapi-docs', '@docusaurus/theme-mermaid'],
 
   plugins: [
     [
@@ -140,6 +142,9 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
+      // Prism bundles bash/json/yaml by default but not powershell, which several
+      // Windows setup pages use; register it so those blocks highlight.
+      additionalLanguages: ['powershell'],
     },
   } satisfies Preset.ThemeConfig,
 };
