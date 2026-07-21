@@ -13,7 +13,7 @@ services:
   app:
     # CI pins this to the exact published digest on each push to main
     # (.github/workflows/publish-ghcr.yml), so deploys are reproducible.
-    image: ghcr.io/pennstatecs/afct-dashboard@sha256:348cbc56442ca3ca1cf3b0c8202cecafb415541dc073c77d11473e5bb838051d
+    image: ghcr.io/pennstatecs/afct-dashboard@sha256:6a2686bc6715f8fb74d162975129bf6e986da9b77d2fd8e096b570199d40135b
     container_name: afct-app
     restart: unless-stopped
     logging: *default-logging
