@@ -153,8 +153,18 @@ recreate_app() {
   _proj=$1
   # Pull + recreate the app and its lockstep sidecars (nginx, backup) at the selected
   # tag. Word-splitting of STACK_SERVICES is intentional (a list of service names).
+  # Run the pull in the background and keep the heartbeat alive while it runs: a large
+  # image over a slow link can take longer than the healthcheck's staleness window,
+  # which would mark this sidecar unhealthy and flip the app's "updater available"
+  # flag to false in the middle of an upgrade.
   # shellcheck disable=SC2086
-  dc "$_proj" pull $STACK_SERVICES >/dev/null 2>&1 || return 1
+  dc "$_proj" pull $STACK_SERVICES >/dev/null 2>&1 &
+  _pull_pid=$!
+  while kill -0 "$_pull_pid" 2>/dev/null; do
+    beat
+    sleep "$HEALTH_INTERVAL"
+  done
+  wait "$_pull_pid" || return 1
   # shellcheck disable=SC2086
   dc "$_proj" up -d $STACK_SERVICES >/dev/null 2>&1 || return 1
   return 0
