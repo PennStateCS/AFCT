@@ -34,7 +34,12 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Faculty',
+      label: 'Student Guide',
+      items: ['student/overview'],
+    },
+    {
+      type: 'category',
+      label: 'Faculty Guide',
       items: [
         {
           type: 'category',
@@ -65,7 +70,7 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Admin',
+      label: 'Admin Guide',
       link: {
         type: 'doc',
         id: 'guides/admin',
