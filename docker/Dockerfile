@@ -105,6 +105,11 @@ RUN mkdir -p /private/uploads/pfps /private/uploads/problems \
 # Holds the admin-uploaded TLS cert; nginx reads it through a shared volume.
 RUN mkdir -p /app/certs && chmod 750 /app/certs
 
+# ACME HTTP-01 challenge webroot. Must exist in the image so the named volume
+# mounted here inherits node ownership; otherwise the app (uid node) can't write
+# challenge tokens and Let's Encrypt issuance fails.
+RUN mkdir -p /app/acme-challenge && chmod 755 /app/acme-challenge
+
 # Give everything to the non-root user the container runs as.
 RUN chown -R node:node /app /private/uploads
 
