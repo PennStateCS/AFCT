@@ -7,8 +7,8 @@ import { parseLimitOffset } from '@/lib/api/request';
 /**
  * Returns a paginated activity feed for one course: course/assignment/problem/
  * submission activity plus member logins. Course-content activity by admins (even if
- * not enrolled) and enrolled staff (Faculty/TA) shows any time — so an admin creating
- * or editing a problem before the term is included — while other members' content and
+ * not enrolled) and enrolled staff (Faculty/TA) shows any time (so an admin creating
+ * or editing a problem before the term is included), while other members' content and
  * all member logins are clipped to the course's start/end dates. Admin logins are never
  * shown (only their course edits). Staff-only to read (see access gate below).
  * @openapi

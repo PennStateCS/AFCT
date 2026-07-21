@@ -609,7 +609,7 @@ export interface paths {
         put?: never;
         /**
          * Peek login rate-limit status
-         * @description Read-only login rate-limit status. The login form calls this after a failed  `signIn` to classify the failure, because NextAuth (Auth.js v5) reports any  `authorize` error only as a generic `CredentialsSignin` — so the client can't  otherwise tell a captcha challenge or a temporary block apart from bad credentials.  This does NOT count an attempt (the credentials `authorize` path is the single  source of truth); it only reports the flags that path already set. Public.
+         * @description Read-only login rate-limit status. The login form calls this after a failed  `signIn` to classify the failure, because NextAuth (Auth.js v5) reports any  `authorize` error only as a generic `CredentialsSignin`, so the client cannot  otherwise tell a captcha challenge or a temporary block apart from bad credentials.  This does NOT count an attempt (the credentials `authorize` path is the single  source of truth); it only reports the flags that path already set. Public.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/auth/login-check/route.ts)
          */
@@ -843,7 +843,7 @@ export interface paths {
         };
         /**
          * Get a course's activity feed
-         * @description Returns a paginated activity feed for one course: course/assignment/problem/  submission activity plus member logins. Course-content activity by admins (even if  not enrolled) and enrolled staff (Faculty/TA) shows any time — so an admin creating  or editing a problem before the term is included — while other members' content and  all member logins are clipped to the course's start/end dates. Admin logins are never  shown (only their course edits). Staff-only to read (see access gate below).
+         * @description Returns a paginated activity feed for one course: course/assignment/problem/  submission activity plus member logins. Course-content activity by admins (even if  not enrolled) and enrolled staff (Faculty/TA) shows any time (so an admin creating  or editing a problem before the term is included), while other members' content and  all member logins are clipped to the course's start/end dates. Admin logins are never  shown (only their course edits). Staff-only to read (see access gate below).
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/activity/route.ts)
          */

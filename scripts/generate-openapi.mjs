@@ -36,7 +36,7 @@ const API_DESCRIPTION = [
   '## Authentication',
   '',
   'The API authenticates with the **NextAuth session cookie**. Most endpoints require a',
-  'signed-in session; some additionally require an `ADMIN`, `FACULTY`, or `TA` role — the',
+  'signed-in session; some additionally require an `ADMIN`, `FACULTY`, or `TA` role, and the',
   'requirement is stated on each operation. A few endpoints (health, signup, login, public',
   'settings) need no session.',
   '',

@@ -5,7 +5,7 @@ import { getLoginLockoutPolicy } from '@/lib/login-policy';
 /**
  * Read-only login rate-limit status. The login form calls this after a failed
  * `signIn` to classify the failure, because NextAuth (Auth.js v5) reports any
- * `authorize` error only as a generic `CredentialsSignin` — so the client can't
+ * `authorize` error only as a generic `CredentialsSignin`, so the client cannot
  * otherwise tell a captcha challenge or a temporary block apart from bad credentials.
  * This does NOT count an attempt (the credentials `authorize` path is the single
  * source of truth); it only reports the flags that path already set. Public.
