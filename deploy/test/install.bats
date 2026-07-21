@@ -108,29 +108,49 @@ EOF
   export ADMIN_PASSWORD="Str0ng!Pass1"
   # Mock curl serves this manifest for the versions.json download; newest release first,
   # the rolling 'main' entry must be skipped.
-  export MOCK_CURL_BODY='{ "versions": [ { "tag": "v2.3.4" }, { "tag": "v2.0.0" }, { "tag": "main" } ] }'
+  export MOCK_VERSIONS_BODY='{ "versions": [ { "tag": "v2.3.4" }, { "tag": "v2.0.0" }, { "tag": "main" } ] }'
   run sh install.sh --non-interactive < /dev/null
   [ "$status" -eq 0 ]
   run grep -Eq '^AFCT_APP_TAG=v2.3.4$' .env.production; [ "$status" -eq 0 ]
 }
 
-@test "an explicit AFCT_APP_TAG wins over the manifest on a fresh install" {
+@test "an explicit AFCT_APP_TAG that is a published release is honored" {
   export ADMIN_EMAIL="admin@example.com"
   export ADMIN_PASSWORD="Str0ng!Pass1"
-  export AFCT_APP_TAG="v1.0.0"
-  export MOCK_CURL_BODY='{ "versions": [ { "tag": "v2.3.4" }, { "tag": "main" } ] }'
+  export AFCT_APP_TAG="v2.0.0"
+  export MOCK_VERSIONS_BODY='{ "versions": [ { "tag": "v2.3.4" }, { "tag": "v2.0.0" }, { "tag": "main" } ] }'
   run sh install.sh --non-interactive < /dev/null
   [ "$status" -eq 0 ]
-  run grep -Eq '^AFCT_APP_TAG=v1.0.0$' .env.production; [ "$status" -eq 0 ]
+  run grep -Eq '^AFCT_APP_TAG=v2.0.0$' .env.production; [ "$status" -eq 0 ]
 }
 
-@test "a fresh install tracks main when the manifest lists no release" {
+@test "AFCT_APP_TAG=main is refused (releases only)" {
   export ADMIN_EMAIL="admin@example.com"
   export ADMIN_PASSWORD="Str0ng!Pass1"
-  export MOCK_CURL_BODY='{ "versions": [ { "tag": "main" } ] }'
+  export AFCT_APP_TAG="main"
   run sh install.sh --non-interactive < /dev/null
-  [ "$status" -eq 0 ]
-  run grep -q '^AFCT_APP_TAG=' .env.production; [ "$status" -ne 0 ]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not allowed"* ]]
+  run grep -q '^AFCT_APP_TAG=main' .env.production; [ "$status" -ne 0 ]
+}
+
+@test "an explicit AFCT_APP_TAG that is not a published release is refused" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export AFCT_APP_TAG="v9.9.9"
+  export MOCK_VERSIONS_BODY='{ "versions": [ { "tag": "v2.3.4" }, { "tag": "main" } ] }'
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not a published release"* ]]
+}
+
+@test "a fresh install refuses to fall back to main when no release is available" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export MOCK_VERSIONS_BODY='{ "versions": [ { "tag": "main" } ] }'
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not determine the latest release"* ]]
 }
 
 @test "a password containing an unsupported character is rejected before writing" {

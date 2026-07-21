@@ -1,19 +1,33 @@
 #!/bin/sh
 # Mock curl. For the health smoke test (`curl ... /api/health`, no -o) it just
 # returns MOCK_CURL_RC (default 0 = the web front answered). For a download
-# (`curl ... -o FILE`, used by `self-update`) it writes MOCK_CURL_BODY to FILE so the
-# caller gets a real file. MOCK_CURL_BODY defaults to a valid no-op script; set it to
-# '' to simulate a truncated/empty download.
+# (`curl ... -o FILE`) it writes a body to FILE so the caller gets a real file.
+#
+# The body is URL-aware so one mock serves both callers:
+#   *versions.json  -> MOCK_VERSIONS_BODY (default: a manifest with one release), used
+#                      by the installer's release-pinning and the updater's allowlist.
+#   anything else   -> MOCK_CURL_BODY (default: a valid no-op script), used by
+#                      `self-update` and the Docker convenience-script download.
+# Set either to '' to simulate a truncated/empty download.
 _out=""
+_url=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -o) _out=${2:-}; shift 2 ;;
+    http://*|https://*) _url=$1; shift ;;
     *) shift ;;
   esac
 done
 if [ -n "$_out" ]; then
-  # No trailing newline, so MOCK_CURL_BODY='' yields a truly empty file (a
-  # truncated download) rather than a one-byte one.
-  printf '%s' "${MOCK_CURL_BODY-#!/bin/sh}" > "$_out"
+  case "$_url" in
+    *versions.json*)
+      printf '%s' "${MOCK_VERSIONS_BODY-{\"versions\":[{\"tag\":\"v0.0.1\"},{\"tag\":\"main\"}]}}" > "$_out"
+      ;;
+    *)
+      # No trailing newline, so MOCK_CURL_BODY='' yields a truly empty file (a
+      # truncated download) rather than a one-byte one.
+      printf '%s' "${MOCK_CURL_BODY-#!/bin/sh}" > "$_out"
+      ;;
+  esac
 fi
 exit "${MOCK_CURL_RC:-0}"
