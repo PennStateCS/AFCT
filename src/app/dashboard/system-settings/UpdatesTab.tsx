@@ -15,6 +15,7 @@ import SelectField from '@/components/ui/SelectField';
 import InputGroup from '@/components/ui/InputGroup';
 import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
 import { upgradePhaseLabel, formatBackupTs } from './system-settings-shared';
+import { UpgradeProgress } from './UpgradeProgress';
 
 /** Updates tab: upgrade to a newer release, and restore/downgrade to a recorded backup. */
 export function UpdatesTab({ disabled }: { disabled: boolean }) {
@@ -39,6 +40,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
     null,
   );
   const [restoreConfirmText, setRestoreConfirmText] = useState('');
+  // Which flow the admin last kicked off, so the progress checklist labels its steps
+  // correctly (upgrade and downgrade share some early phases).
+  const [lastAction, setLastAction] = useState<'upgrade' | 'downgrade' | null>(null);
 
   const upgradeInProgress = isUpgradeInProgress(upgradeInfo?.status);
   const upgradeableVersions = (upgradeInfo?.versions ?? []).filter(
@@ -93,6 +97,10 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               {upgradeInfo.status.message && (
                 <p className="text-muted-foreground">{upgradeInfo.status.message}</p>
               )}
+              <UpgradeProgress
+                phase={upgradeInfo.status.phase}
+                action={lastAction ?? undefined}
+              />
               {upgradeInProgress && (
                 <p className="text-muted-foreground text-xs">
                   This can take a few minutes; the site may briefly restart.
@@ -210,6 +218,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             <Button
               type="button"
               onClick={() => {
+                setLastAction('upgrade');
                 startUpgrade(selectedVersion);
                 setConfirmUpgradeOpen(false);
               }}
@@ -327,6 +336,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               disabled={downgradeBusy || restoreConfirmText !== restoreTarget?.version}
               onClick={() => {
                 if (restoreTarget) {
+                  setLastAction('downgrade');
                   startDowngrade({
                     tag: restoreTarget.version,
                     restorePoint: restoreTarget.backup,
