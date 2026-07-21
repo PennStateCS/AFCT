@@ -183,6 +183,10 @@ wait_for_health() {
       case "$_state" in
         running\|healthy) return 0 ;;
         running\|unhealthy) return 1 ;;
+        # No healthcheck on the image: "running" is the only signal we have, so accept
+        # it rather than looping to a timeout (which would roll back every upgrade). A
+        # stack that wants rollback-on-boot-failure must define a container healthcheck.
+        running\|none) return 0 ;;
         exited\|*|dead\|*) return 1 ;;
       esac
     fi
@@ -452,8 +456,16 @@ process_downgrade() {
 log "AFCT updater started (watching ${TRIGGER_DIR})"
 beat
 
-# Recover a claim left behind by a crash mid-upgrade: retry it once.
-[ -f "$CLAIM_FILE" ] && mv "$CLAIM_FILE" "$REQUEST_FILE" 2>/dev/null || true
+# Recover a claim left behind by a crash mid-upgrade: retry it once. But if a newer
+# request already arrived, it supersedes the interrupted one — discard the stale claim
+# rather than clobbering the pending request.
+if [ -f "$CLAIM_FILE" ]; then
+  if [ -f "$REQUEST_FILE" ]; then
+    rm -f "$CLAIM_FILE" 2>/dev/null || true
+  else
+    mv "$CLAIM_FILE" "$REQUEST_FILE" 2>/dev/null || true
+  fi
+fi
 
 while :; do
   beat
