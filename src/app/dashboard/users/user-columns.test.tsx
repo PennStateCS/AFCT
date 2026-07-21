@@ -90,4 +90,31 @@ describe('user-columns display cells', () => {
     renderCell('avatar', baseUser);
     expect(screen.getByText('AL')).toBeInTheDocument();
   });
+
+  it('shows a Locked badge only when lockedUntil is in the future', () => {
+    renderCell('inactive', {
+      ...baseUser,
+      inactive: false,
+      lockedUntil: new Date(Date.now() + 10 * 60_000),
+    });
+    expect(screen.getByText(/^Locked/)).toBeInTheDocument();
+  });
+
+  it('does not show a Locked badge for an expired or absent lock', () => {
+    renderCell('inactive', { ...baseUser, inactive: false, lockedUntil: new Date(Date.now() - 1000) });
+    expect(screen.queryByText(/^Locked/)).not.toBeInTheDocument();
+
+    renderCell('inactive', { ...baseUser, inactive: false, lockedUntil: null });
+    expect(screen.queryByText(/^Locked/)).not.toBeInTheDocument();
+  });
+
+  it('classifies rows for the lock-status filter by current lock state', () => {
+    const cols = getUserColumns(vi.fn(), 'UTC') as ColumnDef<Record<string, unknown>>[];
+    const lockCol = cols.find(
+      (c) => 'id' in c && (c as { id?: string }).id === 'lockStatus',
+    ) as unknown as { accessorFn: (row: Record<string, unknown>) => string };
+    expect(lockCol.accessorFn({ lockedUntil: new Date(Date.now() + 60_000) })).toBe('locked');
+    expect(lockCol.accessorFn({ lockedUntil: new Date(Date.now() - 60_000) })).toBe('unlocked');
+    expect(lockCol.accessorFn({ lockedUntil: null })).toBe('unlocked');
+  });
 });

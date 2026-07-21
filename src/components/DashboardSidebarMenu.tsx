@@ -192,7 +192,7 @@ function CollapsibleSidebarGroup({
             onClick={onToggle}
             aria-expanded={open}
             aria-controls={contentId}
-            className="hover:bg-secondary/60 flex w-full items-center gap-1 whitespace-nowrap"
+            className="hover:bg-secondary/60 flex w-full items-center gap-1 rounded-md whitespace-nowrap"
           >
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
             <ChevronDown

@@ -131,6 +131,10 @@ current_app_tag() {
 set_app_tag() {
   _tag=$1
   _tmp="${ENV_FILE}.updtmp.$$"
+  # We run as root but the file belongs to the non-root install user; capture its
+  # ownership so we can restore it after the rewrite. Otherwise the file becomes
+  # root-owned and the next host-side `install.sh` (run by that user) can't read it.
+  _owner=$(stat -c '%u:%g' "$ENV_FILE" 2>/dev/null || true)
   if grep -qE '^AFCT_APP_TAG=' "$ENV_FILE" 2>/dev/null; then
     awk -v t="$_tag" '/^AFCT_APP_TAG=/ { print "AFCT_APP_TAG=" t; next } { print }' \
       "$ENV_FILE" > "$_tmp" || return 1
@@ -138,6 +142,7 @@ set_app_tag() {
     { cat "$ENV_FILE" && printf 'AFCT_APP_TAG=%s\n' "$_tag"; } > "$_tmp" || return 1
   fi
   chmod 600 "$_tmp" 2>/dev/null || true
+  [ -n "$_owner" ] && chown "$_owner" "$_tmp" 2>/dev/null || true
   # Same directory as the target, so this rename is atomic and stays on the host
   # filesystem (the deploy directory is bind-mounted, not the single file).
   mv "$_tmp" "$ENV_FILE" || { rm -f "$_tmp"; return 1; }
@@ -148,8 +153,18 @@ recreate_app() {
   _proj=$1
   # Pull + recreate the app and its lockstep sidecars (nginx, backup) at the selected
   # tag. Word-splitting of STACK_SERVICES is intentional (a list of service names).
+  # Run the pull in the background and keep the heartbeat alive while it runs: a large
+  # image over a slow link can take longer than the healthcheck's staleness window,
+  # which would mark this sidecar unhealthy and flip the app's "updater available"
+  # flag to false in the middle of an upgrade.
   # shellcheck disable=SC2086
-  dc "$_proj" pull $STACK_SERVICES >/dev/null 2>&1 || return 1
+  dc "$_proj" pull $STACK_SERVICES >/dev/null 2>&1 &
+  _pull_pid=$!
+  while kill -0 "$_pull_pid" 2>/dev/null; do
+    beat
+    sleep "$HEALTH_INTERVAL"
+  done
+  wait "$_pull_pid" || return 1
   # shellcheck disable=SC2086
   dc "$_proj" up -d $STACK_SERVICES >/dev/null 2>&1 || return 1
   return 0
@@ -168,6 +183,10 @@ wait_for_health() {
       case "$_state" in
         running\|healthy) return 0 ;;
         running\|unhealthy) return 1 ;;
+        # No healthcheck on the image: "running" is the only signal we have, so accept
+        # it rather than looping to a timeout (which would roll back every upgrade). A
+        # stack that wants rollback-on-boot-failure must define a container healthcheck.
+        running\|none) return 0 ;;
         exited\|*|dead\|*) return 1 ;;
       esac
     fi
@@ -437,8 +456,16 @@ process_downgrade() {
 log "AFCT updater started (watching ${TRIGGER_DIR})"
 beat
 
-# Recover a claim left behind by a crash mid-upgrade: retry it once.
-[ -f "$CLAIM_FILE" ] && mv "$CLAIM_FILE" "$REQUEST_FILE" 2>/dev/null || true
+# Recover a claim left behind by a crash mid-upgrade: retry it once. But if a newer
+# request already arrived, it supersedes the interrupted one — discard the stale claim
+# rather than clobbering the pending request.
+if [ -f "$CLAIM_FILE" ]; then
+  if [ -f "$REQUEST_FILE" ]; then
+    rm -f "$CLAIM_FILE" 2>/dev/null || true
+  else
+    mv "$CLAIM_FILE" "$REQUEST_FILE" 2>/dev/null || true
+  fi
+fi
 
 while :; do
   beat
