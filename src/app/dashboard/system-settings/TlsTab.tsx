@@ -14,12 +14,15 @@ import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import FileUploadInput from '@/components/FileUploadInput';
 import { useTlsCertificate } from './useTlsCertificate';
+import { StepList } from './StepList';
+import { deriveAcmeSteps } from './system-settings-shared';
 
 /** TLS Certificate tab: current status plus the upload / CSR / self-signed / Let's Encrypt flows. */
 export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined }) {
   const {
     tls,
     tlsBusy,
+    leProgress,
     tlsMethod,
     setTlsMethod,
     certFile,
@@ -249,6 +252,22 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 description="Required to request a certificate."
                 boxClassName="border-black"
               />
+              {leProgress && (
+                <div
+                  role="status"
+                  className="bg-muted/10 space-y-2 rounded-md border p-3 text-sm"
+                >
+                  {deriveAcmeSteps(leProgress.phase) && (
+                    <StepList
+                      steps={deriveAcmeSteps(leProgress.phase)!}
+                      ariaLabel="Certificate issuance progress"
+                    />
+                  )}
+                  {leProgress.message && (
+                    <p className="text-muted-foreground text-xs">{leProgress.message}</p>
+                  )}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button

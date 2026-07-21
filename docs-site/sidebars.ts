@@ -87,12 +87,13 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Reference',
+      label: 'Developer Guide',
       items: [
+        'reference/creating-a-release',
+        'reference/deployment-architecture',
         'reference/updates',
         'reference/roles-and-permissions',
         'reference/client-api',
-        'reference/deployment-architecture',
         'reference/content-security-policy',
       ],
     },

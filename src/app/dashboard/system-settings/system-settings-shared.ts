@@ -111,6 +111,72 @@ const UPGRADE_PHASE_LABELS: Record<string, string> = {
 export const upgradePhaseLabel = (phase: string) =>
   UPGRADE_PHASE_LABELS[phase] ?? phase.replace(/_/g, ' ');
 
+// A single step in the visual upgrade/downgrade progress checklist.
+export type UpgradeStepState = 'done' | 'current' | 'pending';
+export type UpgradeStep = { label: string; state: UpgradeStepState };
+
+// The ordered steps each flow moves through. The updater reports one coarse phase at a
+// time (status.json), which we map onto these so the admin sees where things are.
+const UPGRADE_FLOW: { phase: string; label: string }[] = [
+  { phase: 'backing_up', label: 'Back up the database' },
+  { phase: 'pulling', label: 'Download the new version' },
+  { phase: 'migrating', label: 'Restart and migrate' },
+  { phase: 'healthy', label: 'Health check' },
+];
+const DOWNGRADE_FLOW: { phase: string; label: string }[] = [
+  { phase: 'backing_up', label: 'Back up current state' },
+  { phase: 'stopping', label: 'Stop the application' },
+  { phase: 'restoring', label: 'Restore the database' },
+  { phase: 'pulling', label: 'Start the previous version' },
+  { phase: 'healthy', label: 'Health check' },
+];
+
+/**
+ * Turn the updater's current phase into an ordered checklist with each step marked
+ * done / current / pending. Returns null for phases where a step list doesn't apply
+ * (failed / rolled_back / unknown) — those are conveyed by the status badge instead.
+ * `action` disambiguates the two flows that share early phases; when it's absent (e.g.
+ * after a reload mid-run) the downgrade-only phases still route to the downgrade flow.
+ */
+export function deriveUpgradeSteps(
+  phase: string | undefined | null,
+  action?: 'upgrade' | 'downgrade',
+): UpgradeStep[] | null {
+  if (!phase) return null;
+  const isDowngrade = action === 'downgrade' || phase === 'stopping' || phase === 'restoring';
+  const flow = isDowngrade ? DOWNGRADE_FLOW : UPGRADE_FLOW;
+  const idx = flow.findIndex((s) => s.phase === phase);
+  if (idx === -1) return null;
+  return flow.map((s, i) => ({
+    label: s.label,
+    state: phase === 'healthy' ? 'done' : i < idx ? 'done' : i === idx ? 'current' : 'pending',
+  }));
+}
+
+// Ordered steps of a Let's Encrypt issuance (the acme status file's coarse phases).
+const ACME_FLOW: { phase: string; label: string }[] = [
+  { phase: 'requesting', label: 'Contact Let’s Encrypt' },
+  { phase: 'validating', label: 'Validate domain ownership' },
+  { phase: 'installing', label: 'Install the certificate' },
+];
+
+/**
+ * Turn an ACME issuance phase into the ordered checklist. `starting` collapses into the
+ * first step; `done` marks everything complete; `error`/`idle`/unknown return null (the
+ * failure is shown as a toast/message instead).
+ */
+export function deriveAcmeSteps(phase: string | undefined | null): UpgradeStep[] | null {
+  if (!phase) return null;
+  if (phase === 'done') return ACME_FLOW.map((s) => ({ label: s.label, state: 'done' }));
+  const p = phase === 'starting' ? 'requesting' : phase;
+  const idx = ACME_FLOW.findIndex((s) => s.phase === p);
+  if (idx === -1) return null;
+  return ACME_FLOW.map((s, i) => ({
+    label: s.label,
+    state: i < idx ? 'done' : i === idx ? 'current' : 'pending',
+  }));
+}
+
 export const SETTINGS_TAB_KEY = 'afct.systemSettingsTab';
 export const SETTINGS_TABS = ['general', 'queue', 'backups', 'captcha', 'tls', 'updates'];
 
