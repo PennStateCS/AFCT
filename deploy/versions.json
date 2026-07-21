@@ -13,7 +13,7 @@
     },
     {
       "tag": "main",
-      "label": "Latest (main)",
+      "label": "Latest",
       "notes": "Tracks the newest build from the main branch. Moves forward on every merge."
     }
   ]
