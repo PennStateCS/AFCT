@@ -153,6 +153,30 @@ export function deriveUpgradeSteps(
   }));
 }
 
+// Ordered steps of a Let's Encrypt issuance (the acme status file's coarse phases).
+const ACME_FLOW: { phase: string; label: string }[] = [
+  { phase: 'requesting', label: 'Contact Let’s Encrypt' },
+  { phase: 'validating', label: 'Validate domain ownership' },
+  { phase: 'installing', label: 'Install the certificate' },
+];
+
+/**
+ * Turn an ACME issuance phase into the ordered checklist. `starting` collapses into the
+ * first step; `done` marks everything complete; `error`/`idle`/unknown return null (the
+ * failure is shown as a toast/message instead).
+ */
+export function deriveAcmeSteps(phase: string | undefined | null): UpgradeStep[] | null {
+  if (!phase) return null;
+  if (phase === 'done') return ACME_FLOW.map((s) => ({ label: s.label, state: 'done' }));
+  const p = phase === 'starting' ? 'requesting' : phase;
+  const idx = ACME_FLOW.findIndex((s) => s.phase === p);
+  if (idx === -1) return null;
+  return ACME_FLOW.map((s, i) => ({
+    label: s.label,
+    state: i < idx ? 'done' : i === idx ? 'current' : 'pending',
+  }));
+}
+
 export const SETTINGS_TAB_KEY = 'afct.systemSettingsTab';
 export const SETTINGS_TABS = ['general', 'queue', 'backups', 'captcha', 'tls', 'updates'];
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveUpgradeSteps, upgradePhaseLabel } from './system-settings-shared';
+import { deriveUpgradeSteps, deriveAcmeSteps, upgradePhaseLabel } from './system-settings-shared';
 
 describe('deriveUpgradeSteps', () => {
   it('returns null for phases without a step list', () => {
@@ -32,6 +32,30 @@ describe('deriveUpgradeSteps', () => {
     const steps = deriveUpgradeSteps('backing_up', 'downgrade')!;
     expect(steps[0].label).toBe('Back up current state');
     expect(steps[0].state).toBe('current');
+  });
+});
+
+describe('deriveAcmeSteps', () => {
+  it('returns null for error / idle / unknown phases', () => {
+    expect(deriveAcmeSteps(null)).toBeNull();
+    expect(deriveAcmeSteps('error')).toBeNull();
+    expect(deriveAcmeSteps('idle')).toBeNull();
+  });
+
+  it('collapses "starting" into the first (current) step', () => {
+    const steps = deriveAcmeSteps('starting')!;
+    expect(steps[0].state).toBe('current');
+    expect(steps.slice(1).every((s) => s.state === 'pending')).toBe(true);
+  });
+
+  it('marks earlier steps done and the current phase current', () => {
+    const steps = deriveAcmeSteps('validating')!;
+    expect(steps.map((s) => s.state)).toEqual(['done', 'current', 'pending']);
+  });
+
+  it('marks all steps done when the cert is installed', () => {
+    const steps = deriveAcmeSteps('done')!;
+    expect(steps.every((s) => s.state === 'done')).toBe(true);
   });
 });
 
