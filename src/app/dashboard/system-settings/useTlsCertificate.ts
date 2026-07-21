@@ -47,6 +47,9 @@ export function useTlsCertificate() {
   );
 
   const [tlsBusy, setTlsBusy] = useState(false);
+  // Live Let's Encrypt issuance progress, polled from the server while the (blocking)
+  // request runs so the dialog can show step-by-step status instead of a bare spinner.
+  const [leProgress, setLeProgress] = useState<{ phase: string; message?: string } | null>(null);
   const [tlsMethod, setTlsMethod] = useState<TlsMethod>(null);
   const [certFile, setCertFile] = useState<File | null>(null);
   const [keyFile, setKeyFile] = useState<File | null>(null);
@@ -197,6 +200,24 @@ export function useTlsCertificate() {
       return;
     }
     setTlsBusy(true);
+    setLeProgress({ phase: 'starting' });
+    // The request blocks until the cert issues (or fails); poll the server's progress
+    // file in parallel so the dialog can show live steps while we wait.
+    let cancelled = false;
+    const pollProgress = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(apiPaths.admin.settingsTlsAcmeProgress(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const s = (await res.json()) as { phase?: string; message?: string };
+        if (!cancelled && s.phase && s.phase !== 'idle') {
+          setLeProgress({ phase: s.phase, message: s.message });
+        }
+      } catch {
+        // ignore transient poll errors
+      }
+    };
+    const poll = setInterval(() => void pollProgress(), 1500);
     try {
       const data = await tlsAction({
         action: 'lets-encrypt',
@@ -212,7 +233,10 @@ export function useTlsCertificate() {
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Failed to obtain a certificate.');
     } finally {
+      cancelled = true;
+      clearInterval(poll);
       setTlsBusy(false);
+      setLeProgress(null);
     }
   };
 
@@ -250,6 +274,7 @@ export function useTlsCertificate() {
   return {
     tls,
     tlsBusy,
+    leProgress,
     tlsMethod,
     setTlsMethod,
     certFile,

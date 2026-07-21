@@ -129,6 +129,7 @@ export const apiPaths = {
     logsExportFields: () => '/api/admin/logs/export/fields',
     settings: () => '/api/admin/settings',
     settingsTls: () => '/api/admin/settings/tls',
+    settingsTlsAcmeProgress: () => '/api/admin/settings/tls/acme-progress',
     backups: () => '/api/admin/settings/backups',
     upgrade: () => '/api/admin/settings/upgrade',
     backupDownload: (opts?: { file?: string }) =>

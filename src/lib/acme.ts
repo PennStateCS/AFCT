@@ -39,6 +39,35 @@ const LOCK_STALE_MS = 10 * 60 * 1000;
 
 export class AcmeError extends Error {}
 
+// Coarse issuance progress, written to a status file the admin UI polls while a request
+// is in flight so it can show live steps instead of a bare spinner. Best-effort: writing
+// it must never break issuance.
+export type AcmeStatus = { phase: string; message?: string; updatedAt: string };
+
+// Computed at call time (not a module const) so tests can point TLS_CERT_DIR at a temp dir.
+function acmeStatusPath(): string {
+  return path.join(process.env.TLS_CERT_DIR || '/app/certs', '.acme-status.json');
+}
+
+function writeAcmeStatus(phase: string, message?: string): void {
+  try {
+    fs.mkdirSync(path.dirname(acmeStatusPath()), { recursive: true });
+    const status: AcmeStatus = { phase, message, updatedAt: new Date().toISOString() };
+    fs.writeFileSync(acmeStatusPath(), `${JSON.stringify(status)}\n`, { mode: 0o600 });
+  } catch {
+    // best effort
+  }
+}
+
+/** The most recent issuance progress, or null if none has been recorded. */
+export function readAcmeStatus(): AcmeStatus | null {
+  try {
+    return JSON.parse(fs.readFileSync(acmeStatusPath(), 'utf8')) as AcmeStatus;
+  } catch {
+    return null;
+  }
+}
+
 export type AcmeConfig = { domain: string; email: string; staging: boolean };
 export type AcmeState = { managed: false } | ({ managed: true } & AcmeConfig);
 
@@ -161,6 +190,7 @@ export async function requestCertificate(input: {
 
   acquireLock();
   try {
+    writeAcmeStatus('starting', 'Preparing the certificate request…');
     const accountKey = await loadOrCreateAccountKey();
     const client = new acme.Client({
       directoryUrl: staging
@@ -171,6 +201,7 @@ export async function requestCertificate(input: {
 
     const [certKey, csr] = await acme.crypto.createCsr({ commonName: domain, altNames: [domain] });
 
+    writeAcmeStatus('requesting', 'Contacting Let’s Encrypt…');
     const cert = await client.auto({
       csr,
       email,
@@ -186,23 +217,29 @@ export async function requestCertificate(input: {
           throw new AcmeError('Only the HTTP-01 challenge is supported.');
         }
         writeChallenge(challenge.token, keyAuthorization);
+        writeAcmeStatus('validating', 'Waiting for Let’s Encrypt to validate your domain…');
       },
       challengeRemoveFn: async (_authz, challenge) => {
         removeChallenge(challenge.token);
       },
     });
 
+    writeAcmeStatus('installing', 'Installing the certificate…');
     // client.auto returns the fullchain (leaf + intermediates); installCert writes
     // it verbatim and validates the leaf against the key.
     const info = installCert(cert.toString(), certKey.toString());
     writeConfig({ domain, email, staging });
+    writeAcmeStatus('done', 'Certificate installed.');
     return info;
   } catch (err) {
-    if (err instanceof AcmeError) throw err;
+    if (err instanceof AcmeError) {
+      writeAcmeStatus('error', err.message);
+      throw err;
+    }
     const detail = err instanceof Error ? err.message : 'unknown error';
-    throw new AcmeError(
-      `Could not obtain a certificate for ${domain}. Confirm the domain points at this server and that port 80 is reachable from the internet. (${detail})`,
-    );
+    const message = `Could not obtain a certificate for ${domain}. Confirm the domain points at this server and that port 80 is reachable from the internet. (${detail})`;
+    writeAcmeStatus('error', message);
+    throw new AcmeError(message);
   } finally {
     releaseLock();
   }

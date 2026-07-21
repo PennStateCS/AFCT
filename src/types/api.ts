@@ -192,6 +192,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/settings/tls/acme-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Let's Encrypt issuance progress
+         * @description Live progress of an in-flight Let's Encrypt issuance. The admin UI polls this while  the (blocking) request runs so it can show step-by-step status instead of a spinner.  Admin only. Returns `{ phase: 'idle' }` when nothing has been recorded.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/tls/acme-progress/route.ts)
+         */
+        get: operations["getAdminSettingsTlsAcmeProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/settings/tls": {
         parameters: {
             query?: never;
@@ -2746,6 +2768,39 @@ export interface operations {
             };
             /** @description Failed to persist the update. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminSettingsTlsAcmeProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current issuance phase. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        phase?: string;
+                        message?: string | null;
+                        updatedAt?: string | null;
+                    };
+                };
+            };
+            /** @description Caller is not an admin. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

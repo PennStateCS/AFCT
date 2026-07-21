@@ -68,6 +68,7 @@ import {
   renewIfNeeded,
   getAcmeState,
   disableAcme,
+  readAcmeStatus,
   AcmeError,
   __test__,
 } from './acme';
@@ -79,7 +80,7 @@ beforeEach(() => {
   installCertMock.mockReturnValue({ installed: true, subject: 'CN=test', validTo: 'far' });
   readCertInfoMock.mockReturnValue({ installed: false });
   // Clean state between tests.
-  for (const f of ['acme.json', 'acme-account.key', '.acme.lock']) {
+  for (const f of ['acme.json', 'acme-account.key', '.acme.lock', '.acme-status.json']) {
     const p = path.join(h.dir, f);
     if (fs.existsSync(p)) fs.unlinkSync(p);
   }
@@ -143,6 +144,23 @@ describe('requestCertificate', () => {
     ).rejects.toThrow(AcmeError);
     expect(installCertMock).not.toHaveBeenCalled();
     expect(getAcmeState().managed).toBe(false);
+  });
+});
+
+describe('readAcmeStatus', () => {
+  it('is null before any issuance has run', () => {
+    expect(readAcmeStatus()).toBeNull();
+  });
+
+  it("records a 'done' phase after a successful issuance", async () => {
+    await requestCertificate({
+      domain: 'afct.example.edu',
+      email: 'admin@example.edu',
+      staging: true,
+    });
+    const status = readAcmeStatus();
+    expect(status?.phase).toBe('done');
+    expect(status?.updatedAt).toBeTruthy();
   });
 });
 
