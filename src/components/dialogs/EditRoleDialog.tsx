@@ -17,8 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Trash2, Delete } from 'lucide-react';
-import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { Trash2 } from 'lucide-react';
 import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
 import SelectField from '@/components/ui/SelectField';
 import { apiPaths } from '@/lib/api-paths';
@@ -58,7 +57,7 @@ type Props = {
   initialViewerDefaultRole?: string | null;
 };
 
-export default function CourseEditUserDialog({
+export function EditRoleDialog({
   open,
   setOpen,
   courseId,
@@ -178,24 +177,6 @@ export default function CourseEditUserDialog({
     saveRoster(parsed.data.role);
   };
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  // Execute removal (called from ConfirmDialog onConfirm)
-  const { mutate: removeUser } = useMutation({
-    mutationFn: () => fetchJson(apiPaths.courseRosterEntry(courseId, userId), { method: 'DELETE' }),
-    onSuccess: () => {
-      invalidateRoster();
-      showToast.success('User removed from course');
-      onSaved?.();
-      setOpen(false);
-    },
-    onError: (err) => {
-      console.error('Error removing user', err);
-      showToast.error(err instanceof Error ? err.message : 'Failed to remove user');
-    },
-    onSettled: () => setConfirmOpen(false),
-  });
-  const handleRemove = () => removeUser();
 
   const { mutate: deleteAvatar } = useMutation({
     mutationFn: (targetUserId: string) => {
@@ -225,7 +206,6 @@ export default function CourseEditUserDialog({
           const orig = JSON.parse(JSON.stringify(originalRosterRef.current));
           setRoster(orig);
           setAvatarPreview(orig.user.avatar ? apiPaths.files.pfp(orig.user.avatar) : '');
-          setConfirmOpen(false);
         }
       }}
     >
@@ -302,51 +282,6 @@ export default function CourseEditUserDialog({
                   label: formatCourseRole(r),
                 }))}
               />
-
-              <div className="pt-2">
-                <div className="mt-2 flex gap-2">
-                  {/* Determine whether the viewer is allowed to remove this user (mirrors server-side rules) */}
-                  {(() => {
-                    const isSiteAdmin = viewerDefaultRole === 'ADMIN';
-                    const viewerCourse = viewerCourseRole ?? null;
-                    const targetRole = roster.role ?? null;
-                    let viewerCanDelete = false;
-                    if (isSiteAdmin) viewerCanDelete = true;
-                    else if (viewerCourse === 'ADMIN') viewerCanDelete = targetRole !== 'ADMIN';
-                    else if (viewerCourse === 'FACULTY')
-                      viewerCanDelete = targetRole !== 'ADMIN' && targetRole !== 'FACULTY';
-                    const removeDisabled = !viewerCanDelete;
-                    const removeTitle = removeDisabled
-                      ? 'You do not have permission to remove this user'
-                      : undefined;
-
-                    return (
-                      <>
-                        <Button
-                          variant="outline"
-                          className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
-                          onClick={() => setConfirmOpen(true)}
-                          disabled={removeDisabled}
-                          title={removeTitle}
-                        >
-                          <Delete className="h-4 w-4" />
-                          Remove from Course
-                        </Button>
-
-                        <ConfirmDialog
-                          open={confirmOpen}
-                          onCancel={() => setConfirmOpen(false)}
-                          onConfirm={handleRemove}
-                          title={`Remove ${roster.user.firstName} ${roster.user.lastName}?`}
-                          description={`This will remove the user from the roster for this course. This action cannot be undone.`}
-                          confirmText="Remove"
-                          cancelText="Cancel"
-                        />
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
             </div>
           ) : (
             <p className="text-muted-foreground text-sm">Roster entry not found.</p>

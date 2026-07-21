@@ -22,11 +22,11 @@ export const ChangePasswordSchema = z
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 
 /**
- * An admin setting another user's password (AdminResetPasswordDialog). Unlike
+ * An admin setting another user's password (ResetPasswordDialog). Unlike
  * {@link ChangePasswordSchema} there's no old password to verify, just a strong
  * new password confirmed twice.
  */
-export const AdminResetPasswordSchema = z
+export const ResetPasswordSchema = z
   .object({
     newPassword: StrongPassword,
     confirmNewPassword: z.string().min(1, 'Please confirm the new password.'),
@@ -36,4 +36,4 @@ export const AdminResetPasswordSchema = z
     message: "Passwords don't match",
   });
 
-export type AdminResetPasswordInput = z.infer<typeof AdminResetPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;

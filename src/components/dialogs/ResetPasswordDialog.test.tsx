@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { AdminResetPasswordDialog } from './AdminResetPasswordDialog';
+import { ResetPasswordDialog } from './ResetPasswordDialog';
 
 vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
 vi.mock('@/components/ui/InputGroup', () =>
@@ -52,7 +52,7 @@ vi.mock('sonner', () => ({
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
 
-describe('AdminResetPasswordDialog', () => {
+describe('ResetPasswordDialog', () => {
   beforeEach(() => {
     toastSuccess.mockReset();
     toastError.mockReset();
@@ -64,7 +64,7 @@ describe('AdminResetPasswordDialog', () => {
     const onResetPassword = vi.fn().mockResolvedValue(undefined);
 
     render(
-      <AdminResetPasswordDialog
+      <ResetPasswordDialog
         open
         setOpen={setOpen}
         onResetPassword={onResetPassword}
@@ -88,7 +88,7 @@ describe('AdminResetPasswordDialog', () => {
     const setOpen = vi.fn();
     const onResetPassword = vi.fn();
 
-    render(<AdminResetPasswordDialog open setOpen={setOpen} onResetPassword={onResetPassword} />);
+    render(<ResetPasswordDialog open setOpen={setOpen} onResetPassword={onResetPassword}/>);
 
     await user.type(screen.getByLabelText('New Password'), 'StrongPass1!');
     await user.type(screen.getByLabelText('Confirm New Password'), 'Mismatch1');
