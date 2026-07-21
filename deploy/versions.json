@@ -1,13 +1,25 @@
 {
   "versions": [
     {
+      "tag": "v0.1.2",
+      "label": "v0.1.2",
+      "notes": "Release v0.1.2.",
+      "requiresHostUpdate": true
+    },
+    {
+      "tag": "v0.1.1",
+      "label": "v0.1.1",
+      "notes": "Release v0.1.1.",
+      "requiresHostUpdate": true
+    },
+    {
       "tag": "v0.1.0",
       "label": "v0.1.0",
       "notes": "First tagged release."
     },
     {
       "tag": "main",
-      "label": "Latest (main)",
+      "label": "Latest",
       "notes": "Tracks the newest build from the main branch. Moves forward on every merge."
     }
   ]

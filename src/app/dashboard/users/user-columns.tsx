@@ -1,7 +1,7 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { User } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import type { UserListItem } from '@/lib/users-list';
@@ -14,7 +14,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Pencil, Trash2, Lock, User2, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, Lock, LockOpen, User2, ChevronDown } from 'lucide-react';
 import { CompactDate } from '@/components/ui/CompactDate';
 
 import {
@@ -25,6 +25,44 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+
+/** Human "5m", "40s" for a millisecond duration. Coarse on purpose; this is a hint. */
+function formatRemaining(ms: number): string {
+  const totalSeconds = Math.ceil(ms / 1000);
+  if (totalSeconds >= 60) return `${Math.ceil(totalSeconds / 60)}m`;
+  return `${totalSeconds}s`;
+}
+
+/**
+ * "Locked 5m" badge that counts itself down and disappears when the lock expires -
+ * without a refetch, so the table stays honest as the clock runs. Renders nothing once
+ * the lock is in the past or absent.
+ */
+function LockedBadge({ lockedUntil }: { lockedUntil: Date | string | null }) {
+  const target = lockedUntil ? new Date(lockedUntil).getTime() : 0;
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!target || target <= Date.now()) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [target]);
+
+  const remaining = target - now;
+  if (remaining <= 0) return null;
+
+  return (
+    <StatusBadge variant="warning" title={new Date(target).toLocaleString()}>
+      <Lock className="mr-1 h-3 w-3" aria-hidden="true" />
+      Locked {formatRemaining(remaining)}
+    </StatusBadge>
+  );
+}
+
+/** Whether an account is locked right now (future lockedUntil). */
+function isLockedNow(lockedUntil: Date | string | null): boolean {
+  return Boolean(lockedUntil && new Date(lockedUntil).getTime() > Date.now());
+}
 
 export function getUserColumns(
   onUserUpdate: () => void,
@@ -109,11 +147,33 @@ export function getUserColumns(
       },
       cell: ({ row }) => {
         const inactive = row.getValue<boolean>('inactive');
-        return inactive ? (
-          <StatusBadge variant="neutral">Inactive</StatusBadge>
-        ) : (
-          <StatusBadge variant="success">Active</StatusBadge>
+        if (inactive) return <StatusBadge variant="neutral">Inactive</StatusBadge>;
+        // A live lock outranks "Active": a locked account can't sign in right now, which
+        // is what an admin scanning this column needs to see. Expired/null falls through.
+        return (
+          <span className="flex items-center gap-1.5">
+            <StatusBadge variant="success">Active</StatusBadge>
+            <LockedBadge lockedUntil={row.original.lockedUntil} />
+          </span>
         );
+      },
+    },
+    {
+      // Filter-only, hidden by default (see defaultColumnVisibility in UsersClient).
+      // Lock is orthogonal to Active/Inactive - a user can be active AND locked - so it
+      // gets its own filter dimension rather than being folded into the Status filter,
+      // which would wrongly make "Active" and "Locked" mutually exclusive.
+      id: 'lockStatus',
+      accessorFn: (row) => (isLockedNow(row.lockedUntil) ? 'locked' : 'unlocked'),
+      header: () => <span className="sr-only">Lock status</span>,
+      cell: () => null,
+      meta: {
+        filterVariant: 'multiselect',
+        filterLabel: 'Lock',
+        filterOptions: [
+          { label: 'Locked', value: 'locked' },
+          { label: 'Not locked', value: 'unlocked' },
+        ],
       },
     },
     {
@@ -187,6 +247,25 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
     }
   }
 
+  async function handleUnlock() {
+    try {
+      const res = await fetch(apiPaths.admin.unlockAccount(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to unlock account.');
+      }
+      showToast.success('Account unlocked.');
+      setUnlockConfirmOpen(false);
+      onUserUpdate();
+    } catch (error) {
+      showToast.error(error instanceof Error ? error.message : 'Failed to unlock account.');
+    }
+  }
+
   async function handleDelete() {
     try {
       const res = await fetch(apiPaths.user(user.id), {
@@ -237,6 +316,16 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         cancelText="Cancel"
       />
 
+      <ConfirmDialog
+        open={unlockConfirmOpen}
+        onCancel={() => setUnlockConfirmOpen(false)}
+        onConfirm={handleUnlock}
+        title="Unlock Account"
+        description={`Unlock ${user.firstName} ${user.lastName}? They will be able to sign in again immediately. Repeated failed logins can re-lock the account.`}
+        confirmText="Unlock"
+        cancelText="Cancel"
+      />
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -266,6 +355,15 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
           >
             <Lock className="h-4 w-4" />
             Reset Password
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => setUnlockConfirmOpen(true)}
+            disabled={!isLockedNow(user.lockedUntil)}
+            className="hover:bg-secondary flex items-center gap-2"
+          >
+            <LockOpen className="h-4 w-4" />
+            Unlock Account
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />

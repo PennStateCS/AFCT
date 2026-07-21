@@ -133,6 +133,9 @@ Environment variables:
   ADMIN_EMAIL             Initial administrator email
   ADMIN_PASSWORD          Initial administrator password
   ADMIN_PASSWORD_FILE     File containing the initial administrator password
+  AFCT_APP_TAG            Published release to pin on a fresh install, e.g. v0.1.1
+                          (default: the latest release). Must be a released version;
+                          'main' and unreleased tags are rejected.
 
 Advanced overrides:
   AFCT_COMPOSE_FILE       Compose file name
@@ -292,9 +295,23 @@ rotate_installer_log() {
   chmod 600 "${LOG_FILE}.1" 2>/dev/null || true
 }
 
+# When the installer is run via `sudo`, the files it writes are created root-owned.
+# A later NON-root run (`status`/`update`/`doctor`, once the user is in the docker
+# group) then can't read .env.production and fails with confusing "missing settings"
+# errors. Hand ownership of the given paths back to the invoking user. No-op when not
+# run under sudo, or when genuinely logged in as root (no SUDO_USER to hand back to).
+restore_sudo_owner() {
+  [ "$(id -u 2>/dev/null || echo 1)" = "0" ] || return 0
+  [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ] || return 0
+  for _p in "$@"; do
+    [ -e "$_p" ] && chown "$SUDO_USER" "$_p" 2>/dev/null || true
+  done
+}
+
 init_log() {
   rotate_installer_log
   if touch "$LOG_FILE" 2>/dev/null && chmod 600 "$LOG_FILE" 2>/dev/null; then
+    restore_sudo_owner "$LOG_FILE"
     LOG_ENABLED="true"
     {
       printf '\n============================================================\n'
@@ -656,6 +673,23 @@ warn_for_app_url() {
   fi
 }
 
+# The AFCT stack always terminates TLS at nginx and redirects :80 -> :443, so it is only
+# ever reached over HTTPS. An http:// public URL would be written to NEXTAUTH_URL and
+# produce a cookie-scheme mismatch that lets login succeed but 401s authenticated
+# requests. Upgrade http:// to https:// (operating on the global APP_URL_IN), keeping an
+# explicit localhost as-is for local testing.
+enforce_https_app_url() {
+  case "$APP_URL_IN" in
+    http://localhost|http://localhost:*|http://localhost/*) return 0 ;;
+    http://127.0.0.1|http://127.0.0.1:*|http://127.0.0.1/*) return 0 ;;
+    http://\[::1\]|http://\[::1\]:*|http://\[::1\]/*) return 0 ;;
+    http://*)
+      APP_URL_IN="https://${APP_URL_IN#http://}"
+      info "the AFCT stack serves HTTPS; using ${APP_URL_IN} as the public URL."
+      ;;
+  esac
+}
+
 is_strong_password() {
   _password=$1
   [ "${#_password}" -ge 8 ] && [ "${#_password}" -le 72 ] || return 1
@@ -786,6 +820,7 @@ backup_env_file() {
   _backup="${ENV_FILE}.backup.${_stamp}.$$"
   cp "$ENV_FILE" "$_backup" || die "could not back up ${ENV_FILE}."
   chmod 600 "$_backup" 2>/dev/null || true
+  restore_sudo_owner "$_backup"
   info "saved the previous configuration as ${_backup}."
 }
 
@@ -859,6 +894,7 @@ write_environment_file() {
   mv "$TMP_ENV" "$ENV_FILE" || die "could not replace ${ENV_FILE}."
   TMP_ENV=""
   chmod 600 "$ENV_FILE" 2>/dev/null || true
+  restore_sudo_owner "$ENV_FILE"
 }
 
 # --------------------------------------------------------------------------- #
@@ -924,10 +960,10 @@ maybe_install_docker() {
 
   info "downloading Docker's installer..."
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL https://get.docker.com -o "$DOCKER_INSTALL_SCRIPT" || \
+    curl -fsSL --connect-timeout 10 --max-time 300 --retry 3 --retry-delay 2 https://get.docker.com -o "$DOCKER_INSTALL_SCRIPT" || \
       die "could not download Docker's installer."
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$DOCKER_INSTALL_SCRIPT" https://get.docker.com || \
+    wget -q --timeout=30 --tries=3 -O "$DOCKER_INSTALL_SCRIPT" https://get.docker.com || \
       die "could not download Docker's installer."
   else
     die "curl or wget is required to download Docker."
@@ -1123,14 +1159,16 @@ check_sensitive_permissions() {
   return 0
 }
 
+# 0 = confirmed synchronized; 1 = confirmed NOT synchronized; 2 = could not determine
+# (no timedatectl, or an indeterminate state) — callers must not report this as "ok".
 check_clock_sync() {
-  command -v timedatectl >/dev/null 2>&1 || return 0
+  command -v timedatectl >/dev/null 2>&1 || return 2
   _sync=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || printf '')
   case "$_sync" in
     yes) return 0 ;;
     no) warn "the system clock is not synchronized. Incorrect time can break TLS and authentication."; return 1 ;;
   esac
-  return 0
+  return 2
 }
 
 compose_volume_names() {
@@ -1379,7 +1417,24 @@ redact_exact_secrets_in_tree() {
     cp "$_file" "$_tmp" 2>/dev/null || continue
     while IFS= read -r _secret; do
       [ -n "$_secret" ] || continue
-      awk -v secret="$_secret" '{ gsub(secret, "***REDACTED***"); print }' "$_tmp" > "${_tmp}.next" 2>/dev/null || continue
+      # Literal (not regex) replacement: a secret may contain regex metacharacters, and
+      # gsub() would treat them as a pattern — either erroring out (leaving the secret
+      # UN-redacted in the shareable archive) or over-redacting. index()/substr do a
+      # plain substring swap and never fail on metacharacters.
+      if ! awk -v s="$_secret" -v r='***REDACTED***' '
+        {
+          line = $0; out = ""
+          while ((p = index(line, s)) > 0) {
+            out = out substr(line, 1, p - 1) r
+            line = substr(line, p + length(s))
+          }
+          print out line
+        }' "$_tmp" > "${_tmp}.next" 2>/dev/null; then
+        # Never ship a file we could not fully redact: drop the staged copy AND the
+        # source from the archive tree so no un-redacted content survives.
+        rm -f "$_tmp" "${_tmp}.next" "$_file"
+        continue 2
+      fi
       mv "${_tmp}.next" "$_tmp"
     done < "$_secret_file"
     mv "$_tmp" "$_file" 2>/dev/null || rm -f "$_tmp"
@@ -1487,6 +1542,7 @@ configure_new_install() {
   fi
   APP_URL_IN=$(normalize_app_url "$_requested_url") || \
     die "APP_URL must be a valid http:// or https:// origin without spaces, paths, queries, or fragments."
+  enforce_https_app_url
   is_env_value_safe "$APP_URL_IN" || die "APP_URL contains unsupported characters."
   warn_for_app_url "$APP_URL_IN"
 
@@ -1562,6 +1618,7 @@ configure_existing_install() {
   fi
   APP_URL_IN=$(normalize_app_url "$_requested_url") || \
     die "APP_URL must be a valid http:// or https:// origin without spaces, paths, queries, or fragments."
+  enforce_https_app_url
   is_env_value_safe "$APP_URL_IN" || die "APP_URL contains unsupported characters."
   warn_for_app_url "$APP_URL_IN"
 
@@ -1668,6 +1725,12 @@ do_install() {
   backup_env_file
   write_environment_file
   success "Configuration written to ${ENV_FILE}."
+
+  # Fresh install only: pin to a published release before pulling images (never the
+  # rolling "main" build). Reconfigure leaves the running version alone.
+  if [ "$RECONFIGURING" != "true" ]; then
+    pin_release_tag_on_fresh_install
+  fi
 
   step "Deploy"
   DIAG_ON_EXIT="true"
@@ -1779,13 +1842,80 @@ show_logs() {
 fetch_url() {
   _url=$1
   _dest=$2
+  # Bounded timeouts + a few retries so a slow or flaky network fails predictably
+  # instead of hanging, and rides out transient blips.
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$_url" -o "$_dest"
+    curl -fsSL --connect-timeout 10 --max-time 120 --retry 3 --retry-delay 2 "$_url" -o "$_dest"
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$_dest" "$_url"
+    wget -q --timeout=30 --tries=3 -O "$_dest" "$_url"
   else
     die "curl or wget is required to download files."
   fi
+}
+
+# Print the newest tagged release from the curated manifest (deploy/versions.json,
+# the same list the in-app updater reads), or nothing if it can't be fetched/parsed.
+# The rolling "main" entry is skipped so a fresh install pins to a real release.
+# Print every curated release tag from the manifest (newest first), one per line,
+# excluding the rolling "main" build. Empty if the manifest can't be fetched/parsed.
+list_release_tags() {
+  _vf=$(mktemp "${TMPDIR:-/tmp}/afct-versions.XXXXXX" 2>/dev/null) || return 0
+  if fetch_url "${INSTALLER_BASE_URL}/versions.json" "$_vf" 2>/dev/null && [ -s "$_vf" ]; then
+    if command -v jq >/dev/null 2>&1; then
+      # Prefer a real JSON parser when available; robust to formatting/escaping.
+      jq -r '(.versions // [])[]?.tag // empty' "$_vf" 2>/dev/null | grep -v '^main$' || true
+    else
+      # Portable fallback: extract "tag":"..." values in order, skipping "main".
+      awk '
+        {
+          s = $0
+          while (match(s, /"tag"[ \t]*:[ \t]*"[^"]*"/)) {
+            tok = substr(s, RSTART, RLENGTH)
+            s = substr(s, RSTART + RLENGTH)
+            sub(/^"tag"[ \t]*:[ \t]*"/, "", tok)
+            sub(/"$/, "", tok)
+            if (tok != "" && tok != "main") print tok
+          }
+        }
+      ' "$_vf"
+    fi
+  fi
+  rm -f "$_vf"
+}
+
+# On a brand-new install, pin AFCT_APP_TAG to a published RELEASE. The installer only
+# deploys versioned releases — never the rolling "main" build — so a production box runs
+# a reproducible version. An explicit AFCT_APP_TAG is honored only if it names a real
+# release (validated against the manifest when reachable); with none set we take the
+# newest release. "main" is refused, and if no release can be determined the install
+# stops rather than silently deploying "main". An existing release pin is left alone.
+pin_release_tag_on_fresh_install() {
+  _existing=$(read_env_value AFCT_APP_TAG "$ENV_FILE")
+  if [ -n "$_existing" ] && [ "$_existing" != "main" ]; then
+    return 0
+  fi
+
+  _want=${AFCT_APP_TAG:-}
+  if [ "$_want" = "main" ]; then
+    die "AFCT_APP_TAG=main is not allowed: the installer deploys published releases only. Set AFCT_APP_TAG to a release (for example v0.1.1), or leave it unset to install the latest."
+  fi
+
+  _releases=$(list_release_tags)
+  if [ -n "$_want" ]; then
+    case "$_want" in *[!A-Za-z0-9._-]*) die "AFCT_APP_TAG contains unsupported characters." ;; esac
+    # When the manifest is reachable, the requested tag must be a listed release; when it
+    # isn't, we trust an explicitly pinned (non-main) tag so an offline install still works.
+    if [ -n "$_releases" ] && ! printf '%s\n' "$_releases" | grep -qx "$_want"; then
+      die "AFCT_APP_TAG='${_want}' is not a published release. Known releases: $(printf '%s\n' "$_releases" | tr '\n' ' ')."
+    fi
+    _tag=$_want
+  else
+    _tag=$(printf '%s\n' "$_releases" | head -n 1)
+    [ -n "$_tag" ] || die "could not determine the latest release to install (is ${INSTALLER_BASE_URL}/versions.json reachable?). Re-run with AFCT_APP_TAG=vX.Y.Z to pin a specific release."
+  fi
+
+  set_env_flag AFCT_APP_TAG "$_tag"
+  info "pinned this install to release ${_tag}. Change it later from Admin -> System Settings -> Updates."
 }
 
 # Refresh the deploy bundle (this installer, the compose file, and the env template)
@@ -1793,6 +1923,9 @@ fetch_url() {
 # containers — it only updates the files on disk. Run it before `update` when a
 # release changed the compose file or the updater (the Updates tab flags those).
 do_self_update() {
+  # Take the same lock the other mutating commands use, so a self-update can't swap the
+  # compose file / installer out from under a concurrent `update` or `restart`.
+  acquire_lock
   info "refreshing the AFCT deploy files from ${INSTALLER_BASE_URL} ..."
 
   # Stage every download first so a partial or failed fetch never clobbers a working
@@ -1801,19 +1934,29 @@ do_self_update() {
   _t_installer="${SCRIPT_DIR}/.install.sh.new.$$"
   _t_compose="${SCRIPT_DIR}/.${COMPOSE_FILE}.new.$$"
   _t_example="${SCRIPT_DIR}/.${ENV_EXAMPLE}.new.$$"
-  _cleanup='rm -f "$_t_installer" "$_t_compose" "$_t_example"'
 
   if ! fetch_url "${INSTALLER_BASE_URL}/install.sh" "$_t_installer" \
     || ! fetch_url "${INSTALLER_BASE_URL}/${COMPOSE_FILE}" "$_t_compose" \
     || ! fetch_url "${INSTALLER_BASE_URL}/${ENV_EXAMPLE}" "$_t_example"; then
-    eval "$_cleanup"
+    rm -f "$_t_installer" "$_t_compose" "$_t_example"
     die "could not download the deploy files. Check network access to the repository."
   fi
 
   # Refuse to install a truncated or corrupt installer.
   if [ ! -s "$_t_installer" ] || ! sh -n "$_t_installer" 2>/dev/null; then
-    eval "$_cleanup"
+    rm -f "$_t_installer" "$_t_compose" "$_t_example"
     die "the downloaded installer is invalid; keeping the current one."
+  fi
+
+  # Sanity-check the other downloads before swapping them in: the compose file must be
+  # non-empty and actually look like a Compose file, and the env template non-empty.
+  if [ ! -s "$_t_compose" ] || ! grep -qE '^services:' "$_t_compose" 2>/dev/null; then
+    rm -f "$_t_installer" "$_t_compose" "$_t_example"
+    die "the downloaded compose file is invalid; keeping the current one."
+  fi
+  if [ ! -s "$_t_example" ]; then
+    rm -f "$_t_installer" "$_t_compose" "$_t_example"
+    die "the downloaded environment template is empty; keeping the current one."
   fi
 
   _changed=""
@@ -1834,7 +1977,7 @@ do_self_update() {
       cp "$_target" "${_target}.backup.${_stamp}" 2>/dev/null \
         && info "saved the previous ${_name} as ${_name}.backup.${_stamp}."
     fi
-    mv "$_tmp" "$_target" || { eval "$_cleanup"; die "could not replace ${_name}."; }
+    mv "$_tmp" "$_target" || { rm -f "$_t_installer" "$_t_compose" "$_t_example"; die "could not replace ${_name}."; }
     _changed="${_changed} ${_name}"
   done
   chmod +x "${SCRIPT_DIR}/install.sh" 2>/dev/null || true
@@ -2014,7 +2157,14 @@ do_doctor() {
   doctor_check "Environment configuration is complete" doctor_env_complete
   check_sensitive_permissions "$ENV_FILE" && success "Environment file permissions are private" && DOCTOR_OK=$((DOCTOR_OK + 1)) || DOCTOR_WARN=$((DOCTOR_WARN + 1))
   doctor_check "At least 5 GB of disk space is available" doctor_disk
-  check_clock_sync && success "System clock synchronization is enabled" && DOCTOR_OK=$((DOCTOR_OK + 1)) || DOCTOR_WARN=$((DOCTOR_WARN + 1))
+  _clock_rc=0; check_clock_sync || _clock_rc=$?
+  if [ "$_clock_rc" -eq 0 ]; then
+    success "System clock synchronization is enabled"; DOCTOR_OK=$((DOCTOR_OK + 1))
+  elif [ "$_clock_rc" -eq 2 ]; then
+    info "System clock synchronization not verified (timedatectl unavailable)"
+  else
+    DOCTOR_WARN=$((DOCTOR_WARN + 1))
+  fi
 
   if resolve_docker_access_soft && [ -n "$COMPOSE_KIND" ]; then
     success "Docker daemon is reachable"
@@ -2080,6 +2230,14 @@ existing_install_menu() {
 # --------------------------------------------------------------------------- #
 # Entry point
 # --------------------------------------------------------------------------- #
+# The health-loop knobs are used by update/restart too, not just the install
+# preflight. Validate them here for every mode so a bad value fails fast instead of
+# aborting a health-wait loop mid-update under `set -e`.
+case "$HEALTH_TIMEOUT" in ''|*[!0-9]*) die "AFCT_HEALTH_TIMEOUT must be a positive integer." ;; esac
+case "$HEALTH_INTERVAL" in ''|*[!0-9]*) die "AFCT_HEALTH_INTERVAL must be a positive integer." ;; esac
+[ "$HEALTH_TIMEOUT" -ge 1 ] || die "AFCT_HEALTH_TIMEOUT must be at least 1 second."
+[ "$HEALTH_INTERVAL" -ge 1 ] || die "AFCT_HEALTH_INTERVAL must be at least 1 second."
+
 case "$MODE" in
   help)
     usage
@@ -2109,6 +2267,7 @@ case "$MODE" in
     do_update
     ;;
   self-update)
+    init_log
     do_self_update
     ;;
   restart)
