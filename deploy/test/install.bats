@@ -153,6 +153,25 @@ EOF
   [[ "$output" == *"could not determine the latest release"* ]]
 }
 
+@test "an http:// public URL is upgraded to https (the stack serves HTTPS)" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export APP_URL="http://afct.example.edu"
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -Eq '^NEXTAUTH_URL=https://afct.example.edu$' .env.production; [ "$status" -eq 0 ]
+  run grep -q '^NEXTAUTH_URL=http://' .env.production; [ "$status" -ne 0 ]
+}
+
+@test "an http://localhost public URL is left as-is for local testing" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export APP_URL="http://localhost:8080"
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -Eq '^NEXTAUTH_URL=http://localhost:8080$' .env.production; [ "$status" -eq 0 ]
+}
+
 @test "a password containing an unsupported character is rejected before writing" {
   export ADMIN_EMAIL="admin@example.com"
   export ADMIN_PASSWORD="Bad'Pass1A"

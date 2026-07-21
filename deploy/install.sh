@@ -673,6 +673,23 @@ warn_for_app_url() {
   fi
 }
 
+# The AFCT stack always terminates TLS at nginx and redirects :80 -> :443, so it is only
+# ever reached over HTTPS. An http:// public URL would be written to NEXTAUTH_URL and
+# produce a cookie-scheme mismatch that lets login succeed but 401s authenticated
+# requests. Upgrade http:// to https:// (operating on the global APP_URL_IN), keeping an
+# explicit localhost as-is for local testing.
+enforce_https_app_url() {
+  case "$APP_URL_IN" in
+    http://localhost|http://localhost:*|http://localhost/*) return 0 ;;
+    http://127.0.0.1|http://127.0.0.1:*|http://127.0.0.1/*) return 0 ;;
+    http://\[::1\]|http://\[::1\]:*|http://\[::1\]/*) return 0 ;;
+    http://*)
+      APP_URL_IN="https://${APP_URL_IN#http://}"
+      info "the AFCT stack serves HTTPS; using ${APP_URL_IN} as the public URL."
+      ;;
+  esac
+}
+
 is_strong_password() {
   _password=$1
   [ "${#_password}" -ge 8 ] && [ "${#_password}" -le 72 ] || return 1
@@ -1525,6 +1542,7 @@ configure_new_install() {
   fi
   APP_URL_IN=$(normalize_app_url "$_requested_url") || \
     die "APP_URL must be a valid http:// or https:// origin without spaces, paths, queries, or fragments."
+  enforce_https_app_url
   is_env_value_safe "$APP_URL_IN" || die "APP_URL contains unsupported characters."
   warn_for_app_url "$APP_URL_IN"
 
@@ -1600,6 +1618,7 @@ configure_existing_install() {
   fi
   APP_URL_IN=$(normalize_app_url "$_requested_url") || \
     die "APP_URL must be a valid http:// or https:// origin without spaces, paths, queries, or fragments."
+  enforce_https_app_url
   is_env_value_safe "$APP_URL_IN" || die "APP_URL contains unsupported characters."
   warn_for_app_url "$APP_URL_IN"
 
