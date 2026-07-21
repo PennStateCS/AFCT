@@ -133,6 +133,9 @@ Environment variables:
   ADMIN_EMAIL             Initial administrator email
   ADMIN_PASSWORD          Initial administrator password
   ADMIN_PASSWORD_FILE     File containing the initial administrator password
+  AFCT_APP_TAG            Version to pin on a fresh install (default: the latest
+                          release; falls back to the rolling 'main' build if the
+                          release list can't be reached)
 
 Advanced overrides:
   AFCT_COMPOSE_FILE       Compose file name
@@ -1669,6 +1672,12 @@ do_install() {
   write_environment_file
   success "Configuration written to ${ENV_FILE}."
 
+  # Fresh install only: pin to the latest release before pulling images. Reconfigure
+  # leaves the running version alone.
+  if [ "$RECONFIGURING" != "true" ]; then
+    pin_app_tag_on_fresh_install
+  fi
+
   step "Deploy"
   DIAG_ON_EXIT="true"
   deploy_stack
@@ -1785,6 +1794,51 @@ fetch_url() {
     wget -qO "$_dest" "$_url"
   else
     die "curl or wget is required to download files."
+  fi
+}
+
+# Print the newest tagged release from the curated manifest (deploy/versions.json,
+# the same list the in-app updater reads), or nothing if it can't be fetched/parsed.
+# The rolling "main" entry is skipped so a fresh install pins to a real release.
+resolve_latest_release_tag() {
+  _vf=$(mktemp "${TMPDIR:-/tmp}/afct-versions.XXXXXX" 2>/dev/null) || return 0
+  if fetch_url "${INSTALLER_BASE_URL}/versions.json" "$_vf" 2>/dev/null && [ -s "$_vf" ]; then
+    awk '
+      {
+        s = $0
+        while (match(s, /"tag"[ \t]*:[ \t]*"[^"]*"/)) {
+          tok = substr(s, RSTART, RLENGTH)
+          s = substr(s, RSTART + RLENGTH)
+          sub(/^"tag"[ \t]*:[ \t]*"/, "", tok)
+          sub(/"$/, "", tok)
+          if (tok != "" && tok != "main") { print tok; exit }
+        }
+      }
+    ' "$_vf"
+  fi
+  rm -f "$_vf"
+}
+
+# On a brand-new install, pin AFCT_APP_TAG to a real release so the box runs a
+# reproducible version instead of the moving "main" build. An explicit AFCT_APP_TAG in
+# the environment wins; otherwise we take the newest release from the manifest. Never
+# overrides a pin already in the env file (e.g. one the in-app updater wrote), and
+# falls back to "main" (leaves AFCT_APP_TAG unset) if nothing resolves.
+pin_app_tag_on_fresh_install() {
+  if [ -n "$(read_env_value AFCT_APP_TAG "$ENV_FILE")" ]; then
+    return 0
+  fi
+  _tag=${AFCT_APP_TAG:-}
+  [ -n "$_tag" ] || _tag=$(resolve_latest_release_tag)
+  # Only accept a plain version token; anything odd falls back to tracking main.
+  case "$_tag" in
+    ''|*[!A-Za-z0-9._-]*) _tag="" ;;
+  esac
+  if [ -n "$_tag" ]; then
+    set_env_flag AFCT_APP_TAG "$_tag"
+    info "pinned this install to ${_tag}. Change it later from Admin -> System Settings -> Updates."
+  else
+    info "no tagged release found; this install tracks the rolling 'main' build."
   fi
 }
 

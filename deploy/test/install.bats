@@ -103,6 +103,36 @@ EOF
   run grep -Eq '^ADMIN_PASSWORD=Str0ng!Pass1$' .env.production; [ "$status" -eq 0 ]
 }
 
+@test "a fresh install pins AFCT_APP_TAG to the newest release from the manifest" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  # Mock curl serves this manifest for the versions.json download; newest release first,
+  # the rolling 'main' entry must be skipped.
+  export MOCK_CURL_BODY='{ "versions": [ { "tag": "v2.3.4" }, { "tag": "v2.0.0" }, { "tag": "main" } ] }'
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -Eq '^AFCT_APP_TAG=v2.3.4$' .env.production; [ "$status" -eq 0 ]
+}
+
+@test "an explicit AFCT_APP_TAG wins over the manifest on a fresh install" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export AFCT_APP_TAG="v1.0.0"
+  export MOCK_CURL_BODY='{ "versions": [ { "tag": "v2.3.4" }, { "tag": "main" } ] }'
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -Eq '^AFCT_APP_TAG=v1.0.0$' .env.production; [ "$status" -eq 0 ]
+}
+
+@test "a fresh install tracks main when the manifest lists no release" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export MOCK_CURL_BODY='{ "versions": [ { "tag": "main" } ] }'
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -q '^AFCT_APP_TAG=' .env.production; [ "$status" -ne 0 ]
+}
+
 @test "a password containing an unsupported character is rejected before writing" {
   export ADMIN_EMAIL="admin@example.com"
   export ADMIN_PASSWORD="Bad'Pass1A"
