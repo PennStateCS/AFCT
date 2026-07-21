@@ -225,6 +225,7 @@ export function getUserColumns(
 function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpdate: () => void }) {
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [ unlockConfirmOpen, setUnlockConfirmOpen ] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
