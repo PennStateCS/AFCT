@@ -295,9 +295,23 @@ rotate_installer_log() {
   chmod 600 "${LOG_FILE}.1" 2>/dev/null || true
 }
 
+# When the installer is run via `sudo`, the files it writes are created root-owned.
+# A later NON-root run (`status`/`update`/`doctor`, once the user is in the docker
+# group) then can't read .env.production and fails with confusing "missing settings"
+# errors. Hand ownership of the given paths back to the invoking user. No-op when not
+# run under sudo, or when genuinely logged in as root (no SUDO_USER to hand back to).
+restore_sudo_owner() {
+  [ "$(id -u 2>/dev/null || echo 1)" = "0" ] || return 0
+  [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ] || return 0
+  for _p in "$@"; do
+    [ -e "$_p" ] && chown "$SUDO_USER" "$_p" 2>/dev/null || true
+  done
+}
+
 init_log() {
   rotate_installer_log
   if touch "$LOG_FILE" 2>/dev/null && chmod 600 "$LOG_FILE" 2>/dev/null; then
+    restore_sudo_owner "$LOG_FILE"
     LOG_ENABLED="true"
     {
       printf '\n============================================================\n'
@@ -789,6 +803,7 @@ backup_env_file() {
   _backup="${ENV_FILE}.backup.${_stamp}.$$"
   cp "$ENV_FILE" "$_backup" || die "could not back up ${ENV_FILE}."
   chmod 600 "$_backup" 2>/dev/null || true
+  restore_sudo_owner "$_backup"
   info "saved the previous configuration as ${_backup}."
 }
 
@@ -862,6 +877,7 @@ write_environment_file() {
   mv "$TMP_ENV" "$ENV_FILE" || die "could not replace ${ENV_FILE}."
   TMP_ENV=""
   chmod 600 "$ENV_FILE" 2>/dev/null || true
+  restore_sudo_owner "$ENV_FILE"
 }
 
 # --------------------------------------------------------------------------- #
@@ -1126,14 +1142,16 @@ check_sensitive_permissions() {
   return 0
 }
 
+# 0 = confirmed synchronized; 1 = confirmed NOT synchronized; 2 = could not determine
+# (no timedatectl, or an indeterminate state) — callers must not report this as "ok".
 check_clock_sync() {
-  command -v timedatectl >/dev/null 2>&1 || return 0
+  command -v timedatectl >/dev/null 2>&1 || return 2
   _sync=$(timedatectl show -p NTPSynchronized --value 2>/dev/null || printf '')
   case "$_sync" in
     yes) return 0 ;;
     no) warn "the system clock is not synchronized. Incorrect time can break TLS and authentication."; return 1 ;;
   esac
-  return 0
+  return 2
 }
 
 compose_volume_names() {
@@ -1382,7 +1400,24 @@ redact_exact_secrets_in_tree() {
     cp "$_file" "$_tmp" 2>/dev/null || continue
     while IFS= read -r _secret; do
       [ -n "$_secret" ] || continue
-      awk -v secret="$_secret" '{ gsub(secret, "***REDACTED***"); print }' "$_tmp" > "${_tmp}.next" 2>/dev/null || continue
+      # Literal (not regex) replacement: a secret may contain regex metacharacters, and
+      # gsub() would treat them as a pattern — either erroring out (leaving the secret
+      # UN-redacted in the shareable archive) or over-redacting. index()/substr do a
+      # plain substring swap and never fail on metacharacters.
+      if ! awk -v s="$_secret" -v r='***REDACTED***' '
+        {
+          line = $0; out = ""
+          while ((p = index(line, s)) > 0) {
+            out = out substr(line, 1, p - 1) r
+            line = substr(line, p + length(s))
+          }
+          print out line
+        }' "$_tmp" > "${_tmp}.next" 2>/dev/null; then
+        # Never ship a file we could not fully redact: drop the staged copy AND the
+        # source from the archive tree so no un-redacted content survives.
+        rm -f "$_tmp" "${_tmp}.next" "$_file"
+        continue 2
+      fi
       mv "${_tmp}.next" "$_tmp"
     done < "$_secret_file"
     mv "$_tmp" "$_file" 2>/dev/null || rm -f "$_tmp"
@@ -1847,6 +1882,9 @@ pin_app_tag_on_fresh_install() {
 # containers — it only updates the files on disk. Run it before `update` when a
 # release changed the compose file or the updater (the Updates tab flags those).
 do_self_update() {
+  # Take the same lock the other mutating commands use, so a self-update can't swap the
+  # compose file / installer out from under a concurrent `update` or `restart`.
+  acquire_lock
   info "refreshing the AFCT deploy files from ${INSTALLER_BASE_URL} ..."
 
   # Stage every download first so a partial or failed fetch never clobbers a working
@@ -1855,18 +1893,17 @@ do_self_update() {
   _t_installer="${SCRIPT_DIR}/.install.sh.new.$$"
   _t_compose="${SCRIPT_DIR}/.${COMPOSE_FILE}.new.$$"
   _t_example="${SCRIPT_DIR}/.${ENV_EXAMPLE}.new.$$"
-  _cleanup='rm -f "$_t_installer" "$_t_compose" "$_t_example"'
 
   if ! fetch_url "${INSTALLER_BASE_URL}/install.sh" "$_t_installer" \
     || ! fetch_url "${INSTALLER_BASE_URL}/${COMPOSE_FILE}" "$_t_compose" \
     || ! fetch_url "${INSTALLER_BASE_URL}/${ENV_EXAMPLE}" "$_t_example"; then
-    eval "$_cleanup"
+    rm -f "$_t_installer" "$_t_compose" "$_t_example"
     die "could not download the deploy files. Check network access to the repository."
   fi
 
   # Refuse to install a truncated or corrupt installer.
   if [ ! -s "$_t_installer" ] || ! sh -n "$_t_installer" 2>/dev/null; then
-    eval "$_cleanup"
+    rm -f "$_t_installer" "$_t_compose" "$_t_example"
     die "the downloaded installer is invalid; keeping the current one."
   fi
 
@@ -1888,7 +1925,7 @@ do_self_update() {
       cp "$_target" "${_target}.backup.${_stamp}" 2>/dev/null \
         && info "saved the previous ${_name} as ${_name}.backup.${_stamp}."
     fi
-    mv "$_tmp" "$_target" || { eval "$_cleanup"; die "could not replace ${_name}."; }
+    mv "$_tmp" "$_target" || { rm -f "$_t_installer" "$_t_compose" "$_t_example"; die "could not replace ${_name}."; }
     _changed="${_changed} ${_name}"
   done
   chmod +x "${SCRIPT_DIR}/install.sh" 2>/dev/null || true
@@ -2068,7 +2105,14 @@ do_doctor() {
   doctor_check "Environment configuration is complete" doctor_env_complete
   check_sensitive_permissions "$ENV_FILE" && success "Environment file permissions are private" && DOCTOR_OK=$((DOCTOR_OK + 1)) || DOCTOR_WARN=$((DOCTOR_WARN + 1))
   doctor_check "At least 5 GB of disk space is available" doctor_disk
-  check_clock_sync && success "System clock synchronization is enabled" && DOCTOR_OK=$((DOCTOR_OK + 1)) || DOCTOR_WARN=$((DOCTOR_WARN + 1))
+  _clock_rc=0; check_clock_sync || _clock_rc=$?
+  if [ "$_clock_rc" -eq 0 ]; then
+    success "System clock synchronization is enabled"; DOCTOR_OK=$((DOCTOR_OK + 1))
+  elif [ "$_clock_rc" -eq 2 ]; then
+    info "System clock synchronization not verified (timedatectl unavailable)"
+  else
+    DOCTOR_WARN=$((DOCTOR_WARN + 1))
+  fi
 
   if resolve_docker_access_soft && [ -n "$COMPOSE_KIND" ]; then
     success "Docker daemon is reachable"
@@ -2134,6 +2178,14 @@ existing_install_menu() {
 # --------------------------------------------------------------------------- #
 # Entry point
 # --------------------------------------------------------------------------- #
+# The health-loop knobs are used by update/restart too, not just the install
+# preflight. Validate them here for every mode so a bad value fails fast instead of
+# aborting a health-wait loop mid-update under `set -e`.
+case "$HEALTH_TIMEOUT" in ''|*[!0-9]*) die "AFCT_HEALTH_TIMEOUT must be a positive integer." ;; esac
+case "$HEALTH_INTERVAL" in ''|*[!0-9]*) die "AFCT_HEALTH_INTERVAL must be a positive integer." ;; esac
+[ "$HEALTH_TIMEOUT" -ge 1 ] || die "AFCT_HEALTH_TIMEOUT must be at least 1 second."
+[ "$HEALTH_INTERVAL" -ge 1 ] || die "AFCT_HEALTH_INTERVAL must be at least 1 second."
+
 case "$MODE" in
   help)
     usage
