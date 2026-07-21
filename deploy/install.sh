@@ -960,10 +960,10 @@ maybe_install_docker() {
 
   info "downloading Docker's installer..."
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL https://get.docker.com -o "$DOCKER_INSTALL_SCRIPT" || \
+    curl -fsSL --connect-timeout 10 --max-time 300 --retry 3 --retry-delay 2 https://get.docker.com -o "$DOCKER_INSTALL_SCRIPT" || \
       die "could not download Docker's installer."
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$DOCKER_INSTALL_SCRIPT" https://get.docker.com || \
+    wget -q --timeout=30 --tries=3 -O "$DOCKER_INSTALL_SCRIPT" https://get.docker.com || \
       die "could not download Docker's installer."
   else
     die "curl or wget is required to download Docker."
@@ -1842,10 +1842,12 @@ show_logs() {
 fetch_url() {
   _url=$1
   _dest=$2
+  # Bounded timeouts + a few retries so a slow or flaky network fails predictably
+  # instead of hanging, and rides out transient blips.
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$_url" -o "$_dest"
+    curl -fsSL --connect-timeout 10 --max-time 120 --retry 3 --retry-delay 2 "$_url" -o "$_dest"
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$_dest" "$_url"
+    wget -q --timeout=30 --tries=3 -O "$_dest" "$_url"
   else
     die "curl or wget is required to download files."
   fi
@@ -1859,18 +1861,24 @@ fetch_url() {
 list_release_tags() {
   _vf=$(mktemp "${TMPDIR:-/tmp}/afct-versions.XXXXXX" 2>/dev/null) || return 0
   if fetch_url "${INSTALLER_BASE_URL}/versions.json" "$_vf" 2>/dev/null && [ -s "$_vf" ]; then
-    awk '
-      {
-        s = $0
-        while (match(s, /"tag"[ \t]*:[ \t]*"[^"]*"/)) {
-          tok = substr(s, RSTART, RLENGTH)
-          s = substr(s, RSTART + RLENGTH)
-          sub(/^"tag"[ \t]*:[ \t]*"/, "", tok)
-          sub(/"$/, "", tok)
-          if (tok != "" && tok != "main") print tok
+    if command -v jq >/dev/null 2>&1; then
+      # Prefer a real JSON parser when available; robust to formatting/escaping.
+      jq -r '(.versions // [])[]?.tag // empty' "$_vf" 2>/dev/null | grep -v '^main$' || true
+    else
+      # Portable fallback: extract "tag":"..." values in order, skipping "main".
+      awk '
+        {
+          s = $0
+          while (match(s, /"tag"[ \t]*:[ \t]*"[^"]*"/)) {
+            tok = substr(s, RSTART, RLENGTH)
+            s = substr(s, RSTART + RLENGTH)
+            sub(/^"tag"[ \t]*:[ \t]*"/, "", tok)
+            sub(/"$/, "", tok)
+            if (tok != "" && tok != "main") print tok
+          }
         }
-      }
-    ' "$_vf"
+      ' "$_vf"
+    fi
   fi
   rm -f "$_vf"
 }
@@ -1898,7 +1906,7 @@ pin_release_tag_on_fresh_install() {
     # When the manifest is reachable, the requested tag must be a listed release; when it
     # isn't, we trust an explicitly pinned (non-main) tag so an offline install still works.
     if [ -n "$_releases" ] && ! printf '%s\n' "$_releases" | grep -qx "$_want"; then
-      die "AFCT_APP_TAG='${_want}' is not a published release. Known releases: $(printf '%s ' $_releases)."
+      die "AFCT_APP_TAG='${_want}' is not a published release. Known releases: $(printf '%s\n' "$_releases" | tr '\n' ' ')."
     fi
     _tag=$_want
   else
@@ -1938,6 +1946,17 @@ do_self_update() {
   if [ ! -s "$_t_installer" ] || ! sh -n "$_t_installer" 2>/dev/null; then
     rm -f "$_t_installer" "$_t_compose" "$_t_example"
     die "the downloaded installer is invalid; keeping the current one."
+  fi
+
+  # Sanity-check the other downloads before swapping them in: the compose file must be
+  # non-empty and actually look like a Compose file, and the env template non-empty.
+  if [ ! -s "$_t_compose" ] || ! grep -qE '^services:' "$_t_compose" 2>/dev/null; then
+    rm -f "$_t_installer" "$_t_compose" "$_t_example"
+    die "the downloaded compose file is invalid; keeping the current one."
+  fi
+  if [ ! -s "$_t_example" ]; then
+    rm -f "$_t_installer" "$_t_compose" "$_t_example"
+    die "the downloaded environment template is empty; keeping the current one."
   fi
 
   _changed=""
@@ -2248,6 +2267,7 @@ case "$MODE" in
     do_update
     ;;
   self-update)
+    init_log
     do_self_update
     ;;
   restart)

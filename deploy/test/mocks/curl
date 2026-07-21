@@ -19,9 +19,17 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 if [ -n "$_out" ]; then
+  # Defaults live in single-quoted vars first: embedding JSON braces directly inside a
+  # ${VAR-default} expansion truncates the default at the first '}'.
+  _versions_default='{"versions":[{"tag":"v0.0.1"},{"tag":"main"}]}'
+  _compose_default='services: {}'
   case "$_url" in
     *versions.json*)
-      printf '%s' "${MOCK_VERSIONS_BODY-{\"versions\":[{\"tag\":\"v0.0.1\"},{\"tag\":\"main\"}]}}" > "$_out"
+      printf '%s' "${MOCK_VERSIONS_BODY-$_versions_default}" > "$_out"
+      ;;
+    *docker-compose.yml*)
+      # self-update sanity-checks the compose file (must look like Compose).
+      printf '%s' "${MOCK_COMPOSE_BODY-$_compose_default}" > "$_out"
       ;;
     *)
       # No trailing newline, so MOCK_CURL_BODY='' yields a truly empty file (a

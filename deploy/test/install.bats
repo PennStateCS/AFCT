@@ -303,6 +303,9 @@ EOF
   export MOCK_CURL_BODY='#!/bin/sh
 # refreshed-by-self-update
 exit 0'
+  # The compose download is served separately (and must look like a Compose file).
+  export MOCK_COMPOSE_BODY='services: {}
+# refreshed-by-self-update'
   run sh install.sh self-update
   [ "$status" -eq 0 ]
   [[ "$output" == *"Updated:"* ]]
@@ -325,6 +328,17 @@ exit 0'
   [[ "$output" == *"invalid"* ]]
   # The working installer was not clobbered by the bad download.
   run cmp -s install.sh install.sh.orig
+  [ "$status" -eq 0 ]
+}
+
+@test "self-update refuses a compose file that is not a Compose file" {
+  write_complete_env
+  cp docker-compose.yml docker-compose.yml.orig
+  export MOCK_COMPOSE_BODY='this is not compose'
+  run sh install.sh self-update
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"compose file is invalid"* ]]
+  run cmp -s docker-compose.yml docker-compose.yml.orig
   [ "$status" -eq 0 ]
 }
 
