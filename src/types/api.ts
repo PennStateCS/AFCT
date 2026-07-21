@@ -85,7 +85,7 @@ export interface paths {
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/reset-password/route.ts)
          */
-        post: operations["postResetPassword"];
+        post: operations["postAdminResetPassword"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2371,7 +2371,7 @@ export interface operations {
             };
         };
     };
-    postResetPassword: {
+    postAdminResetPassword: {
         parameters: {
             query?: never;
             header?: never;
