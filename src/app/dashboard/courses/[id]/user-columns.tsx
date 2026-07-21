@@ -45,8 +45,6 @@ function ActionsCell({
   viewerRole,
   viewerIsAdmin,
 }: ActionsCellProps) {
-  console.log(viewerIsAdmin);
-  console.log(viewerRole);
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [ editRoleOpen, setEditRoleOpen ] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
