@@ -131,6 +131,10 @@ current_app_tag() {
 set_app_tag() {
   _tag=$1
   _tmp="${ENV_FILE}.updtmp.$$"
+  # We run as root but the file belongs to the non-root install user; capture its
+  # ownership so we can restore it after the rewrite. Otherwise the file becomes
+  # root-owned and the next host-side `install.sh` (run by that user) can't read it.
+  _owner=$(stat -c '%u:%g' "$ENV_FILE" 2>/dev/null || true)
   if grep -qE '^AFCT_APP_TAG=' "$ENV_FILE" 2>/dev/null; then
     awk -v t="$_tag" '/^AFCT_APP_TAG=/ { print "AFCT_APP_TAG=" t; next } { print }' \
       "$ENV_FILE" > "$_tmp" || return 1
@@ -138,6 +142,7 @@ set_app_tag() {
     { cat "$ENV_FILE" && printf 'AFCT_APP_TAG=%s\n' "$_tag"; } > "$_tmp" || return 1
   fi
   chmod 600 "$_tmp" 2>/dev/null || true
+  [ -n "$_owner" ] && chown "$_owner" "$_tmp" 2>/dev/null || true
   # Same directory as the target, so this rename is atomic and stays on the host
   # filesystem (the deploy directory is bind-mounted, not the single file).
   mv "$_tmp" "$ENV_FILE" || { rm -f "$_tmp"; return 1; }
