@@ -39,7 +39,7 @@ Set the public DNS name before configuration. `NEXTAUTH_URL` must exactly match 
 
 Use these guides for routine administration:
 
-- [Configure TLS and HTTPS](../operations/https-certificates.md)
+- [Configure TLS and HTTPS](../admin/system-settings.md#tls-certificate)
 - [Update AFCT](../reference/updates.md)
 - [Manage backups and recovery](../operations/backups.md)
 - [Troubleshoot a deployment](../operations/troubleshooting.md)

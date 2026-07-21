@@ -196,4 +196,4 @@ afterward):
 
 This is **off by default** because the updater holds the Docker socket, which is effectively root access on the host. Once enabled, `update`, `restart`, and `status` include it automatically. A downgrade restores a pre-upgrade database backup and permanently discards database records created since it. Uploaded files are left in place and can become unreferenced. Treat downgrade as recovery, not a casual undo.
 
-Continue with [HTTPS certificates](../../operations/https-certificates.md), then review [updates](../../reference/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
+Continue with [TLS certificates](../../admin/system-settings.md#tls-certificate), then review [updates](../../reference/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).

@@ -48,16 +48,58 @@ The secret is write-only and is not displayed after saving. Use **Remove saved s
 
 ## TLS Certificate
 
-The TLS tab supports four setup methods:
+AFCT creates a self-signed certificate during the first startup, so HTTPS works immediately — but browsers show a warning because the certificate is not trusted. A self-signed certificate is reasonable for restricted testing; a public or institution-facing deployment should install a certificate from a trusted certificate authority.
+
+The **TLS Certificate** tab shows the current certificate (trusted, self-signed, or expired, plus the domain and expiry) and supports four setup methods:
 
 - Request and automatically renew a trusted certificate from Let's Encrypt
-- Generate a certificate signing request, then install the signed certificate
+- Generate a certificate signing request (CSR), then install the signed certificate
 - Create a self-signed certificate
 - Upload an existing PEM certificate and private key
 
-Let's Encrypt requires a public domain that points to the server and internet access to port 80. Use its staging option to check DNS and firewall settings before requesting a production certificate.
+A new certificate normally becomes active within about 15 seconds — no container restart is needed. If a certificate is invalid, AFCT rejects it and keeps the current one, so the site stays reachable. The private key is never displayed after it is uploaded.
 
-AFCT can also turn off Let's Encrypt auto-renewal without removing the current certificate, or reset the installation to a self-signed certificate. Review [HTTPS certificates](../operations/https-certificates.md) before replacing a production certificate.
+### Get a free certificate with Let's Encrypt
+
+If the server is reachable from the public internet, AFCT can obtain and automatically renew a browser-trusted certificate from [Let's Encrypt](https://letsencrypt.org/) with no external tools.
+
+Requirements:
+
+- A domain name that resolves to this server in public DNS.
+- Port 80 reachable from the internet — Let's Encrypt fetches a one-time file over plain HTTP at that domain to confirm you control it.
+- The domain should match your configured URL (`NEXTAUTH_URL`).
+
+Steps:
+
+1. Select **TLS Certificate**, then **Get a free certificate (Let's Encrypt)**.
+2. Confirm the domain (prefilled from your configured URL) and enter a contact email. Let's Encrypt uses the email only for expiry and policy notices.
+3. Optionally turn on **Use staging** to run a test issuance first. Staging issues an untrusted test certificate but confirms DNS and port 80 are set up correctly without spending the weekly rate limit. Turn it off and request again once the test succeeds.
+4. Agree to the Let's Encrypt terms of service and select **Request certificate**. Issuance usually takes under a minute, with live progress shown as it validates the domain and installs the certificate.
+
+After it succeeds, AFCT renews the certificate automatically before it expires. The status shows the managed domain and an **Auto-renewing** badge; select **Turn off auto-renewal** to stop managing it (the current certificate stays in place). Installing a trusted certificate also enables HSTS, which tells browsers to use HTTPS for this domain from then on.
+
+If issuance fails, the previous certificate is kept. The most common causes are DNS not pointing at this server or port 80 being blocked; use the staging option while sorting those out, because Let's Encrypt rate-limits failed attempts.
+
+### Upload an existing certificate
+
+1. Select **TLS Certificate**.
+2. Upload the certificate in PEM format and the matching private key in PEM format.
+3. Add any intermediate or chain certificates supplied by the certificate authority.
+4. Select **Apply certificate**.
+
+AFCT checks that the key matches the certificate, that the certificate has not expired, and that both files use supported formats. Invalid files are rejected without replacing the current certificate.
+
+### Request a CA-signed certificate
+
+Generate a certificate signing request from the TLS tab and submit it to your institution or certificate authority. The private key is created and kept on the server; the CSR contains only public information and does not expose the key. When the signed certificate comes back, install it from the same tab.
+
+### Reset to the self-signed certificate
+
+Select **Reset to self-signed** to revert to the built-in certificate.
+
+### Troubleshoot certificate warnings
+
+A warning is expected with the default self-signed certificate. A warning on a previously trusted deployment usually means the certificate expired, the wrong certificate was installed, the hostname is missing from the certificate, an intermediate certificate is missing, or DNS points to a different server. Check the installed certificate here and renew or replace it as needed.
 
 ## Updates
 

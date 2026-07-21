@@ -139,7 +139,7 @@ sh install.sh restart
 sh install.sh diagnostics
 ```
 
-Continue with [HTTPS certificates](../../operations/https-certificates.md), [updates](../../reference/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
+Continue with [TLS certificates](../../admin/system-settings.md#tls-certificate), [updates](../../reference/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
 
 ## Other AWS hosting options
 

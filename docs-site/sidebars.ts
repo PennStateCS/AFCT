@@ -88,7 +88,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Operations',
-      items: ['operations/backups', 'operations/https-certificates', 'operations/troubleshooting'],
+      items: ['operations/backups', 'operations/troubleshooting'],
     },
     {
       type: 'category',
@@ -98,6 +98,7 @@ const sidebars: SidebarsConfig = {
         'reference/deployment-architecture',
         'reference/updates',
         'reference/roles-and-permissions',
+        'reference/login-protection',
         'reference/client-api',
         'reference/content-security-policy',
       ],

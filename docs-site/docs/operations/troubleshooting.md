@@ -139,4 +139,4 @@ The archive contains installer logs, service status, service logs, and redacted 
 
 ## Certificate warnings
 
-See [HTTPS certificates](https-certificates.md) for expected self-signed warnings and trusted-certificate problems.
+See [TLS certificates](../admin/system-settings.md#tls-certificate) for expected self-signed warnings and trusted-certificate problems.
