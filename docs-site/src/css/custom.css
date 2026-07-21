@@ -17,6 +17,16 @@
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
 }
 
+/* Soft-wrap long lines in code blocks by default. The docs are mostly copy-paste
+   shell commands, and a horizontal scrollbar hides the right end of long lines, so a
+   reader can copy a truncated command. Soft-wrapping does not insert newlines into
+   copied text, so copy fidelity is unchanged. Users can still toggle back to scroll
+   with the per-block word-wrap button. */
+.theme-code-block pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
   --ifm-color-primary: #25c2a0;
