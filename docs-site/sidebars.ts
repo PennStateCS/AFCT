@@ -83,6 +83,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Developer Guide',
       items: [
+        'reference/contributing',
         'reference/creating-a-release',
         'reference/system-architecture',
         'reference/updates',
