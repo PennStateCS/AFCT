@@ -14,10 +14,10 @@ If you are not using AWS, the same Linux guide applies to any public Linux serve
 
 Each guide is self-contained. You only need to read the guide for the machine or service that will host AFCT.
 
-- [Deploy on AWS EC2](production/aws.md), recommended for a public production deployment
-- [Deploy on Linux](production/linux.md), recommended for any long-running server
-- [Deploy on Windows](production/windows.md), useful for smaller or locally managed deployments
-- [Deploy on macOS](production/macos.md), useful for smaller or locally managed deployments
+- [AWS EC2](production/aws.md), recommended for a public production deployment
+- [Linux](production/linux.md), recommended for any long-running server
+- [Windows](production/windows.md), useful for smaller or locally managed deployments
+- [macOS](production/macos.md), useful for smaller or locally managed deployments
 
 Linux is the best fit for a long-running public server. Windows and macOS are supported through Docker Desktop, but they are better suited for local, lab, or smaller managed deployments.
 

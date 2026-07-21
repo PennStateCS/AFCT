@@ -1,4 +1,4 @@
-# Deploy AFCT on Linux
+# AFCT on Linux
 
 These instructions cover **Ubuntu** and **Amazon Linux 2023**. Where the commands differ, both are listed. Other distributions can run AFCT, but the Docker installation commands will differ.
 

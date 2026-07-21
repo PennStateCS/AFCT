@@ -1,4 +1,4 @@
-# Deploy AFCT on Windows
+# AFCT on Windows
 
 These instructions use Docker Desktop with the WSL 2 backend.
 

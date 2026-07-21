@@ -1,4 +1,4 @@
-# Deploy AFCT on AWS EC2
+# AFCT on AWS EC2
 
 These instructions describe the recommended AWS production path: one EC2 instance running Linux and the standard AFCT Docker Compose stack.
 

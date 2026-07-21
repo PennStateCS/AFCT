@@ -1,4 +1,4 @@
-# Deploy AFCT on macOS
+# AFCT on macOS
 
 These instructions work on Apple Silicon and Intel Macs. A continuously available Linux server is usually a better choice for a long-running public deployment, but macOS is supported through Docker Desktop.
 

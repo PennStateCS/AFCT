@@ -29,7 +29,6 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Student Guide',
-      collapsed: false,
       items: ['student/overview', 'student/client'],
     },
     {
@@ -82,11 +81,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Operations',
-      items: ['operations/backups', 'operations/troubleshooting'],
-    },
-    {
-      type: 'category',
       label: 'Developer Guide',
       items: [
         'reference/creating-a-release',
@@ -97,6 +91,11 @@ const sidebars: SidebarsConfig = {
         'reference/client-api',
         'reference/content-security-policy',
       ],
+    },
+    {
+      type: 'category',
+      label: 'Operations',
+      items: ['operations/backups', 'operations/troubleshooting'],
     },
   ],
 
