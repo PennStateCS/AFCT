@@ -8,7 +8,7 @@ The **Roster** page lists everyone enrolled in the course and their course role.
 2. Search for an existing AFCT account that is not already in the course.
 3. Select the person and confirm the enrollment.
 
-Direct enrollment is useful for adding another staff member or helping a student who cannot use self-registration.
+Enrollment always adds the person as a **Student**. To give someone a staff role, enroll them first, then change their role with the edit action (see [Manage roles and membership](#manage-roles-and-membership)). Direct enrollment is useful for adding another staff member or helping a student who cannot use self-registration.
 
 ## Enroll a list of students
 

@@ -126,7 +126,7 @@ Group mode currently controls problem-to-group mappings in the course interface.
 | Manage system settings, status, logs, backups, or updates | Yes           | No              | No      |
 | View course activity                                      | Any course    | Assigned course | No      |
 
-There is no manual account unlock action in the current interface. A temporary lock ends after the configured lockout period. An administrator can reset the password from **User Accounts**.
+An administrator can end a login lock early with **Unlock account** on **User Accounts**, and can reset an account's password from the same page. A lock also clears on its own once the configured lockout period passes.
 
 ## Roster safeguards
 

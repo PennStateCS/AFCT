@@ -16,7 +16,7 @@ The header also lists the assigned Faculty and TAs. Staff can copy either the re
 | [Problems](problems.md)       | Build and maintain the reusable problem bank for the course.                         |
 | [Roster](roster.md)           | Enroll students and review course membership. Faculty can also manage course roles.  |
 | [Grades](grades.md)           | Review grades by student and assignment, then open a detailed problem breakdown.     |
-| [Groups](groups.md)           | Create groups and manage group membership for group assignments.                     |
+| [Groups](groups.md)           | Arrange students into group sets and groups for group assignments.                     |
 | [Activity](activity.md)       | Review actions recorded for the course.                                              |
 | [Settings](settings.md)       | Update course details, dates, timezone, registration window, and publication status. |
 

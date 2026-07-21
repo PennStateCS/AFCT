@@ -50,8 +50,10 @@ graph TD
 
 ## Deployment view
 
-The running system is a set of containers on one Docker network. Only nginx is exposed to
-the public internet.
+The running system is a set of containers split across two private Docker networks. nginx
+and the application share a `frontend` network; the application, PostgreSQL, and the backup
+service share a `backend` network. The application bridges the two, so nginx never reaches
+PostgreSQL directly. Only nginx is exposed to the public internet.
 
 ```mermaid
 graph TD
@@ -322,7 +324,7 @@ AFCT deployment path.
 ## Security boundaries
 
 - Only nginx accepts public traffic.
-- PostgreSQL stays on a private network.
+- PostgreSQL stays on the internal `backend` network, which nginx is not attached to.
 - The application container does not control Docker.
 - The optional updater does control Docker and stays disabled unless deliberately enabled.
 - Every state-changing request is authorized in the route handler, not only at the edge.

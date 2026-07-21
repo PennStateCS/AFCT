@@ -1,39 +1,57 @@
 # Groups
 
-Use **Groups** to organize students for group assignments. A group has a name and a set of students from the course roster.
+Use **Groups** to organize students for group assignments. Groups are arranged into **group sets**: a group set is one complete arrangement of the course's students, such as `Project 1` or `Lab Partners`. Each set contains its own groups, and a student belongs to at most one group within a given set. A student can be in different groups across different sets.
 
-## Create a group manually
+A [group assignment](assignments.md) is tied to exactly one group set, so you can keep separate arrangements for separate projects.
 
-1. Select **Create Group**.
-2. Enter a group name.
-3. Create the group.
-4. Select **Manage** beside the new group.
-5. Search for students and select the members who belong in the group.
-6. Save the membership changes.
+## Create a group set
 
-Only students on the course roster can be added to a group.
+1. Select **Create group set**.
+2. Enter a name, such as `Project 1`.
+3. Optionally, enter how many empty groups to start with. They are named Group 1, Group 2, and so on, and you can rename or add more later.
+4. Select **Create group set**.
 
-## Create random groups
+Set names must be unique within the course. After the set is created it opens automatically.
 
-1. Select **Random Groups**.
-2. Enter a group name prefix, such as `Lab Group`.
-3. Exclude any students who should not be assigned in this run.
-4. Choose the number of groups.
-5. Review the expected group-size distribution.
-6. Create the groups.
+## Work with a group set
 
-AFCT shuffles the included students and distributes them as evenly as possible. Review the result afterward, especially when accommodations or existing partnerships matter.
+When a course has more than one set, use the **Group set** selector to switch between them. The selector shows each set's group count and how many students are assigned.
 
-## Maintain groups
+The selected set shows summary counts (groups, eligible students, assigned, and unassigned), a searchable list of unassigned students, and a card for each group.
 
-Use the actions in the group table to:
+Only active students on the course roster are eligible. A student who is inactive or not enrolled is not listed.
 
-- **Manage** the student membership
-- **Edit** the group name
-- **Delete** a group you no longer need
+### Add and manage groups
 
-Create groups before configuring a group assignment. On an [assignment](assignments.md) of type **Group**, you pick one group set and assign the work to all of its groups or to specific groups; each group submits and is graded together.
+- **Add group** creates an empty group in the set.
+- Use a group card's menu to **Rename group** or **Delete group**. Deleting a group returns its members to the unassigned list.
+- The set's own menu (top right) lets you **Rename set**, **Duplicate set**, or **Delete set**. Deleting a set removes all of its groups.
 
-Be careful when changing membership after an assignment has been configured: membership decides which group a student submits with. Once a group has submitted work its set is locked, so plan the groups before students begin.
+### Assign students to groups
 
-Archived courses are read-only. Restore the course before changing group names or membership.
+Assignment uses a selection model rather than drag and drop:
+
+1. Check one or more students in the unassigned list or in any group card.
+2. Use **Move to** and choose a target group, or **Remove from group** to send them back to unassigned.
+
+Moving a student into a group also removes them from any other group in the same set, since a student holds at most one group per set. Only active students can be moved; inactive students in a selection are skipped.
+
+### Assign students randomly
+
+**Random assign** distributes students across the set's existing groups, so add the groups you want first.
+
+1. Add the groups to fill.
+2. Select **Random assign**.
+3. Choose which active students to include. By default the currently unassigned students are selected.
+4. Optionally turn on the reassign option to also shuffle students who already hold a group.
+5. Review the balanced preview, then apply it.
+
+AFCT distributes the included students as evenly as possible. Review the result afterward, especially when accommodations or existing partnerships matter.
+
+## Use a group set for an assignment
+
+Create the groups you need before configuring a group assignment. On an [assignment](assignments.md) of type **Group**, you pick one group set and assign the work to all of its groups or to specific groups; each group submits and is graded together.
+
+Membership decides which group a student submits with, so be careful when changing it after an assignment is configured. Once any group in the set has submitted work or received a grade, the set is **locked**: its groups and memberships can no longer be changed, though you can still rename or duplicate it. To make a new arrangement from a locked set, duplicate it. Plan the groups before students begin submitting.
+
+Archived courses are read-only. Restore the course before changing group sets, groups, or membership.
