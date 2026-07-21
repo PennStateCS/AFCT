@@ -30,7 +30,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Guides',
       collapsed: false,
-      items: ['guides/student', 'guides/faculty'],
+      items: ['guides/faculty'],
     },
     {
       type: 'category',

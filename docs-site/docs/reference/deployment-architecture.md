@@ -9,7 +9,7 @@ graph TD
     App -->|Private SQL| DB[(PostgreSQL)]
     DB -.-> Backup[Backup service]
     Backup --> Archives[(Backup volume)]
-    Updater[Optional updater] -.->|Recreates app| App
+    Updater[Optional updater] -.->|Recreates app + sidecars| App
 ```
 
 ## Service responsibilities
@@ -17,7 +17,7 @@ graph TD
 | Compose service | Container        | Responsibility                                                                                                                        |
 | --------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `nginx`         | `afct-nginx`     | Terminates TLS, serves Let's Encrypt HTTP challenges, redirects other HTTP traffic to HTTPS, and forwards requests to the application |
-| `app`           | `afct-app`       | Runs the Next.js interface, API routes, authentication, submission worker, evaluator integration, and Let's Encrypt renewal           |
+| `app`           | `afct-app`       | Runs the Next.js interface, API routes, authentication, submission worker, evaluator integration, and Let's Encrypt issuance and renewal |
 | `postgres`      | `afct-postgres`  | Stores application data                                                                                                               |
 | `db-backup`     | `afct-db-backup` | Creates scheduled and on-demand database and uploaded-file backups                                                                    |
 | `updater`       | `afct-updater`   | Optional privileged helper for approved in-app upgrades and downgrades                                                                |
@@ -50,11 +50,11 @@ During an approved downgrade, the updater stops the application and asks the bac
 
 ## Optional updater boundary
 
-The updater is in the `updater` Compose profile and is off by default. It mounts the Docker socket and the deployment directory so it can pull an approved application image, change `AFCT_APP_TAG`, and recreate the `app` service.
+The updater is in the `updater` Compose profile and is off by default. It mounts the Docker socket and the deployment directory so it can pull the approved images, change `AFCT_APP_TAG`, and recreate the affected services.
 
 Treat access to the updater container as host-level administrative access. The main application never mounts the Docker socket. It can only write a structured request to the shared update trigger volume.
 
-An in-app upgrade recreates the application service. nginx, backup, and updater images are refreshed during the next host-side Compose update, even though they use the same configured release tag.
+An in-app upgrade recreates the `app`, `nginx`, and `db-backup` services together at the selected release tag. Two services are intentionally left out: `postgres` is pinned by digest (not the release tag), and the `updater` cannot recreate its own running container. The new `updater` image is therefore picked up on the next host-side `sh install.sh update`, which a release flags when the updater or the Compose file changed.
 
 ## AWS EC2 deployment
 

@@ -8,7 +8,7 @@ AFCT (Automated Feedback for CS Theory) is a course dashboard for automata and f
 
 ## Where to start
 
-- **Students**: the [Student Guide](guides/student.md) covers enrolling in a course, submitting solutions, and reading your feedback and grades.
+- **Students**: the [Student Guide](student/overview.md) covers enrolling in a course, submitting solutions, and reading your feedback and grades.
 - **Faculty and TAs**: the [Faculty Guide](guides/faculty.md) covers building courses and assignments, grading, and managing your roster.
 - **Administrators**: the [Administrator Guide](guides/admin.md) covers user management, system settings, backups, and updates.
 
