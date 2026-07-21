@@ -126,7 +126,7 @@ Use this endpoint to confirm that the application process is reachable before at
 
 Returns courses visible to the signed-in user.
 
-Students receive published courses in which they are enrolled. Course staff also receive their unpublished courses. Archived courses are omitted.
+Visibility depends on the caller's role in each course. An administrator receives every non-archived course, published or not. Course staff (Faculty and TA) receive their assigned courses, published or not. Students receive the published courses they are enrolled in that are currently within the course's start and end dates. Archived courses are always omitted.
 
 ```json
 {
@@ -149,7 +149,11 @@ Students receive published courses in which they are enrolled. Course staff also
 
 ### `GET /api/client/v1/courses/{courseId}/assignments`
 
-Returns published assignments and their problems for the selected course. Answer files are never included.
+Returns the course's assignments and their problems. Answer files are never included.
+
+Visibility depends on the caller's role in the course. Administrators and course staff (Faculty, TA) receive every assignment, published or not. Students receive only the published assignments they are assigned, and only once past the assignment's available ("unlock") date if one is set.
+
+Each assignment reports `isGroup` (whether it is a group assignment) and, for a group assignment the caller belongs to, `groupName` (the caller's group). `allowLateSubmissions` says whether late work is accepted.
 
 ```json
 {
@@ -163,16 +167,22 @@ Returns published assignments and their problems for the selected course. Answer
       "dueDate": "2026-01-15T04:59:00.000Z",
       "allowLateSubmissions": false,
       "lateCutoff": null,
+      "isGroup": false,
+      "groupName": null,
       "problems": [
         {
           "id": "...",
           "title": "DFA for even-length strings",
+          "description": "...",
           "type": "FA",
+          "maxStates": 5,
+          "isDeterministic": true,
           "maxPoints": 10,
           "maxSubmissions": 3,
           "submissionCount": 1,
           "grade": 8,
-          "status": "COMPLETED"
+          "status": "COMPLETED",
+          "solved": false
         }
       ]
     }
@@ -180,11 +190,68 @@ Returns published assignments and their problems for the selected course. Answer
 }
 ```
 
+`solved` is `true` once the caller has earned full marks on the problem (see the tree endpoint below for details).
+
 `dueDate`, `lateCutoff`, and `serverTime` are UTC timestamps. Convert deadlines to the returned course timezone for display.
 
 `serverTime` allows the client to display an accurate countdown without trusting the local device clock.
 
 A missing or inaccessible course returns `404`.
+
+### `GET /api/client/v1/tree`
+
+Returns the caller's **entire** course tree in one call: every visible course, each with its assignments, and each assignment with its problems. This lets a client load once and filter locally (for example "upcoming assignments" or "unsolved problems") instead of fetching each course separately. Visibility is identical to the two endpoints above, and answer-key files are never included.
+
+```json
+{
+  "serverTime": "2026-01-10T15:04:05.000Z",
+  "courses": [
+    {
+      "id": "...",
+      "name": "Automata Theory",
+      "code": "CMPEN 331",
+      "semester": "Fall 2026",
+      "timezone": "America/New_York",
+      "isPublished": true,
+      "isArchived": false,
+      "role": "STUDENT",
+      "assignments": [
+        {
+          "id": "...",
+          "title": "Homework 1",
+          "description": "...",
+          "dueDate": "2026-01-15T04:59:00.000Z",
+          "unlockAt": null,
+          "lateCutoff": null,
+          "allowLateSubmissions": false,
+          "isGroup": false,
+          "groupName": null,
+          "problems": [
+            {
+              "id": "...",
+              "title": "DFA for even-length strings",
+              "description": "...",
+              "type": "FA",
+              "maxStates": 5,
+              "isDeterministic": true,
+              "maxPoints": 10,
+              "maxSubmissions": 3,
+              "submissionCount": 1,
+              "grade": 10,
+              "status": "COMPLETED",
+              "solved": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+The course, assignment, and problem fields match the flat endpoints above. `solved` is `true` once the caller has earned full marks on the problem (for a group assignment a groupmate's correct submission counts, since the autograder fans the grade out to every member); a client can use it to offer an "unsolved only" filter without a separate call. Timestamps are UTC; convert to the course `timezone` for display.
+
+The response can be large for an administrator or faculty member who can see many courses; it is intended for the native client's own (typically small, student-scoped) data set. The per-course endpoints above remain available when a narrower fetch is preferred.
 
 ## Submissions
 
@@ -229,13 +296,16 @@ Returns the caller's attempts for one problem, newest first:
       "id": "...",
       "status": "COMPLETED",
       "correct": true,
-      "submittedAt": "2026-01-10T15:00:00.000Z"
+      "submittedAt": "2026-01-10T15:00:00.000Z",
+      "fileName": "answer.jff",
+      "feedback": "accepts \"01\" but should reject it",
+      "submittedBy": "Ada Lovelace"
     }
   ]
 }
 ```
 
-This endpoint never returns another student's work.
+`fileName` is the name of the file the student uploaded. `feedback` is the evaluator's witness or counterexample string, and is `null` while the submission is still queued or processing. `submittedBy` is the member who submitted; for a group problem this can be any groupmate, and for an individual problem it is always the caller. This endpoint never returns another student's work.
 
 ### `GET /api/client/v1/submissions/{submissionId}`
 

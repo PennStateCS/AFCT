@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { withClientAuth } from '@/lib/api/with-client-auth';
-import { getCoursesListForUser } from '@/lib/courses-list';
+import { getVisibleClientCourses } from '@/lib/client-course-tree';
 
 /**
  * The signed-in user's courses (slim shape for the client), scoped to the token's
- * user, same visibility as the web app: enrolled, non-deleted courses that are
- * published or where the user is staff.
+ * user. Visibility is per the viewer's role in each course, and never lists a
+ * deleted or archived course:
+ *   - Admin: every non-archived course (published or not), enrolled or not.
+ *   - Faculty/TA: their non-archived courses (published or not) where they are staff.
+ *   - Student: their published non-archived courses that are currently within the
+ *     course's start/end date range (a submission tool only lists courses you can
+ *     submit to now).
+ * A user who is staff in one course and a student in another is judged per course.
  * @openapi
  * summary: List my courses (client)
  * responses:
@@ -21,32 +26,8 @@ import { getCoursesListForUser } from '@/lib/courses-list';
  *   401: { description: Missing or invalid token. }
  */
 export const GET = withClientAuth(async (_req, _ctx, { user }) => {
-  // Archived courses are frozen (read-only) and can't be submitted to, so the client
-  // (a submission tool) doesn't list them (the web app shows them separately).
-  const courses = (await getCoursesListForUser(user.id, user.isAdmin ? 'ADMIN' : 'STUDENT')).filter(
-    (c) => !c.isArchived,
-  );
-
-  // Attach the caller's own role per course (the list shaping collapses a student's
-  // own roster entry, so read the roles directly).
-  const rosters = await prisma.roster.findMany({
-    where: { userId: user.id, courseId: { in: courses.map((c) => c.id) } },
-    select: { courseId: true, role: true },
-  });
-  const roleByCourse = new Map(rosters.map((r) => [r.courseId, r.role]));
-
-  return NextResponse.json({
-    courses: courses.map((c) => ({
-      id: c.id,
-      name: c.name,
-      code: c.code,
-      semester: c.semester,
-      // IANA zone the course's deadlines are anchored to; the client should render
-      // due dates in this zone.
-      timezone: c.timezone,
-      isPublished: c.isPublished,
-      isArchived: c.isArchived,
-      role: roleByCourse.get(c.id) ?? (user.isAdmin ? 'ADMIN' : null),
-    })),
-  });
+  // Shared with the /tree endpoint so the flat list and the nested tree agree on
+  // exactly which courses are visible. Archived courses are never listed (frozen /
+  // read-only); the web app shows those separately.
+  return NextResponse.json({ courses: await getVisibleClientCourses(user) });
 });

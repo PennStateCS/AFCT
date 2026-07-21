@@ -7,7 +7,12 @@ import { assignedToStudentWhere } from '@/lib/assignment-visibility';
 export type StudentAssignmentProblem = {
   id: string;
   title: string | null;
+  description: string | null;
   type: ProblemType | null;
+  /** FA/PDA state cap, or null when the problem sets no cap. */
+  maxStates: number | null;
+  /** FA determinism requirement, or null when it does not apply. */
+  isDeterministic: boolean | null;
   autograderEnabled: boolean;
   maxPoints: number;
   maxSubmissions: number;
@@ -20,6 +25,8 @@ export type StudentAssignmentProblem = {
 export type StudentAssignment = {
   id: string;
   title: string;
+  /** The assignment's group set, or null for an individual assignment. */
+  groupSetId: string | null;
   description: string | null;
   /** "Available from" resolved for this student; null means available immediately. */
   unlockAt: Date | null;
@@ -40,16 +47,33 @@ export type StudentAssignment = {
  *
  * Shared by the web student-grades route and the native-client assignments endpoint.
  */
+/**
+ * Options widen the base student view for a privileged caller (course staff / admin
+ * using the client): `includeUnpublished` drops the published-only filter, and
+ * `includeUnassigned` drops the assigned-to-this-user filter, so staff see every
+ * assignment in the course. Both default off, preserving the student view.
+ */
+export type CourseAssignmentsOptions = {
+  includeUnpublished?: boolean;
+  includeUnassigned?: boolean;
+};
+
 export async function getStudentCourseAssignments(
   userId: string,
   courseId: string,
+  opts: CourseAssignmentsOptions = {},
 ): Promise<StudentAssignment[]> {
   const assignments = await prisma.assignment.findMany({
-    // Published, and assigned to this student (everyone, or via their own override).
-    where: { courseId, isPublished: true, ...assignedToStudentWhere(userId) },
+    // Published + assigned to this student, unless a privileged caller opts to widen.
+    where: {
+      courseId,
+      ...(opts.includeUnpublished ? {} : { isPublished: true }),
+      ...(opts.includeUnassigned ? {} : assignedToStudentWhere(userId)),
+    },
     select: {
       id: true,
       title: true,
+      groupSetId: true,
       description: true,
       unlockAt: true,
       dueDate: true,
@@ -85,7 +109,16 @@ export async function getStudentCourseAssignments(
         maxSubmissions: true,
         // Autograding is a per-assignment setting on the link, not on the bank problem.
         autograderEnabled: true,
-        problem: { select: { id: true, title: true, type: true } },
+        problem: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            maxStates: true,
+            isDeterministic: true,
+          },
+        },
       },
       orderBy: { assignmentId: 'asc' },
     }),
@@ -119,7 +152,10 @@ export async function getStudentCourseAssignments(
     (byAssignment[p.assignmentId] ??= []).push({
       id: p.problem.id,
       title: p.problem.title,
+      description: p.problem.description,
       type: p.problem.type,
+      maxStates: p.problem.maxStates,
+      isDeterministic: p.problem.isDeterministic,
       autograderEnabled: p.autograderEnabled,
       maxPoints: Number(p.maxPoints ?? 0),
       maxSubmissions: Number(p.maxSubmissions ?? 0),
@@ -147,6 +183,7 @@ export async function getStudentCourseAssignments(
     return {
       id: a.id,
       title: a.title,
+      groupSetId: a.groupSetId,
       description: locked ? null : a.description,
       unlockAt: eff.unlockAt,
       dueDate: eff.dueDate,

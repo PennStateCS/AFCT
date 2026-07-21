@@ -72,7 +72,17 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
         ? { assignmentId, problemId, OR: [{ studentId: user.id }, { studentGroupId: groupId }] }
         : { assignmentId, problemId, studentId: user.id },
       orderBy: { submittedAt: 'desc' },
-      select: { id: true, status: true, correct: true, submittedAt: true },
+      select: {
+        id: true,
+        status: true,
+        correct: true,
+        submittedAt: true,
+        originalFileName: true,
+        feedback: true,
+        // The member who actually submitted. For a group problem this can be any
+        // groupmate; for an individual problem it is always the caller.
+        student: { select: { firstName: true, lastName: true } },
+      },
     });
 
     return NextResponse.json({
@@ -81,6 +91,12 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
         status: s.status,
         correct: s.correct,
         submittedAt: s.submittedAt.toISOString(),
+        // The name of the file the student uploaded, and the evaluator's witness /
+        // counterexample string once evaluation has finished (null while queued).
+        fileName: s.originalFileName,
+        feedback: s.feedback,
+        submittedBy:
+          [s.student?.firstName, s.student?.lastName].filter(Boolean).join(' ').trim() || null,
       })),
     });
   } catch (error) {

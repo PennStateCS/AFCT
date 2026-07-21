@@ -717,7 +717,7 @@ export interface paths {
         };
         /**
          * List a course's assignments + problems (client)
-         * @description A course's **published** assignments and their problems, for the token's user  (client screen after picking a course). Includes each problem's type, per-assignment  maxPoints/maxSubmissions, the student's grade, attempt count, and latest status;  never the answer-key file. A course the caller can't reach is masked as 404.
+         * @description A course's assignments and their problems, scoped by the caller's role in the  course (which they must be able to access, else 404):    - Admin / course staff (Faculty, TA): every assignment, published or not.    - Student: only published assignments they are assigned, and only once past the      assignment's available ("unlock") date if one is set. Pre-unlock assignments      are withheld entirely.  Each assignment also reports whether it is an individual or group assignment, the  caller's group name when it is a group assignment they belong to, and whether late  submissions are accepted. The answer-key file is never included.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/courses/[courseId]/assignments/route.ts)
          */
@@ -739,7 +739,7 @@ export interface paths {
         };
         /**
          * List my courses (client)
-         * @description The signed-in user's courses (slim shape for the client), scoped to the token's  user, same visibility as the web app: enrolled, non-deleted courses that are  published or where the user is staff.
+         * @description The signed-in user's courses (slim shape for the client), scoped to the token's  user. Visibility is per the viewer's role in each course, and never lists a  deleted or archived course:    - Admin: every non-archived course (published or not), enrolled or not.    - Faculty/TA: their non-archived courses (published or not) where they are staff.    - Student: their published non-archived courses that are currently within the      course's start/end date range (a submission tool only lists courses you can      submit to now).  A user who is staff in one course and a student in another is judged per course.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/courses/route.ts)
          */
@@ -796,6 +796,28 @@ export interface paths {
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/submissions/route.ts)
          */
         post: operations["postClientV1Submissions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/client/v1/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My full course tree (client)
+         * @description The caller's entire course tree in one call: every visible course with its assignments  and their problems, resolved for this user. Lets the native client load once and filter  locally (upcoming assignments, unsolved problems) instead of fetching per course.   Visibility matches the per-course endpoints: admins and course staff (Faculty, TA) see  every assignment, published or not; students see only published assignments assigned to  them that have unlocked. Each problem includes a derived `solved` (full marks earned).  Answer-key files are never included.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/tree/route.ts)
+         */
+        get: operations["getClientV1Tree"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4375,6 +4397,39 @@ export interface operations {
             };
             /** @description Server error. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1Tree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every visible course, each with its assignments and problems. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date-time */
+                        serverTime?: string;
+                        courses?: Record<string, never>[];
+                    };
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

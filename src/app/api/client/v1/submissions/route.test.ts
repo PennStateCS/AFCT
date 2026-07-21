@@ -116,8 +116,23 @@ describe('GET /api/client/v1/submissions (history)', () => {
   it("returns the caller's own attempts, newest first", async () => {
     resolveMock.mockResolvedValue(validUser);
     prismaMock.submission.findMany.mockResolvedValue([
-      { id: 's2', status: 'COMPLETED', correct: true, submittedAt: new Date('2026-01-02T00:00:00Z') },
-      { id: 's1', status: 'FAILED', correct: false, submittedAt: new Date('2026-01-01T00:00:00Z') },
+      {
+        id: 's2',
+        status: 'COMPLETED',
+        correct: true,
+        submittedAt: new Date('2026-01-02T00:00:00Z'),
+        originalFileName: 'answer2.jff',
+        feedback: 'accepts "01"',
+        student: { firstName: 'Ada', lastName: 'Lovelace' },
+      },
+      {
+        id: 's1',
+        status: 'FAILED',
+        correct: false,
+        submittedAt: new Date('2026-01-01T00:00:00Z'),
+        originalFileName: 'answer1.jff',
+        feedback: null,
+      },
     ]);
 
     const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
@@ -131,6 +146,10 @@ describe('GET /api/client/v1/submissions (history)', () => {
       }),
     );
     expect(body.submissions.map((s: { id: string }) => s.id)).toEqual(['s2', 's1']);
+    // History fields: uploaded file name, evaluator feedback, and the submitting member.
+    expect(body.submissions[0].fileName).toBe('answer2.jff');
+    expect(body.submissions[0].feedback).toBe('accepts "01"');
+    expect(body.submissions[0].submittedBy).toBe('Ada Lovelace');
   });
 
   it('widens the caller\'s attempt list to the group set when group-assigned', async () => {
