@@ -176,6 +176,11 @@ export async function requestCertificate(input: {
       email,
       termsOfServiceAgreed: true,
       challengePriority: ['http-01'],
+      // Skip acme-client's own pre-flight fetch of the challenge URL. It resolves the
+      // public hostname, which from a box behind NAT without hairpin/loopback routing
+      // can't reach itself — the check would hang and the order would never be sent to
+      // the CA. Let's Encrypt does the real reachability check from the internet anyway.
+      skipChallengeVerification: true,
       challengeCreateFn: async (_authz, challenge, keyAuthorization) => {
         if (challenge.type !== 'http-01') {
           throw new AcmeError('Only the HTTP-01 challenge is supported.');
