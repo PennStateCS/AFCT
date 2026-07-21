@@ -1,7 +1,7 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { ChevronDown, Edit, Lock, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, Lock, Pencil, Tag, UserRoundX } from 'lucide-react';
 import type { User } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -157,7 +157,7 @@ function ActionsCell({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[12rem]">
-          <DropdownMenuLabel className="font-medium">Manage user</DropdownMenuLabel>
+          <DropdownMenuLabel className="font-medium">{`${user.firstName} ${user.lastName}`}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {isSiteAdmin ? (
             <DropdownMenuItem
@@ -172,7 +172,7 @@ function ActionsCell({
             onClick={() => setEditRoleOpen(true)}
             className="flex items-center gap-2"
           >
-            <Pencil className="h-4 w-4" />
+            <Tag className="h-4 w-4" />
             Edit Role
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -189,8 +189,8 @@ function ActionsCell({
             title={removeTitle}
             className={`flex items-center gap-2 ${removeDisabled ? 'cursor-not-allowed text-muted-foreground' : 'text-destructive focus:text-destructive'}`}
           >
-            <Trash2 className="h-4 w-4" />
-            Remove User
+            <UserRoundX className="h-4 w-4" />
+            Remove From Course
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

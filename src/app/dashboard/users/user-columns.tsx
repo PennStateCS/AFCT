@@ -241,18 +241,15 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         <DropdownMenuTrigger asChild>
           <Button
             variant="secondary"
-            aria-label={`Manage user ${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()}
+            aria-label={`Manage ${user.firstName} ${user.lastName}`}
+            className="inline-flex items-center gap-2"
           >
-            <ChevronDown />
             Manage
+            <ChevronDown className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-50">
-          <DropdownMenuLabel className="flex items-center gap-2">
-            <User2 className="h-4 w-4" />
-            {user.firstName} {user.lastName}
-          </DropdownMenuLabel>
-
+          <DropdownMenuLabel className="font-medium">{`${user.firstName} ${user.lastName}`}</DropdownMenuLabel>
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
