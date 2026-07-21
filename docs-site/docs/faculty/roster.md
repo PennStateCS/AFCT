@@ -41,3 +41,13 @@ Faculty can remove a TA or student who has no submissions in the course. Faculty
 AFCT blocks removal when the person has submitted work. This keeps every submission attached to a current course member. Contact a site administrator if you need help resolving a roster entry that the interface will not let you change.
 
 Archived courses are read-only, so enrollment and roster changes are unavailable until an administrator restores the course.
+
+## Reset a student's password
+
+Faculty and TAs can reset the password of a **student** on their roster, which helps in small deployments where a student is locked out and no site administrator is immediately available.
+
+1. Open the member's **Manage** menu and select **Reset Password**.
+2. Enter a new password that meets the strength rules, and confirm it.
+3. Optionally turn on **Temporary password** to require the student to choose a new one at their next sign-in.
+
+The reset takes effect immediately and signs the student out of any active sessions. This action is limited to students: it is not available for Faculty or TA members, and it cannot change a site administrator's password. Resetting passwords for staff, or for anyone outside the course, is done by a site administrator on the **User Accounts** page. Every reset is recorded in the course activity log.

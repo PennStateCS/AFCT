@@ -52,10 +52,11 @@ function ActionsCell({
 
   async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
-      const res = await fetch(apiPaths.admin.resetPassword(), {
+      const res = await fetch(apiPaths.courseRosterResetPassword(courseId, user.id), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, newPassword, isTemporary }),
+        credentials: 'same-origin',
+        body: JSON.stringify({ newPassword, isTemporary }),
       });
 
       if (!res.ok) {
@@ -145,13 +146,15 @@ function ActionsCell({
             <Tag className="h-4 w-4" />
             Edit Role
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => setResetOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Lock className="h-4 w-4" />
-            Reset Password
-          </DropdownMenuItem>
+          {courseRole === 'STUDENT' ? (
+            <DropdownMenuItem
+              onClick={() => setResetOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Lock className="h-4 w-4" />
+              Reset Password
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => setConfirmDeleteOpen(true)}

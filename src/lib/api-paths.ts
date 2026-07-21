@@ -50,6 +50,8 @@ export const apiPaths = {
   courseProblems: (id: string) => `/api/courses/${id}/problems`,
   courseProblem: (id: string, pid: string) => `/api/courses/${id}/problems/${pid}`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
+  courseRosterResetPassword: (id: string, userId: string) =>
+    `/api/courses/${id}/roster/${userId}/reset-password`,
   courseAssignments: (id: string) => `/api/courses/${id}/assignments`,
   courseJoin: () => '/api/courses/join',
 

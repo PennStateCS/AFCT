@@ -1606,6 +1606,28 @@ export interface paths {
         patch: operations["patchCoursesByIdPublish"];
         trace?: never;
     };
+    "/api/courses/{id}/roster/{userId}/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a student's password (course staff)
+         * @description Course-staff password reset for a student on the roster. This is a stop-gap for  small deployments so course staff can help a student who is locked out, without  a system administrator. Permission is tiered: the wrapper admits course FACULTY  and TAs (and global admins); this handler additionally requires the target to be  a STUDENT enrolled in THIS course. It refuses to reset a staff member, a global  administrator, or anyone not on this roster, so it can never be used to seize a  privileged account. System-wide resets stay on the admin User Accounts page.   Not blocked on an archived course: a student may still need to sign in to review  past work, and the reset touches the user account, not course content.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/[userId]/reset-password/route.ts)
+         */
+        post: operations["postCoursesByIdRosterByUserIdResetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/roster/{userId}": {
         parameters: {
             query?: never;
@@ -7720,6 +7742,85 @@ export interface operations {
                 };
             };
             /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdRosterByUserIdResetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Must meet the strength policy */
+                    newPassword: string;
+                    /** @description Force a change at next login (default false) */
+                    isTemporary?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Password reset. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success?: boolean;
+                    };
+                };
+            };
+            /** @description Missing fields or weak password. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff, or the target is not a student on this roster. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Target user is not on this course roster. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Reset failed. */
             500: {
                 headers: {
                     [name: string]: unknown;
