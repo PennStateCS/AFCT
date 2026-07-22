@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
+import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook as rtlRenderHook, act } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const utils = vi.hoisted(() => ({
   deleteItem: vi.fn(),
@@ -21,6 +23,17 @@ const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ showToast: toastMock }));
 
 import { useCourseHandlers } from '@/lib/course-handlers';
+
+// The hook uses useQueryClient (to invalidate the courses cache on publish), so every
+// render needs a QueryClientProvider. Wrap renderHook to supply a fresh client.
+const renderHook: typeof rtlRenderHook = (cb, options) => {
+  const client = new QueryClient();
+  return rtlRenderHook(cb, {
+    ...options,
+    wrapper: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client }, children),
+  });
+};
 
 const course = { id: 'c1', startDate: new Date('2026-01-01'), endDate: new Date('2026-05-01') } as never;
 

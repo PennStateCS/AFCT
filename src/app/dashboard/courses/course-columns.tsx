@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Trash2, BookOpen, ChevronDown, Copy, Archive, ArchiveRestore } from 'lucide-react';
+import { Trash2, BookOpen, ChevronDown, Copy, Archive, ArchiveRestore, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
@@ -312,8 +312,14 @@ function CourseActionsCell({
               View Course
             </Link>
           </DropdownMenuItem>
-          {/* Editing a course now lives on the course's Settings tab, so it's not
-              duplicated here. Duplicate and archive/restore are admin-only. */}
+          {/* Jump straight to the course's Settings tab (editing lives there now). */}
+          <DropdownMenuItem asChild className="hover:bg-secondary flex items-center gap-2">
+            <Link href={`/dashboard/courses/${course.id}?tab=settings`}>
+              <Settings className="mr-2 h-4 w-4" />
+              Course Settings
+            </Link>
+          </DropdownMenuItem>
+          {/* Duplicate and archive/restore are admin-only. */}
           {isAdmin && (
             <DropdownMenuItem
               onClick={() => setDuplicateOpen(true)}

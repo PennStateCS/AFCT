@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Problem, Course } from '@prisma/client';
 
 import { showToast } from '@/lib/toast';
@@ -25,6 +26,7 @@ import type { TabType } from '@/types/course';
 export default function CourseClient({ initialCourse }: { initialCourse?: FullCourse | null }) {
   const { id } = useParams();
   const courseId = Array.isArray(id) ? id[0] : id;
+  const queryClient = useQueryClient();
   // A viewer is a (non-privileged) student when they are NOT a global admin AND
   // their per-course role is not staff (FACULTY/TA). Derive from the initial
   // course payload so the data hook can request the correct view up front.
@@ -136,9 +138,14 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
   const handleCourseSaved = useCallback(
     (updated: Partial<Course>) => {
       setCourse((prev) => (prev ? { ...prev, ...updated } : prev));
+      // Saving course settings changes fields the Courses list and the sidebar nav
+      // render (name, code, dates, timezone, published/archived state), so invalidate
+      // the whole ['courses'] prefix. Without this the list keeps its cached row until
+      // its 30s staleTime elapses, forcing a manual refresh.
+      void queryClient.invalidateQueries({ queryKey: ['courses'] });
       showToast.success('Course updated!');
     },
-    [setCourse],
+    [setCourse, queryClient],
   );
 
   useEffect(() => {

@@ -185,14 +185,17 @@ function CollapsibleSidebarGroup({
           users can jump between sidebar sections by heading, not just by button.
           Tailwind's preflight strips the h3's default margin/size, so this is
           semantics-only with no visual change. */}
-      <SidebarGroupLabel asChild className="text-sidebar-foreground text-sm">
+      {/* px-0 drops the label's own horizontal padding so the inner button spans the
+          full group width; the button then carries p-2 itself, matching a nav item's
+          box exactly so their hover highlights line up edge-to-edge. */}
+      <SidebarGroupLabel asChild className="text-sidebar-foreground px-0 text-sm">
         <h3>
           <button
             type="button"
             onClick={onToggle}
             aria-expanded={open}
             aria-controls={contentId}
-            className="hover:bg-secondary/60 flex w-full items-center gap-1 rounded-md whitespace-nowrap"
+            className="hover:bg-secondary flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap"
           >
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
             <ChevronDown

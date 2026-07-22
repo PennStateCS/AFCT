@@ -624,11 +624,20 @@ async function evaluateWithJar(
     ];
 
     // Execute the evaluator with the configured timeout, memory cap, and analyzer
-    // bound (overrides the CFGANALYZER_LIMIT env default).
+    // bound (overrides the CFGANALYZER_LIMIT env default). The jar also reads:
+    //   - TIMEOUT_SECONDS: the time budget it uses to early-stop upgraded-feedback
+    //     equivalence checks (without it the jar logs "early stopping disabled");
+    //     derived from the same eval timeout, in whole seconds.
+    //   - UPGRADED_FEEDBACK: the jar defaults this on when unset, but set it
+    //     explicitly so the behavior is deterministic and the "not set" warning stops.
     const result = await evaluator.execute(args, {
       timeout: config.timeoutMs,
       maxMemoryMb: config.maxMemoryMb,
-      env: { CFGANALYZER_LIMIT: String(config.analyzerLimit) },
+      env: {
+        CFGANALYZER_LIMIT: String(config.analyzerLimit),
+        TIMEOUT_SECONDS: String(Math.max(1, Math.floor(config.timeoutMs / 1000))),
+        UPGRADED_FEEDBACK: 'true',
+      },
     });
 
     const stdoutTrimmed = result.stdout?.trim() ?? '';

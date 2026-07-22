@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import type { FullCourse, DeleteTarget } from '@/types/course';
 import type { Assignment, Problem, Course } from '@prisma/client';
@@ -19,6 +20,8 @@ export function useCourseHandlers(
   course: FullCourse | null,
   setCourse: React.Dispatch<React.SetStateAction<FullCourse | null>>,
 ) {
+  const queryClient = useQueryClient();
+
   // Assignment handlers
   const handleAssignmentEditClick = useCallback((assignment: Assignment) => {
     return assignment;
@@ -133,13 +136,16 @@ export function useCourseHandlers(
       try {
         const updated = await updateCoursePublishStatus(course.id, isPublished);
         setCourse((prev) => (prev ? { ...prev, isPublished: updated.isPublished } : prev));
+        // Published state drives the Courses list and the sidebar nav, so invalidate the
+        // whole ['courses'] prefix; otherwise the list keeps its stale row until staleTime.
+        void queryClient.invalidateQueries({ queryKey: ['courses'] });
         showToast.success(isPublished ? 'Course published' : 'Course unpublished');
       } catch (error) {
         const msg = (error instanceof Error && error.message) || 'Failed to archive course';
         showToast.error(msg);
       }
     },
-    [course, setCourse],
+    [course, setCourse, queryClient],
   );
 
 

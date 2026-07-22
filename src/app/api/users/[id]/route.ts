@@ -103,6 +103,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let timezoneRaw: string | undefined;
     // The global admin flag, only applied when the actor is themselves an admin.
     let isAdminFlag: boolean | undefined;
+    // Avatar framing (position + zoom). Undefined leaves the stored values untouched.
+    let cropX: number | undefined;
+    let cropY: number | undefined;
+    let zoom: number | undefined;
 
     if (contentType.includes('multipart/form-data')) {
       const parsed = await readFormData(req, UserUpdateFormApiSchema);
@@ -114,6 +118,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       timezoneRaw = parsed.data.timezone || undefined;
       isAdminFlag = parsed.data.isAdmin;
       avatarFile = parsed.form.get('avatar') as File;
+      cropX = parsed.data.cropX;
+      cropY = parsed.data.cropY;
+      zoom = parsed.data.zoom;
     } else {
       const parsed = await readJson(req, UserUpdateJsonApiSchema);
       if (!parsed.ok) return parsed.response;
@@ -122,6 +129,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       inactive = parsed.data.inactive;
       timezoneRaw = parsed.data.timezone;
       isAdminFlag = parsed.data.isAdmin;
+      cropX = parsed.data.cropX;
+      cropY = parsed.data.cropY;
+      zoom = parsed.data.zoom;
     }
     if (
       timezoneRaw &&
@@ -222,6 +232,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       isAdmin?: boolean;
       inactive?: boolean;
       timezone?: string | null;
+      cropX?: number;
+      cropY?: number;
+      zoom?: number;
     } = {
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
@@ -232,6 +245,11 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       // able to disable (or re-enable) their own account.
       inactive: isAdmin(currentUser) ? inactive : undefined,
       timezone: timezoneRaw ? timezoneRaw : undefined,
+      // Avatar framing: written when supplied (repositioning an existing photo or
+      // framing a newly uploaded one); undefined leaves the current values in place.
+      cropX,
+      cropY,
+      zoom,
     };
 
     // Never let the deployment lose its last active admin: demoting or

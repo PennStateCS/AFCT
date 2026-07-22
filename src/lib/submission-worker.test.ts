@@ -140,7 +140,9 @@ describe('runJavaEvaluator — evaluator execution', () => {
     expect(options).toMatchObject({
       timeout: 5_000,
       maxMemoryMb: 256,
-      env: { CFGANALYZER_LIMIT: '100' },
+      // TIMEOUT_SECONDS is the eval timeout in whole seconds (5000ms -> '5'); the jar
+      // needs it to early-stop upgraded feedback, and UPGRADED_FEEDBACK is set explicitly.
+      env: { CFGANALYZER_LIMIT: '100', TIMEOUT_SECONDS: '5', UPGRADED_FEEDBACK: 'true' },
     });
   });
 
