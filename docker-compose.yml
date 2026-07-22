@@ -40,10 +40,18 @@ services:
       WAIT_FOR_DB: 'true'
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'auto'
+      # Grading runs in the isolated `worker` service below; the app must not also start
+      # one (that would double-process the queue and give the evaluator internet egress
+      # via the app's frontend network).
+      RUN_SUBMISSION_WORKER: 'false'
 
     depends_on:
       postgres:
         condition: service_healthy
+
+    networks:
+      - frontend
+      - backend
 
     expose:
       - '3000'
@@ -90,6 +98,9 @@ services:
       app:
         condition: service_healthy
 
+    networks:
+      - frontend
+
     ports:
       - '80:80'
       - '443:443'
@@ -131,6 +142,9 @@ services:
       POSTGRES_DB: afct
       POSTGRES_USER: afct_user
 
+    networks:
+      - backend
+
     # Log slow queries (>500ms) and connection lifecycle for prod observability.
     command:
       - postgres
@@ -169,6 +183,9 @@ services:
       postgres:
         condition: service_healthy
 
+    networks:
+      - backend
+
     # POSTGRES_PASSWORD comes from .env.production (backup.sh maps it to PGPASSWORD).
     env_file:
       - .env.production
@@ -192,6 +209,56 @@ services:
       # Watches here for the app's "back up now" flag.
       - backup_triggers:/backup-triggers
 
+  # Submission evaluator, network-isolated. Same image as the app, run as a standalone
+  # worker on the internal `backend` network ONLY: it reaches Postgres to record grades but
+  # has NO internet egress, so a hostile student submission run through the Java/cfganalyzer
+  # evaluator cannot exfiltrate data or probe internal services. This is the ONLY place
+  # grading happens (the app sets RUN_SUBMISSION_WORKER=false). CI pins this image line
+  # alongside the app's (same global sed), so both track the same digest.
+  worker:
+    image: ghcr.io/pennstatecs/afct-dashboard@sha256:776cfa44bfd65e64d30b4096586221043fd23ca2d62f94dcd405926a57621d42
+    container_name: afct-worker
+    restart: unless-stopped
+    logging: *default-logging
+    command: ['npx', 'tsx', 'src/worker.ts']
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+          pids: 512
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: afct_user
+      DB_NAME: afct
+      WAIT_FOR_DB: 'true'
+      # The app container owns migrations + seeding; the worker must not race it.
+      MIGRATE_ON_START: 'false'
+      SEED_ON_START: 'false'
+      CFGANALYZER_BINARY: /app/bin/cfganalyzer
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - backend
+
+    volumes:
+      # Reads submission + answer-key files only; never writes uploads (grades -> DB).
+      - private_uploads:/private/uploads:ro
+
 volumes:
   postgres_data:
   uploads_data:
@@ -201,3 +268,13 @@ volumes:
   acme_challenge:
   db_backups:
   backup_triggers:
+
+networks:
+  # Public edge + the app's outbound needs (Let's Encrypt/ACME, hCaptcha siteverify).
+  frontend:
+    driver: bridge
+  # Internal only: no gateway, so no internet egress in either direction. Postgres, the
+  # backup sidecar, and the evaluator worker live here.
+  backend:
+    driver: bridge
+    internal: true

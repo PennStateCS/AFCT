@@ -113,8 +113,11 @@ services:
     volumes:
       - .:/app:cached
       - afct-dev-node-modules:/app/node_modules
-      # Same private-uploads volume the app writes submissions into; read-only here.
-      - afct-dev-private-uploads:/private/uploads:ro
+      # Same private-uploads volume the app writes submissions into. Left writable in dev
+      # (the container runs as root, and the entrypoint chowns /private/uploads on start —
+      # a :ro mount just makes that chown log harmless "Read-only file system" noise). Prod
+      # keeps it :ro because the prod worker runs as the non-root node user, so it never chowns.
+      - afct-dev-private-uploads:/private/uploads
 
     healthcheck:
       disable: true
