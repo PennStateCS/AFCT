@@ -1,6 +1,6 @@
 # Development troubleshooting
 
-Use this page with the Docker development setup.
+Use this page with the Docker development stack.
 
 ## Start with service status and logs
 
@@ -105,6 +105,18 @@ npm run docker:dev
 The Compose project prefix may differ. Use the name shown by `docker volume ls`.
 
 Do not use `docker:dev:down:volumes` or `docker:dev:nuke` for this repair unless you also intend to remove the database and uploads.
+
+## Submissions stay `PENDING`
+
+A submission that never leaves `PENDING` means the grading worker is not claiming it.
+
+The worker starts automatically. In the dev container it is started on the first database-backed request (production starts it through instrumentation). Confirm it is running:
+
+```bash
+docker logs afct-dev | grep SubmissionWorker
+```
+
+`[SubmissionWorker] Started safely` means the worker is up. If the worker is running but a submission stays `PENDING`, read the worker logs for an evaluator error, and confirm the evaluator JAR and Java are present in the container.
 
 ## Migration problems after switching branches
 

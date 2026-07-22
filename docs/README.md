@@ -10,15 +10,19 @@ can be imported into Postman, Insomnia, and OpenAPI client generators.
 
 To edit the published docs, edit the Markdown under
 [`docs-site/docs/`](../docs-site/docs/) (see
-[Documentation style](contributing/documentation.md)); the site deploys
-automatically on merge to main.
+[Documentation style](../docs-site/docs/reference/documentation-style.md)); the site
+deploys automatically on merge to main.
 
-## Contributor docs (this folder)
+## Contributor docs
+
+The developer-facing guides (engineering conventions, code comment style,
+documentation style, and development troubleshooting) live in the published site under
+**Developer Guide**. Local setup remains in this folder.
 
 | Guide | Use it for |
 |---|---|
-| [Developer guide](guides/developer.md) | Architecture, authorization, API conventions, validation, data access, logging, and CI |
-| [Development setup](setup/development.md) | Local Docker setup, common commands, database work, and development troubleshooting |
+| [Development setup](setup/development.md) | Local Docker setup, common commands, and database work |
+| [Engineering conventions](../docs-site/docs/reference/conventions.md) | Architecture, authorization, API conventions, validation, data access, logging, and CI |
 
 ## Documentation rules
 
@@ -29,4 +33,4 @@ matrix.
 
 Update the relevant documentation in the same pull request as a feature or
 behavior change. For writing and organization conventions, see
-[Documentation style](contributing/documentation.md).
+[Documentation style](../docs-site/docs/reference/documentation-style.md).

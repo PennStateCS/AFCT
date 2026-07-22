@@ -1,8 +1,8 @@
-# Developer guide
+# Engineering conventions
 
-**Audience:** engineers working on the AFCT Dashboard
+**Audience:** engineers working on AFCT
 
-This guide covers the conventions that affect correctness, security, and maintainability. Use [Development setup](../setup/development.md) for installation and daily Docker commands.
+This page covers the conventions that affect correctness, security, and maintainability. For the branch-and-check workflow, see [Contributing changes](./contributing.md); when the dev stack misbehaves, see [Development troubleshooting](./development-troubleshooting.md).
 
 ## Technology stack
 
@@ -29,7 +29,7 @@ Prisma 7 does not use a bundled query engine or `datasource.url` in the schema. 
 | `src/lib/` | Server logic, authorization, API helpers, auth, Prisma, workers, and shared utilities |
 | `src/schemas/` | Zod form and API schemas |
 | `prisma/` | Schema, migrations, and seed files |
-| `docs/` | User, developer, setup, operations, and reference documentation |
+| `docs-site/` | The published documentation site (this site) |
 
 Important shared files include:
 
@@ -39,40 +39,6 @@ Important shared files include:
 - `src/lib/api/http.ts`
 - `src/lib/prisma.ts`
 - `src/schemas/fields.ts`
-
-## Development workflow
-
-Docker is the supported development path.
-
-Start the stack with:
-
-```bash
-npm run docker:dev
-```
-
-The startup sequence applies migrations and starts PostgreSQL, the application, nginx, the backup service, and Prisma Studio.
-
-When a migration must be applied to a running stack:
-
-```bash
-npm run docker:dev:migrate:deploy
-npm run docker:dev:generate
-```
-
-Run the generate command when the Prisma client changed.
-
-### Stale dependency volume
-
-Development uses a named `node_modules` volume. Rebuilding the image does not replace the contents of that volume.
-
-After changing dependencies, use:
-
-```bash
-npm run docker:dev:down:volumes
-npm run docker:dev
-```
-
-This removes development volumes, including the database and uploads. For a less destructive package-only repair, follow the instructions in [Development troubleshooting](../setup/development-troubleshooting.md#module-not-found-after-adding-a-package).
 
 ## Authorization model
 
@@ -85,7 +51,7 @@ There is no global non-administrator role. Ask which course is involved before c
 
 Faculty and TAs currently share the same permissions. `COURSE_STAFF_ROLES` contains both roles.
 
-The complete model is in [Roles and permissions](../../docs-site/docs/reference/roles-and-permissions.md). That page is authoritative.
+The complete model is in [Roles and permissions](./roles-and-permissions.md). That page is authoritative.
 
 ### Course access helpers
 
@@ -110,7 +76,7 @@ Do not repeat publication and roster rules inside route handlers. Centralized ch
 
 ## Route authorization
 
-Use the wrappers in [`src/lib/api/with-auth.ts`](../../src/lib/api/with-auth.ts):
+Use the wrappers in `src/lib/api/with-auth.ts`:
 
 - `withAdminAuth`
 - `withCourseAuth`
@@ -124,7 +90,7 @@ Some self-scoped or entity-scoped routes call `auth()` directly. Treat those as 
 
 Every mutating route must validate its input with Zod.
 
-Use the helpers in [`src/lib/api/request.ts`](../../src/lib/api/request.ts):
+Use the helpers in `src/lib/api/request.ts`:
 
 - `readJson(req, schema)` for JSON
 - `readFormData(req, schema)` for multipart data
@@ -188,7 +154,7 @@ Never trust identity or scope from the request body. Derive the course from the 
 
 ## Data access
 
-The shared Prisma client in [`src/lib/prisma.ts`](../../src/lib/prisma.ts) uses the PostgreSQL driver adapter and a development singleton.
+The shared Prisma client in `src/lib/prisma.ts` uses the PostgreSQL driver adapter and a development singleton.
 
 Standalone scripts must create their Prisma client with the same adapter. A bare `new PrismaClient()` cannot connect under Prisma 7.
 
@@ -297,6 +263,8 @@ npm run docs
 Run `npm run docs` after changing a route. CI fails when generated API artifacts do not match the committed files.
 
 `next build` checks generated Next.js route types more strictly than plain `tsc`. The Docker image build can therefore catch errors that pass the regular type-check job.
+
+See [Contributing changes](./contributing.md) for the full local-check sequence, including the database test job.
 
 ## CI and publishing
 

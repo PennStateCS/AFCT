@@ -207,7 +207,7 @@ Prisma Studio opens on port 5555. The psql command opens a PostgreSQL shell insi
 
 ## Troubleshooting
 
-See [Development troubleshooting](development-troubleshooting.md) for container, database, sign-in, upload, and stale dependency problems.
+See [Development troubleshooting](../../docs-site/docs/reference/development-troubleshooting.md) for container, database, sign-in, upload, and stale dependency problems.
 
 ## Optional non-Docker setup
 
