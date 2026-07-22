@@ -20,9 +20,19 @@ Allow inbound connections on ports 80 and 443.
 
 ## Install Docker
 
-Install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/) and enable **Use WSL 2 instead of Hyper-V**.
+Download and run [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/). Make these choices during setup:
 
-Start Docker Desktop, open PowerShell, and verify the installation:
+- **Use WSL 2 instead of Hyper-V** — keep **checked** (the recommended backend). Let the installer add the required WSL 2 components if it offers.
+- If asked who to install for, choose **All users** so the engine and the `docker` CLI are available system-wide.
+- Leave **Windows containers** (the option to add Windows container support) **unchecked** — AFCT runs only Linux containers.
+
+After it finishes, start Docker Desktop, **accept the service agreement**, skip the optional sign-in, and leave it on the default **Linux containers** mode. Wait until the whale icon reports the engine is running.
+
+:::note WSL 2 must be installed first
+Docker Desktop's WSL 2 backend requires WSL 2 on the machine. The Docker Desktop installer normally sets this up for you. If it reports that WSL is missing, open **PowerShell as Administrator**, run `wsl --install`, reboot, then start Docker Desktop again.
+:::
+
+Open PowerShell and verify the installation:
 
 ```powershell
 wsl --status
