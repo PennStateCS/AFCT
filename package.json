@@ -30,6 +30,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:db": "vitest run --config vitest.db.config.ts",
+    "test:evaluator": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/evaluator-smoke.mjs",
     "e2e": "node scripts/e2e-db.mjs && playwright test",
     "e2e:db": "node scripts/e2e-db.mjs",
     "e2e:ui": "playwright test --ui",

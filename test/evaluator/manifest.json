@@ -1,0 +1,69 @@
+{
+  "description": "Golden cases for the shipped evaluator jar (jars/afct-evaluator.jar). Each case runs the SAME invocation production uses and asserts the correct/incorrect verdict. See README.md to add cases.",
+  "analyzerLimit": 15,
+  "cases": [
+    {
+      "name": "Hw-00 FA (nondeterministic): solution is equivalent to itself",
+      "type": "FA",
+      "answer": "Hw-00-solution.jff",
+      "submission": "Hw-00-solution.jff",
+      "maxStates": -1,
+      "deterministic": false,
+      "expectCorrect": true
+    },
+    {
+      "name": "Hw-00 FA: incorrect answer 1 is rejected",
+      "type": "FA",
+      "answer": "Hw-00-solution.jff",
+      "submission": "Hw-00-incorrect-answer-1.jff",
+      "maxStates": -1,
+      "deterministic": false,
+      "expectCorrect": false
+    },
+    {
+      "name": "Hw-00 FA: incorrect answer 2 is rejected",
+      "type": "FA",
+      "answer": "Hw-00-solution.jff",
+      "submission": "Hw-00-incorrect-answer-2.jff",
+      "maxStates": -1,
+      "deterministic": false,
+      "expectCorrect": false
+    },
+    {
+      "name": "Hw-02-p02 FA (deterministic): solution is equivalent to itself",
+      "type": "FA",
+      "answer": "Hw-02-p02-solution.jff",
+      "submission": "Hw-02-p02-solution.jff",
+      "maxStates": -1,
+      "deterministic": true,
+      "expectCorrect": true
+    },
+    {
+      "name": "Hw-02-p02 FA: incorrect answer 1 is rejected",
+      "type": "FA",
+      "answer": "Hw-02-p02-solution.jff",
+      "submission": "Hw-02-p02-incorrect-answer-1.jff",
+      "maxStates": -1,
+      "deterministic": true,
+      "expectCorrect": false
+    },
+    {
+      "name": "Hw-02-p02 FA: incorrect answer 2 is rejected",
+      "type": "FA",
+      "answer": "Hw-02-p02-solution.jff",
+      "submission": "Hw-02-p02-incorrect-answer-2.jff",
+      "maxStates": -1,
+      "deterministic": true,
+      "expectCorrect": false
+    },
+    {
+      "name": "Hw-02-p02 FA: incorrect answer 3 is rejected",
+      "type": "FA",
+      "answer": "Hw-02-p02-solution.jff",
+      "submission": "Hw-02-p02-incorrect-answer-3.jff",
+      "maxStates": -1,
+      "deterministic": true,
+      "expectCorrect": false
+    }
+  ]
+}
