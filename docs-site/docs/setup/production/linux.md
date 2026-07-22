@@ -103,7 +103,7 @@ Run the installer:
 sh install.sh
 ```
 
-Later, you can refresh these files in place with `sh install.sh self-update` before an update. See [Update AFCT](../../reference/updates.md).
+Later, you can refresh these files in place with `sh install.sh self-update` before an update. See [Update AFCT](../../operations/updates.md).
 
 ### What the installer asks for
 
@@ -232,4 +232,4 @@ sh install.sh --with-updater
 
 This is **off by default** because the updater holds the Docker socket, which is effectively root access on the host. Once enabled, `update`, `restart`, and `status` include it automatically. A downgrade restores a pre-upgrade database backup and permanently discards database records created since it. Uploaded files are left in place and can become unreferenced. Treat downgrade as recovery, not a casual undo.
 
-Continue with [TLS certificates](../../admin/system-settings.md#tls-certificate), then review [updates](../../reference/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
+Continue with [TLS certificates](../../admin/system-settings.md#tls-certificate), then review [updates](../../operations/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).

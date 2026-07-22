@@ -107,4 +107,4 @@ The **Updates** tab can upgrade AFCT to an approved release or restore a previou
 
 An upgrade creates a backup, changes the application version, checks health, and rolls back when the new version does not start successfully.
 
-Restoring a previous version also restores its database backup. This permanently discards submissions, grades, accounts, and other database records created since that backup. Uploaded files remain and can become unreferenced. Read [Update AFCT](../reference/updates.md) and confirm that you accept the result before restoring an older version.
+Restoring a previous version also restores its database backup. This permanently discards submissions, grades, accounts, and other database records created since that backup. Uploaded files remain and can become unreferenced. Read [Update AFCT](../operations/updates.md) and confirm that you accept the result before restoring an older version.

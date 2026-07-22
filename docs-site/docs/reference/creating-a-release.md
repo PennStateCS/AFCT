@@ -116,7 +116,7 @@ sh install.sh self-update   # refresh install.sh + docker-compose.yml
 sh install.sh update        # pull + recreate the whole stack, incl. the updater
 ```
 
-See [Update AFCT](./updates.md) for the operator-facing update flow and
+See [Update AFCT](../operations/updates.md) for the operator-facing update flow and
 [System architecture](./system-architecture.md) for how the images fit together.
 
 ## Rolling back

@@ -249,7 +249,7 @@ manifest before doing anything. An in-app upgrade recreates the `app`, `nginx`, 
 out: `postgres` is pinned by digest, not the release tag, and the `updater` cannot recreate
 its own running container, so a new updater image is picked up on the next host-side
 `sh install.sh update`. See the [updater boundary](#optional-updater-boundary) below for the
-security rationale, and [Updates](updates.md) for the operator's view.
+security rationale, and [Updates](../operations/updates.md) for the operator's view.
 
 ## Persistent data
 

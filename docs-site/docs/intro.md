@@ -21,7 +21,7 @@ AFCT is self-hosted with Docker. Start with the [production setup overview](setu
 - [Windows](setup/production/windows.md), useful for smaller or locally managed deployments
 - [macOS](setup/production/macos.md), useful for smaller or locally managed deployments
 
-Once deployed, see [updates](reference/updates.md), [backups](operations/backups.md), [TLS certificates](admin/system-settings.md#tls-certificate), and [troubleshooting](operations/troubleshooting.md).
+Once deployed, see [updates](operations/updates.md), [backups](operations/backups.md), [TLS certificates](admin/system-settings.md#tls-certificate), and [troubleshooting](operations/troubleshooting.md).
 
 ## Integrating with AFCT
 

@@ -96,7 +96,6 @@ const sidebars: SidebarsConfig = {
         'reference/development-troubleshooting',
         'reference/creating-a-release',
         'reference/system-architecture',
-        'reference/updates',
         'reference/roles-and-permissions',
         'reference/login-protection',
         'reference/client-api',
@@ -106,7 +105,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Operations',
-      items: ['operations/backups', 'operations/troubleshooting'],
+      items: ['operations/updates', 'operations/backups', 'operations/troubleshooting'],
     },
   ],
 
