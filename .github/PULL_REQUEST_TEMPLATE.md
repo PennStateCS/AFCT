@@ -15,4 +15,4 @@
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes
 - [ ] Ran `npm run docs` and committed `src/types/api.ts` if an `@openapi` block changed
-- [ ] Access-control changes reflected in [roles and permissions](../docs/reference/roles-and-permissions.md)
+- [ ] Access-control changes reflected in [roles and permissions](../docs-site/docs/reference/roles-and-permissions.md)
