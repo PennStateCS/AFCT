@@ -214,6 +214,11 @@ const combineResults = (
 // unique client (one-off IPs, bulk check-email probes, failed logins that never return) and
 // only shrinks on restart. Reap fully-expired buckets to keep it bounded by *active* keys.
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+// Hard ceiling so even an active flood of unique keys (all still inside their window, so
+// the time-based sweep can't touch them) cannot grow the map without bound. Sized well
+// above any legitimate concurrent-client count; a bucket is tiny, so 50k caps this at a
+// few MB. Reaching it means abuse, and the oldest entries are evicted (see below).
+const MAX_BUCKETS = 50_000;
 let lastSweepAt = 0;
 
 /**
@@ -237,10 +242,21 @@ export const sweepExpiredBuckets = (now: number = Date.now()): number => {
   return removed;
 };
 
-// Opportunistic, activity-driven sweep: runs at most once per interval, triggered by the
-// same requests that grow the map. No background timer to start, gate on NODE_ENV, or
-// unref. If traffic stops the map stops growing too, so a missed sweep costs nothing.
+// Opportunistic, activity-driven hygiene run on each rate-limited request. Two parts with
+// deliberately different cost profiles:
+//   1. Hard-cap eviction, every call: evict the oldest entries (Map preserves insertion
+//      order) until back under the cap. O(1) amortized per call, so a sustained flood stays
+//      cheap. Under normal load the map is far below the cap and this never runs.
+//   2. Full expired-entry sweep: O(n), so throttled to once per interval. Reclaims the
+//      slow, non-abuse accumulation of stale one-off keys.
+// No background timer to start, gate on NODE_ENV, or unref; if traffic stops the map stops
+// growing too, so a skipped sweep costs nothing.
 const maybeSweep = (now: number) => {
+  while (buckets.size > MAX_BUCKETS) {
+    const oldest = buckets.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    buckets.delete(oldest);
+  }
   if (now - lastSweepAt < SWEEP_INTERVAL_MS) return;
   lastSweepAt = now;
   sweepExpiredBuckets(now);
@@ -419,3 +435,6 @@ export const __dangerousResetRateLimiter = () => {
   buckets.clear();
   lastSweepAt = 0;
 };
+
+/** Current number of live buckets. Test-only observability for the cap/sweep. */
+export const __bucketCount = () => buckets.size;

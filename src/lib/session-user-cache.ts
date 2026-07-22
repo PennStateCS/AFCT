@@ -70,6 +70,29 @@ type Entry = { promise: Promise<SessionUserRow | null>; expiresAt: number };
 
 const cache = new Map<string, Entry>();
 
+// Entries expire logically after the TTL but are only physically removed when the same
+// user returns or is explicitly invalidated, so over a long process the map could retain
+// one entry per user who ever authenticated. Bounded by the user count (small for a
+// course tool), but keep it tidy anyway: a cheap hard cap on every call plus a throttled
+// pass that drops logically-expired entries.
+const MAX_SESSION_CACHE_ENTRIES = 10_000;
+let opsSincePrune = 0;
+
+function pruneSessionCache(now: number): void {
+  // Hard cap, every call: evict oldest-inserted until under the cap. O(1) amortized.
+  while (cache.size > MAX_SESSION_CACHE_ENTRIES) {
+    const oldest = cache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+  // Full expired-entry pass is O(n); throttle it since entries live only ~15s.
+  if (++opsSincePrune < 250) return;
+  opsSincePrune = 0;
+  for (const [userId, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(userId);
+  }
+}
+
 /**
  * Read the session-relevant user row, reusing a recent (or still in-flight) read.
  * A missing user is cached as `null` too, so a deleted account does not turn into a
@@ -79,6 +102,8 @@ export function getSessionUser(
   userId: string,
   now: number = Date.now(),
 ): Promise<SessionUserRow | null> {
+  pruneSessionCache(now);
+
   const hit = cache.get(userId);
   if (hit && hit.expiresAt > now) return hit.promise;
 
@@ -107,4 +132,5 @@ export function invalidateSessionUser(userId: string): void {
 /** Drop everything (used by tests, and safe to call at any time). */
 export function clearSessionUserCache(): void {
   cache.clear();
+  opsSincePrune = 0;
 }

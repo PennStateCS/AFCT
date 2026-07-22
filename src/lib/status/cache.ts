@@ -13,7 +13,14 @@ type Entry<T> = { value: T; expires: number };
 
 const store = new Map<string, Entry<unknown>>();
 
-/** Memoize an async producer under `key` for `ttlMs`. */
+/**
+ * Memoize an async producer under `key` for `ttlMs`.
+ *
+ * INVARIANT: `key` must come from a small, fixed set (the status collectors: versions,
+ * network, ...). This store never evicts expired entries, so a per-user or per-request key
+ * (`user:${id}`, `host:${name}`) would leak an entry per distinct value. Keep keys static;
+ * if a dynamic key is ever needed, add expiry pruning here first.
+ */
 export async function cached<T>(key: string, ttlMs: number, produce: () => Promise<T>): Promise<T> {
   const now = Date.now();
   const hit = store.get(key) as Entry<T> | undefined;

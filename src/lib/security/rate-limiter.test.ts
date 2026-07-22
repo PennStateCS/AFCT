@@ -10,6 +10,7 @@ import {
   evaluateCheckEmailRateLimit,
   sweepExpiredBuckets,
   __dangerousResetRateLimiter,
+  __bucketCount,
 } from '@/lib/security/rate-limiter';
 
 // The limiter keys off Date.now(); pin it so window/block math is deterministic.
@@ -258,5 +259,16 @@ describe('sweepExpiredBuckets — memory hygiene', () => {
     expect(sweepExpiredBuckets(BASE + 12 * 60 * 1000)).toBe(0);
     // Once the block elapses the bucket carries no live state and is safe to drop.
     expect(sweepExpiredBuckets(BASE + 16 * 60 * 1000)).toBe(1);
+  });
+
+  it('caps the map under a flood of unique keys (all still inside their window)', () => {
+    // 60k unique IPs, all at the same instant, so none are expired: the time-based sweep
+    // cannot touch them. The hard cap must still bound the map (would be 60k without it).
+    for (let i = 0; i < 60_000; i++) {
+      evaluateCheckEmailRateLimit({ ip: `10.0.${(i >> 8) & 255}.${i & 255}` });
+    }
+    // Cap is 50k; the map stayed bounded well below the 60k unique keys seen.
+    expect(__bucketCount()).toBeLessThanOrEqual(50_001);
+    expect(__bucketCount()).toBeGreaterThan(10_000); // still retains a large recent working set
   });
 });
