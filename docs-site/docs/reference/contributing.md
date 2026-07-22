@@ -79,6 +79,9 @@ changes.
 | `npm run build`                      | The production build compiles               | `build`         |
 | `npm run docs`                       | API spec + generated types are valid        | `docs-check`    |
 | `npm run test:db`                    | Database tests (needs Postgres, see below)  | `test-db`       |
+| `npm run test:evaluator`             | Evaluator jar golden tests (needs a JRE)    | `evaluator`     |
+
+`npm run test:evaluator` needs a JRE, so it is left out of the combined command below; CI always runs it, or run it in the worker container (`docker exec afct-dev-worker sh -c 'cd /app && npm run test:evaluator'`). See [Testing the evaluator](./evaluator-tests.md) for how to add cases.
 
 ### Run them all at once
 

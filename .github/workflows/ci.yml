@@ -210,3 +210,41 @@ jobs:
         env:
           NEXTJS_IGNORE_ESLINT: '1'
           NEXT_TELEMETRY_DISABLED: '1'
+
+  # Golden test for the evaluator jar itself: runs jars/afct-evaluator.jar (the exact
+  # artifact the image ships) against known submission/answer pairs and asserts the
+  # verdict, so a regressed or mis-swapped evaluator fails the build rather than silently
+  # mis-grading students. Add cases under test/evaluator (see test/evaluator/README.md).
+  evaluator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+
+      # JRE 21 matches the runtime image (eclipse-temurin:21-jre) so we grade with the
+      # same Java the jar was validated on.
+      - name: Set up Java
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # JFLAP initializes Swing even in CLI mode; without fontconfig + a font the JRE
+      # throws "Fontconfig head is null". The runtime image installs the same packages.
+      - name: Install evaluator font dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core
+
+      # The seed FA cases don't invoke cfganalyzer, but make it executable so CFG/PDA
+      # cases added later work (checkout does not always preserve the +x bit).
+      - name: Make cfganalyzer executable
+        run: chmod +x bin/cfganalyzer
+
+      # The runner uses only Node built-ins + lib/java-runner.js, so no npm install.
+      - name: Run evaluator golden tests
+        run: npm run test:evaluator
