@@ -90,6 +90,7 @@ const sidebars: SidebarsConfig = {
       label: 'Developer Guide',
       items: [
         'reference/contributing',
+        'reference/development-setup',
         'reference/conventions',
         'reference/comment-style',
         'reference/documentation-style',
