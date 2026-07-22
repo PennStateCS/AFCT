@@ -95,6 +95,7 @@ const sidebars: SidebarsConfig = {
         'reference/comment-style',
         'reference/documentation-style',
         'reference/development-troubleshooting',
+        'reference/evaluator-tests',
         'reference/creating-a-release',
         'reference/system-architecture',
         'reference/roles-and-permissions',
