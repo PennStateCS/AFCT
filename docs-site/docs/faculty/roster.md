@@ -44,10 +44,20 @@ Archived courses are read-only, so enrollment and roster changes are unavailable
 
 ## Reset a student's password
 
-Faculty and TAs can reset the password of a **student** on their roster, which helps in small deployments where a student is locked out and no site administrator is immediately available.
+When a student is locked out or has forgotten their password, Faculty and TAs can reset it directly from the roster, without waiting for a site administrator. This is a convenience for small deployments, and it works only for **students** enrolled in your course.
 
-1. Open the member's **Manage** menu and select **Reset Password**.
-2. Enter a new password that meets the strength rules, and confirm it.
-3. Optionally turn on **Temporary password** to require the student to choose a new one at their next sign-in.
+1. Find the student on the roster and open their **Manage** menu.
+2. Select **Reset Password**.
+3. Type a new password and confirm it. The strength rules are shown as you type, and the reset is blocked until the password meets all of them.
+4. Leave **Temporary password** turned on (recommended) so the student is required to choose their own password the first time they sign in. Turn it off only if you want the password you typed to stay in place.
+5. Select **Reset Password**.
 
-The reset takes effect immediately and signs the student out of any active sessions. This action is limited to students: it is not available for Faculty or TA members, and it cannot change a site administrator's password. Resetting passwords for staff, or for anyone outside the course, is done by a site administrator on the **User Accounts** page. Every reset is recorded in the course activity log.
+:::tip Prefer a temporary password
+With **Temporary password** on, you hand the student a one-time password and they immediately set their own, so you never learn their real password. Share the temporary one over a channel you trust (in person or a direct message), not a public post or class channel.
+:::
+
+The reset takes effect immediately and signs the student out of every active session, so they must sign in again with the new password.
+
+**What you can and cannot reset.** This action is limited to students on your roster. You cannot change the password of another Faculty member, a TA, a site administrator, or anyone who is not in your course. Those resets are done by a site administrator on the **User Accounts** page. Every reset is recorded in the course [activity log](./activity.md).
+
+A password reset is not the same as a temporary sign-in lock. If a student is blocked after too many failed sign-in attempts, that lock clears on its own after a short wait, so a reset is only needed when the student has genuinely forgotten their password. If you are locked out of your **own** account, you cannot reset it yourself; ask a site administrator to reset it for you.
