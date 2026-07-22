@@ -9,9 +9,10 @@ import { readJson } from '@/lib/api/request';
 const EnrollBody = z.object({ userId: z.string().min(1, 'Missing userId') });
 
 /**
- * Adds (or re-roles) a single user on a course roster. Course staff (faculty or
- * TAs) or a system admin. The user is always added as a STUDENT; callers don't
- * pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
+ * Adds a single user to a course roster. Course staff (faculty or TAs) or a system
+ * admin. A brand-new member is added as STUDENT; callers don't pick the role. Purely
+ * additive: an already-enrolled member keeps their current role (changing a role,
+ * including demoting staff, is the dedicated faculty-gated role-change endpoint's job).
  * @openapi
  * summary: Enroll a user in a course
  * parameters:
@@ -74,9 +75,10 @@ export const POST = withCourseAuth(
           userId,
           role: roleToAssign,
         },
-        update: {
-          role: roleToAssign,
-        },
+        // Additive only: leave an existing member's role exactly as it is. Resetting it to
+        // STUDENT here would let any course staff (TAs included) silently demote a FACULTY
+        // or TA member, bypassing the faculty-gated, last-faculty-guarded role-change route.
+        update: {},
       });
 
       await createEnhancedActivityLog(prisma, req, {

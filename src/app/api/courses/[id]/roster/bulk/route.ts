@@ -5,13 +5,13 @@ import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { BulkEnrollUserIdsSchema } from '@/schemas/bulk';
-import type { Prisma } from '@prisma/client';
 
 /**
- * Enrolls many users as STUDENT in one transaction (the roster's bulk-add flow).
- * Course staff (faculty or TAs) or a system admin. Existing roster entries are
- * reset to STUDENT rather than duplicated, so it's safe to re-run. Every user is
- * added as a STUDENT regardless of any other role.
+ * Bulk-adds users as STUDENT to a course roster (the roster's bulk-add flow).
+ * Course staff (faculty or TAs) or a system admin. Purely additive: users not yet on
+ * the roster are inserted as STUDENT and anyone already enrolled is left untouched, so
+ * it's idempotent and safe to re-run. Changing an existing member's role is the
+ * dedicated faculty-gated role-change endpoint's job.
  * @openapi
  * summary: Bulk-enroll students
  * parameters:
@@ -45,28 +45,17 @@ export const POST = withCourseAuth(
       if (!userIds.length)
         return NextResponse.json({ error: 'No users provided' }, { status: 400 });
 
-      // Enroll all users as STUDENT. Every row gets the same role, so this is two
-      // set-based statements instead of one upsert per user: a 300-student paste was
-      // 300 sequential round trips.
+      // One set-based insert instead of an upsert per user: a 300-student paste was 300
+      // sequential round trips. `skipDuplicates` makes it idempotent against the
+      // (courseId, userId) unique key — new users are inserted as STUDENT and anyone
+      // already on the roster is skipped, so a concurrent self-join can't abort the batch.
       //
-      // `skipDuplicates` keeps the insert atomic against the (courseId, userId) unique
-      // key, so a concurrent self-join creating the same row does not abort the batch
-      // with a P2002. The updateMany then resets anyone who was already on the roster
-      // under a different role, which is what makes re-running this safe. New rows are
-      // already STUDENT, so it is harmless to include them.
-      //
-      // Note: do NOT "parallelize" this with Promise.all inside the transaction. An
-      // interactive transaction runs on a single connection, so the queries serialize
-      // anyway and interleaving them risks deadlock.
-      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        await tx.roster.createMany({
-          data: userIds.map((userId) => ({ courseId, userId, role: 'STUDENT' as const })),
-          skipDuplicates: true,
-        });
-        await tx.roster.updateMany({
-          where: { courseId, userId: { in: userIds } },
-          data: { role: 'STUDENT' },
-        });
+      // Deliberately additive: we do NOT reset existing rows to STUDENT. That would let
+      // any course staff (TAs included) silently demote a FACULTY/TA member, bypassing the
+      // faculty-gated, last-faculty-guarded role-change route.
+      await prisma.roster.createMany({
+        data: userIds.map((userId) => ({ courseId, userId, role: 'STUDENT' as const })),
+        skipDuplicates: true,
       });
 
       // Log bulk enrollment action

@@ -1695,7 +1695,7 @@ export interface paths {
         put?: never;
         /**
          * Bulk-enroll students
-         * @description Enrolls many users as STUDENT in one transaction (the roster's bulk-add flow).  Course staff (faculty or TAs) or a system admin. Existing roster entries are  reset to STUDENT rather than duplicated, so it's safe to re-run. Every user is  added as a STUDENT regardless of any other role.
+         * @description Bulk-adds users as STUDENT to a course roster (the roster's bulk-add flow).  Course staff (faculty or TAs) or a system admin. Purely additive: users not yet on  the roster are inserted as STUDENT and anyone already enrolled is left untouched, so  it's idempotent and safe to re-run. Changing an existing member's role is the  dedicated faculty-gated role-change endpoint's job.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/bulk/route.ts)
          */
@@ -1717,7 +1717,7 @@ export interface paths {
         put?: never;
         /**
          * Enroll a user in a course
-         * @description Adds (or re-roles) a single user on a course roster. Course staff (faculty or  TAs) or a system admin. The user is always added as a STUDENT; callers don't  pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
+         * @description Adds a single user to a course roster. Course staff (faculty or TAs) or a system  admin. A brand-new member is added as STUDENT; callers don't pick the role. Purely  additive: an already-enrolled member keeps their current role (changing a role,  including demoting staff, is the dedicated faculty-gated role-change endpoint's job).
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/route.ts)
          */

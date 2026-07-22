@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  $transaction: vi.fn(),
-  roster: { findFirst: vi.fn() },
+  roster: { findFirst: vi.fn(), createMany: vi.fn() },
   course: { findUnique: vi.fn() },
 }));
 
@@ -22,6 +21,7 @@ beforeEach(() => {
   prismaMock.roster.findFirst.mockResolvedValue(null);
   // Default: course is not archived; archived-block tests override.
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  prismaMock.roster.createMany.mockResolvedValue({ count: 0 });
 });
 
 describe('POST /api/courses/[id]/roster/bulk', () => {
@@ -64,7 +64,7 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(409);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.roster.createMany).not.toHaveBeenCalled();
   });
 
   it('returns 400 when no users provided', async () => {
@@ -81,17 +81,8 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     expect(res.status).toBe(400);
   });
 
-  const bulkTx = () => {
-    const tx = { roster: { createMany: vi.fn(), updateMany: vi.fn() } };
-    prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
-      cb(tx),
-    );
-    return tx;
-  };
-
   it('bulk enrolls users, skipping rows that already exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    const tx = bulkTx();
 
     const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
@@ -101,17 +92,17 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(200);
-    // skipDuplicates is what keeps a concurrent self-join from aborting the batch.
-    expect(tx.roster.createMany).toHaveBeenCalledWith({
+    // skipDuplicates is what keeps a concurrent self-join from aborting the batch, and
+    // (crucially) means an already-enrolled member is skipped rather than re-roled.
+    expect(prismaMock.roster.createMany).toHaveBeenCalledWith({
       data: [{ courseId: 'c1', userId: 'u1', role: 'STUDENT' }],
       skipDuplicates: true,
     });
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('resets every listed user to STUDENT in a fixed number of queries', async () => {
+  it('inserts every listed user as STUDENT in a single statement and never re-roles', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    const tx = bulkTx();
 
     const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
@@ -121,15 +112,12 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(200);
-    // Two statements for four users, and still two for four hundred: that is the point.
-    expect(tx.roster.createMany).toHaveBeenCalledTimes(1);
-    expect(tx.roster.createMany.mock.calls[0][0].data).toHaveLength(4);
-    // Anyone already on the roster under another role gets demoted to STUDENT, which
-    // is what makes re-running the bulk add idempotent.
-    expect(tx.roster.updateMany).toHaveBeenCalledWith({
-      where: { courseId: 'c1', userId: { in: ['u1', 'u2', 'u3', 'u4'] } },
-      data: { role: 'STUDENT' },
-    });
+    // One statement for four users, and still one for four hundred: that is the point.
+    expect(prismaMock.roster.createMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.roster.createMany.mock.calls[0][0].data).toHaveLength(4);
+    // Additive only: skipDuplicates leaves existing members alone, so no existing
+    // FACULTY/TA is demoted to STUDENT by a bulk-enroll.
+    expect(prismaMock.roster.createMany.mock.calls[0][0].skipDuplicates).toBe(true);
   });
 
   it('returns 400 when userIds is missing entirely (defaults to [])', async () => {
@@ -160,10 +148,10 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 500 when enrollment transaction fails', async () => {
+  it('returns 500 when the enrollment insert fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.$transaction.mockRejectedValue(new Error('tx failed'));
+    prismaMock.roster.createMany.mockRejectedValue(new Error('insert failed'));
 
     const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
@@ -177,8 +165,8 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
   it('returns 500 and logs "unknown error" when a non-Error is thrown', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    // Throw a non-Error to exercise the `: 'unknown error'` branch (line 78).
-    prismaMock.$transaction.mockRejectedValueOnce('boom');
+    // Throw a non-Error to exercise the `: 'unknown error'` branch.
+    prismaMock.roster.createMany.mockRejectedValueOnce('boom');
 
     const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
