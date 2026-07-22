@@ -26,6 +26,8 @@ const activeUser = {
   firstName: 'A',
   lastName: 'B',
   inactive: false,
+  passwordChangedAt: null,
+  lockedUntil: null,
 };
 
 beforeEach(() => {
@@ -70,8 +72,10 @@ describe('client-auth', () => {
     expect(prismaMock.clientApiToken.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { tokenHash: hashToken('tok') } }),
     );
-    // The resolved user has no `inactive` field leaked into it.
+    // The resolved user has no internal gate fields leaked into it.
     expect(res?.user).not.toHaveProperty('inactive');
+    expect(res?.user).not.toHaveProperty('passwordChangedAt');
+    expect(res?.user).not.toHaveProperty('lockedUntil');
     // Sliding expiration: a use renews both lastUsedAt and expiresAt.
     expect(prismaMock.clientApiToken.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -163,6 +167,58 @@ describe('client-auth', () => {
       user: { ...activeUser, inactive: true },
     });
     expect(await resolveClientToken('x')).toBeNull();
+  });
+
+  it('rejects a token issued before the user changed their password', async () => {
+    const createdAt = new Date(Date.now() - 60_000);
+    prismaMock.clientApiToken.findUnique.mockResolvedValue({
+      id: 't1',
+      revokedAt: null,
+      createdAt,
+      expiresAt: new Date(Date.now() + 10_000),
+      lastUsedAt: null,
+      // Password changed after the token was issued -> the token is stale.
+      user: { ...activeUser, passwordChangedAt: new Date(createdAt.getTime() + 1_000) },
+    });
+    expect(await resolveClientToken('tok')).toBeNull();
+    expect(prismaMock.clientApiToken.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts a token issued after the last password change', async () => {
+    const createdAt = new Date(Date.now() - 60_000);
+    prismaMock.clientApiToken.findUnique.mockResolvedValue({
+      id: 't1',
+      revokedAt: null,
+      createdAt,
+      expiresAt: new Date(Date.now() + 10_000),
+      lastUsedAt: null,
+      // Password change predates the token -> still valid.
+      user: { ...activeUser, passwordChangedAt: new Date(createdAt.getTime() - 1_000) },
+    });
+    expect((await resolveClientToken('tok'))?.user.id).toBe('u1');
+  });
+
+  it('rejects a token for a currently locked-out account', async () => {
+    prismaMock.clientApiToken.findUnique.mockResolvedValue({
+      id: 't1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 10_000),
+      lastUsedAt: null,
+      user: { ...activeUser, lockedUntil: new Date(Date.now() + 60_000) },
+    });
+    expect(await resolveClientToken('tok')).toBeNull();
+    expect(prismaMock.clientApiToken.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts a token once an old lock has expired', async () => {
+    prismaMock.clientApiToken.findUnique.mockResolvedValue({
+      id: 't1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 10_000),
+      lastUsedAt: null,
+      user: { ...activeUser, lockedUntil: new Date(Date.now() - 1_000) },
+    });
+    expect((await resolveClientToken('tok'))?.user.id).toBe('u1');
   });
 
   it('revokeClientToken only touches non-revoked rows', async () => {

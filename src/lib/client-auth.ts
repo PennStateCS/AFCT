@@ -82,6 +82,8 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
           firstName: true,
           lastName: true,
           inactive: true,
+          passwordChangedAt: true,
+          lockedUntil: true,
         },
       },
     },
@@ -100,6 +102,21 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
   if (now >= absoluteExpiry) return null;
   if (!row.user || row.user.inactive) return null;
 
+  // A password change (self-service or admin reset) must kill tokens issued beforehand,
+  // mirroring the browser session's revoke-on-password-change. `createdAt` is the issue
+  // instant (sliding expiration only moves `expiresAt`), so a token predating
+  // `passwordChangedAt` is stale and rejected.
+  if (
+    row.user.passwordChangedAt &&
+    row.createdAt &&
+    row.user.passwordChangedAt.getTime() > row.createdAt.getTime()
+  ) {
+    return null;
+  }
+  // A locked-out account (failed-login lockout) must not authenticate via a bearer token
+  // any more than through the credential login gate.
+  if (row.user.lockedUntil && row.user.lockedUntil.getTime() > now) return null;
+
   // Sliding expiration: any authenticated request pushes the expiry out to
   // `now + TTL`, so an actively-used token stays valid and only genuine inactivity
   // (no call for a full TTL window) lets it lapse — but never past the absolute cap.
@@ -115,7 +132,7 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
       .catch(() => {});
   }
 
-  const { inactive: _inactive, ...user } = row.user;
+  const { inactive: _inactive, passwordChangedAt: _pca, lockedUntil: _lu, ...user } = row.user;
   return { tokenId: row.id, user };
 }
 
