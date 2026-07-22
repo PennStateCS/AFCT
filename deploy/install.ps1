@@ -68,6 +68,8 @@ $HealthPath     = Get-EnvOr 'AFCT_HEALTH_PATH' '/api/health'
 $HealthTimeout  = [int](Get-EnvOr 'AFCT_HEALTH_TIMEOUT' '300')
 $HealthInterval = [int](Get-EnvOr 'AFCT_HEALTH_INTERVAL' '5')
 $DiagPrefix     = 'afct-diagnostics'
+# Base for release-manifest and self-update downloads (mirrors INSTALLER_BASE_URL).
+$InstallerBaseUrl = Get-EnvOr 'AFCT_INSTALLER_BASE_URL' 'https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy'
 
 $script:LogEnabled     = $false
 $script:DiagOnExit     = $false
@@ -1001,6 +1003,201 @@ function Show-ExistingInstallMenu {
   }
 }
 
+# --------------------------------------------------------------------------- #
+# Release version management (mirrors install.sh)
+# --------------------------------------------------------------------------- #
+# Compare two files by content (the analog of `cmp -s`). Returns $true when both
+# exist and are byte-for-byte identical.
+function Test-FilesEqual([string]$a, [string]$b) {
+  if (-not (Test-Path -LiteralPath $a) -or -not (Test-Path -LiteralPath $b)) { return $false }
+  $ha = (Get-FileHash -LiteralPath $a -Algorithm SHA256).Hash
+  $hb = (Get-FileHash -LiteralPath $b -Algorithm SHA256).Hash
+  return $ha -eq $hb
+}
+
+# Download a URL to a file with a bounded timeout and a few retries, so a slow or
+# flaky network fails predictably instead of hanging and rides out transient
+# blips. Returns $true on success, $false on failure (never throws). Mirrors
+# fetch_url in install.sh.
+function Get-RemoteFile([string]$url, [string]$dest) {
+  # Older PowerShell 5.1 / .NET defaults to TLS 1.0/1.1; raw.githubusercontent.com
+  # requires TLS 1.2+. Opt in without dropping any protocol already enabled.
+  try {
+    [Net.ServicePointManager]::SecurityProtocol =
+      [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+  } catch {}
+
+  for ($i = 1; $i -le 3; $i++) {
+    try {
+      $prev = $ProgressPreference
+      $ProgressPreference = 'SilentlyContinue'
+      try {
+        Invoke-WebRequest -Uri $url -OutFile $dest -TimeoutSec 120 -UseBasicParsing -ErrorAction Stop | Out-Null
+      } finally {
+        $ProgressPreference = $prev
+      }
+      return $true
+    } catch {
+      if ($i -lt 3) { Start-Sleep -Seconds 2 }
+    }
+  }
+  return $false
+}
+
+# Return every curated release tag from the manifest (deploy/versions.json, the same
+# list the in-app updater reads), newest first, excluding the rolling "main" build.
+# Empty if the manifest can't be fetched or parsed. Mirrors list_release_tags.
+function Get-ReleaseTags {
+  $tmp = Join-Path $env:TEMP "afct-versions.$PID.json"
+  try {
+    if (-not (Get-RemoteFile "$InstallerBaseUrl/versions.json" $tmp)) { return @() }
+    if (-not (Test-Path -LiteralPath $tmp) -or (Get-Item -LiteralPath $tmp).Length -eq 0) { return @() }
+    $data = (Get-Content -LiteralPath $tmp -Raw -ErrorAction Stop) | ConvertFrom-Json -ErrorAction Stop
+    # StrictMode 2.0 throws on missing properties, so probe before dereferencing.
+    if (-not ($data.PSObject.Properties['versions'])) { return @() }
+    $tags = @()
+    foreach ($v in @($data.versions)) {
+      if ($v -and $v.PSObject.Properties['tag']) {
+        $t = $v.tag
+        if ($t -and $t -cne 'main') { $tags += $t }
+      }
+    }
+    return $tags
+  } catch {
+    return @()
+  } finally {
+    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+  }
+}
+
+# On a brand-new install, pin AFCT_APP_TAG to a published RELEASE. The installer only
+# deploys versioned releases -- never the rolling "main" build -- so a production box
+# runs a reproducible version. An explicit AFCT_APP_TAG is honored only if it names a
+# real release (validated against the manifest when reachable); with none set we take
+# the newest release. "main" is refused, and if no release can be determined the
+# install stops rather than silently deploying "main". An existing release pin is left
+# alone. Mirrors pin_release_tag_on_fresh_install in install.sh.
+function Set-ReleasePin {
+  $existing = Read-EnvValue 'AFCT_APP_TAG' $EnvFile
+  if ($existing -and $existing -cne 'main') { return }
+
+  $want = Get-EnvOr 'AFCT_APP_TAG' ''
+  if ($want -ceq 'main') {
+    Stop-Install "AFCT_APP_TAG=main is not allowed: the installer deploys published releases only. Set AFCT_APP_TAG to a release (for example v0.1.1), or leave it unset to install the latest."
+  }
+
+  $releases = @(Get-ReleaseTags)
+  if ($want) {
+    if ($want -match '[^A-Za-z0-9._-]') {
+      Stop-Install 'AFCT_APP_TAG contains unsupported characters.'
+    }
+    # When the manifest is reachable, the requested tag must be a listed release; when
+    # it isn't, we trust an explicitly pinned (non-main) tag so an offline install still
+    # works.
+    if ($releases.Count -gt 0 -and ($releases -cnotcontains $want)) {
+      Stop-Install "AFCT_APP_TAG='$want' is not a published release. Known releases: $($releases -join ' ')."
+    }
+    $tag = $want
+  } else {
+    if ($releases.Count -eq 0) {
+      Stop-Install "could not determine the latest release to install (is $InstallerBaseUrl/versions.json reachable?). Re-run with AFCT_APP_TAG=vX.Y.Z to pin a specific release."
+    }
+    $tag = $releases[0]
+  }
+
+  Set-EnvFlag 'AFCT_APP_TAG' $tag
+  Write-Info "pinned this install to release $tag. Change it later from Admin -> System Settings -> Updates."
+}
+
+# Refresh the deploy bundle (this installer, the compose file, and the env template)
+# from the public repo. It never touches .env.production, data volumes, or running
+# containers -- it only updates the files on disk. Run it before `update` when a
+# release changed the compose file or the updater (the Updates tab flags those).
+# Mirrors do_self_update in install.sh.
+function Invoke-SelfUpdate {
+  # Take the same lock the other mutating commands use, so a self-update can't swap the
+  # compose file / installer out from under a concurrent update or restart.
+  Lock-Installer
+  Write-Info "refreshing the AFCT deploy files from $InstallerBaseUrl ..."
+
+  # Stage every download first so a partial or failed fetch never clobbers a working
+  # installer. Temp files live next to the script so the final swap is a rename on the
+  # same filesystem (safe even though this script is the file being replaced).
+  $tInstaller = Join-Path $PSScriptRoot ".install.ps1.new.$PID"
+  $tCompose   = Join-Path $PSScriptRoot ".$ComposeFile.new.$PID"
+  $tExample   = Join-Path $PSScriptRoot ".$EnvExample.new.$PID"
+  $staged     = @($tInstaller, $tCompose, $tExample)
+  $cleanup    = { foreach ($f in $staged) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
+
+  if ((-not (Get-RemoteFile "$InstallerBaseUrl/install.ps1" $tInstaller)) -or
+      (-not (Get-RemoteFile "$InstallerBaseUrl/$ComposeFile" $tCompose)) -or
+      (-not (Get-RemoteFile "$InstallerBaseUrl/$EnvExample" $tExample))) {
+    & $cleanup
+    Stop-Install 'could not download the deploy files. Check network access to the repository.'
+  }
+
+  # Refuse to install a truncated or corrupt installer: it must be non-empty and parse.
+  $parseErrors = $null
+  try {
+    [System.Management.Automation.Language.Parser]::ParseFile($tInstaller, [ref]$null, [ref]$parseErrors) | Out-Null
+  } catch { $parseErrors = @($_) }
+  if ((-not (Test-Path -LiteralPath $tInstaller)) -or ((Get-Item -LiteralPath $tInstaller).Length -eq 0) -or
+      ($parseErrors -and $parseErrors.Count -gt 0)) {
+    & $cleanup
+    Stop-Install 'the downloaded installer is invalid; keeping the current one.'
+  }
+
+  # The compose file must be non-empty and actually look like a Compose file, and the
+  # env template must be non-empty, before either is swapped in.
+  $composeOk = (Test-Path -LiteralPath $tCompose) -and ((Get-Item -LiteralPath $tCompose).Length -gt 0) -and
+               (Select-String -LiteralPath $tCompose -Pattern '^services:' -Quiet)
+  if (-not $composeOk) {
+    & $cleanup
+    Stop-Install 'the downloaded compose file is invalid; keeping the current one.'
+  }
+  if ((-not (Test-Path -LiteralPath $tExample)) -or ((Get-Item -LiteralPath $tExample).Length -eq 0)) {
+    & $cleanup
+    Stop-Install 'the downloaded environment template is empty; keeping the current one.'
+  }
+
+  $changed = @()
+  # name | staged temp | back up the old copy first?
+  $rows = @(
+    @{ Name = 'install.ps1'; Tmp = $tInstaller; Backup = $true },
+    @{ Name = $ComposeFile;  Tmp = $tCompose;   Backup = $true },
+    @{ Name = $EnvExample;   Tmp = $tExample;   Backup = $false }
+  )
+  foreach ($row in $rows) {
+    $target = Join-Path $PSScriptRoot $row.Name
+    if ((Test-Path -LiteralPath $target) -and (Test-FilesEqual $row.Tmp $target)) {
+      Remove-Item -LiteralPath $row.Tmp -Force -ErrorAction SilentlyContinue
+      continue
+    }
+    if ((Test-Path -LiteralPath $target) -and $row.Backup) {
+      $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+      try {
+        Copy-Item -LiteralPath $target -Destination "$target.backup.$stamp" -ErrorAction Stop
+        Write-Info "saved the previous $($row.Name) as $($row.Name).backup.$stamp."
+      } catch {}
+    }
+    try {
+      Move-Item -LiteralPath $row.Tmp -Destination $target -Force -ErrorAction Stop
+    } catch {
+      & $cleanup
+      Stop-Install "could not replace $($row.Name)."
+    }
+    $changed += $row.Name
+  }
+
+  if ($changed.Count -eq 0) {
+    Write-Success 'The deploy files are already up to date.'
+    return
+  }
+  Write-Success "Updated: $($changed -join ' ')"
+  Write-Info 'Your .env.production and data volumes were not touched.'
+  Write-Info 'Apply any new image or compose changes with: .\install.ps1 update'
+}
+
 function Invoke-Install {
   $script:DiagOnExit = $false
   Lock-Installer
@@ -1048,6 +1245,12 @@ function Invoke-Install {
   Backup-EnvFile
   Write-EnvironmentFile
   Write-Success "Configuration written to $EnvFile."
+
+  # Fresh install only: pin to a published release before pulling images (never the
+  # rolling "main" build). Reconfigure leaves the running version alone.
+  if (-not $script:Reconfiguring) {
+    Set-ReleasePin
+  }
 
   Write-Step 'Deploy'
   $script:DiagOnExit = $true
@@ -1372,6 +1575,9 @@ Commands:
   status        Show container and application health status.
   logs          Follow application logs. Press Ctrl+C to stop.
   update        Pull the latest images, recreate the stack, and verify health.
+  self-update   Re-download the installer, compose file, and env template from the
+                repository. Does not touch .env.production or data. Run before
+                update when a release changes the compose file or the updater.
   restart       Recreate the stack without pulling new images.
   stop          Stop the stack without deleting its data volumes.
   enable-updater  Enable the in-app updater sidecar (in-app upgrades/downgrades).
@@ -1410,9 +1616,13 @@ Environment variables:
   ADMIN_EMAIL             Initial administrator email
   ADMIN_PASSWORD          Initial administrator password
   ADMIN_PASSWORD_FILE     File containing the initial administrator password
+  AFCT_APP_TAG            Published release to pin on a fresh install, e.g. v0.1.1
+                          (default: the latest release). Must be a released version;
+                          'main' and unreleased tags are rejected.
 
 Advanced overrides:
   AFCT_COMPOSE_FILE       Compose file name
+  AFCT_INSTALLER_BASE_URL Base URL self-update downloads the deploy files from
   AFCT_ENV_FILE           Production environment file name
   AFCT_ENV_EXAMPLE        Environment template file name
   AFCT_LOG_FILE           Installer log file name
@@ -1456,6 +1666,10 @@ try {
   elseif ($Command -eq 'update') {
     Initialize-Log
     Invoke-Update
+  }
+  elseif ($Command -eq 'self-update') {
+    Initialize-Log
+    Invoke-SelfUpdate
   }
   elseif ($Command -eq 'restart') {
     Initialize-Log
