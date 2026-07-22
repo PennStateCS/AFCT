@@ -44,7 +44,13 @@ const submissionEvalInclude = {
 
 type WorkerSubmission = Prisma.SubmissionGetPayload<{ include: typeof submissionEvalInclude }>;
 
-let workerStarted = false;
+// Singleton guard for the worker pool. Backed by the process global, NOT a plain
+// module-level `let`: under `next dev` HMR the module is re-evaluated on every recompile,
+// which resets a module `let` to false and let startSubmissionWorker() spawn a *fresh*
+// worker pool each time. Stacked pools then exhaust the DB connection pool (polls wait
+// seconds for a connection) and starve the dev server. The process global persists across
+// re-evaluation, so the guard actually holds. Production (single start) is unaffected.
+const workerFlags = globalThis as unknown as { __submissionWorkerStarted?: boolean };
 
 // Concurrency is the number of live worker loops (each handles one submission at
 // a time). desiredWorkers and maxAttempts are refreshed from SystemSettings, so
@@ -126,12 +132,12 @@ async function logQueueEvent(
 }
 
 export function startSubmissionWorker() {
-  // Worker already started
-  if (workerStarted) {
+  // Worker already started (guard survives dev HMR via the process global).
+  if (workerFlags.__submissionWorkerStarted) {
     console.error('[SubmissionWorker] Already started');
     return;
   }
-  workerStarted = true;
+  workerFlags.__submissionWorkerStarted = true;
 
   // Spawn the initial pool from the defaults, then refresh from settings (which
   // adjusts the pool and reschedules itself).

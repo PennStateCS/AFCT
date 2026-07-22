@@ -86,6 +86,15 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
 
+# Worker source: the submission worker runs standalone (`npx tsx src/worker.ts`) in the
+# dedicated, network-isolated `worker` compose service. tsx is a production dependency and
+# executes the TypeScript directly, resolving the `@/*` alias from tsconfig.json, so ship
+# the source it needs (src/ + the repo-root lib/java-runner.js). The web app ignores these
+# — it runs the compiled .next build, not the source.
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/lib ./lib
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+
 # Evaluator JAR and the cfganalyzer binary it shells out to.
 COPY --from=builder /app/jars /app/jars
 COPY --from=builder /app/bin /app/bin

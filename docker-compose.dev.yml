@@ -22,6 +22,10 @@ services:
 
     environment:
       NODE_ENV: development
+      # Grading runs in the dedicated `worker` service below; the app never starts one.
+      # (Under `next dev --webpack` instrumentation is skipped anyway, but set it
+      # explicitly so a Turbopack/native run wouldn't spawn an in-app worker either.)
+      RUN_SUBMISSION_WORKER: 'false'
       # Poll for file changes; native FS events don't cross the bind mount on
       # Docker Desktop. These env vars only work under webpack (see `command`
       # below); Turbopack ignores them, and its own polling knob
@@ -66,6 +70,51 @@ services:
       # Backups: read-only for listing/downloading; requests go via the trigger volume.
       - afct-dev-db-backups:/backups:ro
       - afct-dev-backup-triggers:/backup-triggers
+
+    healthcheck:
+      disable: true
+
+  # Submission evaluator as its own process (mirrors the prod `worker` service). Runs the
+  # dev image with the live bind-mounted source via tsx, so the worker starts exactly once
+  # instead of re-spawning per webpack bundle context inside the web app (which stacked DB
+  # pollers and ground the dev server to a halt). The web `app` no longer runs a worker.
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    container_name: afct-dev-worker
+    restart: unless-stopped
+    logging: *default-logging
+    # Match the app: root keeps the bind mount writable / node_modules shareable.
+    user: '0:0'
+    command: ['npx', 'tsx', 'src/worker.ts']
+
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: afct_user
+      DB_NAME: afct
+      WAIT_FOR_DB: 'true'
+      # The web app owns migrations + seeding; the worker must not race it.
+      MIGRATE_ON_START: 'false'
+      SEED_ON_START: 'false'
+      CFGANALYZER_BINARY: /app/bin/cfganalyzer
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # Let the app run the entrypoint's dep-sync + migrations first (shared node_modules
+      # volume), so the worker starts against an already-prepared image/schema.
+      app:
+        condition: service_started
+
+    volumes:
+      - .:/app:cached
+      - afct-dev-node-modules:/app/node_modules
+      # Same private-uploads volume the app writes submissions into; read-only here.
+      - afct-dev-private-uploads:/private/uploads:ro
 
     healthcheck:
       disable: true

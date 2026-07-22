@@ -41,7 +41,11 @@ APP_CONTAINER="${AFCT_APP_CONTAINER:-afct-app}"
 # next host-side `docker compose pull`.
 NGINX_SERVICE="${AFCT_NGINX_SERVICE:-nginx}"
 BACKUP_SERVICE="${AFCT_BACKUP_SERVICE:-db-backup}"
-STACK_SERVICES="${AFCT_STACK_SERVICES:-$APP_SERVICE $NGINX_SERVICE $BACKUP_SERVICE}"
+# The evaluator worker runs the SAME app image (same tag), so it must be pulled and
+# recreated together with the app on every upgrade/downgrade; otherwise it lags on the
+# old image across a schema migration.
+WORKER_SERVICE="${AFCT_WORKER_SERVICE:-worker}"
+STACK_SERVICES="${AFCT_STACK_SERVICES:-$APP_SERVICE $NGINX_SERVICE $BACKUP_SERVICE $WORKER_SERVICE}"
 IMAGE_REPO="${UPDATER_IMAGE_REPO:-ghcr.io/pennstatecs/afct-dashboard}"
 DEFAULT_TAG="${UPDATER_DEFAULT_TAG:-main}"
 

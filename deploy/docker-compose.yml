@@ -66,6 +66,10 @@ services:
       # Surfaces the deployed version in Admin -> System Status. Mirrors the image
       # tag selected above so the app knows which version it is running.
       IMAGE_TAG: ${AFCT_APP_TAG:-main}
+      # Grading runs in the dedicated, network-isolated `worker` service below, so the app
+      # must NOT also start a worker: that would double-process the queue and, worse, run
+      # the evaluator on this container's internet-connected `frontend` network.
+      RUN_SUBMISSION_WORKER: 'false'
 
     depends_on:
       postgres:
@@ -99,6 +103,64 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  # Submission evaluator, network-isolated. Runs the SAME image as the app, but as a
+  # standalone worker process (`src/worker.ts` via tsx) attached to the internal `backend`
+  # network ONLY. It reaches Postgres to record grades but has NO internet egress, so a
+  # hostile student submission run through the Java/cfganalyzer subprocess cannot
+  # exfiltrate data or probe internal services. This is the ONLY place grading happens
+  # (the app sets RUN_SUBMISSION_WORKER=false).
+  worker:
+    image: ghcr.io/pennstatecs/afct-dashboard:${AFCT_APP_TAG:-main}
+    container_name: afct-worker
+    restart: unless-stopped
+    logging: *default-logging
+    # Override the app's `npm start` CMD; the shared entrypoint still waits for the DB
+    # first, then execs this.
+    command: ['npx', 'tsx', 'src/worker.ts']
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+          # A JVM per concurrent evaluation plus its cfganalyzer child; bounds fork bombs.
+          pids: 512
+
+    # Same tight posture as the app (it grades student-supplied files) — arguably more
+    # important here, since this is where the untrusted evaluator actually runs.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: afct_user
+      DB_NAME: afct
+      WAIT_FOR_DB: 'true'
+      # The app container owns schema migrations + seeding; the worker must not race it.
+      MIGRATE_ON_START: 'false'
+      SEED_ON_START: 'false'
+      # The evaluator shells out to the native cfganalyzer baked into the image.
+      CFGANALYZER_BINARY: /app/bin/cfganalyzer
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # Internal-only network: Postgres reachable, internet NOT (no `frontend`).
+    networks:
+      - backend
+
+    volumes:
+      # Reads submission + answer-key files only; never writes uploads (grades -> DB),
+      # so mount read-only — a compromised evaluator can't tamper with stored files.
+      - private_uploads:/private/uploads:ro
 
   nginx:
     # Versioned in lockstep with the app (see the app service above).

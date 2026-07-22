@@ -8,7 +8,6 @@ import chalk from 'chalk';
 // Use a global singleton in development to avoid creating multiple Prisma instances on reload
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
-  devWorkerStarted: boolean | undefined;
 };
 
 // Create a Prisma client with query logging enabled
@@ -54,20 +53,9 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-// DEV-ONLY: `next dev --webpack` (Next 16) skips evaluating instrumentation.ts, so the
-// submission worker that instrumentation normally starts never runs in the dev container.
-// prisma is imported by every Node route/server component, so kicking the worker here
-// starts it once the dev server handles its first DB-backed request. Guarded to
-// development and the Node runtime; production starts the worker via instrumentation.ts
-// as usual. The globalThis guard ensures a single start even though webpack evaluates
-// this module in several bundle contexts (each with its own module-level state).
-if (
-  process.env.NODE_ENV === 'development' &&
-  process.env.NEXT_RUNTIME !== 'edge' &&
-  !globalForPrisma.devWorkerStarted
-) {
-  globalForPrisma.devWorkerStarted = true;
-  void import('./submission-worker')
-    .then((m) => m.startSubmissionWorker())
-    .catch((err) => console.error('[dev] failed to start submission worker:', err));
-}
+// NOTE: the submission worker is NOT started here. It runs as its own process — the
+// `worker` service (src/worker.ts) in both docker-compose.dev.yml and
+// deploy/docker-compose.yml — so it starts exactly once and, in prod, in a
+// network-isolated container. (It used to be kicked from here as a workaround for
+// `next dev --webpack` skipping instrumentation.ts, but that re-started it per webpack
+// bundle context and stacked DB pollers.)

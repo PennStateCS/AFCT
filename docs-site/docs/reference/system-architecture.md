@@ -51,18 +51,22 @@ graph TD
 ## Deployment view
 
 The running system is a set of containers split across two private Docker networks. nginx
-and the application share a `frontend` network; the application, PostgreSQL, and the backup
-service share a `backend` network. The application bridges the two, so nginx never reaches
-PostgreSQL directly. Only nginx is exposed to the public internet.
+and the application share a `frontend` network; the application, PostgreSQL, the backup
+service, and the evaluator **worker** share a `backend` network. The `backend` network is
+`internal` — it has no gateway, so no internet egress in either direction. The application
+bridges the two networks; the worker sits on `backend` **only**, so the process that runs
+untrusted student submissions through the Java/cfganalyzer evaluator can reach the database
+to record grades but cannot reach the internet. Only nginx is exposed to the public internet.
 
 ```mermaid
 graph TD
     User[User browser or client] -->|HTTPS| Nginx[nginx]
     Nginx -->|Private HTTP| App[AFCT application]
     App -->|Private SQL| DB[(PostgreSQL)]
+    Worker[Evaluator worker: no internet egress] -->|Private SQL| DB
     DB -.->|Read over private network| Backup[Backup service]
     Backup --> Archives[(Backup volume)]
-    Updater[Optional updater] -.->|Recreates app + sidecars| App
+    Updater[Optional updater] -.->|Recreates app + sidecars + worker| App
 ```
 
 ### Service responsibilities
@@ -70,7 +74,8 @@ graph TD
 | Compose service | Container        | Responsibility                                                                                                                        |
 | --------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `nginx`         | `afct-nginx`     | Terminates TLS, serves Let's Encrypt HTTP challenges, redirects other HTTP traffic to HTTPS, and forwards requests to the application |
-| `app`           | `afct-app`       | Runs the Next.js interface, API routes, authentication, submission worker, evaluator integration, and Let's Encrypt issuance and renewal |
+| `app`           | `afct-app`       | Runs the Next.js interface, API routes, authentication, and Let's Encrypt issuance and renewal                                        |
+| `worker`        | `afct-worker`    | Runs the submission worker and the Java/cfganalyzer evaluator, network-isolated (`backend`-only, no internet egress)                   |
 | `postgres`      | `afct-postgres`  | Stores application data                                                                                                               |
 | `db-backup`     | `afct-db-backup` | Creates scheduled and on-demand database and uploaded-file backups                                                                    |
 | `updater`       | `afct-updater`   | Optional privileged helper for approved in-app upgrades and downgrades                                                                |
@@ -86,9 +91,15 @@ expose PostgreSQL to the public internet.
 
 The `app` service is a single Node.js process. Several responsibilities that might be
 separate services in other systems run **inside that one process** in AFCT: the web and API
-handlers, the edge middleware, the background submission worker, and the certificate-renewal
-loop. This keeps the deployment small, and it is why the application container, not a
-separate service, is the one that renews certificates and evaluates submissions.
+handlers, the edge middleware, the certificate-renewal loop, and the activity-log pruner.
+This keeps the deployment small, and it is why the application container is the one that
+renews certificates.
+
+The **submission worker and evaluator do not run in the app container.** They run in a
+separate, network-isolated `worker` container (see the Deployment view above), so a hostile
+submission run through the Java/cfganalyzer evaluator has no path to the internet. The app
+sets `RUN_SUBMISSION_WORKER=false`; the worker container runs `src/worker.ts`, which starts
+exactly one worker.
 
 ```mermaid
 graph TD
@@ -96,22 +107,30 @@ graph TD
         Edge[Edge middleware: session and CSP]
         Routes[Next.js pages and API routes]
         Auth[Auth and permission checks]
-        Worker[Submission worker loop]
-        Eval[Java evaluator, in process]
         Renew[TLS renewal loop]
+        Prune[Activity-log pruner]
         Prisma[Prisma client]
     end
 
+    subgraph WContainer[worker container: internal network only]
+        Worker[Submission worker loop]
+        Eval[Java evaluator + cfganalyzer]
+        WPrisma[Prisma client]
+    end
+
     Edge --> Routes --> Auth --> Prisma
-    Worker --> Eval
-    Worker --> Prisma
     Renew --> Prisma
+    Prune --> Prisma
+    Worker --> Eval
+    Worker --> WPrisma
     Prisma -->|SQL| DB[(PostgreSQL)]
+    WPrisma -->|SQL| DB
 ```
 
-The web handlers respond to requests. The worker and renewal loops are started once at
-process startup and run on their own schedule, independent of any request. All of them read
-and write the same database through Prisma.
+The web handlers respond to requests. The renewal and pruner loops are started once at app
+startup and run on their own schedule, independent of any request. The submission worker
+runs the same way, but in its own container. All of them read and write the same database
+through Prisma.
 
 ## Request lifecycle
 
@@ -178,10 +197,11 @@ It checks authorization, the per-problem attempt cap, the resubmission cooldown,
 availability and late window, and the uploaded file, stores the file, then inserts the row as
 `PENDING` inside a serializable transaction that re-checks the cap.
 
-The **worker** is the background loop inside the application process. It claims a pending row
-with a single conditional update (set to `PROCESSING` only if still `PENDING`), which makes
-the claim safe even when several worker loops run at once: exactly one wins. It runs the Java
-evaluator in the same process, then writes the result back as `COMPLETED` or `FAILED`. A row
+The **worker** is a background loop running in the isolated `worker` container. It claims a
+pending row with a single conditional update (set to `PROCESSING` only if still `PENDING`),
+which makes the claim safe even when several worker loops run at once: exactly one wins. It
+runs the Java evaluator as a child process, then writes the result back as `COMPLETED` or
+`FAILED`. A row
 left in `PROCESSING` too long is returned to `PENDING` by a periodic reaper so it can be
 retried, and a row that keeps failing is moved to `FAILED` so it cannot loop forever. On a
 completed autograded submission, grades are written without overwriting a manual grade.
