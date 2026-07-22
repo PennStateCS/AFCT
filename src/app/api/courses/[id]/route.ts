@@ -378,6 +378,7 @@ export const GET = withCourseAuth(
         isPublished: course.isPublished,
         isArchived: course.isArchived,
         emptyStringNotation: course.emptyStringNotation,
+        timezone: course.timezone,
         createdAt: course.createdAt,
         updatedAt: course.updatedAt,
         // Only include a single enrolled array (user objects with courseRole)
@@ -747,6 +748,7 @@ export const PUT = withCourseAuth(
         isPublished: updatedCourse.isPublished,
         isArchived: updatedCourse.isArchived,
         emptyStringNotation: updatedCourse.emptyStringNotation,
+        timezone: updatedCourse.timezone,
         createdAt: updatedCourse.createdAt,
         updatedAt: updatedCourse.updatedAt,
         // Only include a single enrolled array (user objects with courseRole)

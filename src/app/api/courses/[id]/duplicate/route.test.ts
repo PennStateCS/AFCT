@@ -167,7 +167,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
@@ -224,7 +224,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
     prismaMock.problem.findMany.mockResolvedValue([
       { id: 'p1', title: 'Problem 1', courseId: 'c1', type: 'FA' },
     ]);
@@ -253,7 +253,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
     prismaMock.assignment.findMany.mockResolvedValue([
       {
         id: 'a1',
@@ -294,7 +294,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
     prismaMock.roster.findMany.mockResolvedValue([
       { userId: 'u2', role: 'FACULTY' },
       { userId: 'u3', role: 'TA' },
@@ -336,7 +336,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: null });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'Europe/London' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
@@ -363,7 +363,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
     prismaMock.assignment.findMany.mockResolvedValue([
       { id: 'a1', title: 'A1', dueDate: new Date(), problems: [] },
     ]);
@@ -423,7 +423,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
     prismaMock.assignment.findMany.mockResolvedValue([
       { id: 'a1', title: 'A1', dueDate: new Date(), problems: [] },
     ]);
@@ -457,7 +457,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1', title: 'Problem 1' }]);
 
     const tx = {
@@ -488,7 +488,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
     // u2 is both copied (FACULTY on the source) and explicitly selected; they must
     // get exactly one roster row.
     prismaMock.roster.findMany.mockResolvedValue([{ userId: 'u2', role: 'FACULTY' }]);
@@ -543,7 +543,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
     prismaMock.$transaction.mockRejectedValue(new Error('tx failed'));
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {

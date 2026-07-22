@@ -101,8 +101,19 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     reValidateMode: 'onChange',
   });
 
-  // Load profile on open
+  // Sync the form from the user ONLY on an open/close transition — never on a mere
+  // re-render while the dialog is already open. The parent rebuilds the `user` object on
+  // every render, so without this guard a background refetch or session update mid-edit
+  // would re-run this effect and clobber the in-progress avatar position/zoom (the
+  // "X/Y position doesn't save" bug).
+  const wasOpenRef = useRef(false);
   useEffect(() => {
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+
+    // Already open and merely re-rendered: keep whatever the user is editing.
+    if (open && !justOpened) return;
+
     if (open) {
       reset(defaults, {
         keepDirty: false,

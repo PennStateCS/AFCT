@@ -9,7 +9,6 @@ import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { createWithUniqueCourseCode } from '@/lib/course-code';
-import { resolveUserTimezone } from '@/lib/user-timezone';
 import { parseValidDate } from '@/lib/date';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
@@ -193,7 +192,17 @@ export const POST = withAdminAuth(
         );
       }
 
-      const userTimezone = await resolveUserTimezone(actorId);
+      // The copy keeps the SOURCE course's timezone, and the (possibly edited) dates
+      // are interpreted in that same zone so the schedule matches what the duplicate
+      // form displayed.
+      const sourceCourse = await prisma.course.findUnique({
+        where: { id: courseId },
+        select: { timezone: true },
+      });
+      if (!sourceCourse) {
+        return NextResponse.json({ error: 'Source course not found.' }, { status: 404 });
+      }
+      const courseTimezone = sourceCourse.timezone || 'UTC';
 
       // Solution files live here. Duplicated problems get their OWN physical copy so
       // the two rows don't share one file (a later delete/replace of one problem would
@@ -273,10 +282,11 @@ export const POST = withAdminAuth(
                 code: normalizeCode(code),
                 semester,
                 credits: parsedCredits,
-                startDate: toDateTimeInTimezone(startDate, userTimezone),
-                endDate: toDateTimeInTimezone(endDate, userTimezone),
-                registrationOpenAt: toDateTimeInTimezone(registrationOpenAt, userTimezone),
-                registrationCloseAt: toDateTimeInTimezone(registrationCloseAt, userTimezone),
+                timezone: courseTimezone,
+                startDate: toDateTimeInTimezone(startDate, courseTimezone),
+                endDate: toDateTimeInTimezone(endDate, courseTimezone),
+                registrationOpenAt: toDateTimeInTimezone(registrationOpenAt, courseTimezone),
+                registrationCloseAt: toDateTimeInTimezone(registrationCloseAt, courseTimezone),
                 isPublished: false,
                 isArchived: false,
                 emptyStringNotation: toEmptyStringNotation(emptyStringNotation),

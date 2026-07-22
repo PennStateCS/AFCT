@@ -37,7 +37,7 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Faculty',
+          label: 'Faculty and TA',
           items: [
             {
               type: 'category',
@@ -83,25 +83,24 @@ const sidebars: SidebarsConfig = {
             'admin/user-accounts',
           ],
         },
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Developer Guide',
-      items: [
-        'reference/contributing',
-        'reference/development-setup',
-        'reference/conventions',
-        'reference/comment-style',
-        'reference/documentation-style',
-        'reference/development-troubleshooting',
-        'reference/evaluator-tests',
-        'reference/creating-a-release',
-        'reference/system-architecture',
-        'reference/roles-and-permissions',
-        'reference/login-protection',
-        'reference/client-api',
-        'reference/content-security-policy',
+        {
+          type: 'category',
+          label: 'Developer',
+          items: [
+            'reference/contributing',
+            'reference/development-setup',
+            'reference/conventions',
+            'reference/code-and-documentation-style',
+            'reference/development-troubleshooting',
+            'reference/evaluator-tests',
+            'reference/creating-a-release',
+            'reference/system-architecture',
+            'reference/roles-and-permissions',
+            'reference/login-protection',
+            'reference/client-api',
+            'reference/content-security-policy',
+          ],
+        },
       ],
     },
     {

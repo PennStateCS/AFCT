@@ -91,8 +91,20 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     reValidateMode: 'onChange',
   });
 
-  // Reset form (avoid error flash on close)
+  // Sync the form from the user ONLY on an open/close transition — never on a mere
+  // re-render while the dialog is already open. This dialog is rendered inside a table
+  // row cell whose parent rebuilds the `user` object on every render, so without this
+  // guard a background list refetch mid-edit would re-run this effect and wipe the
+  // just-uploaded avatar preview/crop (the "acts up right after uploading a photo"
+  // report).
+  const wasOpenRef = useRef(false);
   useEffect(() => {
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+
+    // Already open and merely re-rendered: keep whatever the admin is editing.
+    if (open && !justOpened) return;
+
     if (open) {
       reset(defaults, {
         keepDirty: false,

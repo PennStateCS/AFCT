@@ -305,6 +305,27 @@ export function AssignmentSettingsCard({
         individual students or groups.
       </p>
 
+      {assigneesQuery.isPending || overridesQuery.isPending ? (
+        <p role="status" className="text-muted-foreground text-sm">
+          Loading the assignment&apos;s audience…
+        </p>
+      ) : assigneesQuery.isError || overridesQuery.isError ? (
+        <div role="alert" className="text-sm text-red-600">
+          The assignment&apos;s audience could not be loaded. It is hidden so an accidental save
+          cannot clear it.{' '}
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0 text-red-600 underline"
+            onClick={() => {
+              void assigneesQuery.refetch();
+              void overridesQuery.refetch();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      ) : (
       <form
         className="max-w-5xl space-y-5"
         onSubmit={(e) => {
@@ -338,6 +359,7 @@ export function AssignmentSettingsCard({
           </Button>
         </div>
       </form>
+      )}
     </div>
   );
 }

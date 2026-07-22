@@ -89,18 +89,23 @@ export default function DuplicateCourseDialog({
   timeZone,
   onSuccess,
 }: Props) {
+  // Render (and later re-interpret) the copied dates in the SOURCE course's timezone so
+  // the duplicate's schedule matches the original. Falls back to the passed-in display
+  // zone if the course row doesn't carry a timezone.
+  const zone = course?.timezone || timeZone;
+
   const defaults: FormValues = {
     name: course?.name ?? '',
     code: course?.code ?? '',
     semester: course?.semester ?? '',
     credits: String(course?.credits ?? 3),
-    startDate: course ? toDateTimeLocalInTimeZone(course.startDate, timeZone) : '',
-    endDate: course ? toDateTimeLocalInTimeZone(course.endDate, timeZone) : '',
+    startDate: course ? toDateTimeLocalInTimeZone(course.startDate, zone) : '',
+    endDate: course ? toDateTimeLocalInTimeZone(course.endDate, zone) : '',
     registrationOpenAt: course?.registrationOpenAt
-      ? toDateTimeLocalInTimeZone(course.registrationOpenAt, timeZone)
+      ? toDateTimeLocalInTimeZone(course.registrationOpenAt, zone)
       : '',
     registrationCloseAt: course?.registrationCloseAt
-      ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
+      ? toDateTimeLocalInTimeZone(course.registrationCloseAt, zone)
       : '',
     emptyStringNotation:
       ((course as { emptyStringNotation?: FormValues['emptyStringNotation'] })?.emptyStringNotation) ??
@@ -173,13 +178,13 @@ export default function DuplicateCourseDialog({
       code: course?.code ?? '',
       semester: course?.semester ?? '',
       credits: String(course?.credits ?? 3),
-      startDate: course ? toDateTimeLocalInTimeZone(course.startDate, timeZone) : '',
-      endDate: course ? toDateTimeLocalInTimeZone(course.endDate, timeZone) : '',
+      startDate: course ? toDateTimeLocalInTimeZone(course.startDate, zone) : '',
+      endDate: course ? toDateTimeLocalInTimeZone(course.endDate, zone) : '',
       registrationOpenAt: course?.registrationOpenAt
-        ? toDateTimeLocalInTimeZone(course.registrationOpenAt, timeZone)
+        ? toDateTimeLocalInTimeZone(course.registrationOpenAt, zone)
         : '',
       registrationCloseAt: course?.registrationCloseAt
-        ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
+        ? toDateTimeLocalInTimeZone(course.registrationCloseAt, zone)
         : '',
       emptyStringNotation:
         ((course as { emptyStringNotation?: FormValues['emptyStringNotation'] })?.emptyStringNotation) ??

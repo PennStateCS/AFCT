@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,7 @@ import SelectField from '@/components/ui/SelectField';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 import { useForm, Controller, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -58,9 +59,13 @@ interface CreateCourseDialogProps {
 export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDialogProps) {
   const [step, setStep] = useState(0);
 
-  // Default the course timezone to the creator's browser zone, a sensible starting
-  // point they can change. (The server falls back to the system zone if omitted.)
-  const browserTz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', []);
+  // Default the course timezone to the creator's own profile timezone, falling back to
+  // the server default (then the browser) — exactly what useEffectiveTimezone resolves.
+  // They can still change it in the wizard.
+  const { timezone: effectiveTz } = useEffectiveTimezone();
+  const defaultTz = COMMON_TIMEZONES.includes(effectiveTz as (typeof COMMON_TIMEZONES)[number])
+    ? effectiveTz
+    : 'UTC';
 
   // Default form values (strings for datetime-local)
   const defaults: FormValues = useMemo(
@@ -76,11 +81,9 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       instructorIds: [],
       taIds: [],
       emptyStringNotation: 'EPSILON',
-      timezone: COMMON_TIMEZONES.includes(browserTz as (typeof COMMON_TIMEZONES)[number])
-        ? browserTz
-        : 'UTC',
+      timezone: defaultTz,
     }),
-    [browserTz],
+    [defaultTz],
   );
 
   const {
@@ -102,6 +105,25 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
   // Faculty/TA option lists for the roster step (shared with DuplicateCourseDialog).
   const { facultyList, taList } = useFacultyTaOptions(open);
+
+  // When the wizard opens, (re)seed it from the freshly-resolved defaults so the
+  // timezone reflects the creator's current profile / server default (which may not
+  // have resolved when the component first mounted). Guarded to the open transition so
+  // it never wipes input mid-wizard.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (justOpened) {
+      setStep(0);
+      reset(defaults, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: false,
+      });
+    }
+  }, [open, defaults, reset]);
 
   const resetForm = () => {
     setStep(0);
