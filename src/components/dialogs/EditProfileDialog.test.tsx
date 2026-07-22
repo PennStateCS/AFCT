@@ -18,8 +18,7 @@ vi.mock('@/components/ui/InputGroup', () =>
   import('@/test/mocks/ui').then((mod) => mod.inputGroupMock),
 );
 vi.mock('@/components/ui/select', () => import('@/test/mocks/ui').then((mod) => mod.selectMock));
-// The crop editor wraps react-avatar-editor (canvas), which jsdom can't render; stub
-// it out so tests that show an avatar don't touch a real canvas.
+// The crop editor is drag/pointer-driven and irrelevant to these form tests; stub it.
 vi.mock('../AvatarCrop', () => ({ AvatarCrop: () => null }));
 
 const { updateSession } = vi.hoisted(() => ({ updateSession: vi.fn() }));

@@ -64,5 +64,50 @@ describe('GET /api/admin/status/docker', () => {
     expect(body.docker.isDocker).toBe(true);
     expect(body.docker.containerIdShort).toBe('abcdef012345');
     expect(body.docker.indicators).toContain('CONTAINER env');
+    expect(body.docker.cgroupVersion).toBe('v2');
+    expect(body.docker.imageTag).toBeTruthy();
+  });
+
+  it('derives the id from the hostname and parses cgroup-v2 limits', async () => {
+    process.env.DOCKER_CONTAINER = '1';
+    process.env.AFCT_APP_TAG = 'v9.9.9';
+    process.env.HOSTNAME = 'd8745c2b78ed';
+    vi.mocked(fs.existsSync).mockImplementation(
+      (p) => p === '/.dockerenv' || p === '/sys/fs/cgroup/cgroup.controllers',
+    );
+    vi.mocked(fs.promises.readFile).mockImplementation(async (p) => {
+      const path = String(p);
+      if (path === '/proc/1/cgroup') return '0::/'; // cgroup v2: no 64-hex id here
+      if (path === '/sys/fs/cgroup/memory.max') return '4294967296\n'; // 4 GiB
+      if (path === '/sys/fs/cgroup/cpu.max') return '200000 100000\n'; // 2 cores
+      return '';
+    });
+
+    const res = await GET(req(), routeCtx());
+    const body = await res.json();
+    // No id in cgroup v2, so it falls back to the hostname (the short container id).
+    expect(body.docker.containerIdShort).toBe('d8745c2b78ed');
+    expect(body.docker.cgroupVersion).toBe('v2');
+    expect(body.docker.memoryLimitBytes).toBe(4294967296);
+    expect(body.docker.cpuLimit).toBe(2);
+    expect(body.docker.imageTag).toBe('v9.9.9');
+  });
+
+  it('reports no-limit (null) when cgroup v2 caps are "max"', async () => {
+    process.env.DOCKER_CONTAINER = '1';
+    vi.mocked(fs.existsSync).mockImplementation(
+      (p) => p === '/sys/fs/cgroup/cgroup.controllers',
+    );
+    vi.mocked(fs.promises.readFile).mockImplementation(async (p) => {
+      const path = String(p);
+      if (path === '/sys/fs/cgroup/memory.max') return 'max\n';
+      if (path === '/sys/fs/cgroup/cpu.max') return 'max 100000\n';
+      return '';
+    });
+
+    const res = await GET(req(), routeCtx());
+    const body = await res.json();
+    expect(body.docker.memoryLimitBytes).toBeNull();
+    expect(body.docker.cpuLimit).toBeNull();
   });
 });

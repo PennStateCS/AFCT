@@ -19,6 +19,14 @@
 
 The configured URL cannot be edited in the browser. On an installed server, use `sh install.sh --reconfigure` or set the correct `APP_URL` through the installer workflow.
 
+### Public signup
+
+**Public signup** is self-service account creation: when **Allow user signup** is on, anyone who can reach the site can create their own AFCT account from the sign-in page. When it is off, only an administrator can add accounts, from [User Accounts](user-accounts.md) (individually or by bulk import).
+
+Turn it **on** for open, self-service deployments where you want people to register themselves. Turn it **off** for a controlled installation where every account is provisioned by an administrator. When it is on, use **Allowed signup email domains** to limit who can register — for example, restrict signup to your institution's domain — and leave it blank to allow any domain.
+
+Public signup only creates an account; it does not place anyone in a course. Enrolling in a course is separate and uses a course **registration code**, which Faculty manage per course (see [Roster](../faculty/roster.md) and [Settings](../faculty/settings.md)). The two controls are independent: an account is how someone signs in, and a registration code is how an existing account joins a specific course.
+
 ## Evaluator
 
 These settings control submission processing:

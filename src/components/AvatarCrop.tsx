@@ -1,8 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
-import AvatarEditor, { type AvatarEditorRef } from 'react-avatar-editor';
+import React, { useRef } from 'react';
+import { avatarCropStyle } from './ui/avatar';
 import { Label } from './ui/label';
 
-export type AvatarCropRef = React.MutableRefObject<AvatarEditorRef | null>;
+// The editor frame is a plain <img> styled with the SAME transform as <AvatarImage>
+// (via the shared `avatarCropStyle`), so what you frame here is pixel-for-pixel what
+// every avatar in the app displays. Values are stored as cropX/cropY (0..1, where 0.5
+// is centered) and zoom (a scale multiplier) — the identical model <AvatarImage>
+// consumes. (We deliberately replaced react-avatar-editor, whose boundary-checked,
+// overflow-relative `position` could never round-trip against this transform.)
+export type AvatarCropRef = React.MutableRefObject<HTMLDivElement | null>;
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 export function AvatarCrop({
   avatarPreview,
@@ -21,50 +29,63 @@ export function AvatarCrop({
   onPositionChange?: (position: { x: number; y: number }) => void;
   onZoomChange?: (zoom: number) => void;
 }) {
-  const [crop, setCrop] = useState({ x: cropX, y: cropY, scale: zoom });
-  const internalEditorRef = useRef<AvatarEditorRef | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  // Pointer origin plus the crop values captured when the drag began.
+  const drag = useRef<{ px: number; py: number; cropX: number; cropY: number } | null>(null);
 
-  // The crop is repositioned without a pointer via two native range sliders
-  // (horizontal + vertical), so no `role="application"` is needed; native inputs
-  // are announced and operated correctly by every screen reader. Pointer users can
-  // still drag the image directly.
-  const setPosition = (x: number, y: number) => {
-    setCrop((c) => {
-      const next = { x, y, scale: c.scale };
-      onPositionChange?.({ x: next.x, y: next.y });
-      return next;
-    });
-  };
   const pct = (v: number) => `${Math.round(v * 100)}%`;
 
-  // Update crop whenever the incoming preview or crop params change.
-  useEffect(() => {
-    setCrop({ x: cropX, y: cropY, scale: zoom });
-  }, [avatarPreview, cropX, cropY, zoom]);
+  const attachFrame = (node: HTMLDivElement | null) => {
+    frameRef.current = node;
+    if (editorRef) editorRef.current = node;
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    frameRef.current?.setPointerCapture(e.pointerId);
+    drag.current = { px: e.clientX, py: e.clientY, cropX, cropY };
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const start = drag.current;
+    const size = frameRef.current?.clientWidth ?? 0;
+    if (!start || size === 0) return;
+    // <AvatarImage> shifts the image by zoom*(0.5 - crop)*size px, so a pointer move of
+    // `d` px changes crop by -d/(zoom*size). Dragging right reveals the image's left
+    // side (crop decreases) — the exact inverse of the display transform.
+    const x = clamp01(start.cropX - (e.clientX - start.px) / (zoom * size));
+    const y = clamp01(start.cropY - (e.clientY - start.py) / (zoom * size));
+    onPositionChange?.({ x, y });
+  };
+
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    drag.current = null;
+    frameRef.current?.releasePointerCapture?.(e.pointerId);
+  };
 
   return (
     <div className="space-y-4">
-      <div className="mx-auto grid h-[260px] w-[260px] place-items-center overflow-hidden rounded-2xl">
-        <AvatarEditor
-          ref={editorRef ?? internalEditorRef}
-          image={avatarPreview}
-          width={230}
-          height={230}
-          border={15}
-          borderRadius={115}
-          color={[0, 0, 0, 0.4]}
-          scale={zoom}
-          position={crop}
-          onPositionChange={(position) => {
-            setCrop({ x: position.x, y: position.y, scale: crop.scale });
-            onPositionChange?.(position);
-          }}
-          style={{
-            backgroundColor: 'transparent',
-            width: '100%',
-            height: '100%',
-          }}
-        />
+      {/* Circular frame that clips the same transform the app uses everywhere. Drag to
+          pan (pointer users); the labeled sliders below give keyboard/AT users the same
+          control. */}
+      <div
+        ref={attachFrame}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        className="border-border bg-muted mx-auto h-[230px] w-[230px] cursor-grab touch-none overflow-hidden rounded-full border select-none active:cursor-grabbing"
+      >
+        {avatarPreview ? (
+          // Avatar preview is a local object/data URL; next/image adds no value here and
+          // can't carry this transform.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={avatarPreview}
+            alt=""
+            draggable={false}
+            style={avatarCropStyle(cropX, cropY, zoom)}
+          />
+        ) : null}
       </div>
       <p className="text-muted-foreground text-center text-xs">
         Drag the image to reposition it, or use the sliders below.
@@ -82,9 +103,9 @@ export function AvatarCrop({
             min="0"
             max="1"
             step="0.01"
-            value={crop.x}
-            aria-valuetext={pct(crop.x)}
-            onChange={(e) => setPosition(parseFloat(e.target.value), crop.y)}
+            value={cropX}
+            aria-valuetext={pct(cropX)}
+            onChange={(e) => onPositionChange?.({ x: parseFloat(e.target.value), y: cropY })}
             className="bg-primary-foreground accent-primary h-2 w-full cursor-pointer rounded-lg"
           />
         </div>
@@ -98,9 +119,9 @@ export function AvatarCrop({
             min="0"
             max="1"
             step="0.01"
-            value={crop.y}
-            aria-valuetext={pct(crop.y)}
-            onChange={(e) => setPosition(crop.x, parseFloat(e.target.value))}
+            value={cropY}
+            aria-valuetext={pct(cropY)}
+            onChange={(e) => onPositionChange?.({ x: cropX, y: parseFloat(e.target.value) })}
             className="bg-primary-foreground accent-primary h-2 w-full cursor-pointer rounded-lg"
           />
         </div>
@@ -118,11 +139,7 @@ export function AvatarCrop({
           max="2.6"
           step="0.001"
           value={zoom}
-          onChange={(e) => {
-            const nextZoom = parseFloat(e.target.value);
-            setCrop((c) => ({ ...c, scale: nextZoom }));
-            onZoomChange?.(nextZoom);
-          }}
+          onChange={(e) => onZoomChange?.(parseFloat(e.target.value))}
           className="bg-primary-foreground accent-primary h-2 w-full cursor-pointer rounded-lg"
         />
       </div>

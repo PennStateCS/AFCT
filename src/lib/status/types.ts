@@ -119,6 +119,14 @@ export type DockerInfo = {
   envHostname?: string;
   indicators?: string[];
   cgroupPaths?: string[];
+  // The image tag / version this container is running (matches the Updates tab).
+  imageTag?: string;
+  cgroupVersion?: 'v1' | 'v2';
+  // Container resource caps read from cgroup. A finite number is the cap
+  // (bytes / CPU cores); `null` means explicitly unlimited; `undefined` means it
+  // could not be read.
+  memoryLimitBytes?: number | null;
+  cpuLimit?: number | null;
 };
 
 export type DockerStatusResponse = { docker: DockerInfo | null };

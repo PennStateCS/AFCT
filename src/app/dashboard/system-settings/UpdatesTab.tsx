@@ -97,10 +97,16 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               {upgradeInfo.status.message && (
                 <p className="text-muted-foreground">{upgradeInfo.status.message}</p>
               )}
-              <UpgradeProgress
-                phase={upgradeInfo.status.phase}
-                action={lastAction ?? undefined}
-              />
+              {/* Only show the step checklist for a run that is actually happening (or one
+                  this session started). A completed run leaves the status at `healthy`, and
+                  on a later page load that would otherwise render every step as a green
+                  check — making a not-yet-started upgrade look already done. */}
+              {(upgradeInProgress || lastAction) && (
+                <UpgradeProgress
+                  phase={upgradeInfo.status.phase}
+                  action={lastAction ?? undefined}
+                />
+              )}
               {upgradeInProgress && (
                 <p className="text-muted-foreground text-xs">
                   This can take a few minutes; the site may briefly restart.

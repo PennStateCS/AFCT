@@ -4,7 +4,19 @@ import React from 'react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { DockerStatusResponse } from '@/lib/status/types';
-import { Loading, Stat, Section, useStatusQuery, copy } from '../status-ui';
+import { Loading, Stat, Section, useStatusQuery, copy, formatBytes } from '../status-ui';
+
+// The resource-limit fields are tri-state: a number is the cap, `null` means the
+// container has no limit, and `undefined` means it couldn't be read from cgroup.
+const formatMemoryLimit = (bytes?: number | null) =>
+  bytes === undefined ? '—' : bytes === null ? 'No limit' : formatBytes(bytes);
+
+const formatCpuLimit = (cores?: number | null) => {
+  if (cores === undefined) return '—';
+  if (cores === null) return 'No limit';
+  const value = Number.isInteger(cores) ? String(cores) : cores.toFixed(2);
+  return `${value} ${cores === 1 ? 'core' : 'cores'}`;
+};
 
 export default function DockerTab({
   active,
@@ -43,6 +55,10 @@ export default function DockerTab({
           onCopy={docker.containerId ? () => copy(docker.containerId) : undefined}
         />
         <Stat label="Hostname" value={docker.envHostname ?? docker.hostname ?? '—'} />
+        <Stat label="Running version" value={docker.imageTag ?? '—'} />
+        <Stat label="Memory limit" value={formatMemoryLimit(docker.memoryLimitBytes)} />
+        <Stat label="CPU limit" value={formatCpuLimit(docker.cpuLimit)} />
+        <Stat label="cgroup version" value={docker.cgroupVersion ?? '—'} />
         <Stat
           label="Indicators"
           value={docker.indicators?.length ? docker.indicators.join(', ') : '—'}

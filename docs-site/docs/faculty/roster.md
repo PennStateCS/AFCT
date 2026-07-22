@@ -22,7 +22,7 @@ Bulk enrollment only matches people who already have an AFCT account. Email matc
 
 ## Let students enroll themselves
 
-The course header contains a registration code and an invite link. You can copy either one and share it with students.
+Each course has a unique registration code that AFCT generates automatically when the course is created. The course header shows this code alongside a ready-to-share invite link; copy either one and share it with students.
 
 Self-registration works only when:
 
