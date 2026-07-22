@@ -7,6 +7,8 @@ import {
   recordSignupSuccess,
   applyBotFriction,
   formatRetryAfterSeconds,
+  evaluateCheckEmailRateLimit,
+  sweepExpiredBuckets,
   __dangerousResetRateLimiter,
 } from '@/lib/security/rate-limiter';
 
@@ -231,5 +233,30 @@ describe('peekLoginRateLimit — read-only classification', () => {
     evaluateLoginRateLimit({ ip, identifier, accountLimit });
     expect(evaluateLoginRateLimit({ ip, identifier, accountLimit }).status).toBe('blocked');
     expect(peekLoginRateLimit({ ip, identifier, accountLimit }).status).toBe('blocked');
+  });
+});
+
+describe('sweepExpiredBuckets — memory hygiene', () => {
+  it('drops a bucket once its window has fully elapsed', () => {
+    evaluateLoginRateLimit({ ip: '203.0.113.7' }); // creates a login:ip bucket
+    // Window (10 min) still open: nothing to reap.
+    expect(sweepExpiredBuckets(BASE)).toBe(0);
+    // Past the window with no block/challenge outstanding: the stale bucket is reaped.
+    expect(sweepExpiredBuckets(BASE + 10 * 60 * 1000 + 1)).toBe(1);
+    // Nothing left on a second pass.
+    expect(sweepExpiredBuckets(BASE + 10 * 60 * 1000 + 1)).toBe(0);
+  });
+
+  it('keeps a bucket that is still inside its block window, reaps it after', () => {
+    // check-email disables friction/challenge, so it blocks cleanly and leaves exactly one
+    // bucket. Config: 10-min window, max 30, 15-min block.
+    const ip = '203.0.113.8';
+    for (let i = 0; i < 31; i++) evaluateCheckEmailRateLimit({ ip });
+    expect(evaluateCheckEmailRateLimit({ ip }).status).toBe('blocked');
+    // Window (10 min) has passed but the 15-min block has not: must NOT reap (else the
+    // blocked client would reset early).
+    expect(sweepExpiredBuckets(BASE + 12 * 60 * 1000)).toBe(0);
+    // Once the block elapses the bucket carries no live state and is safe to drop.
+    expect(sweepExpiredBuckets(BASE + 16 * 60 * 1000)).toBe(1);
   });
 });

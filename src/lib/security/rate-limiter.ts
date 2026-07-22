@@ -208,11 +208,50 @@ const combineResults = (
   };
 };
 
+// The bucket map only grows as new IPs/identifiers appear; entries are otherwise removed
+// only on a successful login/signup. Without a sweep, a fully-expired bucket whose key is
+// never hit again lingers for the life of the process, so the map creeps upward with every
+// unique client (one-off IPs, bulk check-email probes, failed logins that never return) and
+// only shrinks on restart. Reap fully-expired buckets to keep it bounded by *active* keys.
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+let lastSweepAt = 0;
+
+/**
+ * Removes buckets that carry no live state: their window has reset AND any block or
+ * challenge cooldown has fully elapsed. Such a bucket is indistinguishable from a fresh
+ * one (hitting the key just rehydrates it), so dropping it changes no decision. A still
+ * blocked or challenged bucket is kept, so a sweep can never let a limited client reset
+ * early. Exported for tests.
+ */
+export const sweepExpiredBuckets = (now: number = Date.now()): number => {
+  let removed = 0;
+  for (const [key, bucket] of buckets) {
+    const windowOver = now >= bucket.resetAt;
+    const notBlocked = !bucket.blockedUntil || now >= bucket.blockedUntil;
+    const notInChallenge = !bucket.challengeUntil || now >= bucket.challengeUntil;
+    if (windowOver && notBlocked && notInChallenge) {
+      buckets.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+};
+
+// Opportunistic, activity-driven sweep: runs at most once per interval, triggered by the
+// same requests that grow the map. No background timer to start, gate on NODE_ENV, or
+// unref. If traffic stops the map stops growing too, so a missed sweep costs nothing.
+const maybeSweep = (now: number) => {
+  if (now - lastSweepAt < SWEEP_INTERVAL_MS) return;
+  lastSweepAt = now;
+  sweepExpiredBuckets(now);
+};
+
 const ensureEvaluations = (
   configs: Array<{ key: string; config: BucketConfig; reason: LimitReason }>,
   interactionMs?: number,
 ) => {
   const now = Date.now();
+  maybeSweep(now);
   const evaluations = configs.map(({ key, config, reason }) => ({
     evaluation: hitBucket(key, config, now),
     reason,
@@ -376,4 +415,7 @@ export const recordSignupSuccess = (params: { ip?: string; identifier?: string }
 
 export const formatRetryAfterSeconds = (ms: number) => Math.max(1, Math.ceil(ms / 1000)).toString();
 
-export const __dangerousResetRateLimiter = () => buckets.clear();
+export const __dangerousResetRateLimiter = () => {
+  buckets.clear();
+  lastSweepAt = 0;
+};
