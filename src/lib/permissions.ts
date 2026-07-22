@@ -149,31 +149,29 @@ export async function staffManagesStudent(
   return rel !== null;
 }
 
-/** Do two users share at least one group in the same course? */
-export async function usersShareGroupInCourse(
-  courseId: string,
-  userA: string | null | undefined,
-  userB: string | null | undefined,
+/** Is `userId` a member of this specific student group? */
+export async function isMemberOfGroup(
+  groupId: string | null | undefined,
+  userId: string | null | undefined,
 ): Promise<boolean> {
-  if (!courseId || !userA || !userB) return false;
-  if (userA === userB) return true;
-  const shared = await prisma.groupMembership.findFirst({
-    where: {
-      courseId,
-      userId: userA,
-      group: { memberships: { some: { userId: userB } } },
-    },
+  if (!groupId || !userId) return false;
+  const membership = await prisma.groupMembership.findFirst({
+    where: { groupId, userId },
     select: { id: true },
   });
-  return shared !== null;
+  return membership !== null;
 }
 
 /**
  * May the caller view `targetStudentId`'s course-scoped data (submissions, grades,
  * review data, files)? Admins and course staff may view anyone's; a student may view
- * **their own**. On a **group** assignment (`opts.groupAssignment`), the group is the
- * unit, so a student may also view a **groupmate's** shared work. Never crosses into
- * another student/group.
+ * **their own**. For a **group submission**, pass `opts.studentGroupId` (the group that
+ * owns the work): a student may also view it if they belong to **that exact group**.
+ * Never crosses into another student/group.
+ *
+ * IMPORTANT: the group check is scoped to the owning group id, NOT "shares any group in
+ * the course". A course can hold several group sets, so two students who are groupmates
+ * in one set but not in the set this submission belongs to must NOT see each other's work.
  *
  * Course membership itself is assumed already gated (e.g. by `withCourseAuth`); this
  * decides *whose* data within the course the caller may see.
@@ -182,14 +180,14 @@ export async function canViewStudentData(
   user: PermissionUser,
   courseId: string,
   targetStudentId: string,
-  opts?: { groupAssignment?: boolean },
+  opts?: { studentGroupId?: string | null },
 ): Promise<boolean> {
   if (isAdmin(user)) return true;
   if (!user?.id) return false;
   if (user.id === targetStudentId) return true;
   if (await canManageCourse(user, courseId)) return true;
-  if (opts?.groupAssignment) {
-    return usersShareGroupInCourse(courseId, user.id, targetStudentId);
+  if (opts?.studentGroupId) {
+    return isMemberOfGroup(opts.studentGroupId, user.id);
   }
   return false;
 }

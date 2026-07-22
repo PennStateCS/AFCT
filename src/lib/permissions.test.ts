@@ -14,7 +14,7 @@ import {
   canManageCourse,
   isCourseArchived,
   staffManagesStudent,
-  usersShareGroupInCourse,
+  isMemberOfGroup,
   canViewStudentData,
 } from './permissions';
 
@@ -191,21 +191,21 @@ describe('staffManagesStudent', () => {
   });
 });
 
-describe('usersShareGroupInCourse', () => {
-  it('short-circuits true when both ids are the same', async () => {
-    await expect(usersShareGroupInCourse('c', 'u', 'u')).resolves.toBe(true);
-    expect(prismaMock.groupMembership.findFirst).not.toHaveBeenCalled();
+describe('isMemberOfGroup', () => {
+  it('is true when the user holds a membership in that group', async () => {
+    prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gm1' });
+    await expect(isMemberOfGroup('g1', 'u')).resolves.toBe(true);
+    // Scoped to the specific group id, not "any group in the course".
+    expect(prismaMock.groupMembership.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', userId: 'u' } }),
+    );
   });
 
-  it('is true when a shared group exists', async () => {
-    prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gr1' });
-    await expect(usersShareGroupInCourse('c', 'a', 'b')).resolves.toBe(true);
-  });
-
-  it('is false when no shared group and when an id is missing', async () => {
+  it('is false with no membership or a missing id', async () => {
     prismaMock.groupMembership.findFirst.mockResolvedValue(null);
-    await expect(usersShareGroupInCourse('c', 'a', 'b')).resolves.toBe(false);
-    await expect(usersShareGroupInCourse('c', 'a', null)).resolves.toBe(false);
+    await expect(isMemberOfGroup('g1', 'u')).resolves.toBe(false);
+    await expect(isMemberOfGroup(null, 'u')).resolves.toBe(false);
+    await expect(isMemberOfGroup('g1', null)).resolves.toBe(false);
   });
 });
 
@@ -225,11 +225,28 @@ describe('canViewStudentData', () => {
     await expect(canViewStudentData({ id: 'u' }, 'c', 'other')).resolves.toBe(false);
   });
 
-  it('a groupmate may view shared work on a group assignment', async () => {
+  it('a member of the owning group may view that group submission', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
-    prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gr1' }); // same group
+    prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gm1' }); // in that group
     await expect(
-      canViewStudentData({ id: 'u' }, 'c', 'mate', { groupAssignment: true }),
+      canViewStudentData({ id: 'u' }, 'c', 'mate', { studentGroupId: 'g1' }),
     ).resolves.toBe(true);
+  });
+
+  it('a non-member is denied even if they share some other group in the course', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
+    // Not a member of the submission's owning group → denied, regardless of any other
+    // group they might co-inhabit with the owner (cross-group-set leak guard).
+    prismaMock.groupMembership.findFirst.mockResolvedValue(null);
+    await expect(
+      canViewStudentData({ id: 'u' }, 'c', 'mate', { studentGroupId: 'g1' }),
+    ).resolves.toBe(false);
+  });
+
+  it('an individual submission (no owning group) is never cross-visible', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
+    await expect(
+      canViewStudentData({ id: 'u' }, 'c', 'other', { studentGroupId: null }),
+    ).resolves.toBe(false);
   });
 });

@@ -70,7 +70,7 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
     expect(res.status).toBe(404);
   });
 
-  it('derives groupAssignment from studentGroupId so a groupmate can view a group submission', async () => {
+  it('passes the owning studentGroupId so a member of that group can view a group submission', async () => {
     resolveMock.mockResolvedValue(validUser);
     prismaMock.submission.findUnique.mockResolvedValue({
       id: 's1',
@@ -83,18 +83,19 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
       correct: true,
       feedback: 'w',
     });
-    // canViewStudentData grants access via the shared group (opts.groupAssignment).
+    // canViewStudentData grants access via membership in the owning group.
     canViewMock.mockResolvedValue(true);
     prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({ grade: 5 });
 
     const res = await GET(makeReq('Bearer good'), ctx);
     expect(res.status).toBe(200);
+    // The exact owning group is threaded through, not a course-wide "shares any group".
     expect(canViewMock).toHaveBeenCalledWith(expect.anything(), 'c1', 'someone-else', {
-      groupAssignment: true,
+      studentGroupId: 'group-1',
     });
   });
 
-  it('passes groupAssignment: false for an individual submission', async () => {
+  it('passes studentGroupId: null for an individual submission', async () => {
     resolveMock.mockResolvedValue(validUser);
     prismaMock.submission.findUnique.mockResolvedValue({
       id: 's1',
@@ -112,7 +113,7 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
     const res = await GET(makeReq('Bearer good'), ctx);
     expect(res.status).toBe(404);
     expect(canViewMock).toHaveBeenCalledWith(expect.anything(), 'c1', 'someone-else', {
-      groupAssignment: false,
+      studentGroupId: null,
     });
   });
 
