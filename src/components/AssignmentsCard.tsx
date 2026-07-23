@@ -41,17 +41,21 @@ export function AssignmentsCard({
         </Button>
       </div>
       <div className="overflow-x-auto">
-        {!isLoading && !assignments.length ? (
-          <p className="text-muted-foreground italic">No assignments found.</p>
-        ) : (
-          <DataTable
-            columns={assignmentColumns}
-            data={assignments}
-            loading={isLoading}
-            tableLabel="Assignments table"
-            defaultSorting={[{ id: 'dueDate', desc: false }]}
-          />
-        )}
+        <DataTable
+          columns={assignmentColumns}
+          data={assignments}
+          loading={isLoading}
+          tableLabel="Assignments table"
+          defaultSorting={[{ id: 'dueDate', desc: false }]}
+          emptyTitle="No assignments yet"
+          emptyDescription={
+            courseIsArchived
+              ? 'This course was archived without any assignments.'
+              : 'Create an assignment to give students something to submit.'
+          }
+          emptyIcon={BookOpen}
+          loadingMessage="Loading assignments, please wait..."
+        />
       </div>
     </div>
   );

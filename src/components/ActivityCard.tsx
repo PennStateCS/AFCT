@@ -90,21 +90,6 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
     void refetch();
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
-          <Activity className="h-5 w-5" />
-          Activity
-        </h2>
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="ml-2">Loading activity...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex flex-row items-center justify-between">
@@ -128,40 +113,31 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
         </Button>
       </div>
       <div className="overflow-x-auto">
-        {activities.length === 0 ? (
-          <div className="text-muted-foreground py-8 text-center">
-            <Activity className="mx-auto mb-4 h-12 w-12 opacity-50" />
-            <p>No activity recorded yet for this course.</p>
-          </div>
-        ) : (
-          <>
-            <DataTable
-              columns={columns}
-              data={activities}
-              tableLabel="Activity log table"
-              defaultSorting={[{ id: 'timestamp', desc: true }]}
-            />
+        <DataTable
+          columns={columns}
+          data={activities}
+          loading={isLoading}
+          tableLabel="Activity log table"
+          defaultSorting={[{ id: 'timestamp', desc: true }]}
+          loadingMessage="Loading activity, please wait..."
+          emptyTitle="No activity yet"
+          emptyDescription="Course actions like enrollments, submissions and grade changes will appear here."
+          emptyIcon={Activity}
+        />
 
-            {hasMore && (
-              <div className="flex justify-center pt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={loadMore}
-                  disabled={isFetchingNextPage}
-                >
-                  {isFetchingNextPage ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    'Load More'
-                  )}
-                </Button>
-              </div>
-            )}
-          </>
+        {hasMore && (
+          <div className="flex justify-center pt-4">
+            <Button variant="outline" size="sm" onClick={loadMore} disabled={isFetchingNextPage}>
+              {isFetchingNextPage ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                'Load More'
+              )}
+            </Button>
+          </div>
         )}
       </div>
     </div>

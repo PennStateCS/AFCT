@@ -55,6 +55,14 @@ export function RosterCard({
         loading={loading}
         tableLabel="Course roster table"
         defaultSorting={[{ id: 'lastName', desc: false }]}
+        emptyTitle="No one enrolled yet"
+        emptyDescription={
+          courseIsArchived
+            ? 'This course was archived with an empty roster.'
+            : 'Use Enroll User or Bulk Enroll to add students and staff.'
+        }
+        emptyIcon={GraduationCap}
+        loadingMessage="Loading roster, please wait..."
       />
     </div>
   );

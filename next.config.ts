@@ -36,6 +36,14 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-DNS-Prefetch-Control', value: 'off' },
+          // Nothing in a private course tool should be indexed. src/app/robots.ts
+          // asks crawlers not to fetch; this header is the part that actually binds,
+          // since it also covers URLs a crawler reaches via an inbound link and
+          // non-HTML responses that can't carry a <meta name="robots">.
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate',
+          },
           // The Content-Security-Policy is set per-request (with a nonce) in the
           // middleware, not here. HSTS is left to nginx (docker/nginx/default.conf),
           // which only sends it with a real cert to avoid trapping self-signed deploys.

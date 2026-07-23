@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, type ComponentType } from 'react';
+import { useState, useEffect, type ComponentType, type ReactNode } from 'react';
 import type { Row, Table as TanstackTable, Column as TanstackColumn } from '@tanstack/react-table';
 import { flexRender } from '@tanstack/react-table';
-import { Inbox, Loader2 } from 'lucide-react';
+import { Inbox } from 'lucide-react';
+import { DataTableLoading, DataTableEmptyState } from '@/components/ui/data-table-status';
 
 /**
  * Stacked card view for narrow screens: each row becomes a card of label/value
@@ -19,6 +20,8 @@ export function DataTableCards<TData>({
   emptyTitle = 'No data found',
   emptyDescription = 'Try adjusting filters or adding new entries.',
   emptyIcon: EmptyIcon = Inbox,
+  loadingMessage = 'Loading data, please wait...',
+  emptyAction,
 }: {
   table: TanstackTable<TData>;
   loading: boolean;
@@ -27,28 +30,23 @@ export function DataTableCards<TData>({
   emptyTitle?: string;
   emptyDescription?: string;
   emptyIcon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+  loadingMessage?: string;
+  emptyAction?: ReactNode;
 }) {
   if (loading) {
-    return (
-      <div
-        className="flex flex-col items-center justify-center gap-2 rounded-md border py-10 text-gray-500"
-        role="status"
-        aria-live="polite"
-      >
-        <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
-        <span>Loading data, please wait...</span>
-      </div>
-    );
+    return <DataTableLoading message={loadingMessage} className="rounded-md border py-10" />;
   }
 
   const rows = table.getRowModel().rows;
   if (!rows.length) {
     return (
-      <div className="text-muted-foreground flex flex-col items-center rounded-md border py-8">
-        <EmptyIcon className="mb-2 h-10 w-10 text-gray-400" aria-hidden={true} />
-        <p className="font-medium">{emptyTitle}</p>
-        <p className="text-sm">{emptyDescription}</p>
-      </div>
+      <DataTableEmptyState
+        icon={EmptyIcon}
+        title={emptyTitle}
+        description={emptyDescription}
+        action={emptyAction}
+        className="rounded-md border py-8"
+      />
     );
   }
 

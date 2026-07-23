@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { CategoryBadge } from '@/components/ui/category-badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
+import { ScrollText } from 'lucide-react';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 import { DownloadLogsDialog } from '@/components/dialogs/DownloadLogsDialog';
 import { apiPaths } from '@/lib/api-paths';
@@ -266,6 +267,10 @@ export default function SystemLogsClient() {
           loading={loading}
           tableLabel="System logs table"
           showExportButton={false}
+          emptyTitle="No log entries"
+          emptyDescription="No activity matches the current search and filters."
+          emptyIcon={ScrollText}
+          loadingMessage="Loading log entries, please wait..."
           actionButtons={
             <DataTableFilterMenu
               groups={[

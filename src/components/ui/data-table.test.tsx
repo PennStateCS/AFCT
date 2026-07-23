@@ -83,6 +83,94 @@ describe('DataTable', () => {
     expect(clickMock).toHaveBeenCalledTimes(1);
   });
 
+  it('exports every filtered row, not just the page on screen', async () => {
+    // 12 rows against a default page size of 10: the last two are off-page, and used
+    // to be silently dropped from the export.
+    const many: RowData[] = Array.from({ length: 12 }, (_, i) => ({
+      id: String(i),
+      name: `Person ${i}`,
+      role: 'Student',
+    }));
+    render(<DataTable columns={columns} data={many} storageKey="test-export-all" />);
+
+    expect(screen.queryByText('Person 11')).not.toBeInTheDocument(); // off-page
+
+    fireEvent.click(screen.getByRole('button', { name: /export table data to csv/i }));
+
+    // The mock is declared with no parameters, so its recorded call tuple is empty
+    // as far as TS is concerned; assert the shape we actually pass.
+    const [blob] = createObjectURL.mock.calls[0] as unknown as [Blob];
+    const csv = await blob.text();
+    expect(csv).toContain('Person 0');
+    expect(csv).toContain('Person 11');
+    expect(csv.trim().split('\n')).toHaveLength(13); // header + 12 rows
+  });
+
+  it('shows the row total, and a filtered count while searching', async () => {
+    const user = userEvent.setup();
+    render(<DataTable columns={columns} data={data} />);
+
+    expect(screen.getByText('3 total')).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText('Search...'), 'Bob');
+
+    expect(await screen.findByText('1 of 3')).toBeInTheDocument();
+  });
+
+  it('restores a saved rows-per-page preference', async () => {
+    localStorage.setItem('test-page-size-page-size', '25');
+    const many: RowData[] = Array.from({ length: 12 }, (_, i) => ({
+      id: String(i),
+      name: `Person ${i}`,
+      role: 'Student',
+    }));
+
+    render(<DataTable columns={columns} data={many} storageKey="test-page-size" />);
+
+    // All 12 fit on one page at 25/page; at the default 10 the last two would be hidden.
+    expect(await screen.findByText('Person 11')).toBeInTheDocument();
+  });
+
+  it('renders an empty-state action when one is provided', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={[]}
+        emptyTitle="No courses yet"
+        emptyAction={<button>Create Course</button>}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Create Course' })).toBeInTheDocument();
+  });
+
+  it('names the sort button with the visible header text (WCAG 2.5.3)', () => {
+    // An aria-label here would override the visible text -- and since columnLabel()
+    // prefers meta.filterLabel, it could announce a word that isn't on screen.
+    render(<DataTable columns={columns} data={data} />);
+
+    expect(screen.getByRole('button', { name: 'Name' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /sort by name/i })).not.toBeInTheDocument();
+  });
+
+  it('announces pagination state through a single live region', () => {
+    const { container } = render(<DataTable columns={columns} data={data} />);
+
+    // Two live regions (page indicator + row total) meant one page change fired two
+    // separate announcements.
+    const live = container.querySelectorAll('[aria-live], [role="status"]');
+    expect(live).toHaveLength(1);
+    expect(live[0]).toHaveTextContent('Page 1 of 1, 3 total');
+  });
+
+  it('only makes the header sticky when asked', () => {
+    const { rerender, container } = render(<DataTable columns={columns} data={data} />);
+    expect(container.querySelector('thead')).not.toHaveClass('sticky');
+
+    rerender(<DataTable columns={columns} data={data} stickyHeader />);
+    expect(container.querySelector('thead')).toHaveClass('sticky');
+  });
+
   it('renders loading state when loading is true', () => {
     render(<DataTable columns={columns} data={[]} loading />);
 
@@ -90,6 +178,13 @@ describe('DataTable', () => {
     expect(screen.getByText(/Loading data, please wait/i).closest('tr')).toHaveClass(
       'hover:bg-transparent',
     );
+  });
+
+  it('uses a custom loading message when one is provided', () => {
+    render(<DataTable columns={columns} data={[]} loading loadingMessage="Loading courses..." />);
+
+    expect(screen.getByText('Loading courses...')).toBeInTheDocument();
+    expect(screen.queryByText(/Loading data, please wait/i)).not.toBeInTheDocument();
   });
 
   it('renders custom action buttons in the toolbar', () => {

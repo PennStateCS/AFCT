@@ -519,6 +519,9 @@ export default function AssignmentDashboardPage({
                   data={problemTableData}
                   tableLabel="Assignment problems table"
                   defaultSorting={[{ id: 'title', desc: false }]}
+                  emptyTitle="No problems on this assignment"
+                  emptyDescription="Add problems so students have something to solve."
+                  emptyIcon={FileText}
                 />
               </div>
             </TabsContent>

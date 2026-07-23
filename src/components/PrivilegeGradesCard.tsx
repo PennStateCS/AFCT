@@ -8,7 +8,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
-import { Table, Download, RefreshCw } from 'lucide-react';
+import { Table, Download, RefreshCw, GraduationCap } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { GradeBreakdownDialog } from '@/components/dialogs/GradeBreakdownDialog';
 import { formatTimeInTimeZone } from '@/lib/date';
@@ -360,6 +360,10 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           loading={gradesQuery.isPending}
           tableLabel="Course grades table"
           showExportButton={false}
+          emptyTitle="No grades to show"
+          emptyDescription="Grades appear once students are enrolled and have submitted work."
+          emptyIcon={GraduationCap}
+          loadingMessage="Loading grades, please wait..."
           actionButtons={
             <>
               <Button

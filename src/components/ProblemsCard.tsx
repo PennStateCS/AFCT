@@ -34,16 +34,20 @@ export function ProblemsCard({
         </Button>
       </div>
       <div className="overflow-x-auto">
-        {!isLoading && !problems.length ? (
-          <p className="text-muted-foreground italic">No problems added.</p>
-        ) : (
-          <DataTable
-            columns={problemColumns}
-            data={problems}
-            loading={isLoading}
-            tableLabel="Problems table"
-          />
-        )}
+        <DataTable
+          columns={problemColumns}
+          data={problems}
+          loading={isLoading}
+          tableLabel="Problems table"
+          emptyTitle="No problems yet"
+          emptyDescription={
+            courseIsArchived
+              ? 'This course was archived without any problems.'
+              : 'Create a problem to add to an assignment.'
+          }
+          emptyIcon={FileText}
+          loadingMessage="Loading problems, please wait..."
+        />
       </div>
     </div>
   );

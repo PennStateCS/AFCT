@@ -30,9 +30,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { ArrowUp, ArrowDown, ArrowUpDown, Inbox, Loader2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowUpDown, Inbox } from 'lucide-react';
 import { usePersistentColumnVisibility } from '@/components/ui/use-persistent-column-visibility';
-import { escapeCsvCell } from '@/lib/csv';
+import { usePersistentPageSize } from '@/components/ui/use-persistent-page-size';
+import { buildTableCsv, downloadCsv } from '@/components/ui/data-table-export';
+import { DataTableLoading, DataTableEmptyState } from '@/components/ui/data-table-status';
 import {
   multiSelectFilter,
   alignTextClass,
@@ -55,6 +57,9 @@ interface DataTableProps<TData, TValue> {
   storageKey?: string;
   tableLabel?: string;
   showExportButton?: boolean;
+  /** Hide the entire toolbar (search, filters, Columns, Export). For small embedded
+   *  tables (e.g. a dialog) that don't need any of it. Pagination still renders. */
+  showToolbar?: boolean;
   actionButtons?: React.ReactNode;
   defaultColumnVisibility?: VisibilityState;
   /** Heading shown when the table has no rows. Defaults to "No data found". */
@@ -66,6 +71,24 @@ interface DataTableProps<TData, TValue> {
    * it's rendered with the table's standard size/color. Defaults to `Inbox`.
    */
   emptyIcon?: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+  /**
+   * Status text shown beside the spinner while `loading`. Defaults to a generic
+   * "Loading data, please wait...". This is the table's live-region announcement,
+   * so keep it a sentence a screen reader can read out, not a bare noun.
+   */
+  loadingMessage?: string;
+  /**
+   * Optional call-to-action rendered under the empty-state text -- typically the same
+   * button the page header offers (e.g. "Create Course"), so a first-run user can act
+   * without hunting for it. Omitted when the table has rows.
+   */
+  emptyAction?: React.ReactNode;
+  /**
+   * Keep the header row visible while the body scrolls. Off by default: it only helps
+   * when the table is inside its own scroll container with a bounded height, and it
+   * would otherwise change every existing table's behavior.
+   */
+  stickyHeader?: boolean;
 
   // ---- Server-side ("manual") mode: all optional; omit for client-side. ----
   // When a controlled value + handler is provided, the table hands that concern
@@ -106,11 +129,15 @@ export function DataTable<TData, TValue>({
   storageKey = 'datatable-columns',
   tableLabel = 'Data table',
   showExportButton = true,
+  showToolbar = true,
   actionButtons,
   defaultColumnVisibility = {},
   emptyTitle = 'No data found',
   emptyDescription = 'Try adjusting filters or adding new entries.',
   emptyIcon: EmptyIcon = Inbox,
+  loadingMessage = 'Loading data, please wait...',
+  emptyAction,
+  stickyHeader = false,
   manualPagination = false,
   pageCount,
   rowCount,
@@ -173,11 +200,22 @@ export function DataTable<TData, TValue>({
   const [internalSorting, setInternalSorting] = useState<SortingState>(defaultSorting);
   const sorting = sortingProp ?? internalSorting;
 
+  // Rows-per-page is remembered per table (client mode only -- in server mode the
+  // parent owns the whole pagination object, including page size).
+  const [savedPageSize, savePageSize] = usePersistentPageSize(storageKey, 10);
   const [internalPagination, setInternalPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
   });
   const pagination = paginationProp ?? internalPagination;
+
+  // Adopt the stored page size once it has been read from localStorage (post-mount).
+  useEffect(() => {
+    if (paginationProp) return;
+    setInternalPagination((prev) =>
+      prev.pageSize === savedPageSize ? prev : { ...prev, pageIndex: 0, pageSize: savedPageSize },
+    );
+  }, [savedPageSize, paginationProp]);
 
   // Normalize react-table's value-or-updater callbacks down to a plain value so
   // both internal setState and the parent's (value) => void handlers work.
@@ -187,6 +225,8 @@ export function DataTable<TData, TValue>({
   };
   const handlePaginationChange: OnChangeFn<PaginationState> = (updater) => {
     const next = typeof updater === 'function' ? updater(pagination) : updater;
+    // Persist a deliberate rows-per-page change so it survives the next visit.
+    if (!onPaginationChange && next.pageSize !== pagination.pageSize) savePageSize(next.pageSize);
     (onPaginationChange ?? setInternalPagination)(next);
   };
   // autoResetPageIndex is disabled below so a background data refetch (e.g. after saving
@@ -267,34 +307,16 @@ export function DataTable<TData, TValue>({
   }, [clientPageCount, pagination.pageIndex, manualPagination, onPaginationChange]);
 
   const exportToCSV = () => {
-    const rows = table.getRowModel().rows;
+    // Pre-pagination on purpose: getRowModel() is the *current page*, so this used to
+    // write a 10-row CSV out of a 200-row filtered result with nothing telling the user.
+    // Search/filters/sort still apply -- you get exactly what the table is showing you,
+    // just all of it rather than the slice on screen. (In server mode the client only
+    // holds one page, which is why those tables pass showExportButton={false}.)
+    const rows = table.getPrePaginationRowModel().rows;
     if (!rows.length) return;
 
     const visibleColumns = table.getAllLeafColumns().filter((col) => col.id !== 'actions');
-
-    // Every cell goes through escapeCsvCell: it quotes (so embedded commas/newlines are
-    // safe) AND neutralizes leading =, +, -, @, tab and CR, which a spreadsheet would
-    // otherwise execute as a formula. Table values include user-controlled text such as
-    // student names and course titles, so quoting alone was not enough. Non-string values
-    // were also previously emitted raw, which broke the row on anything containing a comma.
-    const headers = visibleColumns.map((col) => escapeCsvCell(col.id));
-    const csvRows = [headers.join(',')];
-
-    rows.forEach((row) => {
-      const values = row
-        .getVisibleCells()
-        .filter((cell) => visibleColumns.includes(cell.column))
-        .map((cell) => escapeCsvCell(cell.getValue()));
-      csvRows.push(values.join(','));
-    });
-
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'table_export.csv');
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(buildTableCsv(rows, visibleColumns), 'table_export.csv');
   };
 
   // Value-filter and search-scope only make sense client-side (server mode owns
@@ -327,21 +349,23 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      <DataTableToolbar
-        table={table}
-        globalFilter={globalFilter}
-        setGlobalFilter={setGlobalFilter}
-        searchScope={searchScope}
-        setSearchScope={setSearchScope}
-        scopeOptions={scopeOptions}
-        filterableColumns={filterableColumns}
-        activeFilterCount={activeFilterCount}
-        actionButtons={actionButtons}
-        showExportButton={showExportButton}
-        onExport={exportToCSV}
-        onResetColumns={resetColumns}
-        getColumnLabel={columnLabel}
-      />
+      {showToolbar && (
+        <DataTableToolbar
+          table={table}
+          globalFilter={globalFilter}
+          setGlobalFilter={setGlobalFilter}
+          searchScope={searchScope}
+          setSearchScope={setSearchScope}
+          scopeOptions={scopeOptions}
+          filterableColumns={filterableColumns}
+          activeFilterCount={activeFilterCount}
+          actionButtons={actionButtons}
+          showExportButton={showExportButton}
+          onExport={exportToCSV}
+          onResetColumns={resetColumns}
+          getColumnLabel={columnLabel}
+        />
+      )}
 
       {stacked ? (
         <div className="space-y-3">
@@ -353,6 +377,8 @@ export function DataTable<TData, TValue>({
             emptyTitle={emptyTitle}
             emptyDescription={emptyDescription}
             emptyIcon={EmptyIcon}
+            loadingMessage={loadingMessage}
+            emptyAction={emptyAction}
           />
           <div className="rounded-md border p-3">
             <PaginationControls
@@ -369,7 +395,9 @@ export function DataTable<TData, TValue>({
            rounded corners clipping the scrolling content. */
         <div className="overflow-hidden rounded-md border">
           <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
-            <TableHeader role="rowgroup">
+            {/* stickyHeader needs the row itself to carry the background (the header cells
+                are transparent), which it already does via the inline style below. */}
+            <TableHeader role="rowgroup" className={stickyHeader ? 'sticky top-0 z-10' : undefined}>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow
                   key={headerGroup.id}
@@ -412,12 +440,30 @@ export function DataTable<TData, TValue>({
                             type="button"
                             onClick={handleSortClick}
                             className={`flex w-full cursor-pointer items-center select-none ${flexClass || 'text-left'}`}
-                            aria-label={`Sort by ${columnLabel(header.column).toLowerCase()}`}
+                            /*
+                             * When the header renders plain text, that text IS the button's
+                             * accessible name -- an aria-label here would override it, and
+                             * columnLabel() prefers meta.filterLabel, so a column showing
+                             * "Instructor" with filterLabel "Owner" would be announced (and
+                             * addressed by voice control) as something the user can't see.
+                             * WCAG 2.5.3. Only fall back to a synthesized label when the
+                             * header is custom JSX that may carry no text at all. The
+                             * current sort direction comes from aria-sort on the cell.
+                             */
+                            aria-label={
+                              typeof header.column.columnDef.header === 'string'
+                                ? undefined
+                                : `Sort by ${columnLabel(header.column).toLowerCase()}`
+                            }
                           >
                             {flexRender(header.column.columnDef.header, header.getContext())}
-                            {sorted === 'asc' && <ArrowUp className="ml-1 h-3 w-3" />}
-                            {sorted === 'desc' && <ArrowDown className="ml-1 h-3 w-3" />}
-                            {!sorted && <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />}
+                            {sorted === 'asc' && <ArrowUp className="ml-1 h-3 w-3" aria-hidden />}
+                            {sorted === 'desc' && (
+                              <ArrowDown className="ml-1 h-3 w-3" aria-hidden />
+                            )}
+                            {!sorted && (
+                              <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" aria-hidden />
+                            )}
                           </button>
                         ) : (
                           <div className={`flex items-center ${flexClass}`}>
@@ -435,14 +481,7 @@ export function DataTable<TData, TValue>({
               {loading ? (
                 <TableRow className="pointer-events-none hover:bg-transparent">
                   <TableCell colSpan={columns.length} className="py-10 text-center">
-                    <div
-                      className="flex flex-col items-center justify-center gap-2 text-gray-500"
-                      role="status"
-                      aria-live="polite"
-                    >
-                      <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
-                      <span>Loading data, please wait...</span>
-                    </div>
+                    <DataTableLoading message={loadingMessage} />
                   </TableCell>
                 </TableRow>
               ) : table.getRowModel().rows.length ? (
@@ -467,11 +506,12 @@ export function DataTable<TData, TValue>({
               ) : (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={columns.length} className="py-8 text-center">
-                    <div className="text-muted-foreground flex flex-col items-center">
-                      <EmptyIcon className="mb-2 h-10 w-10 text-gray-400" aria-hidden={true} />
-                      <p className="font-medium">{emptyTitle}</p>
-                      <p className="text-sm">{emptyDescription}</p>
-                    </div>
+                    <DataTableEmptyState
+                      icon={EmptyIcon}
+                      title={emptyTitle}
+                      description={emptyDescription}
+                      action={emptyAction}
+                    />
                   </TableCell>
                 </TableRow>
               )}

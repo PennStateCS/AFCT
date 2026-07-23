@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Eye, File, RotateCcw } from 'lucide-react';
+import { Download, Eye, File, FileCode2, RotateCcw } from 'lucide-react';
+import { PulseLoader } from 'react-spinners';
 import type { Course } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -552,11 +553,42 @@ export default function SubmissionsClient() {
             </TableHeader>
             <TableBody>
               {visibleSubmissions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-muted-foreground py-8 text-center text-sm">
-                    {loadingCourses || loadingAssignments || loadingSubmissions
-                      ? 'Loading submissions...'
-                      : 'No submissions match your current filters.'}
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={8} className="py-10 text-center">
+                    {loadingCourses || loadingAssignments || loadingSubmissions ? (
+                      <div
+                        className="flex flex-col items-center justify-center gap-2 text-gray-500"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <span aria-hidden="true" className="text-brand-teal">
+                          <PulseLoader
+                            color="currentColor"
+                            size={8}
+                            margin={3}
+                            speedMultiplier={0.65}
+                          />
+                        </span>
+                        <span>Loading submissions, please wait...</span>
+                      </div>
+                    ) : (
+                      /* Distinguish "you haven't submitted anything" from "your filters
+                         hide everything" -- the fix for the second is a filter change,
+                         not doing more work. */
+                      <div className="text-muted-foreground flex flex-col items-center whitespace-normal">
+                        <FileCode2 className="mb-2 h-10 w-10 text-gray-400" aria-hidden={true} />
+                        <p className="font-medium">
+                          {submissions.length === 0
+                            ? 'No submissions yet'
+                            : 'No submissions match your filters'}
+                        </p>
+                        <p className="text-sm">
+                          {submissions.length === 0
+                            ? 'Work you submit for a problem will show up here.'
+                            : 'Try clearing a course, assignment, problem or status filter.'}
+                        </p>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

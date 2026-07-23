@@ -7,7 +7,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateCourseDialog } from '@/components/dialogs/CreateCourseDialog';
-import { BookPlus } from 'lucide-react';
+import { BookPlus, BookOpen } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import type { CourseListItem } from '@/lib/courses-list';
@@ -77,6 +77,15 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
           loading={isLoading}
           tableLabel="Courses table"
           defaultSorting={[{ id: 'startDate', desc: false }]}
+          emptyTitle="No courses yet"
+          emptyDescription="Create a course to get started."
+          emptyIcon={BookOpen}
+          loadingMessage="Loading courses, please wait..."
+          emptyAction={
+            <Button onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>
+              <BookPlus /> Create Course
+            </Button>
+          }
         />
       </CardContent>
 

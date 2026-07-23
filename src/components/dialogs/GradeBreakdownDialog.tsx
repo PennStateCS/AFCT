@@ -17,7 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { showToast } from '@/lib/toast';
-import { Loader2 } from 'lucide-react';
+import { ClipboardList, Loader2 } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
 import { BatchProblemGradesSchema, gradeCellSchema } from '@/schemas/grade';
 
@@ -240,7 +240,16 @@ export function GradeBreakdownDialog({
         </DialogHeader>
 
         <div className="max-h-[60vh] overflow-auto">
-          <DataTable columns={columns} data={rows} loading={loading} />
+          <DataTable
+            columns={columns}
+            data={rows}
+            loading={loading}
+            showToolbar={false}
+            emptyTitle="No problems to grade"
+            emptyDescription="This assignment has no problems, so there is nothing to break down."
+            emptyIcon={ClipboardList}
+            loadingMessage="Loading grade breakdown, please wait..."
+          />
         </div>
 
         <DialogFooter>

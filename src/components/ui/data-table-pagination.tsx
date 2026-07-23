@@ -25,8 +25,31 @@ export function PaginationControls<TData>({
   rowCount?: number;
   manualPagination: boolean;
 }) {
+  const pageLabel = `Page ${table.getState().pagination.pageIndex + 1} of ${Math.max(1, table.getPageCount())}`;
+
+  // Row total: server mode is handed an authoritative count; client mode derives one. When
+  // a search or filter is narrowing the rows we show "12 of 240" so it's obvious how much
+  // is being hidden. In server mode without a rowCount there is nothing honest to show --
+  // the core row model is only the current page, so counting it would claim "10 total".
+  let totalLabel: string | null = null;
+  if (typeof rowCount === 'number') {
+    totalLabel = `${rowCount} total`;
+  } else if (!manualPagination) {
+    const filtered = table.getFilteredRowModel().rows.length;
+    const total = table.getCoreRowModel().rows.length;
+    totalLabel = filtered === total ? `${total} total` : `${filtered} of ${total}`;
+  }
+
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {/* One live region for the whole footer. The page indicator and the row total used
+          to each carry aria-live, so a single page change fired two separate
+          announcements; this announces the combined state once. The visible spans below
+          are left silent. */}
+      <span className="sr-only" role="status">
+        {totalLabel ? `${pageLabel}, ${totalLabel}` : pageLabel}
+      </span>
+
       <div className="text-foreground flex items-center gap-1 font-normal">
         <Button
           variant="outline"
@@ -37,9 +60,7 @@ export function PaginationControls<TData>({
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         </Button>
-        <span className="px-2 whitespace-nowrap" aria-live="polite">
-          Page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}
-        </span>
+        <span className="px-2 whitespace-nowrap">{pageLabel}</span>
         <Button
           variant="outline"
           size="sm"
@@ -52,17 +73,8 @@ export function PaginationControls<TData>({
       </div>
 
       <div className="text-foreground flex items-center gap-3 font-normal">
-        {typeof rowCount === 'number' ? (
-          <span className="text-muted-foreground text-sm whitespace-nowrap" aria-live="polite">
-            {rowCount} total
-          </span>
-        ) : null}
-        {/* Client-side filtering has no visible total; announce the filtered count
-            to screen readers so search results aren't silent. */}
-        {!manualPagination ? (
-          <span className="sr-only" aria-live="polite">
-            {table.getFilteredRowModel().rows.length} results
-          </span>
+        {totalLabel ? (
+          <span className="text-muted-foreground text-sm whitespace-nowrap">{totalLabel}</span>
         ) : null}
         <Select
           value={String(table.getState().pagination.pageSize)}

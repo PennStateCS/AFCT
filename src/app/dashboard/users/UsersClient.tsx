@@ -180,6 +180,10 @@ export default function UsersClient() {
           loading={isLoading}
           tableLabel="Users table"
           showExportButton={false}
+          emptyTitle="No user accounts"
+          emptyDescription="Create or import users to get started."
+          emptyIcon={Users}
+          loadingMessage="Loading user accounts, please wait..."
           defaultColumnVisibility={{ isAdmin: false, lockStatus: false }}
           actionButtons={
             <DataTableFilterMenu

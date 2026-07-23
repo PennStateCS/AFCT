@@ -44,6 +44,10 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-node-color: var(--node-color);
+  /* The navbar's green/teal (--secondary in light mode), pinned as a literal so it
+     stays the same in both themes: --secondary itself flips to a dark neutral in
+     dark mode, which would make anything drawn in it vanish on a dark background. */
+  --color-brand-teal: #43a9b2;
   --color-badge-success: var(--badge-success);
   --color-badge-success-bg: var(--badge-success-bg);
   --color-badge-success-border: var(--badge-success-border);

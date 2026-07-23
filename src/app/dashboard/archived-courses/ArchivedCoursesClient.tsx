@@ -89,6 +89,7 @@ export default function ArchivedCoursesClient({
           emptyTitle="No archived courses"
           emptyDescription="Courses you archive will appear here."
           emptyIcon={Archive}
+          loadingMessage="Loading archived courses, please wait..."
         />
       </CardContent>
     </Card>

@@ -24,18 +24,31 @@ vi.mock('@/app/dashboard/courses/[id]/activity-columns', () => ({
   getActivityColumns: vi.fn(() => []),
 }));
 
-// Render rows minimally so we can assert on row count / content.
+// Render rows minimally so we can assert on row count / content. Loading is now
+// the table's job (the card no longer renders its own spinner), so the stub has
+// to honour it for the loading assertion to mean anything.
 vi.mock('@/components/ui/data-table', () => ({
-  DataTable: ({ data }: { data: ActivityLog[] }) => (
-    <div>
-      <div data-testid="table-rows">{data.length}</div>
-      <ul>
-        {data.map((a) => (
-          <li key={a.id}>{a.action}</li>
-        ))}
-      </ul>
-    </div>
-  ),
+  DataTable: ({
+    data,
+    loading,
+    loadingMessage,
+  }: {
+    data: ActivityLog[];
+    loading?: boolean;
+    loadingMessage?: string;
+  }) =>
+    loading ? (
+      <div>{loadingMessage}</div>
+    ) : (
+      <div>
+        <div data-testid="table-rows">{data.length}</div>
+        <ul>
+          {data.map((a) => (
+            <li key={a.id}>{a.action}</li>
+          ))}
+        </ul>
+      </div>
+    ),
 }));
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
@@ -79,7 +92,7 @@ describe('ActivityCard', () => {
 
     renderWithClient(<ActivityCard courseId="course-1" />);
 
-    expect(screen.getByText('Loading activity...')).toBeInTheDocument();
+    expect(screen.getByText('Loading activity, please wait...')).toBeInTheDocument();
   });
 
   it('loads the next page from the accumulated offset when Load More is clicked', async () => {

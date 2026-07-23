@@ -148,7 +148,7 @@ describe('SubmissionsClient', () => {
 
     // Nothing selected -> fetchSubmissions short-circuits to [] with no network call.
     await waitFor(() => {
-      expect(screen.getByText('Loading submissions...')).toBeInTheDocument();
+      expect(screen.getByText('Loading submissions, please wait...')).toBeInTheDocument();
     });
     expect(submissionsPostCalls(fetchMock)).toHaveLength(0);
   });
@@ -255,7 +255,7 @@ describe('SubmissionsClient', () => {
     await waitFor(() => {
       expect(submissionsPostCalls(fetchMock).length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getByText('Loading submissions...')).toBeInTheDocument();
+    expect(screen.getByText('Loading submissions, please wait...')).toBeInTheDocument();
 
     // Releasing the POST lets the row render.
     releaseSubmissions?.();
