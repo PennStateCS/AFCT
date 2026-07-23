@@ -97,6 +97,35 @@ describe('DueDateCell', () => {
   });
 });
 
+describe('useAssignmentColumns — Manage menu', () => {
+  it('offers deep links to the assignment tabs', async () => {
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useAssignmentColumns(false, vi.fn(), vi.fn(), 'UTC'));
+    const actions = result.current.find((c) => c.id === 'actions');
+    if (!actions?.cell || typeof actions.cell !== 'function') throw new Error('actions cell not found');
+
+    const row = { original: { id: 'a1', courseId: 'c1', title: 'HW 1' } };
+    render(<>{(actions.cell as (ctx: unknown) => React.ReactNode)({ row })}</>);
+
+    await user.click(screen.getByRole('button', { name: /manage assignment hw 1/i }));
+
+    const base = '/dashboard/courses/c1/a1';
+    expect(screen.getByRole('menuitem', { name: /view assignment/i })).toHaveAttribute('href', base);
+    expect(screen.getByRole('menuitem', { name: /submissions/i })).toHaveAttribute(
+      'href',
+      `${base}?tab=submissions`,
+    );
+    expect(screen.getByRole('menuitem', { name: /statistics/i })).toHaveAttribute(
+      'href',
+      `${base}?tab=statistics`,
+    );
+    expect(screen.getByRole('menuitem', { name: /similarity/i })).toHaveAttribute(
+      'href',
+      `${base}?tab=similarity`,
+    );
+  });
+});
+
 describe('useAssignmentColumns — Type (individual/group) column', () => {
   const getTypeColumn = () => {
     const { result } = renderHook(() => useAssignmentColumns(false, vi.fn(), vi.fn(), 'UTC'));
