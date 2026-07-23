@@ -6,7 +6,16 @@ import type { ColumnDef } from '@tanstack/react-table';
 import type { AssignmentWithProblemCount } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { NotebookText, Trash2, ChevronDown, BookOpen, CalendarClock } from 'lucide-react';
+import {
+  NotebookText,
+  Trash2,
+  ChevronDown,
+  BookOpen,
+  CalendarClock,
+  Package,
+  BarChart3,
+  Fingerprint,
+} from 'lucide-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { CompactDate } from '@/components/ui/CompactDate';
@@ -303,6 +312,31 @@ export function useAssignmentColumns(
                   <Link href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}>
                     <BookOpen className="mr-2 h-4 w-4" />
                     View Assignment
+                  </Link>
+                </DropdownMenuItem>
+                {/* Deep links to the assignment's tabs (the ?tab= param the assignment page reads). */}
+                <DropdownMenuItem asChild className="flex items-center gap-2">
+                  <Link
+                    href={`/dashboard/courses/${row.original.courseId}/${row.original.id}?tab=submissions`}
+                  >
+                    <Package className="mr-2 h-4 w-4" />
+                    Submissions
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="flex items-center gap-2">
+                  <Link
+                    href={`/dashboard/courses/${row.original.courseId}/${row.original.id}?tab=statistics`}
+                  >
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    Statistics
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="flex items-center gap-2">
+                  <Link
+                    href={`/dashboard/courses/${row.original.courseId}/${row.original.id}?tab=similarity`}
+                  >
+                    <Fingerprint className="mr-2 h-4 w-4" />
+                    Similarity
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
