@@ -68,6 +68,22 @@ for (const c of manifest.cases) {
     if (typeof feedback.correct !== 'boolean') {
       throw new Error(`evaluator returned no boolean 'correct' (feedback: ${feedback.feedback ?? '?'})`);
     }
+
+    // Cases that assert the *rejection* path: the jar must refuse the file with a
+    // recognizable message rather than crash or silently mark it wrong. Without this
+    // a student uploading an unsupported machine could get a bare "incorrect".
+    if (c.expectErrorContains) {
+      const haystack = [feedback.feedback ?? '', ...(feedback.errors ?? [])].join(' ').toLowerCase();
+      if (!haystack.includes(c.expectErrorContains.toLowerCase())) {
+        failures++;
+        console.error(
+          `  FAIL  ${c.name}\n        expected an error containing "${c.expectErrorContains}"` +
+            `\n        feedback: ${feedback.feedback ?? ''}`,
+        );
+        continue;
+      }
+    }
+
     if (feedback.correct === c.expectCorrect) {
       console.log(`  ok    ${c.name}  (correct=${feedback.correct})`);
     } else {

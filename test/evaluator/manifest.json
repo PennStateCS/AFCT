@@ -64,6 +64,81 @@
       "maxStates": -1,
       "deterministic": true,
       "expectCorrect": false
+    },
+
+    {
+      "name": "RE: regular expression is equivalent to itself",
+      "type": "RE",
+      "answer": "regExprToNfa.jff",
+      "submission": "regExprToNfa.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "CFG: grammar is equivalent to itself",
+      "type": "CFG",
+      "answer": "ex3.1a.jff",
+      "submission": "ex3.1a.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "CFG: second grammar is equivalent to itself",
+      "type": "CFG",
+      "answer": "ex3.isregular-a.jff",
+      "submission": "ex3.isregular-a.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA: pushdown automaton is equivalent to itself",
+      "type": "PDA",
+      "answer": "ex5.1.jff",
+      "submission": "ex5.1.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA: second pushdown automaton is equivalent to itself",
+      "type": "PDA",
+      "answer": "pdaexample.jff",
+      "submission": "pdaexample.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "FA (nondeterministic): third automaton is equivalent to itself",
+      "type": "FA",
+      "answer": "ex1.3a.jff",
+      "submission": "ex1.3a.jff",
+      "maxStates": -1,
+      "deterministic": false,
+      "expectCorrect": true
+    },
+    {
+      "name": "FA (nondeterministic): fourth automaton is equivalent to itself",
+      "type": "FA",
+      "answer": "faex.jff",
+      "submission": "faex.jff",
+      "maxStates": -1,
+      "deterministic": false,
+      "expectCorrect": true
+    },
+
+    {
+      "name": "Rejection path: a Mealy machine is refused, not silently marked wrong",
+      "type": "FA",
+      "answer": "mealyNOT.jff",
+      "submission": "mealyNOT.jff",
+      "maxStates": -1,
+      "deterministic": false,
+      "expectCorrect": false,
+      "expectErrorContains": "unsupported answer type"
+    },
+    {
+      "name": "Rejection path: a building-blocks Turing machine is refused",
+      "type": "TM",
+      "answer": "turingAnBnCn.jff",
+      "submission": "turingAnBnCn.jff",
+      "expectCorrect": false,
+      "expectErrorContains": "unsupported answer type"
     }
   ]
 }
