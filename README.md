@@ -25,7 +25,7 @@ Built with:
 - TypeScript 5.9
 - Docker + GHCR
 
-## Funding Acknowledgement
+## Funding
 
 This project is supported in part by the National Science Foundation under Grant No. 2439326. Any opinions, findings, conclusions, or recommendations expressed are those of the authors and do not necessarily reflect the views of the NSF.
 
