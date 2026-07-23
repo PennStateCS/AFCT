@@ -611,10 +611,17 @@ function Invoke-Preflight {
   # Linux; Resolve-DockerAccess points at Docker Desktop instead.
   Resolve-DockerAccess
 
-  $dockerVersion = (Invoke-NativeCapture { docker version --format '{{.Server.Version}}' } | Select-Object -First 1)
-  if ($LASTEXITCODE -ne 0 -or -not $dockerVersion) { $dockerVersion = 'unknown' }
-  $composeVersion = (Invoke-NativeCapture { docker compose version --short } | Select-Object -First 1)
-  if ($LASTEXITCODE -ne 0 -or -not $composeVersion) { $composeVersion = 'unknown' }
+  # Read $LASTEXITCODE from the native command before Select-Object narrows the
+  # captured output (see Get-AppContainerState: `native | Select-Object -First 1`
+  # corrupts $LASTEXITCODE to -1).
+  $dockerOut = Invoke-NativeCapture { docker version --format '{{.Server.Version}}' }
+  $dockerCode = $LASTEXITCODE
+  $dockerVersion = $dockerOut | Select-Object -First 1
+  if ($dockerCode -ne 0 -or -not $dockerVersion) { $dockerVersion = 'unknown' }
+  $composeOut = Invoke-NativeCapture { docker compose version --short }
+  $composeCode = $LASTEXITCODE
+  $composeVersion = $composeOut | Select-Object -First 1
+  if ($composeCode -ne 0 -or -not $composeVersion) { $composeVersion = 'unknown' }
   Write-Success "Docker $dockerVersion is available."
   Write-Success "Docker Compose $composeVersion is available."
 
@@ -684,10 +691,18 @@ function Test-HttpHealth {
 function Get-AppContainerState {
   $appId = (Invoke-Compose ps -q $AppService | Where-Object { $_ } | Select-Object -First 1)
   if (-not $appId) { return $null }
-  $state = (Invoke-NativeCapture {
+  # Capture the output first, then read $LASTEXITCODE BEFORE narrowing with
+  # Select-Object. Piping a native command straight into `Select-Object -First 1`
+  # stops the pipeline early, which corrupts $LASTEXITCODE to -1 even on success —
+  # so the health gate would report "missing|none" for a perfectly healthy stack and
+  # every install would time out and roll back. Select from the in-memory array,
+  # which leaves $LASTEXITCODE alone.
+  $out = Invoke-NativeCapture {
     docker inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' $appId
-  } | Select-Object -First 1)
-  if ($LASTEXITCODE -ne 0 -or -not $state) { return 'missing|none' }
+  }
+  $code = $LASTEXITCODE
+  $state = $out | Select-Object -First 1
+  if ($code -ne 0 -or -not $state) { return 'missing|none' }
   return $state
 }
 
