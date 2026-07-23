@@ -99,10 +99,10 @@ export function BackupsTab({
                     Taken (server time)
                   </th>
                   <th scope="col" className="p-2 font-medium">
-                    Database
+                    Archive
                   </th>
                   <th scope="col" className="p-2 font-medium">
-                    Files
+                    Encryption
                   </th>
                 </tr>
               </thead>
@@ -111,27 +111,18 @@ export function BackupsTab({
                   <tr key={b.timestamp} className="border-t">
                     <td className="p-2 whitespace-nowrap">{formatBackupTs(b.timestamp)}</td>
                     <td className="p-2">
-                      {b.dumpFile ? (
-                        <a
-                          className="text-sky-600 underline"
-                          href={apiPaths.admin.backupDownload({ file: b.dumpFile })}
-                        >
-                          Download ({formatBytes(b.dumpSize)})
-                        </a>
-                      ) : (
-                        '—'
-                      )}
+                      <a
+                        className="text-sky-600 underline"
+                        href={apiPaths.admin.backupDownload({ file: b.file })}
+                      >
+                        Download ({formatBytes(b.size)})
+                      </a>
                     </td>
-                    <td className="p-2">
-                      {b.filesFile ? (
-                        <a
-                          className="text-sky-600 underline"
-                          href={apiPaths.admin.backupDownload({ file: b.filesFile })}
-                        >
-                          Download ({formatBytes(b.filesSize)})
-                        </a>
+                    <td className="p-2 whitespace-nowrap">
+                      {b.encrypted ? (
+                        'Encrypted'
                       ) : (
-                        '—'
+                        <span className="text-amber-600">Not encrypted</span>
                       )}
                     </td>
                   </tr>
@@ -141,8 +132,9 @@ export function BackupsTab({
           </div>
         )}
         <p className="text-muted-foreground text-xs">
-          Download both the database and files from the same row to keep a complete, restorable copy
-          off-host.
+          Each archive holds the database and the uploaded files together, so one download is a
+          complete, restorable copy. Keep one off-host — and if backups are encrypted, store the
+          passphrase somewhere other than this server, or they cannot be restored.
         </p>
       </div>
     </>

@@ -71,10 +71,9 @@ const backupsPayload = () => ({
   backups: [
     {
       timestamp: '20260115-030201',
-      dumpFile: 'db-20260115-030201.sql.gz',
-      dumpSize: 2048,
-      filesFile: 'files-20260115-030201.tar.gz',
-      filesSize: 4096,
+      file: 'afct-20260115-030201.tar.gz.gpg',
+      size: 4096,
+      encrypted: true,
     },
   ],
 });
@@ -236,15 +235,16 @@ describe('SystemSettingsClient', () => {
 
     renderWithClient(<SystemSettingsClient />);
 
-    // The backups query renders a row with the humanized timestamp and download links.
+    // One archive per backup now, so one download link -- plus its encryption state.
     const cell = await screen.findByText('2026-01-15 03:02:01');
     const row = cell.closest('tr') as HTMLElement;
     const links = within(row).getAllByRole('link', { name: /Download/ });
-    expect(links).toHaveLength(2);
+    expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute(
       'href',
-      expect.stringContaining('db-20260115-030201.sql.gz'),
+      expect.stringContaining('afct-20260115-030201.tar.gz.gpg'),
     );
+    expect(within(row).getByText('Encrypted')).toBeInTheDocument();
   });
 
   it('reflects the TLS status from GET /api/admin/settings/tls', async () => {

@@ -245,10 +245,15 @@ services:
 
   db-backup:
     # backup.sh is baked into this image (docker/backup/Dockerfile). Daily backup
-    # to the db_backups volume: a matched pair of the DB dump and a tarball of the
-    # upload volumes. Schedule (on/off, hour, retention) comes from System Settings.
-    # Copy the db_backups volume off-host regularly; it protects against bad
-    # data/migrations, not host loss.
+    # to the db_backups volume: ONE archive per run holding the DB dump and the
+    # upload volumes together. Schedule (on/off, hour, retention) comes from System
+    # Settings. Copy the db_backups volume off-host regularly; it protects against
+    # bad data/migrations, not host loss.
+    #
+    # Set BACKUP_ENCRYPTION_KEY in .env.production (picked up via env_file below) to
+    # encrypt the archive with gpg AES-256 -- a backup is a full copy of every
+    # education record. Store that passphrase OFF this server: without it the
+    # backups cannot be restored. Unset means backups are written in the clear.
     # Versioned in lockstep with the app (see the app service above).
     image: ghcr.io/pennstatecs/afct-backup:${AFCT_APP_TAG:-main}
     container_name: afct-db-backup

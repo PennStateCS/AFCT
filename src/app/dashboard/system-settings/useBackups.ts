@@ -4,13 +4,13 @@ import { fetchJson } from '@/lib/query-fetch';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 
-// One backup = a database dump plus a matching upload-files archive.
+// One backup = one archive holding the database dump and the uploaded files,
+// encrypted when the deployment has a backup passphrase configured.
 export type BackupInfo = {
   timestamp: string;
-  dumpFile: string | null;
-  dumpSize: number | null;
-  filesFile: string | null;
-  filesSize: number | null;
+  file: string;
+  size: number | null;
+  encrypted: boolean;
 };
 
 const BACKUPS_QUERY_KEY = ['admin', 'settings', 'backups'] as const;

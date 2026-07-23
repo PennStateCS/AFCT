@@ -2,19 +2,28 @@
 # Daily Postgres + uploaded-file backups, scheduled from System Settings, with an
 # on-demand "back up now" trigger from the dashboard.
 #
-# Each run writes a matched pair to $BACKUP_DIR and prunes anything past retention:
-#   afct-<ts>.dump        the database (custom format)
-#   afct-files-<ts>.tgz   the upload volumes mounted under $FILES_ROOT
-# The pair matters: DB rows reference files by name, so restoring one without the
-# other leaves dangling references.
+# Each run writes ONE archive to $BACKUP_DIR and prunes anything past retention:
+#   afct-<ts>.tar.gz.gpg   encrypted (BACKUP_ENCRYPTION_KEY set)
+#   afct-<ts>.tar.gz       plaintext (no key configured)
+#
+# The archive holds both halves of a restorable snapshot, because DB rows reference
+# uploads by name and restoring one without the other leaves dangling references:
+#   db/database.dump   the database (pg_dump custom format)
+#   ./...              the upload volumes mounted under $FILES_ROOT
+#
+# Encryption: gpg symmetric AES-256 with the passphrase from BACKUP_ENCRYPTION_KEY.
+# A backup is a complete copy of every education record, so it should not sit on
+# disk in the clear. WITHOUT THE PASSPHRASE THE BACKUP CANNOT BE RESTORED -- keep it
+# somewhere other than this VM. If the variable is unset we still write the single
+# archive, unencrypted, and log a warning each run rather than silently stopping.
 #
 # On-demand: the app drops a flag file in $TRIGGER_DIR; we back up within one tick.
 # Scheduled: once per day at or after backupHour, read from SystemSettings (falls
 # back to the BACKUP_* env defaults if the row can't be read).
 #
-# Restore (with the volumes mounted at /private/uploads and /app/public/uploads):
-#   pg_restore -h postgres -U afct_user -d afct --clean --if-exists <dump>
-#   tar xzf <files-tgz> -C /tmp/restore
+# Manual restore (with the volumes mounted at /private/uploads and /app/public/uploads):
+#   gpg --decrypt afct-<ts>.tar.gz.gpg | tar xzf - -C /tmp/restore   # or: tar xzf <archive>
+#   pg_restore -h postgres -U afct_user -d afct --clean --if-exists /tmp/restore/db/database.dump
 #   cp -a /tmp/restore/private-uploads/. /private/uploads/
 #   cp -a /tmp/restore/public-uploads/.  /app/public/uploads/
 set -eu
@@ -49,6 +58,41 @@ FALLBACK_RETENTION="${BACKUP_RETENTION_DAYS:-14}"
 HEARTBEAT_FILE="${BACKUP_HEARTBEAT_FILE:-/tmp/afct-backup.alive}"
 beat() { date +%s > "$HEARTBEAT_FILE" 2>/dev/null || true; }
 
+# Encryption passphrase. Kept in a 0600 file rather than passed as a gpg argument,
+# because command lines are readable by any process in the container (ps).
+ENC_KEY="${BACKUP_ENCRYPTION_KEY:-}"
+KEYFILE=''
+if [ -n "$ENC_KEY" ]; then
+  # gpg 2.x needs a writable home to spawn its agent. Without one it does not
+  # fail -- it HANGS, which would silently stall every backup, so pin it here
+  # rather than relying on $HOME existing in the container.
+  GNUPGHOME="${GNUPGHOME:-/tmp/afct-gnupg}"
+  export GNUPGHOME
+  mkdir -p "$GNUPGHOME"
+  chmod 700 "$GNUPGHOME"
+
+  KEYFILE="$(mktemp "${TMPDIR:-/tmp}/afct-backup-key.XXXXXX")"
+  chmod 600 "$KEYFILE"
+  printf '%s' "$ENC_KEY" > "$KEYFILE"
+fi
+
+# Wrappers so the encrypted and plaintext paths read the same at the call sites.
+encrypt_to() { # stdin -> $1
+  if [ -n "$KEYFILE" ]; then
+    gpg --batch --yes --quiet --symmetric --cipher-algo AES256 \
+      --passphrase-file "$KEYFILE" --pinentry-mode loopback -o "$1"
+  else
+    cat > "$1"
+  fi
+}
+decrypt_from() { # $1 -> stdout
+  if [ -n "$KEYFILE" ] && [ "${1##*.}" = "gpg" ]; then
+    gpg --batch --quiet --decrypt --passphrase-file "$KEYFILE" --pinentry-mode loopback "$1"
+  else
+    cat "$1"
+  fi
+}
+
 mkdir -p "$BACKUP_DIR"
 [ -d "$TRIGGER_DIR" ] || mkdir -p "$TRIGGER_DIR" 2>/dev/null || true
 beat
@@ -65,38 +109,64 @@ run_backup() {
   retention="$1"
   ts="$(date +%Y%m%d-%H%M%S)"
 
-  # 1) Database.
-  db_file="${BACKUP_DIR}/afct-${ts}.dump"
-  db_tmp="${db_file}.partial"
+  if [ -z "$KEYFILE" ]; then
+    log "WARNING: BACKUP_ENCRYPTION_KEY is not set - writing an UNENCRYPTED backup"
+  fi
+
+  work="$(mktemp -d "${TMPDIR:-/tmp}/afct-backup.XXXXXX")" || { log "no temp space"; return; }
+  mkdir -p "$work/db"
+
+  # 1) Database, staged into the work dir so it can go into the archive.
   log "dumping ${PGDATABASE}"
-  if pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -Fc -f "$db_tmp"; then
-    mv "$db_tmp" "$db_file"
-    log "wrote ${db_file} ($(du -h "$db_file" | cut -f1))"
-  else
+  if ! pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -Fc \
+       -f "$work/db/database.dump"; then
     log "database dump failed; skipping this run"
-    rm -f "$db_tmp"
+    rm -rf "$work"
     return
   fi
 
-  # 2) Uploaded files (only if the volumes are mounted and non-empty).
+  # 2) One archive: the dump plus the upload volumes (when mounted and non-empty).
+  #    Two -C sections rather than a staging copy, so uploads aren't duplicated on
+  #    disk. GNU tar (installed in the image) is what supports repeating -C.
+  set -- -C "$work" db
   if [ -d "$FILES_ROOT" ] && [ -n "$(ls -A "$FILES_ROOT" 2>/dev/null)" ]; then
-    files_file="${BACKUP_DIR}/afct-files-${ts}.tgz"
-    files_tmp="${files_file}.partial"
-    log "archiving uploads"
-    # Judge success by a non-empty archive, not tar's exit code: tar warns
-    # (non-zero) if a file changes mid-read, which is harmless for our uploads.
-    tar czf "$files_tmp" -C "$FILES_ROOT" . 2>/dev/null || true
-    if [ -s "$files_tmp" ]; then
-      mv "$files_tmp" "$files_file"
-      log "wrote ${files_file} ($(du -h "$files_file" | cut -f1))"
-    else
-      log "file archive failed"
-      rm -f "$files_tmp"
-    fi
+    set -- "$@" -C "$FILES_ROOT" .
+  else
+    log "no uploads mounted; archiving database only"
   fi
 
-  # 3) Prune dumps and file archives past the retention window.
-  find "$BACKUP_DIR" \( -name 'afct-*.dump' -o -name 'afct-files-*.tgz' \) -type f \
+  # The in-progress file keeps the real suffix (and a leading dot so it is never
+  # mistaken for a finished backup): decrypt_from picks its mode from the
+  # extension, so a plain ".partial" suffix would make the verify pass below feed
+  # encrypted bytes to tar and reject every archive.
+  out="${BACKUP_DIR}/afct-${ts}.tar.gz"
+  tmp="${BACKUP_DIR}/.partial-afct-${ts}.tar.gz"
+  if [ -n "$KEYFILE" ]; then
+    out="${out}.gpg"
+    tmp="${tmp}.gpg"
+  fi
+
+  log "writing archive"
+  # tar's exit code is not the gate: it warns (non-zero) when a file changes
+  # mid-read, which is harmless here. The verify pass below is the real check.
+  tar czf - "$@" 2>/dev/null | encrypt_to "$tmp"
+
+  # 3) Verify before publishing: read the archive back the way a restore would and
+  #    confirm the database dump is actually in it. A backup that only *looks*
+  #    written is worse than a failed one, because nobody goes looking.
+  if [ ! -s "$tmp" ] || ! decrypt_from "$tmp" | tar tzf - 2>/dev/null | grep -q '^db/database\.dump$'; then
+    log "archive failed verification; discarding"
+    rm -f "$tmp"
+    rm -rf "$work"
+    return
+  fi
+
+  mv "$tmp" "$out"
+  rm -rf "$work"
+  log "wrote ${out} ($(du -h "$out" | cut -f1))${KEYFILE:+ [encrypted]}"
+
+  # 4) Prune past the retention window.
+  find "$BACKUP_DIR" \( -name 'afct-*.tar.gz' -o -name 'afct-*.tar.gz.gpg' \) -type f \
     -mtime "+${retention}" -exec rm -f {} + 2>/dev/null || true
 }
 
@@ -117,14 +187,37 @@ run_restore() {
   case "$target" in
     '' | *[!0-9-]*) log "restore: invalid target"; write_restore_result "failed" "invalid-target"; return ;;
   esac
-  db_file="${BACKUP_DIR}/afct-${target}.dump"
-  if [ ! -f "$db_file" ]; then
+  archive=''
+  for candidate in \
+    "${BACKUP_DIR}/afct-${target}.tar.gz.gpg" \
+    "${BACKUP_DIR}/afct-${target}.tar.gz"; do
+    [ -f "$candidate" ] && { archive="$candidate"; break; }
+  done
+  if [ -z "$archive" ]; then
     log "restore: backup ${target} not found"
     write_restore_result "failed" "backup-not-found"
     return
   fi
+  if [ "${archive##*.}" = "gpg" ] && [ -z "$KEYFILE" ]; then
+    log "restore: ${target} is encrypted but BACKUP_ENCRYPTION_KEY is not set"
+    write_restore_result "failed" "missing-key"
+    return
+  fi
 
-  log "restoring database from ${db_file} (the app must already be stopped)"
+  work="$(mktemp -d "${TMPDIR:-/tmp}/afct-restore.XXXXXX")" || {
+    write_restore_result "failed" "no-temp-space"; return; }
+  log "extracting ${archive}"
+  # Only the dump is needed: a downgrade restores the schema + data the old app
+  # version expects, and leaves uploads alone (see the note above).
+  if ! decrypt_from "$archive" | tar xzf - -C "$work" db/database.dump 2>/dev/null; then
+    log "restore: could not extract ${target} (wrong key, or corrupt archive)"
+    rm -rf "$work"
+    write_restore_result "failed" "extract-failed"
+    return
+  fi
+  db_file="$work/db/database.dump"
+
+  log "restoring database from ${target} (the app must already be stopped)"
   if pg_restore -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
        --clean --if-exists --no-owner "$db_file"; then
     log "database restore from ${target} complete"
@@ -133,6 +226,7 @@ run_restore() {
     log "database restore from ${target} FAILED"
     write_restore_result "failed" "restore-error"
   fi
+  [ -n "$work" ] && rm -rf "$work"
 }
 
 # Cached retention for on-demand pruning; refreshed on each scheduled check.

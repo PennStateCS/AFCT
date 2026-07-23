@@ -4,6 +4,12 @@
 # with no repo checkout. Kept on the same digest as the postgres service.
 FROM postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
 
+# gnupg: symmetric AES-256 encryption of the backup archive.
+# tar:   GNU tar, for repeating -C so the dump and the upload volumes go into one
+#        archive without staging a second copy of the uploads on disk (BusyBox tar
+#        does not support that). /usr/bin precedes /bin, so this shadows BusyBox.
+RUN apk add --no-cache gnupg tar
+
 COPY backup.sh /backup.sh
 
 ENTRYPOINT ["/bin/sh", "/backup.sh"]

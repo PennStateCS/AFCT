@@ -7,21 +7,21 @@ export const BACKUP_DIR = process.env.BACKUP_DIR || '/backups';
 export const BACKUP_TRIGGER_DIR = process.env.BACKUP_TRIGGER_DIR || '/backup-triggers';
 export const BACKUP_TRIGGER_FILE = path.join(BACKUP_TRIGGER_DIR, 'backup-now');
 
-// The exact names backup.sh writes. Also the allow-list for downloads: a request
-// must match one of these, which blocks path traversal and any other filename.
-const DUMP_RE = /^afct-(\d{8}-\d{6})\.dump$/;
-const FILES_RE = /^afct-files-(\d{8}-\d{6})\.tgz$/;
+// The exact names backup.sh writes: one archive per run, holding both the database
+// dump and the uploads, `.gpg` when a passphrase is configured. This is also the
+// allow-list for downloads -- a request must match it, which blocks path traversal
+// and any other filename.
+const ARCHIVE_RE = /^afct-(\d{8}-\d{6})\.tar\.gz(\.gpg)?$/;
 
 export function isValidBackupName(name: string): boolean {
-  return DUMP_RE.test(name) || FILES_RE.test(name);
+  return ARCHIVE_RE.test(name);
 }
 
-export type BackupPair = {
+export type Backup = {
   timestamp: string; // e.g. 20260706-223043
-  dumpFile: string | null;
-  dumpSize: number | null;
-  filesFile: string | null;
-  filesSize: number | null;
+  file: string;
+  size: number | null;
+  encrypted: boolean;
 };
 
 function safeSize(p: string): number | null {
@@ -32,8 +32,8 @@ function safeSize(p: string): number | null {
   }
 }
 
-// Backups grouped into { database, files } pairs by timestamp, newest first.
-export function listBackups(): BackupPair[] {
+/** Backups in the backup directory, newest first. */
+export function listBackups(): Backup[] {
   let entries: string[];
   try {
     entries = fs.readdirSync(BACKUP_DIR);
@@ -41,28 +41,17 @@ export function listBackups(): BackupPair[] {
     return []; // dir not mounted (e.g. local dev) → nothing to list
   }
 
-  const byTs: Record<string, BackupPair> = {};
+  const backups: Backup[] = [];
   for (const name of entries) {
-    const dump = DUMP_RE.exec(name);
-    const files = FILES_RE.exec(name);
-    const ts = dump?.[1] ?? files?.[1];
-    if (!ts) continue;
-    byTs[ts] ??= {
-      timestamp: ts,
-      dumpFile: null,
-      dumpSize: null,
-      filesFile: null,
-      filesSize: null,
-    };
-    const size = safeSize(path.join(BACKUP_DIR, name));
-    if (dump) {
-      byTs[ts].dumpFile = name;
-      byTs[ts].dumpSize = size;
-    } else {
-      byTs[ts].filesFile = name;
-      byTs[ts].filesSize = size;
-    }
+    const match = ARCHIVE_RE.exec(name);
+    if (!match?.[1]) continue;
+    backups.push({
+      timestamp: match[1],
+      file: name,
+      size: safeSize(path.join(BACKUP_DIR, name)),
+      encrypted: Boolean(match[2]),
+    });
   }
 
-  return Object.values(byTs).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return backups.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }

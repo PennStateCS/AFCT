@@ -153,6 +153,55 @@ set_app_tag() {
   return 0
 }
 
+# Disk needed before a pull is attempted, in MB. The dashboard image is ~4.7GB and
+# Docker needs room for the compressed download AND the unpacked layers at once, so
+# the default leaves real headroom. Checked up-front because the failure mode
+# otherwise is ugly: the pull dies half-way with "no space left on device", the
+# upgrade rolls back, and the log says only "failed" -- which is what happened on
+# the first deployment to fill its disk.
+DISK_MIN_MB="${UPDATER_DISK_MIN_MB:-12000}"
+
+# Free MB on the filesystem that backs Docker's image store. Prefer the data root
+# when it's visible; otherwise this container's own / , which is itself carved out
+# of that same filesystem. Echoes nothing if it can't be determined, in which case
+# the caller proceeds rather than blocking an upgrade on a failed check.
+#
+# The path is chosen with a -d test rather than by chaining `df ... || df ...`:
+# piping a failed df into awk still exits 0, so the fallback would never run and
+# this would quietly always return empty.
+free_disk_mb() {
+  _df_path=/var/lib/docker
+  [ -d "$_df_path" ] || _df_path=/
+  df -Pm "$_df_path" 2>/dev/null | awk 'NR==2 {print $4}'
+}
+
+# Delete our images other than the two tags worth keeping: the one now running and
+# the one to roll back to. Without this every upgrade leaves its predecessor behind
+# forever -- eight releases of a 4.7GB image is enough to fill a 38GB disk, which is
+# exactly how this got found. Untagged leftovers go too. Never touches postgres
+# (digest-pinned) or the updater's own image, and failures here are logged but never
+# fail the upgrade: the new version is already up and healthy by this point.
+prune_old_images() {
+  _keep_a=$1
+  _keep_b=$2
+  _repo_prefix="${IMAGE_REPO%/*}"   # e.g. ghcr.io/pennstatecs
+
+  docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null |
+    grep "^${_repo_prefix}/afct-" |
+    while IFS= read -r _img; do
+      _img_tag="${_img##*:}"
+      [ "$_img_tag" = "$_keep_a" ] && continue
+      [ "$_img_tag" = "$_keep_b" ] && continue
+      docker rmi "$_img" >/dev/null 2>&1 || true
+    done
+
+  # Dangling layers left behind by the retagged/removed images.
+  docker image prune -f >/dev/null 2>&1 || true
+
+  _free=$(free_disk_mb)
+  [ -n "$_free" ] && log "image cleanup done (${_free}MB free, keeping ${_keep_a} and ${_keep_b})"
+}
+
 recreate_app() {
   _proj=$1
   # Pull + recreate the app and its lockstep sidecars (nginx, backup) at the selected
@@ -358,6 +407,19 @@ process_request() {
     fi
   fi
 
+  # Refuse to start when there clearly isn't room, instead of failing mid-download
+  # and rolling back. Nothing has changed yet at this point, so the running version
+  # is untouched and the admin gets an actionable message.
+  _free=$(free_disk_mb)
+  if [ -n "$_free" ] && [ "$_free" -lt "$DISK_MIN_MB" ]; then
+    log "upgrade to ${_tag} refused: only ${_free}MB free, need ${DISK_MIN_MB}MB"
+    write_status "failed" \
+      "Not enough disk space: ${_free}MB free, ${DISK_MIN_MB}MB required. Free space on the server (docker image prune -af) and try again." \
+      "$_from" "$_tag" "$_rid"
+    rm -f "$CLAIM_FILE"
+    return 0
+  fi
+
   write_status "pulling" "downloading ${IMAGE_REPO}:${_tag}" "$_from" "$_tag" "$_rid"
   if ! set_app_tag "$_tag"; then
     write_status "failed" "could not update the version in the environment file" "$_from" "$_tag" "$_rid"
@@ -370,6 +432,9 @@ process_request() {
     if wait_for_health "$_proj"; then
       write_status "healthy" "upgraded to ${_tag}" "$_from" "$_tag" "$_rid"
       log "upgrade to ${_tag} complete"
+      # Only once the new version is up and healthy: keep it and the rollback
+      # target, drop everything older.
+      prune_old_images "$_tag" "$_from"
       rm -f "$CLAIM_FILE"
       return 0
     fi

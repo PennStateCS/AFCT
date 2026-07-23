@@ -128,6 +128,56 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   [[ "$(phase)" == "rolled_back" || "$(phase)" == "failed" ]]
 }
 
+@test "an upgrade is refused up-front when the disk is too small for the image" {
+  # The real failure this guards: the pull dies part-way with "no space left on
+  # device", the upgrade rolls back, and the log says only "failed". Requiring an
+  # impossible amount of free space exercises the pre-flight check.
+  export UPDATER_DISK_MIN_MB=99999999
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"disk1","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ "$(phase)" = "failed" ]
+  # Nothing was touched: the running version is still pinned.
+  [ "$(tag_now)" = "v1.0.0" ]
+  # The message has to be actionable, not just "failed".
+  run jq -r '.message' triggers/status.json
+  [[ "$output" == *"disk space"* ]]
+}
+
+@test "a successful upgrade prunes superseded images but keeps the rollback target" {
+  export MOCK_RMI_LOG="$TESTDIR/rmi.log"
+  export MOCK_IMAGES="ghcr.io/pennstatecs/afct-dashboard:v1.1.0
+ghcr.io/pennstatecs/afct-dashboard:v1.0.0
+ghcr.io/pennstatecs/afct-dashboard:v0.9.0
+ghcr.io/pennstatecs/afct-nginx:v0.9.0
+postgres:15-alpine
+ghcr.io/pennstatecs/afct-updater:v1.0.0"
+
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"prune1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+
+  # Superseded versions of our images are removed...
+  run grep -q 'afct-dashboard:v0.9.0' "$MOCK_RMI_LOG"; [ "$status" -eq 0 ]
+  run grep -q 'afct-nginx:v0.9.0' "$MOCK_RMI_LOG"; [ "$status" -eq 0 ]
+  # ...but the new version and the rollback target survive...
+  run grep -q 'afct-dashboard:v1.1.0' "$MOCK_RMI_LOG"; [ "$status" -ne 0 ]
+  run grep -q 'afct-dashboard:v1.0.0' "$MOCK_RMI_LOG"; [ "$status" -ne 0 ]
+  # ...and images we don't own are never touched.
+  run grep -q 'postgres' "$MOCK_RMI_LOG"; [ "$status" -ne 0 ]
+  run grep -q 'afct-updater' "$MOCK_RMI_LOG"; [ "$status" -ne 0 ]
+}
+
+@test "a failed upgrade prunes nothing" {
+  export MOCK_RMI_LOG="$TESTDIR/rmi.log"
+  export MOCK_IMAGES="ghcr.io/pennstatecs/afct-dashboard:v0.9.0"
+  export MOCK_HEALTH="unhealthy"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"prune2","backupFirst":false}'
+  run sh updater.sh
+  # Rolled back, so the old images are still needed.
+  [ ! -s "$MOCK_RMI_LOG" ]
+}
+
 @test "backup-first is best-effort: an unconfirmed backup still upgrades" {
   # No backup sidecar in the harness, so no new dump appears within the timeout.
   request '{"action":"upgrade","tag":"v1.1.0","requestId":"r10","backupFirst":true}'
