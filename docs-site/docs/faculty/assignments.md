@@ -35,7 +35,7 @@ The default schedule applies to everyone assigned unless a target has an overrid
 
 ## The assignment page
 
-Open an assignment (select its title, or **Manage → View Assignment**). It has five tabs: **Details**, **Type**, **Assign To**, **Problems**, and **Submissions**.
+Open an assignment (select its title, or **Manage → View Assignment**). It has these tabs: **Details**, **Type**, **Assign To**, **Problems**, **Submissions**, **Statistics**, and **Similarity**.
 
 ### Details
 
@@ -69,6 +69,22 @@ These settings can differ from the defaults in the problem bank. Every assigned 
 ### Submissions
 
 Once students begin working, use the **Submissions** tab to review files, rerun the autograder, discuss a problem, and enter grades. See [Submissions](submissions.md).
+
+### Statistics
+
+The **Statistics** tab gives you an at-a-glance read on how the class is doing on this assignment. It is visible to course staff (faculty and TAs) and admins only, never to students. An individual assignment is measured in students; a group assignment is measured in groups, and the tab says which.
+
+Near the heading it shows the normal due date and how many participants have a due-date exception. Below that are three charts:
+
+- **Assignment score distribution** - a histogram of final assignment percentages (total earned points over total possible), in 10-point ranges. Only fully graded work is included; the card notes how many were left out as incomplete or ungraded, and marks the mean and median.
+- **Submission status** - a single bar splitting participants into **On time**, **Late**, **In progress**, **Missing**, and **Not started**, each measured against that participant's own effective due date (so a granted extension is reflected here). A recorded grade takes precedence over submissions: a participant you graded by hand counts as having done the work even with no submission on file, and a grade you lower to zero counts as not done even if a submission passed the autograder.
+- **Problem performance** - a box plot per problem on a shared 0-100% scale, showing the median, middle 50%, whiskers, and any outliers, so you can see which problems were hardest.
+
+Each chart has a matching data table for screen readers, and the figures update as more work is submitted and graded.
+
+### Similarity
+
+The **Similarity** tab is a placeholder for upcoming work that will compare student submissions against each other to help review for possible plagiarism. It is staff-only like Statistics.
 
 ## Group assignments
 

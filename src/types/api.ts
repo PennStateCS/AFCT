@@ -1174,6 +1174,28 @@ export interface paths {
         patch: operations["patchCoursesByIdAssignmentsByAid"];
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an assignment's analytics
+         * @description Aggregate analytics for one assignment: score histogram, per-problem box plots, and  submission-status breakdown, measured in students (individual) or groups (group  assignment). Course staff (faculty or TAs) or a system admin only. These are aggregate  student-performance figures, a FERPA-relevant read, so the access is audited (throttled).
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/statistics/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidStatistics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/student-context": {
         parameters: {
             query?: never;
@@ -6027,6 +6049,76 @@ export interface operations {
                 };
             };
             /** @description Not course staff or a system admin, or a state guard blocked the change. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidStatistics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Histogram, box plots, and status breakdown for the assignment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        unit?: "student" | "group";
+                        participantCount?: number;
+                        exceptionCount?: number;
+                        histogram?: Record<string, never>;
+                        status?: Record<string, never>[];
+                        problems?: Record<string, never>[];
+                        assignmentTitle?: string;
+                        baseDueDate?: string;
+                        timezone?: string;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
