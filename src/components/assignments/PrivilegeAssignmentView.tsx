@@ -2,7 +2,16 @@
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { AlignLeft, FileText, Package, Plus, Shapes, Users } from 'lucide-react';
+import {
+  AlignLeft,
+  BarChart3,
+  FileText,
+  Fingerprint,
+  Package,
+  Plus,
+  Shapes,
+  Users,
+} from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -26,6 +35,8 @@ import { AssignmentSettingsCard } from '@/components/assignments/AssignmentSetti
 import { AssignmentTypeCard } from '@/components/assignments/AssignmentTypeCard';
 import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsForm';
 import { AssignmentProblemSettingsDialog } from '@/components/dialogs/AssignmentProblemSettingsDialog';
+import { AssignmentStatisticsPanel } from '@/components/assignments/AssignmentStatisticsPanel';
+import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSimilarityPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TAB_BAR_LIST_CLASS, TAB_BAR_TRIGGER_CLASS } from '@/components/course/course-tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
@@ -438,6 +449,14 @@ export default function AssignmentDashboardPage({
                 <Package className="size-3.5 opacity-70" />
                 Submissions
               </TabsTrigger>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="statistics">
+                <BarChart3 className="size-3.5 opacity-70" />
+                Statistics
+              </TabsTrigger>
+              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="similarity">
+                <Fingerprint className="size-3.5 opacity-70" />
+                Similarity
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="description">
               <div className="space-y-4">
@@ -533,6 +552,12 @@ export default function AssignmentDashboardPage({
                 maxAssignmentGrade={assignment.maxPoints}
                 problems={submissionTabProblems}
               />
+            </TabsContent>
+            <TabsContent value="statistics">
+              <AssignmentStatisticsPanel />
+            </TabsContent>
+            <TabsContent value="similarity">
+              <AssignmentSimilarityPanel />
             </TabsContent>
             <TabsContent value="settings">
               {settingsAssignment ? (
