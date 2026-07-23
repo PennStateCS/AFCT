@@ -45,6 +45,10 @@ This collaboration supports the continued development, deployment, and study of 
 
 Developer and user documentation is available at: **<https://pennstatecs.github.io/AFCT/>**
 
+## Acknowledgments
+
+AFCT works with a Java evaluator that uses [JFLAP](https://www.jflap.org/) to process and evaluate formal-language assignments. JFLAP was developed by Susan H. Rodger and contributors at Duke University, and their work provides an important foundation for AFCT’s evaluation capabilities. JFLAP remains subject to its own [JFLAP 7.1 license](https://www.jflap.org/jflaptmp/july27-18/license.html) and is not covered by AFCT’s AGPL license.
+
 ## Contributors
 
 | Name                | Affiliation | GitHub                                        |
