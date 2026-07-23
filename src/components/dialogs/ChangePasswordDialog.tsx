@@ -85,6 +85,11 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Real autocomplete tokens below, not "off": this is the user changing
+              their own password, so a password manager should fill the current one and
+              offer to save the new one. Blocking that is how people end up locked out
+              (WCAG 2.2 SC 3.3.8). The admin reset dialog is the deliberate exception,
+              since there someone is setting another user's password. */}
           {/* Old Password */}
           <Controller
             name="oldPassword"
@@ -93,6 +98,7 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
               <InputGroup
                 label="Old Password"
                 name="oldPassword"
+                autoComplete="current-password"
                 type="password"
                 showEye
                 fieldProps={field}
@@ -109,6 +115,7 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
               <InputGroup
                 label="New Password"
                 name="newPassword"
+                autoComplete="new-password"
                 type="password"
                 showEye
                 showStatus
@@ -128,6 +135,7 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
               <InputGroup
                 label="Confirm New Password"
                 name="confirmNewPassword"
+                autoComplete="new-password"
                 type="password"
                 showEye
                 showStatus
