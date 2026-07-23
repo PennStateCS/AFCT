@@ -414,12 +414,18 @@ export default function LoginPage() {
             <p className="mt-1 text-base text-gray-700">Automated Feedback for Computing Theory</p>
           </div>
 
+          {/* Neither form sets autoComplete="off". The individual fields carry the
+              right tokens (username / current-password / new-password), and a
+              form-level "off" can stop a password manager filling or saving them in
+              some browsers. Letting the manager do that work is what keeps signing in
+              from being a memory test (WCAG 2.2 SC 3.3.8, Accessible Authentication).
+              The admin reset-password dialog is the deliberate exception: there an
+              administrator is setting someone else's password. */}
           <AnimatePresence mode="wait" initial={false}>
             {mode === 'login' ? (
               <motion.form
                 key="login"
                 id="login-panel"
-                autoComplete="off"
                 {...panelMotion}
                 onSubmit={handleLogin}
                 className="space-y-5"
@@ -489,7 +495,6 @@ export default function LoginPage() {
               <motion.form
                 key="signup"
                 id="signup-panel"
-                autoComplete="off"
                 {...panelMotion}
                 onSubmit={handleSignup}
                 className="space-y-5"
