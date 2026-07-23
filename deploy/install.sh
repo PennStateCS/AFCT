@@ -47,6 +47,10 @@ UPDATER_SERVICE=${AFCT_UPDATER_SERVICE:-updater}
 HEALTH_PATH=${AFCT_HEALTH_PATH:-/api/health}
 HEALTH_TIMEOUT=${AFCT_HEALTH_TIMEOUT:-300}
 HEALTH_INTERVAL=${AFCT_HEALTH_INTERVAL:-5}
+# Disk thresholds in MB. The app image alone is ~4.7GB and Docker needs the download
+# and the unpacked layers at the same time, so these are deliberately generous.
+INSTALL_MIN_FREE_MB=${AFCT_INSTALL_MIN_FREE_MB:-15360}
+UPDATE_MIN_FREE_MB=${AFCT_UPDATE_MIN_FREE_MB:-12288}
 DIAG_PREFIX="afct-diagnostics"
 LOCK_KEY=$(printf '%s' "$SCRIPT_DIR" | cksum 2>/dev/null | awk '{ print $1 }')
 [ -n "$LOCK_KEY" ] || LOCK_KEY="default"
@@ -1129,16 +1133,85 @@ port_in_use() {
   return 1
 }
 
-check_disk_space() {
+# Free MB on the filesystem backing Docker's image store, or nothing if it cannot be
+# measured (callers treat that as "unknown", never as "full").
+free_disk_mb() {
   command -v df >/dev/null 2>&1 || return 0
-  _available=$(df -Pk . 2>/dev/null | awk 'NR == 2 { print $4 }')
-  case "$_available" in
+  _df_path=/var/lib/docker
+  [ -d "$_df_path" ] || _df_path=$SCRIPT_DIR
+  _free=$(df -Pm "$_df_path" 2>/dev/null | awk 'NR == 2 { print $4 }')
+  case "$_free" in
     ''|*[!0-9]*) return 0 ;;
   esac
+  printf '%s' "$_free"
+}
 
-  if [ "$_available" -lt 5242880 ]; then
-    warn "less than approximately 5 GB is free in ${SCRIPT_DIR}. Docker images may exhaust the disk."
+check_disk_space() {
+  _available=$(free_disk_mb)
+  [ -n "$_available" ] || return 0
+  if [ "$_available" -lt "$INSTALL_MIN_FREE_MB" ]; then
+    warn "less than approximately $((INSTALL_MIN_FREE_MB / 1024)) GB is free. The AFCT images need roughly that much to download and unpack."
   fi
+}
+
+# Hard gate before an update pulls. The app image is ~4.7GB and Docker holds the
+# compressed download and the unpacked layers at once; without this the failure mode
+# is a pull that dies at 98% with "no space left on device", followed by a rollback
+# whose log says only "failed".
+require_update_disk_space() {
+  _available=$(free_disk_mb)
+  [ -n "$_available" ] || return 0   # cannot measure: do not block the update
+  if [ "$_available" -lt "$UPDATE_MIN_FREE_MB" ]; then
+    die "only ${_available}MB is free, but about ${UPDATE_MIN_FREE_MB}MB is needed to download the new images. Reclaim space and re-run, for example: docker image prune -a -f"
+  fi
+}
+
+# Remove AFCT images that are neither in use nor needed for rollback. Without this
+# every update leaves its predecessor behind for good -- eight releases of a ~4.7GB
+# image fills a 38GB disk, which is how this was found.
+#
+# rollback_update_images re-tags recorded image IDs, so those are protected here by
+# ID rather than by tag: a blanket `docker image prune -a` would delete the rollback
+# target and quietly disarm the safety net. Anything that cannot be positively
+# identified is kept, and failures never fail the update.
+prune_superseded_images() {
+  _keep=$(mktemp "${TMPDIR:-/tmp}/afct-keep.XXXXXX") || return 0
+
+  # The rollback snapshot (reference|id) plus the images now in use.
+  if [ -n "${UPDATE_IMAGE_SNAPSHOT:-}" ] && [ -s "$UPDATE_IMAGE_SNAPSHOT" ]; then
+    cut -d'|' -f2 < "$UPDATE_IMAGE_SNAPSHOT" >> "$_keep"
+  fi
+  compose_project config --images 2>/dev/null | while IFS= read -r _reference; do
+    [ -n "$_reference" ] || continue
+    docker_cmd image inspect -f '{{.Id}}' "$_reference" 2>/dev/null || true
+  done >> "$_keep"
+
+  if [ ! -s "$_keep" ]; then
+    rm -f "$_keep"
+    return 0   # nothing identified: do not risk deleting
+  fi
+
+  _removed=0
+  docker_cmd images --no-trunc --format '{{.ID}}|{{.Repository}}:{{.Tag}}' 2>/dev/null |
+    while IFS='|' read -r _id _reference; do
+      [ -n "$_reference" ] || continue
+      case "$_reference" in
+        */afct-*) ;;          # only our own images; never postgres or anything else
+        *) continue ;;
+      esac
+      case "$_reference" in
+        *'<none>'*) continue ;;
+      esac
+      grep -qxF "$_id" "$_keep" && continue
+      docker_cmd rmi "$_reference" >/dev/null 2>&1 && _removed=$((_removed + 1))
+    done
+
+  docker_cmd image prune -f >/dev/null 2>&1 || true
+  rm -f "$_keep"
+
+  _free=$(free_disk_mb)
+  [ -n "$_free" ] && info "cleaned up superseded AFCT images (${_free}MB free)."
+  return 0
 }
 
 check_sensitive_permissions() {
@@ -1998,11 +2071,16 @@ do_update() {
   info "updating AFCT to the latest published images..."
 
   validate_compose
+  # Before anything is downloaded, so a short disk stops the update while the
+  # running version is still untouched.
+  require_update_disk_space
   capture_running_images
   pull_images
 
   if ( start_stack; wait_for_health ); then
     success "AFCT update completed."
+    # Only now: the new version is healthy and the rollback snapshot still exists.
+    prune_superseded_images || true
     DIAG_ON_EXIT="false"
     return 0
   fi
@@ -2134,11 +2212,11 @@ doctor_check() {
 doctor_file_exists() { [ -f "$1" ]; }
 doctor_env_complete() { env_file_complete "$ENV_FILE"; }
 doctor_compose_valid() { compose_project config >/dev/null 2>&1; }
+# Same threshold an update enforces, so doctor warns before an update refuses.
 doctor_disk() {
-  command -v df >/dev/null 2>&1 || return 0
-  _available=$(df -Pk . 2>/dev/null | awk 'NR == 2 { print $4 }')
-  case "$_available" in ''|*[!0-9]*) return 0 ;; esac
-  [ "$_available" -ge 5242880 ]
+  _available=$(free_disk_mb)
+  [ -n "$_available" ] || return 0
+  [ "$_available" -ge "$UPDATE_MIN_FREE_MB" ]
 }
 doctor_web() { http_health_responding; }
 doctor_app_healthy() {
@@ -2156,7 +2234,7 @@ do_doctor() {
   doctor_check "Environment file exists" doctor_file_exists "$ENV_FILE"
   doctor_check "Environment configuration is complete" doctor_env_complete
   check_sensitive_permissions "$ENV_FILE" && success "Environment file permissions are private" && DOCTOR_OK=$((DOCTOR_OK + 1)) || DOCTOR_WARN=$((DOCTOR_WARN + 1))
-  doctor_check "At least 5 GB of disk space is available" doctor_disk
+  doctor_check "At least $((UPDATE_MIN_FREE_MB / 1024)) GB of disk space is available for image downloads" doctor_disk
   _clock_rc=0; check_clock_sync || _clock_rc=$?
   if [ "$_clock_rc" -eq 0 ]; then
     success "System clock synchronization is enabled"; DOCTOR_OK=$((DOCTOR_OK + 1))

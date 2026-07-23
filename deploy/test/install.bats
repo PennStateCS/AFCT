@@ -288,6 +288,49 @@ EOF
   [[ "$output" == *"update completed"* ]]
 }
 
+@test "update is refused up-front when the disk is too small for the images" {
+  write_complete_env
+  # An unreachable requirement stands in for a full disk. The real failure this
+  # guards is a pull dying part-way with "no space left on device".
+  export AFCT_UPDATE_MIN_FREE_MB=999999999
+  run sh install.sh update < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"is needed to download the new images"* ]]
+  # Refused before pulling: nothing was downloaded or recreated.
+  [[ "$output" != *"downloading AFCT container images"* ]]
+}
+
+@test "a successful update prunes superseded images but keeps the rollback target" {
+  write_complete_env
+  export MOCK_RMI_LOG="$TESTDIR/rmi.log"
+  export MOCK_IMAGES="sha256:current|ghcr.io/pennstatecs/afct-dashboard:v0.1.9
+sha256:mockimageid|ghcr.io/pennstatecs/afct-dashboard:v0.1.8
+sha256:ancient|ghcr.io/pennstatecs/afct-dashboard:v0.1.4
+sha256:oldnginx|ghcr.io/pennstatecs/afct-nginx:v0.1.4
+sha256:pg|postgres:15-alpine"
+
+  run sh install.sh update < /dev/null
+  [ "$status" -eq 0 ]
+
+  # Superseded AFCT images go...
+  run grep -q 'afct-dashboard:v0.1.4' "$MOCK_RMI_LOG"; [ "$status" -eq 0 ]
+  run grep -q 'afct-nginx:v0.1.4' "$MOCK_RMI_LOG"; [ "$status" -eq 0 ]
+  # ...the rollback snapshot (mockimageid, what `image inspect` reports) stays...
+  run grep -q 'afct-dashboard:v0.1.8' "$MOCK_RMI_LOG"; [ "$status" -ne 0 ]
+  # ...and images we don't own are never touched.
+  run grep -q 'postgres' "$MOCK_RMI_LOG"; [ "$status" -ne 0 ]
+}
+
+@test "a failed update prunes nothing" {
+  write_complete_env
+  export MOCK_RMI_LOG="$TESTDIR/rmi.log"
+  export MOCK_IMAGES="sha256:ancient|ghcr.io/pennstatecs/afct-dashboard:v0.1.4"
+  export MOCK_HEALTH="unhealthy"
+  run sh install.sh update < /dev/null
+  # Rolled back, so the old images are still needed.
+  [ ! -s "$MOCK_RMI_LOG" ]
+}
+
 @test "update that comes up unhealthy fails after attempting rollback" {
   write_complete_env
   export MOCK_HEALTH="unhealthy"
