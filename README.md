@@ -45,6 +45,12 @@ This collaboration supports the continued development, deployment, and study of 
 
 Developer and user documentation is available at: **<https://pennstatecs.github.io/AFCT/>**
 
+## License
+
+AFCT is licensed under the [GNU Affero General Public License version 3](LICENSE).
+See [LICENSE_SCOPE.md](LICENSE_SCOPE.md) for the scope of this license and information
+about separately licensed components.
+
 ## Contributors
 
 | Name                | Affiliation | GitHub                                        |

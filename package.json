@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Dashboard for the Automated Feedback for CS Theory (AFCT) system.",
-  "license": "GPL-3.0-or-later",
+  "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/PennStateCS/AFCT.git"
