@@ -6101,7 +6101,6 @@ export interface operations {
                         participantCount?: number;
                         exceptionCount?: number;
                         histogram?: Record<string, never>;
-                        status?: Record<string, never>[];
                         problems?: Record<string, never>[];
                         assignmentTitle?: string;
                         baseDueDate?: string;

@@ -154,12 +154,22 @@ export function AssignmentStatisticsPanel() {
         <StatCard
           className="lg:col-span-5"
           title="Submission status"
-          description={`Where each of the ${statusTotal} ${unitPlural} stands against the due date.`}
+          description={`For each problem, where the ${statusTotal} ${unitPlural} stand against the due date.`}
         >
-          {statusTotal > 0 ? (
-            <SubmissionStatusBar status={stats.status} total={statusTotal} unitPlural={unitPlural} />
+          {statusTotal > 0 && stats.problems.length > 0 ? (
+            <SubmissionStatusBar
+              series={stats.problems.map((p) => ({ id: p.id, label: p.title, status: p.status }))}
+              total={statusTotal}
+              unitPlural={unitPlural}
+            />
           ) : (
-            <EmptyChart message={`No ${unitPlural} are assigned yet.`} />
+            <EmptyChart
+              message={
+                statusTotal === 0
+                  ? `No ${unitPlural} are assigned yet.`
+                  : 'This assignment has no problems yet.'
+              }
+            />
           )}
         </StatCard>
 

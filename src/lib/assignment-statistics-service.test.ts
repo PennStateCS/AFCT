@@ -69,15 +69,20 @@ describe('getAssignmentStatistics - individual assignment', () => {
         allowLateSubmissions: null,
       },
     ]);
-    prismaMock.submission.groupBy.mockImplementation((args: { by: string[] }) => {
-      if (args.by.includes('problemId')) {
+    prismaMock.submission.groupBy.mockImplementation(
+      (args: { where?: { correct?: boolean } }) => {
+        if (args.where?.correct === true) {
+          return Promise.resolve([
+            { studentId: 's1', problemId: 'p1', _max: { submittedAt: BEFORE } },
+            { studentId: 's1', problemId: 'p2', _max: { submittedAt: BEFORE } },
+          ]);
+        }
         return Promise.resolve([
-          { studentId: 's1', problemId: 'p1', _max: { submittedAt: BEFORE } },
-          { studentId: 's1', problemId: 'p2', _max: { submittedAt: BEFORE } },
+          { studentId: 's1', problemId: 'p1' },
+          { studentId: 's1', problemId: 'p2' },
         ]);
-      }
-      return Promise.resolve([{ studentId: 's1' }]);
-    });
+      },
+    );
 
     const stats = (await getAssignmentStatistics('c1', 'a1', NOW))!;
 
@@ -92,11 +97,13 @@ describe('getAssignmentStatistics - individual assignment', () => {
     expect(stats.histogram.excludedCount).toBe(1);
     expect(stats.histogram.bins[9]!.count).toBe(1);
 
-    const byKey = Object.fromEntries(stats.status.map((s) => [s.key, s.count]));
-    expect(byKey['on-time']).toBe(1); // s1
-    // s2: no submission, but its effective due (Sep 30) is in the future -> not started
-    expect(byKey['not-started']).toBe(1);
-    expect(byKey['missing']).toBe(0);
+    // Status is per problem now; each problem: s1 on time, s2 not started (future due).
+    for (const problem of stats.problems) {
+      const byKey = Object.fromEntries(problem.status.map((s) => [s.key, s.count]));
+      expect(byKey['on-time']).toBe(1); // s1
+      expect(byKey['not-started']).toBe(1); // s2 on a future deadline
+      expect(byKey['missing']).toBe(0);
+    }
   });
 
   it('only counts students who are actually assigned', async () => {
@@ -137,15 +144,20 @@ describe('getAssignmentStatistics - group assignment', () => {
         allowLateSubmissions: null,
       },
     ]);
-    prismaMock.submission.groupBy.mockImplementation((args: { by: string[] }) => {
-      if (args.by.includes('problemId')) {
+    prismaMock.submission.groupBy.mockImplementation(
+      (args: { where?: { correct?: boolean } }) => {
+        if (args.where?.correct === true) {
+          return Promise.resolve([
+            { studentGroupId: 'g1', problemId: 'p1', _max: { submittedAt: BEFORE } },
+            { studentGroupId: 'g1', problemId: 'p2', _max: { submittedAt: BEFORE } },
+          ]);
+        }
         return Promise.resolve([
-          { studentGroupId: 'g1', problemId: 'p1', _max: { submittedAt: BEFORE } },
-          { studentGroupId: 'g1', problemId: 'p2', _max: { submittedAt: BEFORE } },
+          { studentGroupId: 'g1', problemId: 'p1' },
+          { studentGroupId: 'g1', problemId: 'p2' },
         ]);
-      }
-      return Promise.resolve([{ studentGroupId: 'g1' }]);
-    });
+      },
+    );
 
     const stats = (await getAssignmentStatistics('c1', 'a1', NOW))!;
 
@@ -157,9 +169,12 @@ describe('getAssignmentStatistics - group assignment', () => {
     expect(stats.histogram.includedCount).toBe(1);
     expect(stats.histogram.bins[9]!.count).toBe(1);
 
-    const byKey = Object.fromEntries(stats.status.map((s) => [s.key, s.count]));
-    expect(byKey['on-time']).toBe(1); // g1 finished before due
-    expect(byKey['not-started']).toBe(1); // g2 on a future deadline
+    // Per-problem status: g1 on time, g2 not started (future group deadline).
+    for (const problem of stats.problems) {
+      const byKey = Object.fromEntries(problem.status.map((s) => [s.key, s.count]));
+      expect(byKey['on-time']).toBe(1); // g1 finished before due
+      expect(byKey['not-started']).toBe(1); // g2 on a future deadline
+    }
   });
 });
 

@@ -183,6 +183,8 @@ async function buildStudentParticipants(
 
   // Completion + activity, per student, without loading every attempt: the latest correct
   // submission per problem, and the set of students with any submission at all.
+  // Per (student, problem): latest correct-submission time, and whether any submission
+  // exists. Both grouped by problem so the charts can classify each problem independently.
   const [completedRows, anySubRows] = await Promise.all([
     prisma.submission.groupBy({
       by: ['studentId', 'problemId'],
@@ -190,33 +192,34 @@ async function buildStudentParticipants(
       _max: { submittedAt: true },
     }),
     prisma.submission.groupBy({
-      by: ['studentId'],
+      by: ['studentId', 'problemId'],
       where: { assignmentId: assignment.id, studentGroupId: null },
     }),
   ]);
 
-  const correct = new Map<string, { problemIds: string[]; latest: Date | null }>();
+  const correctAt = new Map<string, Record<string, Date>>();
   for (const row of completedRows) {
-    const prev = correct.get(row.studentId) ?? { problemIds: [], latest: null };
-    prev.problemIds.push(row.problemId);
-    correct.set(row.studentId, {
-      problemIds: prev.problemIds,
-      latest: laterOf(prev.latest, row._max.submittedAt ?? null),
-    });
+    if (!row._max.submittedAt) continue;
+    const rec = correctAt.get(row.studentId) ?? {};
+    rec[row.problemId] = row._max.submittedAt;
+    correctAt.set(row.studentId, rec);
   }
-  const hasSubmission = new Set(anySubRows.map((r) => r.studentId));
+  const submitted = new Map<string, string[]>();
+  for (const row of anySubRows) {
+    const list = submitted.get(row.studentId) ?? [];
+    list.push(row.problemId);
+    submitted.set(row.studentId, list);
+  }
 
   return assignedStudentIds.map((studentId) => {
     const eff = effectiveDeadline(base, overrides, studentId, []);
-    const c = correct.get(studentId) ?? { problemIds: [], latest: null };
     return {
       id: studentId,
       effectiveDue: eff.dueDate,
       hasException: eff.source !== 'base',
       problemGrades: gradesByStudent.get(studentId) ?? {},
-      correctProblemIds: c.problemIds,
-      latestCorrectAt: c.latest,
-      hasAnySubmission: hasSubmission.has(studentId),
+      correctAtByProblem: correctAt.get(studentId) ?? {},
+      submittedProblemIds: submitted.get(studentId) ?? [],
     };
   });
 }
@@ -252,24 +255,25 @@ async function buildGroupParticipants(
       _max: { submittedAt: true },
     }),
     prisma.submission.groupBy({
-      by: ['studentGroupId'],
+      by: ['studentGroupId', 'problemId'],
       where: { assignmentId: assignment.id, studentGroupId: { not: null } },
     }),
   ]);
 
-  const correct = new Map<string, { problemIds: string[]; latest: Date | null }>();
+  const correctAt = new Map<string, Record<string, Date>>();
   for (const row of completedRows) {
-    if (!row.studentGroupId) continue;
-    const prev = correct.get(row.studentGroupId) ?? { problemIds: [], latest: null };
-    prev.problemIds.push(row.problemId);
-    correct.set(row.studentGroupId, {
-      problemIds: prev.problemIds,
-      latest: laterOf(prev.latest, row._max.submittedAt ?? null),
-    });
+    if (!row.studentGroupId || !row._max.submittedAt) continue;
+    const rec = correctAt.get(row.studentGroupId) ?? {};
+    rec[row.problemId] = row._max.submittedAt;
+    correctAt.set(row.studentGroupId, rec);
   }
-  const hasSubmission = new Set(
-    anySubRows.map((r) => r.studentGroupId).filter((g): g is string => !!g),
-  );
+  const submitted = new Map<string, string[]>();
+  for (const row of anySubRows) {
+    if (!row.studentGroupId) continue;
+    const list = submitted.get(row.studentGroupId) ?? [];
+    list.push(row.problemId);
+    submitted.set(row.studentGroupId, list);
+  }
 
   return assignedGroups.map((group) => {
     // A group inherits its due date from a GROUP override on this group (or the base). The
@@ -289,21 +293,13 @@ async function buildGroupParticipants(
       }
     }
 
-    const c = correct.get(group.id) ?? { problemIds: [], latest: null };
     return {
       id: group.id,
       effectiveDue: eff.dueDate,
       hasException: eff.source === 'group-override',
       problemGrades: groupGrades,
-      correctProblemIds: c.problemIds,
-      latestCorrectAt: c.latest,
-      hasAnySubmission: hasSubmission.has(group.id),
+      correctAtByProblem: correctAt.get(group.id) ?? {},
+      submittedProblemIds: submitted.get(group.id) ?? [],
     };
   });
-}
-
-function laterOf(a: Date | null, b: Date | null): Date | null {
-  if (!a) return b;
-  if (!b) return a;
-  return a.getTime() >= b.getTime() ? a : b;
 }

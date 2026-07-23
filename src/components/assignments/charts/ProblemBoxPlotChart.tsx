@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProblemBoxPlot } from '@/lib/assignment-statistics';
+import type { ProblemStats } from '@/lib/assignment-statistics';
 import {
   ChartDataTable,
   ChartTooltip,
@@ -10,7 +10,7 @@ import {
 } from './chart-utils';
 
 type Props = {
-  problems: ProblemBoxPlot[];
+  problems: ProblemStats[];
   /** e.g. "students" or "groups". */
   unitPlural: string;
 };
@@ -20,7 +20,7 @@ const AXIS_H = 26;
 const BOX_H = 18;
 const INSET = 6; // keep 0% and 100% marks off the very edge
 
-function statsText(p: ProblemBoxPlot, unitPlural: string): string {
+function statsText(p: ProblemStats, unitPlural: string): string {
   if (!p.boxplot) return `${p.title}: no graded ${unitPlural}.`;
   const b = p.boxplot;
   return (
@@ -31,7 +31,7 @@ function statsText(p: ProblemBoxPlot, unitPlural: string): string {
   );
 }
 
-function Tooltip({ p, unitPlural }: { p: ProblemBoxPlot; unitPlural: string }) {
+function Tooltip({ p, unitPlural }: { p: ProblemStats; unitPlural: string }) {
   const b = p.boxplot;
   return (
     <div className="space-y-0.5">
