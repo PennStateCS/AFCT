@@ -25,7 +25,7 @@ Built with:
 - TypeScript 5.9
 - Docker + GHCR
 
-## Funding Acknowledgement
+## Funding
 
 This project is supported in part by the National Science Foundation under Grant No. 2439326. Any opinions, findings, conclusions, or recommendations expressed are those of the authors and do not necessarily reflect the views of the NSF.
 
@@ -45,11 +45,9 @@ This collaboration supports the continued development, deployment, and study of 
 
 Developer and user documentation is available at: **<https://pennstatecs.github.io/AFCT/>**
 
-## License
+## Acknowledgments
 
-AFCT is licensed under the [GNU Affero General Public License version 3](LICENSE).
-See [LICENSE_SCOPE.md](LICENSE_SCOPE.md) for the scope of this license and information
-about separately licensed components.
+AFCT works with a Java evaluator that uses [JFLAP](https://www.jflap.org/) to process and evaluate formal-language assignments. JFLAP was developed by Susan H. Rodger and contributors at Duke University, and their work provides an important foundation for AFCT’s evaluation capabilities. JFLAP remains subject to its own [JFLAP 7.1 license](https://www.jflap.org/jflaptmp/july27-18/license.html) and is not covered by AFCT’s AGPL license.
 
 ## Contributors
 
