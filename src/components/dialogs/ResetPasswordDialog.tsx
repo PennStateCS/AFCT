@@ -90,9 +90,15 @@ export function ResetPasswordDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* autoComplete off, deliberately: an administrator is setting *another*
+              user's password here, so the browser must not offer the admin's own saved
+              credentials, and must not save this one against the admin's account. That
+              differs from the login and change-password forms, where the person typing
+              is authenticating and a password manager should help. */}
           <InputGroup
             name="newPassword"
             label="New Password"
+            autoComplete="off"
             value={newPassword}
             setValue={setNewPassword}
             type={showNew ? 'text' : 'password'}
@@ -106,6 +112,7 @@ export function ResetPasswordDialog({
           <InputGroup
             name="confirmNewPassword"
             label="Confirm New Password"
+            autoComplete="off"
             value={confirmNewPassword}
             setValue={setConfirmNewPassword}
             type={showConfirm ? 'text' : 'password'}
