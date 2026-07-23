@@ -1,10 +1,19 @@
 'use client';
 
-import { STATUS_LABELS, type StatusKey } from '@/lib/assignment-statistics';
+import { STATUS_LABELS, STATUS_ORDER, type StatusKey } from '@/lib/assignment-statistics';
 import { ChartDataTable, ChartTooltip, fmtPct, useChartTooltip } from './chart-utils';
 
-type Props = {
+export type StatusSeries = {
+  id: string;
+  /** Row label, e.g. a problem title. */
+  label: string;
   status: { key: StatusKey; count: number }[];
+};
+
+type Props = {
+  /** One 100% status bar per entry (per problem). */
+  series: StatusSeries[];
+  /** Total assigned participants (the denominator for every row). */
   total: number;
   /** e.g. "students" or "groups". */
   unitPlural: string;
@@ -14,68 +23,106 @@ type Props = {
 // on-time = positive, late = warning, in-progress = informational, missing = destructive,
 // not-started = muted. Colour is never the only channel: labels sit in the legend and each
 // segment carries an accessible name.
-const STATUS_STYLE: Record<StatusKey, { seg: string; swatch: string }> = {
-  'on-time': { seg: 'bg-badge-success', swatch: 'bg-badge-success' },
-  late: { seg: 'bg-badge-warning', swatch: 'bg-badge-warning' },
-  'in-progress': { seg: 'bg-badge-info', swatch: 'bg-badge-info' },
-  missing: { seg: 'bg-badge-danger', swatch: 'bg-badge-danger' },
-  'not-started': { seg: 'bg-badge-neutral', swatch: 'bg-badge-neutral' },
+const STATUS_STYLE: Record<StatusKey, string> = {
+  'on-time': 'bg-badge-success',
+  late: 'bg-badge-warning',
+  'in-progress': 'bg-badge-info',
+  missing: 'bg-badge-danger',
+  'not-started': 'bg-badge-neutral',
 };
 
-export function SubmissionStatusBar({ status, total, unitPlural }: Props) {
-  const { state, showAtEvent, showAtElement, hide } = useChartTooltip();
-  const segments = status.filter((s) => s.count > 0);
+function StatusRow({
+  row,
+  total,
+  unitPlural,
+  onShow,
+  onShowEl,
+  onHide,
+}: {
+  row: StatusSeries;
+  total: number;
+  unitPlural: string;
+  onShow: (e: { clientX: number; clientY: number }, content: string) => void;
+  onShowEl: (el: Element, content: string) => void;
+  onHide: () => void;
+}) {
+  return (
+    <div>
+      <div className="text-foreground mb-1 truncate text-xs font-medium" title={row.label}>
+        {row.label}
+      </div>
+      <div
+        className="border-border flex h-7 w-full overflow-hidden rounded-md border"
+        role="group"
+        aria-label={`Submission status for ${row.label}, across ${total} ${unitPlural}.`}
+      >
+        {row.status
+          .filter((s) => s.count > 0)
+          .map((s) => {
+            const pct = (s.count / total) * 100;
+            const label = `${row.label} — ${STATUS_LABELS[s.key]}: ${s.count} ${unitPlural} (${fmtPct(s.count, total)})`;
+            return (
+              <div
+                key={s.key}
+                className={`${STATUS_STYLE[s.key]} outline-none focus-visible:[outline:2px_solid_var(--color-ring)] focus-visible:[outline-offset:-2px]`}
+                style={{ width: `${pct}%` }}
+                tabIndex={0}
+                role="img"
+                aria-label={label}
+                onMouseEnter={(e) => onShow(e, label)}
+                onMouseMove={(e) => onShow(e, label)}
+                onMouseLeave={onHide}
+                onFocus={(e) => onShowEl(e.currentTarget, label)}
+                onBlur={onHide}
+              />
+            );
+          })}
+      </div>
+    </div>
+  );
+}
 
-  if (total === 0) return null;
+export function SubmissionStatusBar({ series, total, unitPlural }: Props) {
+  const { state, showAtEvent, showAtElement, hide } = useChartTooltip();
+
+  if (total === 0 || series.length === 0) return null;
 
   return (
     <div className="w-full">
-      <div
-        className="border-border flex h-10 w-full overflow-hidden rounded-md border"
-        role="group"
-        aria-label={`Submission status for ${total} ${unitPlural}.`}
-      >
-        {segments.map((s) => {
-          const pct = (s.count / total) * 100;
-          const label = `${STATUS_LABELS[s.key]}: ${s.count} ${unitPlural} (${fmtPct(s.count, total)})`;
-          return (
-            <div
-              key={s.key}
-              className={`${STATUS_STYLE[s.key].seg} flex items-center justify-center overflow-hidden outline-none focus-visible:[outline:2px_solid_var(--color-ring)] focus-visible:[outline-offset:-2px]`}
-              style={{ width: `${pct}%` }}
-              tabIndex={0}
-              role="img"
-              aria-label={label}
-              onMouseEnter={(e) => showAtEvent(e, label)}
-              onMouseMove={(e) => showAtEvent(e, label)}
-              onMouseLeave={hide}
-              onFocus={(e) => showAtElement(e.currentTarget, label)}
-              onBlur={hide}
-            />
-          );
-        })}
+      <div className="space-y-3">
+        {series.map((row) => (
+          <StatusRow
+            key={row.id}
+            row={row}
+            total={total}
+            unitPlural={unitPlural}
+            onShow={showAtEvent}
+            onShowEl={showAtElement}
+            onHide={hide}
+          />
+        ))}
       </div>
 
-      {/* Legend: every status, so small/absent segments are still explained (not colour-only). */}
+      {/* One shared legend for every row (also carries the labels, so colour isn't the only cue). */}
       <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
-        {status.map((s) => (
-          <li key={s.key} className="flex items-center gap-1.5">
+        {STATUS_ORDER.map((key) => (
+          <li key={key} className="flex items-center gap-1.5">
             <span
-              className={`${STATUS_STYLE[s.key].swatch} inline-block h-3 w-3 rounded-sm`}
+              className={`${STATUS_STYLE[key]} inline-block h-3 w-3 rounded-sm`}
               aria-hidden="true"
             />
-            <span className="text-foreground">{STATUS_LABELS[s.key]}</span>
-            <span className="text-muted-foreground">
-              {s.count} ({fmtPct(s.count, total)})
-            </span>
+            <span className="text-foreground">{STATUS_LABELS[key]}</span>
           </li>
         ))}
       </ul>
 
       <ChartDataTable
-        caption={`Submission status across ${total} ${unitPlural}.`}
-        headers={['Status', `Number of ${unitPlural}`, 'Percent']}
-        rows={status.map((s) => [STATUS_LABELS[s.key], s.count, fmtPct(s.count, total)])}
+        caption={`Submission status per problem, across ${total} ${unitPlural}.`}
+        headers={['Problem', ...STATUS_ORDER.map((k) => STATUS_LABELS[k])]}
+        rows={series.map((row) => {
+          const byKey = Object.fromEntries(row.status.map((s) => [s.key, s.count]));
+          return [row.label, ...STATUS_ORDER.map((k) => byKey[k] ?? 0)];
+        })}
       />
       <ChartTooltip state={state} />
     </div>

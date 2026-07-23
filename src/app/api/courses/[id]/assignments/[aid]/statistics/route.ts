@@ -30,7 +30,6 @@ const STATS_VIEW_THROTTLE_MS = 10 * 60 * 1000;
  *             participantCount: { type: integer }
  *             exceptionCount: { type: integer }
  *             histogram: { type: object }
- *             status: { type: array, items: { type: object } }
  *             problems: { type: array, items: { type: object } }
  *             assignmentTitle: { type: string }
  *             baseDueDate: { type: string }

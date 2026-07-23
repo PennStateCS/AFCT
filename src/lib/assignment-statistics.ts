@@ -239,13 +239,12 @@ export type StatsParticipant = {
    * and a manually zeroed one does not, even with a correct submission.
    */
   problemGrades: Record<string, number>;
-  /** Problem ids with at least one correct submission. Completion fallback for problems
-   *  that have no grade row, and the source of completion timing. */
-  correctProblemIds: string[];
-  /** Latest correct-submission instant across problems, or null (e.g. only manual grades). */
-  latestCorrectAt: Date | null;
-  /** Any submission at all, correct or not. */
-  hasAnySubmission: boolean;
+  /** Latest correct-submission instant per problem id; present ONLY when a correct
+   *  submission exists for that problem. Completion fallback for problems with no grade
+   *  row, and the source of per-problem completion timing. */
+  correctAtByProblem: Record<string, Date>;
+  /** Problem ids the participant has any submission for (correct or not). */
+  submittedProblemIds: string[];
 };
 
 /**
@@ -257,7 +256,27 @@ export type StatsParticipant = {
 function problemCompleted(problem: StatsProblem, participant: StatsParticipant): boolean {
   const grade = participant.problemGrades[problem.id];
   if (grade !== undefined) return problem.maxPoints > 0 ? grade >= problem.maxPoints : true;
-  return participant.correctProblemIds.includes(problem.id);
+  return participant.correctAtByProblem[problem.id] !== undefined;
+}
+
+/**
+ * One participant's submission status on ONE problem: the same rules as the assignment-level
+ * classifier, scoped to a single problem (its own grade, its own correct-submission time,
+ * and whether it has any submission), measured against the participant's effective due date.
+ */
+function problemStatus(problem: StatsProblem, participant: StatsParticipant, now: Date): StatusKey {
+  const grade = participant.problemGrades[problem.id];
+  return classifyParticipantStatus(
+    {
+      requiredProblemCount: 1,
+      completedProblemCount: problemCompleted(problem, participant) ? 1 : 0,
+      // A grade (e.g. a manual entry) is engagement even with no submission.
+      hasActivity: participant.submittedProblemIds.includes(problem.id) || grade !== undefined,
+      latestCompletionAt: participant.correctAtByProblem[problem.id] ?? null,
+      effectiveDue: participant.effectiveDue,
+    },
+    now,
+  );
 }
 
 export type BuildStatisticsInput = {
@@ -268,13 +287,16 @@ export type BuildStatisticsInput = {
   now: Date;
 };
 
-export type ProblemBoxPlot = {
+export type ProblemStats = {
   id: string;
   title: string;
   order: number;
   boxplot: BoxPlotStats | null;
   gradedCount: number;
   ungradedCount: number;
+  /** Submission-status breakdown for THIS problem, in fixed order; counts sum to
+   *  participantCount (every assigned participant is expected to do every problem). */
+  status: { key: StatusKey; count: number }[];
 };
 
 export type AssignmentStatistics = {
@@ -290,8 +312,7 @@ export type AssignmentStatistics = {
     mean: number | null;
     median: number | null;
   };
-  status: { key: StatusKey; count: number }[];
-  problems: ProblemBoxPlot[];
+  problems: ProblemStats[];
 };
 
 /**
@@ -326,36 +347,18 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
   }
   const histogram = computeScoreHistogram(includedPercentages);
 
-  // Status: classify every participant into exactly one bucket, preserving fixed order.
-  const statusCounts = new Map<StatusKey, number>(STATUS_ORDER.map((k) => [k, 0]));
-  for (const part of participants) {
-    const completedProblemCount = problems.reduce(
-      (n, p) => n + (problemCompleted(p, part) ? 1 : 0),
-      0,
-    );
-    // A recorded grade is engagement too, so a manually graded participant is never
-    // "not started" just because they have no submission.
-    const hasActivity = part.hasAnySubmission || Object.keys(part.problemGrades).length > 0;
-    const key = classifyParticipantStatus(
-      {
-        requiredProblemCount,
-        completedProblemCount,
-        hasActivity,
-        latestCompletionAt: part.latestCorrectAt,
-        effectiveDue: part.effectiveDue,
-      },
-      now,
-    );
-    statusCounts.set(key, (statusCounts.get(key) ?? 0) + 1);
-  }
-
-  // Box plots: one per problem, over the participants graded on THAT problem.
-  const problemStats: ProblemBoxPlot[] = [...problems]
+  // One entry per problem: its score box plot AND its own submission-status breakdown
+  // (measured per problem, not per assignment), rendered in assignment order.
+  const problemStats: ProblemStats[] = [...problems]
     .sort((a, b) => a.order - b.order)
     .map((p) => {
       const values: number[] = [];
       let gradedCount = 0;
+      const statusCounts = new Map<StatusKey, number>(STATUS_ORDER.map((k) => [k, 0]));
       for (const part of participants) {
+        const key = problemStatus(p, part, now);
+        statusCounts.set(key, (statusCounts.get(key) ?? 0) + 1);
+
         const grade = part.problemGrades[p.id];
         if (grade === undefined) continue;
         gradedCount += 1;
@@ -370,6 +373,7 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
         boxplot: computeBoxPlot(values),
         gradedCount,
         ungradedCount: participants.length - gradedCount,
+        status: STATUS_ORDER.map((key) => ({ key, count: statusCounts.get(key) ?? 0 })),
       };
     });
 
@@ -384,7 +388,6 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
       mean: histogram.mean,
       median: histogram.median,
     },
-    status: STATUS_ORDER.map((key) => ({ key, count: statusCounts.get(key) ?? 0 })),
     problems: problemStats,
   };
 }
