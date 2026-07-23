@@ -40,6 +40,11 @@ docker exec afct-dev-worker sh -c 'cd /app && npm run test:evaluator'
    }
    ```
 
+   Optional: `"expectErrorContains": "unsupported answer type"` additionally requires
+   the jar to explain itself in `feedback`/`errors`. Use it for files the evaluator is
+   meant to *refuse*, so a refusal never degrades into a bare "incorrect" that a student
+   would read as a wrong answer.
+
    `maxStates`/`deterministic` map to the same per-type args
    `buildEvaluatorArgs()` sends in `src/lib/submission-worker.ts`.
 
@@ -48,11 +53,19 @@ docker exec afct-dev-worker sh -c 'cd /app && npm run test:evaluator'
 
 ## Notes
 
-- The seed cases are **FA** (finite automata): equivalence is decidable and needs only
-  the jar, so they're robust with no external tools. **CFG** and **PDA** cases
+- The `Hw-*` cases are **FA** (finite automata): equivalence is decidable and needs only
+  the jar, so they're robust with no external tools. The **CFG** and **PDA** cases
   additionally exercise the native `cfganalyzer` binary (`bin/cfganalyzer`) via the
-  `CFGANALYZER_BINARY` / `CFGANALYZER_LIMIT` env vars the runner sets — add some to catch
-  a broken cfganalyzer in the build.
+  `CFGANALYZER_BINARY` / `CFGANALYZER_LIMIT` env vars the runner sets, so a broken or
+  missing cfganalyzer now fails the build instead of surfacing at grading time.
 - A `-solution.jff` graded against itself must be `expectCorrect: true`; an
   `-incorrect-answer-N.jff` graded against the solution must be `expectCorrect: false`.
-- Fixtures here are seeded from the AFCT-Evaluator project's own `TestInputExtended`.
+- `cfganalyzer` is a **Linux** binary, so the CFG/PDA/refusal cases only pass on Linux.
+  On a Windows or macOS host, run the suite inside the worker container.
+- Fixtures: the `Hw-*` files are seeded from the AFCT-Evaluator project's own
+  `TestInputExtended`. The rest are JFLAP's bundled example files, which carry no
+  expected verdict of their own, so they are paired with themselves: an answer key
+  graded against an identical submission must always come back correct. That is a
+  weaker assertion than a real wrong-answer pair, but it is the assertion that catches
+  a broken parser, a broken cfganalyzer, or a mis-swapped jar for the types the `Hw-*`
+  cases never touch.

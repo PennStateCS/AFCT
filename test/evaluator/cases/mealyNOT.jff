@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?><!--Created with JFLAP 4.0b14.--><structure>&#13;
+	<type>mealy</type>&#13;
+	<!--The list of states.-->&#13;
+	<state id="0">&#13;
+		<x>218.0</x>&#13;
+		<y>131.0</y>&#13;
+		<initial/>&#13;
+	</state>&#13;
+	<!--The list of transitions.-->&#13;
+	<transition>&#13;
+		<from>0</from>&#13;
+		<to>0</to>&#13;
+		<read>0</read>&#13;
+		<transout>1</transout>&#13;
+	</transition>&#13;
+	<transition>&#13;
+		<from>0</from>&#13;
+		<to>0</to>&#13;
+		<read>1</read>&#13;
+		<transout>0</transout>&#13;
+	</transition>&#13;
+</structure>
