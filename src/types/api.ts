@@ -510,8 +510,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List users (lightweight)
-         * @description Lightweight user list used to refresh the users table without the audit-logging  side effect of the main `/api/users` GET. Same admin restriction, but read-only.
+         * List users (paginated)
+         * @description One page of the admin users table. Search, filters, sort, and pagination all run  server-side. System administrators only; read-only (no audit-log side effect, unlike  `GET /api/admin/users`).
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/users/list/route.ts)
          */
@@ -3621,20 +3621,42 @@ export interface operations {
     };
     getAdminUsersList: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Match on first name, last name, or email */
+                q?: string;
+                field?: "all" | "firstName" | "lastName" | "email";
+                /** @description Repeatable true/false */
+                admin?: (true | false)[];
+                /** @description Repeatable */
+                status?: ("active" | "inactive")[];
+                /** @description Repeatable */
+                lock?: ("locked" | "unlocked")[];
+                /** @description Repeatable true/false */
+                temp?: (true | false)[];
+                sortBy?: "firstName" | "lastName" | "email" | "isAdmin" | "inactive" | "temporaryPassword" | "createdAt" | "lastLogin";
+                sortDir?: "asc" | "desc";
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The users. */
+            /** @description One page of users. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": {
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
                 };
             };
             /** @description Caller is not a system admin. */

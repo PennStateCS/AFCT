@@ -29,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { ArrowUp, ArrowDown, ArrowUpDown, Inbox, Loader2 } from 'lucide-react';
 import { usePersistentColumnVisibility } from '@/components/ui/use-persistent-column-visibility';
 import { escapeCsvCell } from '@/lib/csv';
@@ -177,9 +177,23 @@ export function DataTable<TData, TValue>({
     const next = typeof updater === 'function' ? updater(pagination) : updater;
     (onPaginationChange ?? setInternalPagination)(next);
   };
+  // autoResetPageIndex is disabled below so a background data refetch (e.g. after saving
+  // a row edit) doesn't kick the user back to page 1. The trade-off is that we must reset
+  // to the first page ourselves when a *filter* narrows the rows. Only for client-owned
+  // pagination; when the parent controls pagination (server mode) it owns that coupling.
+  const resetToFirstPage = () => {
+    if (onPaginationChange) return;
+    setInternalPagination((prev) => (prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 }));
+  };
   const handleGlobalFilterChange: OnChangeFn<string> = (updater) => {
     const next = typeof updater === 'function' ? updater(globalFilter) : updater;
     setGlobalFilter(next);
+    resetToFirstPage();
+  };
+  const handleColumnFiltersChange: OnChangeFn<ColumnFiltersState> = (updater) => {
+    const next = typeof updater === 'function' ? updater(columnFilters) : updater;
+    setColumnFilters(next);
+    resetToFirstPage();
   };
 
   const table = useReactTable<TData>({
@@ -209,12 +223,15 @@ export function DataTable<TData, TValue>({
     manualPagination,
     manualSorting,
     manualFiltering,
+    // Keep the current page across data refetches (e.g. after saving a row edit); the
+    // filter handlers above reset to page 1 when the visible rows change instead.
+    autoResetPageIndex: false,
     pageCount: manualPagination ? (pageCount ?? -1) : undefined,
     rowCount: manualPagination ? rowCount : undefined,
     globalFilterFn: scopedGlobalFilter,
     onGlobalFilterChange: handleGlobalFilterChange,
     onColumnVisibilityChange: setColumnVisibility,
-    onColumnFiltersChange: setColumnFilters,
+    onColumnFiltersChange: handleColumnFiltersChange,
     onSortingChange: handleSortingChange,
     onPaginationChange: handlePaginationChange,
     getCoreRowModel: getCoreRowModel(),
@@ -225,6 +242,17 @@ export function DataTable<TData, TValue>({
     getFacetedRowModel: manualFiltering ? undefined : getFacetedRowModel(),
     getFacetedUniqueValues: manualFiltering ? undefined : getFacetedUniqueValues(),
   });
+
+  // Safety net for client-owned pagination: with autoResetPageIndex off, a shrinking row
+  // set (a delete, or filtering by other means) could strand the user on a now-empty page
+  // past the end. Pull back to the last page that still has rows instead of a blank table.
+  const clientPageCount = manualPagination ? 0 : table.getPageCount();
+  useEffect(() => {
+    if (manualPagination || onPaginationChange) return;
+    if (pagination.pageIndex > 0 && pagination.pageIndex > clientPageCount - 1) {
+      setInternalPagination((prev) => ({ ...prev, pageIndex: Math.max(0, clientPageCount - 1) }));
+    }
+  }, [clientPageCount, pagination.pageIndex, manualPagination, onPaginationChange]);
 
   const exportToCSV = () => {
     const rows = table.getRowModel().rows;

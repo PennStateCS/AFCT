@@ -38,9 +38,20 @@ type EditUserDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   onSave?: (updatedUser: Partial<UserWithAdmin>) => Promise<void>;
+  // Whether this dialog may view/change the GLOBAL admin flag. Only the admin User
+  // Accounts page (whose data carries `isAdmin`) should; contexts like a course roster
+  // pass false, because their user objects don't include `isAdmin` and a default-off
+  // Administrator control would silently demote the account on save.
+  canManageAdmin?: boolean;
 };
 
-export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
+export function EditUserDialog({
+  user,
+  open,
+  setOpen,
+  onSave,
+  canManageAdmin = true,
+}: EditUserDialogProps) {
   const { timezone: effectiveTimezone } = useEffectiveTimezone();
   // Only system admins may see/change the admin flag; the backend enforces this too.
   const { data: session } = useSession();
@@ -51,6 +62,9 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const avatarUploadId = useId();
   const avatarErrorId = `${avatarUploadId}-error`;
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
+  // Gate the Administrator control on BOTH the viewer being an admin and this context
+  // being allowed to manage it (see `canManageAdmin`).
+  const showAdminControl = viewerIsAdmin && canManageAdmin;
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
@@ -201,8 +215,9 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
     formData.append('inactive', parsed.inactive ? 'true' : 'false');
     if (parsed.timezone) formData.append('timezone', parsed.timezone);
-    // Only admins can set this; the backend ignores it from non-admins regardless.
-    if (viewerIsAdmin) formData.append('isAdmin', parsed.isAdmin ? 'true' : 'false');
+    // Only admins can set this, and only from a context allowed to manage it; the backend
+    // also ignores it from non-admins and rejects self-demotion.
+    if (showAdminControl) formData.append('isAdmin', parsed.isAdmin ? 'true' : 'false');
     formData.append('cropX', String(avatarCrop.cropX));
     formData.append('cropY', String(avatarCrop.cropY));
     formData.append('zoom', String(avatarCrop.zoom));
@@ -395,8 +410,8 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             />
           </div>
 
-          {/* Administrator flag (system admins only) */}
-          {viewerIsAdmin && (
+          {/* Administrator flag (system admins only, and only where managing it is allowed) */}
+          {showAdminControl && (
             <Controller
               control={control}
               name="isAdmin"

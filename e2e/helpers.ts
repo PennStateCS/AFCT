@@ -114,9 +114,17 @@ export async function createFixtureCourse(browser: Browser): Promise<string> {
     // Enrol a second student as well: the "assigned to someone else" case needs a real
     // classmate to point the audience at, and an empty audience is rejected by
     // validation, so "assigned to nobody" is not a reachable state to test with.
-    const users = (await (await page.request.get('/api/admin/users/list')).json()) as unknown;
-    const userList = (Array.isArray(users) ? users : ((users as { users?: unknown[] }).users ?? [])) as
-      Array<{ id: string; email: string }>;
+    // The list endpoint is server-paginated; a large pageSize fetches everyone in one page.
+    const users = (await (
+      await page.request.get('/api/admin/users/list?pageSize=100')
+    ).json()) as unknown;
+    const userList = (
+      Array.isArray(users)
+        ? users
+        : ((users as { rows?: unknown[]; users?: unknown[] }).rows ??
+          (users as { users?: unknown[] }).users ??
+          [])
+    ) as Array<{ id: string; email: string }>;
     const classmate = userList.find(
       (u) => u.email?.startsWith('student') && u.id !== studentId,
     );

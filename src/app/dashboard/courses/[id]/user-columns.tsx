@@ -172,6 +172,9 @@ function ActionsCell({
         user={user}
         open={editUserOpen}
         setOpen={setEditUserOpen}
+        // The roster's user objects don't carry the global `isAdmin` flag, and changing
+        // global admin from a course context is out of scope, so never manage it here.
+        canManageAdmin={false}
         onSave={async () => {
           onChange();
         }}

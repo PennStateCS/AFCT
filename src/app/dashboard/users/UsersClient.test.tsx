@@ -43,15 +43,12 @@ vi.mock('@/components/ui/data-table', () => ({
   ),
 }));
 
+vi.mock('@/components/ui/data-table-faceted-filter', () => ({
+  DataTableFilterMenu: () => <div data-testid="filter-menu" />,
+}));
+
 vi.mock('@/components/dialogs/CreateUserDialog', () => ({
-  CreateUserDialog: ({
-    open,
-    setOpen,
-  }: {
-    open: boolean;
-    setOpen: (open: boolean) => void;
-    onSuccess: () => void;
-  }) => (
+  CreateUserDialog: ({ open, setOpen }: { open: boolean; setOpen: (open: boolean) => void }) => (
     <div>
       <div data-testid="create-dialog-state">{open ? 'open' : 'closed'}</div>
       <button type="button" onClick={() => setOpen(false)}>
@@ -62,14 +59,7 @@ vi.mock('@/components/dialogs/CreateUserDialog', () => ({
 }));
 
 vi.mock('@/components/dialogs/ImportUsersDialog', () => ({
-  ImportUsersDialog: ({
-    open,
-    setOpen,
-  }: {
-    open: boolean;
-    setOpen: (open: boolean) => void;
-    onSuccess: () => void;
-  }) => (
+  ImportUsersDialog: ({ open, setOpen }: { open: boolean; setOpen: (open: boolean) => void }) => (
     <div>
       <div data-testid="bulk-dialog-state">{open ? 'open' : 'closed'}</div>
       <button type="button" onClick={() => setOpen(false)}>
@@ -79,93 +69,45 @@ vi.mock('@/components/dialogs/ImportUsersDialog', () => ({
   ),
 }));
 
+// A page response with `count` empty rows and the given total.
+const pageResponse = (count: number, total = count) => ({
+  ok: true,
+  json: async () => ({ rows: Array.from({ length: count }, () => ({})), total }),
+});
+
 describe('UsersClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     searchState.create = '';
-    vi.stubGlobal('fetch', vi.fn());
+    // Default: one empty page. Individual tests override as needed.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(pageResponse(0)));
   });
 
-  it('renders server-provided users without initial fetch', () => {
-    const users: UserListItem[] = [
-      {
-        id: 'u1',
-        email: 'a@example.com',
-        firstName: 'Ada',
-        lastName: 'Lovelace',
-        temporaryPassword: false,
-        isAdmin: true,
-        avatar: null,
-        cropX: null,
-        cropY: null,
-        zoom: null,
-        timezone: 'UTC',
-        inactive: false,
-        lastLogin: null,
-        lockedUntil: null,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-      },
-    ];
-
-    renderWithClient(<UsersClient initialUsers={users} />);
-
-    expect(screen.getByTestId('table-loading').textContent).toBe('false');
-    expect(screen.getByTestId('table-rows').textContent).toBe('1');
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
-
-  it('fetches users on mount when no initial users are provided', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => [
-        {
-          id: 'u2',
-          email: 'u2@example.com',
-          firstName: 'Alan',
-          lastName: 'Turing',
-          temporaryPassword: false,
-          role: 'STUDENT',
-          avatar: null,
-          timezone: 'UTC',
-          inactive: false,
-          createdAt: new Date('2026-01-01T00:00:00.000Z'),
-          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-        },
-      ],
-    });
+  it('fetches the first page from the paginated endpoint on mount', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(pageResponse(1));
 
     renderWithClient(<UsersClient />);
 
     expect(screen.getByTestId('table-loading').textContent).toBe('true');
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/admin/users/list', { cache: 'no-store' });
       expect(screen.getByTestId('table-rows').textContent).toBe('1');
       expect(screen.getByTestId('table-loading').textContent).toBe('false');
+    });
+
+    const url = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(url).toMatch(/^\/api\/admin\/users\/list\?/);
+    expect(url).toContain('page=1');
+    expect(url).toContain('pageSize=10');
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1]).toEqual({
+      cache: 'no-store',
     });
   });
 
   it('shows error banner and retries successfully', async () => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) }).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          id: 'u3',
-          email: 'u3@example.com',
-          firstName: 'Grace',
-          lastName: 'Hopper',
-          temporaryPassword: true,
-          role: 'FACULTY',
-          avatar: null,
-          timezone: 'UTC',
-          inactive: false,
-          createdAt: new Date('2026-01-01T00:00:00.000Z'),
-          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-        },
-      ],
-    });
+    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    fetchMock.mockResolvedValueOnce(pageResponse(1));
 
     renderWithClient(<UsersClient />);
 
@@ -186,7 +128,7 @@ describe('UsersClient', () => {
   it('opens dialog from query string and clears query on close', () => {
     searchState.create = 'open';
 
-    renderWithClient(<UsersClient initialUsers={[]} />);
+    renderWithClient(<UsersClient />);
 
     expect(screen.getByTestId('create-dialog-state')).toHaveTextContent('open');
 
@@ -196,29 +138,11 @@ describe('UsersClient', () => {
   });
 
   it('memoizes table columns across local state updates', async () => {
-    const users: UserListItem[] = [
-      {
-        id: 'u1',
-        email: 'a@example.com',
-        firstName: 'Ada',
-        lastName: 'Lovelace',
-        temporaryPassword: false,
-        isAdmin: true,
-        avatar: null,
-        cropX: null,
-        cropY: null,
-        zoom: null,
-        timezone: 'UTC',
-        inactive: false,
-        lastLogin: null,
-        lockedUntil: null,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-      },
-    ];
+    renderWithClient(<UsersClient />);
 
-    renderWithClient(<UsersClient initialUsers={users} />);
-
+    await waitFor(() => {
+      expect(screen.getByTestId('table-loading').textContent).toBe('false');
+    });
     expect(getUserColumnsMock).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Create User' }));
@@ -231,7 +155,7 @@ describe('UsersClient', () => {
   });
 
   it('opens import users dialog from button click', async () => {
-    renderWithClient(<UsersClient initialUsers={[]} />);
+    renderWithClient(<UsersClient />);
 
     expect(screen.getByTestId('bulk-dialog-state')).toHaveTextContent('closed');
 
