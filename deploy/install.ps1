@@ -67,6 +67,12 @@ $UpdaterService = Get-EnvOr 'AFCT_UPDATER_SERVICE' 'updater'
 $HealthPath     = Get-EnvOr 'AFCT_HEALTH_PATH' '/api/health'
 $HealthTimeout  = [int](Get-EnvOr 'AFCT_HEALTH_TIMEOUT' '300')
 $HealthInterval = [int](Get-EnvOr 'AFCT_HEALTH_INTERVAL' '5')
+
+# Disk thresholds. The app image is ~4.7 GB and Docker holds the compressed download
+# and the unpacked layers at the same time, so these are deliberately generous: the
+# alternative is a pull that dies at 98% with "no space left on device".
+$script:InstallMinFreeBytes = [int64](Get-EnvOr 'AFCT_INSTALL_MIN_FREE_GB' '15') * 1GB
+$script:UpdateMinFreeBytes  = [int64](Get-EnvOr 'AFCT_UPDATE_MIN_FREE_GB' '12') * 1GB
 $DiagPrefix     = 'afct-diagnostics'
 # Base for release-manifest and self-update downloads (mirrors INSTALLER_BASE_URL).
 $InstallerBaseUrl = Get-EnvOr 'AFCT_INSTALLER_BASE_URL' 'https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy'
@@ -576,13 +582,41 @@ function Test-PortInUse([int]$port) {
   } catch { return $false }
 }
 
+# Free bytes on the volume backing Docker's image store. Under Docker Desktop the
+# images live inside a WSL2 virtual disk beneath %LOCALAPPDATA%, which is usually the
+# system drive and not necessarily the drive this script sits on -- so take the
+# smallest of the plausible locations. Returns $null when nothing can be measured,
+# and callers treat that as "unknown" rather than "full".
+function Get-DockerFreeBytes {
+  $candidates = @()
+  foreach ($path in @($env:LOCALAPPDATA, $env:SystemDrive, $PSScriptRoot)) {
+    if ([string]::IsNullOrWhiteSpace($path)) { continue }
+    try {
+      $drive = (Get-Item -LiteralPath $path -ErrorAction Stop).PSDrive
+      if ($drive -and $drive.Free) { $candidates += [int64]$drive.Free }
+    } catch {}
+  }
+  if ($candidates.Count -eq 0) { return $null }
+  return ($candidates | Measure-Object -Minimum).Minimum
+}
+
 function Test-DiskSpace {
-  try {
-    $free = (Get-Item -LiteralPath $PSScriptRoot).PSDrive.Free
-    if ($free -and $free -lt 5GB) {
-      Write-WarnMsg "less than approximately 5 GB is free in $PSScriptRoot. Docker images may exhaust the disk."
-    }
-  } catch {}
+  $free = Get-DockerFreeBytes
+  if ($free -and $free -lt $script:InstallMinFreeBytes) {
+    Write-WarnMsg ("less than approximately {0:N0} GB is free. The AFCT images need roughly that much to download and unpack." -f ($script:InstallMinFreeBytes / 1GB))
+  }
+}
+
+# Hard gate before an update pulls new images. The app image alone is ~4.7 GB and
+# Docker needs the compressed download and the unpacked layers at once. Without this
+# the failure is a half-finished pull, "no space left on device", and a rollback --
+# which is exactly how the first deployment to fill its disk failed.
+function Assert-UpdateDiskSpace {
+  $free = Get-DockerFreeBytes
+  if (-not $free) { return }  # cannot measure: do not block the update
+  if ($free -lt $script:UpdateMinFreeBytes) {
+    Stop-Install ("only {0:N1} GB is free, but about {1:N0} GB is needed to download the new images. Reclaim space and re-run, for example: docker image prune -a -f" -f ($free / 1GB), ($script:UpdateMinFreeBytes / 1GB))
+  }
 }
 
 function Test-ClockSync {
@@ -1340,6 +1374,58 @@ function Restore-PreviousImages {
   } catch { return $false }
 }
 
+# Delete AFCT images that are neither in use nor needed for rollback. Without this
+# every update leaves its predecessor behind for good: eight releases of a ~4.7 GB
+# image is enough to fill a 38 GB disk, which is how this was found.
+#
+# Rollback works by re-tagging recorded image IDs (Restore-PreviousImages), so those
+# IDs are protected here by ID, not by tag. Anything we cannot positively identify is
+# kept -- deleting an image we still need is far worse than leaving one behind. Runs
+# only after a healthy update, and never fails the update.
+function Remove-SupersededImages {
+  try {
+    $keepIds = @{}
+    foreach ($entry in $script:UpdateImageSnapshot) {
+      if ($entry.Id) { $keepIds[$entry.Id] = $true }
+    }
+    # The images the stack is running right now (the version just deployed).
+    $current = Invoke-Compose config --images
+    if ($LASTEXITCODE -eq 0) {
+      foreach ($reference in $current) {
+        if (-not $reference) { continue }
+        $id = (Invoke-NativeCapture { docker image inspect -f '{{.Id}}' $reference } | Select-Object -First 1)
+        if ($LASTEXITCODE -eq 0 -and $id) { $keepIds[$id] = $true }
+      }
+    }
+    if ($keepIds.Count -eq 0) { return }  # nothing identified: do not risk deleting
+
+    $rows = Invoke-NativeCapture { docker images --no-trunc --format '{{.ID}}|{{.Repository}}:{{.Tag}}' }
+    if ($LASTEXITCODE -ne 0) { return }
+
+    $removed = 0
+    foreach ($row in $rows) {
+      if (-not $row) { continue }
+      $id, $reference = $row -split '\|', 2
+      if (-not $reference) { continue }
+      # Only our own images: never postgres (digest-pinned) or anything else on the host.
+      if ($reference -notmatch '/afct-') { continue }
+      if ($reference -match '<none>') { continue }
+      if ($keepIds.ContainsKey($id)) { continue }
+      Invoke-NativeCapture { docker rmi $reference } | Out-Null
+      if ($LASTEXITCODE -eq 0) { $removed++ }
+    }
+
+    Invoke-NativeCapture { docker image prune -f } | Out-Null
+    if ($removed -gt 0) {
+      $free = Get-DockerFreeBytes
+      $suffix = if ($free) { (" ({0:N1} GB free)" -f ($free / 1GB)) } else { '' }
+      Write-Info ("removed {0} superseded AFCT image(s){1}." -f $removed, $suffix)
+    }
+  } catch {
+    Write-WarnMsg 'could not clean up superseded images; the update itself succeeded.'
+  }
+}
+
 function Invoke-Update {
   Lock-Installer
   Confirm-ExistingStack
@@ -1347,6 +1433,9 @@ function Invoke-Update {
   Write-Info 'updating AFCT to the latest published images...'
 
   Test-ComposeConfig
+  # Checked before anything is downloaded, so a short disk stops the update while the
+  # running version is still untouched.
+  Assert-UpdateDiskSpace
   Save-RunningImages
   Get-Images
 
@@ -1358,6 +1447,8 @@ function Invoke-Update {
 
   if ($updateOk) {
     Write-Success 'AFCT update completed.'
+    # Only now: the new version is healthy, and the rollback snapshot is still held.
+    Remove-SupersededImages
     $script:DiagOnExit = $false
     return
   }
@@ -1517,10 +1608,11 @@ function Invoke-Doctor {
   if (& $check 'Environment file exists' (Test-Path -LiteralPath $EnvFile)) { $ok++ } else { $warnings++ }
   if (& $check 'Environment configuration is complete' (Test-EnvFileComplete $EnvFile)) { $ok++ } else { $warnings++ }
 
-  $free = $null
-  try { $free = (Get-Item -LiteralPath $PSScriptRoot).PSDrive.Free } catch {}
-  $diskOk = (-not $free) -or ($free -ge 5GB)
-  if (& $check 'At least 5 GB of disk space is available' $diskOk) { $ok++ } else { $warnings++ }
+  # Matches the gate an update enforces, so `doctor` warns before an update refuses.
+  $free = Get-DockerFreeBytes
+  $diskOk = (-not $free) -or ($free -ge $script:UpdateMinFreeBytes)
+  $diskLabel = "At least {0:N0} GB of disk space is available for image downloads" -f ($script:UpdateMinFreeBytes / 1GB)
+  if (& $check $diskLabel $diskOk) { $ok++ } else { $warnings++ }
 
   if (& $check 'Windows Time service is running' (Test-ClockSync)) { $ok++ } else { $warnings++ }
 
