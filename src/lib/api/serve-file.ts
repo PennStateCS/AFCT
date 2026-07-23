@@ -36,6 +36,12 @@ export type ServeFileOptions = {
   /** Response Content-Type; defaults to `application/octet-stream`. */
   contentType?: string;
   /**
+   * Optional `Cache-Control` value. Stored filenames are unique per upload, so a
+   * given URL is immutable — callers serving those can send a long-lived directive
+   * to stop the browser re-downloading the bytes on every render/navigation.
+   */
+  cacheControl?: string;
+  /**
    * Runs after a successful read but before the response is built: the place to
    * record a download in the audit log, so it only fires when the file truly served.
    */
@@ -74,11 +80,13 @@ export async function serveUploadedFile(
   // `filename*` so an attacker-supplied original name can't break out of the
   // header or corrupt non-ASCII names.
   const contentDisposition = `${disposition}; filename="${sanitizeDispositionName(name)}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+  const headers: Record<string, string> = {
+    'Content-Type': opts.contentType ?? 'application/octet-stream',
+    'Content-Disposition': contentDisposition,
+  };
+  if (opts.cacheControl) headers['Cache-Control'] = opts.cacheControl;
   return new NextResponse(buffer as unknown as BodyInit, {
     status: 200,
-    headers: {
-      'Content-Type': opts.contentType ?? 'application/octet-stream',
-      'Content-Disposition': contentDisposition,
-    },
+    headers,
   });
 }

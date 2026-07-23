@@ -6,6 +6,7 @@ import { columns } from '../courses/course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Archive } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import type { CourseListItem } from '@/lib/courses-list';
@@ -85,6 +86,9 @@ export default function ArchivedCoursesClient({
           data={courses}
           loading={isLoading}
           tableLabel="Archived courses table"
+          emptyTitle="No archived courses"
+          emptyDescription="Courses you archive will appear here."
+          emptyIcon={Archive}
         />
       </CardContent>
     </Card>

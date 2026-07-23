@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ComponentType } from 'react';
 import type { Row, Table as TanstackTable, Column as TanstackColumn } from '@tanstack/react-table';
 import { flexRender } from '@tanstack/react-table';
 import { Inbox, Loader2 } from 'lucide-react';
@@ -16,11 +16,17 @@ export function DataTableCards<TData>({
   loading,
   tableLabel,
   getColumnLabel,
+  emptyTitle = 'No data found',
+  emptyDescription = 'Try adjusting filters or adding new entries.',
+  emptyIcon: EmptyIcon = Inbox,
 }: {
   table: TanstackTable<TData>;
   loading: boolean;
   tableLabel: string;
   getColumnLabel: (column: TanstackColumn<TData, unknown>) => string;
+  emptyTitle?: string;
+  emptyDescription?: string;
+  emptyIcon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   if (loading) {
     return (
@@ -39,9 +45,9 @@ export function DataTableCards<TData>({
   if (!rows.length) {
     return (
       <div className="text-muted-foreground flex flex-col items-center rounded-md border py-8">
-        <Inbox className="mb-2 h-10 w-10 text-gray-400" aria-hidden="true" />
-        <p className="font-medium">No data found</p>
-        <p className="text-sm">Try adjusting filters or adding new entries.</p>
+        <EmptyIcon className="mb-2 h-10 w-10 text-gray-400" aria-hidden={true} />
+        <p className="font-medium">{emptyTitle}</p>
+        <p className="text-sm">{emptyDescription}</p>
       </div>
     );
   }

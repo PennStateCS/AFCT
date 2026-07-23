@@ -105,7 +105,9 @@ describe('GET /api/files/pfps/[file]', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('Content-Type')).toBe('application/octet-stream');
+    expect(res.headers.get('Content-Type')).toBe('image/png');
+    // Filenames are unique per upload, so the URL is immutable and cached long-term.
+    expect(res.headers.get('Cache-Control')).toBe('private, max-age=31536000, immutable');
     expect(res.headers.get('Content-Disposition')).toBe(
       "inline; filename=\"avatar.png\"; filename*=UTF-8''avatar.png",
     );

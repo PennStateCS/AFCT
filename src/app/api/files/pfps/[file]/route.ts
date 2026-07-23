@@ -2,6 +2,22 @@ import { auth } from '@/lib/auth';
 import { apiError } from '@/lib/api/http';
 import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
 
+// Map an avatar file extension to its image content-type. Uploads are validated to be
+// real images (magic bytes) at write time; anything unrecognized falls back to a
+// generic image type. SVG is deliberately excluded — it can carry script.
+const AVATAR_CONTENT_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+};
+
+function avatarContentType(file: string): string {
+  const ext = file.split('.').pop()?.toLowerCase() ?? '';
+  return AVATAR_CONTENT_TYPES[ext] ?? 'application/octet-stream';
+}
+
 /**
  * Serves an avatar image from private storage, inline. Any signed-in user may fetch
  * one (avatars are shown throughout the app). The filename is rejected if it
@@ -34,7 +50,15 @@ export async function GET(_: Request, { params }: { params: Promise<{ file: stri
     }
 
     // Any signed-in user may fetch any avatar; no per-file authorization.
-    return await serveUploadedFile(file, 'pfps');
+    //
+    // The stored filename is a random UUID minted per upload, so a given URL's bytes
+    // never change — cache it immutably (private, since it sits behind auth). Without
+    // this the browser re-downloaded and re-authorized every avatar on every render and
+    // page change, which made tables full of avatars feel slow to load.
+    return await serveUploadedFile(file, 'pfps', {
+      contentType: avatarContentType(file),
+      cacheControl: 'private, max-age=31536000, immutable',
+    });
   } catch (err) {
     console.error('Error serving avatar file:', err);
     return apiError(500, 'Internal server error');

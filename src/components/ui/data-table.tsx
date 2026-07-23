@@ -57,6 +57,15 @@ interface DataTableProps<TData, TValue> {
   showExportButton?: boolean;
   actionButtons?: React.ReactNode;
   defaultColumnVisibility?: VisibilityState;
+  /** Heading shown when the table has no rows. Defaults to "No data found". */
+  emptyTitle?: string;
+  /** Sub-text under the empty heading. Defaults to a generic filters/entries hint. */
+  emptyDescription?: string;
+  /**
+   * Icon for the empty state. Pass a component (e.g. a lucide icon like `Archive`);
+   * it's rendered with the table's standard size/color. Defaults to `Inbox`.
+   */
+  emptyIcon?: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
   // ---- Server-side ("manual") mode: all optional; omit for client-side. ----
   // When a controlled value + handler is provided, the table hands that concern
@@ -99,6 +108,9 @@ export function DataTable<TData, TValue>({
   showExportButton = true,
   actionButtons,
   defaultColumnVisibility = {},
+  emptyTitle = 'No data found',
+  emptyDescription = 'Try adjusting filters or adding new entries.',
+  emptyIcon: EmptyIcon = Inbox,
   manualPagination = false,
   pageCount,
   rowCount,
@@ -338,6 +350,9 @@ export function DataTable<TData, TValue>({
             loading={loading}
             tableLabel={tableLabel}
             getColumnLabel={columnLabel}
+            emptyTitle={emptyTitle}
+            emptyDescription={emptyDescription}
+            emptyIcon={EmptyIcon}
           />
           <div className="rounded-md border p-3">
             <PaginationControls
@@ -453,9 +468,9 @@ export function DataTable<TData, TValue>({
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={columns.length} className="py-8 text-center">
                     <div className="text-muted-foreground flex flex-col items-center">
-                      <Inbox className="mb-2 h-10 w-10 text-gray-400" aria-hidden="true" />
-                      <p className="font-medium">No data found</p>
-                      <p className="text-sm">Try adjusting filters or adding new entries.</p>
+                      <EmptyIcon className="mb-2 h-10 w-10 text-gray-400" aria-hidden={true} />
+                      <p className="font-medium">{emptyTitle}</p>
+                      <p className="text-sm">{emptyDescription}</p>
                     </div>
                   </TableCell>
                 </TableRow>
