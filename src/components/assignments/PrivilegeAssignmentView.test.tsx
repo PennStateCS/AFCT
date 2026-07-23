@@ -650,9 +650,18 @@ describe('PrivilegeAssignmentView — publish toggle', () => {
 });
 
 describe('PrivilegeAssignmentView — assignment switcher', () => {
-  it('navigates to the chosen assignment', () => {
+  it('navigates to the chosen assignment, carrying the current tab', () => {
+    renderView();
+    // Default tab is Details, so the jump preserves it.
+    fireEvent.change(screen.getByLabelText('Switch assignment'), { target: { value: 'a2' } });
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2?tab=description');
+  });
+
+  it('preserves a non-default tab when switching assignments', () => {
+    // Start on the Submissions tab; the jump should keep the new assignment on it.
+    searchState.value = 'tab=submissions';
     renderView();
     fireEvent.change(screen.getByLabelText('Switch assignment'), { target: { value: 'a2' } });
-    expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2');
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2?tab=submissions');
   });
 });

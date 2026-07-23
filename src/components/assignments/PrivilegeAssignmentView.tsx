@@ -401,8 +401,11 @@ export default function AssignmentDashboardPage({
                 <SearchableSelect
                   items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
                   onSelect={(assignmentId) => {
-                    if (id) router.push(`/dashboard/courses/${id}/${assignmentId}`);
-                    else window.location.href = assignmentId;
+                    // Carry the current tab across the jump so switching assignments keeps
+                    // you on the same view (e.g. staying on Submissions or Statistics).
+                    const tabQuery = `?tab=${encodeURIComponent(tab)}`;
+                    if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
+                    else window.location.href = `${assignmentId}${tabQuery}`;
                   }}
                   placeholder={assignmentsLoading ? 'Loading…' : 'Switch assignment'}
                   searchPlaceholder="Search assignments..."
