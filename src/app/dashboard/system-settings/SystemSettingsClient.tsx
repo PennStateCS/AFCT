@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { TAB_BAR_LIST_CLASS, TAB_BAR_TRIGGER_CLASS } from '@/components/course/course-tabs';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -334,8 +335,7 @@ export default function SystemSettingsClient() {
     hcaptchaSecretKey.trim() !== '' ||
     (hcaptchaSecretConfigured && !hcaptchaSecretClear);
 
-  const triggerClass =
-    'hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white';
+  const triggerClass = TAB_BAR_TRIGGER_CLASS;
 
   return (
     <div className="space-y-4 pb-8">
@@ -355,32 +355,29 @@ export default function SystemSettingsClient() {
 
         <CardContent>
           <Tabs value={tab} onValueChange={handleTabChange} className="w-full gap-6">
-            <TabsList
-              aria-label="System settings sections"
-              className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
-            >
+            <TabsList aria-label="System settings sections" className={TAB_BAR_LIST_CLASS}>
               <TabsTrigger value="general" className={triggerClass}>
-                <SlidersHorizontal aria-hidden="true" />
+                <SlidersHorizontal className="size-3.5 opacity-70" aria-hidden="true" />
                 General
               </TabsTrigger>
               <TabsTrigger value="queue" className={triggerClass}>
-                <Cpu aria-hidden="true" />
+                <Cpu className="size-3.5 opacity-70" aria-hidden="true" />
                 Evaluator
               </TabsTrigger>
               <TabsTrigger value="backups" className={triggerClass}>
-                <DatabaseBackup aria-hidden="true" />
+                <DatabaseBackup className="size-3.5 opacity-70" aria-hidden="true" />
                 Backups
               </TabsTrigger>
               <TabsTrigger value="captcha" className={triggerClass}>
-                <ShieldCheck aria-hidden="true" />
+                <ShieldCheck className="size-3.5 opacity-70" aria-hidden="true" />
                 Captcha
               </TabsTrigger>
               <TabsTrigger value="tls" className={triggerClass}>
-                <Lock aria-hidden="true" />
+                <Lock className="size-3.5 opacity-70" aria-hidden="true" />
                 TLS Certificate
               </TabsTrigger>
               <TabsTrigger value="updates" className={triggerClass}>
-                <RefreshCw aria-hidden="true" />
+                <RefreshCw className="size-3.5 opacity-70" aria-hidden="true" />
                 Updates
               </TabsTrigger>
             </TabsList>

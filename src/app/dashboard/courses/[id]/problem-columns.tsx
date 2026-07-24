@@ -4,7 +4,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
 import { useState, type JSX } from 'react';
-import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';
+import { ChevronDown, Pencil, Trash2, FileText, Eye, Download } from 'lucide-react';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import JffViewerDialog from '@/components/JffViewerDialog';
@@ -82,13 +82,26 @@ export const useProblemColumns = ({
         const fileName = row.original.fileName;
         if (!file || !fileName) return '—';
         return (
-          <a
-            href={apiPaths.files.solution(fileName, { download: true })}
-            download={file}
-            className="text-sm break-all text-blue-600 hover:underline"
-          >
-            {file}
-          </a>
+          <div className="flex items-center gap-2">
+            {/* Click the name to open the viewer; the icon downloads. */}
+            <button
+              type="button"
+              onClick={() => setOpenDialog({ open: true, problem: row.original })}
+              className="text-sm break-all text-blue-600 hover:underline"
+              title={`View ${file}`}
+            >
+              {file}
+            </button>
+            <a
+              href={apiPaths.files.solution(fileName, { download: true })}
+              download={file}
+              title={`Download ${file}`}
+              aria-label={`Download ${file}`}
+              className="text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+            </a>
+          </div>
         );
       },
     },

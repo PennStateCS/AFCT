@@ -541,6 +541,9 @@ export default function AssignmentDashboardPage({
                   data={problemTableData}
                   tableLabel="Assignment problems table"
                   defaultSorting={[{ id: 'title', desc: false }]}
+                  // Max States and Deterministic are niche; hide them by default. They
+                  // stay available through the Columns menu.
+                  defaultColumnVisibility={{ maxStates: false, isDeterministic: false }}
                   emptyTitle="No problems on this assignment"
                   emptyDescription="Add problems so students have something to solve."
                   emptyIcon={FileText}

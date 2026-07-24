@@ -315,6 +315,7 @@ export default function ProblemWorkspace({
                           <TableHead className="px-2 py-1">Submitted by</TableHead>
                         ) : null}
                         <TableHead className="px-2 py-1">Status</TableHead>
+                        <TableHead className="px-2 py-1">File</TableHead>
                         <TableHead className="px-2 py-1">Manage</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -322,7 +323,7 @@ export default function ProblemWorkspace({
                       {visibleSubmissions.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={showSubmitter ? 4 : 3}
+                            colSpan={showSubmitter ? 5 : 4}
                             className="text-muted-foreground py-6 text-center text-sm"
                           >
                             No submissions match the selected filter.
@@ -361,6 +362,32 @@ export default function ProblemWorkspace({
                               ) : null}
                               <TableCell className="p-1 align-top">
                                 {renderStatusCell(submission)}
+                              </TableCell>
+                              <TableCell className="p-1 align-top">
+                                {submission.fileName ? (
+                                  <div className="flex items-center gap-2">
+                                    {/* Click the name to preview; the icon downloads. */}
+                                    <button
+                                      type="button"
+                                      onClick={() => onViewSubmission(submission)}
+                                      className="break-all text-blue-600 hover:underline"
+                                      title={`Preview ${submission.originalFileName || 'submission'}`}
+                                    >
+                                      {submission.originalFileName || submission.fileName}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownload(submission)}
+                                      className="text-muted-foreground hover:text-foreground shrink-0"
+                                      title={`Download ${submission.originalFileName || 'submission'}`}
+                                      aria-label={`Download ${submission.originalFileName || 'submission'}`}
+                                    >
+                                      <Download className="h-4 w-4" aria-hidden="true" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
                               </TableCell>
                               <TableCell className="p-1 align-top">
                                 <div className="flex items-center gap-2 whitespace-nowrap">

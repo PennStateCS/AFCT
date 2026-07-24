@@ -114,15 +114,18 @@ describe('buildProblemColumns', () => {
     expect(screen.queryByText('View Description')).not.toBeInTheDocument();
   });
 
-  it('answer-file cell: renders a viewer button when a file exists, else "No file"', () => {
+  it('answer-file cell: the file name opens the viewer, with a download link, else "No file"', () => {
     const openRenderViewer = vi.fn();
     const answer = find(cols({ openRenderViewer }), 'answerFile');
 
     const { rerender } = render(
       <>{answer.cell(arg(problem({ fileName: 'sol.jff', originalFileName: 'mine.jff' })))}</>,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Render file for Prob/ }));
+    // Clicking the file name opens the render viewer.
+    fireEvent.click(screen.getByRole('button', { name: 'mine.jff' }));
     expect(openRenderViewer).toHaveBeenCalledTimes(1);
+    // A download link sits beside it.
+    expect(screen.getByRole('link', { name: /Download mine.jff/ })).toBeInTheDocument();
 
     rerender(<>{answer.cell(arg(problem({ fileName: null })))}</>);
     expect(screen.getByText('No file')).toBeInTheDocument();
