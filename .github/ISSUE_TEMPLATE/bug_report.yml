@@ -21,6 +21,7 @@ body:
       label: Institution
       description: Which site is this being reported from?
       options:
+        - College of the Holy Cross
         - Rochester Institute of Technology
         - The Pennsylvania State University
         - The University of New Mexico
