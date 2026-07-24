@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/data-table';
 import SelectField from '@/components/ui/SelectField';
 import InputGroup from '@/components/ui/InputGroup';
 import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
@@ -54,6 +56,49 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
   const restorePoints = (upgradeInfo?.restorePoints ?? []).filter(
     (r) => r.version !== upgradeInfo?.current,
   );
+
+  // Built inline (not memoized) so the per-row Restore button always reflects the
+  // current busy flags. The list is tiny, so there's no cost to it.
+  type RestorePoint = (typeof restorePoints)[number];
+  const restoreColumns: ColumnDef<RestorePoint>[] = [
+    {
+      accessorKey: 'version',
+      header: 'Version',
+      cell: ({ row }) => (
+        <span className="font-mono whitespace-nowrap">{row.original.version}</span>
+      ),
+      meta: { priority: 1 },
+    },
+    {
+      accessorKey: 'backup',
+      header: 'Backup taken',
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap">{formatBackupTs(row.original.backup)}</span>
+      ),
+      meta: { priority: 1 },
+    },
+    {
+      id: 'actions',
+      header: () => <span className="sr-only">Actions</span>,
+      enableSorting: false,
+      meta: { align: 'right', priority: 1 },
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          size="sm"
+          variant="destructive"
+          aria-label={`Restore version ${row.original.version}`}
+          disabled={disabled || downgradeBusy || upgradeInProgress}
+          onClick={() => {
+            setRestoreTarget({ version: row.original.version, backup: row.original.backup });
+            setRestoreConfirmText('');
+          }}
+        >
+          Restore
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <>
@@ -246,46 +291,17 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             </span>{' '}
             — submissions, grades, and accounts. Use this only for recovery.
           </p>
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-sm" aria-label="Restore points">
-              <thead className="bg-muted/30 text-left">
-                <tr>
-                  <th scope="col" className="p-2 font-medium">
-                    Version
-                  </th>
-                  <th scope="col" className="p-2 font-medium">
-                    Backup taken
-                  </th>
-                  <th scope="col" className="p-2 font-medium">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {restorePoints.map((r) => (
-                  <tr key={r.backup} className="border-t">
-                    <td className="p-2 font-mono whitespace-nowrap">{r.version}</td>
-                    <td className="p-2 whitespace-nowrap">{formatBackupTs(r.backup)}</td>
-                    <td className="p-2 text-right">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="destructive"
-                        aria-label={`Restore version ${r.version}`}
-                        disabled={disabled || downgradeBusy || upgradeInProgress}
-                        onClick={() => {
-                          setRestoreTarget({ version: r.version, backup: r.backup });
-                          setRestoreConfirmText('');
-                        }}
-                      >
-                        Restore
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={restoreColumns}
+            data={restorePoints}
+            storageKey="system-restore-points"
+            tableLabel="Restore points"
+            // Short, action-focused list: skip the search/filter/columns/export toolbar.
+            showToolbar={false}
+            defaultSorting={[{ id: 'backup', desc: true }]}
+            emptyTitle="No restore points"
+            emptyDescription="A restore point is recorded automatically before each upgrade."
+          />
         </div>
       )}
 

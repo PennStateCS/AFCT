@@ -1,8 +1,11 @@
 'use client';
 
+import { useMemo } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
+import { DataTable } from '@/components/ui/data-table';
 import { apiPaths } from '@/lib/api-paths';
 import {
   MIN_BACKUP_HOUR,
@@ -24,6 +27,47 @@ export function BackupsTab({
   disabled: boolean;
 }) {
   const { backups, backupsLoading, backupNowBusy, handleBackupNow } = useBackups();
+
+  type BackupRow = (typeof backups)[number];
+  const columns = useMemo<ColumnDef<BackupRow>[]>(
+    () => [
+      {
+        accessorKey: 'timestamp',
+        header: 'Taken (server time)',
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap">{formatBackupTs(row.original.timestamp)}</span>
+        ),
+        meta: { priority: 1 },
+      },
+      {
+        id: 'archive',
+        header: 'Archive',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <a
+            className="text-sky-600 underline"
+            href={apiPaths.admin.backupDownload({ file: row.original.file })}
+          >
+            Download ({formatBytes(row.original.size)})
+          </a>
+        ),
+        meta: { priority: 1 },
+      },
+      {
+        id: 'encryption',
+        header: 'Encryption',
+        accessorFn: (b) => (b.encrypted ? 'Encrypted' : 'Not encrypted'),
+        cell: ({ row }) =>
+          row.original.encrypted ? (
+            <span className="whitespace-nowrap">Encrypted</span>
+          ) : (
+            <span className="whitespace-nowrap text-amber-600">Not encrypted</span>
+          ),
+        meta: { priority: 2 },
+      },
+    ],
+    [],
+  );
 
   return (
     <>
@@ -86,51 +130,20 @@ export function BackupsTab({
           {backupNowBusy ? 'Requesting…' : 'Back up now'}
         </Button>
 
-        {backupsLoading ? (
-          <p className="text-muted-foreground text-sm">Loading…</p>
-        ) : backups.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No backups yet.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-sm" aria-label="Available backups">
-              <thead className="bg-muted/30 text-left">
-                <tr>
-                  <th scope="col" className="p-2 font-medium">
-                    Taken (server time)
-                  </th>
-                  <th scope="col" className="p-2 font-medium">
-                    Archive
-                  </th>
-                  <th scope="col" className="p-2 font-medium">
-                    Encryption
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {backups.map((b) => (
-                  <tr key={b.timestamp} className="border-t">
-                    <td className="p-2 whitespace-nowrap">{formatBackupTs(b.timestamp)}</td>
-                    <td className="p-2">
-                      <a
-                        className="text-sky-600 underline"
-                        href={apiPaths.admin.backupDownload({ file: b.file })}
-                      >
-                        Download ({formatBytes(b.size)})
-                      </a>
-                    </td>
-                    <td className="p-2 whitespace-nowrap">
-                      {b.encrypted ? (
-                        'Encrypted'
-                      ) : (
-                        <span className="text-amber-600">Not encrypted</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataTable
+          columns={columns}
+          data={backups}
+          loading={backupsLoading}
+          storageKey="system-backups"
+          tableLabel="Available backups"
+          // Small, self-contained list: no search/filter/columns/export toolbar. Sortable
+          // headers, pagination and the mobile card view still come from DataTable.
+          showToolbar={false}
+          defaultSorting={[{ id: 'timestamp', desc: true }]}
+          loadingMessage="Loading backups, please wait..."
+          emptyTitle="No backups yet"
+          emptyDescription="Scheduled dumps appear here once taken. Use Back up now to create one."
+        />
         <p className="text-muted-foreground text-xs">
           Each archive holds the database and the uploaded files together, so one download is a
           complete, restorable copy. Keep one off-host — and if backups are encrypted, store the
