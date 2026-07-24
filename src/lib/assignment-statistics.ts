@@ -194,6 +194,171 @@ export function computeBoxPlot(values: number[]): BoxPlotStats | null {
   };
 }
 
+// ─── submission-event aggregations ───────────────────────────────────────────
+
+/** One raw submission event, attributed to a participant (student or group). */
+export type StatsSubmission = {
+  participantId: string;
+  problemId: string;
+  /** Submission time as epoch milliseconds (serializable + deterministic). */
+  submittedAt: number;
+  /** Whether the evaluator judged it correct (a null/undefined verdict is not correct). */
+  correct: boolean;
+};
+
+export type AttemptsBucket = { label: string; count: number };
+export type AttemptsToSolve = {
+  /** Buckets 1, 2, 3, 4, 5+ attempts-until-first-correct. */
+  buckets: AttemptsBucket[];
+  /** Participant/problem pairs that were eventually solved (the histogram's population). */
+  solvedCount: number;
+  /** Pairs with at least one submission that were never solved (excluded from the buckets). */
+  unsolvedCount: number;
+};
+
+export type TimelinePoint = { date: string; count: number };
+export type ActivityHeatmap = {
+  /** matrix[dayOfWeek 0=Sun..6=Sat][hour 0..23] = submission count. */
+  matrix: number[][];
+  /** Largest single-cell count, for the colour scale (0 when there is no activity). */
+  max: number;
+};
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+/** Local calendar parts of an instant in a timezone (deterministic given the zone). */
+function localParts(ms: number, timeZone: string): { date: string; hour: number; weekday: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    weekday: 'short',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ms));
+  const m = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  return {
+    date: `${m.year}-${m.month}-${m.day}`,
+    hour: Number(m.hour) % 24,
+    weekday: WEEKDAY_INDEX[m.weekday ?? 'Sun'] ?? 0,
+  };
+}
+
+/** Group submissions by participant+problem, each list sorted oldest-first. */
+function byParticipantProblem(submissions: StatsSubmission[]): StatsSubmission[][] {
+  const groups = new Map<string, StatsSubmission[]>();
+  for (const s of submissions) {
+    const key = `${s.participantId} ${s.problemId}`;
+    const list = groups.get(key);
+    if (list) list.push(s);
+    else groups.set(key, [s]);
+  }
+  const out: StatsSubmission[][] = [];
+  for (const list of groups.values()) {
+    out.push([...list].sort((a, b) => a.submittedAt - b.submittedAt));
+  }
+  return out;
+}
+
+/**
+ * Distribution of how many submissions each participant needed before their first correct
+ * one, bucketed 1..4 and 5+. Only pairs that were eventually solved are counted; pairs that
+ * submitted but never got it right are reported separately (unsolvedCount).
+ */
+export function computeAttemptsToSolve(submissions: StatsSubmission[]): AttemptsToSolve {
+  const buckets: AttemptsBucket[] = [
+    { label: '1', count: 0 },
+    { label: '2', count: 0 },
+    { label: '3', count: 0 },
+    { label: '4', count: 0 },
+    { label: '5+', count: 0 },
+  ];
+  let solvedCount = 0;
+  let unsolvedCount = 0;
+  for (const list of byParticipantProblem(submissions)) {
+    const idx = list.findIndex((s) => s.correct);
+    if (idx === -1) {
+      unsolvedCount += 1;
+      continue;
+    }
+    solvedCount += 1;
+    const attempts = idx + 1;
+    buckets[Math.min(attempts, 5) - 1]!.count += 1;
+  }
+  return { buckets, solvedCount, unsolvedCount };
+}
+
+/**
+ * Per problem: how many participants got it right on their very first submission, out of
+ * those who submitted it at all. Keyed by problem id.
+ */
+export function computeFirstAttemptSuccess(
+  submissions: StatsSubmission[],
+): Map<string, { correct: number; submitted: number }> {
+  const result = new Map<string, { correct: number; submitted: number }>();
+  for (const list of byParticipantProblem(submissions)) {
+    const first = list[0];
+    if (!first) continue;
+    const rec = result.get(first.problemId) ?? { correct: 0, submitted: 0 };
+    rec.submitted += 1;
+    if (first.correct) rec.correct += 1;
+    result.set(first.problemId, rec);
+  }
+  return result;
+}
+
+/**
+ * Submissions per local calendar day (course timezone), with zero-filled gaps so the axis
+ * is continuous. Empty when there are no submissions.
+ */
+export function computeSubmissionTimeline(
+  submissions: StatsSubmission[],
+  timeZone: string,
+): TimelinePoint[] {
+  if (submissions.length === 0) return [];
+  const counts = new Map<string, number>();
+  for (const s of submissions) {
+    const { date } = localParts(s.submittedAt, timeZone);
+    counts.set(date, (counts.get(date) ?? 0) + 1);
+  }
+  const dates = [...counts.keys()].sort();
+  const day = 86_400_000;
+  const out: TimelinePoint[] = [];
+  let cursor = new Date(`${dates[0]}T00:00:00Z`).getTime();
+  const end = new Date(`${dates[dates.length - 1]}T00:00:00Z`).getTime();
+  while (cursor <= end) {
+    const label = new Date(cursor).toISOString().slice(0, 10);
+    out.push({ date: label, count: counts.get(label) ?? 0 });
+    cursor += day;
+  }
+  return out;
+}
+
+/** 7x24 grid (day-of-week x hour, course timezone) of submission counts. */
+export function computeActivityHeatmap(
+  submissions: StatsSubmission[],
+  timeZone: string,
+): ActivityHeatmap {
+  const matrix: number[][] = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
+  let max = 0;
+  for (const s of submissions) {
+    const { hour, weekday } = localParts(s.submittedAt, timeZone);
+    const next = (matrix[weekday]![hour] ?? 0) + 1;
+    matrix[weekday]![hour] = next;
+    if (next > max) max = next;
+  }
+  return { matrix, max };
+}
+
 // ─── assembly ────────────────────────────────────────────────────────────────
 
 export type StatsProblem = {
@@ -225,6 +390,10 @@ export type BuildStatisticsInput = {
   unit: 'student' | 'group';
   problems: StatsProblem[];
   participants: StatsParticipant[];
+  /** Raw submission events (already filtered to assigned participants). */
+  submissions: StatsSubmission[];
+  /** Course timezone, for bucketing the timeline and activity heatmap by local time. */
+  timeZone: string;
 };
 
 export type ProblemStats = {
@@ -237,6 +406,10 @@ export type ProblemStats = {
   /** Submission-status breakdown for THIS problem, in fixed order; counts sum to
    *  participantCount (every assigned participant is expected to do every problem). */
   status: { key: StatusKey; count: number }[];
+  /** How many participants got this problem right on their first submission... */
+  firstAttemptCorrect: number;
+  /** ...out of how many submitted it at all. */
+  firstAttemptSubmitted: number;
 };
 
 export type AssignmentStatistics = {
@@ -253,6 +426,9 @@ export type AssignmentStatistics = {
     median: number | null;
   };
   problems: ProblemStats[];
+  attemptsToSolve: AttemptsToSolve;
+  timeline: TimelinePoint[];
+  heatmap: ActivityHeatmap;
 };
 
 /**
@@ -261,9 +437,10 @@ export type AssignmentStatistics = {
  * any test see identical results.
  */
 export function buildAssignmentStatistics(input: BuildStatisticsInput): AssignmentStatistics {
-  const { problems, participants, unit } = input;
+  const { problems, participants, unit, submissions, timeZone } = input;
   const requiredProblemCount = problems.length;
   const totalPossible = problems.reduce((sum, p) => sum + p.maxPoints, 0);
+  const firstAttempt = computeFirstAttemptSuccess(submissions);
 
   // Histogram: include a participant only when EVERY problem is graded for them, so
   // partially graded work never pollutes the distribution. Everyone else is excluded and
@@ -307,6 +484,7 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
         // as graded but contributes no distribution point.
         if (p.maxPoints > 0) values.push((grade / p.maxPoints) * 100);
       }
+      const fa = firstAttempt.get(p.id) ?? { correct: 0, submitted: 0 };
       return {
         id: p.id,
         title: p.title,
@@ -315,6 +493,8 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
         gradedCount,
         ungradedCount: participants.length - gradedCount,
         status: STATUS_ORDER.map((key) => ({ key, count: statusCounts.get(key) ?? 0 })),
+        firstAttemptCorrect: fa.correct,
+        firstAttemptSubmitted: fa.submitted,
       };
     });
 
@@ -330,5 +510,8 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
       median: histogram.median,
     },
     problems: problemStats,
+    attemptsToSolve: computeAttemptsToSolve(submissions),
+    timeline: computeSubmissionTimeline(submissions, timeZone),
+    heatmap: computeActivityHeatmap(submissions, timeZone),
   };
 }

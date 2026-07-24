@@ -59,10 +59,24 @@ describe('getAssignmentStatistics - individual assignment', () => {
     prismaMock.assignmentOverride.findMany.mockResolvedValue([
       { targetType: 'STUDENT', userId: 's2', groupId: null },
     ]);
-    // s1's latest submissions: p1 evaluated, p2 still queued. s2 never submitted.
+    // s1's submissions: p1 solved (Completed), p2 still queued (Pending). s2 never submitted.
     prismaMock.submission.findMany.mockResolvedValue([
-      { studentId: 's1', problemId: 'p1', status: 'COMPLETED' },
-      { studentId: 's1', problemId: 'p2', status: 'PENDING' },
+      {
+        studentId: 's1',
+        studentGroupId: null,
+        problemId: 'p1',
+        submittedAt: new Date('2026-08-01T10:00:00Z'),
+        correct: true,
+        status: 'COMPLETED',
+      },
+      {
+        studentId: 's1',
+        studentGroupId: null,
+        problemId: 'p2',
+        submittedAt: new Date('2026-08-01T11:00:00Z'),
+        correct: false,
+        status: 'PENDING',
+      },
     ]);
 
     const stats = (await getAssignmentStatistics('c1', 'a1'))!;
@@ -83,6 +97,14 @@ describe('getAssignmentStatistics - individual assignment', () => {
     expect(statusFor(stats, 'p1')['missing']).toBe(1);
     expect(statusFor(stats, 'p2')['pending']).toBe(1);
     expect(statusFor(stats, 'p2')['missing']).toBe(1);
+
+    // Attempts-to-solve: s1 solved p1 on the first try; p2 never solved (still pending).
+    expect(stats.attemptsToSolve.solvedCount).toBe(1);
+    expect(stats.attemptsToSolve.unsolvedCount).toBe(1);
+    // First-attempt success on p1: s1 got it right first try.
+    const p1 = stats.problems.find((p) => p.id === 'p1')!;
+    expect(p1.firstAttemptCorrect).toBe(1);
+    expect(p1.firstAttemptSubmitted).toBe(1);
   });
 
   it('only counts students who are actually assigned', async () => {
@@ -114,10 +136,24 @@ describe('getAssignmentStatistics - group assignment', () => {
     prismaMock.assignmentOverride.findMany.mockResolvedValue([
       { targetType: 'GROUP', userId: null, groupId: 'g2' },
     ]);
-    // g1's latest submissions: p1 completed, p2 failed. g2 never submitted.
+    // g1's submissions: p1 completed, p2 failed. g2 never submitted.
     prismaMock.submission.findMany.mockResolvedValue([
-      { studentGroupId: 'g1', problemId: 'p1', status: 'COMPLETED' },
-      { studentGroupId: 'g1', problemId: 'p2', status: 'FAILED' },
+      {
+        studentId: 'u1',
+        studentGroupId: 'g1',
+        problemId: 'p1',
+        submittedAt: new Date('2026-08-01T10:00:00Z'),
+        correct: true,
+        status: 'COMPLETED',
+      },
+      {
+        studentId: 'u1',
+        studentGroupId: 'g1',
+        problemId: 'p2',
+        submittedAt: new Date('2026-08-01T11:00:00Z'),
+        correct: false,
+        status: 'FAILED',
+      },
     ]);
 
     const stats = (await getAssignmentStatistics('c1', 'a1'))!;
