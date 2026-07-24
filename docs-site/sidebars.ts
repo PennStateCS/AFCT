@@ -11,7 +11,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Getting Started',
       collapsed: false,
-      items: ['intro'],
+      items: ['intro', 'reporting-bugs'],
     },
     {
       type: 'category',
