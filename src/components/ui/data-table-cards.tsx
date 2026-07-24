@@ -85,15 +85,17 @@ export function DataTableCards<TData>({
 }
 
 /**
- * Below 768px, present rows as stacked cards instead of a horizontally scrolling
- * table. Guards against jsdom / SSR where matchMedia is absent: returns false
- * until mounted, so the server and tests render the desktop table.
+ * Below 640px, present rows as stacked cards instead of a horizontally scrolling
+ * table. Above that the table stays, shedding lower-priority columns as it narrows
+ * (see `responsiveClass`), so it condenses through several stages before cards.
+ * Guards against jsdom / SSR where matchMedia is absent: returns false until mounted,
+ * so the server and tests render the desktop table.
  */
 export function useStackedView() {
   const [stacked, setStacked] = useState(false);
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const mql = window.matchMedia('(max-width: 767px)');
+    const mql = window.matchMedia('(max-width: 639px)');
     const update = () => setStacked(mql.matches);
     update();
     mql.addEventListener('change', update);
