@@ -98,11 +98,14 @@ describe('getAssignmentStatistics - individual assignment', () => {
     expect(statusFor(stats, 'p2')['pending']).toBe(1);
     expect(statusFor(stats, 'p2')['missing']).toBe(1);
 
-    // Attempts-to-solve: s1 solved p1 on the first try; p2 never solved (still pending).
-    expect(stats.attemptsToSolve.solvedCount).toBe(1);
-    expect(stats.attemptsToSolve.unsolvedCount).toBe(1);
-    // First-attempt success on p1: s1 got it right first try.
+    // Attempts-to-solve, per problem: s1 solved p1 on the first try; p2 never solved.
     const p1 = stats.problems.find((p) => p.id === 'p1')!;
+    const p2 = stats.problems.find((p) => p.id === 'p2')!;
+    expect(p1.attempts.solvedCount).toBe(1);
+    expect(p1.attempts.buckets.find((b) => b.label === '1')!.count).toBe(1);
+    expect(p2.attempts.solvedCount).toBe(0);
+    expect(p2.attempts.unsolvedCount).toBe(1); // pending submission, never correct
+    // First-attempt success on p1: s1 got it right first try.
     expect(p1.firstAttemptCorrect).toBe(1);
     expect(p1.firstAttemptSubmitted).toBe(1);
   });

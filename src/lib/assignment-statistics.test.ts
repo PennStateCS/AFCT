@@ -7,7 +7,7 @@ import {
   computeScoreHistogram,
   computeBoxPlot,
   queueStatusKey,
-  computeAttemptsToSolve,
+  computeAttemptsToSolveByProblem,
   computeFirstAttemptSuccess,
   computeSubmissionTimeline,
   computeActivityHeatmap,
@@ -285,41 +285,43 @@ describe('buildAssignmentStatistics', () => {
   });
 });
 
-describe('computeAttemptsToSolve', () => {
-  const bucketCounts = (subs: StatsSubmission[]) =>
-    Object.fromEntries(computeAttemptsToSolve(subs).buckets.map((b) => [b.label, b.count]));
+describe('computeAttemptsToSolveByProblem', () => {
+  const bucketCounts = (a: { buckets: { label: string; count: number }[] }) =>
+    Object.fromEntries(a.buckets.map((b) => [b.label, b.count]));
 
-  it('buckets the attempt on which each pair was first solved', () => {
+  it('buckets the attempt on which each pair was first solved, per problem', () => {
     const subs = [
-      // s1/p1 solved on the 3rd try
+      // p1: s1 solved on the 3rd try, s2 solved first try
       sub('s1', 'p1', '2026-08-01T10:00:00Z'),
       sub('s1', 'p1', '2026-08-01T11:00:00Z'),
       sub('s1', 'p1', '2026-08-01T12:00:00Z', true),
-      // s2/p1 solved first try
       sub('s2', 'p1', '2026-08-01T10:00:00Z', true),
-      // s1/p2 solved on the 6th try -> 5+
+      // p2: s1 solved on the 6th try -> 5+
       ...Array.from({ length: 5 }, (_, i) => sub('s1', 'p2', `2026-08-0${i + 1}T09:00:00Z`)),
       sub('s1', 'p2', '2026-08-07T09:00:00Z', true),
     ];
-    const counts = bucketCounts(subs);
-    expect(counts['1']).toBe(1); // s2/p1
-    expect(counts['3']).toBe(1); // s1/p1
-    expect(counts['5+']).toBe(1); // s1/p2
-    const r = computeAttemptsToSolve(subs);
-    expect(r.solvedCount).toBe(3);
-    expect(r.unsolvedCount).toBe(0);
+    const map = computeAttemptsToSolveByProblem(subs);
+
+    const p1 = map.get('p1')!;
+    expect(bucketCounts(p1)).toMatchObject({ '1': 1, '3': 1 });
+    expect(p1.solvedCount).toBe(2);
+    expect(p1.unsolvedCount).toBe(0);
+
+    const p2 = map.get('p2')!;
+    expect(bucketCounts(p2)['5+']).toBe(1);
+    expect(p2.solvedCount).toBe(1);
   });
 
-  it('excludes pairs that submitted but never solved, and is order-independent', () => {
+  it('counts pairs that never solved in unsolvedCount, order-independent', () => {
     const subs = [
-      // given out of order; the function sorts by time
+      // given out of order; the function sorts by time; never correct
       sub('s1', 'p1', '2026-08-01T12:00:00Z'),
       sub('s1', 'p1', '2026-08-01T10:00:00Z'),
     ];
-    const r = computeAttemptsToSolve(subs);
-    expect(r.solvedCount).toBe(0);
-    expect(r.unsolvedCount).toBe(1);
-    expect(r.buckets.every((b) => b.count === 0)).toBe(true);
+    const p1 = computeAttemptsToSolveByProblem(subs).get('p1')!;
+    expect(p1.solvedCount).toBe(0);
+    expect(p1.unsolvedCount).toBe(1);
+    expect(p1.buckets.every((b) => b.count === 0)).toBe(true);
   });
 });
 

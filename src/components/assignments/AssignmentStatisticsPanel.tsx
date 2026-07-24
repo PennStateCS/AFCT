@@ -14,7 +14,7 @@ import type { AssignmentStatistics } from '@/lib/assignment-statistics';
 import { ScoreHistogramChart } from './charts/ScoreHistogramChart';
 import { SubmissionStatusBar } from './charts/SubmissionStatusBar';
 import { ProblemBoxPlotChart } from './charts/ProblemBoxPlotChart';
-import { AttemptsHistogramChart } from './charts/AttemptsHistogramChart';
+import { AttemptsPerProblemChart } from './charts/AttemptsPerProblemChart';
 import { FirstAttemptChart } from './charts/FirstAttemptChart';
 import { SubmissionTimelineChart } from './charts/SubmissionTimelineChart';
 import { ActivityHeatmapChart } from './charts/ActivityHeatmapChart';
@@ -209,23 +209,21 @@ export function AssignmentStatisticsPanel() {
         <StatCard
           className="lg:col-span-8"
           title="Attempts to solve"
-          description={`How many submissions ${unitPlural} needed before their first correct one.`}
+          description={`How many submissions ${unitPlural} needed before their first correct one, per problem.`}
         >
-          {stats.attemptsToSolve.solvedCount > 0 ? (
-            <>
-              <AttemptsHistogramChart
-                buckets={stats.attemptsToSolve.buckets}
-                solvedCount={stats.attemptsToSolve.solvedCount}
-                unitPlural={unitPlural}
-              />
-              {stats.attemptsToSolve.unsolvedCount > 0 && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                  {stats.attemptsToSolve.unsolvedCount} attempted but not yet solved (excluded).
-                </p>
-              )}
-            </>
+          {stats.problems.some(
+            (p) => p.attempts.solvedCount + p.attempts.unsolvedCount > 0,
+          ) ? (
+            <AttemptsPerProblemChart
+              problems={stats.problems.map((p) => ({
+                id: p.id,
+                title: p.title,
+                attempts: p.attempts,
+              }))}
+              unitPlural={unitPlural}
+            />
           ) : (
-            <EmptyChart message="No solved submissions yet." />
+            <EmptyChart message="No submissions yet." />
           )}
         </StatCard>
 
