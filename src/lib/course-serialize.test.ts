@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { serializeAssignment, type AssignmentRow } from '@/lib/course/serialize';
+import { serializeAssignment, type AssignmentRow } from '@/lib/course-serialize';
 
 const NOW = new Date('2026-03-10T12:00:00.000Z');
 const HOUR = 3600_000;

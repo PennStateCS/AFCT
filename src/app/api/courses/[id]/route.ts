@@ -18,9 +18,9 @@ import {
   countByAssignment,
   studentsWithSubmissions,
   type OptionalCountDelegate,
-} from '@/lib/course/aggregates';
-import { diffFacultyRoster } from '@/lib/course/faculty';
-import { serializeAssignment, type AssignmentRow } from '@/lib/course/serialize';
+} from '@/lib/course-aggregates';
+import { diffFacultyRoster } from '@/lib/course-faculty';
+import { serializeAssignment, type AssignmentRow } from '@/lib/course-serialize';
 
 /**
  * Fetches one course with derived metadata, shaped by the `view` query param to
@@ -167,7 +167,7 @@ export const GET = withCourseAuth(
 
       // The findUnique uses conditional includes, so widen to the relations and
       // _count that may be present for the requested view. The row shapes live with
-      // the serializer that consumes them (lib/course/serialize).
+      // the serializer that consumes them (lib/course-serialize).
       const courseData = course as unknown as Omit<
         typeof course,
         'roster' | 'assignments' | 'problems' | '_count'

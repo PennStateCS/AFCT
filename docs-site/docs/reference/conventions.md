@@ -40,6 +40,35 @@ Important shared files include:
 - `src/lib/prisma.ts`
 - `src/schemas/fields.ts`
 
+### Where a new module in `src/lib/` goes
+
+`src/lib/` is mostly flat, with a few folders. The default is flat with a prefix that
+groups the module with its relatives: `course-grades.ts`, `assignment-visibility.ts`,
+`submission-window.ts`. A prefix sorts next to its siblings in any listing, and it means
+you never have to decide which folder a new file belongs to.
+
+**A cluster earns a folder only when one of these is true:**
+
+1. **It has internals**, at least one module that should not be imported from outside the
+   folder. `status/` qualifies: `status/cache.ts` and `status/ip-classify.ts` are used
+   only by their sibling collectors.
+2. **It is a layer, not a domain**, meaning every module in it does the same *kind* of job
+   for the whole app, so the folder name is a role rather than a topic. `api/` (request
+   handling) and `security/` (authentication machinery) qualify.
+
+A group of files that merely share a topic does **not** earn a folder. That is what the
+prefix is for.
+
+Two rules that apply either way:
+
+- **No `index.ts` barrels in `src/lib/`.** A barrel re-exporting a domain would put
+  server-only modules (`fs`, `child_process`, `dns`, `tls`) into the same import graph as
+  client components, and it defeats tree-shaking. Import the specific module.
+- **Moving or renaming a module means sweeping for `vi.mock('...')` too.** Those are
+  string literals that nothing type-checks. A mock pointing at a path that no longer
+  exists does not fail: the test silently runs against the real implementation and usually
+  keeps passing, having quietly stopped testing what it claims to.
+
 ## Authorization model
 
 AFCT uses:

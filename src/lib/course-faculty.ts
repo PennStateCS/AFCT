@@ -1,5 +1,3 @@
-// src/lib/course/faculty.ts
-//
 // Pure roster-diff logic for reconciling a course's FACULTY set to a desired list.
 // Kept free of Prisma so it can be unit-tested directly; the caller runs the resulting
 // add/promote/remove operations inside its own transaction.
