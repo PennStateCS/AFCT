@@ -8,32 +8,52 @@
  *   - SCORE (histogram, box plots): driven by recorded grades. A participant counts only
  *     when their work is graded; a real recorded zero counts, but missing/ungraded work is
  *     never silently treated as zero.
- *   - STATUS (segmented bar): driven by submission behaviour against the participant's
- *     effective due date. Grades never affect status; submissions never affect the score.
+ *   - STATUS (segmented bar): the evaluation-queue state of the participant's latest
+ *     submission for each problem (Completed / Processing / Pending / Failed), plus Missing
+ *     when no submission exists. Grades never affect status; submissions never affect the score.
  *
  * "Participant" is a student for an individual assignment and a group for a group
  * assignment; the caller fixes the unit and never mixes the two in one result.
  */
 
-export type StatusKey = 'on-time' | 'late' | 'in-progress' | 'missing' | 'not-started';
+/** The raw submission queue states (Prisma `SubmissionStatus`), before adding "missing". */
+export type SubmissionQueueStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
-/** Fixed display + legend order for the status bar (best outcome first). */
+/**
+ * Status buckets shown in the Submission status chart: the four evaluation-queue states of
+ * a participant's latest submission for a problem, plus `missing` when there is none.
+ */
+export type StatusKey = 'completed' | 'processing' | 'pending' | 'failed' | 'missing';
+
+/** Fixed display + legend order for the status bar (graded/done first, missing last). */
 export const STATUS_ORDER: readonly StatusKey[] = [
-  'on-time',
-  'late',
-  'in-progress',
+  'completed',
+  'processing',
+  'pending',
+  'failed',
   'missing',
-  'not-started',
 ] as const;
 
 /** Plain-language labels, kept here (not in the component) so tests can assert them. */
 export const STATUS_LABELS: Record<StatusKey, string> = {
-  'on-time': 'On time',
-  late: 'Late',
-  'in-progress': 'In progress',
+  completed: 'Completed',
+  processing: 'Processing',
+  pending: 'Pending',
+  failed: 'Failed',
   missing: 'Missing',
-  'not-started': 'Not started',
 };
+
+/** Map a raw queue state onto its status bucket. Absence of a submission is `missing`. */
+const QUEUE_STATUS_KEY: Record<SubmissionQueueStatus, StatusKey> = {
+  COMPLETED: 'completed',
+  PROCESSING: 'processing',
+  PENDING: 'pending',
+  FAILED: 'failed',
+};
+
+export function queueStatusKey(status: SubmissionQueueStatus | undefined): StatusKey {
+  return status ? QUEUE_STATUS_KEY[status] : 'missing';
+}
 
 export const HISTOGRAM_BIN_COUNT = 10;
 
@@ -174,47 +194,6 @@ export function computeBoxPlot(values: number[]): BoxPlotStats | null {
   };
 }
 
-// ─── status classification ───────────────────────────────────────────────────
-
-export type ParticipantStatusFacts = {
-  /** Problems on the assignment (the completion denominator). */
-  requiredProblemCount: number;
-  /** Problems the participant has completed (see `buildAssignmentStatistics` for the rule). */
-  completedProblemCount: number;
-  /** Any engagement at all: a submission OR a recorded grade (e.g. a manual entry). */
-  hasActivity: boolean;
-  /**
-   * When the participant finished: the latest correct submission across all problems. Only
-   * meaningful when complete; null when there is no timing evidence (e.g. the work was only
-   * ever manually graded, with no submission).
-   */
-  latestCompletionAt: Date | null;
-  /** The participant's effective due date (base date with any exception already applied). */
-  effectiveDue: Date;
-};
-
-/**
- * Classify one participant into a mutually exclusive submission status. The boundary is
- * deliberate: a submission exactly at the effective due date is on time (strict `>` for
- * late), and a future extended deadline keeps an unfinished participant in
- * not-started/in-progress rather than missing.
- */
-export function classifyParticipantStatus(facts: ParticipantStatusFacts, now: Date): StatusKey {
-  const complete =
-    facts.requiredProblemCount > 0 && facts.completedProblemCount >= facts.requiredProblemCount;
-  const pastDue = now.getTime() > facts.effectiveDue.getTime();
-
-  if (complete) {
-    const finishedLate =
-      facts.latestCompletionAt != null &&
-      facts.latestCompletionAt.getTime() > facts.effectiveDue.getTime();
-    return finishedLate ? 'late' : 'on-time';
-  }
-
-  if (!facts.hasActivity) return pastDue ? 'missing' : 'not-started';
-  return pastDue ? 'missing' : 'in-progress';
-}
-
 // ─── assembly ────────────────────────────────────────────────────────────────
 
 export type StatsProblem = {
@@ -227,64 +206,25 @@ export type StatsProblem = {
 
 export type StatsParticipant = {
   id: string;
-  /** Resolved effective due date (base + any student/group exception). */
-  effectiveDue: Date;
   /** True when a due-date exception (override) applies to this participant. */
   hasException: boolean;
   /**
    * Recorded grade points per problem id. A key is present ONLY when that problem is graded
-   * for this participant; a present value of 0 is a real zero and counts. This is
-   * authoritative for completion: a grade (e.g. a manual entry) overrides the submission
-   * signal, so a manually full-marked problem counts as complete even with no submission,
-   * and a manually zeroed one does not, even with a correct submission.
+   * for this participant; a present value of 0 is a real zero and counts. Drives the score
+   * charts (histogram, box plots), never the status chart.
    */
   problemGrades: Record<string, number>;
-  /** Latest correct-submission instant per problem id; present ONLY when a correct
-   *  submission exists for that problem. Completion fallback for problems with no grade
-   *  row, and the source of per-problem completion timing. */
-  correctAtByProblem: Record<string, Date>;
-  /** Problem ids the participant has any submission for (correct or not). */
-  submittedProblemIds: string[];
+  /**
+   * The evaluation-queue state of the participant's LATEST submission per problem id. A key
+   * is present only when a submission exists; a missing key means no submission (→ `missing`).
+   */
+  latestStatusByProblem: Record<string, SubmissionQueueStatus>;
 };
-
-/**
- * Whether a participant has completed one problem. Grade-authoritative: when a grade row
- * exists it decides (full marks = complete), so a manual grade overrides the autograder in
- * both directions. Only when a problem has no grade at all do we fall back to "a correct
- * submission exists" (covers non-autograded work graded later, or a lagging grade write).
- */
-function problemCompleted(problem: StatsProblem, participant: StatsParticipant): boolean {
-  const grade = participant.problemGrades[problem.id];
-  if (grade !== undefined) return problem.maxPoints > 0 ? grade >= problem.maxPoints : true;
-  return participant.correctAtByProblem[problem.id] !== undefined;
-}
-
-/**
- * One participant's submission status on ONE problem: the same rules as the assignment-level
- * classifier, scoped to a single problem (its own grade, its own correct-submission time,
- * and whether it has any submission), measured against the participant's effective due date.
- */
-function problemStatus(problem: StatsProblem, participant: StatsParticipant, now: Date): StatusKey {
-  const grade = participant.problemGrades[problem.id];
-  return classifyParticipantStatus(
-    {
-      requiredProblemCount: 1,
-      completedProblemCount: problemCompleted(problem, participant) ? 1 : 0,
-      // A grade (e.g. a manual entry) is engagement even with no submission.
-      hasActivity: participant.submittedProblemIds.includes(problem.id) || grade !== undefined,
-      latestCompletionAt: participant.correctAtByProblem[problem.id] ?? null,
-      effectiveDue: participant.effectiveDue,
-    },
-    now,
-  );
-}
 
 export type BuildStatisticsInput = {
   unit: 'student' | 'group';
   problems: StatsProblem[];
   participants: StatsParticipant[];
-  /** Injected for deterministic tests; the service passes the request time. */
-  now: Date;
 };
 
 export type ProblemStats = {
@@ -321,7 +261,7 @@ export type AssignmentStatistics = {
  * any test see identical results.
  */
 export function buildAssignmentStatistics(input: BuildStatisticsInput): AssignmentStatistics {
-  const { problems, participants, unit, now } = input;
+  const { problems, participants, unit } = input;
   const requiredProblemCount = problems.length;
   const totalPossible = problems.reduce((sum, p) => sum + p.maxPoints, 0);
 
@@ -348,7 +288,8 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
   const histogram = computeScoreHistogram(includedPercentages);
 
   // One entry per problem: its score box plot AND its own submission-status breakdown
-  // (measured per problem, not per assignment), rendered in assignment order.
+  // (the queue state of each participant's latest submission for that problem, else
+  // "missing"), rendered in assignment order.
   const problemStats: ProblemStats[] = [...problems]
     .sort((a, b) => a.order - b.order)
     .map((p) => {
@@ -356,7 +297,7 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
       let gradedCount = 0;
       const statusCounts = new Map<StatusKey, number>(STATUS_ORDER.map((k) => [k, 0]));
       for (const part of participants) {
-        const key = problemStatus(p, part, now);
+        const key = queueStatusKey(part.latestStatusByProblem[p.id]);
         statusCounts.set(key, (statusCounts.get(key) ?? 0) + 1);
 
         const grade = part.problemGrades[p.id];

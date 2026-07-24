@@ -6,15 +6,12 @@ import {
   meanOf,
   computeScoreHistogram,
   computeBoxPlot,
-  classifyParticipantStatus,
+  queueStatusKey,
   buildAssignmentStatistics,
   STATUS_ORDER,
   type StatsParticipant,
   type StatsProblem,
 } from './assignment-statistics';
-
-const at = (iso: string) => new Date(iso);
-const DUE = at('2026-08-10T23:59:00.000Z');
 
 describe('assignmentPercentage', () => {
   it('divides earned by possible', () => {
@@ -115,76 +112,15 @@ describe('computeBoxPlot (Tukey)', () => {
   });
 });
 
-describe('classifyParticipantStatus', () => {
-  const base = {
-    requiredProblemCount: 2,
-    completedProblemCount: 0,
-    hasActivity: false,
-    latestCompletionAt: null as Date | null,
-    effectiveDue: DUE,
-  };
-  const before = at('2026-08-01T00:00:00.000Z');
-  const after = at('2026-08-20T00:00:00.000Z');
-
-  it('all problems completed before due -> on time', () => {
-    expect(
-      classifyParticipantStatus(
-        { ...base, completedProblemCount: 2, hasActivity: true, latestCompletionAt: before },
-        after,
-      ),
-    ).toBe('on-time');
+describe('queueStatusKey', () => {
+  it('maps each queue state onto its bucket', () => {
+    expect(queueStatusKey('COMPLETED')).toBe('completed');
+    expect(queueStatusKey('PROCESSING')).toBe('processing');
+    expect(queueStatusKey('PENDING')).toBe('pending');
+    expect(queueStatusKey('FAILED')).toBe('failed');
   });
-  it('completion exactly at the due date -> on time (boundary)', () => {
-    expect(
-      classifyParticipantStatus(
-        { ...base, completedProblemCount: 2, hasActivity: true, latestCompletionAt: DUE },
-        after,
-      ),
-    ).toBe('on-time');
-  });
-  it('completed but final submission after due -> late', () => {
-    expect(
-      classifyParticipantStatus(
-        { ...base, completedProblemCount: 2, hasActivity: true, latestCompletionAt: after },
-        after,
-      ),
-    ).toBe('late');
-  });
-  it('completed with no completion timestamp (only manually graded) -> on time', () => {
-    // A manual grade with no submission has no late evidence, so it is not late.
-    expect(
-      classifyParticipantStatus(
-        { ...base, completedProblemCount: 2, hasActivity: true, latestCompletionAt: null },
-        after,
-      ),
-    ).toBe('on-time');
-  });
-  it('partial submission before due -> in progress', () => {
-    expect(
-      classifyParticipantStatus({ ...base, completedProblemCount: 1, hasActivity: true }, before),
-    ).toBe('in-progress');
-  });
-  it('partial submission after due -> missing', () => {
-    expect(
-      classifyParticipantStatus({ ...base, completedProblemCount: 1, hasActivity: true }, after),
-    ).toBe('missing');
-  });
-  it('no activity before due -> not started', () => {
-    expect(classifyParticipantStatus(base, before)).toBe('not-started');
-  });
-  it('no activity after due -> missing', () => {
-    expect(classifyParticipantStatus(base, after)).toBe('missing');
-  });
-  it('extended (future) deadline keeps an unfinished participant out of missing', () => {
-    const future = at('2026-09-30T23:59:00.000Z');
-    // "now" is past the base due but before this participant's extended due.
-    expect(
-      classifyParticipantStatus(
-        { ...base, completedProblemCount: 1, hasActivity: true, effectiveDue: future },
-        after,
-      ),
-    ).toBe('in-progress');
-    expect(classifyParticipantStatus({ ...base, effectiveDue: future }, after)).toBe('not-started');
+  it('treats an absent submission as missing', () => {
+    expect(queueStatusKey(undefined)).toBe('missing');
   });
 });
 
@@ -193,15 +129,11 @@ describe('buildAssignmentStatistics', () => {
     { id: 'p1', title: 'Problem 1', order: 0, maxPoints: 10 },
     { id: 'p2', title: 'Problem 2', order: 1, maxPoints: 10 },
   ];
-  const now = at('2026-08-20T00:00:00.000Z'); // past the base due
-  const onTimeAt = at('2026-08-05T00:00:00.000Z');
 
   const mkParticipant = (over: Partial<StatsParticipant> & { id: string }): StatsParticipant => ({
-    effectiveDue: DUE,
     hasException: false,
     problemGrades: {},
-    correctAtByProblem: {},
-    submittedProblemIds: [],
+    latestStatusByProblem: {},
     ...over,
   });
 
@@ -222,7 +154,7 @@ describe('buildAssignmentStatistics', () => {
       // nothing graded -> excluded
       mkParticipant({ id: 's4' }),
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, now });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
     expect(stats.histogram.includedCount).toBe(2);
     expect(stats.histogram.excludedCount).toBe(2);
     // s1 -> 100% (last bin), s2 -> 0% (first bin)
@@ -237,7 +169,7 @@ describe('buildAssignmentStatistics', () => {
       mkParticipant({ id: 's2', problemGrades: { p1: 0 } }), // p1 0%, p2 ungraded
       mkParticipant({ id: 's3' }), // nothing graded
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, now });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
     const p1 = stats.problems.find((p) => p.id === 'p1')!;
     const p2 = stats.problems.find((p) => p.id === 'p2')!;
     expect(p1.gradedCount).toBe(2);
@@ -253,67 +185,55 @@ describe('buildAssignmentStatistics', () => {
       { id: 'b', title: 'B', order: 1, maxPoints: 10 },
       { id: 'a', title: 'A', order: 0, maxPoints: 10 },
     ];
-    const stats = buildAssignmentStatistics({
-      unit: 'student',
-      problems: unordered,
-      participants: [],
-      now,
-    });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems: unordered, participants: [] });
     expect(stats.problems.map((p) => p.id)).toEqual(['a', 'b']);
   });
 
-  it('classifies status per problem, in the fixed order, summing to the participant count', () => {
-    const future = at('2026-09-30T00:00:00.000Z');
+  it('reports the per-problem queue status, in order, summing to the participant count', () => {
     const participants = [
-      // a (due 08-10, past): p1 solved on time; p2 untouched -> p1 on-time, p2 missing
-      mkParticipant({ id: 'a', correctAtByProblem: { p1: onTimeAt }, submittedProblemIds: ['p1'] }),
-      // b (due 08-10, past): p1 solved after due; p2 untouched -> p1 late, p2 missing
-      mkParticipant({ id: 'b', correctAtByProblem: { p1: now }, submittedProblemIds: ['p1'] }),
-      // c (extended future due): p1 attempted-unsolved; p2 untouched -> p1 in-progress, p2 not-started
-      mkParticipant({ id: 'c', effectiveDue: future, submittedProblemIds: ['p1'] }),
+      // p1 evaluated, p2 still queued
+      mkParticipant({ id: 'a', latestStatusByProblem: { p1: 'COMPLETED', p2: 'PENDING' } }),
+      // p1 being evaluated, p2 failed
+      mkParticipant({ id: 'b', latestStatusByProblem: { p1: 'PROCESSING', p2: 'FAILED' } }),
+      // nothing submitted at all -> both missing
+      mkParticipant({ id: 'c' }),
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, now });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
 
-    // Every problem reports the full ordered status list, and its counts sum to 3.
     for (const p of stats.problems) {
       expect(p.status.map((s) => s.key)).toEqual([...STATUS_ORDER]);
       expect(p.status.reduce((n, s) => n + s.count, 0)).toBe(3);
     }
 
     const p1 = statusOf(stats, 'p1');
-    expect(p1['on-time']).toBe(1); // a
-    expect(p1['late']).toBe(1); // b
-    expect(p1['in-progress']).toBe(1); // c
+    expect(p1['completed']).toBe(1); // a
+    expect(p1['processing']).toBe(1); // b
+    expect(p1['missing']).toBe(1); // c
 
     const p2 = statusOf(stats, 'p2');
-    expect(p2['missing']).toBe(2); // a, b: no activity, past due
-    expect(p2['not-started']).toBe(1); // c: no activity, future due
+    expect(p2['pending']).toBe(1); // a
+    expect(p2['failed']).toBe(1); // b
+    expect(p2['missing']).toBe(1); // c
   });
 
-  it('treats a manual full grade with no submission as complete and on time (per problem)', () => {
-    // The user case: a TA enters full marks and there is no submission at all. Each problem
-    // must count as on time, never missing, even though the due date has passed.
-    const participants = [mkParticipant({ id: 'manual', problemGrades: { p1: 10, p2: 10 } })];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, now });
-    expect(statusOf(stats, 'p1')['on-time']).toBe(1);
-    expect(statusOf(stats, 'p1')['missing']).toBe(0);
-    expect(statusOf(stats, 'p2')['on-time']).toBe(1);
-  });
-
-  it('lets a manual zero override a correct submission (grade wins, per problem)', () => {
-    // A correct submission exists for p1, but a TA manually zeroed it. The grade is
-    // authoritative, so p1 is not complete -> missing past due.
+  it('uses the latest submission and counts an absent one as missing', () => {
     const participants = [
-      mkParticipant({
-        id: 'zeroed',
-        problemGrades: { p1: 0 },
-        correctAtByProblem: { p1: onTimeAt },
-        submittedProblemIds: ['p1'],
-      }),
+      mkParticipant({ id: 's1', latestStatusByProblem: { p1: 'FAILED' } }), // p1 failed, p2 missing
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, now });
-    expect(statusOf(stats, 'p1')['on-time']).toBe(0);
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
+    expect(statusOf(stats, 'p1')['failed']).toBe(1);
+    expect(statusOf(stats, 'p1')['missing']).toBe(0);
+    expect(statusOf(stats, 'p2')['missing']).toBe(1);
+  });
+
+  it('status is independent of grades (a graded problem with no submission is missing)', () => {
+    // A manual grade does not create a submission, so the queue status stays "missing".
+    const participants = [mkParticipant({ id: 'manual', problemGrades: { p1: 10, p2: 10 } })];
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
     expect(statusOf(stats, 'p1')['missing']).toBe(1);
+    expect(statusOf(stats, 'p1')['completed']).toBe(0);
+    // ...but the grade still lands in the histogram.
+    expect(stats.histogram.includedCount).toBe(1);
   });
 
   it('counts due-date exceptions among participants', () => {
@@ -322,7 +242,7 @@ describe('buildAssignmentStatistics', () => {
       mkParticipant({ id: 's2', hasException: true }),
       mkParticipant({ id: 's3' }),
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, now });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
     expect(stats.exceptionCount).toBe(2);
     expect(stats.participantCount).toBe(3);
   });
@@ -332,7 +252,6 @@ describe('buildAssignmentStatistics', () => {
       unit: 'group',
       problems,
       participants: [mkParticipant({ id: 'g1', problemGrades: { p1: 10, p2: 10 } })],
-      now,
     });
     expect(groupStats.unit).toBe('group');
     expect(groupStats.participantCount).toBe(1);

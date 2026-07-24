@@ -154,7 +154,7 @@ export function AssignmentStatisticsPanel() {
         <StatCard
           className="lg:col-span-5"
           title="Submission status"
-          description={`For each problem, where the ${statusTotal} ${unitPlural} stand against the due date.`}
+          description={`For each problem, the evaluation state of each of the ${statusTotal} ${unitPlural}' latest submission.`}
         >
           {statusTotal > 0 && stats.problems.length > 0 ? (
             <SubmissionStatusBar

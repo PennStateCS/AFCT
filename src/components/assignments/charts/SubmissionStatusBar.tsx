@@ -20,15 +20,15 @@ type Props = {
 };
 
 // Semantic-but-restrained colours from the app's badge palette (full light/dark support).
-// on-time = positive, late = warning, in-progress = informational, missing = destructive,
-// not-started = muted. Colour is never the only channel: labels sit in the legend and each
-// segment carries an accessible name.
+// completed = positive, processing = informational, pending = warning (in the queue),
+// failed = destructive, missing = muted. Colour is never the only channel: labels sit in
+// the legend and each segment carries an accessible name.
 const STATUS_STYLE: Record<StatusKey, string> = {
-  'on-time': 'bg-badge-success',
-  late: 'bg-badge-warning',
-  'in-progress': 'bg-badge-info',
-  missing: 'bg-badge-danger',
-  'not-started': 'bg-badge-neutral',
+  completed: 'bg-badge-success',
+  processing: 'bg-badge-info',
+  pending: 'bg-badge-warning',
+  failed: 'bg-badge-danger',
+  missing: 'bg-badge-neutral',
 };
 
 function StatusRow({
