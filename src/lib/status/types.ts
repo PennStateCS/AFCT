@@ -219,8 +219,46 @@ export type RateLimitEntry = {
   lastAttemptAt: number;
 };
 
+/** Where an address sits in the address space, which is decided without any lookup. */
+export type IpKind = 'public' | 'private' | 'loopback' | 'link-local' | 'shared' | 'unknown';
+
+/** How the reverse-DNS lookup went, so the UI can say "no name" rather than stay blank. */
+export type HostnameLookup = 'ok' | 'none' | 'skipped' | 'failed';
+
+/**
+ * What AFCT already knows about an address from its own activity log: whether it is a
+ * familiar address and roughly how busy. This is the signal that separates "the computer
+ * lab" from "somewhere that has never been seen before".
+ */
+export type IpKnownActivity = {
+  /** Days of log searched. */
+  windowDays: number;
+  eventCount: number;
+  accountCount: number;
+  /** A small sample of the accounts seen, for recognising a shared address. */
+  accounts: string[];
+  firstSeen: number | null;
+  lastSeen: number | null;
+  /** True when the scan cap was hit, so the counts are a floor rather than a total. */
+  truncated: boolean;
+};
+
+export type IpDetails = {
+  version: 4 | 6 | null;
+  kind: IpKind;
+  /** Plain-language form of `kind`, e.g. "Private network address". */
+  kindLabel: string;
+  hostname: string | null;
+  hostnameLookup: HostnameLookup;
+  /** Null when the activity-log lookup could not run. */
+  knownActivity: IpKnownActivity | null;
+};
+
+/** A restricted address plus everything that could be worked out about it. */
+export type RateLimitedAddress = RateLimitEntry & { details: IpDetails };
+
 export type RateLimitsStatusResponse = {
-  entries: RateLimitEntry[];
+  entries: RateLimitedAddress[];
   /** Epoch ms the list was taken, so the client can render "expires in" without clock skew. */
   generatedAt: number;
 };

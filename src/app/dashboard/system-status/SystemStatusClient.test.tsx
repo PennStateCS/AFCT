@@ -54,6 +54,22 @@ const rateLimits = {
       attempts: 21,
       attemptsWhileRestricted: 4,
       lastAttemptAt: NOW - 30_000,
+      details: {
+        version: 4,
+        kind: 'public',
+        kindLabel: 'Public internet address',
+        hostname: 'lab-12.cs.example.edu',
+        hostnameLookup: 'ok',
+        knownActivity: {
+          windowDays: 30,
+          eventCount: 482,
+          accountCount: 12,
+          accounts: ['a@example.edu', 'b@example.edu'],
+          firstSeen: NOW - 20 * 24 * 3600_000,
+          lastSeen: NOW - 30_000,
+          truncated: false,
+        },
+      },
     },
   ],
 };
@@ -162,6 +178,18 @@ describe('SystemStatusClient', () => {
     // Both "restricted since" and "expires" are shown relative to the server's clock.
     expect(screen.getByText('5 minutes ago')).toBeInTheDocument();
     expect(screen.getByText('in 25 minutes')).toBeInTheDocument();
+  });
+
+  it('shows what is known about the address itself', async () => {
+    localStorage.setItem('afct.systemStatusTab', 'rate-limits');
+    renderWithClient(<SystemStatusClient />);
+
+    // Reverse-DNS name and classification, which is what identifies a campus address.
+    expect(await screen.findByText('lab-12.cs.example.edu')).toBeInTheDocument();
+    expect(screen.getByText('Public internet address (IPv4)')).toBeInTheDocument();
+    // And what AFCT's own log already knows about it.
+    expect(screen.getByText('12 accounts (shared address)')).toBeInTheDocument();
+    expect(screen.getByText('482 events in 30 days')).toBeInTheDocument();
   });
 
   it('clears one rate limit only after the administrator confirms', async () => {

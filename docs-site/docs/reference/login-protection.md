@@ -86,6 +86,19 @@ attempts have been counted and refused, and when it expires. An administrator ca
 one early (`POST /api/admin/status/rate-limits/clear`), which is logged at `SECURITY`
 severity with the actor, the address, and what was in force when it was cleared.
 
+Each address is enriched by `src/lib/status/rate-limits.ts` from three local sources: a
+pure offline classification (`ip-classify.ts`), a reverse-DNS name from the resolver the
+server already uses (attempted only for public and carrier-shared addresses, capped by an
+800 ms timeout and a bounded 10-minute cache), and a single grouped `ActivityLog` query
+for the last 30 days served by the `[ipAddress, timestamp]` index. Enrichment is capped
+at 25 addresses per refresh, and a failed activity lookup degrades to `knownActivity:
+null` rather than emptying the panel.
+
+No third-party geolocation or WHOIS service is called, deliberately: it would send
+visitors' addresses to an outside company, require egress plus an API key, and fail on an
+air-gapped install, all for a city name that answers a less useful question than "have we
+seen this address before".
+
 Only the IP-keyed scopes are exposed. The buckets keyed on an email address or a user id
 (`login:account`, `signup:identifier`, `avatar-upload`) are deliberately absent, so the
 tab cannot be used to learn which accounts exist. Ending an account lock is a separate

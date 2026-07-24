@@ -43,6 +43,16 @@ The **Rate Limits** tab lists every address currently being refused, and for eac
 - **recent activity**: how many attempts were counted, how many have been turned away since, and the time of the most recent one;
 - when the restriction **expires** on its own.
 
+### What AFCT can tell you about the address
+
+Alongside each restriction, the tab shows whatever it could establish about the address itself, which is usually enough to answer "is this us?":
+
+- the **reverse-DNS name**, if the address has one. A name like `lab-12.cs.example.edu` identifies a campus machine at a glance. Many addresses have no name, and that is normal.
+- **what kind of address it is**: a public internet address, a private network address, this server itself, or a carrier-shared address (one that many mobile subscribers sit behind, so restricting it affects more people than usual).
+- **Seen before**: whether this address appears in AFCT's own activity log in the last 30 days, how many accounts have used it, how busy it has been, and when it was last seen. An address with a dozen accounts behind it is a shared one, a lab or an office, and is the strongest sign that a restriction is catching innocent people.
+
+AFCT does not look addresses up with any outside service, so nothing about your visitors is sent anywhere, and this works the same on an installation with no internet access. That also means there is no city, country, or internet-provider name to show: the activity log is the better answer to the question you are actually asking.
+
 Two things to keep in mind when reading the list. Restrictions are held in the running application's memory, so the list covers the instance you are connected to and empties whenever AFCT restarts. And a restriction applies to an address, not a person: a computer lab, a library, or a campus network can put dozens of students behind one address.
 
 ### Clear a rate limit
