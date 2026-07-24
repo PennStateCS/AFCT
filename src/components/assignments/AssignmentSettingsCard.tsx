@@ -15,7 +15,7 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { AssignmentWizardFormSchema } from '@/schemas/assignment';
-import { toDateTimeLocalInTimeZone } from '@/lib/date-utils';
+import { toDateTimeLocalInTimeZone } from '@/lib/date-convert';
 
 
 type AssigneeApi = {

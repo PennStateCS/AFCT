@@ -16,7 +16,7 @@ vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'America/New_York' }),
 }));
 
-vi.mock('@/lib/date', () => ({
+vi.mock('@/lib/date-format', () => ({
   formatDateTimeInTimeZone: (value: Date | string) =>
     typeof value === 'string' ? value : value.toISOString(),
 }));

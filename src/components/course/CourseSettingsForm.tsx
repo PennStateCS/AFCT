@@ -17,7 +17,7 @@ import { CourseFormSchema } from '@/schemas/course';
 import type { EnrolledUser } from '@/lib/course-utils';
 import { apiPaths } from '@/lib/api-paths';
 import { cn } from '@/lib/utils';
-import { toDateTimeLocalInTimeZone } from '@/lib/date-utils';
+import { toDateTimeLocalInTimeZone } from '@/lib/date-convert';
 
 
 // RHF form state before transforms (strings for datetime-local)

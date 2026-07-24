@@ -11,7 +11,7 @@ import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
-import { formatDateInTimeZone } from '@/lib/date';
+import { formatDateInTimeZone } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
 import {
   DropdownMenu,

@@ -14,7 +14,7 @@ import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDeadlineDual } from '@/lib/date';
+import { formatDeadlineDual } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';

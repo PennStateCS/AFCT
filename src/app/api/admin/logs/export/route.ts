@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { DownloadLogsSchema } from '@/schemas/log';
 import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
 import { withAdminAuth } from '@/lib/api/with-auth';
-import { parseValidDate } from '@/lib/date';
+import { parseValidDate } from '@/lib/date-format';
 import type { Prisma } from '@prisma/client';
 
 // Upper bound so a single export can't try to page the entire table into memory.

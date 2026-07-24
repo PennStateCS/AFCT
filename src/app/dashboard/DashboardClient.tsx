@@ -9,7 +9,7 @@ import { getCourseStatusTag } from '@/lib/course-status';
 import type { EnrolledUser } from '@/lib/course-utils';
 import { formatInstructorNames, getStudentCount, getTAs } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
 
 type DashboardCourse = {
   id: string;

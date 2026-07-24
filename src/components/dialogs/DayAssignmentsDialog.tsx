@@ -18,7 +18,7 @@ import {
   formatDateInTimeZone,
   formatDateTimeInTimeZone,
   formatWeekdayInTimeZone,
-} from '@/lib/date';
+} from '@/lib/date-format';
 import type { CalendarAssignment } from '@/lib/calendar-shared';
 
 type Props = {

@@ -9,8 +9,8 @@ import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { createWithUniqueCourseCode } from '@/lib/course-code';
-import { parseValidDate } from '@/lib/date';
-import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { parseValidDate } from '@/lib/date-format';
+import { toDateTimeInTimezone } from '@/lib/date-convert';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma, Problem } from '@prisma/client';
 

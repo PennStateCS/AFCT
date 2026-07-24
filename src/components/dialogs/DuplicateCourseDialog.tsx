@@ -29,7 +29,7 @@ import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
 import { CourseDateTimeField } from './CourseDateTimeField';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
-import { formatDateTimeLocal, toDateTimeLocalInTimeZone } from '@/lib/date-utils';
+import { formatDateTimeLocal, toDateTimeLocalInTimeZone } from '@/lib/date-convert';
 
 
 type FormValues = z.input<typeof DuplicateFormSchema>;

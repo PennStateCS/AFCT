@@ -8,7 +8,7 @@ import { getInitials } from '@/app/utils/initials';
 import { CategoryBadge } from '@/components/ui/category-badge';
 import { Clock, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
 
 export interface ActivityUser {

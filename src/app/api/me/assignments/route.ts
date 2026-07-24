@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
-import { toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toEndOfDayInTimezone } from '@/lib/date-convert';
 import { getAssignmentsForUserRange, resolveUserTimezone } from '@/lib/calendar-assignments';
 import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';

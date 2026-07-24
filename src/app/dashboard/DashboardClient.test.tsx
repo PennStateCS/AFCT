@@ -8,7 +8,7 @@ import DashboardClient from './DashboardClient';
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
-vi.mock('@/lib/date', () => ({ formatDateTimeInTimeZone: () => 'DATE' }));
+vi.mock('@/lib/date-format', () => ({ formatDateTimeInTimeZone: () => 'DATE' }));
 vi.mock('@/lib/course-status', () => ({
   getCourseStatusTag: () => ({ status: 'Open', variant: 'success' }),
 }));

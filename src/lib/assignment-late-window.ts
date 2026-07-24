@@ -1,4 +1,4 @@
-import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone } from '@/lib/date-convert';
 
 export type LateSubmissionStateResult =
   | { ok: true; allowLateSubmissions: boolean; lateCutoff: Date | null }

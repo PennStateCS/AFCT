@@ -7,7 +7,7 @@ import { isAdmin, canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { apiError } from '@/lib/api/http';
-import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone } from '@/lib/date-convert';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';

@@ -31,7 +31,7 @@ import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
 import { CourseDateTimeField } from './CourseDateTimeField';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
-import { formatDateTimeLocal } from '@/lib/date-utils';
+import { formatDateTimeLocal } from '@/lib/date-convert';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
 type FormValues = z.input<typeof CreateCourseFormSchema>;

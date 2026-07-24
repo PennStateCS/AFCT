@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { FileText } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { cn } from '@/lib/utils';
 
 type DueDateAssignment = {

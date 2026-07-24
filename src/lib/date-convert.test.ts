@@ -4,7 +4,7 @@ import {
   toDateTimeInTimezone,
   toDateTimeLocalInTimeZone,
   formatDateTimeLocal,
-} from './date-utils';
+} from './date-convert';
 
 describe('date-utils', () => {
   describe('toEndOfDayInTimezone', () => {
