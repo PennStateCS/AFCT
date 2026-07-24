@@ -29,7 +29,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('studentId=s1'),
 }));
 
-vi.mock('@/lib/useEmptyStringSymbol', () => ({
+vi.mock('@/hooks/use-empty-string-symbol', () => ({
   useEmptyStringSymbol: () => '∅',
 }));
 

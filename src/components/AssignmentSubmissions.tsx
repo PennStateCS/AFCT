@@ -23,7 +23,7 @@ import {
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
-import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
+import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { useReviewData, type ReviewDataResponse } from './useReviewData';
 

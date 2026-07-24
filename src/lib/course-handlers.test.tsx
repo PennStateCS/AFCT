@@ -17,7 +17,7 @@ const utils = vi.hoisted(() => ({
   updateCourseArchiveStatus: vi.fn(),
   saveCourse: vi.fn(),
 }));
-vi.mock('@/lib/course-utils', () => utils);
+vi.mock('@/lib/course-mutations', () => utils);
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ showToast: toastMock }));

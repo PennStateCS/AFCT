@@ -31,7 +31,7 @@ import {
 } from '@/schemas/problem';
 import { showToast } from '@/lib/toast';
 import FileUploadInput from '@/components/FileUploadInput';
-import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
+import { useMaxUploadSize } from '@/hooks/use-max-upload-size';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';

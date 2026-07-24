@@ -65,6 +65,11 @@ Sharing a topic is not a reason. That is what the prefix is for, and it is why t
 helpers are `course-aggregates.ts` and `course-serialize.ts` rather than a `course/`
 folder.
 
+Name the module after what it does, not after being a helper. `src/lib/utils.ts` is the
+one exception and holds only `cn`: shadcn/ui expects its class merger at `@/lib/utils`,
+every vendored component imports it from there, and `npx shadcn add` regenerates that
+path. Do not add anything else to it.
+
 Two rules that apply either way:
 
 - **No `index.ts` barrels in `src/lib/`.** A barrel re-exporting a domain would put
