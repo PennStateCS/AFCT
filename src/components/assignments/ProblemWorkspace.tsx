@@ -1,19 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, File, FileText, MessageSquare, RotateCcw } from 'lucide-react';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Download, FileText, MessageSquare, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FeedbackDialog } from '@/components/dialogs/FeedbackDialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { DataTable } from '@/components/ui/data-table';
 import ProblemHeader from '@/components/ProblemHeader';
 import ProblemGradeForm from '@/components/ProblemGradeForm';
 import WorkspacePanel from '@/components/WorkspacePanel';
@@ -24,7 +17,12 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import type { SubmissionStatusFilter } from '@/lib/submission-status-filter';
 import { STATUS_FILTER_OPTIONS, filterSubmissions } from '@/lib/submission-status-filter';
 import { apiPaths } from '@/lib/api-paths';
-import { statusToneClass, getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
+import {
+  statusToneClass,
+  getTimingStatusChip,
+  getReviewStatusChip,
+  type StatusChip,
+} from '@/lib/submission-status';
 import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
@@ -124,8 +122,6 @@ export default function ProblemWorkspace({
   submissionsLoading = false,
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
-  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
-  const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
   const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
   // Render each submission's date/time in the course/effective timezone (not the
   // reviewer's browser locale), so the time shown is the one that student submitted at.
@@ -175,28 +171,157 @@ export default function ProblemWorkspace({
     link.click();
   };
 
-  const renderStatusCell = (submission: ProblemSubmission) => {
-    const timingStatus = getTimingStatusChip(submission, hasValidDueDate, dueDate);
-    const reviewStatus = getReviewStatusChip(submission);
+  // A single status chip (dot + label). Status (timing) and Result (evaluator verdict)
+  // each render one of these in their own column.
+  const renderStatusChip = (chip: StatusChip) => (
+    <span className="inline-flex items-center gap-2 text-xs font-medium" title={chip.title}>
+      <span
+        className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[chip.tone]}`}
+        aria-hidden="true"
+      />
+      <span>{chip.label}</span>
+    </span>
+  );
 
-    return (
-      <div className="flex flex-col gap-1">
-        {[timingStatus, reviewStatus].map((chip) => (
-          <span
-            key={chip.label}
-            className="inline-flex items-center gap-2 text-xs font-medium"
-            title={chip.title}
-          >
-            <span
-              className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[chip.tone]}`}
-              aria-hidden="true"
-            />
-            <span>{chip.label}</span>
-          </span>
-        ))}
-      </div>
-    );
-  };
+  // Built inline so each cell's action buttons capture the current handlers/flags. The
+  // status-chip filter above the table stays the toolbar, so `visibleSubmissions` is
+  // already filtered; DataTable adds sortable headers, pagination and the mobile cards.
+  const submissionColumns: ColumnDef<ProblemSubmission>[] = [
+    {
+      id: 'submitted',
+      header: 'Submitted',
+      accessorFn: (s) => new Date(s.submittedAt).getTime(),
+      cell: ({ row }) => {
+        const submission = row.original;
+        const submittedAt = new Date(submission.submittedAt);
+        const isLate =
+          submission.status?.toLowerCase() === 'late' ||
+          (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
+        return (
+          <div className="flex flex-col gap-1">
+            <span>{formatDateInTimeZone(submittedAt, timezone)}</span>
+            <span className="text-muted-foreground text-xs">
+              {formatTimeInTimeZone(submittedAt, timezone, hour12)}
+            </span>
+            {isLate ? (
+              <Badge
+                variant="secondary"
+                className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900 shadow-sm"
+              >
+                Late
+              </Badge>
+            ) : null}
+          </div>
+        );
+      },
+      meta: { priority: 1 },
+    },
+    ...(showSubmitter
+      ? [
+          {
+            id: 'submittedBy',
+            header: 'Submitted by',
+            accessorFn: (s: ProblemSubmission) =>
+              typeof s.submittedBy === 'string' ? s.submittedBy : '',
+            cell: ({ row }: { row: { original: ProblemSubmission } }) =>
+              typeof row.original.submittedBy === 'string' ? row.original.submittedBy : '—',
+            meta: { priority: 2 },
+          } as ColumnDef<ProblemSubmission>,
+        ]
+      : []),
+    {
+      id: 'status',
+      header: 'Status',
+      enableSorting: false,
+      cell: ({ row }) =>
+        renderStatusChip(getTimingStatusChip(row.original, hasValidDueDate, dueDate)),
+      meta: { priority: 1 },
+    },
+    {
+      id: 'result',
+      header: 'Result',
+      enableSorting: false,
+      cell: ({ row }) => renderStatusChip(getReviewStatusChip(row.original)),
+      meta: { priority: 1 },
+    },
+    {
+      id: 'feedback',
+      header: 'Feedback',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const feedback = row.original.feedback;
+        if (!feedback) return <span className="text-muted-foreground">—</span>;
+        // TableCell bakes in whitespace-nowrap; override it here so long evaluator
+        // output wraps (and keeps its own line breaks) inside a bounded width.
+        return (
+          <div className="max-w-[28rem] text-xs whitespace-pre-wrap break-words">
+            {String(feedback)}
+          </div>
+        );
+      },
+      meta: { priority: 2 },
+    },
+    {
+      id: 'file',
+      header: 'File',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const submission = row.original;
+        if (!submission.fileName) return <span className="text-muted-foreground">—</span>;
+        return (
+          <div className="flex items-center gap-2">
+            {/* Click the name to preview; the icon downloads. */}
+            <button
+              type="button"
+              onClick={() => onViewSubmission(submission)}
+              className="break-all text-blue-600 hover:underline"
+              title={`Preview ${submission.originalFileName || 'submission'}`}
+            >
+              {submission.originalFileName || submission.fileName}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDownload(submission)}
+              className="text-muted-foreground hover:text-foreground shrink-0"
+              title={`Download ${submission.originalFileName || 'submission'}`}
+              aria-label={`Download ${submission.originalFileName || 'submission'}`}
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        );
+      },
+      meta: { priority: 2 },
+    },
+    {
+      id: 'manage',
+      header: 'Manage',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const submission = row.original;
+        const pendingOrProcessing =
+          submission.status?.toLowerCase() === 'pending' ||
+          submission.status?.toLowerCase() === 'processing';
+        return (
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pendingOrProcessing}
+              onClick={() => onRerunSubmission?.(submission)}
+              title="Rerun submission"
+              aria-label="Rerun submission"
+              className="h-8 w-8 p-0"
+              hidden={!isPrivilegedUser}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      },
+      meta: { priority: 1 },
+    },
+  ];
 
   return (
     <div className="space-y-4 print:space-y-2">
@@ -306,134 +431,19 @@ export default function ProblemWorkspace({
                   </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-md border">
-                  <Table className="text-sm">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="px-2 py-1">Submitted</TableHead>
-                        {showSubmitter ? (
-                          <TableHead className="px-2 py-1">Submitted by</TableHead>
-                        ) : null}
-                        <TableHead className="px-2 py-1">Status</TableHead>
-                        <TableHead className="px-2 py-1">File</TableHead>
-                        <TableHead className="px-2 py-1">Manage</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {visibleSubmissions.length === 0 ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={showSubmitter ? 5 : 4}
-                            className="text-muted-foreground py-6 text-center text-sm"
-                          >
-                            No submissions match the selected filter.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        visibleSubmissions.map((submission) => {
-                          const submittedAt = new Date(submission.submittedAt);
-                          const isLate =
-                            submission.status?.toLowerCase() === 'late' ||
-                            (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
-                          return (
-                            <TableRow key={submission.id} className="hover:bg-transparent">
-                              <TableCell className="p-1 align-top">
-                                <div className="flex flex-col gap-1">
-                                  <span>{formatDateInTimeZone(submittedAt, timezone)}</span>
-                                  <span className="text-muted-foreground text-xs">
-                                    {formatTimeInTimeZone(submittedAt, timezone, hour12)}
-                                  </span>
-                                  {isLate ? (
-                                    <Badge
-                                      variant="secondary"
-                                      className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900 shadow-sm"
-                                    >
-                                      Late
-                                    </Badge>
-                                  ) : null}
-                                </div>
-                              </TableCell>
-                              {showSubmitter ? (
-                                <TableCell className="p-1 align-top whitespace-nowrap">
-                                  {typeof submission.submittedBy === 'string'
-                                    ? submission.submittedBy
-                                    : '—'}
-                                </TableCell>
-                              ) : null}
-                              <TableCell className="p-1 align-top">
-                                {renderStatusCell(submission)}
-                              </TableCell>
-                              <TableCell className="p-1 align-top">
-                                {submission.fileName ? (
-                                  <div className="flex items-center gap-2">
-                                    {/* Click the name to preview; the icon downloads. */}
-                                    <button
-                                      type="button"
-                                      onClick={() => onViewSubmission(submission)}
-                                      className="break-all text-blue-600 hover:underline"
-                                      title={`Preview ${submission.originalFileName || 'submission'}`}
-                                    >
-                                      {submission.originalFileName || submission.fileName}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDownload(submission)}
-                                      className="text-muted-foreground hover:text-foreground shrink-0"
-                                      title={`Download ${submission.originalFileName || 'submission'}`}
-                                      aria-label={`Download ${submission.originalFileName || 'submission'}`}
-                                    >
-                                      <Download className="h-4 w-4" aria-hidden="true" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="text-muted-foreground">—</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="p-1 align-top">
-                                <div className="flex items-center gap-2 whitespace-nowrap">
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => {
-                                      setActiveFeedback(String(submission.feedback));
-                                      setFeedbackDialogOpen(true);
-                                    }}
-                                    title="View feedback"
-                                    aria-label="View submission feedback"
-                                    className="h-8 w-8 p-0"
-                                    disabled={
-                                      !submission.feedback ||
-                                      submission.status?.toLowerCase() === 'pending' ||
-                                      submission.status?.toLowerCase() === 'processing'
-                                    }
-                                  >
-                                    <File className="h-4 w-4" />
-                                  </Button>
-
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={
-                                      submission.status?.toLowerCase() === 'pending' ||
-                                      submission.status?.toLowerCase() === 'processing'
-                                    }
-                                    onClick={() => onRerunSubmission?.(submission)}
-                                    title="Rerun submission"
-                                    aria-label="Rerun submission"
-                                    className="h-8 w-8 p-0"
-                                    hidden={!isPrivilegedUser}
-                                  >
-                                    <RotateCcw className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                <DataTable
+                  columns={submissionColumns}
+                  data={visibleSubmissions}
+                  storageKey="problem-submissions"
+                  tableLabel="Submissions"
+                  // The status-chip filter above is the toolbar for this table, so hide
+                  // DataTable's own search/filter/columns/export controls.
+                  showToolbar={false}
+                  defaultSorting={[{ id: 'submitted', desc: true }]}
+                  emptyTitle="No submissions match the selected filter"
+                  emptyDescription="Adjust the status filters above to see more."
+                  emptyIcon={FileText}
+                />
               </div>
             ) : (
               <div className="text-muted-foreground space-y-2 rounded-md border border-dashed p-4 text-center text-sm">
@@ -464,11 +474,6 @@ export default function ProblemWorkspace({
             )}
           </WorkspacePanel>
         </div>
-      <FeedbackDialog
-        open={feedbackDialogOpen}
-        onOpenChange={setFeedbackDialogOpen}
-        feedbackText={activeFeedback}
-      />
     </div>
   );
 }
