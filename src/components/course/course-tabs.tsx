@@ -53,7 +53,9 @@ export const TAB_BAR_LIST_CLASS =
 // container and produce a phantom vertical scrollbar.
 export const TAB_BAR_TRIGGER_CLASS = [
   'text-muted-foreground hover:text-foreground',
-  'data-[state=active]:text-teal-600 dark:data-[state=active]:text-teal-400 data-[state=active]:font-semibold',
+  // teal-700 (not -600) for the active label so 14px text clears WCAG AA 4.5:1 on the
+  // card; the underline below stays teal-600. Interim until the visual redesign.
+  'data-[state=active]:text-teal-700 dark:data-[state=active]:text-teal-400 data-[state=active]:font-semibold',
   'inline-flex h-auto lg:min-w-36 flex-none items-center justify-center gap-1.5 whitespace-nowrap',
   'rounded-none border-0 border-b-2 border-transparent bg-transparent px-2 py-3 text-sm font-medium lg:px-1',
   'transition-colors',
