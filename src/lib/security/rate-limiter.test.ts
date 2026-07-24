@@ -367,6 +367,21 @@ describe('admin inspection of restricted IPs', () => {
     expect(clearRestrictedIp({ scope: 'check-email:ip', ip, now: BASE })).toBeNull();
   });
 
+  it('clears one address without touching the others', () => {
+    // The reported symptom was "clear one and they all clear", so pin the case of
+    // several distinct addresses restricted under the SAME scope.
+    const ips = ['203.0.113.1', '203.0.113.2', '203.0.113.3'];
+    for (const addr of ips) {
+      for (let i = 0; i < 31; i++) evaluateCheckEmailRateLimit({ ip: addr });
+    }
+    expect(listRestrictedIps(BASE)).toHaveLength(3);
+
+    clearRestrictedIp({ scope: 'check-email:ip', ip: '203.0.113.2', now: BASE });
+
+    const remaining = listRestrictedIps(BASE).map((e) => e.ip).sort();
+    expect(remaining).toEqual(['203.0.113.1', '203.0.113.3']);
+  });
+
   it('clears only the scope it was asked to clear', () => {
     blockCheckEmail();
     for (let i = 0; i < 13; i++) evaluateSignupRateLimit({ ip });
