@@ -130,7 +130,7 @@ export function AssignmentStatisticsPanel() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <StatCard
-          className="lg:col-span-7"
+          className="lg:col-span-6"
           title="Assignment score distribution"
           description={`How final assignment percentages are spread across the graded ${unitPlural}.`}
         >
@@ -156,7 +156,7 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-5"
+          className="lg:col-span-6"
           title="Submission status"
           description={`For each problem, the evaluation state of each of the ${statusTotal} ${unitPlural}' latest submission.`}
         >
@@ -178,7 +178,7 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-5"
+          className="lg:col-span-6"
           title="Attempts to solve"
           description={`How many submissions ${unitPlural} needed before their first correct one.`}
         >
@@ -201,7 +201,7 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-7"
+          className="lg:col-span-6"
           title="First-attempt success"
           description={`Share of ${unitPlural} who got each problem right on their first submission.`}
         >
@@ -221,7 +221,7 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-12"
+          className="lg:col-span-6"
           title="Submissions over time"
           description={`Submissions per day for ${unitPlural}, with the due date marked.`}
         >
@@ -238,7 +238,7 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-12"
+          className="lg:col-span-6"
           title="Problem performance"
           description={`Score distribution for each problem, on a shared 0-100% scale (${unitPlural}).`}
         >
