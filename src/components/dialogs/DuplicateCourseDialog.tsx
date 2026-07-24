@@ -29,27 +29,8 @@ import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
 import { CourseDateTimeField } from './CourseDateTimeField';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
+import { formatDateTimeLocal, toDateTimeLocalInTimeZone } from '@/lib/date-convert';
 
-function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
-  const d = new Date(date);
-  if (!Number.isFinite(d.getTime())) return '';
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(d);
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const year = lookup.year ?? '0000';
-  const month = lookup.month ?? '01';
-  const day = lookup.day ?? '01';
-  const hour = lookup.hour ?? '00';
-  const minute = lookup.minute ?? '00';
-  return `${year}-${month}-${day}T${hour}:${minute}`;
-}
 
 type FormValues = z.input<typeof DuplicateFormSchema>;
 
@@ -616,12 +597,12 @@ export default function DuplicateCourseDialog({
                   <dd>{review.credits}</dd>
                   <dt className="text-muted-foreground">Runs</dt>
                   <dd>
-                    {formatLocal(review.startDate)} to {formatLocal(review.endDate)}
+                    {formatDateTimeLocal(review.startDate)} to {formatDateTimeLocal(review.endDate)}
                   </dd>
                   <dt className="text-muted-foreground">Self registration</dt>
                   <dd>
-                    {formatLocal(review.registrationOpenAt)} to{' '}
-                    {formatLocal(review.registrationCloseAt)}
+                    {formatDateTimeLocal(review.registrationOpenAt)} to{' '}
+                    {formatDateTimeLocal(review.registrationCloseAt)}
                   </dd>
                   <dt className="text-muted-foreground">Copy</dt>
                   <dd>{COPY_MODE_LABELS[review.copyMode ?? ''] ?? review.copyMode}</dd>
@@ -709,7 +690,3 @@ export default function DuplicateCourseDialog({
   );
 }
 
-/** Render a datetime-local string ("2026-08-25T09:00") as "2026-08-25 09:00". */
-function formatLocal(value: string | undefined) {
-  return value ? value.replace('T', ' ') : '';
-}

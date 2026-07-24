@@ -40,6 +40,46 @@ Important shared files include:
 - `src/lib/prisma.ts`
 - `src/schemas/fields.ts`
 
+### Where a new module in `src/lib/` goes
+
+**Put it flat in `src/lib/`, with a prefix that groups it with its relatives**:
+`course-grades.ts`, `assignment-visibility.ts`, `submission-window.ts`. A prefix sorts
+next to its siblings in any listing, so you get the grouping without having to decide
+where the file belongs.
+
+`api/`, `security/`, and `status/` are the only folders. If your module is not part of
+one of those three, it goes flat. **Adding a fourth folder is a decision to argue for in
+review**, not something to do while naming a file.
+
+Those three exist for two reasons, recorded here so a proposal for a fourth has something
+to be measured against:
+
+- **It has internals**, at least one module that should not be imported from outside the
+  folder. `status/` qualifies: `status/cache.ts` and `status/ip-classify.ts` are used only
+  by their sibling collectors.
+- **It is a layer, not a domain**, meaning every module in it does the same *kind* of job
+  for the whole app, so the folder name is a role rather than a topic. `api/` (request
+  handling) and `security/` (authentication machinery) qualify.
+
+Sharing a topic is not a reason. That is what the prefix is for, and it is why the course
+helpers are `course-aggregates.ts` and `course-serialize.ts` rather than a `course/`
+folder.
+
+Name the module after what it does, not after being a helper. `src/lib/utils.ts` is the
+one exception and holds only `cn`: shadcn/ui expects its class merger at `@/lib/utils`,
+every vendored component imports it from there, and `npx shadcn add` regenerates that
+path. Do not add anything else to it.
+
+Two rules that apply either way:
+
+- **No `index.ts` barrels in `src/lib/`.** A barrel re-exporting a domain would put
+  server-only modules (`fs`, `child_process`, `dns`, `tls`) into the same import graph as
+  client components, and it defeats tree-shaking. Import the specific module.
+- **Moving or renaming a module means sweeping for `vi.mock('...')` too.** Those are
+  string literals that nothing type-checks. A mock pointing at a path that no longer
+  exists does not fail: the test silently runs against the real implementation and usually
+  keeps passing, having quietly stopped testing what it claims to.
+
 ## Authorization model
 
 AFCT uses:

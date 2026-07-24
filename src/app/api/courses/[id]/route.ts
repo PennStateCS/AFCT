@@ -7,20 +7,20 @@ import { isAdmin, canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { apiError } from '@/lib/api/http';
-import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone } from '@/lib/date-convert';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
 import { assignedToStudentWhere, overridesForStudentWhere } from '@/lib/assignment-visibility';
-import { effectiveDeadline } from '@/lib/effective-deadline';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import { CourseUpdateApiSchema } from '@/schemas/course';
 import {
   countByAssignment,
   studentsWithSubmissions,
   type OptionalCountDelegate,
-} from '@/lib/course/aggregates';
-import { diffFacultyRoster } from '@/lib/course/faculty';
+} from '@/lib/course-aggregates';
+import { diffFacultyRoster } from '@/lib/course-faculty';
+import { serializeAssignment, type AssignmentRow } from '@/lib/course-serialize';
 
 /**
  * Fetches one course with derived metadata, shaped by the `view` query param to
@@ -166,33 +166,8 @@ export const GET = withCourseAuth(
       // viewer's role (viewerRoster/isStaff) was resolved above the query.
 
       // The findUnique uses conditional includes, so widen to the relations and
-      // _count that may be present for the requested view.
-      // Two different override selects land here: the staff one (carries `user` for the
-      // badge) and the student one (carries the target columns so their own effective
-      // unlock can be resolved). Both shapes are covered with optional fields.
-      type OverrideRowRaw = {
-        unlockAt: Date | null;
-        dueDate: Date | null;
-        lateCutoff: Date | null;
-        allowLateSubmissions: boolean | null;
-        user?: { firstName: string | null; lastName: string | null; email: string };
-        targetType?: 'STUDENT' | 'GROUP';
-        userId?: string | null;
-        groupId?: string | null;
-      };
-      type AssignmentRow = Record<string, unknown> & {
-        id: string;
-        description?: string | null;
-        dueDate?: Date;
-        unlockAt?: Date | null;
-        allowLateSubmissions?: boolean;
-        lateCutoff?: Date | null;
-        assignedToEveryone?: boolean;
-        groupSetId?: string | null;
-        problems?: Array<{ maxPoints?: number | null }>;
-        _count?: { problems?: number };
-        overrides?: OverrideRowRaw[];
-      };
+      // _count that may be present for the requested view. The row shapes live with
+      // the serializer that consumes them (lib/course-serialize).
       const courseData = course as unknown as Omit<
         typeof course,
         'roster' | 'assignments' | 'problems' | '_count'
@@ -266,80 +241,15 @@ export const GET = withCourseAuth(
 
         const now = new Date();
 
-        assignmentsWithProblemCount = assignmentRows.map((assignment) => {
-          const totalProblemPoints = sumProblemPoints(assignment.problems);
-
-          const submissionCount = submissionCountMap.get(assignment.id) ?? 0;
-          const commentCount = commentCountMap.get(assignment.id) ?? 0;
-
-          // Content lock: before a student's effective unlock time they may see that the
-          // assignment exists and when it opens, but not its prompt. Staff always see it.
-          // The selected overrides are already scoped to this student, so any group id
-          // present is one of theirs.
-          const studentOverrides = (isStaff ? [] : (assignment.overrides ?? [])).map((o) => ({
-            targetType: o.targetType ?? 'STUDENT',
-            userId: o.userId ?? null,
-            groupId: o.groupId ?? null,
-            unlockAt: o.unlockAt,
-            dueDate: o.dueDate,
-            lateCutoff: o.lateCutoff,
-            allowLateSubmissions: o.allowLateSubmissions,
-          }));
-          const eff =
-            isStaff || !assignment.dueDate
-              ? null
-              : effectiveDeadline(
-                  {
-                    unlockAt: assignment.unlockAt ?? null,
-                    dueDate: assignment.dueDate,
-                    allowLateSubmissions: assignment.allowLateSubmissions ?? false,
-                    lateCutoff: assignment.lateCutoff ?? null,
-                  },
-                  studentOverrides,
-                  user.id,
-                  studentOverrides
-                    .map((o) => o.groupId)
-                    .filter((gid): gid is string => gid != null),
-                );
-          const locked = !!eff?.unlockAt && eff.unlockAt.getTime() > now.getTime();
-
-          return {
-            id: assignment.id,
-            title: assignment.title,
-            description: locked ? null : assignment.description,
-            locked,
-            dueDate: assignment.dueDate,
-            unlockAt: assignment.unlockAt ?? null,
-            assignedToEveryone: assignment.assignedToEveryone ?? true,
-            // Individual vs group is derived from the set link (no stored flag).
-            isGroup: assignment.groupSetId != null,
-            allowLateSubmissions: assignment.allowLateSubmissions,
-            lateCutoff: assignment.lateCutoff,
-            maxPoints: totalProblemPoints,
-            isPublished: assignment.isPublished,
-            createdAt: assignment.createdAt,
-            updatedAt: assignment.updatedAt,
-            courseId: assignment.courseId,
-            problemCount: assignment._count?.problems ?? 0,
-            // Staff-only. Students also have overrides selected now (to resolve their own
-            // unlock time above), but those must never be serialized, and they carry no
-            // `user` relation, so this stays strictly gated on isStaff.
-            overrides: isStaff
-              ? (assignment.overrides ?? []).map((o) => ({
-                  studentName:
-                    `${o.user?.firstName ?? ''} ${o.user?.lastName ?? ''}`.trim() ||
-                    (o.user?.email ?? ''),
-                  unlockAt: o.unlockAt,
-                  dueDate: o.dueDate,
-                  lateCutoff: o.lateCutoff,
-                  allowLateSubmissions: o.allowLateSubmissions,
-                }))
-              : [],
-            submissionCount,
-            commentCount,
-            hasSubmissionsOrComments: submissionCount > 0 || commentCount > 0,
-          };
-        });
+        assignmentsWithProblemCount = assignmentRows.map((assignment) =>
+          serializeAssignment(assignment, {
+            isStaff,
+            viewerId: user.id,
+            submissionCounts: submissionCountMap,
+            commentCounts: commentCountMap,
+            now,
+          }),
+        );
       }
 
       let problemsWithLink: Array<Record<string, unknown>> = [];

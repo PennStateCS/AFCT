@@ -98,7 +98,7 @@ vi.mock('@/components/ui/dialog', () => {
   };
 });
 
-vi.mock('@/hooks/useMaxUploadSize', () => ({
+vi.mock('@/hooks/use-max-upload-size', () => ({
   useMaxUploadSize: () => ({ maxMb: 25, loading: false, error: null }),
 }));
 

@@ -4,7 +4,7 @@ import React from 'react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import type { SessionsStatusResponse } from '@/lib/status/types';
 import { Loading, Stat, Section, useStatusQuery, copy } from '../status-ui';
 

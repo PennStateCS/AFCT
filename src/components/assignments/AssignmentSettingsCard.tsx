@@ -15,23 +15,8 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { AssignmentWizardFormSchema } from '@/schemas/assignment';
+import { toDateTimeLocalInTimeZone } from '@/lib/date-convert';
 
-// Date -> "YYYY-MM-DDTHH:MM" for <input type="datetime-local"> in a timezone.
-function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return '';
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(d);
-  const l = Object.fromEntries(parts.map((p) => [p.type, p.value]));
-  return `${l.year ?? '0000'}-${l.month ?? '01'}-${l.day ?? '01'}T${l.hour ?? '00'}:${l.minute ?? '00'}`;
-}
 
 type AssigneeApi = {
   id: string;

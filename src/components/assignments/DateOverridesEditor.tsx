@@ -28,17 +28,11 @@ import {
   OverrideLatePolicyField,
 } from '@/components/assignments/DueDateFormPrimitives';
 import type { AssignmentWizardFormSchema } from '@/schemas/assignment';
+import { formatDateTimeLocal } from '@/lib/date-convert';
+import { memberCountLabel } from '@/components/assignments/labels';
 
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 type FormOverride = NonNullable<FormValues['dateOverrides']>[number];
-
-function formatLocal(value: string | undefined | null): string {
-  return value ? value.replace('T', ' ') : '';
-}
-function memberCountLabel(count: number | undefined): string {
-  const n = count ?? 0;
-  return `${n} ${n === 1 ? 'member' : 'members'}`;
-}
 
 /**
  * The assignment-page editor for per-student / per-group DATE overrides. Operates on the
@@ -219,7 +213,7 @@ export function DateOverridesEditor({
             if (overrideAllowLate === undefined || overrideAllowLate === null) {
               lateText = baseAllowLate ? 'Default: allowed' : 'Default: closes at due';
             } else if (overrideAllowLate) {
-              lateText = o?.lateCutoff ? `Until ${formatLocal(o.lateCutoff)}` : 'Allowed, no cutoff';
+              lateText = o?.lateCutoff ? `Until ${formatDateTimeLocal(o.lateCutoff)}` : 'Allowed, no cutoff';
             } else {
               lateText = 'Closes at due';
             }
@@ -249,11 +243,11 @@ export function DateOverridesEditor({
                       </span>
                       <span className="text-muted-foreground pl-6 text-xs md:pl-0">
                         <span className="font-medium md:sr-only">Available: </span>
-                        {o?.unlockAt ? formatLocal(o.unlockAt) : <Badge variant="neutral">Default</Badge>}
+                        {o?.unlockAt ? formatDateTimeLocal(o.unlockAt) : <Badge variant="neutral">Default</Badge>}
                       </span>
                       <span className="text-muted-foreground pl-6 text-xs md:pl-0">
                         <span className="font-medium md:sr-only">Due: </span>
-                        {o?.dueDate ? formatLocal(o.dueDate) : <Badge variant="neutral">Default</Badge>}
+                        {o?.dueDate ? formatDateTimeLocal(o.dueDate) : <Badge variant="neutral">Default</Badge>}
                       </span>
                       <span className="text-muted-foreground pl-6 text-xs md:pl-0">
                         <span className="font-medium md:sr-only">Late work: </span>

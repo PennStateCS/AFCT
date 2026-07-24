@@ -18,7 +18,7 @@ import { readJson } from '@/lib/api/request';
 import { CourseCreateApiSchema } from '@/schemas/course';
 import { auth } from '@/lib/auth';
 import { isAdmin } from '@/lib/permissions';
-import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone } from '@/lib/date-convert';
 import { resolveSystemTimezone } from '@/lib/course-timezone';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { createWithUniqueCourseCode } from '@/lib/course-code';

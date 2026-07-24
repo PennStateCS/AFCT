@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, ChevronRight, BookOpen } from 'lucide-react';
-import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date';
+import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { FullCourse } from '@/types/course';
 

@@ -27,7 +27,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/course-timezone', () => ({ resolveCourseTimezone: resolveTzMock }));
-vi.mock('@/lib/date-utils', () => ({
+vi.mock('@/lib/date-convert', () => ({
   toEndOfDayInTimezone: toEndOfDayMock,
   toDateTimeInTimezone: toDateTimeMock,
 }));

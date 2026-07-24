@@ -1,0 +1,134 @@
+/**
+ * Shaping a course's assignment rows for the course API response.
+ *
+ * Extracted from the route handler because these are the security decisions on that
+ * endpoint, and inside a 350-line handler they could only be exercised by standing up
+ * the whole request. Three things are decided here, and all three are the difference
+ * between a correct response and a leak:
+ *
+ *   1. the content lock, which hides an assignment's prompt from a student until their
+ *      own effective unlock time (an override can move it earlier or later);
+ *   2. the `overrides` array, which names other students and is staff-only, even though
+ *      a student's own overrides are loaded to resolve the lock above;
+ *   3. the class-wide submission and comment counts, which are staff-only aggregates.
+ *
+ * Pure: no Prisma, no request, no clock of its own. `now` is passed in so a caller can
+ * reason about the boundary, and so tests can sit on either side of it.
+ */
+
+import { effectiveDeadline } from '@/lib/effective-deadline';
+import { sumProblemPoints } from '@/lib/course-format';
+
+/**
+ * Both override selects the route issues land here: the staff one carries `user` for the
+ * badge, the student one carries the target columns so their own unlock can be resolved.
+ */
+export type OverrideRowRaw = {
+  unlockAt: Date | null;
+  dueDate: Date | null;
+  lateCutoff: Date | null;
+  allowLateSubmissions: boolean | null;
+  user?: { firstName: string | null; lastName: string | null; email: string };
+  targetType?: 'STUDENT' | 'GROUP';
+  userId?: string | null;
+  groupId?: string | null;
+};
+
+export type AssignmentRow = Record<string, unknown> & {
+  id: string;
+  description?: string | null;
+  dueDate?: Date;
+  unlockAt?: Date | null;
+  allowLateSubmissions?: boolean;
+  lateCutoff?: Date | null;
+  assignedToEveryone?: boolean;
+  groupSetId?: string | null;
+  problems?: Array<{ maxPoints?: number | null }>;
+  _count?: { problems?: number };
+  overrides?: OverrideRowRaw[];
+};
+
+export type SerializeAssignmentContext = {
+  /** Course staff (FACULTY/TA) or a system admin. Gates every disclosure below. */
+  isStaff: boolean;
+  /** The viewer, used to resolve their own effective unlock time. */
+  viewerId: string;
+  /** Empty for a non-staff viewer, whose counts stay at zero. */
+  submissionCounts: Map<string, number>;
+  commentCounts: Map<string, number>;
+  now: Date;
+};
+
+/** Shapes one assignment row for the response, applying the disclosure rules above. */
+export function serializeAssignment(assignment: AssignmentRow, ctx: SerializeAssignmentContext) {
+  const { isStaff, viewerId, submissionCounts, commentCounts, now } = ctx;
+
+  const totalProblemPoints = sumProblemPoints(assignment.problems);
+  const submissionCount = submissionCounts.get(assignment.id) ?? 0;
+  const commentCount = commentCounts.get(assignment.id) ?? 0;
+
+  // Content lock: before a student's effective unlock time they may see that the
+  // assignment exists and when it opens, but not its prompt. Staff always see it.
+  // The selected overrides are already scoped to this student, so any group id
+  // present is one of theirs.
+  const studentOverrides = (isStaff ? [] : (assignment.overrides ?? [])).map((o) => ({
+    targetType: o.targetType ?? 'STUDENT',
+    userId: o.userId ?? null,
+    groupId: o.groupId ?? null,
+    unlockAt: o.unlockAt,
+    dueDate: o.dueDate,
+    lateCutoff: o.lateCutoff,
+    allowLateSubmissions: o.allowLateSubmissions,
+  }));
+  const eff =
+    isStaff || !assignment.dueDate
+      ? null
+      : effectiveDeadline(
+          {
+            unlockAt: assignment.unlockAt ?? null,
+            dueDate: assignment.dueDate,
+            allowLateSubmissions: assignment.allowLateSubmissions ?? false,
+            lateCutoff: assignment.lateCutoff ?? null,
+          },
+          studentOverrides,
+          viewerId,
+          studentOverrides.map((o) => o.groupId).filter((gid): gid is string => gid != null),
+        );
+  const locked = !!eff?.unlockAt && eff.unlockAt.getTime() > now.getTime();
+
+  return {
+    id: assignment.id,
+    title: assignment.title,
+    description: locked ? null : assignment.description,
+    locked,
+    dueDate: assignment.dueDate,
+    unlockAt: assignment.unlockAt ?? null,
+    assignedToEveryone: assignment.assignedToEveryone ?? true,
+    // Individual vs group is derived from the set link (no stored flag).
+    isGroup: assignment.groupSetId != null,
+    allowLateSubmissions: assignment.allowLateSubmissions,
+    lateCutoff: assignment.lateCutoff,
+    maxPoints: totalProblemPoints,
+    isPublished: assignment.isPublished,
+    createdAt: assignment.createdAt,
+    updatedAt: assignment.updatedAt,
+    courseId: assignment.courseId,
+    problemCount: assignment._count?.problems ?? 0,
+    // Staff-only. Students also have overrides selected now (to resolve their own
+    // unlock time above), but those must never be serialized, and they carry no
+    // `user` relation, so this stays strictly gated on isStaff.
+    overrides: isStaff
+      ? (assignment.overrides ?? []).map((o) => ({
+          studentName:
+            `${o.user?.firstName ?? ''} ${o.user?.lastName ?? ''}`.trim() || (o.user?.email ?? ''),
+          unlockAt: o.unlockAt,
+          dueDate: o.dueDate,
+          lateCutoff: o.lateCutoff,
+          allowLateSubmissions: o.allowLateSubmissions,
+        }))
+      : [],
+    submissionCount,
+    commentCount,
+    hasSubmissionsOrComments: submissionCount > 0 || commentCount > 0,
+  };
+}

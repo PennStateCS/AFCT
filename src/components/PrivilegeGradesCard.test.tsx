@@ -27,7 +27,7 @@ vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
 
-vi.mock('@/lib/date', () => ({
+vi.mock('@/lib/date-format', () => ({
   formatTimeInTimeZone: () => 'now',
 }));
 

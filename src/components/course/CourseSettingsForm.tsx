@@ -14,30 +14,11 @@ import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { showToast } from '@/lib/toast';
 import { CourseFormSchema } from '@/schemas/course';
-import type { EnrolledUser } from '@/lib/course-utils';
+import type { EnrolledUser } from '@/lib/course-roster';
 import { apiPaths } from '@/lib/api-paths';
 import { cn } from '@/lib/utils';
+import { toDateTimeLocalInTimeZone } from '@/lib/date-convert';
 
-function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
-  const d = new Date(date);
-  if (!Number.isFinite(d.getTime())) return '';
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(d);
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const year = lookup.year ?? '0000';
-  const month = lookup.month ?? '01';
-  const day = lookup.day ?? '01';
-  const hour = lookup.hour ?? '00';
-  const minute = lookup.minute ?? '00';
-  return `${year}-${month}-${day}T${hour}:${minute}`;
-}
 
 // RHF form state before transforms (strings for datetime-local)
 type FormValues = z.input<typeof CourseFormSchema>;

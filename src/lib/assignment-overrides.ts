@@ -1,4 +1,4 @@
-import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-convert';
 
 /** The assignment's base ("Everyone") deadline fields. */
 export type OverrideBaseFields = {

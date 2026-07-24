@@ -31,6 +31,7 @@ import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
 import { CourseDateTimeField } from './CourseDateTimeField';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
+import { formatDateTimeLocal } from '@/lib/date-convert';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
 type FormValues = z.input<typeof CreateCourseFormSchema>;
@@ -414,12 +415,12 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                   <dd>{formatTimezoneLabel(review.timezone ?? 'UTC')}</dd>
                   <dt className="text-muted-foreground">Runs</dt>
                   <dd>
-                    {formatLocal(review.startDate)} to {formatLocal(review.endDate)}
+                    {formatDateTimeLocal(review.startDate)} to {formatDateTimeLocal(review.endDate)}
                   </dd>
                   <dt className="text-muted-foreground">Self registration</dt>
                   <dd>
-                    {formatLocal(review.registrationOpenAt)} to{' '}
-                    {formatLocal(review.registrationCloseAt)}
+                    {formatDateTimeLocal(review.registrationOpenAt)} to{' '}
+                    {formatDateTimeLocal(review.registrationCloseAt)}
                   </dd>
                   <dt className="text-muted-foreground">Faculty</dt>
                   <dd>
@@ -495,8 +496,4 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
   );
 }
 
-/** Render a datetime-local string ("2026-08-25T09:00") as "2026-08-25 09:00". */
-function formatLocal(value: string | undefined) {
-  return value ? value.replace('T', ' ') : '';
-}
 

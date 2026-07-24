@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { FullCourse } from '@/types/course';
-import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
+import { getInstructors, type EnrolledUser } from '@/lib/course-roster';
 import { showToast } from '@/lib/toast';
 import { formatRegistrationCode } from '@/lib/format-registration-code';
 

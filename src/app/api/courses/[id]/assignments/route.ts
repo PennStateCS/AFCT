@@ -5,7 +5,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
-import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-convert';
 import { resolveUnlockAt } from '@/lib/assignment-late-window';
 import { AssignmentCreateApiSchema } from '@/schemas/assignment';
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseValidDate, formatDeadlineParts, formatDeadlineDual } from './date';
+import { parseValidDate, formatDeadlineParts, formatDeadlineDual } from './date-format';
 
 describe('parseValidDate', () => {
   it('parses a valid date string', () => {

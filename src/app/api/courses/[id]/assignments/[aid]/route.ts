@@ -11,7 +11,7 @@ import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';
 import { sumProblemPoints } from '@/lib/course-format';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
-import { toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toEndOfDayInTimezone } from '@/lib/date-convert';
 import { computeLateSubmissionState, resolveUnlockAt } from '@/lib/assignment-late-window';
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { overridesForStudentWhere } from '@/lib/assignment-visibility';

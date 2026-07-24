@@ -52,7 +52,7 @@ vi.mock('@/lib/course-status-checks', () => ({
   canArchiveCourse: canArchiveMock,
   canUnpublishCourse: canUnpublishMock,
 }));
-vi.mock('@/lib/date-utils', () => ({
+vi.mock('@/lib/date-convert', () => ({
   toDateTimeInTimezone: toDateTimeMock,
 }));
 

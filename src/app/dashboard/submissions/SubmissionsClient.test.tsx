@@ -21,7 +21,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: () => null, toString: () => '' }),
 }));
 
-vi.mock('@/lib/useEmptyStringSymbol', () => ({
+vi.mock('@/hooks/use-empty-string-symbol', () => ({
   useEmptyStringSymbol: () => 'ε',
 }));
 

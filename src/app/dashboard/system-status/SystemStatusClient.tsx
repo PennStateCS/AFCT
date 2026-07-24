@@ -12,7 +12,7 @@ import { Server, Database, Container, Network, Users, HardDrive, ShieldAlert } f
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatTimeInTimeZone } from '@/lib/date';
+import { formatTimeInTimeZone } from '@/lib/date-format';
 import type { SummaryStatus } from '@/lib/status/types';
 import { Skel, TrendBadge } from './status-ui';
 import { formatUptime, formatDbSize } from './status-format';
