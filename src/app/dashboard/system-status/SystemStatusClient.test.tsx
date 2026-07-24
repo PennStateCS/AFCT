@@ -38,6 +38,26 @@ const filesPayload = {
   },
 };
 
+const NOW = 1_700_000_000_000;
+const rateLimits = {
+  generatedAt: NOW,
+  entries: [
+    {
+      id: 'login:ip:203.0.113.5',
+      ip: '203.0.113.5',
+      scope: 'login:ip',
+      scopeLabel: 'Sign-in attempts',
+      state: 'blocked',
+      reason: 'Too many failed sign-in attempts from this address',
+      startedAt: NOW - 5 * 60_000,
+      expiresAt: NOW + 25 * 60_000,
+      attempts: 21,
+      attemptsWhileRestricted: 4,
+      lastAttemptAt: NOW - 30_000,
+    },
+  ],
+};
+
 // Route global fetch by URL/method (fetchJson reads res.ok + res.json()).
 const routeFetch = () =>
   (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
@@ -45,6 +65,8 @@ const routeFetch = () =>
       const u = String(url);
       const json = (data: unknown) =>
         Promise.resolve({ ok: true, json: async () => data } as Response);
+      if (u.includes('/status/rate-limits/clear')) return json({ success: true });
+      if (u.includes('/status/rate-limits')) return json(rateLimits);
       if (u.includes('/status/summary')) return json(summary);
       if (u.includes('/status/server')) return json(server);
       if (u.includes('/status/files') && init?.method === 'DELETE') return json({ ok: true });
@@ -70,8 +92,16 @@ describe('SystemStatusClient', () => {
     // DB badge + a summary tile from /summary.
     expect(await screen.findByText('DB OK')).toBeInTheDocument();
     expect(screen.getByText('POSTGRES')).toBeInTheDocument();
-    // All six tabs present.
-    for (const name of ['Server', 'Database', 'Docker', 'Network', 'Session', 'Files']) {
+    // All tabs present.
+    for (const name of [
+      'Server',
+      'Database',
+      'Docker',
+      'Network',
+      'Session',
+      'Files',
+      'Rate Limits',
+    ]) {
       expect(screen.getByRole('tab', { name })).toBeInTheDocument();
     }
   });
@@ -117,5 +147,67 @@ describe('SystemStatusClient', () => {
     renderWithClient(<SystemStatusClient />);
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/admin/status/database'));
+  });
+
+  it('shows each restricted address with its reason, activity and expiry', async () => {
+    localStorage.setItem('afct.systemStatusTab', 'rate-limits');
+    renderWithClient(<SystemStatusClient />);
+
+    expect(await screen.findByText('203.0.113.5')).toBeInTheDocument();
+    expect(
+      screen.getByText('Too many failed sign-in attempts from this address'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Blocked')).toBeInTheDocument();
+    expect(screen.getByText(/21 attempts counted, 4 turned away since/)).toBeInTheDocument();
+    // Both "restricted since" and "expires" are shown relative to the server's clock.
+    expect(screen.getByText('5 minutes ago')).toBeInTheDocument();
+    expect(screen.getByText('in 25 minutes')).toBeInTheDocument();
+  });
+
+  it('clears one rate limit only after the administrator confirms', async () => {
+    localStorage.setItem('afct.systemStatusTab', 'rate-limits');
+    renderWithClient(<SystemStatusClient />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Clear the restriction on 203\.0\.113\.5/ }),
+    );
+
+    // Nothing has been sent yet: the confirmation is still open.
+    expect(
+      (global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(([u]) =>
+        String(u).includes('/status/rate-limits/clear'),
+      ),
+    ).toBe(false);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear rate limit' }));
+
+    await waitFor(() => {
+      const posted = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(([u]) =>
+        String(u).includes('/status/rate-limits/clear'),
+      );
+      expect(posted).toBeDefined();
+      const init = posted?.[1] as RequestInit;
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(String(init.body))).toEqual({
+        scope: 'login:ip',
+        ip: '203.0.113.5',
+      });
+    });
+  });
+
+  it('cancelling the confirmation sends nothing', async () => {
+    localStorage.setItem('afct.systemStatusTab', 'rate-limits');
+    renderWithClient(<SystemStatusClient />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Clear the restriction on 203\.0\.113\.5/ }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    expect(
+      (global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(([u]) =>
+        String(u).includes('/status/rate-limits/clear'),
+      ),
+    ).toBe(false);
   });
 });

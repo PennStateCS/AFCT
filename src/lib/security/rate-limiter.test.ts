@@ -9,6 +9,8 @@ import {
   formatRetryAfterSeconds,
   evaluateCheckEmailRateLimit,
   sweepExpiredBuckets,
+  listRestrictedIps,
+  clearRestrictedIp,
   __dangerousResetRateLimiter,
   __bucketCount,
 } from '@/lib/security/rate-limiter';
@@ -233,7 +235,8 @@ describe('peekLoginRateLimit — read-only classification', () => {
     const accountLimit = { maxAttempts: 1 };
     evaluateLoginRateLimit({ ip, identifier, accountLimit });
     expect(evaluateLoginRateLimit({ ip, identifier, accountLimit }).status).toBe('blocked');
-    expect(peekLoginRateLimit({ ip, identifier, accountLimit }).status).toBe('blocked');
+    // The peek takes no limit config: it only reads the flags the counting path set.
+    expect(peekLoginRateLimit({ ip, identifier }).status).toBe('blocked');
   });
 });
 
@@ -270,5 +273,108 @@ describe('sweepExpiredBuckets — memory hygiene', () => {
     // Cap is 50k; the map stayed bounded well below the 60k unique keys seen.
     expect(__bucketCount()).toBeLessThanOrEqual(50_001);
     expect(__bucketCount()).toBeGreaterThan(10_000); // still retains a large recent working set
+  });
+});
+
+describe('a block outlives its counting window', () => {
+  const ip = '203.0.113.31';
+
+  it('stays blocked after the window rolls over', () => {
+    // The check-email window is 10 minutes but its block runs 15, so the window
+    // rolls over mid-block. Rehydrating the bucket must not drop the block.
+    for (let i = 0; i < 31; i++) evaluateCheckEmailRateLimit({ ip });
+    expect(evaluateCheckEmailRateLimit({ ip }).status).toBe('blocked');
+
+    vi.setSystemTime(BASE + 12 * 60 * 1000); // past the window, inside the block
+    expect(evaluateCheckEmailRateLimit({ ip }).status).toBe('blocked');
+
+    vi.setSystemTime(BASE + 16 * 60 * 1000); // past the block
+    expect(evaluateCheckEmailRateLimit({ ip }).status).toBe('ok');
+  });
+
+  it('reports the same block from a peek after the window rolls over', () => {
+    const identifier = 'rollover@example.edu';
+    // maxAttempts 1 blocks the account bucket on the 2nd attempt; the account window
+    // is 15 minutes and the block 45, so the same rollover applies.
+    evaluateLoginRateLimit({ ip, identifier, accountLimit: { maxAttempts: 1 } });
+    evaluateLoginRateLimit({ ip, identifier, accountLimit: { maxAttempts: 1 } });
+
+    vi.setSystemTime(BASE + 20 * 60 * 1000);
+    expect(peekLoginRateLimit({ ip, identifier }).status).toBe('blocked');
+  });
+});
+
+describe('admin inspection of restricted IPs', () => {
+  const ip = '203.0.113.42';
+
+  const blockCheckEmail = () => {
+    for (let i = 0; i < 31; i++) evaluateCheckEmailRateLimit({ ip });
+  };
+
+  it('lists nothing while no address is restricted', () => {
+    evaluateCheckEmailRateLimit({ ip }); // one harmless attempt
+    expect(listRestrictedIps(BASE)).toEqual([]);
+  });
+
+  it('describes a blocked address with its reason, start, activity and expiry', () => {
+    blockCheckEmail();
+    vi.setSystemTime(BASE + 60_000);
+    evaluateCheckEmailRateLimit({ ip }); // refused while blocked
+
+    const entries = listRestrictedIps(BASE + 60_000);
+    expect(entries).toHaveLength(1);
+    const entry = entries[0]!;
+    expect(entry).toMatchObject({
+      ip,
+      scope: 'check-email:ip',
+      state: 'blocked',
+      reason: 'Too many email availability checks from this address',
+      startedAt: BASE,
+      attemptsWhileRestricted: 1,
+      lastAttemptAt: BASE + 60_000,
+    });
+    // The check-email block runs 15 minutes from when it was applied.
+    expect(entry.expiresAt).toBe(BASE + 15 * 60 * 1000);
+  });
+
+  it('drops an address from the list once its restriction expires', () => {
+    blockCheckEmail();
+    expect(listRestrictedIps(BASE + 14 * 60 * 1000)).toHaveLength(1);
+    expect(listRestrictedIps(BASE + 16 * 60 * 1000)).toEqual([]);
+  });
+
+  it('never surfaces the buckets keyed on an account rather than an address', () => {
+    // A blocked per-account bucket is keyed on an email address, so it must not appear
+    // in a list that an administrator reads as "IP addresses".
+    evaluateLoginRateLimit({ identifier: 'student@example.edu', accountLimit: { maxAttempts: 1 } });
+    evaluateLoginRateLimit({ identifier: 'student@example.edu', accountLimit: { maxAttempts: 1 } });
+    expect(listRestrictedIps(BASE)).toEqual([]);
+  });
+
+  it('clears one restriction and returns what was cleared', () => {
+    blockCheckEmail();
+    const cleared = clearRestrictedIp({ scope: 'check-email:ip', ip, now: BASE });
+    expect(cleared).toMatchObject({ ip, scope: 'check-email:ip', state: 'blocked' });
+    expect(listRestrictedIps(BASE)).toEqual([]);
+    // And the address can transact again immediately.
+    expect(evaluateCheckEmailRateLimit({ ip }).status).toBe('ok');
+  });
+
+  it('returns null when the address is not currently restricted', () => {
+    expect(clearRestrictedIp({ scope: 'check-email:ip', ip, now: BASE })).toBeNull();
+    // A known-but-unrestricted address is still a no-op, not a false success.
+    evaluateCheckEmailRateLimit({ ip });
+    expect(clearRestrictedIp({ scope: 'check-email:ip', ip, now: BASE })).toBeNull();
+  });
+
+  it('clears only the scope it was asked to clear', () => {
+    blockCheckEmail();
+    for (let i = 0; i < 13; i++) evaluateSignupRateLimit({ ip });
+    expect(listRestrictedIps(BASE)).toHaveLength(2);
+
+    clearRestrictedIp({ scope: 'check-email:ip', ip, now: BASE });
+    const remaining = listRestrictedIps(BASE);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.scope).toBe('signup:ip');
   });
 });

@@ -370,6 +370,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/status/rate-limits/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear one IP address's rate limit (admin)
+         * @description Lifts one IP's rate-limit restriction ahead of its expiry, so an administrator can  let a locked-out classroom or office back in without waiting it out. System  administrators only.   Not idempotent by design: clearing an address that is not currently restricted  returns 404 rather than a silent success, so the caller learns the restriction had  already lapsed (or landed on another instance) instead of assuming it acted.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/rate-limits/clear/route.ts)
+         */
+        post: operations["postAdminStatusRateLimitsClear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/rate-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Currently rate-limited IP addresses
+         * @description Rate Limits tab: every client IP currently blocked or under a captcha-challenge  cooldown, with why it was restricted, since when, how hard it is still knocking,  and when the restriction lifts on its own.   The rate limiter keeps its buckets in process memory, so this reports the state of  the instance that serves the request and resets when the app restarts. It exposes  visitors' IP addresses, so system administrators only.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/rate-limits/route.ts)
+         */
+        get: operations["getAdminStatusRateLimits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/status/server": {
         parameters: {
             query?: never;
@@ -3309,6 +3353,112 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Upstream connectivity probes and error-rate summaries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminStatusRateLimitsClear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Which limit to clear
+                     * @enum {string}
+                     */
+                    scope: "login:ip" | "signup:ip" | "check-email:ip";
+                    /** @description The restricted address */
+                    ip: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The restriction was cleared. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success?: boolean;
+                    };
+                };
+            };
+            /** @description Missing or invalid scope/ip. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description That address is not currently restricted. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Clearing the restriction failed. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusRateLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The IP addresses currently restricted on this instance. */
             200: {
                 headers: {
                     [name: string]: unknown;

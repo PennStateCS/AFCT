@@ -18,6 +18,7 @@ Select **Refresh** for a new snapshot, or turn on **Auto-refresh** to update eve
 | **Network**  | Database and authentication latency, connection counts, error rates, DNS results, and configured hosts.                     |
 | **Session**  | Session counts and accounts seen during the last 24 hours, including recent IP and user-agent details.                      |
 | **Files**    | Uploaded files that exist on disk without a matching database record.                                                       |
+| **Rate Limits** | IP addresses AFCT is currently turning away for making too many requests.                                                |
 
 ## Remove an abandoned file
 
@@ -30,5 +31,26 @@ Before selecting **Delete**:
 3. Make sure a current backup contains uploaded files.
 
 Deleting an abandoned file is permanent. If you are unsure why it exists, leave it in place while you investigate.
+
+## Rate-limited addresses
+
+AFCT slows down and then temporarily refuses an address that makes too many sign-in attempts, account sign-ups, or email-availability checks in a short time. This is what stops password guessing and bulk account enumeration; see [Login protection](../reference/login-protection.md) for the thresholds.
+
+The **Rate Limits** tab lists every address currently being refused, and for each one shows:
+
+- the **reason**, and whether the address is fully **Blocked** or only **Challenged** (asked to complete a captcha);
+- when the restriction **began**;
+- **recent activity**: how many attempts were counted, how many have been turned away since, and the time of the most recent one;
+- when the restriction **expires** on its own.
+
+Two things to keep in mind when reading the list. Restrictions are held in the running application's memory, so the list covers the instance you are connected to and empties whenever AFCT restarts. And a restriction applies to an address, not a person: a computer lab, a library, or a campus network can put dozens of students behind one address.
+
+### Clear a rate limit
+
+Every restriction lifts by itself at the time shown, so waiting is usually the right answer. Clear one early only when you know the traffic is legitimate, most often a shared address where one person's mistyped password has shut out a whole room.
+
+Select **Clear** on the row and confirm. The address can make those requests again immediately, and AFCT records the action in the [System Logs](system-logs.md) with your account, the address, and the time, so lifting a protection is always traceable. If the address is still under attack it will simply be restricted again on the next burst.
+
+Clearing a rate limit is not the same as unlocking an account. A locked *account* is cleared from [User Accounts](user-accounts.md); this tab only affects addresses.
 
 For host-level checks and commands, continue with [Production troubleshooting](../operations/troubleshooting.md).

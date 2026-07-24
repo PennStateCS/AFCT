@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getClientIp, peekLoginRateLimit } from '@/lib/security/rate-limiter';
-import { getLoginLockoutPolicy } from '@/lib/login-policy';
 
 /**
  * Read-only login rate-limit status. The login form calls this after a failed
@@ -40,8 +39,7 @@ export async function POST(req: Request) {
   }
   const identifier = typeof email === 'string' ? email.trim().toLowerCase() : undefined;
 
-  const accountLimit = await getLoginLockoutPolicy();
-  const decision = peekLoginRateLimit({ ip, identifier, accountLimit });
+  const decision = peekLoginRateLimit({ ip, identifier });
 
   return NextResponse.json({
     status: decision.status,

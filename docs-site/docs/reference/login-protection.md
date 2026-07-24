@@ -74,6 +74,23 @@ counting an attempt) so it can tell the user whether a failed sign-in was a capt
 challenge, a temporary block, or just a wrong password. NextAuth otherwise reports only
 a generic error. The authoritative counting happens in the credentials `authorize` path.
 
+A block outlives the window that produced it (a login IP block runs 30 minutes against a
+10-minute window), so a bucket whose window has rolled over keeps any live block or
+challenge instead of rehydrating clean. Both the counting path and the peek honour this.
+
+### Inspecting and clearing IP limits
+
+**System Status → Rate Limits** lists the IPs currently blocked or challenged on the
+instance serving the request, with the reason, when the restriction started, how many
+attempts have been counted and refused, and when it expires. An administrator can clear
+one early (`POST /api/admin/status/rate-limits/clear`), which is logged at `SECURITY`
+severity with the actor, the address, and what was in force when it was cleared.
+
+Only the IP-keyed scopes are exposed. The buckets keyed on an email address or a user id
+(`login:account`, `signup:identifier`, `avatar-upload`) are deliberately absent, so the
+tab cannot be used to learn which accounts exist. Ending an account lock is a separate
+action on the [User Accounts](../admin/user-accounts.md) page.
+
 ## Deployment caveat: single instance
 
 The rate-limiter buckets live **in process, per app container**. This is correct for the

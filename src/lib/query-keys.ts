@@ -99,6 +99,7 @@ export const queryKeys = {
     statusNetwork: () => ['admin', 'status', 'network'] as const,
     statusSessions: () => ['admin', 'status', 'sessions'] as const,
     statusFiles: () => ['admin', 'status', 'files'] as const,
+    statusRateLimits: () => ['admin', 'status', 'rate-limits'] as const,
     settings: () => ['admin', 'settings'] as const,
     settingsBackups: () => ['admin', 'settings', 'backups'] as const,
     settingsTls: () => ['admin', 'settings', 'tls'] as const,

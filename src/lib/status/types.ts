@@ -187,6 +187,44 @@ export type AbandonedFilesSummary = {
 
 export type FilesStatusResponse = { abandonedFiles: AbandonedFilesSummary };
 
+/* ---------------- Rate limits ---------------- */
+/**
+ * The rate-limiter scopes keyed on a client IP address. Scopes keyed on an email or a
+ * user id are never surfaced here, so this tab only ever shows addresses.
+ */
+export type RateLimitScope = 'login:ip' | 'signup:ip' | 'check-email:ip';
+
+/** A hard block, or the softer captcha-challenge cooldown that precedes one. */
+export type RateLimitState = 'blocked' | 'challenge';
+
+export type RateLimitEntry = {
+  /** Opaque handle (the rate limiter's bucket key) so one entry can be round-tripped. */
+  id: string;
+  ip: string;
+  scope: RateLimitScope;
+  /** Short name of the limit that fired, e.g. "Sign-in attempts". */
+  scopeLabel: string;
+  state: RateLimitState;
+  /** Plain-language explanation for the administrator. */
+  reason: string;
+  /** Epoch ms when the current restriction was applied. */
+  startedAt: number;
+  /** Epoch ms when it lifts on its own. */
+  expiresAt: number;
+  /** Attempts counted in the current window before the restriction applied. */
+  attempts: number;
+  /** Attempts refused since the restriction applied (is it still knocking?). */
+  attemptsWhileRestricted: number;
+  /** Epoch ms of the most recent attempt, refused or not. */
+  lastAttemptAt: number;
+};
+
+export type RateLimitsStatusResponse = {
+  entries: RateLimitEntry[];
+  /** Epoch ms the list was taken, so the client can render "expires in" without clock skew. */
+  generatedAt: number;
+};
+
 /* ---------------- Summary (top cards) ---------------- */
 export type SummaryStatus = {
   db: { ok: boolean; message: string; provider: 'sqlite' | 'postgres' | 'unknown' };
