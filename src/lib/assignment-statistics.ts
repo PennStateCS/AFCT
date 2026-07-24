@@ -359,6 +359,23 @@ export function computeActivityHeatmap(
   return { matrix, max };
 }
 
+/** Discrete 0..4 intensity level for a heatmap cell. */
+export type HeatmapLevel = 0 | 1 | 2 | 3 | 4;
+
+/**
+ * Map a cell count to a 0..4 intensity level on a square-root scale, so a single
+ * deadline-driven spike doesn't flatten every other cell to "empty". 0 means no
+ * submissions; 1..4 span low to highest activity relative to the busiest cell.
+ */
+export function heatmapLevel(count: number, max: number): HeatmapLevel {
+  if (count <= 0 || max <= 0) return 0;
+  const s = Math.sqrt(count / max);
+  if (s <= 0.25) return 1;
+  if (s <= 0.5) return 2;
+  if (s <= 0.75) return 3;
+  return 4;
+}
+
 // ─── assembly ────────────────────────────────────────────────────────────────
 
 export type StatsProblem = {

@@ -251,8 +251,8 @@ export function AssignmentStatisticsPanel() {
 
         <StatCard
           className="lg:col-span-8"
-          title="When work happens"
-          description={`When ${unitPlural} submit, by day of week and hour (course time).`}
+          title="When submissions happen"
+          description="Submission attempts by day of week and hour, in the course time zone."
         >
           {stats.heatmap.max > 0 ? (
             <ActivityHeatmapChart
