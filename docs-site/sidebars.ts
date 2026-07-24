@@ -55,7 +55,7 @@ const sidebars: SidebarsConfig = {
                     type: 'doc',
                     id: 'faculty/assignments',
                   },
-                  items: ['faculty/submissions'],
+                  items: ['faculty/submissions', 'faculty/statistics', 'faculty/similarity'],
                 },
                 'faculty/grades',
                 'faculty/groups',
