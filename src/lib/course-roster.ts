@@ -20,13 +20,9 @@ export function getEnrolledIds(enrolled: (string | EnrolledUser)[] | undefined):
   return enrolled.map((e) => (typeof e === 'string' ? e : e.id));
 }
 
-export function isEnrolled(
-  enrolled: (string | EnrolledUser)[] | undefined,
-  userId: string,
-): boolean {
-  const ids = getEnrolledIds(enrolled);
-  return ids.includes(userId);
-}
+// No `isEnrolled` here on purpose. Membership in this array is a display fact, not an
+// access decision, and a helper of that name invites being used as one. Authorization
+// goes through `canAccessCourse` / `canManageCourse` in `lib/permissions`.
 
 export function getInstructors(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
   if (!Array.isArray(enrolled)) return [];
@@ -54,18 +50,6 @@ export function formatInstructorNames(enrolled: EnrolledUser[] | undefined): str
     .map((instructor) => `${instructor.firstName ?? ''} ${instructor.lastName ?? ''}`.trim())
     .filter(Boolean)
     .join(', ');
-}
-
-export function deriveRoleSlices(enrolled: EnrolledUser[] | undefined) {
-  const instructors = getInstructors(enrolled);
-  const tas = getTAs(enrolled);
-  const students = getStudents(enrolled);
-  return {
-    instructors,
-    tas,
-    students,
-    counts: { instructors: instructors.length, tas: tas.length, students: students.length },
-  };
 }
 
 // Return a sorted roster array (shallow copies) based on courseRole ordering and last name

@@ -1,13 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   getEnrolledIds,
-  isEnrolled,
   getInstructors,
   getTAs,
   getStudents,
   getStudentCount,
   formatInstructorNames,
-  deriveRoleSlices,
   sortRoster,
   type EnrolledUser,
 } from './course-roster';
@@ -46,27 +44,6 @@ describe('course-roster', () => {
       const result = getEnrolledIds(enrolled);
 
       expect(result).toEqual(['user-1', 'user-2']);
-    });
-  });
-
-  describe('isEnrolled', () => {
-    it('should return true if user is enrolled', () => {
-      const enrolled: EnrolledUser[] = [
-        { id: 'user-1', email: 'user1@test.com' },
-        { id: 'user-2', email: 'user2@test.com' },
-      ];
-
-      expect(isEnrolled(enrolled, 'user-1')).toBe(true);
-    });
-
-    it('should return false if user is not enrolled', () => {
-      const enrolled: EnrolledUser[] = [{ id: 'user-1', email: 'user1@test.com' }];
-
-      expect(isEnrolled(enrolled, 'user-3')).toBe(false);
-    });
-
-    it('should return false for undefined enrolled list', () => {
-      expect(isEnrolled(undefined, 'user-1')).toBe(false);
     });
   });
 
@@ -211,50 +188,6 @@ describe('course-roster', () => {
 
     it('should return TBA for undefined', () => {
       expect(formatInstructorNames(undefined)).toBe('TBA');
-    });
-  });
-
-  describe('deriveRoleSlices', () => {
-    it('should categorize users by role with counts', () => {
-      const enrolled: EnrolledUser[] = [
-        { id: 'user-1', courseRole: 'FACULTY' },
-        { id: 'user-2', courseRole: 'FACULTY' },
-        { id: 'user-3', courseRole: 'TA' },
-        { id: 'user-4', courseRole: 'STUDENT' },
-        { id: 'user-5', courseRole: 'STUDENT' },
-        { id: 'user-6', courseRole: 'STUDENT' },
-      ];
-
-      const result = deriveRoleSlices(enrolled);
-
-      expect(result.instructors).toHaveLength(2);
-      expect(result.tas).toHaveLength(1);
-      expect(result.students).toHaveLength(3);
-      expect(result.counts).toEqual({
-        instructors: 2,
-        tas: 1,
-        students: 3,
-      });
-    });
-
-    it('should handle empty roster', () => {
-      const result = deriveRoleSlices([]);
-
-      expect(result.counts).toEqual({
-        instructors: 0,
-        tas: 0,
-        students: 0,
-      });
-    });
-
-    it('should handle undefined roster', () => {
-      const result = deriveRoleSlices(undefined);
-
-      expect(result.counts).toEqual({
-        instructors: 0,
-        tas: 0,
-        students: 0,
-      });
     });
   });
 
