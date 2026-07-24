@@ -30,7 +30,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => nav,
 }));
 
-vi.mock('@/lib/useEmptyStringSymbol', () => ({ useEmptyStringSymbol: () => 'ε' }));
+vi.mock('@/hooks/use-empty-string-symbol', () => ({ useEmptyStringSymbol: () => 'ε' }));
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));

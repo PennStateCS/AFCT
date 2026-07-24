@@ -14,7 +14,7 @@ import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { showToast } from '@/lib/toast';
 import { CourseFormSchema } from '@/schemas/course';
-import type { EnrolledUser } from '@/lib/course-utils';
+import type { EnrolledUser } from '@/lib/course-roster';
 import { apiPaths } from '@/lib/api-paths';
 import { cn } from '@/lib/utils';
 import { toDateTimeLocalInTimeZone } from '@/lib/date-convert';

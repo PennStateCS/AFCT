@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
@@ -42,7 +42,7 @@ import { TAB_BAR_LIST_CLASS, TAB_BAR_TRIGGER_CLASS } from '@/components/course/c
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
 import type { Problem } from '@prisma/client';
-import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
+import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { AssignmentWithDetails } from '@/lib/assignment-details';
 import { apiPaths } from '@/lib/api-paths';

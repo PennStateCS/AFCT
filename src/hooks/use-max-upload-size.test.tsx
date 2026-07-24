@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DEFAULT_MAX_UPLOAD_SIZE_MB } from '@/lib/system-settings';
-import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
+import { useMaxUploadSize } from '@/hooks/use-max-upload-size';
 
 // A fresh QueryClient per test so the settings cache never leaks between cases.
 // retry:false keeps failure paths fast; gcTime:0 avoids lingering cache.

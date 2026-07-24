@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import type { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
-import { getEnrolledIds, type EnrolledUser } from '@/lib/course-utils';
+import { getEnrolledIds, type EnrolledUser } from '@/lib/course-roster';
 import { apiPaths } from '@/lib/api-paths';
 import { fetchJson } from '@/lib/query-fetch';
 import type { Assignment, Problem, User } from '@prisma/client';

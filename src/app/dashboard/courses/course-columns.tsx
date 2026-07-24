@@ -18,13 +18,13 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { Course } from '@prisma/client';
 import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
-import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
+import { getInstructors, type EnrolledUser } from '@/lib/course-roster';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { CompactDate } from '@/components/ui/CompactDate';
 import { formatRegistrationCode } from '@/lib/format-registration-code';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, mutateWithToast } from '@/lib/api/fetch-client';
-import { truncate } from '@/lib/utils';
+import { truncate } from '@/lib/truncate';
 
 type CourseWithFaculty = Course & {
   // Enrolled list (user objects with courseRole and flags)

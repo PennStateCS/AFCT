@@ -12,7 +12,7 @@ vi.mock('@/lib/date-format', () => ({ formatDateTimeInTimeZone: () => 'DATE' }))
 vi.mock('@/lib/course-status', () => ({
   getCourseStatusTag: () => ({ status: 'Open', variant: 'success' }),
 }));
-vi.mock('@/lib/course-utils', () => ({
+vi.mock('@/lib/course-roster', () => ({
   getStudentCount: () => 3,
   formatInstructorNames: () => 'Prof X',
   getTAs: () => [],
