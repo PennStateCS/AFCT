@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, Download, File, FileText, MessageSquare, RotateCcw } from 'lucide-react';
+import { Download, File, FileText, MessageSquare, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -408,29 +408,6 @@ export default function ProblemWorkspace({
                                     }
                                   >
                                     <File className="h-4 w-4" />
-                                  </Button>
-
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => onViewSubmission(submission)}
-                                    title="View submission"
-                                    aria-label="View submission"
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={!submission.fileName}
-                                    onClick={() => handleDownload(submission)}
-                                    title="Download submission"
-                                    aria-label="Download submission"
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <Download className="h-4 w-4" />
                                   </Button>
 
                                   <Button

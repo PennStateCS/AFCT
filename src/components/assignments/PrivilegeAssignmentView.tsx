@@ -218,7 +218,7 @@ export default function AssignmentDashboardPage({
   const assignmentsQuery = useQuery({
     queryKey: ['course', id, 'assignments-list'],
     queryFn: () =>
-      fetch(apiPaths.courseAssignments(id))
+      fetch(apiPaths.courseAssignments(id, { includeUnpublished: true }))
         .then((res) => res.json())
         .then((data) =>
           Array.isArray(data)
