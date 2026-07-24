@@ -15,6 +15,7 @@
 
 import { promises as dns } from 'dns';
 import { prisma } from '@/lib/prisma';
+import { boundedCache } from '@/lib/status/cache';
 import { listRestrictedIps } from '@/lib/security/rate-limiter';
 import { classifyIp, ipKindLabel } from '@/lib/status/ip-classify';
 import type {
@@ -39,48 +40,33 @@ const PTR_TTL_MS = 10 * 60_000;
 /** Bounded so a flood of unique addresses cannot grow the cache without limit. */
 const PTR_CACHE_MAX = 500;
 
-type PtrEntry = { hostname: string | null; lookup: HostnameLookup; expires: number };
-const ptrCache = new Map<string, PtrEntry>();
+type PtrResult = { hostname: string | null; lookup: HostnameLookup };
 
-const rememberPtr = (ip: string, entry: PtrEntry) => {
-  // Map preserves insertion order, so the first key is the oldest.
-  while (ptrCache.size >= PTR_CACHE_MAX) {
-    const oldest = ptrCache.keys().next().value as string | undefined;
-    if (oldest === undefined) break;
-    ptrCache.delete(oldest);
-  }
-  ptrCache.set(ip, entry);
-};
+// Keyed on an address, so it needs the size-capped cache rather than `cached`.
+const ptrCache = boundedCache<PtrResult>({ max: PTR_CACHE_MAX, ttlMs: PTR_TTL_MS });
 
 /**
  * Reverse-DNS name for an address, or null. Never throws and never blocks for long: an
  * address with no PTR record is the normal case, not an error, and a slow or missing
  * resolver must not stall the whole tab.
  */
-const lookupHostname = async (ip: string): Promise<Pick<PtrEntry, 'hostname' | 'lookup'>> => {
-  const now = Date.now();
-  const hit = ptrCache.get(ip);
-  if (hit && hit.expires > now) return { hostname: hit.hostname, lookup: hit.lookup };
-
-  let result: Pick<PtrEntry, 'hostname' | 'lookup'>;
-  try {
-    const names = await Promise.race([
-      dns.reverse(ip),
-      new Promise<never>((_resolve, reject) =>
-        setTimeout(() => reject(new Error('reverse DNS timed out')), PTR_TIMEOUT_MS),
-      ),
-    ]);
-    const hostname = names.find((name) => name.length > 0) ?? null;
-    result = { hostname, lookup: hostname ? 'ok' : 'none' };
-  } catch {
-    // NXDOMAIN (no PTR) and a dead resolver are indistinguishable here, and neither is
-    // worth surfacing as a failure the administrator has to act on.
-    result = { hostname: null, lookup: 'failed' };
-  }
-
-  rememberPtr(ip, { ...result, expires: now + PTR_TTL_MS });
-  return result;
-};
+const lookupHostname = (ip: string): Promise<PtrResult> =>
+  ptrCache.get(ip, async () => {
+    try {
+      const names = await Promise.race([
+        dns.reverse(ip),
+        new Promise<never>((_resolve, reject) =>
+          setTimeout(() => reject(new Error('reverse DNS timed out')), PTR_TIMEOUT_MS),
+        ),
+      ]);
+      const hostname = names.find((name) => name.length > 0) ?? null;
+      return { hostname, lookup: hostname ? 'ok' : 'none' };
+    } catch {
+      // NXDOMAIN (no PTR) and a dead resolver are indistinguishable here, and neither is
+      // worth surfacing as a failure the administrator has to act on.
+      return { hostname: null, lookup: 'failed' };
+    }
+  });
 
 type ActivityRow = { ipAddress: string | null; userId: string | null; timestamp: Date };
 
@@ -201,5 +187,5 @@ export async function collectRateLimits(): Promise<RateLimitsStatusResponse> {
   return { entries: withDetails, generatedAt: Date.now() };
 }
 
-/** Drop cached reverse-DNS results (tests). */
+/** Drop cached reverse-DNS results (tests). `clearStatusCache()` also covers this. */
 export const __clearPtrCache = () => ptrCache.clear();

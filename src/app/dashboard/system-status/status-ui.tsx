@@ -1,6 +1,14 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+/**
+ * Shared building blocks for the System Status tabs: the per-tab query hook and the
+ * presentational primitives every tab composes.
+ *
+ * Two neighbours hold the rest: `status-format.ts` for the pure display formatters, and
+ * `use-trends.ts` for the localStorage-backed trend history.
+ */
+
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { Badge } from '@/components/ui/badge';
@@ -28,44 +36,7 @@ export function useStatusQuery<T>(opts: {
   });
 }
 
-/* -------------------- formatters -------------------- */
-export const formatUptime = (secs?: number | null) => {
-  if (secs == null || Number.isNaN(Number(secs))) return '—';
-  const total = Math.floor(Number(secs));
-  const d = Math.floor(total / 86400);
-  const h = Math.floor((total % 86400) / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  return d > 0 ? `${d}d ${h}h ${m}m` : `${h}h ${m}m`;
-};
-
-export const formatBytes = (b?: number | null) => {
-  if (b == null || Number.isNaN(Number(b))) return '—';
-  const bytes = Number(b);
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-};
-
-export const formatDbSize = formatBytes;
-
-export const formatMs = (ms?: number | null) =>
-  typeof ms === 'number' && Number.isFinite(ms) ? `${ms} ms` : '—';
-
-export const formatRate = (pct?: number | null) =>
-  typeof pct === 'number' && Number.isFinite(pct) ? `${pct.toFixed(1)}%` : '—';
-
-export const formatDbVersion = (v?: string | null) => {
-  if (!v) return '—';
-  const pg = v.match(/(PostgreSQL\s+\d+(?:\.\d+)?)/i)?.[1];
-  const bits = v.match(/(\d+-bit)/i)?.[1];
-  if (pg) return [pg, bits].filter(Boolean).join(' ');
-  return v.split(',')[0]?.trim() || v;
-};
-
-export const toTitleCase = (s?: string | null) =>
-  s ? s.replace(/\w\S*/g, (w) => (w[0] ?? '').toUpperCase() + w.slice(1).toLowerCase()) : '—';
-
+/** Copy to the clipboard, falling back to a hidden textarea on older browsers. */
 export const copy = async (text?: string | null) => {
   if (!text) return;
   try {
@@ -217,88 +188,3 @@ export const Sparkline = ({
     </div>
   );
 };
-
-/* -------------------- trend history (localStorage) -------------------- */
-export type HistoryPoint = {
-  ts: number;
-  cpuPct?: number;
-  memPct?: number;
-  dbSizeMB?: number;
-  dbTables?: number | null;
-  sessions24h?: number;
-  latencyMs?: number;
-};
-
-const HIST_KEY = 'statusHistory:v2';
-
-export const readHistory = (): HistoryPoint[] => {
-  try {
-    const raw = localStorage.getItem(HIST_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as HistoryPoint[];
-    return Array.isArray(parsed) ? parsed.filter((p) => typeof p?.ts === 'number') : [];
-  } catch {
-    return [];
-  }
-};
-
-const writeHistory = (arr: HistoryPoint[]) => {
-  try {
-    localStorage.setItem(HIST_KEY, JSON.stringify(arr));
-  } catch {
-    /* ignore quota / disabled storage */
-  }
-};
-
-/**
- * Append the latest sample (keeping up to `keepHours`) and expose oldest→newest
- * deltas over a selectable window. Backed by localStorage so trends survive a
- * reload. Returns the window control so the header can drive it.
- */
-export function useTrends(sample: HistoryPoint | null, keepHours = 24) {
-  const [windowHours, setWindowHours] = useState(1);
-  const setHours = useCallback((h: number) => setWindowHours(h), []);
-
-  // Persist each new sample to history as a side effect, never during render.
-  // Dedupe by timestamp so a repeated effect run (e.g. StrictMode's double
-  // invoke) can't append the same point twice, and any legacy dupes collapse.
-  useEffect(() => {
-    if (!sample) return;
-    const cutoff = sample.ts - keepHours * 3600_000;
-    const byTs = new Map<number, HistoryPoint>();
-    for (const p of readHistory()) {
-      if (p.ts >= cutoff) byTs.set(p.ts, p);
-    }
-    byTs.set(sample.ts, sample);
-    writeHistory([...byTs.values()]);
-  }, [sample, keepHours]);
-
-  const trends = useMemo(() => {
-    const now = Date.now();
-    const hist = readHistory();
-    // Fold in the current sample so the trend reflects it before the effect commits.
-    const source = sample ? [...hist.filter((p) => p.ts !== sample.ts), sample] : hist;
-
-    const windowHist = source.filter((p) => now - p.ts <= windowHours * 3600_000);
-    const delta = (a?: number | null, b?: number | null) =>
-      typeof a === 'number' && typeof b === 'number' ? b - a : 0;
-    if (windowHist.length < 2) {
-      return { cpu: 0, mem: 0, dbSize: 0, dbTables: 0, sessions: 0, latency: 0 };
-    }
-    const first = windowHist[0];
-    const last = windowHist[windowHist.length - 1];
-    if (!first || !last) {
-      return { cpu: 0, mem: 0, dbSize: 0, dbTables: 0, sessions: 0, latency: 0 };
-    }
-    return {
-      cpu: delta(first.cpuPct, last.cpuPct),
-      mem: delta(first.memPct, last.memPct),
-      dbSize: delta(first.dbSizeMB, last.dbSizeMB),
-      dbTables: delta(first.dbTables ?? null, last.dbTables ?? null),
-      sessions: delta(first.sessions24h, last.sessions24h),
-      latency: delta(first.latencyMs, last.latencyMs),
-    };
-  }, [sample, windowHours]);
-
-  return { windowHours, setHours, trends };
-}

@@ -6,19 +6,9 @@ import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import pkg from '../../../../../package.json';
 import type { ServerStatusResponse, IpAddr } from '@/lib/status/types';
-import {
-  Loading,
-  Stat,
-  Meter,
-  Section,
-  Sparkline,
-  useStatusQuery,
-  readHistory,
-  formatBytes,
-  formatUptime,
-  toTitleCase,
-  copy,
-} from '../status-ui';
+import { Loading, Stat, Meter, Section, Sparkline, useStatusQuery, copy } from '../status-ui';
+import { formatBytes, formatUptime, toTitleCase } from '../status-format';
+import { readHistory } from '../use-trends';
 
 export default function ServerTab({
   active,

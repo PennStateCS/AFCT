@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { withAdminAuth } from '@/lib/api/with-auth';
+import { statusGet } from '@/lib/api/status-route';
 import { collectSummary } from '@/lib/status/summary';
 
 export const runtime = 'nodejs';
@@ -17,12 +16,11 @@ export const dynamic = 'force-dynamic';
  *   401: { description: Not signed in. }
  *   403: { description: Not a system administrator. }
  */
-export const GET = withAdminAuth(
-  async () => {
-    const t0 = performance.now();
-    const data = await collectSummary();
-    data.latencyMs = Math.round(performance.now() - t0);
-    return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
-  },
-  { deniedAction: 'ADMIN_STATUS_ACCESS_DENIED' },
-);
+export const GET = statusGet(async () => {
+  // The reported latency is this probe's own round trip, so it is measured here rather
+  // than inside the collector.
+  const t0 = performance.now();
+  const data = await collectSummary();
+  data.latencyMs = Math.round(performance.now() - t0);
+  return data;
+});

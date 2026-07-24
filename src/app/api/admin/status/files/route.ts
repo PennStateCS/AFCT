@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { statusGet } from '@/lib/api/status-route';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';
@@ -27,13 +28,7 @@ export const dynamic = 'force-dynamic';
  *   401: { description: Not signed in. }
  *   403: { description: Not a system administrator. }
  */
-export const GET = withAdminAuth(
-  async () => {
-    const data = await collectAbandonedFiles();
-    return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
-  },
-  { deniedAction: 'ADMIN_STATUS_ACCESS_DENIED' },
-);
+export const GET = statusGet(collectAbandonedFiles);
 
 /**
  * Deletes a single orphaned upload. Guards on every axis (known category,

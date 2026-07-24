@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { withAdminAuth } from '@/lib/api/with-auth';
+import { statusGet } from '@/lib/api/status-route';
 import { collectServer } from '@/lib/status/server';
 
 export const runtime = 'nodejs';
@@ -16,10 +15,4 @@ export const dynamic = 'force-dynamic';
  *   401: { description: Not signed in. }
  *   403: { description: Not a system administrator. }
  */
-export const GET = withAdminAuth(
-  async () => {
-    const data = await collectServer();
-    return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
-  },
-  { deniedAction: 'ADMIN_STATUS_ACCESS_DENIED' },
-);
+export const GET = statusGet(collectServer);

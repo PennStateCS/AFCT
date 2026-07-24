@@ -4,7 +4,8 @@ import React from 'react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { NetworkStatusResponse } from '@/lib/status/types';
-import { Loading, Stat, Section, useStatusQuery, formatMs, formatRate } from '../status-ui';
+import { Loading, Stat, Section, useStatusQuery } from '../status-ui';
+import { formatMs, formatRate } from '../status-format';
 
 export default function NetworkTab({
   active,
