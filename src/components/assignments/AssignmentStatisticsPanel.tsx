@@ -250,7 +250,7 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-12"
+          className="lg:col-span-8"
           title="When work happens"
           description={`When ${unitPlural} submit, by day of week and hour (course time).`}
         >
