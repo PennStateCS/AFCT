@@ -269,32 +269,45 @@ function byParticipantProblem(submissions: StatsSubmission[]): StatsSubmission[]
   return out;
 }
 
+function emptyAttempts(): AttemptsToSolve {
+  return {
+    buckets: [
+      { label: '1', count: 0 },
+      { label: '2', count: 0 },
+      { label: '3', count: 0 },
+      { label: '4', count: 0 },
+      { label: '5+', count: 0 },
+    ],
+    solvedCount: 0,
+    unsolvedCount: 0,
+  };
+}
+
 /**
- * Distribution of how many submissions each participant needed before their first correct
- * one, bucketed 1..4 and 5+. Only pairs that were eventually solved are counted; pairs that
- * submitted but never got it right are reported separately (unsolvedCount).
+ * Per problem, the distribution of how many submissions each participant needed before
+ * their first correct one, bucketed 1..4 and 5+. Pairs that submitted but never solved the
+ * problem are counted in `unsolvedCount`. Keyed by problem id.
  */
-export function computeAttemptsToSolve(submissions: StatsSubmission[]): AttemptsToSolve {
-  const buckets: AttemptsBucket[] = [
-    { label: '1', count: 0 },
-    { label: '2', count: 0 },
-    { label: '3', count: 0 },
-    { label: '4', count: 0 },
-    { label: '5+', count: 0 },
-  ];
-  let solvedCount = 0;
-  let unsolvedCount = 0;
+export function computeAttemptsToSolveByProblem(
+  submissions: StatsSubmission[],
+): Map<string, AttemptsToSolve> {
+  const result = new Map<string, AttemptsToSolve>();
   for (const list of byParticipantProblem(submissions)) {
+    const problemId = list[0]!.problemId;
+    let entry = result.get(problemId);
+    if (!entry) {
+      entry = emptyAttempts();
+      result.set(problemId, entry);
+    }
     const idx = list.findIndex((s) => s.correct);
     if (idx === -1) {
-      unsolvedCount += 1;
-      continue;
+      entry.unsolvedCount += 1;
+    } else {
+      entry.solvedCount += 1;
+      entry.buckets[Math.min(idx + 1, 5) - 1]!.count += 1;
     }
-    solvedCount += 1;
-    const attempts = idx + 1;
-    buckets[Math.min(attempts, 5) - 1]!.count += 1;
   }
-  return { buckets, solvedCount, unsolvedCount };
+  return result;
 }
 
 /**
@@ -427,6 +440,8 @@ export type ProblemStats = {
   firstAttemptCorrect: number;
   /** ...out of how many submitted it at all. */
   firstAttemptSubmitted: number;
+  /** Attempts-until-first-correct distribution for THIS problem (plus its unsolved count). */
+  attempts: AttemptsToSolve;
 };
 
 export type AssignmentStatistics = {
@@ -443,7 +458,6 @@ export type AssignmentStatistics = {
     median: number | null;
   };
   problems: ProblemStats[];
-  attemptsToSolve: AttemptsToSolve;
   timeline: TimelinePoint[];
   heatmap: ActivityHeatmap;
 };
@@ -458,6 +472,7 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
   const requiredProblemCount = problems.length;
   const totalPossible = problems.reduce((sum, p) => sum + p.maxPoints, 0);
   const firstAttempt = computeFirstAttemptSuccess(submissions);
+  const attemptsByProblem = computeAttemptsToSolveByProblem(submissions);
 
   // Histogram: include a participant only when EVERY problem is graded for them, so
   // partially graded work never pollutes the distribution. Everyone else is excluded and
@@ -512,6 +527,7 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
         status: STATUS_ORDER.map((key) => ({ key, count: statusCounts.get(key) ?? 0 })),
         firstAttemptCorrect: fa.correct,
         firstAttemptSubmitted: fa.submitted,
+        attempts: attemptsByProblem.get(p.id) ?? emptyAttempts(),
       };
     });
 
@@ -527,7 +543,6 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
       median: histogram.median,
     },
     problems: problemStats,
-    attemptsToSolve: computeAttemptsToSolve(submissions),
     timeline: computeSubmissionTimeline(submissions, timeZone),
     heatmap: computeActivityHeatmap(submissions, timeZone),
   };
