@@ -82,7 +82,7 @@ Near the heading it shows the normal due date and how many participants have a d
 - **First-attempt success** - for each problem, the share of participants who got it right on their very first submission.
 - **Submissions over time** - submissions per day, with the due date marked, so you can see how work clusters around the deadline.
 - **Problem performance** - a box plot per problem on a shared 0-100% scale, showing the median, middle 50%, whiskers, and any outliers, so you can see which problems were hardest.
-- **When work happens** - a day-of-week by hour heatmap of when submissions arrive (in course time).
+- **When submissions happen** - a day-of-week by hour heatmap of when submission attempts arrive (in course time), shaded from fewer to more so you can spot the busy hours.
 
 Each chart has a matching data table for screen readers, and the figures update as more work is submitted and graded.
 

@@ -11,6 +11,7 @@ import {
   computeFirstAttemptSuccess,
   computeSubmissionTimeline,
   computeActivityHeatmap,
+  heatmapLevel,
   buildAssignmentStatistics,
   STATUS_ORDER,
   type StatsParticipant,
@@ -370,5 +371,24 @@ describe('computeActivityHeatmap', () => {
     );
     expect(matrix[0]![22]).toBe(1); // Sunday, 22:00 local
     expect(matrix[1]![2]).toBe(0);
+  });
+});
+
+describe('heatmapLevel', () => {
+  it('is 0 for empty cells or no activity', () => {
+    expect(heatmapLevel(0, 5)).toBe(0);
+    expect(heatmapLevel(3, 0)).toBe(0);
+  });
+  it('puts the busiest cell at level 4', () => {
+    expect(heatmapLevel(9, 9)).toBe(4);
+  });
+  it('uses a square-root scale so low counts stay visible', () => {
+    // one spike of 16: a single submission (1/16) is sqrt=0.25 -> level 1, not near-zero.
+    expect(heatmapLevel(1, 16)).toBe(1);
+    expect(heatmapLevel(4, 16)).toBe(2); // sqrt(0.25)=0.5
+    expect(heatmapLevel(9, 16)).toBe(3); // sqrt(0.5625)=0.75
+  });
+  it('makes every nonzero cell level 4 when they are all equal', () => {
+    expect(heatmapLevel(1, 1)).toBe(4);
   });
 });
