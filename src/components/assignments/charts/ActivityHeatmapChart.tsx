@@ -40,14 +40,17 @@ export function ActivityHeatmapChart({ matrix, max, unitPlural }: Props) {
               <div className="text-muted-foreground flex items-center pr-1 text-[10px]">{day}</div>
               {HOURS.map((h) => {
                 const count = matrix[d]?.[h] ?? 0;
-                // Faint for zero, scaling up to solid at the busiest cell.
-                const opacity = count === 0 ? 0 : 0.15 + 0.85 * (max > 0 ? count / max : 0);
+                // Transparent for an empty cell (only the border shows); otherwise a floor
+                // of 0.3 so even a single submission is clearly visible, scaling to solid at
+                // the busiest cell. Keep the raw 0 here: `opacity || undefined` would turn an
+                // empty cell fully opaque (0 is falsy), which hides real activity.
+                const opacity = count === 0 ? 0 : 0.3 + 0.7 * (max > 0 ? count / max : 0);
                 const label = `${day} ${hourLabel(h)}: ${count} submission${count === 1 ? '' : 's'}`;
                 return (
                   <div
                     key={h}
                     className="border-border/60 h-4 rounded-[2px] border outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
-                    style={{ backgroundColor: 'var(--color-brand-teal)', opacity: opacity || undefined }}
+                    style={{ backgroundColor: 'var(--color-brand-teal)', opacity }}
                     tabIndex={0}
                     role="img"
                     aria-label={label}
