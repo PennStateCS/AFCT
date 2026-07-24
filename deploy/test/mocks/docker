@@ -10,6 +10,8 @@
 #   MOCK_PS_ID            container id `compose ps -q` prints  (default mockappid)
 #   MOCK_STATE            container .State.Status              (default running)
 #   MOCK_HEALTH           container .State.Health.Status       (default healthy)
+#   MOCK_HEALTH_FLIP_AT   report `unhealthy` until the Nth health poll, then `healthy`
+#   MOCK_HEALTH_COUNT_FILE  counter file backing MOCK_HEALTH_FLIP_AT (default $TMPDIR/...)
 #   MOCK_VOLUMES          names `docker volume ls` prints      (default: none)
 #   MOCK_CONFIG_VOLUMES   names `compose config --volumes`     (default afct_data)
 #   MOCK_ARGS_LOG         if set, append every invocation's args to this file
@@ -49,7 +51,22 @@ case "$cmd" in
       esac
     done
     case "$_tmpl" in
-      *State.Status*) printf '%s|%s\n' "${MOCK_STATE:-running}" "${MOCK_HEALTH:-healthy}" ;;
+      *State.Status*)
+        # MOCK_HEALTH_FLIP_AT lets a test model a slow boot: report `unhealthy` until the
+        # Nth health poll, then `healthy` from then on (counter kept in MOCK_HEALTH_COUNT_FILE).
+        if [ -n "${MOCK_HEALTH_FLIP_AT:-}" ]; then
+          _hcf="${MOCK_HEALTH_COUNT_FILE:-$TMPDIR/mock_health_count}"
+          _n=$(( $(cat "$_hcf" 2>/dev/null || echo 0) + 1 ))
+          printf '%s' "$_n" > "$_hcf"
+          if [ "$_n" -ge "$MOCK_HEALTH_FLIP_AT" ]; then
+            printf '%s|healthy\n' "${MOCK_STATE:-running}"
+          else
+            printf '%s|unhealthy\n' "${MOCK_STATE:-running}"
+          fi
+        else
+          printf '%s|%s\n' "${MOCK_STATE:-running}" "${MOCK_HEALTH:-healthy}"
+        fi
+        ;;
       *State.Health*) printf '%s\n' "${MOCK_HEALTH:-healthy}" ;;
       # Compose project discovery (updater): empty when MOCK_NO_PROJECT is set.
       *Labels*) [ -n "${MOCK_NO_PROJECT:-}" ] && printf '\n' || printf '%s\n' "${MOCK_PROJECT:-afct}" ;;

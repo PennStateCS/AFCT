@@ -102,7 +102,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      # A cold first boot runs `prisma migrate deploy` + seed before the server answers,
+      # which on a small or busy host can take past a minute. Keep the container in
+      # `starting` (not `unhealthy`) until then, so a normal upgrade never flashes
+      # unhealthy in `docker ps` or to the updater's health gate.
+      start_period: 150s
 
   # Submission evaluator, network-isolated. Runs the SAME image as the app, but as a
   # standalone worker process (`src/worker.ts` via tsx) attached to the internal `backend`

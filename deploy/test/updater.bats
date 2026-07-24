@@ -110,14 +110,25 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   [ "$(tag_now)" = "v1.0.0" ]
 }
 
-@test "an unhealthy upgrade rolls the tag back" {
+@test "a permanently unhealthy upgrade rolls the tag back" {
   export MOCK_HEALTH="unhealthy"
   request '{"action":"upgrade","tag":"v1.1.0","requestId":"r8","backupFirst":false}'
   run sh updater.sh
-  # Health never passes for either tag in the mock, so the env is restored to the
-  # original and the final phase reflects the failed upgrade+rollback.
+  # Health never passes for either tag in the mock, so the gate exhausts its timeout,
+  # the env is restored to the original, and the final phase reflects the rollback.
   [ "$(tag_now)" = "v1.0.0" ]
   [[ "$(phase)" == "rolled_back" || "$(phase)" == "failed" ]]
+}
+
+@test "an app that is unhealthy then recovers is NOT rolled back" {
+  # Model a slow cold boot: unhealthy for the first two health polls, healthy after.
+  # The gate must keep the new tag rather than roll back on the first unhealthy read.
+  export MOCK_HEALTH_FLIP_AT=3
+  export MOCK_HEALTH_COUNT_FILE="$TESTDIR/hc"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"r9","backupFirst":false}'
+  run sh updater.sh
+  [ "$(tag_now)" = "v1.1.0" ]
+  [ "$(phase)" = "healthy" ]
 }
 
 @test "a failed image pull rolls back" {

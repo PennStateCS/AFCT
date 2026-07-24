@@ -76,7 +76,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      # A cold first boot runs `prisma migrate deploy` + seed before the server answers,
+      # which on a small or busy host can take past a minute; keep it in `starting` (not
+      # `unhealthy`) until then. Kept in step with deploy/docker-compose.yml.
+      start_period: 150s
 
   nginx:
     # Custom image: pinned nginx + baked openssl + baked config (docker/nginx).
