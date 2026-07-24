@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diffFacultyRoster } from './faculty';
+import { diffFacultyRoster } from './course-faculty';
 
 describe('diffFacultyRoster', () => {
   it('adds members not on the roster', () => {

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import JffViewerDialog from '@/components/JffViewerDialog';
-import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
+import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { FeedbackDialog } from '@/components/dialogs/FeedbackDialog';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import Link from 'next/link';

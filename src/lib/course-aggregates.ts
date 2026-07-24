@@ -1,5 +1,3 @@
-// src/lib/course/aggregates.ts
-//
 // Submission/comment roll-ups for the course GET view. Each helper prefers a single
 // grouped aggregate but degrades gracefully: a delegate (or partial test mock) without
 // `groupBy` falls back to `findMany`, and without that to a per-item query. This

@@ -17,7 +17,7 @@ const authMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
-vi.mock('@/lib/date-utils', () => ({
+vi.mock('@/lib/date-convert', () => ({
   toDateTimeInTimezone: vi.fn((date: string) => new Date(date)),
 }));
 

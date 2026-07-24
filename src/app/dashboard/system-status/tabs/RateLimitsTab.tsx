@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import type { IpDetails, RateLimitedAddress, RateLimitsStatusResponse } from '@/lib/status/types';
 import { Loading, Section, useStatusQuery, copy } from '../status-ui';
 // The server sends `generatedAt` alongside the entries, so every relative time on this

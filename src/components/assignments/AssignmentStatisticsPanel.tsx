@@ -9,7 +9,7 @@ import LoadingSpinner from '@/components/ui/loading-spinner';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone, zoneAbbrev } from '@/lib/date';
+import { formatDateTimeInTimeZone, zoneAbbrev } from '@/lib/date-format';
 import type { AssignmentStatistics } from '@/lib/assignment-statistics';
 import { ScoreHistogramChart } from './charts/ScoreHistogramChart';
 import { SubmissionStatusBar } from './charts/SubmissionStatusBar';

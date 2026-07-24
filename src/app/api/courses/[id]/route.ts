@@ -7,7 +7,7 @@ import { isAdmin, canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { apiError } from '@/lib/api/http';
-import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone } from '@/lib/date-convert';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
@@ -18,9 +18,9 @@ import {
   countByAssignment,
   studentsWithSubmissions,
   type OptionalCountDelegate,
-} from '@/lib/course/aggregates';
-import { diffFacultyRoster } from '@/lib/course/faculty';
-import { serializeAssignment, type AssignmentRow } from '@/lib/course/serialize';
+} from '@/lib/course-aggregates';
+import { diffFacultyRoster } from '@/lib/course-faculty';
+import { serializeAssignment, type AssignmentRow } from '@/lib/course-serialize';
 
 /**
  * Fetches one course with derived metadata, shaped by the `view` query param to
@@ -167,7 +167,7 @@ export const GET = withCourseAuth(
 
       // The findUnique uses conditional includes, so widen to the relations and
       // _count that may be present for the requested view. The row shapes live with
-      // the serializer that consumes them (lib/course/serialize).
+      // the serializer that consumes them (lib/course-serialize).
       const courseData = course as unknown as Omit<
         typeof course,
         'roster' | 'assignments' | 'problems' | '_count'

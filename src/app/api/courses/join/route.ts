@@ -20,7 +20,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { isAdmin } from '@/lib/permissions';
 import { readJson } from '@/lib/api/request';
-import { parseValidDate } from '@/lib/date';
+import { parseValidDate } from '@/lib/date-format';
 
 // Accept both legacy 6-char codes and the current 8-char ones (and a little slack);
 // the real check is the DB lookup below.

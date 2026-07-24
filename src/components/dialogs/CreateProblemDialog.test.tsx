@@ -12,7 +12,7 @@ vi.mock('@/components/ui/InputGroup', () =>
   import('@/test/mocks/ui').then((mod) => mod.inputGroupMock),
 );
 vi.mock('@/components/ui/switch', () => import('@/test/mocks/ui').then((mod) => mod.switchMock));
-vi.mock('@/hooks/useMaxUploadSize', () => ({
+vi.mock('@/hooks/use-max-upload-size', () => ({
   useMaxUploadSize: () => {
     // Mock the hook but don't call fetch in the hook
     return { maxMb: 25, loading: false, error: null };

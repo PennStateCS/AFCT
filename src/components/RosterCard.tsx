@@ -1,7 +1,7 @@
 'use client';
 
 import type { User } from '@prisma/client';
-import { sortRoster, type EnrolledUser } from '@/lib/course-utils';
+import { sortRoster, type EnrolledUser } from '@/lib/course-roster';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';

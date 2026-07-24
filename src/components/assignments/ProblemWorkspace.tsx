@@ -25,7 +25,7 @@ import type { SubmissionStatusFilter } from '@/lib/submission-status-filter';
 import { STATUS_FILTER_OPTIONS, filterSubmissions } from '@/lib/submission-status-filter';
 import { apiPaths } from '@/lib/api-paths';
 import { statusToneClass, getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
-import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date';
+import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type Problem = {

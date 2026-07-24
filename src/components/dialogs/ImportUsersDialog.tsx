@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import SwitchField from '@/components/ui/SwitchField';
 import FileUploadInput from '@/components/FileUploadInput';
-import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
+import { useMaxUploadSize } from '@/hooks/use-max-upload-size';
 import { apiPaths } from '@/lib/api-paths';
 import { BulkImportUsersSchema, BulkImportRowSchema } from '@/schemas/bulk';
 

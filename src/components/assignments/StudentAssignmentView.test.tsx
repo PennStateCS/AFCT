@@ -38,7 +38,7 @@ vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
 
-vi.mock('@/lib/useEmptyStringSymbol', () => ({
+vi.mock('@/hooks/use-empty-string-symbol', () => ({
   useEmptyStringSymbol: () => '∅',
 }));
 

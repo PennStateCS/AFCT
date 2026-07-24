@@ -1,4 +1,4 @@
-import { toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toEndOfDayInTimezone } from '@/lib/date-convert';
 
 export type CalendarAssignment = {
   id: string;

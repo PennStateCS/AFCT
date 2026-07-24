@@ -29,7 +29,7 @@ import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import type { GroupSetSummaryDTO } from '@/lib/group-set-service';
 import type { Assignment } from '@prisma/client';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
-import { formatDateTimeLocal } from '@/lib/date-utils';
+import { formatDateTimeLocal } from '@/lib/date-convert';
 
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 

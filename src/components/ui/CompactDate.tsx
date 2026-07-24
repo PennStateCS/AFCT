@@ -1,4 +1,4 @@
-import { formatDateInTimeZone, formatTimeInTimeZone, parseValidDate } from '@/lib/date';
+import { formatDateInTimeZone, formatTimeInTimeZone, parseValidDate } from '@/lib/date-format';
 
 /**
  * A compact table-cell date: the date on top with the time in muted text below, so a

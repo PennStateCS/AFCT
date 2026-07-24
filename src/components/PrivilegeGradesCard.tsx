@@ -11,7 +11,7 @@ import { showToast } from '@/lib/toast';
 import { Table, Download, RefreshCw, GraduationCap } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { GradeBreakdownDialog } from '@/components/dialogs/GradeBreakdownDialog';
-import { formatTimeInTimeZone } from '@/lib/date';
+import { formatTimeInTimeZone } from '@/lib/date-format';
 import { GradesLmsExportDialog } from '@/components/dialogs/GradesLmsExportDialog';
 import { findCanvasReservedTitleConflicts, type LmsPlatform } from '@/lib/lms-grade-export';
 import { useSession } from 'next-auth/react';

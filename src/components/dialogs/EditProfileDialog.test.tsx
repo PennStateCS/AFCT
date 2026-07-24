@@ -41,7 +41,7 @@ vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
 
-vi.mock('@/hooks/useMaxUploadSize', () => ({
+vi.mock('@/hooks/use-max-upload-size', () => ({
   useMaxUploadSize: () => {
     // Mock the hook but don't call fetch in the hook
     return { maxMb: 25, loading: false, error: null };

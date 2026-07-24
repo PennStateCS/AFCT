@@ -28,7 +28,7 @@ import {
   OverrideLatePolicyField,
 } from '@/components/assignments/DueDateFormPrimitives';
 import type { AssignmentWizardFormSchema } from '@/schemas/assignment';
-import { formatDateTimeLocal } from '@/lib/date-utils';
+import { formatDateTimeLocal } from '@/lib/date-convert';
 import { memberCountLabel } from '@/components/assignments/labels';
 
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
