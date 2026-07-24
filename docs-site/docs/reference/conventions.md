@@ -42,22 +42,28 @@ Important shared files include:
 
 ### Where a new module in `src/lib/` goes
 
-`src/lib/` is mostly flat, with a few folders. The default is flat with a prefix that
-groups the module with its relatives: `course-grades.ts`, `assignment-visibility.ts`,
-`submission-window.ts`. A prefix sorts next to its siblings in any listing, and it means
-you never have to decide which folder a new file belongs to.
+**Put it flat in `src/lib/`, with a prefix that groups it with its relatives**:
+`course-grades.ts`, `assignment-visibility.ts`, `submission-window.ts`. A prefix sorts
+next to its siblings in any listing, so you get the grouping without having to decide
+where the file belongs.
 
-**A cluster earns a folder only when one of these is true:**
+`api/`, `security/`, and `status/` are the only folders. If your module is not part of
+one of those three, it goes flat. **Adding a fourth folder is a decision to argue for in
+review**, not something to do while naming a file.
 
-1. **It has internals**, at least one module that should not be imported from outside the
-   folder. `status/` qualifies: `status/cache.ts` and `status/ip-classify.ts` are used
-   only by their sibling collectors.
-2. **It is a layer, not a domain**, meaning every module in it does the same *kind* of job
-   for the whole app, so the folder name is a role rather than a topic. `api/` (request
-   handling) and `security/` (authentication machinery) qualify.
+Those three exist for two reasons, recorded here so a proposal for a fourth has something
+to be measured against:
 
-A group of files that merely share a topic does **not** earn a folder. That is what the
-prefix is for.
+- **It has internals**, at least one module that should not be imported from outside the
+  folder. `status/` qualifies: `status/cache.ts` and `status/ip-classify.ts` are used only
+  by their sibling collectors.
+- **It is a layer, not a domain**, meaning every module in it does the same *kind* of job
+  for the whole app, so the folder name is a role rather than a topic. `api/` (request
+  handling) and `security/` (authentication machinery) qualify.
+
+Sharing a topic is not a reason. That is what the prefix is for, and it is why the course
+helpers are `course-aggregates.ts` and `course-serialize.ts` rather than a `course/`
+folder.
 
 Two rules that apply either way:
 
