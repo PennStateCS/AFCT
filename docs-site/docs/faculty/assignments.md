@@ -39,32 +39,19 @@ Open an assignment (select its title, or **Manage → View Assignment**). It has
 
 ### Details
 
-Edit the title and description.
+Edit the assignment's title and description. See [Details](details.md).
 
 ### Type
 
-Shows whether the assignment is individual or group, and for a group its group set. You can switch the type here (see [Type](#type-individual-or-group) above for what a switch resets).
+Switch the assignment between individual and group. See [Type](type.md).
 
 ### Assign To
 
-The same audience selector and default schedule as the create wizard, plus a **Date overrides** section for giving one student or group different dates.
-
-To add an override, use **Add override** and pick an assigned target - only students or groups that are actually assigned this assignment are listed. A row appears where you can set any of **Available from**, **Due**, **Late submissions**, and **Accept until**. Any field you leave blank inherits the default schedule, so you can change only the due date and keep the rest. Remove a row to drop the override; the target falls back to the default schedule.
-
-Select **Save changes** to apply your edits to the audience, schedule, and overrides together.
+Choose the audience, set the default schedule, and add per-target date overrides. See [Assign To](assign-to.md).
 
 ### Problems
 
-- **Create Problem** creates a new problem in the problem bank and adds it to this assignment.
-- **Add Existing Problem** reuses a problem already in the problem bank.
-
-Each problem has per-assignment settings:
-
-- **Max Points** controls how much the problem contributes to the assignment grade.
-- **Max Submissions** can be a fixed number or unlimited.
-- **Automatic Grading** controls whether AFCT sends submissions for that problem to the autograder.
-
-These settings can differ from the defaults in the problem bank. Every assigned student (or group) gets the same set of problems. Removing a problem from an assignment does not delete it from the course.
+Add problems to the assignment and set their per-assignment points, submission caps, and autograding. See [Problems](assignment-problems.md).
 
 ### Submissions
 
