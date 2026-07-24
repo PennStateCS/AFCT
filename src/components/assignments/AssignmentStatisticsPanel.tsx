@@ -130,7 +130,7 @@ export function AssignmentStatisticsPanel() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <StatCard
-          className="lg:col-span-6"
+          className="lg:col-span-8"
           title="Assignment score distribution"
           description={`How final assignment percentages are spread across the graded ${unitPlural}.`}
         >
@@ -156,7 +156,7 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-6"
+          className="lg:col-span-4"
           title="Submission status"
           description={`For each problem, the evaluation state of each of the ${statusTotal} ${unitPlural}' latest submission.`}
         >
@@ -178,7 +178,36 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-6"
+          className="lg:col-span-8"
+          title="Problem performance"
+          description={`Score distribution for each problem, on a shared 0-100% scale (${unitPlural}).`}
+        >
+          {stats.problems.length > 0 ? (
+            <ProblemBoxPlotChart problems={stats.problems} unitPlural={unitPlural} />
+          ) : (
+            <EmptyChart message="This assignment has no problems yet." />
+          )}
+        </StatCard>
+
+        <StatCard
+          className="lg:col-span-4"
+          title="Submissions over time"
+          description={`Submissions per day for ${unitPlural}, with the due date marked.`}
+        >
+          {stats.timeline.length > 0 ? (
+            <SubmissionTimelineChart
+              timeline={stats.timeline}
+              dueDate={stats.baseDueDate}
+              timeZone={stats.timezone}
+              unitPlural={unitPlural}
+            />
+          ) : (
+            <EmptyChart message="No submissions yet." />
+          )}
+        </StatCard>
+
+        <StatCard
+          className="lg:col-span-8"
           title="Attempts to solve"
           description={`How many submissions ${unitPlural} needed before their first correct one.`}
         >
@@ -201,7 +230,7 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-6"
+          className="lg:col-span-4"
           title="First-attempt success"
           description={`Share of ${unitPlural} who got each problem right on their first submission.`}
         >
@@ -215,35 +244,6 @@ export function AssignmentStatisticsPanel() {
               }))}
               unitPlural={unitPlural}
             />
-          ) : (
-            <EmptyChart message="This assignment has no problems yet." />
-          )}
-        </StatCard>
-
-        <StatCard
-          className="lg:col-span-6"
-          title="Submissions over time"
-          description={`Submissions per day for ${unitPlural}, with the due date marked.`}
-        >
-          {stats.timeline.length > 0 ? (
-            <SubmissionTimelineChart
-              timeline={stats.timeline}
-              dueDate={stats.baseDueDate}
-              timeZone={stats.timezone}
-              unitPlural={unitPlural}
-            />
-          ) : (
-            <EmptyChart message="No submissions yet." />
-          )}
-        </StatCard>
-
-        <StatCard
-          className="lg:col-span-6"
-          title="Problem performance"
-          description={`Score distribution for each problem, on a shared 0-100% scale (${unitPlural}).`}
-        >
-          {stats.problems.length > 0 ? (
-            <ProblemBoxPlotChart problems={stats.problems} unitPlural={unitPlural} />
           ) : (
             <EmptyChart message="This assignment has no problems yet." />
           )}
