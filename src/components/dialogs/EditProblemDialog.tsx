@@ -25,7 +25,7 @@ import { z } from 'zod';
 import type { Problem } from '@prisma/client';
 import { ProblemFormSchema, UpdateProblemSchema, type ProblemFormRaw } from '@/schemas/problem';
 import FileUploadInput from '@/components/FileUploadInput';
-import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
+import { useMaxUploadSize } from '@/hooks/use-max-upload-size';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';

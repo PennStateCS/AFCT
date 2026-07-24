@@ -14,7 +14,7 @@ import {
   updateAssignmentPublishStatus,
   updateCoursePublishStatus,
   saveCourse,
-} from '@/lib/course-utils';
+} from '@/lib/course-mutations';
 
 export function useCourseHandlers(
   course: FullCourse | null,

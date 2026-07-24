@@ -50,7 +50,7 @@ vi.mock('@/components/FileUploadInput', () => ({
   ),
 }));
 
-vi.mock('@/hooks/useMaxUploadSize', () => ({
+vi.mock('@/hooks/use-max-upload-size', () => ({
   useMaxUploadSize: () => {
     return { maxMb: 25, loading: false, error: null };
   },

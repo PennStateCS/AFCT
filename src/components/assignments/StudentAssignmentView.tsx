@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { ArrowLeft } from 'lucide-react';
-import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
+import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';

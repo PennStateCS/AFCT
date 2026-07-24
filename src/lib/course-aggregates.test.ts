@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { countByAssignment, studentsWithSubmissions } from './aggregates';
+import { countByAssignment, studentsWithSubmissions } from './course-aggregates';
 
 describe('countByAssignment', () => {
   it('returns an empty map for no assignments without touching the delegate', async () => {
