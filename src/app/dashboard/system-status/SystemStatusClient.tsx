@@ -14,14 +14,9 @@ import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatTimeInTimeZone } from '@/lib/date';
 import type { SummaryStatus } from '@/lib/status/types';
-import {
-  Skel,
-  TrendBadge,
-  useTrends,
-  formatUptime,
-  formatDbSize,
-  type HistoryPoint,
-} from './status-ui';
+import { Skel, TrendBadge } from './status-ui';
+import { formatUptime, formatDbSize } from './status-format';
+import { useTrends, type HistoryPoint } from './use-trends';
 import ServerTab from './tabs/ServerTab';
 import DatabaseTab from './tabs/DatabaseTab';
 import DockerTab from './tabs/DockerTab';

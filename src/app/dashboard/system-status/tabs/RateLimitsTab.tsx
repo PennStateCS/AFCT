@@ -12,24 +12,9 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import type { IpDetails, RateLimitedAddress, RateLimitsStatusResponse } from '@/lib/status/types';
 import { Loading, Section, useStatusQuery, copy } from '../status-ui';
-
-/**
- * Rounded "in 12 minutes" / "12 minutes ago" for a moment relative to `from`. The
- * server sends `generatedAt` alongside the entries so these read off one clock and
- * a client whose time is off does not show a restriction as already expired.
- */
-const formatRelative = (at: number, from: number) => {
-  const deltaMs = at - from;
-  const future = deltaMs >= 0;
-  const minutes = Math.round(Math.abs(deltaMs) / 60_000);
-  if (minutes < 1) return future ? 'in under a minute' : 'just now';
-  const hours = Math.floor(minutes / 60);
-  const span =
-    hours >= 1
-      ? `${hours} hour${hours === 1 ? '' : 's'}${minutes % 60 ? ` ${minutes % 60} min` : ''}`
-      : `${minutes} minute${minutes === 1 ? '' : 's'}`;
-  return future ? `in ${span}` : `${span} ago`;
-};
+// The server sends `generatedAt` alongside the entries, so every relative time on this
+// tab is measured against the server's clock rather than the browser's.
+import { formatRelative } from '../status-format';
 
 /**
  * What could be established about the address itself. A reverse-DNS name is the fastest

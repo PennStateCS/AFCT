@@ -1,8 +1,13 @@
 import type { PeerCertificate } from 'tls';
 import { prisma } from '@/lib/prisma';
-import { cached, STATUS_TTL } from '@/lib/status/cache';
+import { boundedCache, STATUS_TTL } from '@/lib/status/cache';
 import { detectProvider } from '@/lib/status/database';
 import type { NetworkStatusResponse } from '@/lib/status/types';
+
+// Keyed on a hostname read from configuration, so it is a dynamic key even though a
+// given deployment only ever produces two or three of them.
+const dnsCache = boundedCache<string[] | null>({ max: 32, ttlMs: STATUS_TTL.network });
+const tlsCache = boundedCache<string | null>({ max: 32, ttlMs: STATUS_TTL.network });
 
 async function resolveHost(host?: string | null): Promise<string[] | null> {
   if (!host) return null;
@@ -118,13 +123,11 @@ export async function collectNetwork(origin: string): Promise<NetworkStatusRespo
   } catch {}
 
   const [dbResolved, authResolved, authLatencyMs, authCertExpiry] = await Promise.all([
-    cached(`dns:${dbHost}`, STATUS_TTL.network, () => resolveHost(dbHost)),
-    cached(`dns:${authHost}`, STATUS_TTL.network, () => resolveHost(authHost)),
+    dnsCache.get(`${dbHost}`, () => resolveHost(dbHost)),
+    dnsCache.get(`${authHost}`, () => resolveHost(authHost)),
     measureFetchLatency(authProbeUrl),
     authProtocol === 'https:'
-      ? cached(`tls:${authHost}:${authPort}`, STATUS_TTL.network, () =>
-          getTlsExpiry(authHost, authPort),
-        )
+      ? tlsCache.get(`${authHost}:${authPort}`, () => getTlsExpiry(authHost, authPort))
       : Promise.resolve(null),
   ]);
 
