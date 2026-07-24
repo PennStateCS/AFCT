@@ -1,0 +1,12 @@
+# Force every report through a template (bug or feature) rather than a blank box, so
+# reports arrive with the fields we need to act on them.
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/PennStateCS/AFCT/security/advisories/new
+    about: >-
+      Do not open a public issue for a security problem. Use GitHub's private
+      advisory so the details stay confidential until a fix is out.
+  - name: Documentation
+    url: https://pennstatecs.github.io/AFCT/
+    about: Setup, faculty, and admin guides. Check here before filing a bug.
