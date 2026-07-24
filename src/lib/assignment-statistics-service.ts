@@ -1,11 +1,11 @@
 import { prisma } from '@/lib/prisma';
-import { effectiveDeadline, type OverrideRow } from '@/lib/effective-deadline';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 import {
   buildAssignmentStatistics,
   type AssignmentStatistics,
   type StatsParticipant,
   type StatsProblem,
+  type SubmissionQueueStatus,
 } from '@/lib/assignment-statistics';
 
 /**
@@ -17,7 +17,8 @@ import {
  * Unit: an INDIVIDUAL assignment (no group set) is measured in students; a GROUP
  * assignment is measured in groups. The two are never mixed. Because an autograded group
  * submission fans its grade out identically to every member (see submission-worker), a
- * group's per-problem grade is read from its members' grade rows.
+ * group's per-problem grade is read from its members' grade rows, and its per-problem
+ * submission status from the group's own submissions.
  */
 export type AssignmentStatisticsPayload = AssignmentStatistics & {
   assignmentTitle: string;
@@ -27,10 +28,12 @@ export type AssignmentStatisticsPayload = AssignmentStatistics & {
   timezone: string;
 };
 
+/** Just the override fields needed to decide who has a due-date exception. */
+type OverrideTarget = { targetType: 'STUDENT' | 'GROUP'; userId: string | null; groupId: string | null };
+
 export async function getAssignmentStatistics(
   courseId: string,
   assignmentId: string,
-  now: Date = new Date(),
 ): Promise<AssignmentStatisticsPayload | null> {
   const assignment = await prisma.assignment.findFirst({
     where: { id: assignmentId, courseId },
@@ -38,9 +41,6 @@ export async function getAssignmentStatistics(
       id: true,
       title: true,
       dueDate: true,
-      unlockAt: true,
-      allowLateSubmissions: true,
-      lateCutoff: true,
       assignedToEveryone: true,
       groupSetId: true,
       course: { select: { timezone: true } },
@@ -62,35 +62,12 @@ export async function getAssignmentStatistics(
     .sort((a, b) => a.title.localeCompare(b.title))
     .map((p, i) => ({ ...p, order: i }));
 
-  const base = {
-    unlockAt: assignment.unlockAt,
-    dueDate: assignment.dueDate,
-    allowLateSubmissions: assignment.allowLateSubmissions,
-    lateCutoff: assignment.lateCutoff,
-  };
-
-  // All override rows for the assignment (student + group), resolved per participant below.
-  const overrideRows = await prisma.assignmentOverride.findMany({
+  // Override rows only decide who has a due-date exception (shown near the heading); the
+  // status chart no longer depends on deadlines.
+  const overrides: OverrideTarget[] = await prisma.assignmentOverride.findMany({
     where: { assignmentId },
-    select: {
-      targetType: true,
-      userId: true,
-      groupId: true,
-      unlockAt: true,
-      dueDate: true,
-      lateCutoff: true,
-      allowLateSubmissions: true,
-    },
+    select: { targetType: true, userId: true, groupId: true },
   });
-  const overrides: OverrideRow[] = overrideRows.map((o) => ({
-    targetType: o.targetType,
-    userId: o.userId,
-    groupId: o.groupId,
-    unlockAt: o.unlockAt,
-    dueDate: o.dueDate,
-    lateCutoff: o.lateCutoff,
-    allowLateSubmissions: o.allowLateSubmissions,
-  }));
 
   // Per-(student, problem) recorded grade. A key existing means "graded"; a value of 0 is
   // a real zero. Used directly for individual participants and aggregated for groups.
@@ -108,14 +85,13 @@ export async function getAssignmentStatistics(
   const isGroupAssignment = assignment.groupSetId != null;
 
   const participants = isGroupAssignment
-    ? await buildGroupParticipants(assignment.groupSetId!, assignment, base, overrides, gradesByStudent)
-    : await buildStudentParticipants(courseId, assignment, base, overrides, gradesByStudent);
+    ? await buildGroupParticipants(assignment.groupSetId!, assignment, overrides, gradesByStudent)
+    : await buildStudentParticipants(courseId, assignment, overrides, gradesByStudent);
 
   const stats = buildAssignmentStatistics({
     unit: isGroupAssignment ? 'group' : 'student',
     problems,
     participants,
-    now,
   });
 
   return {
@@ -125,13 +101,6 @@ export async function getAssignmentStatistics(
     timezone: assignment.course?.timezone ?? 'UTC',
   };
 }
-
-type BaseDeadline = {
-  unlockAt: Date | null;
-  dueDate: Date;
-  allowLateSubmissions: boolean;
-  lateCutoff: Date | null;
-};
 
 type AssignmentShape = {
   id: string;
@@ -144,8 +113,7 @@ type AssignmentShape = {
 async function buildStudentParticipants(
   courseId: string,
   assignment: AssignmentShape,
-  base: BaseDeadline,
-  overrides: OverrideRow[],
+  overrides: OverrideTarget[],
   gradesByStudent: Map<string, Record<string, number>>,
 ): Promise<StatsParticipant[]> {
   const roster = await prisma.roster.findMany({
@@ -181,47 +149,32 @@ async function buildStudentParticipants(
   );
   if (assignedStudentIds.length === 0) return [];
 
-  // Completion + activity, per student, without loading every attempt: the latest correct
-  // submission per problem, and the set of students with any submission at all.
-  // Per (student, problem): latest correct-submission time, and whether any submission
-  // exists. Both grouped by problem so the charts can classify each problem independently.
-  const [completedRows, anySubRows] = await Promise.all([
-    prisma.submission.groupBy({
-      by: ['studentId', 'problemId'],
-      where: { assignmentId: assignment.id, correct: true, studentGroupId: null },
-      _max: { submittedAt: true },
-    }),
-    prisma.submission.groupBy({
-      by: ['studentId', 'problemId'],
-      where: { assignmentId: assignment.id, studentGroupId: null },
-    }),
-  ]);
-
-  const correctAt = new Map<string, Record<string, Date>>();
-  for (const row of completedRows) {
-    if (!row._max.submittedAt) continue;
-    const rec = correctAt.get(row.studentId) ?? {};
-    rec[row.problemId] = row._max.submittedAt;
-    correctAt.set(row.studentId, rec);
-  }
-  const submitted = new Map<string, string[]>();
-  for (const row of anySubRows) {
-    const list = submitted.get(row.studentId) ?? [];
-    list.push(row.problemId);
-    submitted.set(row.studentId, list);
-  }
-
-  return assignedStudentIds.map((studentId) => {
-    const eff = effectiveDeadline(base, overrides, studentId, []);
-    return {
-      id: studentId,
-      effectiveDue: eff.dueDate,
-      hasException: eff.source !== 'base',
-      problemGrades: gradesByStudent.get(studentId) ?? {},
-      correctAtByProblem: correctAt.get(studentId) ?? {},
-      submittedProblemIds: submitted.get(studentId) ?? [],
-    };
+  // The queue state of each (student, problem)'s LATEST submission: distinct on the pair,
+  // newest first, so the first row per pair is the current one (same pattern as
+  // student-assignments.ts). No submission for a pair -> that problem is "missing".
+  const latestRows = await prisma.submission.findMany({
+    where: { assignmentId: assignment.id, studentGroupId: null },
+    distinct: ['studentId', 'problemId'],
+    orderBy: { submittedAt: 'desc' },
+    select: { studentId: true, problemId: true, status: true },
   });
+  const statusByStudent = new Map<string, Record<string, SubmissionQueueStatus>>();
+  for (const row of latestRows) {
+    const rec = statusByStudent.get(row.studentId) ?? {};
+    rec[row.problemId] = row.status as SubmissionQueueStatus;
+    statusByStudent.set(row.studentId, rec);
+  }
+
+  const studentHasException = new Set(
+    overrides.filter((o) => o.targetType === 'STUDENT' && o.userId).map((o) => o.userId!),
+  );
+
+  return assignedStudentIds.map((studentId) => ({
+    id: studentId,
+    hasException: studentHasException.has(studentId),
+    problemGrades: gradesByStudent.get(studentId) ?? {},
+    latestStatusByProblem: statusByStudent.get(studentId) ?? {},
+  }));
 }
 
 // ─── group participants ──────────────────────────────────────────────────────
@@ -229,8 +182,7 @@ async function buildStudentParticipants(
 async function buildGroupParticipants(
   groupSetId: string,
   assignment: AssignmentShape,
-  base: BaseDeadline,
-  overrides: OverrideRow[],
+  overrides: OverrideTarget[],
   gradesByStudent: Map<string, Record<string, number>>,
 ): Promise<StatsParticipant[]> {
   const groups = await prisma.studentGroup.findMany({
@@ -242,44 +194,31 @@ async function buildGroupParticipants(
     assignment.assignees.map((a) => a.groupId).filter((g): g is string => !!g),
   );
   // Assigned groups: everyone -> all groups in the set, else the groups named as assignees.
-  // A memberless group can't participate, so it's not counted (avoids inflating "not started").
+  // A memberless group can't participate, so it's not counted (avoids inflating "missing").
   const assignedGroups = groups.filter(
     (g) => (assignment.assignedToEveryone || namedGroupIds.has(g.id)) && g.memberships.length > 0,
   );
   if (assignedGroups.length === 0) return [];
 
-  const [completedRows, anySubRows] = await Promise.all([
-    prisma.submission.groupBy({
-      by: ['studentGroupId', 'problemId'],
-      where: { assignmentId: assignment.id, correct: true, studentGroupId: { not: null } },
-      _max: { submittedAt: true },
-    }),
-    prisma.submission.groupBy({
-      by: ['studentGroupId', 'problemId'],
-      where: { assignmentId: assignment.id, studentGroupId: { not: null } },
-    }),
-  ]);
-
-  const correctAt = new Map<string, Record<string, Date>>();
-  for (const row of completedRows) {
-    if (!row.studentGroupId || !row._max.submittedAt) continue;
-    const rec = correctAt.get(row.studentGroupId) ?? {};
-    rec[row.problemId] = row._max.submittedAt;
-    correctAt.set(row.studentGroupId, rec);
-  }
-  const submitted = new Map<string, string[]>();
-  for (const row of anySubRows) {
+  const latestRows = await prisma.submission.findMany({
+    where: { assignmentId: assignment.id, studentGroupId: { not: null } },
+    distinct: ['studentGroupId', 'problemId'],
+    orderBy: { submittedAt: 'desc' },
+    select: { studentGroupId: true, problemId: true, status: true },
+  });
+  const statusByGroup = new Map<string, Record<string, SubmissionQueueStatus>>();
+  for (const row of latestRows) {
     if (!row.studentGroupId) continue;
-    const list = submitted.get(row.studentGroupId) ?? [];
-    list.push(row.problemId);
-    submitted.set(row.studentGroupId, list);
+    const rec = statusByGroup.get(row.studentGroupId) ?? {};
+    rec[row.problemId] = row.status as SubmissionQueueStatus;
+    statusByGroup.set(row.studentGroupId, rec);
   }
+
+  const groupHasException = new Set(
+    overrides.filter((o) => o.targetType === 'GROUP' && o.groupId).map((o) => o.groupId!),
+  );
 
   return assignedGroups.map((group) => {
-    // A group inherits its due date from a GROUP override on this group (or the base). The
-    // sentinel student id can't match any STUDENT override, so only the group rule applies.
-    const eff = effectiveDeadline(base, overrides, `__group__:${group.id}`, [group.id]);
-
     // Aggregate members' grade rows: a problem is graded for the group when any member has
     // a grade row (autograde writes identical rows to every member); take the max so a lone
     // manually-graded member is still reflected.
@@ -295,11 +234,9 @@ async function buildGroupParticipants(
 
     return {
       id: group.id,
-      effectiveDue: eff.dueDate,
-      hasException: eff.source === 'group-override',
+      hasException: groupHasException.has(group.id),
       problemGrades: groupGrades,
-      correctAtByProblem: correctAt.get(group.id) ?? {},
-      submittedProblemIds: submitted.get(group.id) ?? [],
+      latestStatusByProblem: statusByGroup.get(group.id) ?? {},
     };
   });
 }

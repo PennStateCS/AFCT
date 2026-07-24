@@ -77,7 +77,7 @@ The **Statistics** tab gives you an at-a-glance read on how the class is doing o
 Near the heading it shows the normal due date and how many participants have a due-date exception. Below that are three charts:
 
 - **Assignment score distribution** - a histogram of final assignment percentages (total earned points over total possible), in 10-point ranges. Only fully graded work is included; the card notes how many were left out as incomplete or ungraded, and marks the mean and median.
-- **Submission status** - one bar per problem, each splitting participants into **On time**, **Late**, **In progress**, **Missing**, and **Not started** for that problem, measured against each participant's own effective due date (so a granted extension is reflected here). A recorded grade takes precedence over submissions: a problem you graded by hand counts as done even with no submission on file, and a grade you lower to zero counts as not done even if a submission passed the autograder.
+- **Submission status** - one bar per problem showing where each participant's latest submission sits in the evaluation queue: **Completed** (evaluated), **Processing** (being evaluated now), **Pending** (queued, waiting for the autograder), **Failed** (evaluation errored), and **Missing** (no submission yet). This tracks the grading pipeline, so a problem someone has not submitted shows as Missing regardless of the due date.
 - **Problem performance** - a box plot per problem on a shared 0-100% scale, showing the median, middle 50%, whiskers, and any outliers, so you can see which problems were hardest.
 
 Each chart has a matching data table for screen readers, and the figures update as more work is submitted and graded.
