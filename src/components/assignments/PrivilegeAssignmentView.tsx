@@ -37,8 +37,8 @@ import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsF
 import { AssignmentProblemSettingsDialog } from '@/components/dialogs/AssignmentProblemSettingsDialog';
 import { AssignmentStatisticsPanel } from '@/components/assignments/AssignmentStatisticsPanel';
 import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSimilarityPanel';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TAB_BAR_LIST_CLASS, TAB_BAR_TRIGGER_CLASS } from '@/components/course/course-tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { TabBar } from '@/components/course/course-tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
 import type { Problem } from '@prisma/client';
@@ -369,6 +369,18 @@ export default function AssignmentDashboardPage({
       }
     : undefined;
 
+  // Single source of truth for the assignment tab strip and its mobile select
+  // fallback, so the two stay in sync.
+  const assignmentTabs = [
+    { value: 'description', label: 'Details', Icon: AlignLeft },
+    { value: 'type', label: 'Type', Icon: Shapes },
+    { value: 'settings', label: 'Assign To', Icon: Users },
+    { value: 'problems', label: 'Problems', Icon: FileText },
+    { value: 'submissions', label: 'Submissions', Icon: Package },
+    { value: 'statistics', label: 'Statistics', Icon: BarChart3 },
+    { value: 'similarity', label: 'Similarity', Icon: Fingerprint },
+  ] as const;
+
   return (
     <div className="mx-auto w-full text-sm">
       <Tabs value={tab} onValueChange={handleTabChange}>
@@ -431,36 +443,13 @@ export default function AssignmentDashboardPage({
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Tab selector, matching the underline style used on the course page. */}
-            <TabsList aria-label="Assignment sections" className={TAB_BAR_LIST_CLASS}>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="description">
-                <AlignLeft className="size-3.5 opacity-70" />
-                Details
-              </TabsTrigger>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="type">
-                <Shapes className="size-3.5 opacity-70" />
-                Type
-              </TabsTrigger>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="settings">
-                <Users className="size-3.5 opacity-70" />
-                Assign To
-              </TabsTrigger>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="problems">
-                <FileText className="size-3.5 opacity-70" />
-                Problems
-              </TabsTrigger>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="submissions">
-                <Package className="size-3.5 opacity-70" />
-                Submissions
-              </TabsTrigger>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="statistics">
-                <BarChart3 className="size-3.5 opacity-70" />
-                Statistics
-              </TabsTrigger>
-              <TabsTrigger className={TAB_BAR_TRIGGER_CLASS} value="similarity">
-                <Fingerprint className="size-3.5 opacity-70" />
-                Similarity
-              </TabsTrigger>
-            </TabsList>
+            <TabBar
+              ariaLabel="Assignment sections"
+              selectId="assignment-tab-select"
+              value={tab}
+              onValueChange={handleTabChange}
+              tabs={assignmentTabs}
+            />
             <TabsContent value="description">
               <div className="space-y-4">
                 <h2

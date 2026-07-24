@@ -109,6 +109,8 @@ export function AdminCourseView({
 
         <CardContent className="space-y-6">
           <CourseTabBar
+            value={tab}
+            onValueChange={onTabChange}
             counts={{
               assignments: assignmentCount,
               problems: problemCount,

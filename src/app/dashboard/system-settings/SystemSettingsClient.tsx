@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { TAB_BAR_LIST_CLASS, TAB_BAR_TRIGGER_CLASS } from '@/components/course/course-tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { TabBar } from '@/components/course/course-tabs';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -335,7 +335,16 @@ export default function SystemSettingsClient() {
     hcaptchaSecretKey.trim() !== '' ||
     (hcaptchaSecretConfigured && !hcaptchaSecretClear);
 
-  const triggerClass = TAB_BAR_TRIGGER_CLASS;
+  // Single source of truth for the tab strip and its mobile select fallback, so the
+  // two never drift apart.
+  const settingsTabs = [
+    { value: 'general', label: 'General', Icon: SlidersHorizontal },
+    { value: 'queue', label: 'Evaluator', Icon: Cpu },
+    { value: 'backups', label: 'Backups', Icon: DatabaseBackup },
+    { value: 'captcha', label: 'Captcha', Icon: ShieldCheck },
+    { value: 'tls', label: 'TLS Certificate', Icon: Lock },
+    { value: 'updates', label: 'Updates', Icon: RefreshCw },
+  ] as const;
 
   return (
     <div className="space-y-4 pb-8">
@@ -355,32 +364,13 @@ export default function SystemSettingsClient() {
 
         <CardContent>
           <Tabs value={tab} onValueChange={handleTabChange} className="w-full gap-6">
-            <TabsList aria-label="System settings sections" className={TAB_BAR_LIST_CLASS}>
-              <TabsTrigger value="general" className={triggerClass}>
-                <SlidersHorizontal className="size-3.5 opacity-70" aria-hidden="true" />
-                General
-              </TabsTrigger>
-              <TabsTrigger value="queue" className={triggerClass}>
-                <Cpu className="size-3.5 opacity-70" aria-hidden="true" />
-                Evaluator
-              </TabsTrigger>
-              <TabsTrigger value="backups" className={triggerClass}>
-                <DatabaseBackup className="size-3.5 opacity-70" aria-hidden="true" />
-                Backups
-              </TabsTrigger>
-              <TabsTrigger value="captcha" className={triggerClass}>
-                <ShieldCheck className="size-3.5 opacity-70" aria-hidden="true" />
-                Captcha
-              </TabsTrigger>
-              <TabsTrigger value="tls" className={triggerClass}>
-                <Lock className="size-3.5 opacity-70" aria-hidden="true" />
-                TLS Certificate
-              </TabsTrigger>
-              <TabsTrigger value="updates" className={triggerClass}>
-                <RefreshCw className="size-3.5 opacity-70" aria-hidden="true" />
-                Updates
-              </TabsTrigger>
-            </TabsList>
+            <TabBar
+              ariaLabel="System settings sections"
+              selectId="system-settings-tab-select"
+              value={tab}
+              onValueChange={handleTabChange}
+              tabs={settingsTabs}
+            />
 
             <TabsContent value="general">
               <GeneralTab
