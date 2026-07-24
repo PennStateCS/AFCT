@@ -235,7 +235,15 @@ wait_for_health() {
         "$_id" 2>/dev/null || printf 'missing|none')
       case "$_state" in
         running\|healthy) return 0 ;;
-        running\|unhealthy) return 1 ;;
+        # `unhealthy` (and `starting`, which matches no case and falls through) are both
+        # transient during a cold first boot: a heavy app running DB migrations can fail
+        # its early healthchecks and briefly flip to `unhealthy` before it finishes, then
+        # recover. Keep polling within the HEALTH_TIMEOUT budget instead of rolling back
+        # on the first bad read -- that first-read rollback caused spurious rollbacks on
+        # slow or disk-pressured hosts (a still-unhealthy app is still rolled back once the
+        # budget runs out below). A crashed container (exited/dead) cannot recover, so it
+        # still fails fast.
+        running\|unhealthy) ;;
         # No healthcheck on the image: "running" is the only signal we have, so accept
         # it rather than looping to a timeout (which would roll back every upgrade). A
         # stack that wants rollback-on-boot-failure must define a container healthcheck.
