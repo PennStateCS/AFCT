@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, Download, File, FileText, MessageSquare, RotateCcw } from 'lucide-react';
+import { Download, File, FileText, MessageSquare, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -315,6 +315,7 @@ export default function ProblemWorkspace({
                           <TableHead className="px-2 py-1">Submitted by</TableHead>
                         ) : null}
                         <TableHead className="px-2 py-1">Status</TableHead>
+                        <TableHead className="px-2 py-1">File</TableHead>
                         <TableHead className="px-2 py-1">Manage</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -322,7 +323,7 @@ export default function ProblemWorkspace({
                       {visibleSubmissions.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={showSubmitter ? 4 : 3}
+                            colSpan={showSubmitter ? 5 : 4}
                             className="text-muted-foreground py-6 text-center text-sm"
                           >
                             No submissions match the selected filter.
@@ -363,6 +364,32 @@ export default function ProblemWorkspace({
                                 {renderStatusCell(submission)}
                               </TableCell>
                               <TableCell className="p-1 align-top">
+                                {submission.fileName ? (
+                                  <div className="flex items-center gap-2">
+                                    {/* Click the name to preview; the icon downloads. */}
+                                    <button
+                                      type="button"
+                                      onClick={() => onViewSubmission(submission)}
+                                      className="break-all text-blue-600 hover:underline"
+                                      title={`Preview ${submission.originalFileName || 'submission'}`}
+                                    >
+                                      {submission.originalFileName || submission.fileName}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownload(submission)}
+                                      className="text-muted-foreground hover:text-foreground shrink-0"
+                                      title={`Download ${submission.originalFileName || 'submission'}`}
+                                      aria-label={`Download ${submission.originalFileName || 'submission'}`}
+                                    >
+                                      <Download className="h-4 w-4" aria-hidden="true" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="p-1 align-top">
                                 <div className="flex items-center gap-2 whitespace-nowrap">
                                   <Button
                                     variant="secondary"
@@ -381,29 +408,6 @@ export default function ProblemWorkspace({
                                     }
                                   >
                                     <File className="h-4 w-4" />
-                                  </Button>
-
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => onViewSubmission(submission)}
-                                    title="View submission"
-                                    aria-label="View submission"
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={!submission.fileName}
-                                    onClick={() => handleDownload(submission)}
-                                    title="Download submission"
-                                    aria-label="Download submission"
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <Download className="h-4 w-4" />
                                   </Button>
 
                                   <Button

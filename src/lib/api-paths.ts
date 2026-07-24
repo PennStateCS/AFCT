@@ -52,7 +52,8 @@ export const apiPaths = {
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
   courseRosterResetPassword: (id: string, userId: string) =>
     `/api/courses/${id}/roster/${userId}/reset-password`,
-  courseAssignments: (id: string) => `/api/courses/${id}/assignments`,
+  courseAssignments: (id: string, opts?: { includeUnpublished?: boolean }) =>
+    `/api/courses/${id}/assignments${qs({ includeUnpublished: opts?.includeUnpublished ? '1' : undefined })}`,
   courseJoin: () => '/api/courses/join',
 
   // --- "My" (self-scoped, /api/me/*) --------------------------------------

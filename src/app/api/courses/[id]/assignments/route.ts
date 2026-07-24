@@ -10,12 +10,15 @@ import { resolveUnlockAt } from '@/lib/assignment-late-window';
 import { AssignmentCreateApiSchema } from '@/schemas/assignment';
 
 /**
- * Lists a course's published assignments with each one's total and max grade
- * (summed across its problems). Course faculty or a system admin (TAs excluded).
+ * Lists a course's assignments with each one's total and max grade (summed across
+ * its problems). Published only by default; pass `includeUnpublished=1` to also
+ * return drafts (used by the staff assignment switcher). Course staff or a system
+ * admin.
  * @openapi
- * summary: List a course's published assignments
+ * summary: List a course's assignments
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: includeUnpublished, in: query, required: false, schema: { type: boolean }, description: "When true, include unpublished (draft) assignments." }
  * responses:
  *   200:
  *     description: Published assignments with totalGrade and maxGrade.
@@ -28,7 +31,7 @@ import { AssignmentCreateApiSchema } from '@/schemas/assignment';
  *   500: { description: Server error. }
  */
 export const GET = withCourseAuth(
-  async (_req, _ctx, { courseId }) => {
+  async (req, _ctx, { courseId }) => {
     try {
       const course = await prisma.course.findUnique({
         where: { id: courseId },
@@ -39,11 +42,16 @@ export const GET = withCourseAuth(
         return NextResponse.json({ error: 'Course not found' }, { status: 404 });
       }
 
+      // Staff surfaces (the assignment switcher) need drafts too; other callers get
+      // published-only. This route is manage-gated, so no student ever sees drafts.
+      const includeUnpublished =
+        new URL(req.url).searchParams.get('includeUnpublished') === '1';
+
       // Pull each assignment's problems too, to derive total/max grade below.
       const assignments = await prisma.assignment.findMany({
         where: {
           courseId: courseId,
-          isPublished: true,
+          ...(includeUnpublished ? {} : { isPublished: true }),
         },
         select: {
           id: true,

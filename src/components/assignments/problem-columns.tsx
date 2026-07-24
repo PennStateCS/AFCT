@@ -193,28 +193,27 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
         const fileUrl = row.original.fileName
           ? apiPaths.files.solution(row.original.fileName, { download: true })
           : null;
-        const fileName = row.original.originalFileName || 'Download';
+        const fileName = row.original.originalFileName || 'solution';
         return fileUrl ? (
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
+            {/* Click the name to open the viewer; the icon downloads. */}
+            <button
+              type="button"
               onClick={() => openRenderViewer(row.original)}
-              title="Render file"
-              aria-label={`Render file for ${row.original.title}`}
+              className="break-all text-blue-600 hover:underline"
+              title={`View ${fileName}`}
             >
-              <Eye className="h-4 w-4" />
-            </Button>
-            <Button asChild variant="secondary" size="sm">
-              <a
-                href={fileUrl}
-                download={fileName}
-                title={`Download ${fileName}`}
-                aria-label={`Download ${fileName} for ${row.original.title}`}
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-              </a>
-            </Button>
+              {fileName}
+            </button>
+            <a
+              href={fileUrl}
+              download={fileName}
+              title={`Download ${fileName}`}
+              aria-label={`Download ${fileName} for ${row.original.title}`}
+              className="text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+            </a>
           </div>
         ) : (
           <span className="text-muted-foreground">No file</span>

@@ -98,6 +98,28 @@ describe('GET /api/courses/[id]/assignments', () => {
     expect(body[0].maxGrade).toBe(10);
   });
 
+  it('lists published only by default, but includes drafts when asked', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
+    prismaMock.assignment.findMany.mockResolvedValue([]);
+
+    await GET(new NextRequest('http://localhost/api/courses/c1/assignments'), {
+      params: Promise.resolve({ id: 'c1' }),
+    });
+    expect(prismaMock.assignment.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { courseId: 'c1', isPublished: true } }),
+    );
+
+    await GET(
+      new NextRequest('http://localhost/api/courses/c1/assignments?includeUnpublished=1'),
+      { params: Promise.resolve({ id: 'c1' }) },
+    );
+    expect(prismaMock.assignment.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { courseId: 'c1' } }),
+    );
+  });
+
   it('returns 500 when fetching assignments throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });

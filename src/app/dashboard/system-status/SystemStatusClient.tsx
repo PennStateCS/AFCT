@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { TabBar } from '@/components/course/course-tabs';
 import { Server, Database, Container, Network, Users, HardDrive, ShieldAlert } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
@@ -185,21 +186,13 @@ export default function SystemStatusClient() {
             ))}
           </div>
 
-          <TabsList
-            aria-label="System status sections"
-            className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
-          >
-            {TABS.map((t) => (
-              <TabsTrigger
-                key={t.value}
-                value={t.value}
-                className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
-              >
-                <t.icon aria-hidden="true" />
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <TabBar
+            ariaLabel="System status sections"
+            selectId="system-status-tab-select"
+            value={tab}
+            onValueChange={setTab}
+            tabs={TABS.map((t) => ({ value: t.value, label: t.label, Icon: t.icon }))}
+          />
 
           <div className="pt-2">
             <TabsContent value="server">

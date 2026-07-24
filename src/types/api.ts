@@ -1336,8 +1336,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List a course's published assignments
-         * @description Lists a course's published assignments with each one's total and max grade  (summed across its problems). Course faculty or a system admin (TAs excluded).
+         * List a course's assignments
+         * @description Lists a course's assignments with each one's total and max grade (summed across  its problems). Published only by default; pass `includeUnpublished=1` to also  return drafts (used by the staff assignment switcher). Course staff or a system  admin.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/route.ts)
          */
@@ -6557,7 +6557,10 @@ export interface operations {
     };
     getCoursesByIdAssignments: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When true, include unpublished (draft) assignments. */
+                includeUnpublished?: boolean;
+            };
             header?: never;
             path: {
                 id: string;
