@@ -14,6 +14,10 @@ import type { AssignmentStatistics } from '@/lib/assignment-statistics';
 import { ScoreHistogramChart } from './charts/ScoreHistogramChart';
 import { SubmissionStatusBar } from './charts/SubmissionStatusBar';
 import { ProblemBoxPlotChart } from './charts/ProblemBoxPlotChart';
+import { AttemptsHistogramChart } from './charts/AttemptsHistogramChart';
+import { FirstAttemptChart } from './charts/FirstAttemptChart';
+import { SubmissionTimelineChart } from './charts/SubmissionTimelineChart';
+import { ActivityHeatmapChart } from './charts/ActivityHeatmapChart';
 
 // Mirrors the server payload (assignment-statistics-service). Declared here rather than
 // imported so this client component never pulls the Prisma-backed service into the bundle.
@@ -126,7 +130,7 @@ export function AssignmentStatisticsPanel() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <StatCard
-          className="lg:col-span-7"
+          className="lg:col-span-6"
           title="Assignment score distribution"
           description={`How final assignment percentages are spread across the graded ${unitPlural}.`}
         >
@@ -152,7 +156,7 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-5"
+          className="lg:col-span-6"
           title="Submission status"
           description={`For each problem, the evaluation state of each of the ${statusTotal} ${unitPlural}' latest submission.`}
         >
@@ -174,7 +178,67 @@ export function AssignmentStatisticsPanel() {
         </StatCard>
 
         <StatCard
-          className="lg:col-span-12"
+          className="lg:col-span-6"
+          title="Attempts to solve"
+          description={`How many submissions ${unitPlural} needed before their first correct one.`}
+        >
+          {stats.attemptsToSolve.solvedCount > 0 ? (
+            <>
+              <AttemptsHistogramChart
+                buckets={stats.attemptsToSolve.buckets}
+                solvedCount={stats.attemptsToSolve.solvedCount}
+                unitPlural={unitPlural}
+              />
+              {stats.attemptsToSolve.unsolvedCount > 0 && (
+                <p className="text-muted-foreground mt-2 text-xs">
+                  {stats.attemptsToSolve.unsolvedCount} attempted but not yet solved (excluded).
+                </p>
+              )}
+            </>
+          ) : (
+            <EmptyChart message="No solved submissions yet." />
+          )}
+        </StatCard>
+
+        <StatCard
+          className="lg:col-span-6"
+          title="First-attempt success"
+          description={`Share of ${unitPlural} who got each problem right on their first submission.`}
+        >
+          {stats.problems.length > 0 ? (
+            <FirstAttemptChart
+              problems={stats.problems.map((p) => ({
+                id: p.id,
+                title: p.title,
+                correct: p.firstAttemptCorrect,
+                submitted: p.firstAttemptSubmitted,
+              }))}
+              unitPlural={unitPlural}
+            />
+          ) : (
+            <EmptyChart message="This assignment has no problems yet." />
+          )}
+        </StatCard>
+
+        <StatCard
+          className="lg:col-span-6"
+          title="Submissions over time"
+          description={`Submissions per day for ${unitPlural}, with the due date marked.`}
+        >
+          {stats.timeline.length > 0 ? (
+            <SubmissionTimelineChart
+              timeline={stats.timeline}
+              dueDate={stats.baseDueDate}
+              timeZone={stats.timezone}
+              unitPlural={unitPlural}
+            />
+          ) : (
+            <EmptyChart message="No submissions yet." />
+          )}
+        </StatCard>
+
+        <StatCard
+          className="lg:col-span-6"
           title="Problem performance"
           description={`Score distribution for each problem, on a shared 0-100% scale (${unitPlural}).`}
         >
@@ -182,6 +246,22 @@ export function AssignmentStatisticsPanel() {
             <ProblemBoxPlotChart problems={stats.problems} unitPlural={unitPlural} />
           ) : (
             <EmptyChart message="This assignment has no problems yet." />
+          )}
+        </StatCard>
+
+        <StatCard
+          className="lg:col-span-12"
+          title="When work happens"
+          description={`When ${unitPlural} submit, by day of week and hour (course time).`}
+        >
+          {stats.heatmap.max > 0 ? (
+            <ActivityHeatmapChart
+              matrix={stats.heatmap.matrix}
+              max={stats.heatmap.max}
+              unitPlural={unitPlural}
+            />
+          ) : (
+            <EmptyChart message="No submissions yet." />
           )}
         </StatCard>
       </div>

@@ -5,20 +5,21 @@ import {
   type AssignmentStatistics,
   type StatsParticipant,
   type StatsProblem,
+  type StatsSubmission,
   type SubmissionQueueStatus,
 } from '@/lib/assignment-statistics';
 
 /**
  * Server-side aggregator for the assignment Statistics tab. It loads exactly what the
- * three charts need in a handful of batched queries (no per-participant reads, no N+1),
- * maps it into the database-agnostic shape `buildAssignmentStatistics` expects, and lets
- * that pure core decide every number. Presentation lives in the client components.
+ * charts need in a handful of batched queries (no per-participant reads, no N+1), maps it
+ * into the database-agnostic shape `buildAssignmentStatistics` expects, and lets that pure
+ * core decide every number. Presentation lives in the client components.
  *
  * Unit: an INDIVIDUAL assignment (no group set) is measured in students; a GROUP
  * assignment is measured in groups. The two are never mixed. Because an autograded group
  * submission fans its grade out identically to every member (see submission-worker), a
- * group's per-problem grade is read from its members' grade rows, and its per-problem
- * submission status from the group's own submissions.
+ * group's per-problem grade is read from its members' grade rows, and its submissions are
+ * the group's own (studentGroupId) submissions.
  */
 export type AssignmentStatisticsPayload = AssignmentStatistics & {
   assignmentTitle: string;
@@ -28,8 +29,10 @@ export type AssignmentStatisticsPayload = AssignmentStatistics & {
   timezone: string;
 };
 
-/** Just the override fields needed to decide who has a due-date exception. */
 type OverrideTarget = { targetType: 'STUDENT' | 'GROUP'; userId: string | null; groupId: string | null };
+
+/** Latest queue status per problem, keyed by participant id. */
+type LatestStatusMap = Map<string, Record<string, SubmissionQueueStatus>>;
 
 export async function getAssignmentStatistics(
   courseId: string,
@@ -50,6 +53,9 @@ export async function getAssignmentStatistics(
   });
   if (!assignment) return null;
 
+  const timeZone = assignment.course?.timezone ?? 'UTC';
+  const isGroupAssignment = assignment.groupSetId != null;
+
   // Problem order: there is no persisted per-assignment order, so use title ascending,
   // matching the Problems tab's default sort. The box plots render in this order.
   const problems: StatsProblem[] = assignment.problems
@@ -62,8 +68,7 @@ export async function getAssignmentStatistics(
     .sort((a, b) => a.title.localeCompare(b.title))
     .map((p, i) => ({ ...p, order: i }));
 
-  // Override rows only decide who has a due-date exception (shown near the heading); the
-  // status chart no longer depends on deadlines.
+  // Override rows only decide who has a due-date exception (shown near the heading).
   const overrides: OverrideTarget[] = await prisma.assignmentOverride.findMany({
     where: { assignmentId },
     select: { targetType: true, userId: true, groupId: true },
@@ -82,23 +87,63 @@ export async function getAssignmentStatistics(
     gradesByStudent.set(g.studentId, rec);
   }
 
-  const isGroupAssignment = assignment.groupSetId != null;
+  // Every submission for the relevant scope, oldest first. One read serves three purposes:
+  // the latest queue status per participant/problem (last row wins), and the attempt /
+  // timeline / heatmap aggregations in the pure core.
+  const submissionRows = await prisma.submission.findMany({
+    where: {
+      assignmentId,
+      studentGroupId: isGroupAssignment ? { not: null } : null,
+    },
+    orderBy: { submittedAt: 'asc' },
+    select: {
+      studentId: true,
+      studentGroupId: true,
+      problemId: true,
+      submittedAt: true,
+      correct: true,
+      status: true,
+    },
+  });
+  const keyOf = (r: { studentId: string; studentGroupId: string | null }) =>
+    isGroupAssignment ? r.studentGroupId! : r.studentId;
+
+  const latestStatus: LatestStatusMap = new Map();
+  for (const r of submissionRows) {
+    const k = keyOf(r);
+    const rec = latestStatus.get(k) ?? {};
+    rec[r.problemId] = r.status as SubmissionQueueStatus; // asc order -> the last write is newest
+    latestStatus.set(k, rec);
+  }
 
   const participants = isGroupAssignment
-    ? await buildGroupParticipants(assignment.groupSetId!, assignment, overrides, gradesByStudent)
-    : await buildStudentParticipants(courseId, assignment, overrides, gradesByStudent);
+    ? await buildGroupParticipants(assignment.groupSetId!, assignment, overrides, gradesByStudent, latestStatus)
+    : await buildStudentParticipants(courseId, assignment, overrides, gradesByStudent, latestStatus);
+
+  // Only count submissions from participants who are actually assigned this assignment.
+  const assignedIds = new Set(participants.map((p) => p.id));
+  const submissions: StatsSubmission[] = submissionRows
+    .filter((r) => assignedIds.has(keyOf(r)))
+    .map((r) => ({
+      participantId: keyOf(r),
+      problemId: r.problemId,
+      submittedAt: r.submittedAt.getTime(),
+      correct: r.correct === true,
+    }));
 
   const stats = buildAssignmentStatistics({
     unit: isGroupAssignment ? 'group' : 'student',
     problems,
     participants,
+    submissions,
+    timeZone,
   });
 
   return {
     ...stats,
     assignmentTitle: assignment.title,
     baseDueDate: assignment.dueDate.toISOString(),
-    timezone: assignment.course?.timezone ?? 'UTC',
+    timezone: timeZone,
   };
 }
 
@@ -115,6 +160,7 @@ async function buildStudentParticipants(
   assignment: AssignmentShape,
   overrides: OverrideTarget[],
   gradesByStudent: Map<string, Record<string, number>>,
+  latestStatus: LatestStatusMap,
 ): Promise<StatsParticipant[]> {
   const roster = await prisma.roster.findMany({
     where: { courseId, role: 'STUDENT' },
@@ -149,22 +195,6 @@ async function buildStudentParticipants(
   );
   if (assignedStudentIds.length === 0) return [];
 
-  // The queue state of each (student, problem)'s LATEST submission: distinct on the pair,
-  // newest first, so the first row per pair is the current one (same pattern as
-  // student-assignments.ts). No submission for a pair -> that problem is "missing".
-  const latestRows = await prisma.submission.findMany({
-    where: { assignmentId: assignment.id, studentGroupId: null },
-    distinct: ['studentId', 'problemId'],
-    orderBy: { submittedAt: 'desc' },
-    select: { studentId: true, problemId: true, status: true },
-  });
-  const statusByStudent = new Map<string, Record<string, SubmissionQueueStatus>>();
-  for (const row of latestRows) {
-    const rec = statusByStudent.get(row.studentId) ?? {};
-    rec[row.problemId] = row.status as SubmissionQueueStatus;
-    statusByStudent.set(row.studentId, rec);
-  }
-
   const studentHasException = new Set(
     overrides.filter((o) => o.targetType === 'STUDENT' && o.userId).map((o) => o.userId!),
   );
@@ -173,7 +203,7 @@ async function buildStudentParticipants(
     id: studentId,
     hasException: studentHasException.has(studentId),
     problemGrades: gradesByStudent.get(studentId) ?? {},
-    latestStatusByProblem: statusByStudent.get(studentId) ?? {},
+    latestStatusByProblem: latestStatus.get(studentId) ?? {},
   }));
 }
 
@@ -184,6 +214,7 @@ async function buildGroupParticipants(
   assignment: AssignmentShape,
   overrides: OverrideTarget[],
   gradesByStudent: Map<string, Record<string, number>>,
+  latestStatus: LatestStatusMap,
 ): Promise<StatsParticipant[]> {
   const groups = await prisma.studentGroup.findMany({
     where: { groupSetId },
@@ -199,20 +230,6 @@ async function buildGroupParticipants(
     (g) => (assignment.assignedToEveryone || namedGroupIds.has(g.id)) && g.memberships.length > 0,
   );
   if (assignedGroups.length === 0) return [];
-
-  const latestRows = await prisma.submission.findMany({
-    where: { assignmentId: assignment.id, studentGroupId: { not: null } },
-    distinct: ['studentGroupId', 'problemId'],
-    orderBy: { submittedAt: 'desc' },
-    select: { studentGroupId: true, problemId: true, status: true },
-  });
-  const statusByGroup = new Map<string, Record<string, SubmissionQueueStatus>>();
-  for (const row of latestRows) {
-    if (!row.studentGroupId) continue;
-    const rec = statusByGroup.get(row.studentGroupId) ?? {};
-    rec[row.problemId] = row.status as SubmissionQueueStatus;
-    statusByGroup.set(row.studentGroupId, rec);
-  }
 
   const groupHasException = new Set(
     overrides.filter((o) => o.targetType === 'GROUP' && o.groupId).map((o) => o.groupId!),
@@ -236,7 +253,7 @@ async function buildGroupParticipants(
       id: group.id,
       hasException: groupHasException.has(group.id),
       problemGrades: groupGrades,
-      latestStatusByProblem: statusByGroup.get(group.id) ?? {},
+      latestStatusByProblem: latestStatus.get(group.id) ?? {},
     };
   });
 }

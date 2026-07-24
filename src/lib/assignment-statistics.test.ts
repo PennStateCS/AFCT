@@ -7,11 +7,29 @@ import {
   computeScoreHistogram,
   computeBoxPlot,
   queueStatusKey,
+  computeAttemptsToSolve,
+  computeFirstAttemptSuccess,
+  computeSubmissionTimeline,
+  computeActivityHeatmap,
   buildAssignmentStatistics,
   STATUS_ORDER,
   type StatsParticipant,
   type StatsProblem,
+  type StatsSubmission,
 } from './assignment-statistics';
+
+// Build a submission event; time given as a UTC ISO string for readability.
+const sub = (
+  participantId: string,
+  problemId: string,
+  iso: string,
+  correct = false,
+): StatsSubmission => ({
+  participantId,
+  problemId,
+  submittedAt: new Date(iso).getTime(),
+  correct,
+});
 
 describe('assignmentPercentage', () => {
   it('divides earned by possible', () => {
@@ -154,7 +172,7 @@ describe('buildAssignmentStatistics', () => {
       // nothing graded -> excluded
       mkParticipant({ id: 's4' }),
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
     expect(stats.histogram.includedCount).toBe(2);
     expect(stats.histogram.excludedCount).toBe(2);
     // s1 -> 100% (last bin), s2 -> 0% (first bin)
@@ -169,7 +187,7 @@ describe('buildAssignmentStatistics', () => {
       mkParticipant({ id: 's2', problemGrades: { p1: 0 } }), // p1 0%, p2 ungraded
       mkParticipant({ id: 's3' }), // nothing graded
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
     const p1 = stats.problems.find((p) => p.id === 'p1')!;
     const p2 = stats.problems.find((p) => p.id === 'p2')!;
     expect(p1.gradedCount).toBe(2);
@@ -185,7 +203,13 @@ describe('buildAssignmentStatistics', () => {
       { id: 'b', title: 'B', order: 1, maxPoints: 10 },
       { id: 'a', title: 'A', order: 0, maxPoints: 10 },
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems: unordered, participants: [] });
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems: unordered,
+      participants: [],
+      submissions: [],
+      timeZone: 'UTC',
+    });
     expect(stats.problems.map((p) => p.id)).toEqual(['a', 'b']);
   });
 
@@ -198,7 +222,7 @@ describe('buildAssignmentStatistics', () => {
       // nothing submitted at all -> both missing
       mkParticipant({ id: 'c' }),
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
 
     for (const p of stats.problems) {
       expect(p.status.map((s) => s.key)).toEqual([...STATUS_ORDER]);
@@ -220,7 +244,7 @@ describe('buildAssignmentStatistics', () => {
     const participants = [
       mkParticipant({ id: 's1', latestStatusByProblem: { p1: 'FAILED' } }), // p1 failed, p2 missing
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
     expect(statusOf(stats, 'p1')['failed']).toBe(1);
     expect(statusOf(stats, 'p1')['missing']).toBe(0);
     expect(statusOf(stats, 'p2')['missing']).toBe(1);
@@ -229,7 +253,7 @@ describe('buildAssignmentStatistics', () => {
   it('status is independent of grades (a graded problem with no submission is missing)', () => {
     // A manual grade does not create a submission, so the queue status stays "missing".
     const participants = [mkParticipant({ id: 'manual', problemGrades: { p1: 10, p2: 10 } })];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
     expect(statusOf(stats, 'p1')['missing']).toBe(1);
     expect(statusOf(stats, 'p1')['completed']).toBe(0);
     // ...but the grade still lands in the histogram.
@@ -242,7 +266,7 @@ describe('buildAssignmentStatistics', () => {
       mkParticipant({ id: 's2', hasException: true }),
       mkParticipant({ id: 's3' }),
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants });
+    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
     expect(stats.exceptionCount).toBe(2);
     expect(stats.participantCount).toBe(3);
   });
@@ -252,8 +276,99 @@ describe('buildAssignmentStatistics', () => {
       unit: 'group',
       problems,
       participants: [mkParticipant({ id: 'g1', problemGrades: { p1: 10, p2: 10 } })],
+      submissions: [],
+      timeZone: 'UTC',
     });
     expect(groupStats.unit).toBe('group');
     expect(groupStats.participantCount).toBe(1);
+  });
+});
+
+describe('computeAttemptsToSolve', () => {
+  const bucketCounts = (subs: StatsSubmission[]) =>
+    Object.fromEntries(computeAttemptsToSolve(subs).buckets.map((b) => [b.label, b.count]));
+
+  it('buckets the attempt on which each pair was first solved', () => {
+    const subs = [
+      // s1/p1 solved on the 3rd try
+      sub('s1', 'p1', '2026-08-01T10:00:00Z'),
+      sub('s1', 'p1', '2026-08-01T11:00:00Z'),
+      sub('s1', 'p1', '2026-08-01T12:00:00Z', true),
+      // s2/p1 solved first try
+      sub('s2', 'p1', '2026-08-01T10:00:00Z', true),
+      // s1/p2 solved on the 6th try -> 5+
+      ...Array.from({ length: 5 }, (_, i) => sub('s1', 'p2', `2026-08-0${i + 1}T09:00:00Z`)),
+      sub('s1', 'p2', '2026-08-07T09:00:00Z', true),
+    ];
+    const counts = bucketCounts(subs);
+    expect(counts['1']).toBe(1); // s2/p1
+    expect(counts['3']).toBe(1); // s1/p1
+    expect(counts['5+']).toBe(1); // s1/p2
+    const r = computeAttemptsToSolve(subs);
+    expect(r.solvedCount).toBe(3);
+    expect(r.unsolvedCount).toBe(0);
+  });
+
+  it('excludes pairs that submitted but never solved, and is order-independent', () => {
+    const subs = [
+      // given out of order; the function sorts by time
+      sub('s1', 'p1', '2026-08-01T12:00:00Z'),
+      sub('s1', 'p1', '2026-08-01T10:00:00Z'),
+    ];
+    const r = computeAttemptsToSolve(subs);
+    expect(r.solvedCount).toBe(0);
+    expect(r.unsolvedCount).toBe(1);
+    expect(r.buckets.every((b) => b.count === 0)).toBe(true);
+  });
+});
+
+describe('computeFirstAttemptSuccess', () => {
+  it('counts first-submission correctness per problem', () => {
+    const subs = [
+      sub('s1', 'p1', '2026-08-01T10:00:00Z', true), // first try correct
+      sub('s2', 'p1', '2026-08-01T10:00:00Z'), // first try wrong
+      sub('s2', 'p1', '2026-08-01T11:00:00Z', true), // later correct doesn't count
+      sub('s1', 'p2', '2026-08-01T10:00:00Z', true),
+    ];
+    const map = computeFirstAttemptSuccess(subs);
+    expect(map.get('p1')).toEqual({ correct: 1, submitted: 2 });
+    expect(map.get('p2')).toEqual({ correct: 1, submitted: 1 });
+  });
+});
+
+describe('computeSubmissionTimeline', () => {
+  it('counts submissions per local day and zero-fills the gaps', () => {
+    const subs = [
+      sub('s1', 'p1', '2026-08-01T12:00:00Z'),
+      sub('s2', 'p1', '2026-08-01T15:00:00Z'),
+      sub('s3', 'p1', '2026-08-03T09:00:00Z'),
+    ];
+    expect(computeSubmissionTimeline(subs, 'UTC')).toEqual([
+      { date: '2026-08-01', count: 2 },
+      { date: '2026-08-02', count: 0 },
+      { date: '2026-08-03', count: 1 },
+    ]);
+  });
+  it('is empty with no submissions', () => {
+    expect(computeSubmissionTimeline([], 'UTC')).toEqual([]);
+  });
+});
+
+describe('computeActivityHeatmap', () => {
+  it('buckets by local day-of-week and hour', () => {
+    // 2026-08-03 is a Monday; 14:00 UTC.
+    const { matrix, max } = computeActivityHeatmap([sub('s1', 'p1', '2026-08-03T14:00:00Z')], 'UTC');
+    expect(matrix[1]![14]).toBe(1); // Monday, 14:00
+    expect(max).toBe(1);
+    expect(matrix[0]![0]).toBe(0);
+  });
+  it('uses the given timezone to place the cell', () => {
+    // 02:00 UTC on Mon 2026-08-03 is 22:00 on Sun 2026-08-02 in New York (UTC-4).
+    const { matrix } = computeActivityHeatmap(
+      [sub('s1', 'p1', '2026-08-03T02:00:00Z')],
+      'America/New_York',
+    );
+    expect(matrix[0]![22]).toBe(1); // Sunday, 22:00 local
+    expect(matrix[1]![2]).toBe(0);
   });
 });
