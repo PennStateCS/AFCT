@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createEnhancedActivityLog, type EnhancedActivityLogData } from '@/lib/activity-log-utils';
+import { safeAuditLog } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { parseDomainList } from '@/lib/email';
@@ -70,14 +70,6 @@ function diffSettings(
 }
 
 // Audit logging must never turn a successful save into a 500, so swallow its errors.
-async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promise<void> {
-  try {
-    await createEnhancedActivityLog(prisma, req, data);
-  } catch (err) {
-    console.error('[system-settings] audit log failed:', err);
-  }
-}
-
 /**
  * Returns the singleton system settings, falling back to defaults for any unset
  * field. The hCaptcha secret is never returned; only `hcaptchaSecretConfigured`
@@ -319,7 +311,7 @@ export const PUT = withAdminAuth(
       });
     } catch (err) {
       console.error('[system-settings] failed to persist update:', err);
-      await safeAuditLog(req, {
+      await safeAuditLog('system-settings', req, {
         userId: user.id,
         action: 'SYSTEM_SETTINGS_UPDATE_ERROR',
         severity: 'ERROR',
@@ -341,7 +333,7 @@ export const PUT = withAdminAuth(
       typeof body.hcaptchaSecretKey === 'string' &&
       body.hcaptchaSecretKey.trim() !== '';
     if (Object.keys(changes).length || hcaptchaSecretUpdated || hcaptchaSecretCleared) {
-      await safeAuditLog(req, {
+      await safeAuditLog('system-settings', req, {
         userId: user.id,
         action: 'SYSTEM_SETTINGS_UPDATED',
         severity: 'INFO',

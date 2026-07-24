@@ -29,6 +29,7 @@ import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import type { GroupSetSummaryDTO } from '@/lib/group-set-service';
 import type { Assignment } from '@prisma/client';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
+import { formatDateTimeLocal } from '@/lib/date-utils';
 
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 
@@ -64,10 +65,6 @@ function defaultDueLocalString(timeZone: string): string {
   return `${l.year ?? '0000'}-${l.month ?? '01'}-${l.day ?? '01'}T23:59`;
 }
 
-/** Render a datetime-local string ("2026-01-10T23:59") as "2026-01-10 23:59". */
-function formatLocal(value: string | undefined | null): string {
-  return value ? value.replace('T', ' ') : '';
-}
 
 /**
  * A full, human-readable window ("Available … · Due … · Late until …" / "· No late") from
@@ -81,10 +78,10 @@ function formatWindow(w: {
   lateCutoff?: string;
 }): string {
   const parts: string[] = [];
-  if (w.unlockAt) parts.push(`Available ${formatLocal(w.unlockAt)}`);
-  parts.push(`Due ${w.dueDate ? formatLocal(w.dueDate) : 'not set'}`);
+  if (w.unlockAt) parts.push(`Available ${formatDateTimeLocal(w.unlockAt)}`);
+  parts.push(`Due ${w.dueDate ? formatDateTimeLocal(w.dueDate) : 'not set'}`);
   if (w.allowLate) {
-    parts.push(w.lateCutoff ? `Late until ${formatLocal(w.lateCutoff)}` : 'Late accepted');
+    parts.push(w.lateCutoff ? `Late until ${formatDateTimeLocal(w.lateCutoff)}` : 'Late accepted');
   } else {
     parts.push('No late');
   }

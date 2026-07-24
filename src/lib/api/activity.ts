@@ -5,6 +5,28 @@ import { canManageCourse, type PermissionUser } from '@/lib/permissions';
 import { apiError } from './http';
 
 /**
+ * Writes an audit entry without letting a logging failure fail the request.
+ *
+ * For handlers whose work has already succeeded and been persisted by the time they log:
+ * throwing here would report failure for something that did happen, which is a worse lie
+ * than a missing log line. The failure is still printed with `scope` so it is traceable.
+ *
+ * Do NOT reach for this by default. Everywhere else the log is part of the operation and
+ * a failure to record it should surface; see the FERPA note in CLAUDE.md.
+ */
+export async function safeAuditLog(
+  scope: string,
+  req: Request,
+  data: EnhancedActivityLogData,
+): Promise<void> {
+  try {
+    await createEnhancedActivityLog(prisma, req, data);
+  } catch (err) {
+    console.error(`[${scope}] audit log failed:`, err);
+  }
+}
+
+/**
  * Records a SECURITY denial in the audit log and returns a 403 Forbidden. This is
  * the single home for the "log the `*_DENIED` event, then return Forbidden" block
  * that was copy-pasted across ~30 handlers.

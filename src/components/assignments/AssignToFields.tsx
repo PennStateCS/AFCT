@@ -22,15 +22,10 @@ import { apiClient } from '@/lib/api/fetch-client';
 import { apiPaths } from '@/lib/api-paths';
 import type { GroupSetDetailDTO } from '@/lib/group-set-service';
 import type { AssignmentWizardFormSchema } from '@/schemas/assignment';
+import { memberCountLabel } from '@/components/assignments/labels';
 
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 type FormOverride = NonNullable<FormValues['overrides']>[number];
-
-/** "3 members" / "1 member" for a group summary. */
-function memberCountLabel(count: number | undefined): string {
-  const n = count ?? 0;
-  return `${n} ${n === 1 ? 'member' : 'members'}`;
-}
 
 /**
  * The create wizard's "Assign To" step: a single stacked column of the assign-to selector

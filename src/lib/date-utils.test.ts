@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { toEndOfDayInTimezone, toDateTimeInTimezone } from './date-utils';
+import {
+  toEndOfDayInTimezone,
+  toDateTimeInTimezone,
+  toDateTimeLocalInTimeZone,
+  formatDateTimeLocal,
+} from './date-utils';
 
 describe('date-utils', () => {
   describe('toEndOfDayInTimezone', () => {
@@ -188,5 +193,66 @@ describe('date-utils', () => {
       expect(endOfDay.toISOString()).toBe(startOfDay.toISOString());
       expect(endOfDay.toISOString()).toBe('2024-01-15T19:30:00.000Z');
     });
+  });
+});
+
+const NY = 'America/New_York';
+
+describe('toDateTimeLocalInTimeZone', () => {
+  it('reads an instant in the requested zone, not the runtime zone', () => {
+    // 14:30 UTC is 09:30 in New York (EST) on this date.
+    expect(toDateTimeLocalInTimeZone('2026-01-15T14:30:00.000Z', NY)).toBe('2026-01-15T09:30');
+    expect(toDateTimeLocalInTimeZone('2026-01-15T14:30:00.000Z', 'UTC')).toBe('2026-01-15T14:30');
+  });
+
+  it('renders midnight as 00:00, never 24:00', () => {
+    // en-US with `hour12: false` has been observed reporting midnight as hour "24",
+    // which is not a valid datetime-local value and blanks the input.
+    expect(toDateTimeLocalInTimeZone('2026-06-01T00:00:00.000Z', 'UTC')).toBe('2026-06-01T00:00');
+    expect(toDateTimeLocalInTimeZone('2026-06-01T04:00:00.000Z', NY)).toBe('2026-06-01T00:00');
+  });
+
+  it('follows the zone across a daylight-saving change', () => {
+    // US DST began 2026-03-08: the same UTC hour is EST before and EDT after.
+    expect(toDateTimeLocalInTimeZone('2026-03-07T17:00:00.000Z', NY)).toBe('2026-03-07T12:00');
+    expect(toDateTimeLocalInTimeZone('2026-03-09T17:00:00.000Z', NY)).toBe('2026-03-09T13:00');
+  });
+
+  it('renders an empty field rather than "Invalid Date" for an unusable value', () => {
+    expect(toDateTimeLocalInTimeZone('not a date', NY)).toBe('');
+    expect(toDateTimeLocalInTimeZone(new Date(Number.NaN), NY)).toBe('');
+  });
+
+  it('accepts a Date as readily as a string', () => {
+    const d = new Date('2026-01-15T14:30:00.000Z');
+    expect(toDateTimeLocalInTimeZone(d, NY)).toBe(toDateTimeLocalInTimeZone(d.toISOString(), NY));
+  });
+});
+
+describe('the datetime-local round trip', () => {
+  // These two are inverses: a form renders an instant with one and reads it back with the
+  // other. If they ever disagree, a due date silently moves when a form is saved without
+  // being edited, which is the failure this pins down.
+  it.each([
+    ['2026-01-15T14:30:00.000Z', NY], // EST
+    ['2026-07-15T14:30:00.000Z', NY], // EDT
+    ['2026-06-01T00:00:00.000Z', 'UTC'], // midnight
+    ['2026-11-01T05:30:00.000Z', NY], // the hour after DST ends
+    ['2026-02-01T09:15:00.000Z', 'Asia/Kolkata'], // half-hour offset
+  ])('survives rendering and re-reading %s in %s', (iso, zone) => {
+    const rendered = toDateTimeLocalInTimeZone(iso, zone);
+    expect(toDateTimeInTimezone(rendered, zone).toISOString()).toBe(iso);
+  });
+});
+
+describe('formatDateTimeLocal', () => {
+  it('swaps the separator for reading', () => {
+    expect(formatDateTimeLocal('2026-01-10T23:59')).toBe('2026-01-10 23:59');
+  });
+
+  it('renders nothing for an absent value', () => {
+    expect(formatDateTimeLocal(undefined)).toBe('');
+    expect(formatDateTimeLocal(null)).toBe('');
+    expect(formatDateTimeLocal('')).toBe('');
   });
 });

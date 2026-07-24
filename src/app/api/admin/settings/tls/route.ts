@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
-import { createEnhancedActivityLog, type EnhancedActivityLogData } from '@/lib/activity-log-utils';
+import { type EnhancedActivityLogData } from '@/lib/activity-log-utils';
+import { safeAuditLog } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import {
@@ -18,14 +18,6 @@ import {
 import { requestCertificate, disableAcme, getAcmeState, AcmeError } from '@/lib/acme';
 
 // Audit logging must never break a certificate operation, so swallow its errors.
-async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promise<void> {
-  try {
-    await createEnhancedActivityLog(prisma, req, data);
-  } catch (err) {
-    console.error('[tls] audit log failed:', err);
-  }
-}
-
 // Non-sensitive certificate details safe to record. Never the key or PEM bodies.
 function certMeta(info: CertInfo) {
   return {
@@ -207,7 +199,7 @@ export const POST = withAdminAuth(
         }
       }
 
-      await safeAuditLog(req, {
+      await safeAuditLog('tls', req, {
         userId: user.id,
         action: auditAction,
         // CSR generation and every cert install are routine operations.
@@ -221,7 +213,7 @@ export const POST = withAdminAuth(
         // A rejected certificate or a failed ACME order is a meaningful operational
         // event; the message is an admin-facing reason (e.g. "key does not match", or
         // "domain does not point here"), never key material.
-        await safeAuditLog(req, {
+        await safeAuditLog('tls', req, {
           userId: user.id,
           action: 'TLS_CERT_REJECTED',
           severity: 'WARNING',
@@ -231,7 +223,7 @@ export const POST = withAdminAuth(
         return NextResponse.json({ error: err.message }, { status: 400 });
       }
       console.error('TLS action failed:', err);
-      await safeAuditLog(req, {
+      await safeAuditLog('tls', req, {
         userId: user.id,
         action: 'TLS_CERT_ERROR',
         severity: 'ERROR',
@@ -259,7 +251,7 @@ export const POST = withAdminAuth(
 export const DELETE = withAdminAuth(
   async (req, _ctx, { user }) => {
     const result = clearCert();
-    await safeAuditLog(req, {
+    await safeAuditLog('tls', req, {
       userId: user.id,
       action: 'TLS_CERT_RESET',
       category: 'SYSTEM',
