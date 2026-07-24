@@ -4,7 +4,8 @@ import React from 'react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { DockerStatusResponse } from '@/lib/status/types';
-import { Loading, Stat, Section, useStatusQuery, copy, formatBytes } from '../status-ui';
+import { Loading, Stat, Section, useStatusQuery, copy } from '../status-ui';
+import { formatBytes } from '../status-format';
 
 // The resource-limit fields are tri-state: a number is the cap, `null` means the
 // container has no limit, and `undefined` means it couldn't be read from cgroup.

@@ -146,6 +146,8 @@ export const apiPaths = {
     statusNetwork: () => '/api/admin/status/network',
     statusSessions: () => '/api/admin/status/sessions',
     statusFiles: () => '/api/admin/status/files',
+    statusRateLimits: () => '/api/admin/status/rate-limits',
+    statusRateLimitsClear: () => '/api/admin/status/rate-limits/clear',
     submissions: () => '/api/admin/submissions',
   },
 } as const;

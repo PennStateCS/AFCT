@@ -6,15 +6,8 @@ import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import type { DatabaseStatusResponse } from '@/lib/status/types';
-import {
-  Loading,
-  Stat,
-  Section,
-  useStatusQuery,
-  formatDbSize,
-  formatDbVersion,
-  copy,
-} from '../status-ui';
+import { Loading, Stat, Section, useStatusQuery, copy } from '../status-ui';
+import { formatDbSize, formatDbVersion } from '../status-format';
 
 export default function DatabaseTab({
   active,

@@ -598,6 +598,7 @@ model ActivityLog {
   @@index([assignmentId, action])
   @@index([userId, courseId])
   @@index([timestamp, category])
+  @@index([ipAddress, timestamp]) // "what has this address done", System Status + investigations
 }
 
 model SystemSettings {

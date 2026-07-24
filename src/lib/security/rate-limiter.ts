@@ -2,6 +2,10 @@
 // it here so existing importers (auth, signup) keep working.
 export { getClientIp } from '@/lib/ip-utils';
 
+// The admin-facing shapes live with the other System Status wire types so a client
+// component can import them without pulling this module into the browser bundle.
+import type { RateLimitEntry, RateLimitScope } from '@/lib/status/types';
+
 // In-process, per-instance state. This is correct for the supported deployment
 // (a single app container, per docs/setup/production.md). It is deliberately NOT
 // shared across instances: horizontal scaling would give each instance its own
@@ -103,6 +107,15 @@ type RateLimiterBucket = {
   resetAt: number;
   blockedUntil?: number;
   challengeUntil?: number;
+  // Observability for the admin System Status view. None of these feed a limit
+  // decision; they exist so an administrator can see why an address is restricted,
+  // since when, and whether it is still knocking.
+  firstHitAt: number;
+  lastHitAt: number;
+  /** When the current block or challenge cooldown was armed. */
+  restrictedAt?: number;
+  /** Attempts refused since that cooldown was armed. */
+  hitsWhileRestricted: number;
 };
 
 type BucketEvaluation =
@@ -126,19 +139,42 @@ const hydrateBucket = (key: string, config: BucketConfig, now: number) => {
   const fresh: RateLimiterBucket = {
     count: 0,
     resetAt: now + config.windowMs,
+    firstHitAt: now,
+    lastHitAt: now,
+    hitsWhileRestricted: 0,
   };
+  // A block outlives its counting window (a login IP block runs 30 minutes, the
+  // window only 10), so carry any live cooldown onto the fresh bucket. Without
+  // this the first attempt after the window rolled over would rehydrate a clean
+  // bucket and silently lift a restriction that has not expired.
+  if (existing) {
+    if (existing.blockedUntil && now < existing.blockedUntil) {
+      fresh.blockedUntil = existing.blockedUntil;
+    }
+    if (existing.challengeUntil && now < existing.challengeUntil) {
+      fresh.challengeUntil = existing.challengeUntil;
+    }
+    if (fresh.blockedUntil || fresh.challengeUntil) {
+      fresh.restrictedAt = existing.restrictedAt;
+      fresh.firstHitAt = existing.firstHitAt;
+      fresh.hitsWhileRestricted = existing.hitsWhileRestricted;
+    }
+  }
   buckets.set(key, fresh);
   return fresh;
 };
 
 const hitBucket = (key: string, config: BucketConfig, now: number): BucketEvaluation => {
   const bucket = hydrateBucket(key, config, now);
+  bucket.lastHitAt = now;
 
   if (bucket.blockedUntil && now < bucket.blockedUntil) {
+    bucket.hitsWhileRestricted += 1;
     return { type: 'blocked', retryAfterMs: bucket.blockedUntil - now };
   }
 
   if (bucket.challengeUntil && now < bucket.challengeUntil) {
+    bucket.hitsWhileRestricted += 1;
     return { type: 'challenge', retryAfterMs: bucket.challengeUntil - now };
   }
 
@@ -146,11 +182,15 @@ const hitBucket = (key: string, config: BucketConfig, now: number): BucketEvalua
 
   if (bucket.count > config.maxAttempts) {
     bucket.blockedUntil = now + config.blockDurationMs;
+    bucket.restrictedAt = now;
+    bucket.hitsWhileRestricted = 0;
     return { type: 'blocked', retryAfterMs: config.blockDurationMs };
   }
 
   if (bucket.count >= config.challengeThreshold) {
     bucket.challengeUntil = now + config.challengeCooldownMs;
+    bucket.restrictedAt = now;
+    bucket.hitsWhileRestricted = 0;
     return { type: 'challenge', retryAfterMs: config.challengeCooldownMs };
   }
 
@@ -309,11 +349,14 @@ export const evaluateLoginRateLimit = (params: {
 // only reports as a generic error: is it a captcha challenge, a temporary block, or
 // just bad credentials? The authoritative counting stays in the credentials
 // `authorize` path; this only observes the flags that path already set.
-const peekBucket = (key: string, config: BucketConfig, now: number): BucketEvaluation => {
+const peekBucket = (key: string, now: number): BucketEvaluation => {
   const bucket = buckets.get(key);
-  if (!bucket || now >= bucket.resetAt) {
+  if (!bucket) {
     return { type: 'ok', applyFriction: false, frictionDelayMs: 0 };
   }
+  // Deliberately not short-circuiting on an elapsed window: a block or challenge
+  // outlasts the window that produced it, and the checks below already expire on
+  // their own clocks.
   if (bucket.blockedUntil && now < bucket.blockedUntil) {
     return { type: 'blocked', retryAfterMs: bucket.blockedUntil - now };
   }
@@ -323,26 +366,22 @@ const peekBucket = (key: string, config: BucketConfig, now: number): BucketEvalu
   return { type: 'ok', applyFriction: false, frictionDelayMs: 0 };
 };
 
+// No `accountLimit` here: a peek only reads the block/challenge flags the counting
+// path already set, so the configured thresholds cannot change its answer.
 export const peekLoginRateLimit = (params: {
   ip?: string;
   identifier?: string;
-  accountLimit?: { maxAttempts?: number; blockDurationMs?: number };
 }): RateLimitDecision => {
   const now = Date.now();
   const evaluations = [
     {
-      evaluation: peekBucket(bucketKey('login:ip', params.ip), LOGIN_IP_CONFIG, now),
+      evaluation: peekBucket(bucketKey('login:ip', params.ip), now),
       reason: 'ip' as LimitReason,
     },
   ];
   if (params.identifier) {
-    const accountConfig: BucketConfig = {
-      ...LOGIN_ACCOUNT_CONFIG,
-      maxAttempts: params.accountLimit?.maxAttempts ?? LOGIN_ACCOUNT_CONFIG.maxAttempts,
-      blockDurationMs: params.accountLimit?.blockDurationMs ?? LOGIN_ACCOUNT_CONFIG.blockDurationMs,
-    };
     evaluations.push({
-      evaluation: peekBucket(bucketKey('login:account', params.identifier), accountConfig, now),
+      evaluation: peekBucket(bucketKey('login:account', params.identifier), now),
       reason: 'account' as LimitReason,
     });
   }
@@ -430,6 +469,96 @@ export const recordSignupSuccess = (params: { ip?: string; identifier?: string }
 };
 
 export const formatRetryAfterSeconds = (ms: number) => Math.max(1, Math.ceil(ms / 1000)).toString();
+
+/* -------------------- admin inspection -------------------- */
+
+/**
+ * The bucket scopes keyed on a client IP address, with the plain-language reason an
+ * administrator sees on System Status. The other scopes (`login:account`,
+ * `signup:identifier`, `avatar-upload`) are keyed on an email or a user id, not an
+ * address, so they are deliberately absent: this surface only ever exposes IPs.
+ */
+const IP_SCOPES: Record<RateLimitScope, { label: string; reason: string }> = {
+  'login:ip': {
+    label: 'Sign-in attempts',
+    reason: 'Too many failed sign-in attempts from this address',
+  },
+  'signup:ip': {
+    label: 'Account sign-ups',
+    reason: 'Too many account sign-up attempts from this address',
+  },
+  'check-email:ip': {
+    label: 'Email availability checks',
+    reason: 'Too many email availability checks from this address',
+  },
+};
+
+/** The same scopes as a tuple, for building the API's request schema. */
+export const RATE_LIMIT_SCOPES = [
+  'login:ip',
+  'signup:ip',
+  'check-email:ip',
+] as const satisfies readonly RateLimitScope[];
+
+const scopeOf = (key: string): RateLimitScope | null =>
+  RATE_LIMIT_SCOPES.find((scope) => key.startsWith(`${scope}:`)) ?? null;
+
+const toEntry = (key: string, bucket: RateLimiterBucket, now: number): RateLimitEntry | null => {
+  const scope = scopeOf(key);
+  if (!scope) return null;
+
+  const blocked = bucket.blockedUntil !== undefined && now < bucket.blockedUntil;
+  const challenged = bucket.challengeUntil !== undefined && now < bucket.challengeUntil;
+  if (!blocked && !challenged) return null;
+
+  const meta = IP_SCOPES[scope];
+  return {
+    id: key,
+    ip: key.slice(scope.length + 1),
+    scope,
+    scopeLabel: meta.label,
+    state: blocked ? 'blocked' : 'challenge',
+    reason: meta.reason,
+    startedAt: bucket.restrictedAt ?? bucket.firstHitAt,
+    expiresAt: (blocked ? bucket.blockedUntil : bucket.challengeUntil) as number,
+    attempts: bucket.count,
+    attemptsWhileRestricted: bucket.hitsWhileRestricted,
+    lastAttemptAt: bucket.lastHitAt,
+  };
+};
+
+/**
+ * Every IP currently under a block or challenge cooldown, newest restriction first.
+ * Reads the live in-process map, so it reflects only this instance and resets with it.
+ */
+export const listRestrictedIps = (now: number = Date.now()): RateLimitEntry[] => {
+  const entries: RateLimitEntry[] = [];
+  for (const [key, bucket] of buckets) {
+    const entry = toEntry(key, bucket, now);
+    if (entry) entries.push(entry);
+  }
+  return entries.sort((a, b) => b.startedAt - a.startedAt);
+};
+
+/**
+ * Lifts one IP restriction ahead of its expiry, returning the entry as it stood so the
+ * caller can record what was cleared. Returns null when that address is not currently
+ * restricted, which makes a double-submit a no-op rather than a silent success.
+ */
+export const clearRestrictedIp = (params: {
+  scope: RateLimitScope;
+  ip: string;
+  now?: number;
+}): RateLimitEntry | null => {
+  const now = params.now ?? Date.now();
+  const key = bucketKey(params.scope, params.ip);
+  const bucket = buckets.get(key);
+  if (!bucket) return null;
+  const entry = toEntry(key, bucket, now);
+  if (!entry) return null;
+  buckets.delete(key);
+  return entry;
+};
 
 export const __dangerousResetRateLimiter = () => {
   buckets.clear();

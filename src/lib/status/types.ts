@@ -187,6 +187,82 @@ export type AbandonedFilesSummary = {
 
 export type FilesStatusResponse = { abandonedFiles: AbandonedFilesSummary };
 
+/* ---------------- Rate limits ---------------- */
+/**
+ * The rate-limiter scopes keyed on a client IP address. Scopes keyed on an email or a
+ * user id are never surfaced here, so this tab only ever shows addresses.
+ */
+export type RateLimitScope = 'login:ip' | 'signup:ip' | 'check-email:ip';
+
+/** A hard block, or the softer captcha-challenge cooldown that precedes one. */
+export type RateLimitState = 'blocked' | 'challenge';
+
+export type RateLimitEntry = {
+  /** Opaque handle (the rate limiter's bucket key) so one entry can be round-tripped. */
+  id: string;
+  ip: string;
+  scope: RateLimitScope;
+  /** Short name of the limit that fired, e.g. "Sign-in attempts". */
+  scopeLabel: string;
+  state: RateLimitState;
+  /** Plain-language explanation for the administrator. */
+  reason: string;
+  /** Epoch ms when the current restriction was applied. */
+  startedAt: number;
+  /** Epoch ms when it lifts on its own. */
+  expiresAt: number;
+  /** Attempts counted in the current window before the restriction applied. */
+  attempts: number;
+  /** Attempts refused since the restriction applied (is it still knocking?). */
+  attemptsWhileRestricted: number;
+  /** Epoch ms of the most recent attempt, refused or not. */
+  lastAttemptAt: number;
+};
+
+/** Where an address sits in the address space, which is decided without any lookup. */
+export type IpKind = 'public' | 'private' | 'loopback' | 'link-local' | 'shared' | 'unknown';
+
+/** How the reverse-DNS lookup went, so the UI can say "no name" rather than stay blank. */
+export type HostnameLookup = 'ok' | 'none' | 'skipped' | 'failed';
+
+/**
+ * What AFCT already knows about an address from its own activity log: whether it is a
+ * familiar address and roughly how busy. This is the signal that separates "the computer
+ * lab" from "somewhere that has never been seen before".
+ */
+export type IpKnownActivity = {
+  /** Days of log searched. */
+  windowDays: number;
+  eventCount: number;
+  accountCount: number;
+  /** A small sample of the accounts seen, for recognising a shared address. */
+  accounts: string[];
+  firstSeen: number | null;
+  lastSeen: number | null;
+  /** True when the scan cap was hit, so the counts are a floor rather than a total. */
+  truncated: boolean;
+};
+
+export type IpDetails = {
+  version: 4 | 6 | null;
+  kind: IpKind;
+  /** Plain-language form of `kind`, e.g. "Private network address". */
+  kindLabel: string;
+  hostname: string | null;
+  hostnameLookup: HostnameLookup;
+  /** Null when the activity-log lookup could not run. */
+  knownActivity: IpKnownActivity | null;
+};
+
+/** A restricted address plus everything that could be worked out about it. */
+export type RateLimitedAddress = RateLimitEntry & { details: IpDetails };
+
+export type RateLimitsStatusResponse = {
+  entries: RateLimitedAddress[];
+  /** Epoch ms the list was taken, so the client can render "expires in" without clock skew. */
+  generatedAt: number;
+};
+
 /* ---------------- Summary (top cards) ---------------- */
 export type SummaryStatus = {
   db: { ok: boolean; message: string; provider: 'sqlite' | 'postgres' | 'unknown' };
