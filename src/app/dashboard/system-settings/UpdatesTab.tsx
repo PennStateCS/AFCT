@@ -30,9 +30,11 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
     upgradeBusy,
     downgradeBusy,
     selfUpdateBusy,
+    deleteBusy,
     startUpgrade,
     startDowngrade,
     startSelfUpdate,
+    startDeleteRestorePoint,
   } = useUpgrade(true);
 
   const [selectedVersion, setSelectedVersion] = useState('');
@@ -45,6 +47,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
     null,
   );
   const [restoreConfirmText, setRestoreConfirmText] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<{ version: string; backup: string } | null>(
+    null,
+  );
   // Which flow the admin last kicked off, so the progress checklist labels its steps
   // correctly (upgrade and downgrade share some early phases).
   const [lastAction, setLastAction] = useState<'upgrade' | 'downgrade' | null>(null);
@@ -86,19 +91,33 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
       enableSorting: false,
       meta: { align: 'right', priority: 1 },
       cell: ({ row }) => (
-        <Button
-          type="button"
-          size="sm"
-          variant="destructive"
-          aria-label={`Restore version ${row.original.version}`}
-          disabled={disabled || downgradeBusy || upgradeInProgress}
-          onClick={() => {
-            setRestoreTarget({ version: row.original.version, backup: row.original.backup });
-            setRestoreConfirmText('');
-          }}
-        >
-          Restore
-        </Button>
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            aria-label={`Restore version ${row.original.version}`}
+            disabled={disabled || downgradeBusy || upgradeInProgress}
+            onClick={() => {
+              setRestoreTarget({ version: row.original.version, backup: row.original.backup });
+              setRestoreConfirmText('');
+            }}
+          >
+            Restore
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            aria-label={`Delete the ${formatBackupTs(row.original.backup)} backup for version ${row.original.version}`}
+            disabled={disabled || deleteBusy || downgradeBusy || upgradeInProgress}
+            onClick={() =>
+              setDeleteTarget({ version: row.original.version, backup: row.original.backup })
+            }
+          >
+            Delete
+          </Button>
+        </div>
       ),
     },
   ];
@@ -401,6 +420,46 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               }}
             >
               Restore and downgrade
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete a restore point: removes the backup file(s) and drops it from the list.
+          Less destructive than a downgrade (nothing in the running app changes), so a
+          plain confirm is enough. */}
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent className="bg-card sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Delete this backup?</DialogTitle>
+            <DialogDescription>
+              This deletes the backup from{' '}
+              <span className="font-mono">
+                {deleteTarget ? formatBackupTs(deleteTarget.backup) : ''}
+              </span>{' '}
+              and removes <span className="font-mono">{deleteTarget?.version}</span> from the restore
+              list, so you can no longer downgrade to it. It does not affect the running application.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteBusy}
+              onClick={() => {
+                if (deleteTarget) startDeleteRestorePoint(deleteTarget.backup);
+                setDeleteTarget(null);
+              }}
+            >
+              Delete backup
             </Button>
           </DialogFooter>
         </DialogContent>

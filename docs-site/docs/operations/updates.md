@@ -87,6 +87,8 @@ Once enabled, the Updates tab lists the available versions from the project's re
 Downgrading restores the database from the backup taken at that restore point, which discards database records created since. Uploaded files are not rolled back and may become unreferenced. Only downgrade when you accept that result. The Updates tab requires explicit confirmation.
 :::
 
+Each restore point also has a **Delete** button. Removing one deletes its backup file to reclaim disk and drops it from the list, so you can no longer downgrade to that version. It does not affect the running application.
+
 Only versions listed in the curated release manifest can be selected; the updater validates every request against it, so the app can never be pointed at an arbitrary image.
 
 ### Stack changes are applied for you

@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -57,6 +57,7 @@ export function isUpgradeInProgress(status: UpdateStatus | null | undefined): bo
  * terminal phase. Gated on `enabled` so it only runs while the Updates tab is open.
  */
 export function useUpgrade(enabled: boolean) {
+  const queryClient = useQueryClient();
   const {
     data,
     isLoading,
@@ -119,15 +120,50 @@ export function useUpgrade(enabled: boolean) {
     },
   });
 
+  const { mutate: startDeleteRestorePoint, isPending: deleteBusy } = useMutation({
+    // Remove a recorded restore point and its backup file(s). The updater does the
+    // work asynchronously, so optimistically drop the row for instant feedback and
+    // reconcile with a refetch once the sidecar has had time to process it.
+    mutationFn: (backup: string) =>
+      fetchJson(apiPaths.admin.upgrade(), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'delete-restore-point', restorePoint: backup }),
+      }),
+    onMutate: (backup: string) => {
+      const prev = queryClient.getQueryData<UpgradeInfo>(UPGRADE_QUERY_KEY);
+      if (prev) {
+        queryClient.setQueryData<UpgradeInfo>(UPGRADE_QUERY_KEY, {
+          ...prev,
+          restorePoints: prev.restorePoints.filter((r) => r.backup !== backup),
+        });
+      }
+      return { prev };
+    },
+    onError: (err, _backup, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(UPGRADE_QUERY_KEY, ctx.prev);
+      showToast.error(err instanceof Error ? err.message : 'Failed to delete the restore point');
+    },
+    onSuccess: () => {
+      showToast.success('Restore point deleted.');
+    },
+    onSettled: () => {
+      // The sidecar polls for the request, so give it a moment before reconciling.
+      setTimeout(() => void refetch(), 6000);
+    },
+  });
+
   return {
     info: data,
     loading: isLoading,
     upgradeBusy,
     downgradeBusy,
     selfUpdateBusy,
+    deleteBusy,
     startUpgrade,
     startDowngrade,
     startSelfUpdate,
+    startDeleteRestorePoint,
     refetch,
   };
 }
