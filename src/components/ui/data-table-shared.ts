@@ -21,6 +21,9 @@ declare module '@tanstack/react-table' {
     filterOptions?: { label: string; value: string }[];
     /** Hide this column from the stacked mobile card view. */
     mobileHidden?: boolean;
+    /** Keep this column's cell on one line. Cells wrap by default; set this for values
+     *  that must not break (dates, counts, short codes, action buttons). */
+    nowrap?: boolean;
   }
 }
 
@@ -55,11 +58,17 @@ export const ariaSort = (
   return 'none';
 };
 
-/** Responsive visibility class for a column's `priority` meta (higher = hidden sooner). */
+/**
+ * Responsive visibility class for a column's `priority` meta (higher = hidden sooner).
+ * The thresholds sit above the table→cards cutoff (640px, see `useStackedView`) so the
+ * table condenses through several stages before it becomes cards: priority 4 drops
+ * below xl, 3 below lg, 2 below md, and priority 1 (or unset) always shows. Every table
+ * must therefore keep at least one priority-1 column, or its narrowest stage is blank.
+ */
 export const responsiveClass = (priority: number | undefined): string => {
-  if (priority === 2) return 'hidden sm:table-cell';
-  if (priority === 3) return 'hidden md:table-cell';
-  if (priority === 4) return 'hidden lg:table-cell';
+  if (priority === 2) return 'hidden md:table-cell';
+  if (priority === 3) return 'hidden lg:table-cell';
+  if (priority === 4) return 'hidden xl:table-cell';
   return '';
 };
 

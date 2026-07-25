@@ -496,6 +496,7 @@ export function DataTable<TData, TValue>({
                     {row.getVisibleCells().map((cell) => (
                       <TableCell
                         key={cell.id}
+                        nowrap={cell.column.columnDef.meta?.nowrap}
                         className={`${responsiveClass(cell.column.columnDef.meta?.priority)} ${alignTextClass(cell.column.columnDef.meta?.align)}`}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

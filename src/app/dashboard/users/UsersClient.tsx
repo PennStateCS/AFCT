@@ -146,11 +146,11 @@ export default function UsersClient() {
 
   return (
     <Card className="p-4">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
+      <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle role="heading" aria-level={1} className="text-2xl">
           User Accounts
         </CardTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Users />
             Import Users
