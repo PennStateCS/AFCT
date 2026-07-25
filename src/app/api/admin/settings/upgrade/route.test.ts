@@ -9,9 +9,11 @@ const updatesMock = vi.hoisted(() => ({
   isValidRestorePoint: vi.fn(() => true),
   readStatus: vi.fn(() => null),
   updaterAvailable: vi.fn(() => true),
+  updaterVersion: vi.fn(() => ''),
   readRestorePoints: vi.fn((): Array<{ version: string; backup: string; createdAt?: string }> => []),
   writeUpdateRequest: vi.fn(),
   writeDowngradeRequest: vi.fn(),
+  writeSelfUpdateRequest: vi.fn(),
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -37,6 +39,7 @@ beforeEach(() => {
   // test may have stubbed to throw (writeUpdateRequest, fetchManifest below).
   updatesMock.writeUpdateRequest.mockReset();
   updatesMock.writeDowngradeRequest.mockReset();
+  updatesMock.writeSelfUpdateRequest.mockReset();
   authMock.mockResolvedValue(admin);
   updatesMock.currentVersion.mockReturnValue('v1.0.0');
   updatesMock.isValidTag.mockReturnValue(true);
@@ -105,6 +108,20 @@ describe('POST /api/admin/settings/upgrade', () => {
     const res = await POST(req('POST', { tag: 'v1.0.0' }), routeCtx());
     expect(res.status).toBe(400);
     expect(updatesMock.writeUpdateRequest).not.toHaveBeenCalled();
+  });
+
+  it('requests a self-update for the running version', async () => {
+    const res = await POST(req('POST', { action: 'self-update', tag: 'v1.0.0' }), routeCtx());
+    expect(res.status).toBe(202);
+    expect(updatesMock.writeSelfUpdateRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ tag: 'v1.0.0' }),
+    );
+  });
+
+  it('rejects a self-update to a version other than the running one', async () => {
+    const res = await POST(req('POST', { action: 'self-update', tag: 'v1.1.0' }), routeCtx());
+    expect(res.status).toBe(400);
+    expect(updatesMock.writeSelfUpdateRequest).not.toHaveBeenCalled();
   });
 
   it('503 when the release list cannot be verified', async () => {

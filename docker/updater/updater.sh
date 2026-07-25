@@ -52,6 +52,9 @@ BACKUP_SERVICE="${AFCT_BACKUP_SERVICE:-db-backup}"
 # old image across a schema migration.
 WORKER_SERVICE="${AFCT_WORKER_SERVICE:-worker}"
 STACK_SERVICES="${AFCT_STACK_SERVICES:-$APP_SERVICE $NGINX_SERVICE $BACKUP_SERVICE $WORKER_SERVICE}"
+# This updater's own compose service. Recreated only by an explicit `self-update`
+# action, handed off to a detached helper (it can't recreate its own container).
+UPDATER_SERVICE="${AFCT_UPDATER_SERVICE:-updater}"
 IMAGE_REPO="${UPDATER_IMAGE_REPO:-ghcr.io/pennstatecs/afct-dashboard}"
 DEFAULT_TAG="${UPDATER_DEFAULT_TAG:-main}"
 
@@ -394,7 +397,7 @@ process_request() {
   printf '%s' "$_rid" | grep -Eq "$ID_REGEX" || _rid="unknown"
 
   case "$_action" in
-    upgrade | downgrade) : ;;
+    upgrade | downgrade | self-update) : ;;
     *)
       write_status "failed" "unsupported action: ${_action}" "" "" "$_rid"
       rm -f "$CLAIM_FILE"
@@ -419,6 +422,14 @@ process_request() {
 
   if [ "$_action" = "downgrade" ]; then
     process_downgrade "$_tag" "$_rid" "$_from" "$_proj" "$_restore_point"
+    rm -f "$CLAIM_FILE"
+    return 0
+  fi
+
+  if [ "$_action" = "self-update" ]; then
+    # Clear the claim BEFORE the swap: the recreate helper replaces this container, and
+    # the new updater must not find a stale claim and reprocess it.
+    process_self_update "$_tag" "$_rid" "$_from" "$_proj"
     rm -f "$CLAIM_FILE"
     return 0
   fi
@@ -571,9 +582,94 @@ process_downgrade() {
 }
 
 # --------------------------------------------------------------------------- #
+# Self-update: recreate THIS updater container at a new tag.
+#
+# The updater image tracks AFCT_APP_TAG, so after an app upgrade this container is a
+# version behind. A process can't recreate the container it runs in, so we pull the
+# new updater image and hand off to a short-lived, detached helper that swaps the
+# container a moment later (recreate_updater). Best-effort by design: we report
+# healthy BEFORE the swap, so if the helper fails the old updater simply keeps running
+# (exactly today's behaviour) instead of leaving the box without an updater.
+# --------------------------------------------------------------------------- #
+this_container_id() {
+  # Docker sets the container's hostname to its id unless overridden (we don't).
+  cat /etc/hostname 2>/dev/null | tr -d '[:space:]'
+}
+
+# Write this updater's version (its image's version label) to the shared volume, so
+# the app can tell when the updater is behind and offer a self-update. Best-effort.
+stamp_updater_version() {
+  _self=$(this_container_id)
+  [ -n "$_self" ] || return 0
+  _ver=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$_self" 2>/dev/null || printf '')
+  [ -n "$_ver" ] && printf '%s\n' "$_ver" > "${TRIGGER_DIR}/updater.version" 2>/dev/null || true
+}
+
+recreate_updater() {
+  _proj=$1
+  _self=$(this_container_id)
+  [ -n "$_self" ] || { progress_note "could not determine the updater container"; return 1; }
+  # The helper runs the updater's OWN image (it has docker + compose); the new image
+  # is picked up by its `up -d`. `docker run -v` needs HOST paths, so resolve the host
+  # source backing this container's /afct mount.
+  _self_image=$(docker inspect --format '{{.Config.Image}}' "$_self" 2>/dev/null || printf '')
+  [ -n "$_self_image" ] || { progress_note "could not resolve the updater image"; return 1; }
+  _afct_src=$(docker inspect \
+    --format '{{ range .Mounts }}{{ if eq .Destination "/afct" }}{{ .Source }}{{ end }}{{ end }}' \
+    "$_self" 2>/dev/null || printf '')
+  [ -n "$_afct_src" ] || { progress_note "could not resolve the deploy directory"; return 1; }
+
+  # Sleep briefly so the caller can finish writing status before this container is
+  # replaced; then recreate only the updater (no deps) at the already-pulled image.
+  _cmd="sleep 3; docker compose -p '${_proj}' --env-file '${ENV_FILE}' -f '${COMPOSE_FILE}' --profile updater up -d --no-deps ${UPDATER_SERVICE}"
+  docker run -d --rm \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v "${_afct_src}:/afct" \
+    "$_self_image" sh -c "$_cmd" >/dev/null 2>&1 || {
+    progress_note "could not start the update-service swap helper"
+    return 1
+  }
+  return 0
+}
+
+process_self_update() {
+  _tag=$1
+  _rid=$2
+  _from=$3
+  _proj=$4
+
+  if ! tag_allowed "$_tag"; then
+    write_status "failed" "version is not an allowed release" "$_from" "$_tag" "$_rid"
+    return 0
+  fi
+
+  progress_reset
+  progress_note "updating the update service to ${_tag}"
+  write_status "self_updating" "updating the update service to ${_tag}" "$_from" "$_tag" "$_rid"
+
+  # Pull the new updater image first so the swap is quick and can't fail on the network.
+  if ! dc "$_proj" --profile updater pull "$UPDATER_SERVICE" >> "$PROGRESS_LOG" 2>&1; then
+    progress_note "could not download the update service ${_tag}"
+    write_status "failed" "could not download the update service ${_tag}" "$_from" "$_tag" "$_rid"
+    return 0
+  fi
+
+  # Report success up front: once the helper replaces this container we can no longer
+  # write status, and a failed swap is non-fatal (the old updater keeps running).
+  if recreate_updater "$_proj"; then
+    progress_note "update service ${_tag} downloaded; swapping in the background"
+    write_status "healthy" "update service updated to ${_tag}" "$_from" "$_tag" "$_rid"
+  else
+    write_status "failed" "could not restart the update service" "$_from" "$_tag" "$_rid"
+  fi
+  return 0
+}
+
+# --------------------------------------------------------------------------- #
 # Main loop
 # --------------------------------------------------------------------------- #
 log "AFCT updater started (watching ${TRIGGER_DIR})"
+stamp_updater_version
 beat
 
 # Recover a claim left behind by a crash mid-upgrade: retry it once. But if a newer

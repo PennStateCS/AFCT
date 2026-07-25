@@ -77,6 +77,20 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   run grep -q 'updater' "$TESTDIR/up.log"; [ "$status" -ne 0 ]
 }
 
+@test "self-update pulls the updater image and hands off to a detached helper" {
+  export MOCK_ARGS_LOG="$TESTDIR/docker-args.log"
+  request '{"action":"self-update","tag":"v1.1.0","requestId":"su1"}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  [[ "$(jq -r '.message' triggers/status.json)" == *"update service updated to v1.1.0"* ]]
+  # It pulled the updater service...
+  run grep -Eq 'pull +updater' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  # ...and spawned a detached helper (docker run) to recreate it.
+  run grep -Eq '^run .*-d' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  # A self-update must not touch the app's version pin.
+  [ "$(tag_now)" = "v1.0.0" ]
+}
+
 @test "an invalid tag is rejected and the version is unchanged" {
   request '{"action":"upgrade","tag":"bad tag!","requestId":"r2","backupFirst":false}'
   run sh updater.sh

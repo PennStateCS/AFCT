@@ -29,8 +29,10 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
     loading: upgradeLoading,
     upgradeBusy,
     downgradeBusy,
+    selfUpdateBusy,
     startUpgrade,
     startDowngrade,
+    startSelfUpdate,
   } = useUpgrade(true);
 
   const [selectedVersion, setSelectedVersion] = useState('');
@@ -116,6 +118,33 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
           </Badge>
         </div>
+
+        {/* The updater sidecar tracks the app version but is recreated on its own, so it
+            can lag after an app upgrade. Offer to bring it up to date from here rather
+            than at the console. Hidden when it matches or hasn't reported a version. */}
+        {upgradeInfo?.updaterVersion &&
+          upgradeInfo.updaterVersion !== upgradeInfo.current &&
+          !upgradeInProgress && (
+            <div
+              role="note"
+              className="max-w-xl space-y-2 rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              <p>
+                The update service is on <span className="font-mono">{upgradeInfo.updaterVersion}</span>,
+                behind the app&apos;s <span className="font-mono">{upgradeInfo.current}</span>. Update it
+                so future upgrades use the latest logic.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={disabled || selfUpdateBusy}
+                onClick={() => startSelfUpdate(upgradeInfo.current)}
+              >
+                {selfUpdateBusy ? 'Updating…' : 'Update the update service'}
+              </Button>
+            </div>
+          )}
 
         {upgradeInfo?.status?.phase && (
           <div className="space-y-2" ref={upgradeStatusRef} tabIndex={-1}>

@@ -13,7 +13,9 @@ import {
   readRestorePoints,
   readStatus,
   updaterAvailable,
+  updaterVersion,
   writeDowngradeRequest,
+  writeSelfUpdateRequest,
   writeUpdateRequest,
   type ReleaseVersion,
 } from '@/lib/updates';
@@ -55,6 +57,7 @@ export const GET = withAdminAuth(
       versions,
       manifestError,
       updaterAvailable: updaterAvailable(),
+      updaterVersion: updaterVersion(),
       restorePoints: readRestorePoints(),
     });
   },
@@ -62,7 +65,7 @@ export const GET = withAdminAuth(
 );
 
 const UpgradeBody = z.object({
-  action: z.enum(['upgrade', 'downgrade']).optional(),
+  action: z.enum(['upgrade', 'downgrade', 'self-update']).optional(),
   tag: z.string().min(1),
   restorePoint: z.string().optional(),
 });
@@ -109,6 +112,31 @@ export const POST = withAdminAuth(
     }
 
     const requestId = crypto.randomUUID();
+
+    // ---- Self-update: recreate the updater sidecar itself so it stops lagging the
+    // app version. The target is the running app version; the updater re-checks it.
+    if (action === 'self-update') {
+      if (tag !== currentVersion()) {
+        return apiError(400, 'The update service can only be updated to the running version');
+      }
+      try {
+        writeSelfUpdateRequest({ tag, requestedBy: user.id, requestId });
+      } catch {
+        return apiError(503, 'The updater service is not available');
+      }
+      try {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: user.id,
+          action: 'SYSTEM_UPDATER_SELF_UPDATE_REQUESTED',
+          severity: 'INFO',
+          category: 'SYSTEM',
+          metadata: { tag, requestId },
+        });
+      } catch (err) {
+        console.error('[updates] audit log failed:', err);
+      }
+      return NextResponse.json({ ok: true, requestId }, { status: 202 });
+    }
 
     // ---- Downgrade: restore a recorded pre-upgrade backup and run the old image.
     if (action === 'downgrade') {

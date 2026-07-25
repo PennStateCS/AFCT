@@ -71,6 +71,8 @@ case "$cmd" in
       # Compose project discovery (updater): empty when MOCK_NO_PROJECT is set.
       *Labels*) [ -n "${MOCK_NO_PROJECT:-}" ] && printf '\n' || printf '%s\n' "${MOCK_PROJECT:-afct}" ;;
       *Config.Image*) printf 'ghcr.io/example/afct:latest\n' ;;
+      # The updater resolves its own /afct host mount to spawn the self-update helper.
+      *Mounts*) printf '%s\n' "${MOCK_AFCT_MOUNT:-/host/afct}" ;;
       *.Image*) printf 'sha256:mockimageid\n' ;;
       *) printf '\n' ;;
     esac

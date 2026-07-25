@@ -117,4 +117,6 @@ An upgrade creates a backup, changes the application version, checks health, and
 
 While an upgrade runs, the tab shows a step checklist and a **Live progress** panel that streams what the server is doing as it happens (downloading the new image, recreating the containers), so a long download shows real activity. It updates on its own; there is no need to refresh the page.
 
+The update service (the component that performs upgrades) is versioned alongside the application but is recreated separately, so it can briefly lag after an upgrade. When it does, the tab shows an **Update the update service** action that brings it up to date, so this no longer requires the server console.
+
 Restoring a previous version also restores its database backup. This permanently discards submissions, grades, accounts, and other database records created since that backup. Uploaded files remain and can become unreferenced. Read [Update AFCT](../operations/updates.md) and confirm that you accept the result before restoring an older version.
