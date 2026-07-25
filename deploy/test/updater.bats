@@ -238,11 +238,14 @@ ghcr.io/pennstatecs/afct-updater:v1.0.0"
 # the tests below are set to 20s for the same reason; both only bound the
 # pathological case, they don't slow the normal path.
 
-# Fulfill a backup request: create a new dump when backup-now shows up.
+# Fulfill a backup request: create a new backup archive when backup-now shows up.
+# The extension defaults to the current bundle format (tar.gz); pass a second arg to
+# exercise a legacy dump.
 serve_backup() {
+  _ext=${2:-tar.gz}
   ( _i=0
     while [ "$_i" -lt 800 ]; do
-      [ -f backup-triggers/backup-now ] && { : > "backups/afct-$1.dump"; break; }
+      [ -f backup-triggers/backup-now ] && { : > "backups/afct-$1.${_ext}"; break; }
       _i=$((_i + 1)); sleep 0.05
     done ) &
 }
@@ -256,6 +259,9 @@ serve_restore() {
 }
 
 @test "a successful upgrade records a restore point for the version left behind" {
+  # The backup sidecar writes the current archive format (afct-<ts>.tar.gz); the
+  # updater must detect that, not just the legacy .dump, or it waits out the whole
+  # backup timeout and never records a restore point.
   export UPDATER_BACKUP_TIMEOUT=20
   request '{"action":"upgrade","tag":"v1.1.0","requestId":"u1","backupFirst":true}'
   serve_backup "20260202-000000"; watcher=$!
@@ -263,6 +269,20 @@ serve_restore() {
   kill "$watcher" 2>/dev/null || true
   [ "$(phase)" = "healthy" ]
   run jq -e '.[] | select(.version=="v1.0.0" and .backup=="20260202-000000")' triggers/restore-points.json
+  [ "$status" -eq 0 ]
+  # The backup phase streams progress so the UI doesn't look stalled on the longest step.
+  run grep -q 'backing up the database' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+  run grep -q 'database backup complete' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "a legacy .dump backup is still detected and recorded" {
+  export UPDATER_BACKUP_TIMEOUT=20
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"u2","backupFirst":true}'
+  serve_backup "20260203-000000" dump; watcher=$!
+  run sh updater.sh
+  kill "$watcher" 2>/dev/null || true
+  [ "$(phase)" = "healthy" ]
+  run jq -e '.[] | select(.version=="v1.0.0" and .backup=="20260203-000000")' triggers/restore-points.json
   [ "$status" -eq 0 ]
 }
 
