@@ -53,7 +53,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
 
   return (
     <Card className="p-4" aria-labelledby="courses-title">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
+      <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle id="courses-title" role="heading" aria-level={1} className="text-2xl">
           Courses
         </CardTitle>
