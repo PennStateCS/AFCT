@@ -68,6 +68,10 @@ export type RestorePoint = {
   version: string;
   backup: string;
   createdAt?: string;
+  // File details, filled in by matching the backup against the files on disk (see
+  // withBackupDetails). Undefined when the backup file is gone or can't be read.
+  size?: number | null;
+  encrypted?: boolean;
 };
 
 export type UpdateStatus = {
@@ -243,6 +247,21 @@ export function readRestorePoints(): RestorePoint[] {
   } catch {
     return [];
   }
+}
+
+// Fill in each restore point's backup file details (size, encrypted) by matching its
+// backup timestamp against the backup files currently on disk. Kept pure (files passed
+// in) so it doesn't couple this module to the backups reader and stays unit-testable. A
+// point whose backup file is missing keeps undefined details, shown as unknown.
+export function withBackupDetails(
+  points: RestorePoint[],
+  files: { timestamp: string; size: number | null; encrypted: boolean }[],
+): RestorePoint[] {
+  const byTimestamp = new Map(files.map((f) => [f.timestamp, f]));
+  return points.map((p) => {
+    const file = byTimestamp.get(p.backup);
+    return file ? { ...p, size: file.size, encrypted: file.encrypted } : p;
+  });
 }
 
 // Drop a validated DELETE-RESTORE-POINT request: the sidecar removes the restore point

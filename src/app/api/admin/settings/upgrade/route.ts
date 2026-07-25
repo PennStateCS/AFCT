@@ -19,8 +19,10 @@ import {
   writeDowngradeRequest,
   writeSelfUpdateRequest,
   writeUpdateRequest,
+  withBackupDetails,
   type ReleaseVersion,
 } from '@/lib/updates';
+import { listBackups } from '@/lib/backups';
 
 /**
  * Reports the deployed version, the available curated releases, and the latest
@@ -63,7 +65,10 @@ export const GET = withAdminAuth(
       manifestError,
       updaterAvailable: updaterAvailable(),
       updaterVersion: updaterVersion(),
-      restorePoints: readRestorePoints(),
+      // Enrich with each backup's size + encrypted flag, read from the same backup dir
+      // the Backups tab lists, so the restore table can show them without the updater
+      // recording anything extra.
+      restorePoints: withBackupDetails(readRestorePoints(), listBackups()),
     });
   },
   { deniedAction: 'ADMIN_UPGRADE_VIEW_DENIED' },

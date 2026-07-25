@@ -16,7 +16,14 @@ import { DataTable } from '@/components/ui/data-table';
 import SelectField from '@/components/ui/SelectField';
 import InputGroup from '@/components/ui/InputGroup';
 import { useUpgrade, isUpgradeInProgress, type SelfUpdateState } from './useUpgrade';
-import { upgradePhaseLabel, formatBackupTs, isNewerThan } from './system-settings-shared';
+import {
+  upgradePhaseLabel,
+  formatBackupTs,
+  formatBytes,
+  isNewerThan,
+} from './system-settings-shared';
+import { UpgradeProgress } from './UpgradeProgress';
+import { UpgradeLiveLog } from './UpgradeLiveLog';
 
 // Colour the self-update banner by outcome: green on success, red on a real failure,
 // amber while working / timed out / when the updater is simply behind.
@@ -31,8 +38,6 @@ function selfUpdateBannerClass(phase: SelfUpdateState['phase']): string {
       return `${base} border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200`;
   }
 }
-import { UpgradeProgress } from './UpgradeProgress';
-import { UpgradeLiveLog } from './UpgradeLiveLog';
 
 /** Updates tab: upgrade to a newer release, and restore/downgrade to a recorded backup. */
 export function UpdatesTab({ disabled }: { disabled: boolean }) {
@@ -105,6 +110,30 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         <span className="whitespace-nowrap">{formatBackupTs(row.original.backup)}</span>
       ),
       meta: { priority: 1 },
+    },
+    {
+      id: 'encryption',
+      header: 'Encrypted',
+      accessorFn: (r) => (r.encrypted === undefined ? '' : r.encrypted ? 'Yes' : 'No'),
+      cell: ({ row }) =>
+        row.original.encrypted === undefined ? (
+          <span className="text-muted-foreground">—</span>
+        ) : row.original.encrypted ? (
+          <span className="whitespace-nowrap">Yes</span>
+        ) : (
+          <span className="whitespace-nowrap text-amber-600">No</span>
+        ),
+      meta: { priority: 2 },
+    },
+    {
+      accessorKey: 'size',
+      header: 'Size',
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap">
+          {row.original.size == null ? '—' : formatBytes(row.original.size)}
+        </span>
+      ),
+      meta: { priority: 2 },
     },
     {
       id: 'actions',

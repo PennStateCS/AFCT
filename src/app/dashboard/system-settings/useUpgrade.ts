@@ -28,6 +28,10 @@ export type RestorePoint = {
   version: string;
   backup: string;
   createdAt?: string;
+  // Backup file details, joined server-side from the backup directory. Undefined when
+  // the backup file is missing or unreadable.
+  size?: number | null;
+  encrypted?: boolean;
 };
 
 export type UpgradeInfo = {
