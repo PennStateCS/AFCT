@@ -38,6 +38,14 @@ MANIFEST_FILE="${UPDATER_MANIFEST_FILE:-/afct/versions.json}"
 # the fallback when the remote is unreachable. Set empty to disable the remote fetch
 # (the test harness does this to stay offline and deterministic).
 MANIFEST_URL="${UPDATER_MANIFEST_URL:-https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy/versions.json}"
+# Base for fetching a release's compose file, so an upgrade whose release changed the
+# stack layout (a new service, a healthcheck) can apply it without a host-side
+# `install.sh self-update`. The file is fetched from the immutable RELEASE TAG ref
+# (<base>/<tag>/deploy/docker-compose.yml), validated, backed up, and only written when
+# it differs. Uses `-` (not `:-`) so an explicitly-empty value disables it -- the test
+# harness sets it empty to stay offline; a deployment can set it empty as a kill switch.
+COMPOSE_BASE_URL="${UPDATER_COMPOSE_BASE_URL-https://raw.githubusercontent.com/PennStateCS/AFCT}"
+COMPOSE_PATH_IN_REPO="${UPDATER_COMPOSE_PATH_IN_REPO:-deploy/docker-compose.yml}"
 
 APP_SERVICE="${AFCT_APP_SERVICE:-app}"
 APP_CONTAINER="${AFCT_APP_CONTAINER:-afct-app}"
@@ -160,6 +168,15 @@ dc() {
   docker compose -p "$_proj" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
+dc_file() {
+  # Like dc(), but against an arbitrary compose file (used to validate a candidate
+  # release compose before it is installed).
+  _f=$1
+  _proj=$2
+  shift 2
+  docker compose -p "$_proj" --env-file "$ENV_FILE" -f "$_f" "$@"
+}
+
 current_app_tag() {
   _v=$(awk -F= '/^AFCT_APP_TAG=/ { sub(/^AFCT_APP_TAG=/, ""); print; exit }' "$ENV_FILE" 2>/dev/null || true)
   [ -n "$_v" ] && printf '%s' "$_v" || printf '%s' "$DEFAULT_TAG"
@@ -186,6 +203,92 @@ set_app_tag() {
   # filesystem (the deploy directory is bind-mounted, not the single file).
   mv "$_tmp" "$ENV_FILE" || { rm -f "$_tmp"; return 1; }
   return 0
+}
+
+# Set by apply_release_compose so the upgrade flow can restore the previous compose
+# file if it has to roll back. Empty means the compose was not changed this run.
+_COMPOSE_BACKUP=""
+
+# When a release changes the stack layout (adds a service, a healthcheck, a volume),
+# the running compose file on the host is stale and recreating from it would miss the
+# change. This fetches the target release's compose from its IMMUTABLE TAG ref, and if
+# it differs from what's on disk, validates it and swaps it in (keeping a backup).
+#
+# Safety rails, because this rewrites the file that defines the whole stack:
+#   - source is the signed release tag ref only (never a branch), same repo as the app
+#   - the fetched file must pass `docker compose config` before it is trusted
+#   - the current file is backed up first, so the upgrade's rollback path can restore it
+#   - best-effort: any failure (offline, bad file) leaves the current compose in place
+#     and returns 0. A genuinely required layout change then surfaces as a failed
+#     health check and a normal rollback, not a half-applied stack.
+# Sets _COMPOSE_BACKUP to the backup path when it swaps the file; leaves it empty
+# otherwise. Always returns 0 (never blocks an upgrade on its own).
+apply_release_compose() {
+  _tag=$1
+  _proj=$2
+  _COMPOSE_BACKUP=""
+
+  # Disabled (empty base URL): the test harness and any pinned/offline deployment.
+  [ -n "$COMPOSE_BASE_URL" ] || return 0
+
+  _url="${COMPOSE_BASE_URL}/${_tag}/${COMPOSE_PATH_IN_REPO}"
+  _new="${COMPOSE_FILE}.rel.$$"
+  if ! curl -fsS --max-time 20 "$_url" -o "$_new" 2>/dev/null || [ ! -s "$_new" ]; then
+    rm -f "$_new"
+    progress_note "using the current stack configuration (release compose not fetched)"
+    return 0
+  fi
+
+  # Identical to what's running: nothing to do, and no backup/notice needed.
+  if cmp -s "$_new" "$COMPOSE_FILE"; then
+    rm -f "$_new"
+    return 0
+  fi
+
+  # Validate the candidate before trusting it. `config -q` resolves ${VAR}
+  # interpolation against the same env file the stack uses, so it also catches a
+  # compose that references variables this host doesn't set.
+  if ! dc_file "$_new" "$_proj" config -q >/dev/null 2>&1; then
+    rm -f "$_new"
+    log "release ${_tag} compose failed validation; keeping the current stack configuration"
+    progress_note "release stack configuration failed validation; keeping the current one"
+    return 0
+  fi
+
+  # Back up the current file (ownership preserved) so rollback can restore it, then
+  # swap atomically within the same directory.
+  _bak="${COMPOSE_FILE}.bak.${_tag}.$$"
+  if ! cp -p "$COMPOSE_FILE" "$_bak" 2>/dev/null; then
+    rm -f "$_new"
+    log "could not back up the current compose file; keeping it and skipping the release compose"
+    return 0
+  fi
+  _owner=$(stat -c '%u:%g' "$COMPOSE_FILE" 2>/dev/null || true)
+  chmod 644 "$_new" 2>/dev/null || true
+  [ -n "$_owner" ] && chown "$_owner" "$_new" 2>/dev/null || true
+  if ! mv "$_new" "$COMPOSE_FILE"; then
+    rm -f "$_new" "$_bak"
+    log "could not install the release compose file; keeping the current one"
+    return 0
+  fi
+
+  _COMPOSE_BACKUP="$_bak"
+  log "applied release ${_tag} stack configuration (backup at ${_bak})"
+  progress_note "updated the stack configuration for ${_tag}"
+  return 0
+}
+
+# Restore the compose file backed up by apply_release_compose, used on the rollback
+# path so a failed upgrade also reverts a stack-layout change. No-op if nothing was
+# changed this run.
+restore_release_compose() {
+  [ -n "$_COMPOSE_BACKUP" ] || return 0
+  if cp -p "$_COMPOSE_BACKUP" "$COMPOSE_FILE" 2>/dev/null; then
+    log "restored the previous stack configuration from ${_COMPOSE_BACKUP}"
+    progress_note "restored the previous stack configuration"
+  else
+    log "WARNING: could not restore the previous compose file from ${_COMPOSE_BACKUP}"
+  fi
 }
 
 # Disk needed before a pull is attempted, in MB. The dashboard image is ~4.7GB and
@@ -489,6 +592,11 @@ process_request() {
     return 0
   fi
 
+  # If this release changed the stack layout, pull its compose in before recreating,
+  # so a new service or healthcheck is applied as part of the same upgrade. Best
+  # effort and self-reverting: the rollback path below restores the old file.
+  apply_release_compose "$_tag" "$_proj"
+
   if recreate_app "$_proj"; then
     write_status "migrating" "waiting for ${_tag} to become healthy" "$_from" "$_tag" "$_rid"
     if wait_for_health "$_proj"; then
@@ -497,6 +605,8 @@ process_request() {
       # Only once the new version is up and healthy: keep it and the rollback
       # target, drop everything older.
       prune_old_images "$_tag" "$_from"
+      # The new compose is proven good; drop its backup so they don't pile up.
+      [ -n "$_COMPOSE_BACKUP" ] && rm -f "$_COMPOSE_BACKUP"
       rm -f "$CLAIM_FILE"
       return 0
     fi
@@ -505,6 +615,9 @@ process_request() {
   # Roll back to the previous tag.
   write_status "rolling_back" "the upgrade failed; restoring ${_from}" "$_from" "$_tag" "$_rid"
   log "upgrade to ${_tag} failed; rolling back to ${_from}"
+  # Revert the compose file too if this upgrade swapped it, so the rollback recreates
+  # the old stack shape and not the new one that just failed.
+  restore_release_compose
   if set_app_tag "$_from" && recreate_app "$_proj" && wait_for_health "$_proj"; then
     write_status "rolled_back" "restored ${_from} after a failed upgrade to ${_tag}" "$_from" "$_tag" "$_rid"
   else
