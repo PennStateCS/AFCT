@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { reconcileUpdateOutcomeLog } from '@/lib/update-audit';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { apiError } from '@/lib/api/http';
 import { readJson } from '@/lib/api/request';
@@ -44,7 +45,7 @@ import { listBackups } from '@/lib/backups';
  *   403: { description: Caller is not a system administrator. }
  */
 export const GET = withAdminAuth(
-  async () => {
+  async (req) => {
     let versions: ReleaseVersion[] = [];
     let manifestError = false;
     try {
@@ -54,6 +55,9 @@ export const GET = withAdminAuth(
       // page still shows the current version and any in-flight status.
       manifestError = true;
     }
+    // Ride along on the status poll to record a finished run's outcome in the activity
+    // log exactly once. The updater has no DB access, so the app reconciles it here.
+    await reconcileUpdateOutcomeLog(prisma, req);
     return NextResponse.json({
       current: currentVersion(),
       status: readStatus(),

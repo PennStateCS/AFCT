@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { showToast } from '@/lib/toast';
@@ -11,6 +11,8 @@ export type ReleaseVersion = {
   releasedAt?: string;
   // See src/lib/updates.ts: this release also needs a host-side `install.sh update`.
   requiresHostUpdate?: boolean;
+  // Optional free-text note for this release, shown when the version is selected.
+  upgradeNote?: string;
 };
 
 export type UpdateStatus = {
@@ -67,11 +69,31 @@ export function isUpgradeInProgress(status: UpdateStatus | null | undefined): bo
 // stop us before the new run reports in.
 const REQUEST_GRACE_MS = 45_000;
 
+// The updater replaces its OWN container during a self-update, so it can't report its
+// own success: the app confirms it by watching for the updater to come back on the new
+// version. If it hasn't within this window, the UI stops waiting and nudges the admin
+// (a soft "taking longer than expected", never a hard failure).
+const SELF_UPDATE_TIMEOUT_MS = 150_000;
+
+// The self-update has its own lifecycle, separate from the upgrade status.json channel,
+// because the updater restarting itself would otherwise read as an upgrade failure.
+export type SelfUpdateState =
+  | { phase: 'idle' }
+  | { phase: 'updating'; targetTag: string; requestId: string; startedAt: number }
+  | { phase: 'done'; targetTag: string }
+  | { phase: 'failed'; targetTag: string; message?: string }
+  | { phase: 'timeout'; targetTag: string };
+
 export function useUpgrade(enabled: boolean) {
   const queryClient = useQueryClient();
   // Wall-clock of the last upgrade/downgrade request, so the poller keeps going during
   // the grace window above. A ref (not state) because only the poll callback reads it.
   const requestedAtRef = useRef(0);
+  // Self-update lifecycle, driven by watching updaterVersion rather than status.json.
+  const [selfUpdate, setSelfUpdate] = useState<SelfUpdateState>({ phase: 'idle' });
+  // Mirror of whether a self-update is in flight, read by the poll callback (which
+  // can't depend on `selfUpdate` state without being re-created each render).
+  const selfUpdatingRef = useRef(false);
 
   // Flip the cached status to an in-flight phase right after a request so the status
   // panel and live log appear immediately, with no manual refresh, and the poll starts.
@@ -94,6 +116,7 @@ export function useUpgrade(enabled: boolean) {
     // sidecar spins up; stop once it settles.
     refetchInterval: (query) =>
       isUpgradeInProgress(query.state.data?.status) ||
+      selfUpdatingRef.current ||
       Date.now() - requestedAtRef.current < REQUEST_GRACE_MS
         ? 3000
         : false,
@@ -146,19 +169,72 @@ export function useUpgrade(enabled: boolean) {
   const { mutate: startSelfUpdate, isPending: selfUpdateBusy } = useMutation({
     // Bring the updater sidecar up to the running app version.
     mutationFn: (tag: string) =>
-      fetchJson(apiPaths.admin.upgrade(), {
+      fetchJson<{ ok: boolean; requestId: string }>(apiPaths.admin.upgrade(), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'self-update', tag }),
       }),
-    onSuccess: () => {
+    onSuccess: (data, tag) => {
+      // Enter the self-update lifecycle. From here the outcome is decided by watching
+      // the updater come back on the new version (see the effects below), NOT by the
+      // status.json phase, whose transient values during the container swap would
+      // otherwise read as a failure.
+      selfUpdatingRef.current = true;
+      setSelfUpdate({
+        phase: 'updating',
+        targetTag: tag,
+        requestId: data.requestId,
+        startedAt: Date.now(),
+      });
       showToast.success('Update service is updating and will restart shortly.');
-      void refetch();
     },
     onError: (err) => {
       showToast.error(err instanceof Error ? err.message : 'Failed to update the update service');
     },
   });
+
+  // Resolve the self-update by watching the updater's reported version. Success is the
+  // updater coming back on the target version; a genuine failure is the updater
+  // reporting `failed` for this request while still running the old version (a
+  // pre-swap failure, e.g. the image couldn't be pulled).
+  useEffect(() => {
+    if (selfUpdate.phase !== 'updating') return;
+    const { targetTag, requestId } = selfUpdate;
+    const updaterVersion = data?.updaterVersion;
+    const updaterUp = data?.updaterAvailable !== false;
+    const status = data?.status;
+
+    if (updaterVersion && updaterVersion === targetTag && updaterUp) {
+      selfUpdatingRef.current = false;
+      setSelfUpdate({ phase: 'done', targetTag });
+      return;
+    }
+    if (
+      status?.phase === 'failed' &&
+      status.requestId === requestId &&
+      updaterUp &&
+      updaterVersion !== targetTag
+    ) {
+      selfUpdatingRef.current = false;
+      setSelfUpdate({ phase: 'failed', targetTag, message: status.message });
+    }
+  }, [data, selfUpdate]);
+
+  // Independent timeout: if the updater never reports back, stop waiting and nudge the
+  // admin rather than spinning forever. Kept off the status poll so it fires even if
+  // the polled data stops changing.
+  useEffect(() => {
+    if (selfUpdate.phase !== 'updating') return;
+    const remaining = SELF_UPDATE_TIMEOUT_MS - (Date.now() - selfUpdate.startedAt);
+    const timer = setTimeout(() => {
+      selfUpdatingRef.current = false;
+      setSelfUpdate((s) => (s.phase === 'updating' ? { phase: 'timeout', targetTag: s.targetTag } : s));
+    }, Math.max(0, remaining));
+    return () => clearTimeout(timer);
+  }, [selfUpdate]);
+
+  // Clear a settled self-update back to idle (the banner returns to its normal state).
+  const dismissSelfUpdate = () => setSelfUpdate({ phase: 'idle' });
 
   const { mutate: startDeleteRestorePoint, isPending: deleteBusy } = useMutation({
     // Remove a recorded restore point and its backup file(s). The updater does the
@@ -204,6 +280,8 @@ export function useUpgrade(enabled: boolean) {
     startDowngrade,
     startSelfUpdate,
     startDeleteRestorePoint,
+    selfUpdate,
+    dismissSelfUpdate,
     refetch,
   };
 }

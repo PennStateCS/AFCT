@@ -91,11 +91,13 @@ Each restore point also has a **Delete** button. Removing one deletes its backup
 
 Only versions listed in the curated release manifest can be selected; the updater validates every request against it, so the app can never be pointed at an arbitrary image.
 
+Every upgrade, downgrade, and update-service change is recorded in **Admin Menu > System Settings > System Logs**: one entry when it is requested and one for the outcome (completed, rolled back, or failed), so you can review what happened after the fact even once the live progress has cleared.
+
 ### Stack changes are applied for you
 
 Some releases change more than the application image: they add a service, a health check, or a setting in `docker-compose.yml`, or they update the updater component itself. The Updates tab handles these without a shell session:
 
 - **Compose changes.** During an upgrade, the updater fetches that release's `docker-compose.yml` from the release's own tag, validates it, and installs it (keeping a backup) before recreating the stack. If the upgrade has to roll back, the previous compose file is restored with it. A release whose compose needs a setting your host does not provide is left in place and the upgrade proceeds on the current configuration, so a bad file can never take the stack down.
-- **The updater itself.** Because the updater cannot recreate its own container, it tracks the application version separately. When it falls behind, the Updates tab shows an **Update the update service** action that brings it up to the running version.
+- **The updater itself.** Because the updater cannot recreate its own container, it tracks the application version separately. When it falls behind, the Updates tab shows an **Update the update service** action that brings it up to the running version. The update service restarts itself as part of this, so the tab reports progress and confirms once it comes back on the new version; a brief unavailability during the swap is expected and is not an error.
 
 This means the console is normally not needed to keep a deployment current. The host-side `sh install.sh self-update` remains available as a manual path and as the way to update the installer script, but routine upgrades, including ones that change the stack layout, can be done entirely from the Updates tab.

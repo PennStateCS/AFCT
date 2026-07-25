@@ -142,6 +142,19 @@ jobs:
             echo "no previous tag; requiresHostUpdate=false"
           fi
 
+          # An optional admin note for this release, taken from the BODY of the
+          # annotated tag's message: the subject (first -m) is the normal summary, and
+          # a second -m becomes the note. So `git tag -a vX.Y.Z -m "summary"` has no
+          # note, while `git tag -a vX.Y.Z -m "summary" -m "run X on the server first"`
+          # attaches one. It's shown in the Updates tab when this version is selected,
+          # for the rare release that needs a manual server step. %(contents:body)
+          # excludes both the subject and any PGP signature.
+          NOTE=""
+          if [ "$(git cat-file -t "$TAG" 2>/dev/null || true)" = "tag" ]; then
+            NOTE=$(git tag -l --format='%(contents:body)' "$TAG")
+          fi
+          [ -n "$NOTE" ] && echo "release note attached (${#NOTE} chars)" || echo "no release note"
+
           attempt=0
           while [ "$attempt" -lt 5 ]; do
             attempt=$((attempt + 1))
@@ -153,8 +166,11 @@ jobs:
             fi
             # Newest first; keep the moving "main" entry wherever it already sits.
             tmp=$(mktemp)
-            jq --arg t "$TAG" --argjson rhu "$RHU" \
-               '.versions = ([{tag:$t, label:$t, notes:("Release " + $t + "."), requiresHostUpdate:$rhu}] + (.versions // []))' \
+            jq --arg t "$TAG" --argjson rhu "$RHU" --arg note "$NOTE" \
+               '.versions = ([
+                  {tag:$t, label:$t, notes:("Release " + $t + "."), requiresHostUpdate:$rhu}
+                  + (if $note == "" then {} else {upgradeNote:$note} end)
+                ] + (.versions // []))' \
                deploy/versions.json > "$tmp"
             mv "$tmp" deploy/versions.json
             git add deploy/versions.json

@@ -15,10 +15,29 @@ import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import SelectField from '@/components/ui/SelectField';
 import InputGroup from '@/components/ui/InputGroup';
-import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
-import { upgradePhaseLabel, formatBackupTs, formatBytes, isNewerThan } from './system-settings-shared';
+import { useUpgrade, isUpgradeInProgress, type SelfUpdateState } from './useUpgrade';
+import {
+  upgradePhaseLabel,
+  formatBackupTs,
+  formatBytes,
+  isNewerThan,
+} from './system-settings-shared';
 import { UpgradeProgress } from './UpgradeProgress';
 import { UpgradeLiveLog } from './UpgradeLiveLog';
+
+// Colour the self-update banner by outcome: green on success, red on a real failure,
+// amber while working / timed out / when the updater is simply behind.
+function selfUpdateBannerClass(phase: SelfUpdateState['phase']): string {
+  const base = 'max-w-xl space-y-2 rounded-md border p-3 text-sm';
+  switch (phase) {
+    case 'done':
+      return `${base} border-green-500/40 bg-green-50 text-green-900 dark:bg-green-950/40 dark:text-green-200`;
+    case 'failed':
+      return `${base} border-red-500/40 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200`;
+    default:
+      return `${base} border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200`;
+  }
+}
 
 /** Updates tab: upgrade to a newer release, and restore/downgrade to a recorded backup. */
 export function UpdatesTab({ disabled }: { disabled: boolean }) {
@@ -35,6 +54,8 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
     startDowngrade,
     startSelfUpdate,
     startDeleteRestorePoint,
+    selfUpdate,
+    dismissSelfUpdate,
   } = useUpgrade(true);
 
   const [selectedVersion, setSelectedVersion] = useState('');
@@ -180,33 +201,94 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         </div>
 
         {/* The updater sidecar tracks the app version but is recreated on its own, so it
-            can lag after an app upgrade. Offer to bring it up to date from here rather
-            than at the console. Hidden when it matches or hasn't reported a version. */}
-        {upgradeInfo?.updaterVersion &&
-          upgradeInfo.updaterVersion !== upgradeInfo.current &&
-          !upgradeInProgress && (
-            <div
-              role="note"
-              className="max-w-xl space-y-2 rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
-            >
+            can lag after an app upgrade. Offer to bring it up to date from here. Once a
+            self-update starts, the outcome is tracked by watching the updater come back
+            on the new version (the updater restarts itself, so it can't report its own
+            success and a transient status would otherwise look like a failure). */}
+        {(selfUpdate.phase !== 'idle' ||
+          (!!upgradeInfo?.updaterVersion &&
+            upgradeInfo.updaterVersion !== upgradeInfo.current &&
+            !upgradeInProgress)) && (
+          <div
+            role={
+              selfUpdate.phase === 'updating' || selfUpdate.phase === 'done' ? 'status' : 'note'
+            }
+            className={selfUpdateBannerClass(selfUpdate.phase)}
+          >
+            {selfUpdate.phase === 'updating' ? (
               <p>
-                The update service is on <span className="font-mono">{upgradeInfo.updaterVersion}</span>,
-                behind the app&apos;s <span className="font-mono">{upgradeInfo.current}</span>. Update it
-                so future upgrades use the latest logic.
+                Updating the update service to{' '}
+                <span className="font-mono">{selfUpdate.targetTag}</span>. It restarts as part of
+                this, so it may briefly show as unavailable; this is expected and can take a minute
+                or two.
               </p>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={disabled || selfUpdateBusy}
-                onClick={() => startSelfUpdate(upgradeInfo.current)}
-              >
-                {selfUpdateBusy ? 'Updating…' : 'Update the update service'}
-              </Button>
-            </div>
-          )}
+            ) : selfUpdate.phase === 'done' ? (
+              <div className="flex items-center justify-between gap-3">
+                <p>
+                  The update service is now on{' '}
+                  <span className="font-mono">{selfUpdate.targetTag}</span>.
+                </p>
+                <Button type="button" size="sm" variant="secondary" onClick={dismissSelfUpdate}>
+                  Dismiss
+                </Button>
+              </div>
+            ) : selfUpdate.phase === 'failed' ? (
+              <div className="space-y-2">
+                <p>
+                  The update service could not be updated
+                  {selfUpdate.message ? `: ${selfUpdate.message}` : '.'}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={disabled || selfUpdateBusy || !upgradeInfo}
+                    onClick={() => upgradeInfo && startSelfUpdate(upgradeInfo.current)}
+                  >
+                    {selfUpdateBusy ? 'Updating…' : 'Try again'}
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={dismissSelfUpdate}>
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            ) : selfUpdate.phase === 'timeout' ? (
+              <div className="space-y-2">
+                <p>
+                  The update service is taking longer than expected to come back. Reload this page
+                  in a moment; if it&apos;s still behind, run{' '}
+                  <code className="font-mono">sh install.sh update</code> on the server.
+                </p>
+                <Button type="button" size="sm" variant="secondary" onClick={dismissSelfUpdate}>
+                  Dismiss
+                </Button>
+              </div>
+            ) : (
+              <>
+                <p>
+                  The update service is on{' '}
+                  <span className="font-mono">{upgradeInfo?.updaterVersion}</span>, behind the
+                  app&apos;s <span className="font-mono">{upgradeInfo?.current}</span>. Update it so
+                  future upgrades use the latest logic.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={disabled || selfUpdateBusy || !upgradeInfo}
+                  onClick={() => upgradeInfo && startSelfUpdate(upgradeInfo.current)}
+                >
+                  {selfUpdateBusy ? 'Updating…' : 'Update the update service'}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
 
-        {upgradeInfo?.status?.phase && (
+        {/* The self-update has its own banner above; hide the generic status card while
+            it runs so the updater's transient self-update phases don't show here too. */}
+        {upgradeInfo?.status?.phase && selfUpdate.phase === 'idle' && (
           <div className="space-y-2" ref={upgradeStatusRef} tabIndex={-1}>
             <h3 className="text-sm font-medium">Update status</h3>
             {/* role="status": phase changes arrive via background polling,
@@ -337,14 +419,12 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             {selectedVersionInfo?.notes && (
               <p className="text-muted-foreground text-sm">{selectedVersionInfo.notes}</p>
             )}
-            {selectedVersionInfo?.requiresHostUpdate && (
+            {selectedVersionInfo?.upgradeNote && (
               <div
                 role="note"
-                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm whitespace-pre-line text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
               >
-                This release also updates a component the in-app upgrade can’t replace on its own.
-                After the upgrade finishes, run{' '}
-                <code className="font-mono">sh install.sh update</code> on the server to complete it.
+                {selectedVersionInfo.upgradeNote}
               </div>
             )}
             <Button
@@ -379,10 +459,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               downloads the new version, and restarts. This may take a few minutes, during which the
               site may be briefly unavailable. A failed upgrade is rolled back automatically.
             </DialogDescription>
-            {selectedVersionInfo?.requiresHostUpdate && (
-              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                Afterward, run <code className="font-mono">sh install.sh update</code> on the server
-                to finish updating a component the app can’t replace itself.
+            {selectedVersionInfo?.upgradeNote && (
+              <p className="text-sm font-medium whitespace-pre-line text-amber-700 dark:text-amber-300">
+                {selectedVersionInfo.upgradeNote}
               </p>
             )}
           </DialogHeader>

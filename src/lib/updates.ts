@@ -53,6 +53,11 @@ export type ReleaseVersion = {
   // sidecar or the compose file changed, and the app can't apply those to itself.
   // The admin must run the installer on the host afterward to finish.
   requiresHostUpdate?: boolean;
+  // An optional free-text note for this specific release, shown in the Updates tab
+  // when the version is selected. Set from an annotated tag's message at release time
+  // (see .github/workflows/release.yml) for the rare release that needs the admin to
+  // do something on the server first. Absent on ordinary releases.
+  upgradeNote?: string;
 };
 
 export type ReleaseManifest = { versions: ReleaseVersion[] };
@@ -163,6 +168,39 @@ export function writeUpdateRequest(request: {
   const tmp = path.join(UPDATE_TRIGGER_DIR, `.request.${process.pid}.tmp`);
   fs.writeFileSync(tmp, JSON.stringify(payload));
   fs.renameSync(tmp, UPDATE_REQUEST_FILE);
+}
+
+// Records the requestId of the last update run whose terminal outcome the app has
+// already written to the activity log, so a completed run is logged exactly once no
+// matter how many admins poll the status. Lives in the trigger volume next to
+// status.json; the app owns it (the updater never touches it).
+export const UPDATE_STATUS_LOGGED_FILE = path.join(UPDATE_TRIGGER_DIR, 'status.logged');
+
+// The requestId already logged, or '' if none (missing file / unmounted volume).
+export function readLoggedStatusRequestId(): string {
+  try {
+    return fs.readFileSync(UPDATE_STATUS_LOGGED_FILE, 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+// Remember that this run's outcome has been logged. Best-effort: a failed write just
+// means the outcome could be logged again on a later poll.
+export function markStatusLogged(requestId: string): void {
+  try {
+    fs.mkdirSync(UPDATE_TRIGGER_DIR, { recursive: true });
+    fs.writeFileSync(UPDATE_STATUS_LOGGED_FILE, requestId);
+  } catch {
+    // best-effort
+  }
+}
+
+// The last `maxLines` lines of the live progress log, for attaching a snapshot of a
+// finished run to its outcome log entry. Empty if the log isn't present.
+export function readProgressTail(maxLines: number): string[] {
+  const { lines } = readProgress(0);
+  return lines.length > maxLines ? lines.slice(lines.length - maxLines) : lines;
 }
 
 // The updater stamps its own running version (its image's version label) here on
