@@ -348,7 +348,11 @@ recreate_app() {
   # image over a slow link can take longer than the healthcheck's staleness window,
   # which would mark this sidecar unhealthy and flip the app's "updater available"
   # flag to false in the middle of an upgrade.
-  progress_note "pulling images (${STACK_SERVICES})"
+  # `docker compose pull` both downloads and then EXTRACTS the layers. On the ~4.7GB
+  # app image the extract alone can take a few minutes, and with --quiet (below) it is
+  # silent, so say up front that this whole step can take a while -- otherwise it looks
+  # stalled between heartbeats.
+  progress_note "downloading and extracting images (this can take a few minutes)"
   # --quiet: docker redraws per-layer progress bars in place on a TTY, but with output
   # redirected to this file (no TTY) every redraw becomes a NEW line, so the streamed
   # log fills with hundreds of "Downloading [==>]" lines. Suppress that firehose; the
@@ -361,7 +365,7 @@ recreate_app() {
     beat
     sleep "$HEALTH_INTERVAL"
     _elapsed=$((_elapsed + HEALTH_INTERVAL))
-    progress_note "still downloading (${_elapsed}s elapsed)"
+    progress_note "still downloading/extracting images (${_elapsed}s elapsed)"
     progress_trim
   done
   wait "$_pull_pid" || { progress_note "image pull failed"; return 1; }
