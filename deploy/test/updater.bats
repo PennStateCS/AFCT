@@ -277,6 +277,17 @@ serve_restore() {
   [ "$(tag_now)" = "v0.9.0" ]
 }
 
+@test "the updater stamps its version from the image tag when there's no version label" {
+  # MOCK_NO_PROJECT makes the mock's label lookup return empty, so the stamp must fall
+  # back to the tag in the image ref (ghcr.io/example/afct:latest -> latest).
+  export MOCK_NO_PROJECT=1
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ -s "$TESTDIR/triggers/updater.version" ]
+  run cat "$TESTDIR/triggers/updater.version"
+  [ "$output" = "latest" ]
+}
+
 @test "the updater stamps a presence heartbeat in the shared trigger volume" {
   # The app (no Docker access) reads this to know the sidecar is installed/running.
   request '{"action":"upgrade","tag":"v1.1.0","requestId":"p1","backupFirst":false}'

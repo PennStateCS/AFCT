@@ -596,12 +596,21 @@ this_container_id() {
   cat /etc/hostname 2>/dev/null | tr -d '[:space:]'
 }
 
-# Write this updater's version (its image's version label) to the shared volume, so
-# the app can tell when the updater is behind and offer a self-update. Best-effort.
+# Write this updater's version to the shared volume, so the app can tell when the
+# updater is behind and offer a self-update. Prefer the image's version label, but the
+# updater image doesn't currently carry one, so fall back to the tag in its image ref
+# (e.g. ghcr.io/pennstatecs/afct-updater:v0.1.12 -> v0.1.12). Best-effort.
 stamp_updater_version() {
   _self=$(this_container_id)
   [ -n "$_self" ] || return 0
   _ver=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$_self" 2>/dev/null || printf '')
+  if [ -z "$_ver" ]; then
+    _img=$(docker inspect --format '{{.Config.Image}}' "$_self" 2>/dev/null || printf '')
+    case "$_img" in
+      *@*) : ;;              # digest-pinned ref: no readable tag, leave unset
+      *:*) _ver=${_img##*:} ;; # strip repo, keep the tag after the last colon
+    esac
+  fi
   [ -n "$_ver" ] && printf '%s\n' "$_ver" > "${TRIGGER_DIR}/updater.version" 2>/dev/null || true
 }
 
