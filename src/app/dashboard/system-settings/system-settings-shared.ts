@@ -95,6 +95,28 @@ export const formatBackupTs = (ts: string) => {
   return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}` : ts;
 };
 
+// Parse a release tag like "v0.1.19" or "0.1.19" into [major, minor, patch]. Returns
+// null for anything that isn't a plain three-part version (e.g. "main" in dev, or a
+// commit SHA), so callers can fall back rather than guess an ordering.
+export function parseVersionTag(tag: string): [number, number, number] | null {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(tag.trim());
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+// Whether `tag` is a strictly higher version than `current`. Returns null when either
+// side isn't a parseable version, so the caller keeps its old behaviour instead of
+// hiding versions it can't compare.
+export function isNewerThan(tag: string, current: string): boolean | null {
+  const a = parseVersionTag(tag);
+  const b = parseVersionTag(current);
+  if (!a || !b) return null;
+  const [a0, a1, a2] = a;
+  const [b0, b1, b2] = b;
+  if (a0 !== b0) return a0 > b0;
+  if (a1 !== b1) return a1 > b1;
+  return a2 > b2;
+}
+
 // Human labels for the updater's machine phase strings, both for display and so
 // the status live region doesn't announce "rolled underscore back".
 const UPGRADE_PHASE_LABELS: Record<string, string> = {
