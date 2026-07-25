@@ -267,8 +267,10 @@ the deployment directory. It re-validates the requested tag against the curated 
 manifest before doing anything. An in-app upgrade recreates the `app`, `nginx`, and
 `db-backup` services together at the selected release tag. Two services are intentionally left
 out: `postgres` is pinned by digest, not the release tag, and the `updater` cannot recreate
-its own running container, so a new updater image is picked up on the next host-side
-`sh install.sh update`. See the [updater boundary](#optional-updater-boundary) below for the
+its own running container, so it is updated separately, from the Updates tab (**Update the
+update service**) or a host-side `sh install.sh update`. When a release changes the stack
+layout, the updater also fetches that release's `docker-compose.yml` and applies it as part
+of the upgrade. See the [updater boundary](#optional-updater-boundary) below for the
 security rationale, and [Updates](../operations/updates.md) for the operator's view.
 
 ## Persistent data

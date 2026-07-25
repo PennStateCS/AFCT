@@ -107,9 +107,19 @@ pick the version, and click **Upgrade**. The stack backs up the database, pulls 
 images, recreates, and health-checks, rolling back automatically if the new version is
 unhealthy.
 
-**Host-side completion.** The in-app updater can't replace itself or apply a changed
-`docker-compose.yml`. If the release is marked `requiresHostUpdate` (the Updates tab
-shows a note), finish it on the server after the in-app upgrade:
+**Completing the update.** Some releases also change the stack layout
+(`docker-compose.yml`) or the updater component. These are marked `requiresHostUpdate`
+(the Updates tab shows a note). The in-app path now handles both:
+
+- A changed `docker-compose.yml` is fetched from the target release, validated, and
+  applied during the upgrade, provided the updater itself is current. This needs an
+  updater that includes the capability (v0.1.14 or newer), so update the updater first
+  if it is behind.
+- The updater can't recreate its own running container, so it is updated separately:
+  the Updates tab shows **Update the update service** when it lags the app version.
+
+The host-side commands remain as a fallback, and `self-update` is still how you refresh
+the installer script itself:
 
 ```bash
 sh install.sh self-update   # refresh install.sh + docker-compose.yml
