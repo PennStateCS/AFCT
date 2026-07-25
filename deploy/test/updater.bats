@@ -27,6 +27,7 @@ setup() {
   export UPDATER_ENV_FILE="$TESTDIR/.env.production"
   export UPDATER_MANIFEST_FILE="$TESTDIR/versions.json"   # absent unless a test writes it
   export UPDATER_MANIFEST_URL=""                          # offline: validate against the local file only
+  export UPDATER_COMPOSE_BASE_URL=""                      # offline: don't fetch a release compose unless a test opts in
   export UPDATER_BACKUP_DIR="$TESTDIR/backups"
   export BACKUP_TRIGGER_DIR="$TESTDIR/backup-triggers"
   export UPDATER_HEALTH_TIMEOUT=6
@@ -324,4 +325,55 @@ serve_restore() {
   kill "$watcher" 2>/dev/null || true
   [ "$(phase)" = "failed" ]
   [ "$(tag_now)" = "v1.0.0" ]     # tag not switched when the restore fails
+}
+
+# --- compose-from-release (a release that changed the stack layout) ------------ #
+
+@test "an upgrade applies a changed release compose from the release tag ref" {
+  export UPDATER_COMPOSE_BASE_URL="https://raw.githubusercontent.com/PennStateCS/AFCT"
+  export MOCK_COMPOSE_BODY='services:\n  app: {}\n  worker: {}\n'
+  printf 'services: {}\n' > docker-compose.yml   # current on-disk stack differs from the release
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"c1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  # The release compose (fetched from the v1.1.0 tag ref) is now installed.
+  run grep -q 'worker:' docker-compose.yml; [ "$status" -eq 0 ]
+  run grep -q 'updated the stack configuration for v1.1.0' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "an unchanged release compose is left in place with no backup churn" {
+  export UPDATER_COMPOSE_BASE_URL="https://raw.githubusercontent.com/PennStateCS/AFCT"
+  export MOCK_COMPOSE_BODY='services: {}'
+  printf 'services: {}' > docker-compose.yml     # identical to what the release ships
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"c2","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  run grep -q 'updated the stack configuration' "$TESTDIR/triggers/progress.log"; [ "$status" -ne 0 ]
+  # No .bak.* backup files were left behind in the deploy dir.
+  run sh -c 'ls docker-compose.yml.bak.* 2>/dev/null'; [ "$status" -ne 0 ]
+}
+
+@test "a release compose that fails validation is not applied" {
+  export UPDATER_COMPOSE_BASE_URL="https://raw.githubusercontent.com/PennStateCS/AFCT"
+  export MOCK_COMPOSE_BODY='services:\n  app: {}\n  worker: {}\n'
+  export MOCK_CONFIG_RC=1                         # candidate fails `compose config`
+  printf 'services: {}\n' > docker-compose.yml
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"c3","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  # The bad candidate was rejected; the current stack file is untouched.
+  run grep -q 'worker:' docker-compose.yml; [ "$status" -ne 0 ]
+  run grep -q 'failed validation' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "a failed upgrade restores the previous compose file" {
+  export UPDATER_COMPOSE_BASE_URL="https://raw.githubusercontent.com/PennStateCS/AFCT"
+  export MOCK_COMPOSE_BODY='services:\n  app: {}\n  worker: {}\n'
+  export MOCK_HEALTH="unhealthy"                  # new stack never becomes healthy
+  printf 'services: {}\n' > docker-compose.yml
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"c4","backupFirst":false}'
+  run sh updater.sh
+  [[ "$(phase)" == "rolled_back" || "$(phase)" == "failed" ]]
+  # Rollback reverted the stack file to the pre-upgrade one (no worker service).
+  run grep -q 'worker:' docker-compose.yml; [ "$status" -ne 0 ]
 }
