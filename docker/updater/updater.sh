@@ -403,11 +403,28 @@ wait_for_health() {
   return 1
 }
 
-# Ask the existing backup sidecar for a fresh backup and wait for a new dump to
+# Newest completed backup the sidecar has produced, or nothing. Matches the current
+# bundle format (afct-<ts>.tar.gz, or .tar.gz.gpg when encrypted) AND the legacy
+# DB-only dump, newest first. The unexpanded globs for formats that don't exist are
+# harmlessly skipped (their errors go to /dev/null). ".partial-" temp files and the
+# legacy "afct-files-" companion never match these globs, so they can't be mistaken
+# for a completed backup.
+latest_backup() {
+  ls -1t "$BACKUP_DIR"/afct-*.tar.gz "$BACKUP_DIR"/afct-*.tar.gz.gpg "$BACKUP_DIR"/afct-*.dump \
+    2>/dev/null | head -n 1
+}
+
+# Strip the afct- prefix and the known suffix off a backup filename, leaving the
+# timestamp used as the restore-point key (and by the sidecar to locate it on restore).
+backup_timestamp() {
+  basename "$1" | sed -e 's/^afct-//' -e 's/\.tar\.gz\.gpg$//' -e 's/\.tar\.gz$//' -e 's/\.dump$//'
+}
+
+# Ask the existing backup sidecar for a fresh backup and wait for a new archive to
 # appear. On success, echoes the new backup's timestamp (so the caller can record a
 # restore point). Best-effort: the image rollback still protects an upgrade.
 backup_and_wait() {
-  _before=$(ls -1t "$BACKUP_DIR"/afct-*.dump 2>/dev/null | head -n 1 || true)
+  _before=$(latest_backup)
   mkdir -p "$BACKUP_TRIGGER_DIR" 2>/dev/null || return 1
   : > "$BACKUP_TRIGGER_FILE" 2>/dev/null || return 1
   # Note progress to the streamed log (a file, so this never pollutes the timestamp
@@ -417,10 +434,10 @@ backup_and_wait() {
   _elapsed=0
   while [ "$_elapsed" -lt "$BACKUP_TIMEOUT" ]; do
     beat
-    _now=$(ls -1t "$BACKUP_DIR"/afct-*.dump 2>/dev/null | head -n 1 || true)
+    _now=$(latest_backup)
     if [ -n "$_now" ] && [ "$_now" != "$_before" ]; then
       progress_note "database backup complete (${_elapsed}s)"
-      basename "$_now" | sed -n 's/^afct-\(.*\)\.dump$/\1/p'
+      backup_timestamp "$_now"
       return 0
     fi
     sleep "$HEALTH_INTERVAL"
