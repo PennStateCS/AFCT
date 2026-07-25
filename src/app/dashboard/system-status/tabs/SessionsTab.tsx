@@ -1,12 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
+import { DataTable } from '@/components/ui/data-table';
 import type { SessionsStatusResponse } from '@/lib/status/types';
 import { Loading, Stat, Section, useStatusQuery, copy } from '../status-ui';
+
+type SessionRow = SessionsStatusResponse['activeSessions'][number];
 
 export default function SessionsTab({
   active,
@@ -22,6 +26,64 @@ export default function SessionsTab({
     active,
     autoRefresh,
   });
+
+  const columns = useMemo<ColumnDef<SessionRow>[]>(
+    () => [
+      {
+        id: 'user',
+        header: 'User',
+        accessorFn: (s) => s.email ?? s.userId ?? 'Unknown',
+        cell: ({ row }) => (
+          <span className="font-medium">
+            {row.original.email ?? row.original.userId ?? 'Unknown'}
+          </span>
+        ),
+        meta: { priority: 1 },
+      },
+      {
+        id: 'ip',
+        header: 'IP',
+        accessorFn: (s) => s.ipAddress ?? '',
+        cell: ({ row }) => {
+          const ip = row.original.ipAddress;
+          if (!ip) return '—';
+          return (
+            <div className="flex items-center gap-2">
+              <span>{ip}</span>
+              <button
+                type="button"
+                className="text-muted-foreground text-xs underline hover:opacity-80"
+                onClick={() => copy(ip)}
+                aria-label={`Copy IP address ${ip}`}
+              >
+                Copy
+              </button>
+            </div>
+          );
+        },
+        meta: { priority: 1 },
+      },
+      {
+        accessorKey: 'lastSeen',
+        header: 'Last Seen',
+        cell: ({ row }) =>
+          row.original.lastSeen ? formatDateTimeInTimeZone(row.original.lastSeen, timezone) : '—',
+        meta: { priority: 2 },
+      },
+      {
+        accessorKey: 'userAgent',
+        header: 'User Agent',
+        cell: ({ row }) => (
+          <div className="max-w-[50ch] truncate" title={row.original.userAgent ?? ''}>
+            {row.original.userAgent ?? '—'}
+          </div>
+        ),
+        enableSorting: false,
+        meta: { priority: 3 },
+      },
+    ],
+    [timezone],
+  );
 
   if (isLoading || !data) {
     return <Loading />;
@@ -40,55 +102,18 @@ export default function SessionsTab({
           <Stat label="Last 60m" value={summary.last60m} />
         </div>
 
-        {data.activeSessions.length ? (
-          <div className="overflow-auto rounded border">
-            <table className="w-full text-sm" aria-label="Active sessions table">
-              <caption className="sr-only">Active sessions seen in the last 24 hours</caption>
-              <thead className="text-muted-foreground text-left text-xs">
-                <tr className="border-b">
-                  <th className="px-3 py-2">User</th>
-                  <th className="px-3 py-2">IP</th>
-                  <th className="px-3 py-2">Last Seen</th>
-                  <th className="px-3 py-2">User Agent</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.activeSessions.map((s, i) => (
-                  <tr key={s.userId ?? s.email ?? i} className="border-b last:border-0">
-                    <td className="px-3 py-2">
-                      <div className="font-medium">{s.email ?? s.userId ?? 'Unknown'}</div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <span>{s.ipAddress ?? '—'}</span>
-                        {s.ipAddress ? (
-                          <button
-                            type="button"
-                            className="text-muted-foreground text-xs underline hover:opacity-80"
-                            onClick={() => copy(s.ipAddress)}
-                            aria-label={`Copy IP address ${s.ipAddress}`}
-                          >
-                            Copy
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      {s.lastSeen ? formatDateTimeInTimeZone(s.lastSeen, timezone) : '—'}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="max-w-[50ch] truncate" title={s.userAgent ?? ''}>
-                        {s.userAgent ?? '—'}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-sm">No active sessions found.</div>
-        )}
+        <DataTable
+          columns={columns}
+          data={data.activeSessions}
+          storageKey="status-sessions"
+          tableLabel="Active sessions table"
+          // Session rows carry IPs and user agents; a CSV export of that isn't something
+          // to offer casually. Search still helps an admin find a user or IP.
+          showExportButton={false}
+          defaultSorting={[{ id: 'lastSeen', desc: true }]}
+          emptyTitle="No active sessions"
+          emptyDescription="No sessions have been seen in the last 24 hours."
+        />
       </div>
     </Section>
   );
