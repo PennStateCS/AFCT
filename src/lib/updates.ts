@@ -9,6 +9,9 @@ export const UPDATE_REQUEST_FILE = path.join(UPDATE_TRIGGER_DIR, 'request.json')
 export const UPDATE_STATUS_FILE = path.join(UPDATE_TRIGGER_DIR, 'status.json');
 // The version -> pre-upgrade-backup map the updater records; drives downgrade.
 export const UPDATE_RESTORE_POINTS_FILE = path.join(UPDATE_TRIGGER_DIR, 'restore-points.json');
+// The updater's append-only live log for the current upgrade (image pull + recreate
+// output plus heartbeats). The app tails this to stream real-time progress to the UI.
+export const UPDATE_PROGRESS_FILE = path.join(UPDATE_TRIGGER_DIR, 'progress.log');
 // The updater sidecar stamps this (an epoch) every few seconds while it runs. The
 // app has no Docker access, so a fresh file here is how it knows the sidecar is
 // actually installed and running.
@@ -106,6 +109,30 @@ export function readStatus(): UpdateStatus | null {
     return JSON.parse(fs.readFileSync(UPDATE_STATUS_FILE, 'utf8')) as UpdateStatus;
   } catch {
     return null;
+  }
+}
+
+/** A slice of the live progress log: new lines past a cursor, and the cursor to
+ *  send next. `since` is a line count (not a byte offset), so a truncate/rotate of
+ *  the log resets cleanly (fewer lines than `since` -> start over from the top). */
+export type ProgressSlice = { lines: string[]; nextCursor: number };
+
+/** Pure splitter, extracted so it can be unit-tested without the filesystem. */
+export function sliceProgress(content: string, since: number): ProgressSlice {
+  const all = content.split('\n');
+  // A trailing newline yields a final empty element; drop it so it isn't a "line".
+  if (all.length > 0 && all[all.length - 1] === '') all.pop();
+  // The file was truncated/rotated (now shorter than the cursor): resend from 0.
+  const from = since >= 0 && since <= all.length ? since : 0;
+  return { lines: all.slice(from), nextCursor: all.length };
+}
+
+/** New progress-log lines past `since`, or an empty slice if the log isn't there. */
+export function readProgress(since = 0): ProgressSlice {
+  try {
+    return sliceProgress(fs.readFileSync(UPDATE_PROGRESS_FILE, 'utf8'), since);
+  } catch {
+    return { lines: [], nextCursor: since };
   }
 }
 

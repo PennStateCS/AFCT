@@ -18,6 +18,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
 import { upgradePhaseLabel, formatBackupTs } from './system-settings-shared';
 import { UpgradeProgress } from './UpgradeProgress';
+import { UpgradeLiveLog } from './UpgradeLiveLog';
 
 /** Updates tab: upgrade to a newer release, and restore/downgrade to a recorded backup. */
 export function UpdatesTab({ disabled }: { disabled: boolean }) {
@@ -152,6 +153,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                   action={lastAction ?? undefined}
                 />
               )}
+              {/* Live streamed detail beneath the coarse checklist, so the long image
+                  pull shows real movement instead of a frozen phase. */}
+              <UpgradeLiveLog active={upgradeInProgress} />
               {upgradeInProgress && (
                 <p className="text-muted-foreground text-xs">
                   This can take a few minutes; the site may briefly restart.
