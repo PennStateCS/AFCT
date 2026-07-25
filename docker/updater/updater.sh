@@ -814,7 +814,14 @@ recreate_updater() {
 
   # Sleep briefly so the caller can finish writing status before this container is
   # replaced; then recreate only the updater (no deps) at the already-pulled image.
-  _cmd="sleep 3; docker compose -p '${_proj}' --env-file '${ENV_FILE}' -f '${COMPOSE_FILE}' --profile updater up -d --no-deps ${UPDATER_SERVICE}"
+  #
+  # --project-directory is CRITICAL: the compose file mounts the deploy dir with a
+  # relative `.:/afct`, and compose resolves `.` against the project directory. Without
+  # this, `.` would resolve to the compose file's dir INSIDE this helper (/afct), and
+  # the daemon would bind the literal host path /afct (an empty auto-created dir) rather
+  # than the real deploy directory -- leaving the new updater unable to see the env file.
+  # Point it at the real host source so the recreated updater keeps the correct mount.
+  _cmd="sleep 3; docker compose -p '${_proj}' --project-directory '${_afct_src}' --env-file '${ENV_FILE}' -f '${COMPOSE_FILE}' --profile updater up -d --no-deps ${UPDATER_SERVICE}"
   docker run -d --rm \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "${_afct_src}:/afct" \

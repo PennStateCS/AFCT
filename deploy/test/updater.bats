@@ -88,6 +88,10 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   run grep -Eq 'pull +updater' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
   # ...and spawned a detached helper (docker run) to recreate it.
   run grep -Eq '^run .*-d' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  # The recreate must pin the project directory to the REAL host deploy dir (the mock
+  # reports /host/afct), or the relative `.:/afct` mount would resolve to a bare /afct
+  # and the new updater would lose sight of the env file.
+  run grep -q -- "--project-directory '/host/afct'" "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
   # A self-update must not touch the app's version pin.
   [ "$(tag_now)" = "v1.0.0" ]
 }
