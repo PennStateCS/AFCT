@@ -55,6 +55,16 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   run grep -q '^NEXTAUTH_SECRET=keepme$' .env.production; [ "$status" -eq 0 ]
 }
 
+@test "a valid upgrade writes a live progress log the UI can stream" {
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"prog1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  # The append-only progress log captured the milestone notes the UI tails.
+  [ -s "$TESTDIR/triggers/progress.log" ]
+  run grep -q 'starting upgrade v1.0.0 -> v1.1.0' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+  run grep -q 'recreating containers' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
 @test "an upgrade recreates the app and its lockstep sidecars but not the updater" {
   export MOCK_UP_LOG="$TESTDIR/up.log"
   request '{"action":"upgrade","tag":"v1.1.0","requestId":"ls1","backupFirst":false}'

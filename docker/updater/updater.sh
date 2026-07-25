@@ -22,6 +22,12 @@ TRIGGER_DIR="${UPDATER_TRIGGER_DIR:-/update-triggers}"
 REQUEST_FILE="${TRIGGER_DIR}/request.json"
 STATUS_FILE="${TRIGGER_DIR}/status.json"
 CLAIM_FILE="${TRIGGER_DIR}/.processing.json"
+# Append-only, size-capped live log of the current upgrade's shell output (image
+# pull + container recreate) plus periodic heartbeat lines. The app tails this over
+# SSE so the Updates UI shows what's happening in real time instead of sitting on a
+# static phase during the long (~4.7GB) pull. Reset at the start of each upgrade.
+PROGRESS_LOG="${TRIGGER_DIR}/progress.log"
+PROGRESS_MAX_LINES="${UPDATER_PROGRESS_MAX_LINES:-400}"
 
 COMPOSE_FILE="${UPDATER_COMPOSE_FILE:-/afct/docker-compose.yml}"
 ENV_FILE="${UPDATER_ENV_FILE:-/afct/.env.production}"
@@ -106,6 +112,32 @@ write_status() {
     '{requestId:$requestId, phase:$phase, message:$message, fromTag:$fromTag, toTag:$toTag, updatedAt:$updatedAt}' \
     > "${STATUS_FILE}.tmp" 2>/dev/null && mv "${STATUS_FILE}.tmp" "$STATUS_FILE" 2>/dev/null || \
     log "could not write status: ${1:-} ${2:-}"
+}
+
+# --------------------------------------------------------------------------- #
+# Live progress log. Raw command output (docker pull / compose up) and periodic
+# heartbeat notes are appended here so the UI can stream what's happening; the
+# coarse phase still lives in status.json. Trimmed to the last PROGRESS_MAX_LINES
+# so a verbose or slow pull can't grow it without bound.
+# --------------------------------------------------------------------------- #
+progress_reset() {
+  : > "$PROGRESS_LOG" 2>/dev/null || true
+}
+
+progress_note() {
+  # One timestamped milestone/heartbeat line, e.g. "still downloading (30s)".
+  _pnow=$(date -u '+%H:%M:%S' 2>/dev/null || printf '')
+  printf '%s %s\n' "$_pnow" "${1:-}" >> "$PROGRESS_LOG" 2>/dev/null || true
+}
+
+progress_trim() {
+  [ -f "$PROGRESS_LOG" ] || return 0
+  _plines=$(wc -l < "$PROGRESS_LOG" 2>/dev/null || printf '0')
+  if [ "${_plines:-0}" -gt "$PROGRESS_MAX_LINES" ] 2>/dev/null; then
+    _ptmp="${PROGRESS_LOG}.trim.$$"
+    tail -n "$PROGRESS_MAX_LINES" "$PROGRESS_LOG" > "$_ptmp" 2>/dev/null &&
+      mv "$_ptmp" "$PROGRESS_LOG" 2>/dev/null || rm -f "$_ptmp" 2>/dev/null || true
+  fi
 }
 
 # --------------------------------------------------------------------------- #
@@ -210,16 +242,24 @@ recreate_app() {
   # image over a slow link can take longer than the healthcheck's staleness window,
   # which would mark this sidecar unhealthy and flip the app's "updater available"
   # flag to false in the middle of an upgrade.
+  progress_note "pulling images (${STACK_SERVICES})"
   # shellcheck disable=SC2086
-  dc "$_proj" pull $STACK_SERVICES >/dev/null 2>&1 &
+  dc "$_proj" pull $STACK_SERVICES >> "$PROGRESS_LOG" 2>&1 &
   _pull_pid=$!
+  _elapsed=0
   while kill -0 "$_pull_pid" 2>/dev/null; do
     beat
     sleep "$HEALTH_INTERVAL"
+    _elapsed=$((_elapsed + HEALTH_INTERVAL))
+    progress_note "still downloading (${_elapsed}s elapsed)"
+    progress_trim
   done
-  wait "$_pull_pid" || return 1
+  wait "$_pull_pid" || { progress_note "image pull failed"; return 1; }
+  progress_note "images ready; recreating containers"
   # shellcheck disable=SC2086
-  dc "$_proj" up -d $STACK_SERVICES >/dev/null 2>&1 || return 1
+  dc "$_proj" up -d $STACK_SERVICES >> "$PROGRESS_LOG" 2>&1 || { progress_note "recreate failed"; return 1; }
+  progress_trim
+  progress_note "containers recreated"
   return 0
 }
 
@@ -399,6 +439,9 @@ process_request() {
   fi
 
   log "upgrade requested: ${_from} -> ${_tag} (project ${_proj}, request ${_rid})"
+  # Fresh live log for this upgrade; the UI streams it from the first phase on.
+  progress_reset
+  progress_note "starting upgrade ${_from} -> ${_tag}"
 
   if [ "$_backup" = "true" ]; then
     write_status "backing_up" "creating a pre-upgrade backup" "$_from" "$_tag" "$_rid"
