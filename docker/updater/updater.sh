@@ -349,8 +349,12 @@ recreate_app() {
   # which would mark this sidecar unhealthy and flip the app's "updater available"
   # flag to false in the middle of an upgrade.
   progress_note "pulling images (${STACK_SERVICES})"
+  # --quiet: docker redraws per-layer progress bars in place on a TTY, but with output
+  # redirected to this file (no TTY) every redraw becomes a NEW line, so the streamed
+  # log fills with hundreds of "Downloading [==>]" lines. Suppress that firehose; the
+  # elapsed heartbeats below carry liveness, and errors still print to stderr (2>&1).
   # shellcheck disable=SC2086
-  dc "$_proj" pull $STACK_SERVICES >> "$PROGRESS_LOG" 2>&1 &
+  dc "$_proj" pull --quiet $STACK_SERVICES >> "$PROGRESS_LOG" 2>&1 &
   _pull_pid=$!
   _elapsed=0
   while kill -0 "$_pull_pid" 2>/dev/null; do
@@ -812,19 +816,21 @@ recreate_updater() {
     "$_self" 2>/dev/null || printf '')
   [ -n "$_afct_src" ] || { progress_note "could not resolve the deploy directory"; return 1; }
 
-  # Sleep briefly so the caller can finish writing status before this container is
-  # replaced; then recreate only the updater (no deps) at the already-pulled image.
-  #
-  # --project-directory is CRITICAL: the compose file mounts the deploy dir with a
-  # relative `.:/afct`, and compose resolves `.` against the project directory. Without
-  # this, `.` would resolve to the compose file's dir INSIDE this helper (/afct), and
-  # the daemon would bind the literal host path /afct (an empty auto-created dir) rather
-  # than the real deploy directory -- leaving the new updater unable to see the env file.
-  # Point it at the real host source so the recreated updater keeps the correct mount.
-  _cmd="sleep 3; docker compose -p '${_proj}' --project-directory '${_afct_src}' --env-file '${ENV_FILE}' -f '${COMPOSE_FILE}' --profile updater up -d --no-deps ${UPDATER_SERVICE}"
+  # Mount the deploy dir at its REAL host path (not /afct) and run compose from there.
+  # This is what keeps the recreated updater pointed at the real deploy directory. The
+  # compose file mounts it with a relative `.:/afct` AND its services read a relative
+  # `env_file: .env.production`; compose resolves BOTH against the project directory
+  # (the working dir). If we ran from a dir the helper doesn't actually have (e.g. via
+  # --project-directory, or the compose file's own /afct dir), the env-file read fails
+  # inside the helper and the swap dies silently, or `.` binds a bare literal /afct.
+  # Mounting the source at the same path and cd-ing there makes every relative path
+  # resolve identically in the helper and on the daemon.
+  _env_base=$(basename "$ENV_FILE")
+  _compose_base=$(basename "$COMPOSE_FILE")
+  _cmd="sleep 3; cd '${_afct_src}' && docker compose -p '${_proj}' --env-file '${_env_base}' -f '${_compose_base}' --profile updater up -d --no-deps ${UPDATER_SERVICE}"
   docker run -d --rm \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "${_afct_src}:/afct" \
+    -v "${_afct_src}:${_afct_src}" \
     "$_self_image" sh -c "$_cmd" >/dev/null 2>&1 || {
     progress_note "could not start the update-service swap helper"
     return 1
