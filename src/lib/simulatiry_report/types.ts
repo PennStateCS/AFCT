@@ -1,6 +1,9 @@
 export type CodeAndUsers = {
     code: number | undefined;
-    user_ids: string[];
+    ids: {
+        user_ids: string[];
+        submission_ids: string[];
+    }
 };
 
 export type FileStatusReturn = {
@@ -15,4 +18,7 @@ export type FileStatusReturn = {
 
     file_hash_user_ids: string[];
     calc_hash_user_ids: string[];
+
+    file_hash_submission_ids: string[];
+    calc_hash_submission_ids: string[];
 };
