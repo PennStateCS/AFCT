@@ -500,6 +500,7 @@ exit 0'
 service_mode_env() {
   export AFCT_SERVICE_USER="afct"
   export AFCT_SERVICE_HOME="$TESTDIR"     # already the deploy dir: no relocation
+  chmod +x "$BATS_TEST_DIRNAME/mocks-service/"* 2>/dev/null || true
   PATH="$BATS_TEST_DIRNAME/mocks-service:$PATH"
   export PATH
 }
