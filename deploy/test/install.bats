@@ -51,6 +51,19 @@ EOF
 
 # --- CLI surface ---------------------------------------------------------------
 
+@test "update notes a newer installer and continues (non-interactive)" {
+  write_complete_env
+  # The published installer advertises a newer version than this one.
+  export MOCK_CURL_BODY='#!/bin/sh
+INSTALLER_VERSION="9999.0.0"
+'
+  run sh install.sh update --non-interactive
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"newer installer (9999.0.0)"* ]]
+  # Non-interactive without -y must not self-update; it points at the command instead.
+  [[ "$output" == *"self-update"* ]]
+}
+
 @test "--help prints usage and exits 0" {
   run sh install.sh --help
   [ "$status" -eq 0 ]
