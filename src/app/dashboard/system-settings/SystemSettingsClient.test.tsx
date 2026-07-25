@@ -245,6 +245,8 @@ describe('SystemSettingsClient', () => {
       expect.stringContaining('afct-20260115-030201.tar.gz.gpg'),
     );
     expect(within(row).getByText('Encrypted')).toBeInTheDocument();
+    // The Backups tab has savable schedule settings, so the shared Save button shows.
+    expect(screen.getByRole('button', { name: 'Save system settings' })).toBeInTheDocument();
   });
 
   it('reflects the TLS status from GET /api/admin/settings/tls', async () => {
@@ -258,6 +260,11 @@ describe('SystemSettingsClient', () => {
     expect(await screen.findByText('Trusted certificate')).toBeInTheDocument();
     expect(screen.getByText('CN=afct.example.edu')).toBeInTheDocument();
     expect(screen.getByText('2030-01-01')).toBeInTheDocument();
+    // The TLS tab runs its own actions and has no savable fields, so the shared Save
+    // button is hidden here rather than looking like it has unsaved settings.
+    expect(
+      screen.queryByRole('button', { name: 'Save system settings' }),
+    ).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
