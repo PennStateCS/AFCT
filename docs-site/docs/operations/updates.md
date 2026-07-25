@@ -14,7 +14,7 @@ This records the currently deployed image versions, pulls the latest images, rec
 
 ### Update the installer itself
 
-`sh install.sh update` uses the `docker-compose.yml` already on the host. When a release changes the compose file or the updater component, refresh those files first:
+`sh install.sh update` uses the `docker-compose.yml` already on the host. Use `self-update` when you want to refresh the installer script itself:
 
 ```bash
 sh install.sh self-update
@@ -22,6 +22,8 @@ sh install.sh update
 ```
 
 `self-update` downloads the installer, `docker-compose.yml`, and the environment template from the repository, backing up the old copies first. It never touches `.env.production` or application data. It needs no Git checkout because the files come from the public repository over HTTPS.
+
+A changed `docker-compose.yml` no longer has to be refreshed by hand before an update: an in-app upgrade applies the target release's compose file for you (see [In-app updates](#in-app-updates) below). This host-side path stays available for deployments that do not run the updater, or as a fallback.
 
 The equivalent Docker commands work on any platform, including Windows PowerShell:
 
