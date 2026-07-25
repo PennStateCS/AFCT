@@ -456,6 +456,10 @@ model Submission {
   fileName         String?
   originalFileName String?
 
+  contentHash      String?
+  fileHash         String?
+  similarityReportJson Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
