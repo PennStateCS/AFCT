@@ -26,8 +26,10 @@ export function UpgradeLiveLog({ active }: { active: boolean }) {
         const { lines: incoming } = JSON.parse((e as MessageEvent).data) as { lines: string[] };
         setLines((prev) => {
           const next = [...prev, ...incoming];
-          // Bound memory/DOM: keep only the most recent lines.
-          return next.length > 500 ? next.slice(next.length - 500) : next;
+          // Bound memory/DOM, but keep enough that a whole run stays scrollable rather
+          // than dropping its early lines. (The updater also trims progress.log itself,
+          // so this cap is only a backstop for an unusually chatty run.)
+          return next.length > 5000 ? next.slice(next.length - 5000) : next;
         });
       } catch {
         // ignore a malformed frame
@@ -55,7 +57,7 @@ export function UpgradeLiveLog({ active }: { active: boolean }) {
         aria-live="off"
         aria-label="Live upgrade log"
         tabIndex={0}
-        className="bg-muted/30 focus-visible:ring-ring max-h-48 overflow-auto rounded-md border p-2 font-mono text-xs leading-relaxed focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-muted/30 focus-visible:ring-ring max-h-80 overflow-auto rounded-md border p-2 font-mono text-xs leading-relaxed focus-visible:ring-2 focus-visible:outline-none"
       >
         {lines.map((line, i) => (
           <div key={i} className="break-words whitespace-pre-wrap">

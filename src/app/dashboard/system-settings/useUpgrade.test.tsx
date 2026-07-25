@@ -85,6 +85,31 @@ describe('useUpgrade', () => {
     expect(JSON.parse(postCall![1].body as string)).toEqual({ tag: 'v1.1.0' });
   });
 
+  it('flips status to in-progress right after a request, without waiting for a refetch', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ current: 'v1.0.0', versions: [], status: null, manifestError: false }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: 'r1' }) })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ current: 'v1.0.0', versions: [], status: null, manifestError: false }),
+      });
+
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info).toBeTruthy());
+
+    result.current.startUpgrade('v1.1.0');
+
+    // The cached status becomes a non-terminal phase immediately, so the panel and
+    // poll start without a manual refresh. The server still reports status: null here.
+    await waitFor(() =>
+      expect(isUpgradeInProgress(result.current.info?.status)).toBe(true),
+    );
+    expect(result.current.info?.status?.toTag).toBe('v1.1.0');
+  });
+
   it('surfaces the server error message on a failed upgrade request', async () => {
     fetchMock
       .mockResolvedValueOnce({

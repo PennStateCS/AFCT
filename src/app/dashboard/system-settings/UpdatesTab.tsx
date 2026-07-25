@@ -16,7 +16,7 @@ import { DataTable } from '@/components/ui/data-table';
 import SelectField from '@/components/ui/SelectField';
 import InputGroup from '@/components/ui/InputGroup';
 import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
-import { upgradePhaseLabel, formatBackupTs } from './system-settings-shared';
+import { upgradePhaseLabel, formatBackupTs, isNewerThan } from './system-settings-shared';
 import { UpgradeProgress } from './UpgradeProgress';
 import { UpgradeLiveLog } from './UpgradeLiveLog';
 
@@ -55,9 +55,14 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
   const [lastAction, setLastAction] = useState<'upgrade' | 'downgrade' | null>(null);
 
   const upgradeInProgress = isUpgradeInProgress(upgradeInfo?.status);
-  const upgradeableVersions = (upgradeInfo?.versions ?? []).filter(
-    (v) => v.tag !== upgradeInfo?.current,
-  );
+  // Only offer versions newer than what's running: you can't "upgrade" to an older
+  // release (that's the restore-points flow below). When the current tag isn't a
+  // comparable version (e.g. `main` in dev), fall back to everything but the current.
+  const upgradeableVersions = (upgradeInfo?.versions ?? []).filter((v) => {
+    if (v.tag === upgradeInfo?.current) return false;
+    const newer = isNewerThan(v.tag, upgradeInfo?.current ?? '');
+    return newer === null ? true : newer;
+  });
   const selectedVersionInfo = upgradeableVersions.find((v) => v.tag === selectedVersion);
   // Treated as available until the first load resolves, so the guidance doesn't flash.
   const updaterAvailable = upgradeInfo?.updaterAvailable !== false;
@@ -92,10 +97,13 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
       meta: { align: 'right', priority: 1 },
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
+          {/* Restore is green (the recovery action the admin wants), Delete is red.
+              Restore is still guarded by type-to-confirm in its dialog, since a
+              downgrade discards data. */}
           <Button
             type="button"
             size="sm"
-            variant="destructive"
+            className="bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600/30"
             aria-label={`Restore version ${row.original.version}`}
             disabled={disabled || downgradeBusy || upgradeInProgress}
             onClick={() => {
@@ -108,7 +116,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
           <Button
             type="button"
             size="sm"
-            variant="outline"
+            variant="destructive"
             aria-label={`Delete the ${formatBackupTs(row.original.backup)} backup for version ${row.original.version}`}
             disabled={disabled || deleteBusy || downgradeBusy || upgradeInProgress}
             onClick={() =>
@@ -124,11 +132,20 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
 
   return (
     <>
-      <p className="text-muted-foreground mb-4 text-sm">
-        Upgrade AFCT to a newer published release. The stack backs up the database first, downloads
-        the new version, and restarts; if the new version fails its health check it is rolled back
-        automatically.
-      </p>
+      <div className="text-muted-foreground mb-4 max-w-2xl space-y-2 text-sm xl:max-w-4xl">
+        <p>
+          Upgrade AFCT to a newer published release, all from here — no server login needed. When
+          you start an upgrade, AFCT backs up the database, downloads the new version, and restarts.
+          If the new version fails its health check it is rolled back to the current one
+          automatically, so a bad release won&apos;t leave the site down.
+        </p>
+        <p>
+          Some releases also improve the update system itself. Because the updater can&apos;t replace
+          its own container while it&apos;s running, those show a second step afterward — an{' '}
+          <span className="font-medium">Update the update service</span> button — so the next upgrade
+          uses the newest logic. Both steps run here.
+        </p>
+      </div>
 
       <div className="max-w-2xl space-y-5 xl:max-w-4xl">
         <div className="space-y-2">
@@ -208,6 +225,37 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                 <p className="text-muted-foreground text-xs">
                   This can take a few minutes; the site may briefly restart.
                 </p>
+              )}
+              {/* Once a run this session settles, show where things landed: the app
+                  version, the update service's version, and whether the updater is
+                  running. Gated on lastAction so a leftover "healthy" from a previous
+                  session doesn't render this on a fresh page load. */}
+              {!upgradeInProgress && lastAction && (
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t pt-2 text-sm">
+                  <dt className="text-muted-foreground">Dashboard</dt>
+                  <dd className="font-mono">{upgradeInfo?.current ?? 'unknown'}</dd>
+                  <dt className="text-muted-foreground">Update service</dt>
+                  <dd>
+                    <span className="font-mono">{upgradeInfo?.updaterVersion || 'unknown'}</span>
+                    {upgradeInfo?.updaterVersion &&
+                      (upgradeInfo.updaterVersion === upgradeInfo.current ? (
+                        <span className="text-muted-foreground"> · up to date</span>
+                      ) : (
+                        <span className="text-amber-700 dark:text-amber-300">
+                          {' '}
+                          · behind the app
+                        </span>
+                      ))}
+                  </dd>
+                  <dt className="text-muted-foreground">Update service health</dt>
+                  <dd>
+                    {updaterAvailable ? (
+                      <span className="text-green-700 dark:text-green-400">Running</span>
+                    ) : (
+                      <span className="text-amber-700 dark:text-amber-300">Not running</span>
+                    )}
+                  </dd>
+                </dl>
               )}
             </div>
           </div>

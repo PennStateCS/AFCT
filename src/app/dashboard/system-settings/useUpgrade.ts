@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { showToast } from '@/lib/toast';
@@ -56,8 +57,26 @@ export function isUpgradeInProgress(status: UpdateStatus | null | undefined): bo
  * updater sidecar, so while one is in flight we poll the status until it reaches a
  * terminal phase. Gated on `enabled` so it only runs while the Updates tab is open.
  */
+// After requesting an upgrade the sidecar takes a moment to notice the request and
+// write its first status. Keep polling through that window even if the last status
+// still reads terminal (e.g. a previous run's "healthy"), so a stale first poll can't
+// stop us before the new run reports in.
+const REQUEST_GRACE_MS = 45_000;
+
 export function useUpgrade(enabled: boolean) {
   const queryClient = useQueryClient();
+  // Wall-clock of the last upgrade/downgrade request, so the poller keeps going during
+  // the grace window above. A ref (not state) because only the poll callback reads it.
+  const requestedAtRef = useRef(0);
+
+  // Flip the cached status to an in-flight phase right after a request so the status
+  // panel and live log appear immediately, with no manual refresh, and the poll starts.
+  const markInProgress = (status: UpdateStatus) => {
+    const prev = queryClient.getQueryData<UpgradeInfo>(UPGRADE_QUERY_KEY);
+    if (prev) queryClient.setQueryData<UpgradeInfo>(UPGRADE_QUERY_KEY, { ...prev, status });
+    requestedAtRef.current = Date.now();
+  };
+
   const {
     data,
     isLoading,
@@ -67,8 +86,13 @@ export function useUpgrade(enabled: boolean) {
     queryFn: () => fetchJson<UpgradeInfo>(apiPaths.admin.upgrade(), { cache: 'no-store' }),
     enabled,
     staleTime: 10_000,
-    // Poll every 3s while an upgrade is mid-flight; stop once it settles.
-    refetchInterval: (query) => (isUpgradeInProgress(query.state.data?.status) ? 3000 : false),
+    // Poll every 3s while an upgrade is mid-flight, or briefly after a request while the
+    // sidecar spins up; stop once it settles.
+    refetchInterval: (query) =>
+      isUpgradeInProgress(query.state.data?.status) ||
+      Date.now() - requestedAtRef.current < REQUEST_GRACE_MS
+        ? 3000
+        : false,
   });
 
   const { mutate: startUpgrade, isPending: upgradeBusy } = useMutation({
@@ -78,9 +102,15 @@ export function useUpgrade(enabled: boolean) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ tag }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, tag) => {
+      const current = queryClient.getQueryData<UpgradeInfo>(UPGRADE_QUERY_KEY)?.current;
+      markInProgress({
+        phase: 'backing_up',
+        message: 'Starting the upgrade…',
+        fromTag: current,
+        toTag: tag,
+      });
       showToast.success('Upgrade requested. AFCT will update and restart shortly.');
-      void refetch();
     },
     onError: (err) => {
       showToast.error(err instanceof Error ? err.message : 'Failed to start the upgrade');
@@ -94,9 +124,15 @@ export function useUpgrade(enabled: boolean) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'downgrade', tag: v.tag, restorePoint: v.restorePoint }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, v) => {
+      const current = queryClient.getQueryData<UpgradeInfo>(UPGRADE_QUERY_KEY)?.current;
+      markInProgress({
+        phase: 'backing_up',
+        message: 'Starting the restore…',
+        fromTag: current,
+        toTag: v.tag,
+      });
       showToast.success('Downgrade requested. AFCT will restore and restart shortly.');
-      void refetch();
     },
     onError: (err) => {
       showToast.error(err instanceof Error ? err.message : 'Failed to start the downgrade');

@@ -1,5 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { deriveUpgradeSteps, deriveAcmeSteps, upgradePhaseLabel } from './system-settings-shared';
+import {
+  deriveUpgradeSteps,
+  deriveAcmeSteps,
+  upgradePhaseLabel,
+  parseVersionTag,
+  isNewerThan,
+} from './system-settings-shared';
+
+describe('parseVersionTag', () => {
+  it('parses tags with and without a v prefix', () => {
+    expect(parseVersionTag('v0.1.19')).toEqual([0, 1, 19]);
+    expect(parseVersionTag('1.2.3')).toEqual([1, 2, 3]);
+  });
+  it('returns null for non-version tags', () => {
+    expect(parseVersionTag('main')).toBeNull();
+    expect(parseVersionTag('v1.2')).toBeNull();
+    expect(parseVersionTag('sha-abc123')).toBeNull();
+  });
+});
+
+describe('isNewerThan', () => {
+  it('compares each part of the version', () => {
+    expect(isNewerThan('v0.1.20', 'v0.1.19')).toBe(true);
+    expect(isNewerThan('v0.2.0', 'v0.1.99')).toBe(true);
+    expect(isNewerThan('v1.0.0', 'v0.9.9')).toBe(true);
+    expect(isNewerThan('v0.1.19', 'v0.1.20')).toBe(false);
+    expect(isNewerThan('v0.1.19', 'v0.1.19')).toBe(false);
+  });
+  it('returns null when either side is not comparable', () => {
+    expect(isNewerThan('v0.1.19', 'main')).toBeNull();
+    expect(isNewerThan('latest', 'v0.1.19')).toBeNull();
+  });
+});
 
 describe('deriveUpgradeSteps', () => {
   it('returns null for phases without a step list', () => {
