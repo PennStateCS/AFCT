@@ -11,7 +11,6 @@ import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
 import { errMessage } from '@/lib/errors';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
-import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
@@ -396,17 +395,6 @@ export default function AssignmentSubmissions({
     [refreshReview],
   );
 
-  const handleRerunVisibleSubmissions = useCallback(
-    async (visibleSubmissions: ProblemSubmission[]) => {
-      await rerunVisibleSubmissions({
-        visibleSubmissions,
-        setRerunning,
-        fetchReviewData: refreshReview,
-      });
-    },
-    [refreshReview],
-  );
-
   const saveComment = useCallback(
     async (problemId: string) => {
       const commentText = commentTexts[problemId]?.trim();
@@ -741,7 +729,6 @@ export default function AssignmentSubmissions({
                     onRerunSubmission={(submission) =>
                       handleRerunSubmission(submission as unknown as Submission)
                     }
-                    onRerunVisibleSubmissions={handleRerunVisibleSubmissions}
                     rerunning={rerunning}
                     courseIsArchived={courseIsArchived}
                     gradeInput={selectedProblem ? gradeInputs[selectedProblem.id] || '' : ''}

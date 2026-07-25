@@ -3,7 +3,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { Download, FileText, MessageSquare, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import ProblemHeader from '@/components/ProblemHeader';
@@ -55,7 +54,6 @@ export type ProblemWorkspaceProps = {
   deletingComments?: Record<string, boolean>;
   onViewSubmission: (submission: ProblemSubmission) => void;
   onRerunSubmission?: (submission: ProblemSubmission) => void;
-  onRerunVisibleSubmissions?: (submissions: ProblemSubmission[]) => void;
   rerunning?: Record<string, boolean>;
   courseIsArchived: boolean;
   gradeInput?: string;
@@ -106,7 +104,6 @@ export default function ProblemWorkspace({
   deletingComments = {},
   onViewSubmission,
   onRerunSubmission,
-  onRerunVisibleSubmissions,
   courseIsArchived,
   gradeInput = '',
   currentGrade = null,
@@ -377,21 +374,6 @@ export default function ProblemWorkspace({
                 tableLabel="Submissions"
                 showExportButton={false}
                 defaultSorting={[{ id: 'submitted', desc: true }]}
-                // Bulk rerun lives in the toolbar now that the custom filter row is gone.
-                actionButtons={
-                  isPrivilegedUser ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => onRerunVisibleSubmissions?.(sortedSubmissions)}
-                      disabled={sortedSubmissions.length === 0}
-                      className="whitespace-nowrap"
-                      title="Rerun all submissions"
-                    >
-                      Rerun all
-                    </Button>
-                  ) : undefined
-                }
                 emptyTitle="No submissions match the filters"
                 emptyDescription="Adjust the filters to see more."
                 emptyIcon={FileText}
