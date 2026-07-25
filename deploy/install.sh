@@ -44,6 +44,23 @@ LOG_FILE=${AFCT_LOG_FILE:-install.log}
 INSTALLER_BASE_URL=${AFCT_INSTALLER_BASE_URL:-https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy}
 APP_SERVICE=${AFCT_APP_SERVICE:-app}
 UPDATER_SERVICE=${AFCT_UPDATER_SERVICE:-updater}
+# Dedicated service account. When the installer runs as root it deploys under a
+# system account instead of a person's login, so the Docker-socket access and the
+# deploy files belong to a purpose-built user that survives staff turnover. Set
+# AFCT_SERVICE_USER to empty (or "none"/"off"), or pass --no-service-user, to keep the
+# legacy behavior of installing as the invoking user. Non-root installs always use the
+# legacy path. AFCT_SERVICE_HOME is the canonical deploy directory for a service
+# install; service installs are relocated there so the account can always read them.
+SERVICE_USER=${AFCT_SERVICE_USER-afct}
+SERVICE_HOME=${AFCT_SERVICE_HOME:-/opt/afct}
+# The per-deployment marker that records "this deployment is service-account managed"
+# and which account owns it. Read at startup so later runs (update/status/...) re-enter
+# service mode automatically. Lives in the deploy directory alongside the compose file.
+SERVICE_MARKER_NAME=${AFCT_SERVICE_MARKER:-.afct-service-user}
+# Set true once a service-account deployment is confirmed for this run (from the marker
+# at startup, or after a fresh service install is set up). Gates the docker/ownership
+# helpers below.
+SERVICE_MODE="false"
 HEALTH_PATH=${AFCT_HEALTH_PATH:-/api/health}
 HEALTH_TIMEOUT=${AFCT_HEALTH_TIMEOUT:-300}
 HEALTH_INTERVAL=${AFCT_HEALTH_INTERVAL:-5}
@@ -129,6 +146,14 @@ Options:
       downgrades). It holds the Docker socket, so it is otherwise off by default.
       Equivalent to running `enable-updater` afterward.
 
+  --service-user NAME
+      Deploy under the given system account instead of the default 'afct'. Only
+      applies to a fresh install run as root.
+
+  --no-service-user
+      Install as the invoking user rather than a dedicated service account. Use this
+      to keep the legacy behavior on a root install.
+
   --no-color
       Disable colored terminal output.
 
@@ -142,6 +167,9 @@ Environment variables:
                           'main' and unreleased tags are rejected.
 
 Advanced overrides:
+  AFCT_SERVICE_USER       System account a root install deploys under (default: afct).
+                          Set empty, 'none', or 'off' to install as the invoking user.
+  AFCT_SERVICE_HOME       Deploy directory for a service install (default: /opt/afct).
   AFCT_COMPOSE_FILE       Compose file name
   AFCT_INSTALLER_BASE_URL Base URL `self-update` downloads the deploy files from
   AFCT_ENV_FILE           Production environment file name
@@ -185,6 +213,13 @@ while [ "$#" -gt 0 ]; do
     --non-interactive|--noninteractive) NON_INTERACTIVE="true" ;;
     --reconfigure) FORCE_RECONFIGURE="true" ;;
     --with-updater) WITH_UPDATER="true" ;;
+    --no-service-user) SERVICE_USER="" ;;
+    --service-user)
+      shift
+      [ "$#" -gt 0 ] || { printf '[afct] ERROR: --service-user needs a username.\n' >&2; exit 2; }
+      SERVICE_USER="$1"
+      ;;
+    --service-user=*) SERVICE_USER="${1#--service-user=}" ;;
     --no-color) COLOR_FORCED_OFF="true" ;;
     --)
       shift
@@ -312,10 +347,28 @@ restore_sudo_owner() {
   done
 }
 
+# Hand a freshly written deploy file to the account that operates the stack: the
+# dedicated service account in service mode, otherwise the sudo-invoking user (the
+# legacy behavior). Use this for every deploy file the account must be able to read
+# afterward (env file, its backups, the log). No-op when not running as root.
+own_deploy_path() {
+  if [ "$SERVICE_MODE" = "true" ]; then
+    [ "$(id -u 2>/dev/null || echo 1)" = "0" ] || return 0
+    for _p in "$@"; do
+      # Owner to the service account, and its primary group when resolvable, so a
+      # deploy file is not left group-owned by whoever ran the installer.
+      [ -e "$_p" ] && chown "$SERVICE_USER:$(service_user_group)" "$_p" 2>/dev/null \
+        || { [ -e "$_p" ] && chown "$SERVICE_USER" "$_p" 2>/dev/null; } || true
+    done
+    return 0
+  fi
+  restore_sudo_owner "$@"
+}
+
 init_log() {
   rotate_installer_log
   if touch "$LOG_FILE" 2>/dev/null && chmod 600 "$LOG_FILE" 2>/dev/null; then
-    restore_sudo_owner "$LOG_FILE"
+    own_deploy_path "$LOG_FILE"
     LOG_ENABLED="true"
     {
       printf '\n============================================================\n'
@@ -424,8 +477,21 @@ acquire_lock() {
 # --------------------------------------------------------------------------- #
 # Docker and Compose wrappers
 # --------------------------------------------------------------------------- #
+# Run a command as the dedicated service account. As root this is passwordless;
+# runuser is preferred because it needs no sudoers configuration and re-initializes
+# the group list (so a just-added docker-group membership takes effect immediately).
+run_as_service() {
+  if command -v runuser >/dev/null 2>&1; then
+    runuser -u "$SERVICE_USER" -- "$@"
+  else
+    sudo -u "$SERVICE_USER" -- "$@"
+  fi
+}
+
 docker_cmd() {
-  if [ -n "$DOCKER_SUDO" ]; then
+  if [ "$SERVICE_MODE" = "true" ]; then
+    run_as_service docker "$@"
+  elif [ -n "$DOCKER_SUDO" ]; then
     sudo docker "$@"
   else
     docker "$@"
@@ -436,7 +502,9 @@ compose_raw() {
   case "$COMPOSE_KIND" in
     v2) docker_cmd compose "$@" ;;
     v1)
-      if [ -n "$DOCKER_SUDO" ]; then
+      if [ "$SERVICE_MODE" = "true" ]; then
+        run_as_service docker-compose "$@"
+      elif [ -n "$DOCKER_SUDO" ]; then
         sudo docker-compose "$@"
       else
         docker-compose "$@"
@@ -490,6 +558,15 @@ detect_compose() {
 
 resolve_docker_access() {
   command -v docker >/dev/null 2>&1 || die "Docker is not installed. Run: sh install.sh"
+
+  # Service mode routes every docker call through the service account (docker_cmd), so
+  # the sudo probing below is irrelevant. Just make sure the account can reach Docker.
+  if [ "$SERVICE_MODE" = "true" ]; then
+    ensure_service_docker_access
+    DOCKER_SUDO=""
+    detect_compose || return 1
+    return 0
+  fi
 
   if docker info >/dev/null 2>&1; then
     DOCKER_SUDO=""
@@ -807,6 +884,7 @@ set_env_flag() {
   fi
   chmod 600 "$_tmp" 2>/dev/null || true
   mv "$_tmp" "$ENV_FILE" || { rm -f "$_tmp"; die "could not replace ${ENV_FILE}."; }
+  own_deploy_path "$ENV_FILE"
 }
 
 write_env_assignment() {
@@ -824,7 +902,7 @@ backup_env_file() {
   _backup="${ENV_FILE}.backup.${_stamp}.$$"
   cp "$ENV_FILE" "$_backup" || die "could not back up ${ENV_FILE}."
   chmod 600 "$_backup" 2>/dev/null || true
-  restore_sudo_owner "$_backup"
+  own_deploy_path "$_backup"
   info "saved the previous configuration as ${_backup}."
 }
 
@@ -898,7 +976,7 @@ write_environment_file() {
   mv "$TMP_ENV" "$ENV_FILE" || die "could not replace ${ENV_FILE}."
   TMP_ENV=""
   chmod 600 "$ENV_FILE" 2>/dev/null || true
-  restore_sudo_owner "$ENV_FILE"
+  own_deploy_path "$ENV_FILE"
 }
 
 # --------------------------------------------------------------------------- #
@@ -1744,8 +1822,156 @@ review_configuration() {
   fi
 }
 
+# --------------------------------------------------------------------------- #
+# Dedicated service account
+#
+# When run as root, a fresh install deploys under a system account (default `afct`)
+# instead of the invoking person's login: the deploy files and the Docker-socket
+# membership belong to a purpose-built user that survives staff turnover. The
+# deployment is relocated to a canonical directory (default /opt/afct) so the account
+# can always read it, and a marker file records the owning account so later runs
+# (update/status/...) re-enter service mode automatically. See own_deploy_path,
+# docker_cmd, and run_as_service for how ownership and command execution are routed.
+# --------------------------------------------------------------------------- #
+service_user_enabled() {
+  case "$SERVICE_USER" in
+    ""|none|off|no|disabled) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# The service account's primary group name. Always resolvable once the account
+# exists (every user has a primary group); falls back to the username so a chown
+# string is never empty.
+service_user_group() {
+  id -gn "$SERVICE_USER" 2>/dev/null || printf '%s' "$SERVICE_USER"
+}
+
+canonical_path() {
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$1" 2>/dev/null || printf '%s' "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
+
+create_service_user() {
+  id "$SERVICE_USER" >/dev/null 2>&1 && return 0
+  mkdir -p "$SERVICE_HOME" 2>/dev/null || true
+  if command -v useradd >/dev/null 2>&1; then
+    useradd --system --home-dir "$SERVICE_HOME" --shell /usr/sbin/nologin "$SERVICE_USER" 2>/dev/null \
+      || useradd -r -d "$SERVICE_HOME" -s /bin/false "$SERVICE_USER" 2>/dev/null || true
+  elif command -v adduser >/dev/null 2>&1; then
+    # busybox/alpine adduser: -S system, -H no home creation (we made it above).
+    adduser -S -H -h "$SERVICE_HOME" -s /sbin/nologin "$SERVICE_USER" 2>/dev/null || true
+  fi
+  id "$SERVICE_USER" >/dev/null 2>&1
+}
+
+add_service_user_to_docker_group() {
+  # Rootless or socket-permission setups may not use a docker group; nothing to do.
+  getent group docker >/dev/null 2>&1 || return 0
+  if command -v usermod >/dev/null 2>&1; then
+    usermod -aG docker "$SERVICE_USER" 2>/dev/null || true
+  elif command -v addgroup >/dev/null 2>&1; then
+    addgroup "$SERVICE_USER" docker 2>/dev/null || true
+  fi
+}
+
+# Verify the service account can reach the Docker daemon, adding it to the docker group
+# first. Called from resolve_docker_access, so it runs after Docker is guaranteed
+# installed. Fatal if the account still can't reach Docker: better a clear message here
+# than a cryptic failure mid-deploy.
+ensure_service_docker_access() {
+  add_service_user_to_docker_group
+  run_as_service docker info >/dev/null 2>&1 && return 0
+  die "the '${SERVICE_USER}' service account cannot reach Docker. Ensure a 'docker' group exists and the account belongs to it, or reinstall with --no-service-user."
+}
+
+# Copy the deploy bundle to the canonical home, hand it to the service account, and
+# re-exec from there. The re-run finds the marker and proceeds in service mode. Runs
+# before any lock is taken, so exec leaks nothing.
+relocate_to_service_home() {
+  info "relocating the AFCT deploy files to ${SERVICE_HOME}..."
+  mkdir -p "$SERVICE_HOME" || die "could not create ${SERVICE_HOME}."
+  for _f in install.sh "$COMPOSE_FILE" "$ENV_EXAMPLE" versions.json "$ENV_FILE"; do
+    [ -f "${SCRIPT_DIR}/${_f}" ] && cp -p "${SCRIPT_DIR}/${_f}" "${SERVICE_HOME}/${_f}" 2>/dev/null || true
+  done
+  printf '%s\n' "$SERVICE_USER" > "${SERVICE_HOME}/${SERVICE_MARKER_NAME}"
+  chmod +x "${SERVICE_HOME}/install.sh" 2>/dev/null || true
+  chown -R "$SERVICE_USER:$(service_user_group)" "$SERVICE_HOME" 2>/dev/null || true
+  success "Deploy files are now in ${SERVICE_HOME} (owned by ${SERVICE_USER})."
+  info "Re-running the installer from ${SERVICE_HOME}..."
+  # Preserve the mode and the flags that affect this run. Env-var config (ADMIN_EMAIL,
+  # APP_URL, ...) is inherited across exec automatically.
+  set -- "$MODE"
+  [ "$NON_INTERACTIVE" = "true" ] && set -- "$@" --non-interactive
+  [ "$ASSUME_YES" = "true" ] && set -- "$@" -y
+  [ "$FORCE_RECONFIGURE" = "true" ] && set -- "$@" --reconfigure
+  [ "$WITH_UPDATER" = "true" ] && set -- "$@" --with-updater
+  [ "$COLOR_FORCED_OFF" = "true" ] && set -- "$@" --no-color
+  exec sh "${SERVICE_HOME}/install.sh" "$@"
+}
+
+# Re-enter service mode on a later run when this deployment is service-account managed.
+# Reads the owning account from the marker. Root only: a non-root run can't act as the
+# account, and the marker gate keeps ordinary sudo runs (id 0) in service mode.
+activate_service_mode_from_marker() {
+  [ "$(id -u 2>/dev/null || echo 1)" = "0" ] || return 0
+  _marker="${SCRIPT_DIR}/${SERVICE_MARKER_NAME}"
+  [ -f "$_marker" ] || return 0
+  _u=$(sed -n '1p' "$_marker" 2>/dev/null | tr -d ' \011')
+  [ -n "$_u" ] || return 0
+  if ! id "$_u" >/dev/null 2>&1; then
+    warn "the '${_u}' service account named in ${_marker} is missing; operating as the current user."
+    return 0
+  fi
+  SERVICE_USER="$_u"
+  SERVICE_MODE="true"
+}
+
+# Fresh root install only: create the account, relocate to the canonical home, and
+# enter service mode. Must run before any lock or config write (it can re-exec).
+maybe_setup_service_user() {
+  [ "$SERVICE_MODE" = "true" ] && return 0
+  service_user_enabled || return 0
+  [ "$(id -u 2>/dev/null || echo 1)" = "0" ] || return 0
+
+  if can_prompt && [ "$ASSUME_YES" != "true" ]; then
+    heading "Dedicated service account"
+    info "AFCT can run under a dedicated '${SERVICE_USER}' system account instead of your"
+    info "login, so the deploy files and Docker access belong to a purpose-built user."
+    if ! confirm "Install under the '${SERVICE_USER}' service account?" "y"; then
+      info "Installing as the current user."
+      return 0
+    fi
+  fi
+
+  create_service_user || {
+    warn "could not create the '${SERVICE_USER}' account; installing as the current user."
+    return 0
+  }
+
+  if [ "$(canonical_path "$SCRIPT_DIR")" != "$(canonical_path "$SERVICE_HOME")" ]; then
+    relocate_to_service_home   # re-exec's; does not return
+  fi
+
+  mkdir -p "$SERVICE_HOME" 2>/dev/null || true
+  printf '%s\n' "$SERVICE_USER" > "${SERVICE_HOME}/${SERVICE_MARKER_NAME}" 2>/dev/null || true
+  chown -R "$SERVICE_USER:$(service_user_group)" "$SERVICE_HOME" 2>/dev/null || true
+  SERVICE_MODE="true"
+  success "Using the '${SERVICE_USER}' service account (deploy directory ${SERVICE_HOME})."
+}
+
 do_install() {
   DIAG_ON_EXIT="false"
+  # Fresh root install: create (or re-enter) the service account before anything is
+  # written or locked. Relocates + re-exec's when the deploy dir isn't the canonical
+  # home, so this must precede acquire_lock. Skipped when a config already exists (an
+  # existing deployment is never converted) or when already in service mode.
+  if [ "$SERVICE_MODE" != "true" ] && [ ! -f "$ENV_FILE" ]; then
+    maybe_setup_service_user
+  fi
   acquire_lock
   preflight
 
@@ -1824,13 +2050,20 @@ print_completion() {
     show_secret "Save this password now. It is intentionally not written to install.log."
   fi
 
-  info ""
-  info "Useful commands:"
-  info "  sh install.sh status"
-  info "  sh install.sh doctor"
-  info "  sh install.sh logs"
-  info "  sh install.sh update"
-  info "  sh install.sh diagnostics"
+  if [ "$SERVICE_MODE" = "true" ]; then
+    info ""
+    info "Running under the '${SERVICE_USER}' service account in ${SERVICE_HOME}."
+    info "Run later commands from there, for example:"
+    info "  cd ${SERVICE_HOME} && sudo sh install.sh status"
+  else
+    info ""
+    info "Useful commands:"
+    info "  sh install.sh status"
+    info "  sh install.sh doctor"
+    info "  sh install.sh logs"
+    info "  sh install.sh update"
+    info "  sh install.sh diagnostics"
+  fi
   info ""
   info "A self-signed certificate may trigger a browser warning until a trusted certificate is configured."
 }
@@ -2051,6 +2284,7 @@ do_self_update() {
         && info "saved the previous ${_name} as ${_name}.backup.${_stamp}."
     fi
     mv "$_tmp" "$_target" || { rm -f "$_t_installer" "$_t_compose" "$_t_example"; die "could not replace ${_name}."; }
+    own_deploy_path "$_target"
     _changed="${_changed} ${_name}"
   done
   chmod +x "${SCRIPT_DIR}/install.sh" 2>/dev/null || true
@@ -2279,6 +2513,7 @@ do_recover() {
   fi
   cp "$_latest" "$ENV_FILE" || die "could not restore ${ENV_FILE}."
   chmod 600 "$ENV_FILE" 2>/dev/null || true
+  own_deploy_path "$ENV_FILE"
   env_file_complete "$ENV_FILE" || die "the restored environment file is incomplete."
   success "Configuration restored from ${_latest}."
   info "Run: sh install.sh doctor"
@@ -2362,6 +2597,10 @@ check_installer_freshness() {
     *) return 0 ;;
   esac
 }
+
+# Re-enter service mode when this deployment is service-account managed, before any
+# mode runs a docker or ownership operation.
+activate_service_mode_from_marker
 
 case "$MODE" in
   help)

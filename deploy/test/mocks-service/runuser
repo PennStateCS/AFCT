@@ -1,0 +1,13 @@
+#!/bin/sh
+# Mock runuser for the service-account tests. The installer runs docker as the service
+# account with `runuser -u NAME -- CMD ARGS...`; this drops the `-u NAME --` prefix and
+# executes the command directly, so the regular docker mock still handles it. The real
+# service account does not need to exist for the command to run.
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -u) shift 2 ;;   # drop `-u NAME`
+    --) shift; break ;;
+    *) break ;;
+  esac
+done
+exec "$@"
