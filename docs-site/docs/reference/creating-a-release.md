@@ -57,12 +57,26 @@ git tag -a v0.1.3 <sha> -m "v0.1.3 - short summary"
 git push origin v0.1.3
 ```
 
+### Attaching an admin note (optional)
+
+For the rare release where the admin must do something on the server before or after
+upgrading, add a second `-m`. The first message is the normal summary; the second
+becomes a free-text note shown in the Updates tab when that version is selected:
+
+```bash
+git tag -a v0.1.3 <sha> -m "v0.1.3 - short summary" -m "Increase the VM disk to 60 GB before upgrading."
+git push origin v0.1.3
+```
+
+Ordinary releases use a single `-m` and show no note. Keep the note short and
+actionable; it is the only place this instruction reaches the operator in-app.
+
 The `release.yml` workflow then:
 
 1. Builds and pushes the four `:vX.Y.Z` images to GHCR.
 2. Runs an informational Trivy scan (non-blocking).
-3. Adds the version to `deploy/versions.json` on `main` (marking `requiresHostUpdate`
-   if the updater sidecar or the compose file changed since the previous release).
+3. Adds the version to `deploy/versions.json` on `main`, including the admin note from
+   the tag body if one was given.
 4. Opens a GitHub Release with generated notes.
 
 ## Verify it triggered
@@ -108,8 +122,10 @@ images, recreates, and health-checks, rolling back automatically if the new vers
 unhealthy.
 
 **Completing the update.** Some releases also change the stack layout
-(`docker-compose.yml`) or the updater component. These are marked `requiresHostUpdate`
-(the Updates tab shows a note). The in-app path now handles both:
+(`docker-compose.yml`) or the updater component. The in-app path now handles both, so
+they no longer need a routine host-side step; if a specific release genuinely needs one,
+attach an admin note to the tag (above) and it shows in the Updates tab. The in-app path
+works as follows:
 
 - A changed `docker-compose.yml` is fetched from the target release, validated, and
   applied during the upgrade, provided the updater itself is current. This needs an

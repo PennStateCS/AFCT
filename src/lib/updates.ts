@@ -53,6 +53,11 @@ export type ReleaseVersion = {
   // sidecar or the compose file changed, and the app can't apply those to itself.
   // The admin must run the installer on the host afterward to finish.
   requiresHostUpdate?: boolean;
+  // An optional free-text note for this specific release, shown in the Updates tab
+  // when the version is selected. Set from an annotated tag's message at release time
+  // (see .github/workflows/release.yml) for the rare release that needs the admin to
+  // do something on the server first. Absent on ordinary releases.
+  upgradeNote?: string;
 };
 
 export type ReleaseManifest = { versions: ReleaseVersion[] };
