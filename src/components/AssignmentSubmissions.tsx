@@ -15,11 +15,6 @@ import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from '@/components/ui/resizable';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
@@ -768,7 +763,7 @@ export default function AssignmentSubmissions({
                   />
                 );
 
-                // Stack on small screens; a draggable horizontal split on desktop.
+                // Stack on small screens; a fixed two-column layout on desktop.
                 if (isMobile) {
                   return (
                     <div className="flex flex-col gap-4">
@@ -779,15 +774,10 @@ export default function AssignmentSubmissions({
                 }
 
                 return (
-                  <ResizablePanelGroup className="items-stretch gap-0 print:block">
-                    <ResizablePanel defaultSize={280} minSize={180} className="min-w-0 pr-3">
-                      {listCard}
-                    </ResizablePanel>
-                    <ResizableHandle withHandle className="print:hidden" />
-                    <ResizablePanel minSize={340} className="min-w-0 pl-3 print:col-span-2">
-                      {workspace}
-                    </ResizablePanel>
-                  </ResizablePanelGroup>
+                  <div className="grid grid-cols-[280px_minmax(0,1fr)] items-stretch gap-6 print:block">
+                    <div className="min-w-0">{listCard}</div>
+                    <div className="min-w-0 print:col-span-2">{workspace}</div>
+                  </div>
                 );
               })()
             )}

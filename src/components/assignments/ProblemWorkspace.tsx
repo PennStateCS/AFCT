@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Download, FileText, MessageSquare, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,8 +13,6 @@ import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
 import type { Comment as DiscussionComment } from '@/components/DiscussionPanel';
 import type { StudentProblemComment } from '@/lib/assignment-details';
 import type { ProblemSubmission } from '@/lib/problem-submission';
-import type { SubmissionStatusFilter } from '@/lib/submission-status-filter';
-import { STATUS_FILTER_OPTIONS, filterSubmissions } from '@/lib/submission-status-filter';
 import { apiPaths } from '@/lib/api-paths';
 import {
   statusToneClass,
@@ -122,19 +119,10 @@ export default function ProblemWorkspace({
   submissionsLoading = false,
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
-  const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
   // Render each submission's date/time in the course/effective timezone (not the
   // reviewer's browser locale), so the time shown is the one that student submitted at.
   const { timezone, hour12 } = useEffectiveTimezone();
 
-  const toggleFilter = (f: SubmissionStatusFilter) => {
-    setActiveFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(f)) next.delete(f);
-      else next.add(f);
-      return next;
-    });
-  };
   if (!problem) {
     return (
       <Card>
@@ -152,13 +140,6 @@ export default function ProblemWorkspace({
 
   const sortedSubmissions = [...submissions].sort(
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
-  );
-
-  const visibleSubmissions = filterSubmissions(
-    sortedSubmissions,
-    activeFilters,
-    dueDate,
-    hasValidDueDate,
   );
 
   const handleDownload = (submission: ProblemSubmission) => {
@@ -183,9 +164,9 @@ export default function ProblemWorkspace({
     </span>
   );
 
-  // Built inline so each cell's action buttons capture the current handlers/flags. The
-  // status-chip filter above the table stays the toolbar, so `visibleSubmissions` is
-  // already filtered; DataTable adds sortable headers, pagination and the mobile cards.
+  // Built inline so each cell's action buttons capture the current handlers/flags.
+  // Status and Result expose a string accessor + multiselect filter so DataTable's own
+  // Filters popover replaces the previous custom status chips.
   const submissionColumns: ColumnDef<ProblemSubmission>[] = [
     {
       id: 'submitted',
@@ -232,17 +213,38 @@ export default function ProblemWorkspace({
     {
       id: 'status',
       header: 'Status',
+      accessorFn: (s) => getTimingStatusChip(s, hasValidDueDate, dueDate).label,
       enableSorting: false,
       cell: ({ row }) =>
         renderStatusChip(getTimingStatusChip(row.original, hasValidDueDate, dueDate)),
-      meta: { priority: 1 },
+      meta: {
+        priority: 1,
+        filterVariant: 'multiselect',
+        filterLabel: 'Status',
+        filterOptions: [
+          { label: 'On time', value: 'On time' },
+          { label: 'Late', value: 'Late' },
+        ],
+      },
     },
     {
       id: 'result',
       header: 'Result',
+      accessorFn: (s) => getReviewStatusChip(s).label,
       enableSorting: false,
       cell: ({ row }) => renderStatusChip(getReviewStatusChip(row.original)),
-      meta: { priority: 1 },
+      meta: {
+        priority: 1,
+        filterVariant: 'multiselect',
+        filterLabel: 'Result',
+        filterOptions: [
+          { label: 'Pending', value: 'Pending' },
+          { label: 'Processing', value: 'Processing' },
+          { label: 'Failed', value: 'Failed' },
+          { label: 'Correct', value: 'Correct' },
+          { label: 'Incorrect', value: 'Incorrect' },
+        ],
+      },
     },
     {
       id: 'feedback',
@@ -268,9 +270,12 @@ export default function ProblemWorkspace({
       cell: ({ row }) => {
         const submission = row.original;
         if (!submission.fileName) return <span className="text-muted-foreground">—</span>;
+        const pendingOrProcessing =
+          submission.status?.toLowerCase() === 'pending' ||
+          submission.status?.toLowerCase() === 'processing';
         return (
           <div className="flex items-center gap-2">
-            {/* Click the name to preview; the icon downloads. */}
+            {/* Click the name to preview; the icons download and (for staff) rerun. */}
             <button
               type="button"
               onClick={() => onViewSubmission(submission)}
@@ -288,38 +293,22 @@ export default function ProblemWorkspace({
             >
               <Download className="h-4 w-4" aria-hidden="true" />
             </button>
+            {isPrivilegedUser ? (
+              <button
+                type="button"
+                onClick={() => onRerunSubmission?.(submission)}
+                disabled={pendingOrProcessing}
+                className="text-muted-foreground hover:text-foreground shrink-0 disabled:pointer-events-none disabled:opacity-50"
+                title="Rerun submission"
+                aria-label="Rerun submission"
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ) : null}
           </div>
         );
       },
       meta: { priority: 2 },
-    },
-    {
-      id: 'manage',
-      header: 'Manage',
-      enableSorting: false,
-      cell: ({ row }) => {
-        const submission = row.original;
-        const pendingOrProcessing =
-          submission.status?.toLowerCase() === 'pending' ||
-          submission.status?.toLowerCase() === 'processing';
-        return (
-          <div className="flex items-center gap-2 whitespace-nowrap">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={pendingOrProcessing}
-              onClick={() => onRerunSubmission?.(submission)}
-              title="Rerun submission"
-              aria-label="Rerun submission"
-              className="h-8 w-8 p-0"
-              hidden={!isPrivilegedUser}
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          </div>
-        );
-      },
-      meta: { priority: 1 },
     },
   ];
 
@@ -381,70 +370,32 @@ export default function ProblemWorkspace({
                 <p className="text-muted-foreground text-sm">Loading submissions...</p>
               </div>
             ) : sortedSubmissions.length > 0 ? (
-              <div className="space-y-2">
-                <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap gap-1">
-                    <button
-                      onClick={() => setActiveFilters(new Set())}
-                      className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                        activeFilters.size === 0
-                          ? 'border-foreground bg-foreground text-background'
-                          : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
-                      }`}
-                    >
-                      All
-                    </button>
-                    {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
-                      const active = activeFilters.has(value);
-                      return (
-                        <button
-                          key={value}
-                          onClick={() => toggleFilter(value)}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                            active
-                              ? 'border-foreground bg-foreground text-background'
-                              : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
-                          }`}
-                        >
-                          <span
-                            className={`inline-flex h-2 w-2 rounded-full ${dot}`}
-                            aria-hidden="true"
-                          />
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center gap-2">
+              <DataTable
+                columns={submissionColumns}
+                data={sortedSubmissions}
+                storageKey="problem-submissions"
+                tableLabel="Submissions"
+                showExportButton={false}
+                defaultSorting={[{ id: 'submitted', desc: true }]}
+                // Bulk rerun lives in the toolbar now that the custom filter row is gone.
+                actionButtons={
+                  isPrivilegedUser ? (
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => onRerunVisibleSubmissions?.(visibleSubmissions)}
-                      disabled={visibleSubmissions.length === 0}
-                      hidden={!isPrivilegedUser}
+                      onClick={() => onRerunVisibleSubmissions?.(sortedSubmissions)}
+                      disabled={sortedSubmissions.length === 0}
                       className="whitespace-nowrap"
-                      title="Rerun Visible Submissions"
+                      title="Rerun all submissions"
                     >
-                      Rerun
+                      Rerun all
                     </Button>
-                  </div>
-                </div>
-
-                <DataTable
-                  columns={submissionColumns}
-                  data={visibleSubmissions}
-                  storageKey="problem-submissions"
-                  tableLabel="Submissions"
-                  // The status-chip filter above is the toolbar for this table, so hide
-                  // DataTable's own search/filter/columns/export controls.
-                  showToolbar={false}
-                  defaultSorting={[{ id: 'submitted', desc: true }]}
-                  emptyTitle="No submissions match the selected filter"
-                  emptyDescription="Adjust the status filters above to see more."
-                  emptyIcon={FileText}
-                />
-              </div>
+                  ) : undefined
+                }
+                emptyTitle="No submissions match the filters"
+                emptyDescription="Adjust the filters to see more."
+                emptyIcon={FileText}
+              />
             ) : (
               <div className="text-muted-foreground space-y-2 rounded-md border border-dashed p-4 text-center text-sm">
                 <p>No submissions yet.</p>
