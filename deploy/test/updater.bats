@@ -264,6 +264,9 @@ serve_restore() {
   [ "$(phase)" = "healthy" ]
   run jq -e '.[] | select(.version=="v1.0.0" and .backup=="20260202-000000")' triggers/restore-points.json
   [ "$status" -eq 0 ]
+  # The backup phase streams progress so the UI doesn't look stalled on the longest step.
+  run grep -q 'backing up the database' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+  run grep -q 'database backup complete' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
 }
 
 @test "downgrade restores the database and switches to the old version" {

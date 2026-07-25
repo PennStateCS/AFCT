@@ -410,17 +410,25 @@ backup_and_wait() {
   _before=$(ls -1t "$BACKUP_DIR"/afct-*.dump 2>/dev/null | head -n 1 || true)
   mkdir -p "$BACKUP_TRIGGER_DIR" 2>/dev/null || return 1
   : > "$BACKUP_TRIGGER_FILE" 2>/dev/null || return 1
+  # Note progress to the streamed log (a file, so this never pollutes the timestamp
+  # this function echoes on success). Without these, the backup phase is silent and
+  # looks stalled, and it can genuinely be the longest step on a large database.
+  progress_note "backing up the database"
   _elapsed=0
   while [ "$_elapsed" -lt "$BACKUP_TIMEOUT" ]; do
     beat
     _now=$(ls -1t "$BACKUP_DIR"/afct-*.dump 2>/dev/null | head -n 1 || true)
     if [ -n "$_now" ] && [ "$_now" != "$_before" ]; then
+      progress_note "database backup complete (${_elapsed}s)"
       basename "$_now" | sed -n 's/^afct-\(.*\)\.dump$/\1/p'
       return 0
     fi
     sleep "$HEALTH_INTERVAL"
     _elapsed=$((_elapsed + HEALTH_INTERVAL))
+    progress_note "still backing up the database (${_elapsed}s elapsed)"
+    progress_trim
   done
+  progress_note "database backup did not complete within ${BACKUP_TIMEOUT}s"
   return 1
 }
 
