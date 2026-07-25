@@ -2316,6 +2316,53 @@ case "$HEALTH_INTERVAL" in ''|*[!0-9]*) die "AFCT_HEALTH_INTERVAL must be a posi
 [ "$HEALTH_TIMEOUT" -ge 1 ] || die "AFCT_HEALTH_TIMEOUT must be at least 1 second."
 [ "$HEALTH_INTERVAL" -ge 1 ] || die "AFCT_HEALTH_INTERVAL must be at least 1 second."
 
+# Before a mutating run, offer to update the installer itself when a newer one is
+# published, so the console path stays current without a separate `self-update`. Skips
+# when re-executed (AFCT_INSTALLER_SELF_CHECKED), offline, or already up to date. On a
+# non-interactive run it only notes the newer version (auto-updating needs -y).
+check_installer_freshness() {
+  [ "${AFCT_INSTALLER_SELF_CHECKED:-}" = "1" ] && return 0
+  command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || return 0
+
+  _rf=$(mktemp "${TMPDIR:-/tmp}/afct-installer.XXXXXX" 2>/dev/null) || return 0
+  if ! fetch_url "${INSTALLER_BASE_URL}/install.sh" "$_rf" 2>/dev/null || [ ! -s "$_rf" ]; then
+    rm -f "$_rf"
+    return 0
+  fi
+  _remote_ver=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$_rf" | head -n 1)
+  rm -f "$_rf"
+  [ -n "$_remote_ver" ] || return 0
+  # Releases move forward only, so a version that differs from the published one means
+  # the local installer is behind. Kept as a plain string compare for portability (no
+  # sort -V, which busybox/older shells may lack).
+  [ "$_remote_ver" = "$INSTALLER_VERSION" ] && return 0
+
+  info "a newer installer (${_remote_ver}) is available; you have ${INSTALLER_VERSION}."
+  if [ "$ASSUME_YES" = "true" ]; then
+    _answer="y"
+  elif can_prompt; then
+    _answer=$(prompt_default "Update the installer before continuing?" "y")
+  else
+    info "run 'sh install.sh self-update' to update the installer first."
+    return 0
+  fi
+  case "$_answer" in
+    y | Y | yes | YES)
+      info "updating the installer to ${_remote_ver} ..."
+      if ! do_self_update; then
+        info "installer self-update failed; continuing with ${INSTALLER_VERSION}."
+        return 0
+      fi
+      _yflag=""
+      [ "$ASSUME_YES" = "true" ] && _yflag="-y"
+      info "re-running with the updated installer ..."
+      # The guard stops the fresh installer from checking again in a loop.
+      AFCT_INSTALLER_SELF_CHECKED=1 exec sh "$0" "$MODE" $_yflag
+      ;;
+    *) return 0 ;;
+  esac
+}
+
 case "$MODE" in
   help)
     usage
@@ -2342,6 +2389,7 @@ case "$MODE" in
     ;;
   update)
     init_log
+    check_installer_freshness
     do_update
     ;;
   self-update)
@@ -2350,6 +2398,7 @@ case "$MODE" in
     ;;
   restart)
     init_log
+    check_installer_freshness
     do_restart
     ;;
   stop)
@@ -2366,6 +2415,7 @@ case "$MODE" in
     ;;
   install)
     init_log
+    check_installer_freshness
     do_install
     ;;
   *)
