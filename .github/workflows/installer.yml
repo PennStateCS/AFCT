@@ -52,5 +52,10 @@ jobs:
           shellcheck -s sh deploy/install.sh || true
           shellcheck -s sh docker/updater/updater.sh || true
 
+      # Run in the bats container as root: the dedicated-service-account tests are
+      # root-only by design (they create a system user), so running as the non-root
+      # runner would skip them. This mirrors the documented local command.
       - name: Run installer + updater tests
-        run: bats deploy/test/install.bats deploy/test/updater.bats
+        run: |
+          docker run --rm -v "$PWD:/code" -w /code --entrypoint sh bats/bats:latest -c \
+            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache jq >/dev/null 2>&1; bats deploy/test/install.bats deploy/test/updater.bats"
