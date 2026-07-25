@@ -21,6 +21,9 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/updates', () => updatesMock);
+// The GET handler reconciles a finished run's outcome into the activity log; that has
+// its own tests (update-audit.test.ts), so stub it out here.
+vi.mock('@/lib/update-audit', () => ({ reconcileUpdateOutcomeLog: vi.fn() }));
 
 import { GET, POST } from './route';
 import { routeCtx } from '@/test/route';
