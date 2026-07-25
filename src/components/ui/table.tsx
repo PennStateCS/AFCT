@@ -105,12 +105,21 @@ function TableHead({ className, scope = "col", ...props }: React.ComponentProps<
   )
 }
 
-function TableCell({ className, ...props }: React.ComponentProps<"td">) {
+// Cells wrap by default so long values (emails, titles, evaluator feedback) reflow
+// instead of forcing the whole table into a horizontal scroll. Pass `nowrap` for
+// values that must stay on one line (dates, counts, short codes). A `whitespace-*`
+// class in `className` still wins over both, via tailwind-merge.
+function TableCell({
+  className,
+  nowrap = false,
+  ...props
+}: React.ComponentProps<"td"> & { nowrap?: boolean }) {
   return (
     <td
       data-slot="table-cell"
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        nowrap && "whitespace-nowrap",
         className
       )}
       {...props}
