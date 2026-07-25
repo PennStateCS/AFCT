@@ -64,6 +64,26 @@ describe('DataTable', () => {
     delete (window as any).matchMedia;
   });
 
+  it('applies whitespace-nowrap to a body cell only when the column sets meta.nowrap', () => {
+    const cols: ColumnDef<RowData>[] = [
+      {
+        accessorKey: 'name',
+        header: 'Name',
+        cell: ({ getValue }) => <span>{getValue<string>()}</span>,
+      },
+      {
+        accessorKey: 'role',
+        header: 'Role',
+        cell: ({ getValue }) => <span>{getValue<string>()}</span>,
+        meta: { nowrap: true },
+      },
+    ];
+    render(<DataTable columns={cols} data={[{ id: '1', name: 'Alice', role: 'Admin' }]} />);
+    // Cells wrap by default; only the opted-in column stays on one line.
+    expect(screen.getByText('Alice').closest('td')?.className).not.toContain('whitespace-nowrap');
+    expect(screen.getByText('Admin').closest('td')?.className).toContain('whitespace-nowrap');
+  });
+
   it('filters rows with the global search input', async () => {
     const user = userEvent.setup();
     render(<DataTable columns={columns} data={data} />);

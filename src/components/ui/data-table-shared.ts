@@ -21,6 +21,9 @@ declare module '@tanstack/react-table' {
     filterOptions?: { label: string; value: string }[];
     /** Hide this column from the stacked mobile card view. */
     mobileHidden?: boolean;
+    /** Keep this column's cell on one line. Cells wrap by default; set this for values
+     *  that must not break (dates, counts, short codes, action buttons). */
+    nowrap?: boolean;
   }
 }
 
