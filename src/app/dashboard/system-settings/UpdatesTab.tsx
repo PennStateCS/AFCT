@@ -111,7 +111,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         automatically.
       </p>
 
-      <div className="max-w-2xl space-y-5">
+      <div className="max-w-2xl space-y-5 xl:max-w-4xl">
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Current version</h3>
           <Badge variant="secondary" className="w-fit font-mono">
@@ -153,7 +153,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                 so announce them to screen readers as they happen. */}
             <div
               role="status"
-              className="bg-muted/10 w-fit max-w-xl space-y-2 rounded-md border p-3 text-sm"
+              className="bg-muted/10 w-full max-w-xl space-y-2 rounded-md border p-3 text-sm xl:max-w-3xl"
             >
               <Badge
                 variant={
@@ -315,7 +315,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
 
       {/* Restore / downgrade — destructive, so kept visually separate. */}
       {restorePoints.length > 0 && (
-        <div className="mt-8 max-w-2xl space-y-3 border-t pt-6">
+        <div className="mt-8 max-w-2xl space-y-3 border-t pt-6 xl:max-w-4xl">
           <h3 className="text-destructive text-sm font-semibold">Restore a previous version</h3>
           <p className="text-muted-foreground text-sm">
             Downgrading restores the database backup taken before that version was replaced. It{' '}
