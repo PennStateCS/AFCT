@@ -117,6 +117,20 @@ It then verifies Docker, generates the PostgreSQL password and authentication se
 
 Re-running `sh install.sh` on a configured host detects the existing installation and offers a menu: start or repair it, update it, reconfigure the public URL or bootstrap settings, run system checks, or create a diagnostics archive. Existing database and authentication secrets are preserved during reconfiguration.
 
+### Dedicated service account
+
+When you run a fresh install as root (for example with `sudo sh install.sh`), the installer deploys AFCT under a dedicated `afct` system account rather than your login. The deploy files and the Docker-socket access then belong to a purpose-built user that is not tied to any one administrator, which is the recommended setup for a shared or long-lived server.
+
+Because the account has to be able to read the deploy files, a service install is placed in `/opt/afct`. If you downloaded the bundle elsewhere, the installer copies it there and continues from that location. Run later commands from `/opt/afct`, for example:
+
+```bash
+cd /opt/afct
+sudo sh install.sh status
+sudo sh install.sh update
+```
+
+To install as the current user instead (the older behavior), pass `--no-service-user`, or set `AFCT_SERVICE_USER=` (empty). To use a different account name, pass `--service-user NAME`. Installs that are not run as root always use the current user.
+
 For unattended installs, supply the values as environment variables and pass `--non-interactive`. Docker and the Compose plugin must already be installed:
 
 ```bash

@@ -26,6 +26,11 @@ setup() {
   # Keep the health-wait loop short so timeout cases finish quickly (sleep is mocked).
   export AFCT_HEALTH_TIMEOUT=10
   export AFCT_HEALTH_INTERVAL=1
+  # These tests run as root inside the bats image, which would otherwise trigger the
+  # dedicated-service-account path (create a user, relocate to /opt/afct, re-exec).
+  # Default the suite to the legacy "install as the current user" behavior; the
+  # service-account path has its own tests that opt in explicitly.
+  export AFCT_SERVICE_USER=""
 
   cd "$TESTDIR"
 }
@@ -481,4 +486,56 @@ exit 0'
   export MOCK_ARGS_LOG="$TESTDIR/args-on.log"
   run sh install.sh status
   run grep -q -- '--profile updater' "$TESTDIR/args-on.log"; [ "$status" -eq 0 ]
+}
+
+# --- dedicated service account -------------------------------------------------
+#
+# These opt into service mode (the shared setup disables it). The bats image runs as
+# root and has busybox adduser, so a real 'afct' account is created; a runuser mock
+# (mocks-service/) lets the installer "run docker as afct" without a real login. The
+# deploy dir is pointed at TESTDIR so no relocation/re-exec is exercised here (that
+# path needs a real VM). AFCT_SERVICE_USER uses `-` semantics: empty disables it.
+
+# Opt back in and put the runuser mock ahead of everything.
+service_mode_env() {
+  export AFCT_SERVICE_USER="afct"
+  export AFCT_SERVICE_HOME="$TESTDIR"     # already the deploy dir: no relocation
+  PATH="$BATS_TEST_DIRNAME/mocks-service:$PATH"
+  export PATH
+}
+
+@test "a root install sets up the service account, marks it, and owns the deploy files" {
+  service_mode_env
+  export ADMIN_EMAIL="admin@example.com" ADMIN_PASSWORD="Str0ng!Pass1"
+  export MOCK_ARGS_LOG="$TESTDIR/svc-args.log"
+  run sh install.sh --non-interactive
+  [ "$status" -eq 0 ]
+  # The marker records the owning account so later runs re-enter service mode.
+  [ -f "$TESTDIR/.afct-service-user" ]
+  run cat "$TESTDIR/.afct-service-user"; [ "$output" = "afct" ]
+  # The deploy files are owned by the service account, not root.
+  run stat -c '%U' "$TESTDIR/.env.production"; [ "$output" = "afct" ]
+  # Docker was actually driven (as the service account, via the runuser mock).
+  run grep -Eq 'up +-d' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+}
+
+@test "a later run re-enters service mode from the marker" {
+  service_mode_env
+  adduser -S -H -s /sbin/nologin afct 2>/dev/null || true
+  printf 'afct\n' > "$TESTDIR/.afct-service-user"
+  write_complete_env
+  export MOCK_ARGS_LOG="$TESTDIR/svc-args2.log"
+  run sh install.sh status
+  [ "$status" -eq 0 ]
+  # Service mode ran a docker command through the account (the runuser mock).
+  [ -s "$MOCK_ARGS_LOG" ]
+}
+
+@test "--no-service-user installs as the current user even as root" {
+  service_mode_env
+  export ADMIN_EMAIL="admin@example.com" ADMIN_PASSWORD="Str0ng!Pass1"
+  run sh install.sh --non-interactive --no-service-user
+  [ "$status" -eq 0 ]
+  # No service marker: this was a legacy install.
+  [ ! -f "$TESTDIR/.afct-service-user" ]
 }
