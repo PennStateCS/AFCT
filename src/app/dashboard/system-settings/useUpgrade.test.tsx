@@ -132,6 +132,60 @@ describe('useUpgrade', () => {
     );
   });
 
+  const selfUpdateGet = (over: Record<string, unknown> = {}) => ({
+    ok: true,
+    json: async () => ({
+      current: 'v1.0.0',
+      updaterVersion: 'v0.9.0',
+      updaterAvailable: true,
+      versions: [],
+      status: null,
+      manifestError: false,
+      restorePoints: [],
+      ...over,
+    }),
+  });
+
+  it('self-update resolves to done when the updater comes back on the new version', async () => {
+    fetchMock
+      .mockResolvedValueOnce(selfUpdateGet()) // initial: updater behind
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: 's1' }) })
+      .mockResolvedValue(selfUpdateGet({ updaterVersion: 'v1.0.0' })); // caught up
+
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info?.updaterVersion).toBe('v0.9.0'));
+
+    result.current.startSelfUpdate('v1.0.0');
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('updating'));
+
+    void result.current.refetch();
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('done'));
+
+    result.current.dismissSelfUpdate();
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('idle'));
+  });
+
+  it('self-update reports failure only when the updater stays behind and reports failed', async () => {
+    fetchMock
+      .mockResolvedValueOnce(selfUpdateGet())
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: 's2' }) })
+      .mockResolvedValue(
+        selfUpdateGet({
+          updaterVersion: 'v0.9.0',
+          status: { phase: 'failed', requestId: 's2', message: 'could not download' },
+        }),
+      );
+
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info).toBeTruthy());
+
+    result.current.startSelfUpdate('v1.0.0');
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('updating'));
+
+    void result.current.refetch();
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('failed'));
+  });
+
   it('POSTs a downgrade with the restore point and toasts success', async () => {
     fetchMock
       .mockResolvedValueOnce({
