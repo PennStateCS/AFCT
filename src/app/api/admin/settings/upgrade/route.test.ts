@@ -15,12 +15,15 @@ const updatesMock = vi.hoisted(() => ({
   writeDowngradeRequest: vi.fn(),
   writeSelfUpdateRequest: vi.fn(),
   writeDeleteRestorePointRequest: vi.fn(),
+  // Pass restore points through unchanged; the join is covered in updates.test.ts.
+  withBackupDetails: vi.fn((points: unknown) => points),
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/updates', () => updatesMock);
+vi.mock('@/lib/backups', () => ({ listBackups: vi.fn(() => []) }));
 
 import { GET, POST } from './route';
 import { routeCtx } from '@/test/route';

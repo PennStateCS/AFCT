@@ -16,7 +16,7 @@ import { DataTable } from '@/components/ui/data-table';
 import SelectField from '@/components/ui/SelectField';
 import InputGroup from '@/components/ui/InputGroup';
 import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
-import { upgradePhaseLabel, formatBackupTs, isNewerThan } from './system-settings-shared';
+import { upgradePhaseLabel, formatBackupTs, formatBytes, isNewerThan } from './system-settings-shared';
 import { UpgradeProgress } from './UpgradeProgress';
 import { UpgradeLiveLog } from './UpgradeLiveLog';
 
@@ -89,6 +89,30 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         <span className="whitespace-nowrap">{formatBackupTs(row.original.backup)}</span>
       ),
       meta: { priority: 1 },
+    },
+    {
+      id: 'encryption',
+      header: 'Encrypted',
+      accessorFn: (r) => (r.encrypted === undefined ? '' : r.encrypted ? 'Yes' : 'No'),
+      cell: ({ row }) =>
+        row.original.encrypted === undefined ? (
+          <span className="text-muted-foreground">—</span>
+        ) : row.original.encrypted ? (
+          <span className="whitespace-nowrap">Yes</span>
+        ) : (
+          <span className="whitespace-nowrap text-amber-600">No</span>
+        ),
+      meta: { priority: 2 },
+    },
+    {
+      accessorKey: 'size',
+      header: 'Size',
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap">
+          {row.original.size == null ? '—' : formatBytes(row.original.size)}
+        </span>
+      ),
+      meta: { priority: 2 },
     },
     {
       id: 'actions',

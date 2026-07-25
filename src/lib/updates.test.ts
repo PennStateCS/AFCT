@@ -17,6 +17,7 @@ import {
   readStatus,
   readRestorePoints,
   updaterAvailable,
+  withBackupDetails,
   writeUpdateRequest,
   writeDowngradeRequest,
   UPDATE_REQUEST_FILE,
@@ -40,6 +41,30 @@ describe('isValidTag', () => {
     expect(isValidTag('-leading')).toBe(false);
     expect(isValidTag('has/slash')).toBe(false);
     expect(isValidTag('')).toBe(false);
+  });
+});
+
+describe('withBackupDetails', () => {
+  const points = [
+    { version: 'v0.1.1', backup: '20260101-000000' },
+    { version: 'v0.1.2', backup: '20260202-000000' },
+  ];
+
+  it('fills in size and encrypted from the matching backup file', () => {
+    const result = withBackupDetails(points, [
+      { timestamp: '20260101-000000', size: 1024, encrypted: false },
+      { timestamp: '20260202-000000', size: 2048, encrypted: true },
+    ]);
+    expect(result[0]).toMatchObject({ size: 1024, encrypted: false });
+    expect(result[1]).toMatchObject({ size: 2048, encrypted: true });
+  });
+
+  it('leaves details undefined when no backup file matches', () => {
+    const result = withBackupDetails(points, [
+      { timestamp: '20260101-000000', size: 1024, encrypted: false },
+    ]);
+    expect(result[1].size).toBeUndefined();
+    expect(result[1].encrypted).toBeUndefined();
   });
 });
 
