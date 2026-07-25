@@ -313,14 +313,12 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             {selectedVersionInfo?.notes && (
               <p className="text-muted-foreground text-sm">{selectedVersionInfo.notes}</p>
             )}
-            {selectedVersionInfo?.requiresHostUpdate && (
+            {selectedVersionInfo?.upgradeNote && (
               <div
                 role="note"
-                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm whitespace-pre-line text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
               >
-                This release also updates a component the in-app upgrade can’t replace on its own.
-                After the upgrade finishes, run{' '}
-                <code className="font-mono">sh install.sh update</code> on the server to complete it.
+                {selectedVersionInfo.upgradeNote}
               </div>
             )}
             <Button
@@ -355,10 +353,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               downloads the new version, and restarts. This may take a few minutes, during which the
               site may be briefly unavailable. A failed upgrade is rolled back automatically.
             </DialogDescription>
-            {selectedVersionInfo?.requiresHostUpdate && (
-              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                Afterward, run <code className="font-mono">sh install.sh update</code> on the server
-                to finish updating a component the app can’t replace itself.
+            {selectedVersionInfo?.upgradeNote && (
+              <p className="text-sm font-medium whitespace-pre-line text-amber-700 dark:text-amber-300">
+                {selectedVersionInfo.upgradeNote}
               </p>
             )}
           </DialogHeader>

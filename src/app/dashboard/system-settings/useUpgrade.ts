@@ -11,6 +11,8 @@ export type ReleaseVersion = {
   releasedAt?: string;
   // See src/lib/updates.ts: this release also needs a host-side `install.sh update`.
   requiresHostUpdate?: boolean;
+  // Optional free-text note for this release, shown when the version is selected.
+  upgradeNote?: string;
 };
 
 export type UpdateStatus = {
