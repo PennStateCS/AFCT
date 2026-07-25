@@ -443,6 +443,44 @@ record_restore_point() {
   mv "$_tmp" "$RESTORE_POINTS_FILE" 2>/dev/null || true
 }
 
+# Delete a restore point the admin no longer wants: drop it from the map and delete its
+# backup artifacts (reclaiming disk). Only a RECORDED restore point can be deleted, so
+# the app can never make this remove an arbitrary file. Does NOT write an upgrade phase
+# to status.json (this isn't an upgrade); the app refetches the list to see it gone.
+process_delete_restore_point() {
+  _rp=$1
+  _rid=$2
+  # Same shape as a downgrade target: digits and dashes only (YYYYMMDD-HHMMSS).
+  case "$_rp" in
+    '' | *[!0-9-]*)
+      log "delete restore point rejected: invalid timestamp"
+      return 0
+      ;;
+  esac
+  if ! { [ -f "$RESTORE_POINTS_FILE" ] && jq -e --arg b "$_rp" \
+       'any(.[]?; .backup == $b)' "$RESTORE_POINTS_FILE" >/dev/null 2>&1; }; then
+    log "delete restore point ${_rp}: not a recorded restore point; ignoring"
+    return 0
+  fi
+
+  log "deleting restore point ${_rp} (request ${_rid})"
+  # 1) Remove the entry (or entries) from the map so the app stops offering it.
+  _tmp="${RESTORE_POINTS_FILE}.tmp.$$"
+  if jq --arg b "$_rp" 'map(select(.backup != $b))' "$RESTORE_POINTS_FILE" > "$_tmp" 2>/dev/null; then
+    mv "$_tmp" "$RESTORE_POINTS_FILE" 2>/dev/null || rm -f "$_tmp"
+  else
+    rm -f "$_tmp"
+  fi
+  # 2) Delete the backup artifacts for this timestamp: the current bundle
+  # (.tar.gz / .tar.gz.gpg) and the legacy DB dump + files companion.
+  rm -f "$BACKUP_DIR/afct-${_rp}.tar.gz" \
+        "$BACKUP_DIR/afct-${_rp}.tar.gz.gpg" \
+        "$BACKUP_DIR/afct-${_rp}.dump" \
+        "$BACKUP_DIR/afct-files-${_rp}.tgz" 2>/dev/null || true
+  log "deleted restore point ${_rp}"
+  return 0
+}
+
 # Wait for the backup sidecar to report the outcome of a restore.
 wait_for_restore() {
   _elapsed=0
@@ -500,13 +538,21 @@ process_request() {
   printf '%s' "$_rid" | grep -Eq "$ID_REGEX" || _rid="unknown"
 
   case "$_action" in
-    upgrade | downgrade | self-update) : ;;
+    upgrade | downgrade | self-update | delete-restore-point) : ;;
     *)
       write_status "failed" "unsupported action: ${_action}" "" "" "$_rid"
       rm -f "$CLAIM_FILE"
       return 0
       ;;
   esac
+
+  # Deleting a restore point needs no tag or running container; handle it before those
+  # checks (it removes an old backup the admin no longer wants to keep).
+  if [ "$_action" = "delete-restore-point" ]; then
+    process_delete_restore_point "$_restore_point" "$_rid"
+    rm -f "$CLAIM_FILE"
+    return 0
+  fi
 
   # Tag character-safety applies to both actions (it's written to the env file).
   if ! printf '%s' "$_tag" | grep -Eq "$TAG_REGEX"; then

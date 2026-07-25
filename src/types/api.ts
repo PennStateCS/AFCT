@@ -3128,8 +3128,8 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    action?: "upgrade" | "downgrade";
-                    tag: string;
+                    action?: "upgrade" | "downgrade" | "self-update" | "delete-restore-point";
+                    tag?: string;
                     restorePoint?: string;
                 };
             };

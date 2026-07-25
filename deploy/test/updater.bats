@@ -327,6 +327,34 @@ serve_restore() {
   [ "$(tag_now)" = "v1.0.0" ]     # tag not switched when the restore fails
 }
 
+# --- delete a restore point ---------------------------------------------------- #
+
+@test "delete-restore-point removes the entry and its backup files" {
+  printf '[{"version":"v0.9.0","backup":"20260101-000000"},{"version":"v1.0.0","backup":"20260202-000000"}]\n' > triggers/restore-points.json
+  : > backups/afct-20260101-000000.tar.gz
+  : > backups/afct-files-20260101-000000.tgz
+  request '{"action":"delete-restore-point","requestId":"del1","restorePoint":"20260101-000000"}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  # The chosen entry is gone; the other is kept.
+  run jq -e 'any(.[]?; .backup=="20260101-000000")' triggers/restore-points.json; [ "$status" -ne 0 ]
+  run jq -e 'any(.[]?; .backup=="20260202-000000")' triggers/restore-points.json; [ "$status" -eq 0 ]
+  # Its backup artifacts are deleted (disk reclaimed).
+  [ ! -f backups/afct-20260101-000000.tar.gz ]
+  [ ! -f backups/afct-files-20260101-000000.tgz ]
+}
+
+@test "delete-restore-point ignores an unrecorded restore point" {
+  printf '[{"version":"v1.0.0","backup":"20260202-000000"}]\n' > triggers/restore-points.json
+  : > backups/afct-19990101-000000.tar.gz
+  request '{"action":"delete-restore-point","requestId":"del2","restorePoint":"19990101-000000"}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  # A backup that isn't a recorded restore point is never deleted (no arbitrary rm).
+  [ -f backups/afct-19990101-000000.tar.gz ]
+  run jq -e 'any(.[]?; .backup=="20260202-000000")' triggers/restore-points.json; [ "$status" -eq 0 ]
+}
+
 # --- compose-from-release (a release that changed the stack layout) ------------ #
 
 @test "an upgrade applies a changed release compose from the release tag ref" {

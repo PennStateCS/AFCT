@@ -14,6 +14,7 @@ import {
   readStatus,
   updaterAvailable,
   updaterVersion,
+  writeDeleteRestorePointRequest,
   writeDowngradeRequest,
   writeSelfUpdateRequest,
   writeUpdateRequest,
@@ -65,8 +66,10 @@ export const GET = withAdminAuth(
 );
 
 const UpgradeBody = z.object({
-  action: z.enum(['upgrade', 'downgrade', 'self-update']).optional(),
-  tag: z.string().min(1),
+  action: z.enum(['upgrade', 'downgrade', 'self-update', 'delete-restore-point']).optional(),
+  // Required for every action except delete-restore-point, which only needs a
+  // restorePoint; validated per-action below.
+  tag: z.string().min(1).optional(),
   restorePoint: z.string().optional(),
 });
 
@@ -84,9 +87,8 @@ const UpgradeBody = z.object({
  *     application/json:
  *       schema:
  *         type: object
- *         required: [tag]
  *         properties:
- *           action: { type: string, enum: [upgrade, downgrade] }
+ *           action: { type: string, enum: [upgrade, downgrade, self-update, delete-restore-point] }
  *           tag: { type: string }
  *           restorePoint: { type: string }
  * responses:
@@ -106,12 +108,40 @@ export const POST = withAdminAuth(
     const parsed = await readJson(req, UpgradeBody);
     if (!parsed.ok) return parsed.response;
     const { action = 'upgrade', tag, restorePoint } = parsed.data;
+    const requestId = crypto.randomUUID();
 
-    if (!isValidTag(tag)) {
-      return apiError(400, 'Invalid version tag');
+    // ---- Delete a restore point: remove an old backup the admin no longer wants to
+    // keep. No tag or running container involved; only a recorded restore point.
+    if (action === 'delete-restore-point') {
+      if (!restorePoint || !isValidRestorePoint(restorePoint)) {
+        return apiError(400, 'A valid restore point is required');
+      }
+      const match = readRestorePoints().find((r) => r.backup === restorePoint);
+      if (!match) {
+        return apiError(400, `No restore point ${restorePoint}`);
+      }
+      try {
+        writeDeleteRestorePointRequest({ restorePoint, requestedBy: user.id, requestId });
+      } catch {
+        return apiError(503, 'The updater service is not available');
+      }
+      try {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: user.id,
+          action: 'SYSTEM_RESTORE_POINT_DELETE_REQUESTED',
+          severity: 'WARNING',
+          category: 'SYSTEM',
+          metadata: { restorePoint, version: match.version, requestId },
+        });
+      } catch (err) {
+        console.error('[updates] audit log failed:', err);
+      }
+      return NextResponse.json({ ok: true, requestId }, { status: 202 });
     }
 
-    const requestId = crypto.randomUUID();
+    if (!tag || !isValidTag(tag)) {
+      return apiError(400, 'Invalid version tag');
+    }
 
     // ---- Self-update: recreate the updater sidecar itself so it stops lagging the
     // app version. The target is the running app version; the updater re-checks it.

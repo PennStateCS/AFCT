@@ -14,6 +14,7 @@ const updatesMock = vi.hoisted(() => ({
   writeUpdateRequest: vi.fn(),
   writeDowngradeRequest: vi.fn(),
   writeSelfUpdateRequest: vi.fn(),
+  writeDeleteRestorePointRequest: vi.fn(),
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -40,6 +41,7 @@ beforeEach(() => {
   updatesMock.writeUpdateRequest.mockReset();
   updatesMock.writeDowngradeRequest.mockReset();
   updatesMock.writeSelfUpdateRequest.mockReset();
+  updatesMock.writeDeleteRestorePointRequest.mockReset();
   authMock.mockResolvedValue(admin);
   updatesMock.currentVersion.mockReturnValue('v1.0.0');
   updatesMock.isValidTag.mockReturnValue(true);
@@ -199,5 +201,40 @@ describe('POST downgrade', () => {
     const res = await downgrade({ tag: 'v0.9.0', restorePoint: '20260101-000000' });
     expect(res.status).toBe(403);
     expect(updatesMock.writeDowngradeRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST delete-restore-point', () => {
+  const del = (body: Record<string, unknown>) =>
+    POST(req('POST', { action: 'delete-restore-point', ...body }), routeCtx());
+
+  it('rejects an invalid restore point', async () => {
+    updatesMock.isValidRestorePoint.mockReturnValue(false);
+    const res = await del({ restorePoint: 'bad' });
+    expect(res.status).toBe(400);
+    expect(updatesMock.writeDeleteRestorePointRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects a restore point that is not recorded (no arbitrary deletes)', async () => {
+    updatesMock.readRestorePoints.mockReturnValue([{ version: 'v0.9.0', backup: '20260101-000000' }]);
+    const res = await del({ restorePoint: '19990101-000000' });
+    expect(res.status).toBe(400);
+    expect(updatesMock.writeDeleteRestorePointRequest).not.toHaveBeenCalled();
+  });
+
+  it('writes a delete request and audit-logs it on a recorded restore point', async () => {
+    updatesMock.readRestorePoints.mockReturnValue([{ version: 'v0.9.0', backup: '20260101-000000' }]);
+    const res = await del({ restorePoint: '20260101-000000' });
+    expect(res.status).toBe(202);
+    expect(updatesMock.writeDeleteRestorePointRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ restorePoint: '20260101-000000', requestedBy: 'a1' }),
+    );
+    // No tag needed, so the release manifest is never consulted.
+    expect(updatesMock.fetchManifest).not.toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      {},
+      expect.anything(),
+      expect.objectContaining({ action: 'SYSTEM_RESTORE_POINT_DELETE_REQUESTED' }),
+    );
   });
 });

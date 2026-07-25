@@ -207,6 +207,26 @@ export function readRestorePoints(): RestorePoint[] {
   }
 }
 
+// Drop a validated DELETE-RESTORE-POINT request: the sidecar removes the restore point
+// from the map and deletes its backup file(s) to reclaim disk. Not destructive to the
+// running app. Atomic write, like the other requests.
+export function writeDeleteRestorePointRequest(request: {
+  restorePoint: string;
+  requestedBy: string;
+  requestId: string;
+}): void {
+  fs.mkdirSync(UPDATE_TRIGGER_DIR, { recursive: true });
+  const payload = {
+    action: 'delete-restore-point',
+    restorePoint: request.restorePoint,
+    requestedBy: request.requestedBy,
+    requestId: request.requestId,
+  };
+  const tmp = path.join(UPDATE_TRIGGER_DIR, `.request.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, JSON.stringify(payload));
+  fs.renameSync(tmp, UPDATE_REQUEST_FILE);
+}
+
 // Drop a validated DOWNGRADE request for the sidecar (destructive: it restores the
 // backup, discarding everything since). Atomic write, like the upgrade request.
 export function writeDowngradeRequest(request: {
