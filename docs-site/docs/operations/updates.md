@@ -91,6 +91,8 @@ Each restore point also has a **Delete** button. Removing one deletes its backup
 
 Only versions listed in the curated release manifest can be selected; the updater validates every request against it, so the app can never be pointed at an arbitrary image.
 
+Every upgrade, downgrade, and update-service change is recorded in **Admin Menu > System Settings > System Logs**: one entry when it is requested and one for the outcome (completed, rolled back, or failed), so you can review what happened after the fact even once the live progress has cleared.
+
 ### Stack changes are applied for you
 
 Some releases change more than the application image: they add a service, a health check, or a setting in `docker-compose.yml`, or they update the updater component itself. The Updates tab handles these without a shell session:
