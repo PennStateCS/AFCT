@@ -9,6 +9,12 @@ export const UPDATE_REQUEST_FILE = path.join(UPDATE_TRIGGER_DIR, 'request.json')
 export const UPDATE_STATUS_FILE = path.join(UPDATE_TRIGGER_DIR, 'status.json');
 // The version -> pre-upgrade-backup map the updater records; drives downgrade.
 export const UPDATE_RESTORE_POINTS_FILE = path.join(UPDATE_TRIGGER_DIR, 'restore-points.json');
+// The updater's append-only live log for the current upgrade (image pull + recreate
+// output plus heartbeats). The app tails this to stream real-time progress to the UI.
+export const UPDATE_PROGRESS_FILE = path.join(UPDATE_TRIGGER_DIR, 'progress.log');
+// The updater stamps its own running version here; drives the "update service is
+// behind" prompt (the updater tracks the app tag but recreates itself separately).
+export const UPDATE_UPDATER_VERSION_FILE = path.join(UPDATE_TRIGGER_DIR, 'updater.version');
 // The updater sidecar stamps this (an epoch) every few seconds while it runs. The
 // app has no Docker access, so a fresh file here is how it knows the sidecar is
 // actually installed and running.
@@ -109,6 +115,30 @@ export function readStatus(): UpdateStatus | null {
   }
 }
 
+/** A slice of the live progress log: new lines past a cursor, and the cursor to
+ *  send next. `since` is a line count (not a byte offset), so a truncate/rotate of
+ *  the log resets cleanly (fewer lines than `since` -> start over from the top). */
+export type ProgressSlice = { lines: string[]; nextCursor: number };
+
+/** Pure splitter, extracted so it can be unit-tested without the filesystem. */
+export function sliceProgress(content: string, since: number): ProgressSlice {
+  const all = content.split('\n');
+  // A trailing newline yields a final empty element; drop it so it isn't a "line".
+  if (all.length > 0 && all[all.length - 1] === '') all.pop();
+  // The file was truncated/rotated (now shorter than the cursor): resend from 0.
+  const from = since >= 0 && since <= all.length ? since : 0;
+  return { lines: all.slice(from), nextCursor: all.length };
+}
+
+/** New progress-log lines past `since`, or an empty slice if the log isn't there. */
+export function readProgress(since = 0): ProgressSlice {
+  try {
+    return sliceProgress(fs.readFileSync(UPDATE_PROGRESS_FILE, 'utf8'), since);
+  } catch {
+    return { lines: [], nextCursor: since };
+  }
+}
+
 // Drop a validated upgrade request for the sidecar. Written to a temp file and
 // renamed so the sidecar never reads a half-written request. Throws if the
 // trigger volume isn't mounted (surfaced by the caller as "service unavailable").
@@ -125,6 +155,38 @@ export function writeUpdateRequest(request: {
     requestedBy: request.requestedBy,
     requestId: request.requestId,
     backupFirst: request.backupFirst !== false,
+  };
+  const tmp = path.join(UPDATE_TRIGGER_DIR, `.request.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, JSON.stringify(payload));
+  fs.renameSync(tmp, UPDATE_REQUEST_FILE);
+}
+
+// The updater stamps its own running version (its image's version label) here on
+// startup. The app compares it to the current app tag to tell when the updater is
+// behind (it tracks the same tag but is recreated on its own), so it can offer a
+// self-update. Empty string if the updater hasn't stamped it (older updater / dev).
+export function updaterVersion(): string {
+  try {
+    return fs.readFileSync(UPDATE_UPDATER_VERSION_FILE, 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+// Drop a validated SELF-UPDATE request: recreate the updater sidecar itself at `tag`.
+// The updater pulls its new image and hands off to a detached helper to swap the
+// container. Atomic write, like the other requests.
+export function writeSelfUpdateRequest(request: {
+  tag: string;
+  requestedBy: string;
+  requestId: string;
+}): void {
+  fs.mkdirSync(UPDATE_TRIGGER_DIR, { recursive: true });
+  const payload = {
+    action: 'self-update',
+    tag: request.tag,
+    requestedBy: request.requestedBy,
+    requestId: request.requestId,
   };
   const tmp = path.join(UPDATE_TRIGGER_DIR, `.request.${process.pid}.tmp`);
   fs.writeFileSync(tmp, JSON.stringify(payload));

@@ -55,6 +55,16 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   run grep -q '^NEXTAUTH_SECRET=keepme$' .env.production; [ "$status" -eq 0 ]
 }
 
+@test "a valid upgrade writes a live progress log the UI can stream" {
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"prog1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  # The append-only progress log captured the milestone notes the UI tails.
+  [ -s "$TESTDIR/triggers/progress.log" ]
+  run grep -q 'starting upgrade v1.0.0 -> v1.1.0' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+  run grep -q 'recreating containers' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
 @test "an upgrade recreates the app and its lockstep sidecars but not the updater" {
   export MOCK_UP_LOG="$TESTDIR/up.log"
   request '{"action":"upgrade","tag":"v1.1.0","requestId":"ls1","backupFirst":false}'
@@ -65,6 +75,20 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   run grep -q 'db-backup' "$TESTDIR/up.log"; [ "$status" -eq 0 ]
   # The updater must never recreate its own container.
   run grep -q 'updater' "$TESTDIR/up.log"; [ "$status" -ne 0 ]
+}
+
+@test "self-update pulls the updater image and hands off to a detached helper" {
+  export MOCK_ARGS_LOG="$TESTDIR/docker-args.log"
+  request '{"action":"self-update","tag":"v1.1.0","requestId":"su1"}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  [[ "$(jq -r '.message' triggers/status.json)" == *"update service updated to v1.1.0"* ]]
+  # It pulled the updater service...
+  run grep -Eq 'pull +updater' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  # ...and spawned a detached helper (docker run) to recreate it.
+  run grep -Eq '^run .*-d' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  # A self-update must not touch the app's version pin.
+  [ "$(tag_now)" = "v1.0.0" ]
 }
 
 @test "an invalid tag is rejected and the version is unchanged" {

@@ -18,6 +18,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
 import { upgradePhaseLabel, formatBackupTs } from './system-settings-shared';
 import { UpgradeProgress } from './UpgradeProgress';
+import { UpgradeLiveLog } from './UpgradeLiveLog';
 
 /** Updates tab: upgrade to a newer release, and restore/downgrade to a recorded backup. */
 export function UpdatesTab({ disabled }: { disabled: boolean }) {
@@ -28,8 +29,10 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
     loading: upgradeLoading,
     upgradeBusy,
     downgradeBusy,
+    selfUpdateBusy,
     startUpgrade,
     startDowngrade,
+    startSelfUpdate,
   } = useUpgrade(true);
 
   const [selectedVersion, setSelectedVersion] = useState('');
@@ -116,6 +119,33 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
           </Badge>
         </div>
 
+        {/* The updater sidecar tracks the app version but is recreated on its own, so it
+            can lag after an app upgrade. Offer to bring it up to date from here rather
+            than at the console. Hidden when it matches or hasn't reported a version. */}
+        {upgradeInfo?.updaterVersion &&
+          upgradeInfo.updaterVersion !== upgradeInfo.current &&
+          !upgradeInProgress && (
+            <div
+              role="note"
+              className="max-w-xl space-y-2 rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              <p>
+                The update service is on <span className="font-mono">{upgradeInfo.updaterVersion}</span>,
+                behind the app&apos;s <span className="font-mono">{upgradeInfo.current}</span>. Update it
+                so future upgrades use the latest logic.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={disabled || selfUpdateBusy}
+                onClick={() => startSelfUpdate(upgradeInfo.current)}
+              >
+                {selfUpdateBusy ? 'Updating…' : 'Update the update service'}
+              </Button>
+            </div>
+          )}
+
         {upgradeInfo?.status?.phase && (
           <div className="space-y-2" ref={upgradeStatusRef} tabIndex={-1}>
             <h3 className="text-sm font-medium">Update status</h3>
@@ -152,6 +182,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                   action={lastAction ?? undefined}
                 />
               )}
+              {/* Live streamed detail beneath the coarse checklist, so the long image
+                  pull shows real movement instead of a frozen phase. */}
+              <UpgradeLiveLog active={upgradeInProgress} />
               {upgradeInProgress && (
                 <p className="text-muted-foreground text-xs">
                   This can take a few minutes; the site may briefly restart.

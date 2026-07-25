@@ -276,6 +276,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/settings/upgrade/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream live upgrade progress (Server-Sent Events)
+         * @description Server-Sent Events stream of an in-flight upgrade: the coarse phase from  status.json plus new lines from the updater's progress.log, pushed as they appear  so the Updates UI shows real-time progress without polling or a manual refresh.  Closes when the upgrade reaches a terminal phase (or after a time cap). System  administrators only.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/upgrade/stream/route.ts)
+         */
+        get: operations["getAdminSettingsUpgradeStream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/status/database": {
         parameters: {
             query?: never;
@@ -3145,6 +3167,33 @@ export interface operations {
             };
             /** @description The release list or the updater service is unavailable. */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminSettingsUpgradeStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An event stream (text/event-stream) of status + log events. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

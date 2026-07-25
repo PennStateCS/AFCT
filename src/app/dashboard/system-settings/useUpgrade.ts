@@ -35,6 +35,10 @@ export type UpgradeInfo = {
   // False when the privileged updater sidecar isn't installed/running, so in-app
   // upgrades and downgrades can't be performed.
   updaterAvailable: boolean;
+  // The updater sidecar's own running version. It tracks the app tag but is recreated
+  // separately, so when this lags `current` the UI can offer to update it. Empty if an
+  // older updater that doesn't stamp its version is running.
+  updaterVersion?: string;
   restorePoints: RestorePoint[];
 };
 
@@ -98,13 +102,32 @@ export function useUpgrade(enabled: boolean) {
     },
   });
 
+  const { mutate: startSelfUpdate, isPending: selfUpdateBusy } = useMutation({
+    // Bring the updater sidecar up to the running app version.
+    mutationFn: (tag: string) =>
+      fetchJson(apiPaths.admin.upgrade(), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'self-update', tag }),
+      }),
+    onSuccess: () => {
+      showToast.success('Update service is updating and will restart shortly.');
+      void refetch();
+    },
+    onError: (err) => {
+      showToast.error(err instanceof Error ? err.message : 'Failed to update the update service');
+    },
+  });
+
   return {
     info: data,
     loading: isLoading,
     upgradeBusy,
     downgradeBusy,
+    selfUpdateBusy,
     startUpgrade,
     startDowngrade,
+    startSelfUpdate,
     refetch,
   };
 }
