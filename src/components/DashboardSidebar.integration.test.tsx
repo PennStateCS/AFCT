@@ -120,6 +120,35 @@ describe('dashboard sidebar (real primitives)', () => {
     expect(trigger).toBeInTheDocument();
   });
 
+  it('starts collapsed to the icon rail on medium-width screens', () => {
+    const original = window.innerWidth;
+    // Between the mobile drawer breakpoint (768) and the auto-expand width (1024).
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 900 });
+    try {
+      renderSidebar();
+      expect(screen.getByRole('button', { name: /sidebar$/i })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: original,
+      });
+    }
+  });
+
+  it('starts expanded on wide screens', () => {
+    // jsdom's default innerWidth (1024) is at the auto-expand width, so the saved
+    // preference (defaultOpen) wins and the sidebar renders expanded.
+    renderSidebar();
+    expect(screen.getByRole('button', { name: /sidebar$/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
   describe('on mobile', () => {
     beforeEach(() => isMobileMock.mockReturnValue(true));
 
