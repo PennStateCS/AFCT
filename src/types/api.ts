@@ -1738,7 +1738,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/courses/{id}/problems": {
+    "/api/courses/{id}/problems/import": {
         parameters: {
             query?: never;
             header?: never;
@@ -1746,6 +1746,34 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /**
+         * Import a problem from another course
+         * @description Imports a problem from ANOTHER course the caller can manage into this course. The  title/description come from the request; the type, state cap, determinism flag, and  the solution file (answer key) are copied from the source. The solution file is copied  to a fresh name on disk so the two problems never share a file.   Permission is tiered: the wrapper gates the destination course (manage), and the caller  must also be able to manage the source course.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/problems/import/route.ts)
+         */
+        post: operations["postCoursesByIdProblemsImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a course's problems
+         * @description Lists a course's problem bank (id, title, description, type), for pickers such as the  "import a problem from another course" wizard. Course staff (faculty or TAs) or a  system admin; this route is manage-gated, so no student reaches it.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/problems/route.ts)
+         */
+        get: operations["getCoursesByIdProblems"];
         put?: never;
         /**
          * Create a problem in a course
@@ -8237,6 +8265,121 @@ export interface operations {
             };
             /** @description Problem not found in this course. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdProblemsImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Destination course id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sourceCourseId: string;
+                    sourceProblemId: string;
+                    title: string;
+                    description?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The newly created problem. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body, or the source is the destination course. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller cannot manage the destination or the source course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Source problem not found in the source course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdProblems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The course's problems. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff or a system admin. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

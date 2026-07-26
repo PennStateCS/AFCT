@@ -24,6 +24,7 @@ import {
   type DuplicateSourceProblem,
 } from '@/components/dialogs/DuplicateProblemDialog';
 import { ImportAssignmentDialog } from '@/components/dialogs/ImportAssignmentDialog';
+import { ImportProblemDialog } from '@/components/dialogs/ImportProblemDialog';
 import type { FullCourse, TabType } from '@/types/course';
 import type { Problem, Course } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -92,6 +93,9 @@ export function AdminCourseView({
   const [duplicateProblemTarget, setDuplicateProblemTarget] =
     useState<DuplicateSourceProblem | null>(null);
 
+  // Whether the "import problem from another course" wizard is open.
+  const [importProblemOpen, setImportProblemOpen] = useState(false);
+
   const { columns: problemColumns, viewDialog: problemViewDialog } = useProblemColumns({
     courseIsArchived: course.isArchived,
     onEdit: onProblemEdit,
@@ -159,6 +163,7 @@ export function AdminCourseView({
               problems={course.problems}
               problemColumns={problemColumns}
               onCreateProblem={onCreateProblem}
+              onImportProblem={() => setImportProblemOpen(true)}
               isLoading={isProblemsLoading}
             />
             {problemViewDialog}
@@ -259,6 +264,18 @@ export function AdminCourseView({
       onDuplicated={() => {
         setDuplicateProblemTarget(null);
         // Back on the Problems tab: refresh so the new problem appears in the list.
+        onRefreshCourse();
+      }}
+    />
+
+    <ImportProblemDialog
+      open={importProblemOpen}
+      setOpen={setImportProblemOpen}
+      courseId={course.id}
+      courseIsArchived={course.isArchived}
+      onImported={() => {
+        setImportProblemOpen(false);
+        // The imported problem now exists in this course; refresh the problems list.
         onRefreshCourse();
       }}
     />

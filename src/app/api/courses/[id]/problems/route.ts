@@ -20,6 +20,41 @@ import {
 const uploadsDir = path.join('/private', 'uploads', 'solutions');
 
 /**
+ * Lists a course's problem bank (id, title, description, type), for pickers such as the
+ * "import a problem from another course" wizard. Course staff (faculty or TAs) or a
+ * system admin; this route is manage-gated, so no student reaches it.
+ * @openapi
+ * summary: List a course's problems
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The course's problems.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not course staff or a system admin. }
+ *   500: { description: Server error. }
+ */
+export const GET = withCourseAuth(
+  async (_req, _ctx, { courseId }) => {
+    try {
+      const problems = await prisma.problem.findMany({
+        where: { courseId },
+        select: { id: true, title: true, description: true, type: true },
+        orderBy: { title: 'asc' },
+      });
+      return NextResponse.json(problems);
+    } catch (error) {
+      console.error('Error listing problems:', error);
+      return NextResponse.json({ error: 'Failed to fetch problems.' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'COURSE_PROBLEMS_ACCESS_DENIED' },
+);
+
+/**
  * Creates a problem in a course from an uploaded solution file (multipart/form-data).
  * Course staff (faculty or TAs) or a system admin. The file's XML structure is
  * validated against the problem type before it's written to disk, and it's

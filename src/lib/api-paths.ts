@@ -52,6 +52,8 @@ export const apiPaths = {
   courseProblem: (id: string, pid: string) => `/api/courses/${id}/problems/${pid}`,
   courseProblemDuplicate: (id: string, pid: string) =>
     `/api/courses/${id}/problems/${pid}/duplicate`,
+  // Import a problem from another course INTO this (destination) course.
+  courseProblemImport: (id: string) => `/api/courses/${id}/problems/import`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
   courseRosterResetPassword: (id: string, userId: string) =>
     `/api/courses/${id}/roster/${userId}/reset-password`,

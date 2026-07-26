@@ -4,7 +4,7 @@ import type { Problem } from '@prisma/client';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus, FileText } from 'lucide-react';
+import { Plus, FileText, Download } from 'lucide-react';
 
 interface ProblemsCardProps {
   courseId: string;
@@ -12,6 +12,7 @@ interface ProblemsCardProps {
   problems: Problem[];
   problemColumns: ColumnDef<Problem>[];
   onCreateProblem: () => void;
+  onImportProblem?: () => void;
   isLoading?: boolean;
 }
 
@@ -20,6 +21,7 @@ export function ProblemsCard({
   problems,
   problemColumns,
   onCreateProblem,
+  onImportProblem,
   isLoading = false,
 }: ProblemsCardProps) {
   return (
@@ -29,9 +31,16 @@ export function ProblemsCard({
           <FileText className="h-5 w-5" />
           Problems
         </h2>
-        <Button variant="default" onClick={onCreateProblem} hidden={courseIsArchived}>
-          <Plus /> Create Problem
-        </Button>
+        <div className="flex items-center gap-2">
+          {onImportProblem && (
+            <Button variant="outline" onClick={onImportProblem} hidden={courseIsArchived}>
+              <Download /> Import Problem
+            </Button>
+          )}
+          <Button variant="default" onClick={onCreateProblem} hidden={courseIsArchived}>
+            <Plus /> Create Problem
+          </Button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <DataTable
