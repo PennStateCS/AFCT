@@ -15,6 +15,11 @@ import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import type { CalendarAssignment } from '@/lib/calendar-shared';
 import { getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
 import { apiPaths } from '@/lib/api-paths';
+import { CalendarCourseFilter, type FilterCourse } from './CalendarCourseFilter';
+
+// Compact course shape from /api/me/courses?view=nav (student: published only;
+// faculty/TA: their courses even when unpublished; admin: all their enrolments).
+type NavCourse = FilterCourse & { isArchived: boolean; startDate?: string | Date | null };
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end
 async function fetchAssignmentsInRange(startIso: string, endIso: string, signal?: AbortSignal) {
@@ -195,6 +200,10 @@ function CalendarDayButton(props: DayButtonProps) {
 // never changes between renders).
 const CALENDAR_DAY_COMPONENTS = { DayButton: CalendarDayButton };
 
+// Where the per-browser course filter is remembered. Stores the ids of the courses the
+// viewer has turned OFF, so the choice survives leaving and returning to the calendar.
+const HIDDEN_COURSES_KEY = 'afct:calendar:hidden-courses';
+
 export default function CalendarClient({
   initialAssignments,
   initialMonth,
@@ -245,6 +254,74 @@ export default function CalendarClient({
   const refresh = useCallback(() => {
     void refetch();
   }, [refetch]);
+
+  // The viewer's courses, for the filter box. Role scoping (published-only for
+  // students, drafts included for staff) is done server-side; we only drop archived
+  // ones here, since the calendar never shows archived-course assignments anyway.
+  const { data: navCourses = [] } = useQuery({
+    queryKey: ['me', 'courses', 'nav'],
+    queryFn: async () => {
+      const res = await fetch(apiPaths.myCourses({ view: 'nav' }), { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Failed to fetch courses');
+      return (await res.json()) as NavCourse[];
+    },
+    staleTime: 60_000,
+  });
+  const filterCourses = useMemo<FilterCourse[]>(() => {
+    const startMs = (v: string | Date | null | undefined) => {
+      const t = v ? new Date(v).getTime() : NaN;
+      return Number.isNaN(t) ? Infinity : t; // undated courses sort to the end
+    };
+    return navCourses
+      .filter((c) => !c.isArchived)
+      .slice()
+      .sort((a, b) => startMs(a.startDate) - startMs(b.startDate))
+      .map((c) => ({ id: c.id, code: c.code, semester: c.semester }));
+  }, [navCourses]);
+
+  // Courses the viewer has turned OFF. Empty = everything shown, so all boxes start
+  // checked and a course we haven't seen yet defaults to visible. Persists across
+  // month navigation (it's plain component state).
+  const [uncheckedCourseIds, setUncheckedCourseIds] = useState<Set<string>>(() => new Set());
+
+  // Restore the saved filter once, on the client. Done in an effect (not a lazy state
+  // initializer) so the server-rendered markup, which has no localStorage, matches the
+  // first client render and nothing hydration-mismatches.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(HIDDEN_COURSES_KEY);
+      const ids: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(ids) && ids.length > 0) {
+        setUncheckedCourseIds(new Set(ids.filter((x): x is string => typeof x === 'string')));
+      }
+    } catch {
+      // Blocked or malformed storage: just show everything.
+    }
+  }, []);
+
+  const toggleCourse = useCallback((courseId: string) => {
+    setUncheckedCourseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(courseId)) next.delete(courseId);
+      else next.add(courseId);
+      try {
+        window.localStorage.setItem(HIDDEN_COURSES_KEY, JSON.stringify([...next]));
+      } catch {
+        // Non-fatal: the toggle still works this session, it just won't persist.
+      }
+      return next;
+    });
+  }, []);
+
+  // Assignments the calendar and the Upcoming list actually render, after the course
+  // filter. When nothing is unchecked this is the full list (no needless copy).
+  const visibleAssignments = useMemo(
+    () =>
+      uncheckedCourseIds.size === 0
+        ? assignments
+        : assignments.filter((a) => !uncheckedCourseIds.has(a.course.id)),
+    [assignments, uncheckedCourseIds],
+  );
 
   const openDayDialog = useCallback((date: Date, dayAssignments: CalendarAssignment[]) => {
     setDialogDate(date);
@@ -299,16 +376,17 @@ export default function CalendarClient({
     [timezone],
   );
 
-  // Group assignments by date string (YYYY-MM-DD) using local dates.
+  // Group assignments by date string (YYYY-MM-DD) using local dates. Built from the
+  // course-filtered list so unchecking a course hides its assignments in the grid too.
   const assignmentsByDate = useMemo(() => {
     const grouped: Record<string, CalendarAssignment[]> = {};
-    assignments.forEach((a) => {
+    visibleAssignments.forEach((a) => {
       const dateStr = localDateKey(a.dueDate);
       if (!grouped[dateStr]) grouped[dateStr] = [];
       grouped[dateStr].push(a);
     });
     return grouped;
-  }, [assignments, localDateKey]);
+  }, [visibleAssignments, localDateKey]);
 
   // The data the (module-scope) day cells read via context. Memoized so cells only
   // re-render when the data actually changes, never just because the parent did.
@@ -429,8 +507,13 @@ export default function CalendarClient({
           </CardContent>
         </Card>
 
-        <div className="w-full">
-          <DueDateModule assignments={assignments} />
+        <div className="w-full space-y-4">
+          <CalendarCourseFilter
+            courses={filterCourses}
+            uncheckedCourseIds={uncheckedCourseIds}
+            onToggle={toggleCourse}
+          />
+          <DueDateModule assignments={visibleAssignments} />
         </div>
       </div>
       <DayAssignmentsDialog

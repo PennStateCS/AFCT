@@ -60,6 +60,7 @@ export async function GET(req: Request) {
           id: true,
           name: true,
           code: true,
+          semester: true,
           isPublished: true,
           isArchived: true,
           startDate: true,
