@@ -304,19 +304,19 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           const assignedFlags = user[ASSIGNED_KEY] as Record<string, boolean> | undefined;
           const isAssigned = assignedFlags?.[a.id] !== false;
 
-          // Not assigned to this student: show a dash instead of a grade. role="img"
-          // with aria-label so the accessible name is announced as "Not assigned"
-          // rather than a bare "-" (which reads the same as an assigned-but-ungraded
-          // cell); the title gives the same hint on hover.
+          // Not assigned to this student: show a muted "N/A" so it's clearly distinct
+          // from an assigned-but-ungraded cell (which shows a plain "-"). role="img"
+          // with aria-label announces it as "Not assigned"; the title repeats it on
+          // hover.
           if (!isAssigned) {
             return (
               <span
                 role="img"
                 aria-label="Not assigned"
                 title="Not assigned"
-                className="text-muted-foreground"
+                className="text-muted-foreground text-xs"
               >
-                -
+                N/A
               </span>
             );
           }

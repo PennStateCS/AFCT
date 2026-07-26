@@ -136,12 +136,12 @@ describe('PrivilegeGradesCard', () => {
     });
   });
 
-  it('renders a dash for unassigned cells and a normal grade otherwise', async () => {
+  it('renders "N/A" for unassigned cells and a normal grade otherwise', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({
         ...gradesPayload,
-        // s1 is assigned a1 (normal cell); s2 is not assigned (dash).
+        // s1 is assigned a1 (normal cell); s2 is not assigned (N/A).
         assigned: {
           s1: { a1: true },
           s2: { a1: false },
@@ -151,11 +151,12 @@ describe('PrivilegeGradesCard', () => {
 
     renderWithClient(<PrivilegeGradesCard courseId="c1" />);
 
-    // The unassigned cell renders exactly one "Not assigned" dash.
+    // The unassigned cell renders exactly one "Not assigned" (N/A) marker.
     const notAssigned = await screen.findAllByLabelText('Not assigned');
     expect(notAssigned).toHaveLength(1);
+    expect(notAssigned[0]).toHaveTextContent('N/A');
 
-    // The assigned cell renders its grade (two decimals), and the dash has no grade.
+    // The assigned cell renders its grade (two decimals).
     expect(screen.getByText('8.00')).toBeInTheDocument();
   });
 
