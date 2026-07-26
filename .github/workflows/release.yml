@@ -71,8 +71,8 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
@@ -94,8 +94,8 @@ jobs:
         with:
           context: docker/nginx
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=nginx
+          cache-to: type=gha,mode=max,scope=nginx
           tags: ghcr.io/pennstatecs/afct-nginx:${{ github.ref_name }}
 
       - name: Build and push backup image
@@ -103,8 +103,8 @@ jobs:
         with:
           context: docker/backup
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,mode=max,scope=backup
           tags: ghcr.io/pennstatecs/afct-backup:${{ github.ref_name }}
 
       - name: Build and push updater image
@@ -112,8 +112,8 @@ jobs:
         with:
           context: docker/updater
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=updater
+          cache-to: type=gha,mode=max,scope=updater
           tags: ghcr.io/pennstatecs/afct-updater:${{ github.ref_name }}
 
       # Add the new version to the curated manifest on main so the updater offers it.
