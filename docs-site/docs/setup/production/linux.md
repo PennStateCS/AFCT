@@ -1,336 +1,573 @@
-# AFCT on Linux
+# Install AFCT on Linux
 
-These instructions cover **Ubuntu** and **Amazon Linux 2023**. Where the commands differ, both are listed. Other distributions can run AFCT, but the Docker installation commands will differ.
+These instructions explain how to install AFCT on a Linux server or Linux computer.
 
-## Requirements
+The commands are written for:
 
-Review the [system requirements](../requirements.md) before starting. Git is only needed for the manual method.
+- Ubuntu
+- Amazon Linux 2023
 
-On Ubuntu the guided installer can install Docker Engine and the Compose plugin for you. On Amazon Linux, install Docker and the Compose plugin first. The section below covers it. The installer's automatic Docker setup uses Docker's convenience script, which does not support Amazon Linux.
+Other Linux distributions can also run AFCT. Install Docker Engine and the Docker Compose plugin for your distribution, then continue with the AFCT installation steps.
 
-## Configure DNS and the firewall
+## Before you begin
 
-Set the DNS record before installation. `NEXTAUTH_URL` must exactly match the address users will visit:
+You will need:
+
+- A Linux server or Linux computer
+- A user account with `sudo` access
+- At least 15 GB of free disk space
+- Internet access during installation
+- Ports 80 and 443 available if other users will connect to AFCT
+
+Review the [system requirements](../requirements.md) before installing AFCT.
+
+## Decide how people will access AFCT
+
+Before running the installer, decide whether this is a local test installation or a production deployment.
+
+### Local test installation
+
+You do not need a domain name to test AFCT on your own computer or on a temporary server.
+
+You can use a local address such as:
+
+```text
+https://localhost
+```
+
+You may also use the server's IP address during testing:
+
+```text
+https://192.0.2.10
+```
+
+Use the address that you will actually enter in your browser.
+
+A local test installation is useful for:
+
+- Trying AFCT before deploying it
+- Development
+- Demonstrations
+- Testing updates
+- Learning how the system works
+
+Do not use `localhost` if you plan to connect from another computer. On another computer, `localhost` refers to that computer, not the AFCT server.
+
+To access AFCT from another device on the same network, use the Linux computer's IP address instead.
+
+AFCT normally begins with a self-signed certificate. Your browser will warn that the certificate is not trusted. This is expected during local testing.
+
+### Production deployment
+
+A production deployment should ideally use a domain name or subdomain.
+
+For example:
+
+```text
+afct.example.edu
+```
+
+Users would access AFCT at:
 
 ```text
 https://afct.example.edu
 ```
 
-Do not use HTTP, an IP address, the wrong subdomain, an extra path, or an unnecessary port.
+A domain name makes it easier to:
 
-Keep port 80 open. nginx uses it to redirect HTTP requests to HTTPS on port 443.
+- Request a trusted certificate
+- Give users a stable address
+- Move AFCT to another server later
+- Avoid asking users to remember an IP address
+- Configure authentication and security settings consistently
 
-## Install Docker
+Create a DNS record that points the domain name to the server before installation when possible.
+
+The public URL entered during installation must exactly match the address users will visit.
+
+For example:
+
+```text
+https://afct.example.edu
+```
+
+Do not include:
+
+- An extra path such as `/afct`
+- An unnecessary port number
+- A different subdomain
+- A trailing slash unless the installer specifically requests one
+
+For production use, make sure ports 80 and 443 are open in the server firewall and any cloud security group.
+
+AFCT uses:
+
+- Port 80 for HTTP redirects and certificate validation
+- Port 443 for the secure website
+
+You can begin with an IP address and move to a domain later. When you do, reconfigure AFCT so its public URL matches the new address.
+
+## Certificates and HTTPS
+
+AFCT normally installs with a self-signed certificate.
+
+A self-signed certificate still encrypts the connection between the browser and the AFCT server. Information such as passwords, grades, and account details is not sent across the network as plain text.
+
+The difference is that the certificate was created by the AFCT server itself rather than signed by a certificate authority that the browser already trusts.
+
+Because the browser cannot independently verify who created the certificate, it displays a warning such as:
+
+```text
+Your connection is not private
+```
+
+or:
+
+```text
+Warning: Potential Security Risk Ahead
+```
+
+The warning does not mean that encryption is disabled. It means the browser cannot confirm that the server is really the server it claims to be.
+
+This distinction is important:
+
+- **Encryption** protects information while it travels between the browser and the server.
+- **Certificate validation** helps confirm the identity of the server.
+
+A self-signed certificate provides encryption, but it does not provide browser-verified identity.
+
+For a local test installation, this is usually acceptable. Confirm that you entered the correct AFCT address before continuing past the warning.
+
+For a production installation, replace the self-signed certificate before inviting users to sign in. Otherwise, users may become accustomed to ignoring browser security warnings, and they have no reliable way to confirm that they reached the real AFCT server.
+
+After signing in as an administrator, you can use the AFCT administration interface to:
+
+- Upload a certificate issued by your organization
+- Upload a certificate issued by another trusted certificate authority
+- Request and install a trusted certificate automatically from Let’s Encrypt
+
+A trusted certificate provides the same encrypted connection while also allowing the browser to verify the server’s identity. Once it is installed correctly, users should no longer see the certificate warning.
+
+To request a certificate from Let’s Encrypt, the server generally needs:
+
+- A public domain name that points to the AFCT server
+- Public access to port 80
+- Public access to port 443
+- A hostname that matches the AFCT public URL
+
+You can complete the initial installation before setting up the trusted certificate.
+
+## Step 1: Install Docker
+
+Choose the section for your operating system.
 
 ### Ubuntu
 
-Install Docker Engine and the Compose plugin from Docker's official repository:
+Update the server and install the required tools:
 
 ```bash
 sudo apt update
-sudo apt install -y ca-certificates curl gnupg git
-sudo install -m 0755 -d /etc/apt/keyrings
+sudo apt install -y ca-certificates curl
+```
 
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
+Install Docker using Docker's installation script:
 
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
-  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+```
 
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+Start Docker and configure it to start after a reboot:
+
+```bash
+sudo systemctl enable --now docker
 ```
 
 ### Amazon Linux 2023
 
-Docker is in the Amazon Linux repositories, but the Compose plugin is not, so it is installed from Docker's GitHub releases:
+Install and start Docker:
 
 ```bash
-sudo dnf install -y docker git
+sudo dnf install -y docker
 sudo systemctl enable --now docker
+```
 
+Install the Docker Compose plugin:
+
+```bash
 sudo mkdir -p /usr/local/lib/docker/cli-plugins
-sudo curl -fSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+sudo curl -fSL \
+  "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
   -o /usr/local/lib/docker/cli-plugins/docker-compose
 sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 ```
 
-The `$(uname -m)` picks the right binary for both x86 and Graviton (ARM) instances.
+The `$(uname -m)` part selects the correct version for Intel, AMD, or ARM servers.
 
-### Both distributions
+### Other Linux distributions
 
-Allow your account to use Docker without `sudo`:
+Install:
+
+- Docker Engine
+- The Docker Compose plugin
+- `curl` or `wget`
+
+Follow the Docker installation instructions for your distribution.
+
+Do not continue until these commands work:
 
 ```bash
-sudo usermod -aG docker "$USER"
+sudo docker --version
+sudo docker compose version
+sudo docker info
 ```
 
-Log out and sign in again, then verify the installation:
+## Step 2: Download the AFCT installer
+
+Create a temporary directory for the installer:
 
 ```bash
-docker --version
-docker compose version
-docker info
+mkdir -p ~/afct-install
+cd ~/afct-install
 ```
 
-Do not continue until all three commands succeed.
-
-## Guided installation (recommended)
-
-Download the bootstrap installer and run it. It is a small script that fetches a
-versioned deployment bundle from the latest GitHub release, verifies its SHA-256
-checksum before running anything, and installs AFCT under `/opt/afct`:
+Download the installer:
 
 ```bash
 curl -fsSLO https://github.com/PennStateCS/AFCT/releases/latest/download/install.sh
+```
+
+You can use `wget` instead:
+
+```bash
+wget https://github.com/PennStateCS/AFCT/releases/latest/download/install.sh
+```
+
+## Step 3: Run the installer
+
+Run:
+
+```bash
 sudo sh install.sh
 ```
 
-`wget https://github.com/PennStateCS/AFCT/releases/latest/download/install.sh` works
-too. Nothing is cloned and no authentication is needed; the bundle and its `.sha256`
-come from the public release assets over HTTPS.
+The installer will check the system, download the AFCT deployment files, create the configuration, and start the application.
 
-After installation, all operations run through the `afctctl` command, which the
-installer places on your `PATH`. You do not keep a copy of `install.sh` around or run
-it again for day-to-day tasks. See [Manage a running deployment](#manage-a-running-deployment).
+It will ask for the following information.
 
-### Where AFCT is installed
+### AFCT URL
 
-The bootstrap installs into a versioned layout so the tooling can be updated and rolled
-back without touching your configuration or data:
+Enter the address you plan to use in your browser.
+
+For a local test on the same computer:
 
 ```text
-/opt/afct/
-  current -> releases/<ver>-<digest>   # the active deployment-tool release
-  releases/<ver>-<digest>/             # immutable bundle: afctctl, libraries, docker-compose.yml
-  shared/                              # persistent, never replaced by an update
-    .env.production                    # your configuration and secrets
-    deploy.state                       # Compose project name and runtime provenance
-    install.log
-    backups/
-    runtime/
-      docker-compose.yml               # the mutable stack file the deployment drives
+https://localhost
 ```
 
-Release directories are content addressed (`<version>-<digest>`) and immutable: an update
-adds a new one and never edits an existing one, so a rollback is just repointing `current`.
-Your configuration and data live in `shared/` and are never inside a release directory.
+For a test server accessed by IP address:
 
-The stack is defined by a mutable Compose file at `shared/runtime/docker-compose.yml`, not
-by the immutable release. `afctctl` seeds it from the active release and records its
-checksum in `deploy.state` (`RUNTIME_COMPOSE_SHA`). That checksum is how the tooling tells a
-runtime file it wrote from one the in-app updater or an administrator changed: a tooling
-update refreshes the runtime file only when it still matches the recorded checksum, and
-otherwise leaves the changed file in place and tells you so.
+```text
+https://192.0.2.10
+```
 
-:::note Installing from a fork or mirror
-To install from a fork or an internal mirror, point the bootstrap at your own release
-assets before running it: set `AFCT_RELEASE_API` to the fork's releases API, or
-`AFCT_BUNDLE_URL` / `AFCT_BUNDLE_FILE` to a specific bundle. The default is the official
-`PennStateCS/AFCT` release assets.
-:::
+For a production deployment:
 
-### Installing from a local bundle
+```text
+https://afct.example.edu
+```
 
-For an air-gapped install, hand the bootstrap a downloaded bundle with `AFCT_BUNDLE_FILE`.
-By default a local bundle must be accompanied by its checksum: either a sibling
-`<bundle>.tar.gz.sha256` file, or an explicit `AFCT_BUNDLE_SHA256=<sha256>`. A local bundle
-with no checksum is refused.
+The address must match how users will access AFCT.
 
-To install a local bundle without checksum verification (for example a bundle you built
-yourself), set `AFCT_ALLOW_UNVERIFIED_LOCAL_BUNDLE=1`. This bypasses corruption and
-authenticity checks, so the bundle is not verified: the installer prints a prominent
-warning, still inspects the archive for unsafe paths and confirms the bundle's internal
-version consistency, and records the unverified install in `shared/install.log`. This
-override is never allowed for a remote download.
+To change the address later, run:
 
-:::note Checksummed, not signed
-Release bundles are verified with a SHA-256 checksum, which detects corruption and a
-truncated or altered download. It is not a cryptographic signature: a checksum published
-next to the bundle does not by itself prove the release account was not compromised. Signed
-or attested releases are a planned follow-up; until then, treat the bundle as checksummed
-rather than signed.
-:::
+```bash
+sudo afctctl install --reconfigure
+```
 
-### What the installer asks for
+### Administrator email address
 
-The installer prompts for:
+Enter the email address for the first AFCT administrator.
 
-- The public AFCT URL, used as `NEXTAUTH_URL`
-- The initial administrator email address
-- The initial administrator password, or it can generate a strong one for you
+For example:
 
-It then verifies Docker, generates the PostgreSQL password and authentication secret, writes `.env.production` with restricted permissions, shows a short review, downloads the images, and starts AFCT. A generated administrator password is printed once at the end and is never written to the log, so save it before closing the terminal.
+```text
+admin@example.edu
+```
 
-Running `afctctl install` again on a configured host detects the existing installation and offers a menu: start or repair it, update it, reconfigure the public URL or bootstrap settings, run system checks, or create a diagnostics archive. Existing database and authentication secrets are preserved during reconfiguration.
+For a local test, this does not need to be a publicly reachable address, but it should still be an address you will recognize.
 
-:::note Upgrading from an earlier release
-If you previously installed AFCT by downloading `install.sh` and the Compose file into a
-directory of your own, the bootstrap migrates that directory into `/opt/afct` in place.
-It preserves your `.env.production`, backups, and log, and reuses the existing Docker
-volumes and Compose project so your database is not disturbed. Your old `sh install.sh <command>`
-habit keeps working: that file is now a thin shim that forwards to `afctctl`.
-:::
+### Administrator password
 
-### Dedicated service account
+You can:
 
-A root install (`sudo sh install.sh`) runs AFCT under a dedicated `afct` system account rather than your login. The deploy files and the Docker-socket access then belong to a purpose-built user that is not tied to any one administrator, which is the recommended setup for a shared or long-lived server. AFCT is installed under `/opt/afct` in all cases; `afctctl` is on your `PATH`, so you can run it from anywhere:
+- Enter your own password
+- Let the installer generate a strong password
+
+When the installer generates a password, it displays it once at the end. Save it before closing the terminal.
+
+The password is not written to the installer log.
+
+### Service account
+
+The installer may ask whether AFCT should use a dedicated `afct` system account.
+
+For a shared or long-running server, accept the default.
+
+The service account keeps the AFCT deployment separate from a specific administrator's login account.
+
+For a temporary local test, using the dedicated account is still fine. You may also choose current-user mode when you have a specific reason to do so.
+
+## Step 4: Wait for AFCT to start
+
+The first startup can take several minutes because Docker must download the application images and initialize the database.
+
+The installer will wait for the application health check.
+
+A successful installation ends with a message similar to:
+
+```text
+AFCT Dashboard is ready
+```
+
+It will also show:
+
+- The AFCT web address
+- The administrator email address
+- The generated password, when applicable
+
+## Step 5: Check the installation
+
+Run:
 
 ```bash
 sudo afctctl status
+```
+
+You should see that the AFCT application is running and healthy.
+
+Run the system checks:
+
+```bash
+sudo afctctl doctor
+```
+
+To view the application log:
+
+```bash
+sudo afctctl logs
+```
+
+Press `Ctrl+C` when you are finished viewing the log. AFCT will continue running.
+
+## Step 6: Open AFCT
+
+Open the address you entered during installation.
+
+Examples:
+
+```text
+https://localhost
+```
+
+```text
+https://192.0.2.10
+```
+
+```text
+https://afct.example.edu
+```
+
+Your browser will probably display a certificate warning because AFCT starts with a self-signed certificate.
+
+This is expected. The connection is still encrypted, but the browser cannot verify the identity of the server because the certificate was not signed by a certificate authority it already trusts.
+
+Confirm that you entered the correct AFCT address before continuing past the warning.
+
+Sign in with the administrator email address and password you entered during installation.
+
+For local testing, you may continue using the self-signed certificate.
+
+For production, open the AFCT administration interface and replace it with a trusted certificate.
+
+You can either:
+
+- Upload a certificate and private key
+- Use a certificate issued by your organization
+- Request a certificate automatically from Let’s Encrypt
+
+## Step 7: Configure a trusted certificate for production
+
+After signing in as an administrator, open the certificate settings in the AFCT administration interface.
+
+Choose one of the available options.
+
+### Upload an existing certificate
+
+Use this option if your organization or another certificate authority has already provided:
+
+- A certificate
+- A private key
+- Any required intermediate certificate chain
+
+The certificate must match the hostname users will visit.
+
+### Request a certificate from Let’s Encrypt
+
+Use this option if the AFCT server is publicly reachable and the domain name already points to it.
+
+Before starting the request, confirm that:
+
+- The AFCT domain resolves to this server
+- Port 80 is open
+- Port 443 is open
+- No other service is using those ports
+- The public URL in AFCT matches the domain name
+
+AFCT will request and install the certificate through the administration interface.
+
+After the certificate is installed, reload the site and confirm that the browser no longer displays a certificate warning.
+
+## Where AFCT is installed
+
+AFCT stores its deployment files under:
+
+```text
+/opt/afct
+```
+
+The main directories are:
+
+```text
+/opt/afct/
+  current/              Active deployment tools
+  releases/             Installed deployment-tool versions
+  shared/               Persistent configuration and logs
+    .env.production     AFCT configuration and secrets
+    install.log         Installer log
+    runtime/            Active Docker Compose configuration
+```
+
+Application data is stored in Docker volumes.
+
+Updating the deployment tools does not replace the configuration or database.
+
+## Common AFCT commands
+
+You can run these commands from any directory.
+
+Check the application:
+
+```bash
+sudo afctctl status
+```
+
+Run system checks:
+
+```bash
+sudo afctctl doctor
+```
+
+View the application log:
+
+```bash
+sudo afctctl logs
+```
+
+Restart AFCT:
+
+```bash
+sudo afctctl restart
+```
+
+Stop AFCT:
+
+```bash
+sudo afctctl stop
+```
+
+Update the AFCT application:
+
+```bash
 sudo afctctl update
 ```
 
-To install as the current user instead, pass `--no-service-user`, or set `AFCT_SERVICE_USER=` (empty). To use a different account name, pass `--service-user NAME`. Installs that are not run as root always use the current user.
-
-The service account is recorded in a marker file at `/opt/afct/shared/.afct-service-user`,
-and the installer gives the account an explicit ownership and permission model so it can
-operate the deployment immediately:
-
-- `/opt/afct`, `/opt/afct/releases`, and each release directory are owned by the service
-  account and world-traversable (`0755`), so the account can reach the active `afctctl`.
-- `/opt/afct/shared` and `/opt/afct/shared/runtime` are owned by the account and private
-  (`0700`).
-- `.env.production`, `deploy.state`, `install.log`, the runtime Compose file, and the
-  marker are owned by the account and `0600`. Sensitive files are never widened.
-
-**Migrating a legacy install preserves its mode.** If the directory you are upgrading from
-used a dedicated service account (including a custom name), that account is preserved and
-given ownership of the new tree; if it ran as the invoking user, current-user mode is kept.
-The tooling never silently converts a legacy install to the default `afct` account. If a
-marker names an account that no longer exists, the migration warns, stays in current-user
-mode, and does not recreate the account. An explicit `--service-user NAME` or
-`--no-service-user` on the command line always overrides the inferred mode, and works on the
-first `sh install.sh` invocation because the compatibility shim passes your choice into the
-migration.
-
-For unattended installs, supply the values as environment variables and pass `--non-interactive`. Docker and the Compose plugin must already be installed:
+Update the deployment tools:
 
 ```bash
-ADMIN_EMAIL=admin@example.edu \
-ADMIN_PASSWORD_FILE=/run/secrets/afct-admin-password \
-APP_URL=https://afct.example.edu \
-  sudo sh install.sh --non-interactive
+sudo afctctl self-update
 ```
 
-### Installer diagnostics
-
-A failed installation creates a redacted archive under `/opt/afct/shared`:
-
-```text
-afct-diagnostics-<timestamp>.zip
-```
-
-Create one manually with:
+Create a support archive:
 
 ```bash
 sudo afctctl diagnostics
 ```
 
-Review the archive before sharing it.
+## Run the installer again
 
-## Manual installation
+You normally use `afctctl` after the first installation.
 
-Most deployments should use the guided installer above. Use the manual method only when you need to customize the Compose configuration, automate provisioning, or manage the repository directly with Git.
-
-Clone the repository and create the environment file:
+To reopen the installation and repair menu, run:
 
 ```bash
-git clone https://github.com/PennStateCS/AFCT.git
-cd AFCT
-cp .env.production.example .env.production
-nano .env.production
+sudo afctctl install
 ```
 
-Configure these required values:
+The installer will detect the existing configuration and offer options to:
 
-- `POSTGRES_PASSWORD`: Use a long random password. The same password must appear in `DATABASE_URL`.
-- `ADMIN_EMAIL` and `ADMIN_PASSWORD`: These seed the first administrator only when the database is empty.
-- `NEXTAUTH_SECRET`: Generate it once with `openssl rand -base64 64`. Changing it later signs every user out.
-- `NEXTAUTH_URL`: Use the exact public HTTPS address.
+- Start or repair AFCT
+- Update the application
+- Reconfigure the public URL
+- Run system checks
+- Create a diagnostics archive
 
-hCaptcha is optional. You can set `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY` now, or configure it later in **Admin Menu > System Settings > Captcha**. Do not use hCaptcha test credentials in production.
+Existing database and authentication secrets are preserved.
 
-Protect the environment file:
+To change the AFCT URL or other installation settings directly, run:
 
 ```bash
-chmod 600 .env.production
+sudo afctctl install --reconfigure
 ```
 
-Start AFCT:
+## Optional: enable updates from the AFCT website
+
+AFCT can perform application upgrades and downgrades from the administration interface.
+
+Enable this feature with:
 
 ```bash
-docker compose up -d
+sudo afctctl enable-updater
 ```
 
-## Verify the installation
+The updater is disabled by default because it requires access to the Docker socket, which provides extensive control over the server.
 
-Check the services:
+You can disable it later:
 
 ```bash
-docker compose ps
+sudo afctctl disable-updater
 ```
 
-All four services should be `Up`. The application should eventually report `healthy`.
+## Installation problems
 
-Review the application log:
+First, run:
 
 ```bash
-docker compose logs -f app
+sudo afctctl doctor
 ```
 
-Press `Ctrl+C` to stop following the log. AFCT will continue running.
-
-Open the public URL and confirm that the login page loads over HTTPS, the administrator can sign in, and the administration pages open.
-
-A certificate warning is expected until you replace the default self-signed certificate.
-
-## Manage a running deployment
-
-`afctctl` is the operations helper. It can be run from any directory:
+Then create a diagnostics archive:
 
 ```bash
-sudo afctctl status      # container and application health
-sudo afctctl logs        # follow the application log (Ctrl+C to stop)
-sudo afctctl doctor      # read-only system and configuration checks
-sudo afctctl update      # pull the latest app images, recreate, and verify health
-sudo afctctl restart     # recreate the stack without pulling images
-sudo afctctl stop        # stop the stack without deleting data volumes
-sudo afctctl diagnostics # create a redacted support archive
-sudo afctctl self-update # update the deployment tooling itself (see below)
+sudo afctctl diagnostics
 ```
 
-`afctctl update` records the running image versions before pulling and automatically rolls back if the new version fails its health check.
+The archive is saved under:
 
-### Two kinds of version
-
-The **application** and the **deployment tooling** version independently:
-
-- `afctctl update` moves the running AFCT **application** to a newer image.
-- `afctctl self-update` updates the **`afctctl` tooling itself** to a newer bundle. It
-  downloads the newest bundle, verifies its checksum, syntax-checks it, switches the
-  `current` release atomically, and keeps the previous release so it can roll back if the
-  new one fails to run. It does not pull application images or touch your database.
-
-`afctctl version` prints the tooling version. The application version is shown by
-`afctctl status` and in **Admin Menu > System Settings**.
-
-### In-app upgrades (optional)
-
-To run upgrades and downgrades from **Admin Menu > System Settings > Updates** instead of the command line, enable the updater sidecar:
-
-```bash
-sudo afctctl enable-updater    # sudo afctctl disable-updater to turn it off
+```text
+/opt/afct/shared
 ```
 
-A fresh interactive install also offers to enable it at the end; to opt in
-non-interactively, pass `--with-updater` on the install:
-
-```bash
-sudo sh install.sh --with-updater
-```
-
-This is **off by default** because the updater holds the Docker socket, which is effectively root access on the host. Once enabled, `update`, `restart`, and `status` include it automatically. A downgrade restores a pre-upgrade database backup and permanently discards database records created since it. Uploaded files are left in place and can become unreferenced. Treat downgrade as recovery, not a casual undo.
+Review the archive before sharing it because diagnostic information may contain details about your server configuration.
 
 Continue with [TLS certificates](../../admin/system-settings.md#tls-certificate), then review [updates](../../operations/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
