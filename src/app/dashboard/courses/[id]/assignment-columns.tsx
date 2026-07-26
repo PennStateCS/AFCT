@@ -18,7 +18,15 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { CompactDate } from '@/components/ui/CompactDate';
+import { parseValidDate } from '@/lib/date-format';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AssignmentOverrideSummary } from '@/types/course';
 import { apiPaths } from '@/lib/api-paths';
@@ -75,9 +83,12 @@ export function DueDateCell({
   const everyoneLabel = assignment.assignedToEveryone === false ? 'Everyone else' : 'Everyone';
 
   return (
-    <div className="flex items-center gap-1.5">
-      <CompactDate value={assignment.dueDate} timeZone={timeZone} />
-      {overrides.length > 0 && (
+    <div className="flex flex-col items-start gap-1">
+      {/* With per-student overrides the single base date is misleading, so show only
+          the badge; its popover lists every effective date. */}
+      {overrides.length === 0 ? (
+        <CompactDate value={assignment.dueDate} timeZone={timeZone} />
+      ) : (
         <Popover>
           <PopoverTrigger asChild>
             <button
@@ -124,6 +135,108 @@ export function DueDateCell({
         </Popover>
       )}
     </div>
+  );
+}
+
+// The unlock date, late policy, and late cutoff can each be overridden per student.
+// When an assignment's effective values for one of those fields actually differ across
+// the roster we hide the single base value (which would be misleading) and show the
+// same "Multiple" badge the due date uses, with a popover breaking the value down by
+// student. This is the field the cell renders.
+type OverrideField = 'unlockAt' | 'allowLateSubmissions' | 'lateCutoff';
+
+// The value that actually applies for a given field: `o` null means the base "everyone"
+// row; an override falls back to the base when it doesn't set the field. The late cutoff
+// only applies when late submissions are allowed (matching the due-date popover).
+function effectiveFieldValue(
+  assignment: AssignmentWithProblemCount,
+  o: AssignmentOverrideSummary | null,
+  field: OverrideField,
+): Date | string | boolean | null {
+  const effAllowLate = (o?.allowLateSubmissions ?? assignment.allowLateSubmissions) ?? false;
+  switch (field) {
+    case 'unlockAt':
+      return (o?.unlockAt ?? assignment.unlockAt) ?? null;
+    case 'allowLateSubmissions':
+      return effAllowLate;
+    case 'lateCutoff':
+      return effAllowLate ? ((o?.lateCutoff ?? assignment.lateCutoff) ?? null) : null;
+  }
+}
+
+// A comparable key so we can tell whether the effective values genuinely differ. Dates
+// (Date or ISO string) collapse to their timestamp; null is its own bucket.
+function fieldValueKey(value: Date | string | boolean | null): string {
+  if (value === null || value === undefined) return '∅';
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  const parsed = parseValidDate(value);
+  return parsed ? String(parsed.getTime()) : String(value);
+}
+
+function renderFieldValue(
+  field: OverrideField,
+  value: Date | string | boolean | null,
+  timeZone: string,
+) {
+  if (field === 'allowLateSubmissions') {
+    return <span>{value ? 'Yes' : 'No'}</span>;
+  }
+  return <CompactDate value={value as Date | string | null} timeZone={timeZone} />;
+}
+
+export function OverrideAwareCell({
+  assignment,
+  timeZone,
+  field,
+  label,
+}: {
+  assignment: AssignmentWithProblemCount;
+  timeZone: string;
+  field: OverrideField;
+  label: string;
+}) {
+  const overrides = assignment.overrides ?? [];
+  const everyoneLabel = assignment.assignedToEveryone === false ? 'Everyone else' : 'Everyone';
+
+  const baseValue = effectiveFieldValue(assignment, null, field);
+  const rows = [
+    { name: everyoneLabel, value: baseValue },
+    ...overrides.map((o) => ({ name: o.studentName, value: effectiveFieldValue(assignment, o, field) })),
+  ];
+  const distinct = new Set(rows.map((r) => fieldValueKey(r.value)));
+  const isMultiple = overrides.length > 0 && distinct.size > 1;
+
+  if (!isMultiple) {
+    return renderFieldValue(field, baseValue, timeZone);
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 focus-visible:ring-ring/40 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
+          aria-label={`Multiple ${label.toLowerCase()} values; show details`}
+        >
+          <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+          Multiple
+          <ChevronDown className="h-3 w-3" aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-3 text-xs">
+        <p className="mb-2 font-medium">{label}</p>
+        <ul className="space-y-2">
+          {rows.map((r, i) => (
+            <li key={i} className="flex items-baseline justify-between gap-3">
+              <span className={`truncate ${i === 0 ? 'text-muted-foreground' : 'font-medium'}`}>
+                {r.name}
+              </span>
+              <span className="shrink-0">{renderFieldValue(field, r.value, timeZone)}</span>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -179,6 +292,49 @@ function PublishSwitchCell({
   );
 }
 
+// The assignment title (a link to its page) plus a "View description" link that opens
+// a read-only modal. Self-contained so each row owns its own modal state without the
+// column model threading dialog state through the table.
+function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblemCount }) {
+  const [descOpen, setDescOpen] = useState(false);
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <Link
+        href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
+        className="block max-w-[8rem] truncate text-blue-600 hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
+        title={assignment.title}
+      >
+        {assignment.title}
+      </Link>
+      {assignment.description ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setDescOpen(true)}
+            className="self-start text-xs text-blue-600 underline hover:text-blue-800"
+            title="View description"
+          >
+            View description
+          </button>
+          <Dialog open={descOpen} onOpenChange={setDescOpen}>
+            <DialogContent className="bg-card">
+              <DialogHeader>
+                <DialogTitle>Assignment Description</DialogTitle>
+                <DialogDescription className="text-muted-foreground">
+                  {assignment.title}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm break-words whitespace-pre-wrap">
+                {assignment.description}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function useAssignmentColumns(
   courseIsArchived: boolean,
   handleAssignmentDeleteClick: (id: string) => void,
@@ -189,22 +345,7 @@ export function useAssignmentColumns(
     {
       accessorKey: 'title',
       header: 'Title',
-      cell: ({ row }) => (
-        <div className="min-w-0">
-          <Link
-            href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}
-            className="block max-w-[8rem] truncate text-blue-600 hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
-            title={row.original.title}
-          >
-            {row.original.title}
-          </Link>
-        </div>
-      ),
-    },
-    {
-      accessorKey: 'dueDate',
-      header: 'Due Date',
-      cell: ({ row }) => <DueDateCell assignment={row.original} timeZone={timeZone} />,
+      cell: ({ row }) => <AssignmentTitleCell assignment={row.original} />,
     },
     {
       id: 'isGroup',
@@ -213,6 +354,24 @@ export function useAssignmentColumns(
       cell: ({ row }) => <div>{row.original.isGroup ? 'Group' : 'Individual'}</div>,
       enableSorting: true,
       meta: { priority: 2, filterVariant: 'multiselect', filterLabel: 'Type' },
+    },
+    {
+      accessorKey: 'dueDate',
+      header: 'Due Date',
+      cell: ({ row }) => <DueDateCell assignment={row.original} timeZone={timeZone} />,
+    },
+    {
+      accessorKey: 'unlockAt',
+      header: 'Available From',
+      cell: ({ row }) => (
+        <OverrideAwareCell
+          assignment={row.original}
+          timeZone={timeZone}
+          field="unlockAt"
+          label="Available From"
+        />
+      ),
+      meta: { priority: 3 },
     },
     {
       accessorKey: 'maxPoints',
@@ -241,30 +400,28 @@ export function useAssignmentColumns(
       id: 'allowLateSubmissions',
       header: 'Allow Late',
       accessorFn: (row) => (row.allowLateSubmissions ? 'Yes' : 'No'),
-      cell: ({ row }) => <div>{row.original.allowLateSubmissions ? 'Yes' : 'No'}</div>,
+      cell: ({ row }) => (
+        <OverrideAwareCell
+          assignment={row.original}
+          timeZone={timeZone}
+          field="allowLateSubmissions"
+          label="Allow Late"
+        />
+      ),
       enableSorting: true,
       meta: { priority: 3, filterVariant: 'multiselect', filterLabel: 'Allow Late' },
     },
     {
       accessorKey: 'lateCutoff',
       header: 'Late Cutoff',
-      cell: ({ row }) => <CompactDate value={row.original.lateCutoff} timeZone={timeZone} />,
-      meta: { priority: 4 },
-    },
-    {
-      id: 'submissionCount',
-      header: 'Submissions',
-      accessorKey: 'submissionCount',
-      cell: ({ row }) => <div>{row.original.submissionCount ?? 0}</div>,
-      enableSorting: true,
-      meta: { priority: 3 },
-    },
-    {
-      id: 'commentCount',
-      header: 'Comments',
-      accessorKey: 'commentCount',
-      cell: ({ row }) => <div>{row.original.commentCount ?? 0}</div>,
-      enableSorting: true,
+      cell: ({ row }) => (
+        <OverrideAwareCell
+          assignment={row.original}
+          timeZone={timeZone}
+          field="lateCutoff"
+          label="Late Cutoff"
+        />
+      ),
       meta: { priority: 4 },
     },
     {

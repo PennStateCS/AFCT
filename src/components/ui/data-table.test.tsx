@@ -64,6 +64,14 @@ describe('DataTable', () => {
     delete (window as any).matchMedia;
   });
 
+  it('adds gridline classes to the table only when bordered is set', () => {
+    const { rerender } = render(<DataTable columns={columns} data={data} showToolbar={false} />);
+    expect(screen.getByRole('table').className).not.toContain('border-r');
+
+    rerender(<DataTable columns={columns} data={data} showToolbar={false} bordered />);
+    expect(screen.getByRole('table').className).toContain('[&_td:not(:last-child)]:border-r');
+  });
+
   it('applies whitespace-nowrap to a body cell only when the column sets meta.nowrap', () => {
     const cols: ColumnDef<RowData>[] = [
       {

@@ -8,6 +8,13 @@ import { ChevronDown, Pencil, Trash2, FileText, Eye, Download } from 'lucide-rea
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
@@ -45,6 +52,11 @@ export const useProblemColumns = ({
     open: false,
     problem: null,
   });
+  // Separate state for the read-only description modal opened from the title cell.
+  const [descDialog, setDescDialog] = useState<{ open: boolean; problem: Problem | null }>({
+    open: false,
+    problem: null,
+  });
   const epsSymbol = useEmptyStringSymbol(openDialog.problem?.courseId);
 
   const columns: ColumnDef<Problem>[] = [
@@ -54,10 +66,22 @@ export const useProblemColumns = ({
       cell: ({ row }) => {
         const problemWithMeta = row.original as Problem & { usedByAssignment?: boolean };
         return (
-          <div className="flex items-center gap-2">
-            <span>{row.original.title}</span>
-            {problemWithMeta.usedByAssignment ? (
-              <StatusBadge variant="warning">Used</StatusBadge>
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <span>{row.original.title}</span>
+              {problemWithMeta.usedByAssignment ? (
+                <StatusBadge variant="warning">Used</StatusBadge>
+              ) : null}
+            </div>
+            {row.original.description ? (
+              <button
+                type="button"
+                onClick={() => setDescDialog({ open: true, problem: row.original })}
+                className="self-start text-xs text-blue-600 underline hover:text-blue-800"
+                title="View description"
+              >
+                View description
+              </button>
             ) : null}
           </div>
         );
@@ -76,7 +100,7 @@ export const useProblemColumns = ({
     },
     {
       accessorKey: 'originalFileName',
-      header: 'File',
+      header: 'Solution',
       cell: ({ row }) => {
         const file = row.original.originalFileName;
         const fileName = row.original.fileName;
@@ -200,7 +224,7 @@ export const useProblemColumns = ({
     },
   ];
 
-  const viewDialog = (() => {
+  const answerDialog = (() => {
     if (!openDialog.problem) return null;
     switch (openDialog.problem.type) {
       case 'FA':
@@ -245,5 +269,33 @@ export const useProblemColumns = ({
         return null;
     }
   })();
+
+  const descriptionDialog = descDialog.problem ? (
+    <Dialog
+      open={descDialog.open}
+      onOpenChange={(open) => setDescDialog({ open, problem: open ? descDialog.problem : null })}
+    >
+      <DialogContent className="bg-card">
+        <DialogHeader>
+          <DialogTitle>Problem Description</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            {descDialog.problem.title}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm break-words whitespace-pre-wrap">
+          {descDialog.problem.description}
+        </div>
+      </DialogContent>
+    </Dialog>
+  ) : null;
+
+  const viewDialog =
+    answerDialog || descriptionDialog ? (
+      <>
+        {answerDialog}
+        {descriptionDialog}
+      </>
+    ) : null;
+
   return { columns, viewDialog };
 };

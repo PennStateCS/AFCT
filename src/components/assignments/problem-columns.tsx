@@ -55,29 +55,28 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
     {
       accessorKey: 'title',
       header: 'Title',
-      cell: ({ row }: { row: { original: Problem } }) => row.original.title,
-      meta: { priority: 1 },
-      enableSorting: true,
-    },
-    {
-      id: 'description_col',
-      header: 'Description',
+      // The title with a "View description" link underneath. The link opens the
+      // description modal; it's omitted when the problem has no description.
       cell: ({ row }: { row: { original: Problem } }) => {
         const desc = row.original.description;
-        // No description: render nothing so the cell reads as empty.
-        return desc ? (
-          <button
-            type="button"
-            onClick={() => openDescription(desc)}
-            className="text-blue-600 underline hover:text-blue-800"
-            title="View description"
-          >
-            View Description
-          </button>
-        ) : null;
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span>{row.original.title}</span>
+            {desc ? (
+              <button
+                type="button"
+                onClick={() => openDescription(desc)}
+                className="self-start text-xs text-blue-600 underline hover:text-blue-800"
+                title="View description"
+              >
+                View description
+              </button>
+            ) : null}
+          </div>
+        );
       },
-      meta: { priority: 2 },
-      enableSorting: false,
+      meta: { priority: 1 },
+      enableSorting: true,
     },
     {
       accessorKey: 'type',

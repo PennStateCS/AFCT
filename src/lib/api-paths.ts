@@ -28,7 +28,8 @@ export const apiPaths = {
   courseActivity: (id: string, opts?: { limit?: number; offset?: number }) =>
     `/api/courses/${id}/activity${qs({ limit: opts?.limit, offset: opts?.offset })}`,
   courseStudents: (id: string) => `/api/courses/${id}/students`,
-  courseGrades: (id: string) => `/api/courses/${id}/grades`,
+  courseGrades: (id: string, part?: 'structure' | 'values') =>
+    `/api/courses/${id}/grades${part ? `?part=${part}` : ''}`,
   courseGradesExport: (id: string) => `/api/courses/${id}/grades/export`,
   courseStudentGrades: (id: string) => `/api/courses/${id}/student-grades`,
   courseRoster: (id: string) => `/api/courses/${id}/roster`,

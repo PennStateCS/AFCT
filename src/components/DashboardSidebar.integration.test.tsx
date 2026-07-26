@@ -30,7 +30,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('./dialogs/ChangePasswordDialog', () => ({ ChangePasswordDialog: () => null }));
 vi.mock('./dialogs/EditProfileDialog', () => ({ EditProfileDialog: () => null }));
 
-import { SidebarProvider, Sidebar } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, useSidebar } from '@/components/ui/sidebar';
 import { EnhancedSidebarTrigger } from '@/components/ui/EnhancedSidebarTrigger';
 import DashboardSidebarHeader from './DashboardSidebarHeader';
 import DashboardSidebarMenu from './DashboardSidebarMenu';
@@ -118,6 +118,59 @@ describe('dashboard sidebar (real primitives)', () => {
 
     const trigger = screen.getByRole('button', { name: 'Open account menu for Charles Xavier' });
     expect(trigger).toBeInTheDocument();
+  });
+
+  it('starts collapsed to the icon rail on medium-width screens', () => {
+    const original = window.innerWidth;
+    // Between the mobile drawer breakpoint (768) and the auto-expand width (1024).
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 900 });
+    try {
+      renderSidebar();
+      expect(screen.getByRole('button', { name: /sidebar$/i })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: original,
+      });
+    }
+  });
+
+  it('starts expanded on wide screens', () => {
+    // jsdom's default innerWidth (1024) is at the auto-expand width, so the saved
+    // preference (defaultOpen) wins and the sidebar renders expanded.
+    renderSidebar();
+    expect(screen.getByRole('button', { name: /sidebar$/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('does not collapse the desktop state on mobile (the drawer shows full labels)', () => {
+    // A regression guard: auto-collapsing to the icon rail on a narrow screen would
+    // blank the mobile drawer's labels, since the menu renders icon-only when the
+    // state is collapsed. On mobile it must stay expanded.
+    isMobileMock.mockReturnValue(true);
+    const original = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 400 });
+    try {
+      const StateProbe = () => <span data-testid="sidebar-state">{useSidebar().state}</span>;
+      render(
+        <SidebarProvider defaultOpen>
+          <StateProbe />
+        </SidebarProvider>,
+      );
+      expect(screen.getByTestId('sidebar-state')).toHaveTextContent('expanded');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: original,
+      });
+    }
   });
 
   describe('on mobile', () => {

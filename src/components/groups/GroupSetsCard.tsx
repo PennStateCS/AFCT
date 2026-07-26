@@ -120,8 +120,7 @@ export function GroupSetsCard({
             >
               {sets.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.groupCount} group{s.groupCount === 1 ? '' : 's'}, {s.assignedCount}{' '}
-                  assigned)
+                  {s.name}
                 </option>
               ))}
             </select>

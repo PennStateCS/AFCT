@@ -28,6 +28,7 @@ type Row = {
   title: string;
   maxPoints: number;
   grade: number | null;
+  autograded: boolean;
 };
 
 // DataTable stub: render each row's title, and render the real Grade column's
@@ -44,6 +45,7 @@ vi.mock('@/components/ui/data-table', () => ({
     loading?: boolean;
   }) => {
     const gradeColumn = columns.find((c) => c.id === 'Grade');
+    const gradingColumn = columns.find((c) => c.id === 'Grading');
     return (
       <div>
         <div data-testid="table-loading">{String(!!loading)}</div>
@@ -54,6 +56,13 @@ vi.mock('@/components/ui/data-table', () => ({
               <span data-testid={`title-${r.problemId}`}>{r.title}</span>
               <span data-testid={`grade-${r.problemId}`}>
                 {r.grade === null ? 'null' : String(r.grade)}
+              </span>
+              <span data-testid={`grading-${r.problemId}`}>
+                {gradingColumn?.cell
+                  ? (gradingColumn.cell as (ctx: { row: { original: Row } }) => React.ReactNode)({
+                      row: { original: r },
+                    })
+                  : null}
               </span>
               <span data-testid={`gradecell-${r.problemId}`}>
                 {gradeColumn?.cell
@@ -85,8 +94,8 @@ const baseProps = {
 
 const assignmentPayload = {
   problems: [
-    { problem: { id: 'p1', title: 'Problem One' }, maxPoints: 10 },
-    { problem: { id: 'p2', title: 'Problem Two' }, maxPoints: 20 },
+    { problem: { id: 'p1', title: 'Problem One' }, maxPoints: 10, autograderEnabled: true },
+    { problem: { id: 'p2', title: 'Problem Two' }, maxPoints: 20, autograderEnabled: false },
   ],
 };
 
@@ -127,6 +136,29 @@ describe('GradeBreakdownDialog', () => {
     expect(screen.getByTestId('title-p2').textContent).toBe('Problem Two');
     expect(screen.getByTestId('grade-p1').textContent).toBe('7');
     expect(screen.getByTestId('grade-p2').textContent).toBe('null');
+  });
+
+  it('labels each problem as autograded or manually graded', async () => {
+    const fetchMock = vi.fn((url: string): Promise<FetchResult> => {
+      if (url === '/api/courses/c1/assignments/a1') {
+        return Promise.resolve({ ok: true, json: async () => assignmentPayload });
+      }
+      if (url === '/api/courses/c1/assignments/a1/problem-grades/s1') {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<GradeBreakdownDialog {...baseProps} setOpen={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('table-rows').textContent).toBe('2');
+    });
+
+    // p1 is autograded, p2 is manual.
+    expect(screen.getByTestId('grading-p1').textContent).toBe('Autograded');
+    expect(screen.getByTestId('grading-p2').textContent).toBe('Manual');
   });
 
   it('handles a 204 on problem-grades (rows with null grades, no crash)', async () => {

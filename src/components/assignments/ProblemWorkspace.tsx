@@ -327,6 +327,7 @@ export default function ProblemWorkspace({
             <ProblemGradeForm
               value={gradeInput}
               currentGrade={currentGrade}
+              maxPoints={problem.maxPoints}
               disabled={courseIsArchived}
               isSaving={isSavingGrade}
               isLoading={isLoadingGrade}
