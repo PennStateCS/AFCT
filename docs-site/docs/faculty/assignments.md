@@ -83,6 +83,19 @@ When an assignment has date overrides, the **Due Date** cell shows a **Multiple*
 
 Use the **Published** switch to show or hide an assignment. AFCT asks for confirmation before applying the change.
 
+### Duplicate an assignment
+
+**Manage → Duplicate Assignment** opens a short wizard to copy an assignment within the same course:
+
+1. **Details** - the title and description start as the original's; edit them or leave them as is.
+2. **Problems** - choose what happens to the original's problems:
+   - **Don't include problems** - the copy starts empty.
+   - **Link the same problems** - both assignments point at the same problems, so editing a problem (including its solution file) changes it in both.
+   - **Duplicate the problems** - independent copies are made in this course, each with its own solution file, so editing one does not affect the other.
+3. **Review** - a summary before you create it.
+
+The assignment type and all of the Assign To settings (audience, dates, and any date exceptions) are copied from the original and can be changed afterward. The copy is always created **unpublished**, regardless of the original. Submissions and grades are never copied.
+
 Keep these safeguards in mind:
 
 - You cannot unpublish an assignment after it has submissions or grades.

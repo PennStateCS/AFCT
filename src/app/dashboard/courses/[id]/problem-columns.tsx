@@ -4,7 +4,8 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
 import { useState, type JSX } from 'react';
-import { ChevronDown, Pencil, Trash2, FileText, Eye, Download } from 'lucide-react';
+import { ChevronDown, Copy, Pencil, Trash2, FileText, Eye, Download } from 'lucide-react';
+import type { DuplicateSourceProblem } from '@/components/dialogs/DuplicateProblemDialog';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import JffViewerDialog from '@/components/JffViewerDialog';
@@ -41,10 +42,12 @@ export const useProblemColumns = ({
   courseIsArchived,
   onEdit,
   onDelete,
+  onDuplicate,
   timeZone,
 }: {
   onEdit: (p: Problem) => void;
   onDelete: (id: string) => void;
+  onDuplicate?: (p: DuplicateSourceProblem) => void;
   courseIsArchived: boolean;
   timeZone: string;
 }): { columns: ColumnDef<Problem>[]; viewDialog: JSX.Element | null } => {
@@ -199,6 +202,21 @@ export const useProblemColumns = ({
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit Problem
               </DropdownMenuItem>
+              {onDuplicate && !courseIsArchived && (
+                <DropdownMenuItem
+                  onClick={() =>
+                    onDuplicate({
+                      id: row.original.id,
+                      title: row.original.title,
+                      description: row.original.description,
+                    })
+                  }
+                  className="flex items-center gap-2"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Duplicate Problem
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator hidden={courseIsArchived} />
               <DropdownMenuItem
                 onClick={() => {

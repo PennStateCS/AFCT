@@ -50,6 +50,8 @@ export const apiPaths = {
     `/api/courses/${id}/group-sets/${setId}/random-assign`,
   courseProblems: (id: string) => `/api/courses/${id}/problems`,
   courseProblem: (id: string, pid: string) => `/api/courses/${id}/problems/${pid}`,
+  courseProblemDuplicate: (id: string, pid: string) =>
+    `/api/courses/${id}/problems/${pid}/duplicate`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
   courseRosterResetPassword: (id: string, userId: string) =>
     `/api/courses/${id}/roster/${userId}/reset-password`,
@@ -67,6 +69,8 @@ export const apiPaths = {
   // --- Assignments (course-nested under /assignments/[aid]) ----------------
   assignment: (courseId: string, aid: string, opts?: { view?: string }) =>
     `/api/courses/${courseId}/assignments/${aid}${qs({ view: opts?.view })}`,
+  assignmentDuplicate: (courseId: string, aid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/duplicate`,
   assignmentProblems: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/problems`,
   assignmentProblem: (courseId: string, aid: string, pid: string) =>

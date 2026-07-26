@@ -146,6 +146,18 @@ export const ProblemUpdateApiSchema = z.object(problemApiScalars);
 
 export type ProblemCreateApiInput = z.infer<typeof ProblemCreateApiSchema>;
 
+// Duplicate an existing problem. Only the title/description are editable here; the type,
+// state cap, determinism flag, and the solution file are copied from the source and are
+// editable afterward.
+export const ProblemDuplicateApiSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(3, 'Title must be at least 3 characters.')
+    .max(200, 'Title is too long.'),
+  description: z.string().trim().max(20000, 'Description is too long.').nullable().optional(),
+});
+
 /**
  * Per-problem settings sent when associating an existing problem with an
  * assignment (AssociateProblemsDialog). `maxSubmissions === -1` means unlimited;

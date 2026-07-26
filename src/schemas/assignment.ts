@@ -231,6 +231,22 @@ export const AssignmentCreateApiSchema = z.object({
   assignees: z.array(AssigneeApiItem).optional(),
 });
 
+// What to do with the source assignment's problems when duplicating it:
+//   none      - the copy starts with no problems
+//   link      - the copy shares the same Problem records (editing one edits both)
+//   duplicate - independent Problem copies are made (with their own solution files)
+export const AssignmentProblemDuplicateMode = z.enum(['none', 'link', 'duplicate']);
+export type AssignmentProblemDuplicateMode = z.infer<typeof AssignmentProblemDuplicateMode>;
+
+// Duplicate an existing assignment. Only the title/description are editable here; the
+// type (groupSetId), audience, schedule, and date exceptions are copied verbatim from
+// the source (and are editable afterward). The copy is always created unpublished.
+export const AssignmentDuplicateApiSchema = z.object({
+  title: z.string().min(1, 'A title is required.').max(200, 'Title is too long.'),
+  description: z.string().max(20000, 'Description is too long.').nullable().optional(),
+  problemMode: AssignmentProblemDuplicateMode,
+});
+
 export const AssignmentUpdateApiSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
