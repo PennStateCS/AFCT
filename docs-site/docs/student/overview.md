@@ -18,6 +18,8 @@ Students cannot remove themselves from a course. Contact the course staff if you
 
 The dashboard and calendar show published assignments from courses you can access. Unpublished assignments are hidden.
 
+On the calendar, the **Courses** box on the right lists your courses with a checkbox each. They all start checked; uncheck a course to hide its assignments from the calendar and the Upcoming Assignments list, and check it again to bring them back. Your choice is remembered on this device the next time you open the calendar.
+
 Assignment pages show deadlines in your effective timezone. When the course uses a different timezone, AFCT shows the course time as well. This is useful when you travel or take a course hosted in another region.
 
 ## Submit work
