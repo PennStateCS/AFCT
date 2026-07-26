@@ -1372,6 +1372,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/assignments/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an assignment from another course
+         * @description Imports an assignment from ANOTHER course the caller can manage into this course.  Unlike duplicate, audience, group set, and date exceptions are not carried across  (they reference records scoped to the source course); the import always lands as an  unpublished, individual, assigned-to-everyone assignment. The schedule (due date,  available-from, late settings) is copied from the source as a starting point and is  editable afterward.   Problems are handled by `problemMode`:    - none : the imported assignment has no problems.    - copy : each problem is copied into THIS course (a new Problem with its own             solution file); there is no "link" mode because problems are course-scoped.   Permission is tiered: the wrapper gates the destination course (manage), and the  caller must also be able to manage the source course.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/import/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments": {
         parameters: {
             query?: never;
@@ -2226,6 +2248,30 @@ export interface paths {
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/enrollments/route.ts)
          */
         get: operations["getMeEnrollments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/manageable-courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List courses the caller can manage
+         * @description Lists the courses the caller may manage, for the "import assignment" picker: courses  where they are FACULTY or TA, or every course when they are a system admin. Archived  courses are included (you can import from a past term); soft-deleted courses never  appear. Pass `excludeCourseId` to drop the course being imported into (importing from  the same course is what Duplicate already does).
+         *
+         *     **Auth:** requires FACULTY / TA
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/manageable-courses/route.ts)
+         */
+        get: operations["getMeManageableCourses"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6714,6 +6760,74 @@ export interface operations {
             };
         };
     };
+    postCoursesByIdAssignmentsImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Destination course id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sourceCourseId: string;
+                    sourceAssignmentId: string;
+                    title: string;
+                    description?: string | null;
+                    /** @enum {string} */
+                    problemMode: "none" | "copy";
+                };
+            };
+        };
+        responses: {
+            /** @description The newly created (unpublished) assignment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body, or the source is the destination course. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller cannot manage the destination or the source course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Source assignment not found in the source course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getCoursesByIdAssignments: {
         parameters: {
             query?: {
@@ -9730,6 +9844,47 @@ export interface operations {
                 };
             };
             /** @description Query failed. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getMeManageableCourses: {
+        parameters: {
+            query?: {
+                /** @description A course id to omit from the list (typically the import destination). */
+                excludeCourseId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Manageable courses (id, name, code, semester, archived flag), active first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
             500: {
                 headers: {
                     [name: string]: unknown;

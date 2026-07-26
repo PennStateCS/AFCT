@@ -77,7 +77,7 @@ export const GET = withCourseAuth(
       const result = assignments.map(({ problems, ...assignment }) => {
         const maxGrade = problems.reduce((sum, p) => sum + p.maxPoints, 0);
         const totalGrade = problems.reduce((sum, p) => sum + (p.grades[0]?.grade ?? 0), 0);
-        return { ...assignment, totalGrade, maxGrade };
+        return { ...assignment, totalGrade, maxGrade, problemCount: problems.length };
       });
 
       return NextResponse.json(result);

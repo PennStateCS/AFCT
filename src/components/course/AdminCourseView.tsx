@@ -23,6 +23,7 @@ import {
   DuplicateProblemDialog,
   type DuplicateSourceProblem,
 } from '@/components/dialogs/DuplicateProblemDialog';
+import { ImportAssignmentDialog } from '@/components/dialogs/ImportAssignmentDialog';
 import type { FullCourse, TabType } from '@/types/course';
 import type { Problem, Course } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -75,6 +76,9 @@ export function AdminCourseView({
 
   // The assignment being duplicated (opens the wizard); null when closed.
   const [duplicateTarget, setDuplicateTarget] = useState<DuplicateSourceAssignment | null>(null);
+
+  // Whether the "import assignment from another course" wizard is open.
+  const [importAssignmentOpen, setImportAssignmentOpen] = useState(false);
 
   const assignmentColumns = useAssignmentColumns(
     course.isArchived,
@@ -143,6 +147,7 @@ export function AdminCourseView({
               assignments={course.assignments}
               assignmentColumns={assignmentColumns}
               onCreateAssignment={onCreateAssignment}
+              onImportAssignment={() => setImportAssignmentOpen(true)}
               isLoading={isAssignmentsLoading}
             />
           </CourseTabPanel>
@@ -227,6 +232,18 @@ export function AdminCourseView({
       onDuplicated={() => {
         setDuplicateTarget(null);
         // The new (unpublished) assignment now exists; refresh the list to show it.
+        onRefreshCourse();
+      }}
+    />
+
+    <ImportAssignmentDialog
+      open={importAssignmentOpen}
+      setOpen={setImportAssignmentOpen}
+      courseId={course.id}
+      courseIsArchived={course.isArchived}
+      onImported={() => {
+        setImportAssignmentOpen(false);
+        // The imported (unpublished) assignment now exists; refresh the list to show it.
         onRefreshCourse();
       }}
     />

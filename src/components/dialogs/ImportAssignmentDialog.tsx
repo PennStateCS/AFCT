@@ -1,0 +1,405 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import SelectField from '@/components/ui/SelectField';
+import { Stepper } from '@/components/ui/stepper';
+import { showToast } from '@/lib/toast';
+import { apiPaths } from '@/lib/api-paths';
+import { apiClient, ApiError } from '@/lib/api/fetch-client';
+import type { Assignment } from '@prisma/client';
+import type { AssignmentImportProblemMode } from '@/schemas/assignment';
+
+const STEP_TITLES = ['Source', 'Details', 'Problems', 'Review'] as const;
+const LAST_STEP = STEP_TITLES.length - 1;
+
+type ManageableCourse = {
+  id: string;
+  name: string;
+  code: string | null;
+  semester: string | null;
+  isArchived: boolean;
+};
+
+type SourceAssignment = {
+  id: string;
+  title: string;
+  description?: string | null;
+  problemCount?: number;
+};
+
+type Props = {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  courseId: string;
+  courseIsArchived: boolean;
+  onImported?: (created: Assignment) => void;
+};
+
+/** "CS 101 (CMPSC 131) · Spring 2026 · Archived" style label for a source course. */
+function courseLabel(c: ManageableCourse): string {
+  let label = c.name;
+  if (c.code) label += ` (${c.code})`;
+  if (c.semester) label += ` · ${c.semester}`;
+  if (c.isArchived) label += ' · Archived';
+  return label;
+}
+
+/**
+ * Import an assignment from another course the user can manage into this course. Modeled
+ * on the Duplicate Assignment wizard, but the source is a different course: audience,
+ * group set, and date exceptions are not carried across, so the import always lands
+ * unpublished, individual, and assigned to everyone. Problems are either copied into this
+ * course or omitted (there is no "link" option across courses).
+ */
+export function ImportAssignmentDialog({
+  open,
+  setOpen,
+  courseId,
+  courseIsArchived,
+  onImported,
+}: Props) {
+  const [step, setStep] = useState(0);
+
+  const [courses, setCourses] = useState<ManageableCourse[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [sourceCourseId, setSourceCourseId] = useState('');
+
+  const [assignments, setAssignments] = useState<SourceAssignment[]>([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [sourceAssignmentId, setSourceAssignmentId] = useState('');
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [problemMode, setProblemMode] = useState<AssignmentImportProblemMode>('copy');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Reset everything and load the manageable-course list each time the dialog opens.
+  useEffect(() => {
+    if (!open) return;
+    setStep(0);
+    setSourceCourseId('');
+    setAssignments([]);
+    setSourceAssignmentId('');
+    setTitle('');
+    setDescription('');
+    setProblemMode('copy');
+    setSubmitting(false);
+
+    let cancelled = false;
+    setCoursesLoading(true);
+    void (async () => {
+      try {
+        const list = await apiClient.get<ManageableCourse[]>(
+          apiPaths.myManageableCourses({ excludeCourseId: courseId }),
+        );
+        if (!cancelled) setCourses(list);
+      } catch {
+        if (!cancelled) showToast.error('Failed to load courses');
+      } finally {
+        if (!cancelled) setCoursesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, courseId]);
+
+  // When the source course changes, load its assignments (drafts included) and clear the
+  // downstream selection.
+  useEffect(() => {
+    if (!open || !sourceCourseId) return;
+    let cancelled = false;
+    setAssignmentsLoading(true);
+    setAssignments([]);
+    setSourceAssignmentId('');
+    void (async () => {
+      try {
+        const list = await apiClient.get<SourceAssignment[]>(
+          apiPaths.courseAssignments(sourceCourseId, { includeUnpublished: true }),
+        );
+        if (!cancelled) setAssignments(list);
+      } catch {
+        if (!cancelled) showToast.error('Failed to load assignments');
+      } finally {
+        if (!cancelled) setAssignmentsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sourceCourseId]);
+
+  const selected = assignments.find((a) => a.id === sourceAssignmentId) ?? null;
+
+  // Prefill the title/description from the chosen source assignment.
+  useEffect(() => {
+    if (selected) {
+      setTitle(selected.title);
+      setDescription(selected.description ?? '');
+    }
+  }, [selected]);
+
+  const hasProblems = (selected?.problemCount ?? 0) > 0;
+  const titleError = title.trim().length === 0 ? 'A title is required.' : undefined;
+  const sourceComplete = Boolean(sourceCourseId && sourceAssignmentId);
+
+  const next = () => {
+    if (step === 0 && !sourceComplete) return;
+    if (step === 1 && titleError) return;
+    setStep((s) => Math.min(s + 1, LAST_STEP));
+  };
+  const back = () => setStep((s) => Math.max(s - 1, 0));
+
+  const handleImport = async () => {
+    if (!sourceComplete || titleError) return;
+    setSubmitting(true);
+    try {
+      const created = await apiClient.post<Assignment>(apiPaths.assignmentImport(courseId), {
+        sourceCourseId,
+        sourceAssignmentId,
+        title: title.trim(),
+        description: description.trim() ? description.trim() : null,
+        // With no problems there is nothing to copy, so the mode is moot; send 'none'.
+        problemMode: hasProblems ? problemMode : 'none',
+      });
+      showToast.success('Assignment imported');
+      onImported?.(created);
+      setOpen(false);
+    } catch (err) {
+      showToast.error(err instanceof ApiError ? err.message : 'Failed to import assignment');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const sourceCourse = courses.find((c) => c.id === sourceCourseId) ?? null;
+  const problemSummary = !hasProblems
+    ? 'No problems to copy'
+    : problemMode === 'copy'
+      ? 'Copied into this course (independent copies)'
+      : 'Not included';
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="bg-card sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>Import Assignment</DialogTitle>
+          <DialogDescription className="sr-only">
+            Import an assignment from another course you manage: pick the source, edit the details,
+            choose how to handle problems, then review.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Stepper
+          steps={STEP_TITLES as unknown as string[]}
+          current={step}
+          onStepClick={(index) => setStep(index)}
+          className="mb-2"
+        />
+        <div className="sr-only" role="status" aria-live="polite">
+          {`Step ${step + 1} of ${STEP_TITLES.length}: ${STEP_TITLES[step]}`}
+        </div>
+
+        <div className="min-h-[320px] space-y-4">
+          {step === 0 && (
+            <div className="space-y-4">
+              <SelectField
+                label="Course to import from"
+                name="import-source-course"
+                requiredMark
+                value={sourceCourseId || undefined}
+                onValueChange={setSourceCourseId}
+                disabled={coursesLoading}
+                placeholder={coursesLoading ? 'Loading courses…' : 'Select a course'}
+                options={courses.map((c) => ({ value: c.id, label: courseLabel(c) }))}
+              />
+              {!coursesLoading && courses.length === 0 && (
+                <p className="text-muted-foreground text-sm">
+                  You do not manage any other courses to import from.
+                </p>
+              )}
+
+              {sourceCourseId && (
+                <SelectField
+                  label="Assignment to import"
+                  name="import-source-assignment"
+                  requiredMark
+                  value={sourceAssignmentId || undefined}
+                  onValueChange={setSourceAssignmentId}
+                  disabled={assignmentsLoading}
+                  placeholder={assignmentsLoading ? 'Loading assignments…' : 'Select an assignment'}
+                  options={assignments.map((a) => ({
+                    value: a.id,
+                    label: `${a.title}${(a.problemCount ?? 0) > 0 ? ` (${a.problemCount} problem${a.problemCount === 1 ? '' : 's'})` : ''}`,
+                  }))}
+                />
+              )}
+              {sourceCourseId && !assignmentsLoading && assignments.length === 0 && (
+                <p className="text-muted-foreground text-sm">
+                  That course has no assignments to import.
+                </p>
+              )}
+            </div>
+          )}
+
+          {step === 1 && (
+            <>
+              <div>
+                <Label htmlFor="import-title" className="mb-2 block">
+                  Title
+                </Label>
+                <Input
+                  id="import-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  aria-invalid={!!titleError}
+                  aria-describedby={titleError ? 'import-title-error' : undefined}
+                  placeholder="Assignment title"
+                />
+                {titleError && (
+                  <p id="import-title-error" className="mt-1 text-xs text-red-600" role="alert">
+                    {titleError}
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="import-description" className="mb-2 block">
+                  Description
+                </Label>
+                <Textarea
+                  id="import-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Enter assignment description"
+                  className="min-h-[120px]"
+                />
+              </div>
+              <p className="text-muted-foreground text-xs">
+                The title and description start as the source assignment&apos;s. The imported copy
+                is assigned to <strong>all students</strong> and created as an individual assignment;
+                you can change the audience and type after it is created.
+              </p>
+            </>
+          )}
+
+          {step === 2 && (
+            <fieldset className="space-y-3">
+              <legend className="text-sm font-medium">Problems</legend>
+              {!hasProblems ? (
+                <p className="text-muted-foreground text-sm">
+                  This assignment has no problems, so there is nothing to copy. The import will start
+                  empty.
+                </p>
+              ) : (
+                <div className="grid gap-3">
+                  {[
+                    {
+                      value: 'copy' as const,
+                      label: 'Copy the problems into this course',
+                      desc: 'Each problem is copied into this course, with its own solution file. The originals in the other course are not affected.',
+                    },
+                    {
+                      value: 'none' as const,
+                      label: "Don't include problems",
+                      desc: 'The imported assignment starts with no problems. You can add problems to it afterward.',
+                    },
+                  ].map((opt) => {
+                    const isSelected = problemMode === opt.value;
+                    return (
+                      <label
+                        key={opt.value}
+                        className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
+                          isSelected
+                            ? 'border-primary bg-primary/5 ring-primary/30 ring-1'
+                            : 'hover:bg-muted/40'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="importProblemMode"
+                          className="accent-primary mt-1"
+                          checked={isSelected}
+                          onChange={() => setProblemMode(opt.value)}
+                        />
+                        <span>
+                          <span className="block text-sm font-medium">{opt.label}</span>
+                          <span className="text-muted-foreground block text-xs">{opt.desc}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </fieldset>
+          )}
+
+          {step === LAST_STEP && (
+            <div className="space-y-3">
+              <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words">
+                <dt className="text-muted-foreground">From course</dt>
+                <dd className="font-medium">{sourceCourse ? courseLabel(sourceCourse) : '—'}</dd>
+                <dt className="text-muted-foreground">Assignment</dt>
+                <dd>{selected?.title ?? '—'}</dd>
+                <dt className="text-muted-foreground">Title</dt>
+                <dd className="font-medium">{title.trim() || '(untitled)'}</dd>
+                <dt className="text-muted-foreground">Assign To</dt>
+                <dd>All students</dd>
+                <dt className="text-muted-foreground">Problems</dt>
+                <dd>{problemSummary}</dd>
+              </dl>
+              <p className="text-muted-foreground text-xs">
+                The assignment is imported <strong>unpublished</strong> and assigned to everyone.
+                Its schedule (due date, available-from, and late settings) is copied from the source
+                and may be from another term, so review the dates before publishing. Submissions and
+                grades are not imported.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="ghost">
+              Cancel
+            </Button>
+          </DialogClose>
+          {step > 0 && (
+            <Button type="button" variant="secondary" onClick={back}>
+              Back
+            </Button>
+          )}
+          {step < LAST_STEP ? (
+            <Button
+              type="button"
+              onClick={next}
+              disabled={(step === 0 && !sourceComplete) || (step === 1 && !!titleError)}
+            >
+              Next
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={handleImport}
+              disabled={submitting || courseIsArchived || !sourceComplete || !!titleError}
+            >
+              {submitting ? 'Importing…' : 'Import Assignment'}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
