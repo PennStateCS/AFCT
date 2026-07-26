@@ -45,20 +45,56 @@ docker_normalize_name() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g; s/^[^a-z0-9]*//'
 }
 
-# The project name inferred from an existing AFCT volume, or nothing. A live volume named
-# "<project>_<shortname>" is proof of the project the data belongs to, so this is the most
-# reliable source. Never prompts and never fails the caller.
+# A valid Docker Compose project name: lowercase alphanumerics, dashes, and underscores,
+# starting with an alphanumeric. Reject anything else before persisting it.
+valid_compose_project_name() {
+  case "$1" in
+    ''|*[!a-z0-9_-]*) return 1 ;;
+    [!a-z0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# The Compose project name recorded on the RUNNING app container, or nothing. This is the
+# strongest source of truth: it is exactly the project Docker will recreate into, so it
+# cannot disagree with reality the way an inferred name can. Never prompts, never fails.
+project_name_from_container_label() {
+  resolve_docker_access_soft || return 0
+  [ -n "$COMPOSE_KIND" ] || return 0
+  _cid=${AFCT_APP_CONTAINER:-afct-app}
+  docker_cmd inspect "$_cid" \
+    --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true
+}
+
+# The project name inferred from the EXISTING AFCT data volumes, or nothing. A candidate is
+# accepted only when the COMPLETE expected volume set exists for it (<project>_<vol> for
+# every Compose volume), so a single incidental suffix match on one unrelated volume can
+# never select the wrong project. Never prompts and never fails the caller.
 detect_project_name_from_volumes() {
   resolve_docker_access_soft || return 0
   [ -n "$COMPOSE_KIND" ] || return 0
   [ -f "$COMPOSE_FILE" ] || return 0
-  _short=$(compose_raw -f "$COMPOSE_FILE" config --volumes 2>/dev/null | sed -n '1p')
-  [ -n "$_short" ] || return 0
-  docker_cmd volume ls --format '{{.Name}}' 2>/dev/null | awk -v suf="_$_short" '
-    {
-      n = length($0); m = length(suf)
-      if (n > m && substr($0, n - m + 1) == suf) { print substr($0, 1, n - m); exit }
-    }'
+  _vols=$(compose_raw -f "$COMPOSE_FILE" config --volumes 2>/dev/null)
+  [ -n "$_vols" ] || return 0
+  _all=$(docker_cmd volume ls --format '{{.Name}}' 2>/dev/null)
+  [ -n "$_all" ] || return 0
+
+  # Candidate project prefixes: every docker volume whose name ends in "_<first-vol>".
+  _first=$(printf '%s\n' "$_vols" | sed -n '1p')
+  [ -n "$_first" ] || return 0
+  printf '%s\n' "$_all" | awk -v suf="_$_first" '
+    { n = length($0); m = length(suf); if (n > m && substr($0, n - m + 1) == suf) print substr($0, 1, n - m) }' |
+  while IFS= read -r _cand; do
+    [ -n "$_cand" ] || continue
+    _complete=1
+    for _v in $_vols; do
+      printf '%s\n' "$_all" | grep -qx "${_cand}_${_v}" || { _complete=0; break; }
+    done
+    if [ "$_complete" = "1" ]; then
+      printf '%s' "$_cand"
+      break
+    fi
+  done
 }
 
 # The legacy flat deploy directory to migrate from, or nothing. AFCT_LEGACY_DIR wins (for
@@ -77,25 +113,47 @@ legacy_source_dir() {
   return 0
 }
 
-# Resolve the Compose project name once and persist it. Order: already-persisted, then
-# inferred from existing volumes, then the legacy directory basename, then "afct".
+# Resolve the Compose project name once and persist it. Resolution order, strongest first:
+#   1. the running app container's Compose project label (exactly where Docker recreates)
+#   2. the already-persisted deployment state
+#   3. an exact match against the COMPLETE existing AFCT volume set
+#   4. the legacy deployment directory basename (normalized)
+#   5. the default "afct"
+# The chosen name is validated against Compose's project-name rules, then persisted. During
+# install/migration a persist failure is FATAL: the project name is what keeps the existing
+# data volumes attached, so silently continuing could orphan them.
 resolve_and_persist_project_name() {
-  _existing=$(state_get PROJECT_NAME)
-  if [ -n "$_existing" ]; then
-    COMPOSE_PROJECT_NAME=$_existing
-    return 0
-  fi
+  _name=$(project_name_from_container_label)
+  _name=$(printf '%s' "$_name" | tr -d ' \011\012')
 
-  _name=$(detect_project_name_from_volumes)
+  [ -n "$_name" ] || _name=$(state_get PROJECT_NAME)
+  [ -n "$_name" ] || _name=$(detect_project_name_from_volumes)
   if [ -z "$_name" ]; then
     _src=$(legacy_source_dir)
     [ -n "$_src" ] && _name=$(docker_normalize_name "$(basename "$_src")")
   fi
   [ -n "$_name" ] || _name="afct"
 
+  valid_compose_project_name "$_name" || \
+    die "resolved an invalid Docker Compose project name '${_name}'. Set AFCT_LEGACY_DIR or reinstall to correct it."
+
   COMPOSE_PROJECT_NAME=$_name
-  state_set PROJECT_NAME "$_name" || true
+  state_set PROJECT_NAME "$_name" || \
+    die "could not persist the Docker Compose project name to ${SHARED_DIR}. Refusing to continue: this value keeps the existing data volumes attached."
   info "using Docker Compose project name '${_name}' (keeps existing data volumes attached)."
+}
+
+# Migrate a legacy flat installation without deploying: preserve the previous service-account
+# mode (before creating any account), move the configuration/backups/log/marker into the
+# shared directory, and pin the Compose project name. Idempotent and safe to re-run; run by
+# the compatibility shim before it forwards the user's original command.
+do_migrate_legacy() {
+  preserve_or_setup_service_account
+  migrate_legacy_install
+  # Ensure the project name is resolved and persisted even when there was nothing to move
+  # (a genuinely fresh system): later commands then reuse it.
+  resolve_and_persist_project_name
+  success "Legacy migration complete."
 }
 
 # Move a legacy flat install's persistent files into the shared directory, preserving

@@ -181,58 +181,97 @@ do_disable_updater() {
 # --------------------------------------------------------------------------- #
 # Deployment-tool self-update (whole verified bundle)
 # --------------------------------------------------------------------------- #
-# The URL of the newest deployment bootstrap. A fork/mirror overrides it; otherwise it is
-# the install.sh asset on the latest GitHub release.
-bootstrap_url() {
-  printf '%s' "${AFCT_BOOTSTRAP_URL:-https://github.com/${REPO}/releases/latest/download/install.sh}"
-}
-
-# Update the deployment tooling to the newest published bundle. The heavy lifting
-# (download, checksum verify, path-traversal inspection, staged extract, atomic release
-# switch, lightweight validation, rollback, retention) is done by the NEWEST bootstrap in
-# switch-only mode, so there is exactly one verified-install implementation to trust.
+# Update the deployment tooling to the newest published bundle named by the deployment
+# manifest. Unlike the fresh-install path, an installed system must NOT execute a freshly
+# downloaded bootstrap as root: instead this TRUSTED, already-installed afctctl resolves
+# the bundle from the validated manifest, downloads it, verifies its SHA-256 itself, and
+# then hands the verified LOCAL archive to the already-installed (trusted) bootstrap in
+# switch-only mode, which re-verifies, inspects the archive for unsafe paths, extracts,
+# validates, switches atomically, keeps the previous release, and rolls back on failure.
 do_self_update() {
   acquire_lock
   info "updating the AFCT deployment tooling..."
 
-  _boot=$(mktemp "${TMPDIR:-/tmp}/afct-bootstrap.XXXXXX") || die "could not create a temporary file."
-  if ! fetch_url "$(bootstrap_url)" "$_boot" || [ ! -s "$_boot" ]; then
-    rm -f "$_boot"
-    die "could not download the deployment bootstrap. Check network access to the release assets."
+  _mf=$(mktemp "${TMPDIR:-/tmp}/afct-manifest.XXXXXX") || die "could not create a temporary file."
+  if ! fetch_deployment_manifest "$_mf"; then
+    rm -f "$_mf"
+    die "could not fetch or validate the deployment manifest. Check network access to the release assets."
   fi
-  if ! sh -n "$_boot" 2>/dev/null; then
-    rm -f "$_boot"
-    die "the downloaded deployment bootstrap is invalid; keeping the current tooling."
+  _new_ver=$(manifest_field deploymentToolVersion "$_mf")
+  _bundle=$(manifest_field bundle "$_mf")
+  _sha=$(manifest_field sha256 "$_mf")
+  rm -f "$_mf"
+
+  if ! version_gt "$_new_ver" "$INSTALLER_VERSION"; then
+    success "The deployment tooling is already up to date (${INSTALLER_VERSION})."
+    return 0
   fi
 
-  # Switch-only: verify + extract + atomically switch the active release + validate +
-  # keep the previous release for rollback. It does NOT run `afctctl install`.
-  if AFCT_SWITCH_ONLY=1 AFCT_PREFIX="$PREFIX" sh "$_boot"; then
-    rm -f "$_boot"
-    success "The AFCT deployment tooling was updated."
+  _dir=$(mktemp -d "${TMPDIR:-/tmp}/afct-selfupdate.XXXXXX") || die "could not create a temporary directory."
+  _arch="${_dir}/${_bundle}"
+  info "downloading deployment tooling ${_new_ver} (${_bundle})..."
+  if ! fetch_url "$(deployment_asset_base)/${_bundle}" "$_arch" || [ ! -s "$_arch" ]; then
+    rm -rf "$_dir"
+    die "could not download the deployment bundle ${_bundle}."
+  fi
+  # Verify the manifest's checksum against the downloaded bytes BEFORE trusting them.
+  _actual=$(sha_of "$_arch")
+  if [ "$_actual" != "$_sha" ]; then
+    rm -rf "$_dir"
+    die "deployment bundle checksum mismatch (expected ${_sha}, got ${_actual}); refusing to self-update."
+  fi
+  printf '%s  %s\n' "$_sha" "$_bundle" > "${_arch}.sha256"
+
+  # The installed bootstrap was verified when it was installed; run THAT one (never a
+  # freshly downloaded bootstrap) in switch-only mode against the verified local archive.
+  _boot="${RELEASE_DIR}/install.sh"
+  [ -f "$_boot" ] || { rm -rf "$_dir"; die "the installed bootstrap is missing; cannot self-update safely."; }
+
+  if AFCT_SWITCH_ONLY=1 AFCT_PREFIX="$PREFIX" AFCT_BUNDLE_FILE="$_arch" sh "$_boot"; then
+    rm -rf "$_dir"
+    success "The AFCT deployment tooling was updated to ${_new_ver}."
     info "Your .env.production and data volumes were not touched."
     info "Apply any new application image or compose changes with: afctctl update"
     return 0
   fi
 
-  rm -f "$_boot"
+  rm -rf "$_dir"
   die "the deployment-tool self-update failed; the previous tooling is still active."
 }
 
+# Reconstruct the user's original command as a newline-separated argument list (the command
+# followed by each flag it was invoked with), so a self-update re-exec preserves the full
+# intent, not just the command name. Eval-free and POSIX. Kept as its own function so the
+# reconstruction is directly testable and cannot drift from what the re-exec uses.
+reexec_argv() {
+  printf '%s\n' "$MODE"
+  [ "$ASSUME_YES" = "true" ] && printf '%s\n' "--yes"
+  [ "$NON_INTERACTIVE" = "true" ] && printf '%s\n' "--non-interactive"
+  [ "$FORCE_RECONFIGURE" = "true" ] && printf '%s\n' "--reconfigure"
+  [ "$WITH_UPDATER" = "true" ] && printf '%s\n' "--with-updater"
+  [ "$COLOR_FORCED_OFF" = "true" ] && printf '%s\n' "--no-color"
+  case "$SERVICE_USER_CHOICE" in
+    --no-service-user) printf '%s\n' "--no-service-user" ;;
+    --service-user=*) printf '%s\n' "$SERVICE_USER_CHOICE" ;;
+  esac
+  return 0
+}
+
 # Before a mutating run, offer to update the deployment tooling when a newer bundle is
-# published. Skips when re-executed (AFCT_INSTALLER_SELF_CHECKED), offline, or already up
-# to date. Non-interactive: only notes the newer version (auto-update needs -y).
+# published (learned from the validated deployment manifest, not by parsing shell source).
+# Skips when re-executed (AFCT_INSTALLER_SELF_CHECKED), offline, or already up to date.
+# Non-interactive without -y: only notes the newer version.
 check_deploy_tool_update() {
   [ "${AFCT_INSTALLER_SELF_CHECKED:-}" = "1" ] && return 0
   command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || return 0
 
-  _rf=$(mktemp "${TMPDIR:-/tmp}/afct-bootstrap-check.XXXXXX" 2>/dev/null) || return 0
-  if ! fetch_url "$(bootstrap_url)" "$_rf" 2>/dev/null || [ ! -s "$_rf" ]; then
-    rm -f "$_rf"
+  _mf=$(mktemp "${TMPDIR:-/tmp}/afct-manifest-check.XXXXXX" 2>/dev/null) || return 0
+  if ! fetch_deployment_manifest "$_mf"; then
+    rm -f "$_mf"
     return 0
   fi
-  _remote_ver=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$_rf" | head -n 1)
-  rm -f "$_rf"
+  _remote_ver=$(manifest_field deploymentToolVersion "$_mf")
+  rm -f "$_mf"
   [ -n "$_remote_ver" ] || return 0
   # Only when strictly newer, so a stale/rolled-back remote can't trigger a downgrade.
   version_gt "$_remote_ver" "$INSTALLER_VERSION" || return 0
@@ -256,10 +295,19 @@ check_deploy_tool_update() {
       # do_self_update took the lock; release it before re-exec so the fresh run can
       # acquire it (exec keeps this PID, so a held lock looks like a concurrent op).
       release_lock
-      info "re-running with the updated deployment tool ..."
-      # The guard stops the fresh tooling from checking again in a loop. The active
-      # release now points at the new bundle, so run its afctctl.
-      AFCT_INSTALLER_SELF_CHECKED=1 exec "${PREFIX}/current/bin/afctctl" "$MODE"
+      info "re-running the updated deployment tool with your original options ..."
+      # Rebuild and preserve the FULL original command (every flag, not just the command
+      # name), then exec the now-active new afctctl. The guard stops it re-checking in a
+      # loop. Splitting reexec_argv on newlines is safe (our flags contain none) and eval
+      # free; we exec immediately after.
+      set --
+      _old_ifs=$IFS
+      IFS='
+'
+      # shellcheck disable=SC2013  # deliberate newline-split of the argv list
+      for _a in $(reexec_argv); do set -- "$@" "$_a"; done
+      IFS=$_old_ifs
+      AFCT_INSTALLER_SELF_CHECKED=1 exec "${PREFIX}/current/bin/afctctl" "$@"
       ;;
     *) return 0 ;;
   esac

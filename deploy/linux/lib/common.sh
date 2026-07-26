@@ -118,6 +118,18 @@ canonical_path() {
   fi
 }
 
+# SHA-256 of a file (first field only), or nothing if the file is absent or no tool is
+# available. Used to tell an afctctl-written runtime Compose file from an updater-edited
+# one, so a tooling refresh never clobbers an applied stack-layout change.
+sha_of() {
+  [ -f "$1" ] || return 0
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" 2>/dev/null | awk '{ print $1; exit }'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" 2>/dev/null | awk '{ print $1; exit }'
+  fi
+}
+
 # True when dotted-numeric version $1 is strictly newer than $2 (field by field, so
 # 2.1.10 > 2.1.9). If either version isn't purely digits-and-dots, fall back to a plain
 # inequality so an unusual scheme still offers an update rather than getting stuck.

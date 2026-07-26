@@ -40,13 +40,55 @@ updater_profile_args() {
   return 0
 }
 
-# Run compose against the versioned file + shared env with the pinned project name.
+# Seed or refresh the mutable runtime Compose file from the active release. The runtime
+# file is the single stack definition afctctl and the updater both drive, so release
+# directories are never modified after install. Skipped when AFCT_COMPOSE_FILE overrides
+# the location (tests and bespoke deployments manage their own file).
+_write_runtime_compose() {
+  _src=$1
+  _rt_dir=$(dirname "$COMPOSE_FILE")
+  mkdir -p "$_rt_dir" 2>/dev/null || die "could not create the runtime Compose directory ${_rt_dir}."
+  _tmp=$(mktemp "${COMPOSE_FILE}.XXXXXX" 2>/dev/null) || die "could not stage the runtime Compose file."
+  cp "$_src" "$_tmp" || { rm -f "$_tmp"; die "could not stage the runtime Compose file."; }
+  chmod 644 "$_tmp" 2>/dev/null || true
+  mv "$_tmp" "$COMPOSE_FILE" || { rm -f "$_tmp"; die "could not install the runtime Compose file."; }
+  own_deploy_path "$COMPOSE_FILE"
+  state_set RUNTIME_COMPOSE_SHA "$(sha_of "$COMPOSE_FILE")" || true
+}
+
+ensure_runtime_compose() {
+  [ -z "${AFCT_COMPOSE_FILE:-}" ] || return 0
+  [ -f "$RELEASE_COMPOSE_FILE" ] || return 0
+  if [ ! -f "$COMPOSE_FILE" ]; then
+    _write_runtime_compose "$RELEASE_COMPOSE_FILE"
+    return 0
+  fi
+  # Refresh only when afctctl last wrote it (recorded SHA still matches, so the updater
+  # has not diverged it) and the active release ships a different Compose. This lets a
+  # tooling update deliver a Compose fix without overwriting an updater-applied layout.
+  _cur=$(sha_of "$COMPOSE_FILE")
+  _rec=$(state_get RUNTIME_COMPOSE_SHA)
+  if [ -n "$_rec" ] && [ "$_cur" = "$_rec" ] && ! cmp -s "$RELEASE_COMPOSE_FILE" "$COMPOSE_FILE"; then
+    info "refreshing the runtime Compose file from the active release."
+    _write_runtime_compose "$RELEASE_COMPOSE_FILE"
+  fi
+}
+
+# Run compose against the runtime file + shared env with the pinned project name. Exports
+# the runtime path variables the Compose file interpolates (the per-service env_file and
+# the updater's scoped bind mounts) so they resolve to the shared/runtime locations rather
+# than the co-located defaults the Windows installer relies on.
 # Uses the production env file explicitly and prevents exported managed variables in the
 # invoking shell from unexpectedly overriding the saved installation config.
 compose_project() {
   (
     unset NODE_ENV POSTGRES_PASSWORD DATABASE_URL ADMIN_EMAIL ADMIN_PASSWORD \
       NEXTAUTH_SECRET NEXTAUTH_URL AUTH_TRUST_HOST
+
+    AFCT_RUNTIME_ENV_FILE="$ENV_FILE"
+    AFCT_RUNTIME_COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
+    AFCT_RUNTIME_SHARED_DIR=$(dirname "$ENV_FILE")
+    export AFCT_RUNTIME_ENV_FILE AFCT_RUNTIME_COMPOSE_DIR AFCT_RUNTIME_SHARED_DIR
 
     # Unquoted on purpose: expands to `--profile updater` or to nothing.
     _profile=$(updater_profile_args)

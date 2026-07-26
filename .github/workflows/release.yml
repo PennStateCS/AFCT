@@ -197,20 +197,52 @@ jobs:
           fi
 
       # Build the versioned Linux deployment bundle from a single source (deploy/linux/*
-      # plus the shared deploy/docker-compose.yml and deploy/.env.production.example) and
-      # attach it, its checksum, and the bootstrap installer as release assets. The
-      # deployment-tool version (in bin/afctctl) is independent of this app tag; the
-      # bootstrap and afctctl resolve the newest bundle from these assets.
-      - name: Build and attach the Linux deployment bundle
+      # plus the shared deploy/docker-compose.yml and deploy/.env.production.example),
+      # VERIFY it end to end, then attach the bundle, its checksum, the deployment manifest,
+      # and the bootstrap installer as release assets. The deployment-tool version (in
+      # bin/afctctl and the manifest) is independent of this app tag; the bootstrap and
+      # afctctl resolve the newest bundle from the manifest and these assets.
+      - name: Build, verify, and attach the Linux deployment bundle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           set -eu
           sh deploy/linux/build-bundle.sh deploy/dist
+
+          TARBALL=$(ls deploy/dist/afct-linux-deploy-*.tar.gz)
+          MANIFEST=deploy/dist/deployment-manifest.json
+          BASENAME=$(basename "$TARBALL")
+
+          # 1) The checksum file matches the bytes.
+          ( cd deploy/dist && sha256sum -c "${BASENAME}.sha256" )
+
+          # 2) Extract the archive and run sh -n + shellcheck over every bundled shell file.
+          WORK=$(mktemp -d)
+          tar -xzf "$TARBALL" -C "$WORK"
+          ROOT=$(dirname "$(find "$WORK" -name afctctl -path '*/bin/*' | head -n1)")/..
+          sh -n "$ROOT/install.sh"
+          sh -n "$ROOT/bin/afctctl"
+          for f in "$ROOT"/lib/*.sh; do sh -n "$f"; done
+          ( cd "$ROOT" && shellcheck -s sh install.sh bin/afctctl lib/*.sh )
+
+          # 3) The manifest references the exact uploaded filename and digest, and its
+          #    deployment-tool version matches afctctl's INSTALLER_VERSION.
+          MVER=$(jq -r .deploymentToolVersion "$MANIFEST")
+          MBUNDLE=$(jq -r .bundle "$MANIFEST")
+          MSHA=$(jq -r .sha256 "$MANIFEST")
+          AVER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$ROOT/bin/afctctl" | head -n1)
+          ASHA=$(awk '{print $1; exit}' "${TARBALL}.sha256")
+          [ "$MBUNDLE" = "$BASENAME" ] || { echo "manifest bundle ($MBUNDLE) != $BASENAME"; exit 1; }
+          [ "$MSHA" = "$ASHA" ] || { echo "manifest sha256 mismatch"; exit 1; }
+          [ "$MVER" = "$AVER" ] || { echo "manifest version ($MVER) != afctctl INSTALLER_VERSION ($AVER)"; exit 1; }
+
+          # 4) A real docker compose config against the split release/shared layout.
+          sh deploy/test/compose-config.sh
+
+          # All checks passed: publish the assets.
           gh release upload "$TAG" \
-            deploy/dist/afct-linux-deploy-*.tar.gz \
-            deploy/dist/afct-linux-deploy-*.tar.gz.sha256 \
+            "$TARBALL" "${TARBALL}.sha256" "$MANIFEST" \
             --clobber
           # The bootstrap is served as `install.sh` so
           # releases/latest/download/install.sh resolves for new installs and self-update.

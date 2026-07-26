@@ -55,7 +55,13 @@ STATE_DIR="$SHARED_DIR"
 INSTALLER_VERSION="2.2.0"
 REPO=${AFCT_REPO:-PennStateCS/AFCT}
 
-COMPOSE_FILE=${AFCT_COMPOSE_FILE:-${RELEASE_DIR}/docker-compose.yml}
+# The stack is defined by a MUTABLE runtime Compose file under the shared directory, not
+# the immutable versioned release. afctctl seeds it from the active release's bundled
+# Compose (RELEASE_COMPOSE_FILE) and the updater may atomically replace it for a release
+# that changes the stack layout, so release directories stay read-only after install.
+RELEASE_COMPOSE_FILE="${RELEASE_DIR}/docker-compose.yml"
+RUNTIME_DIR="${SHARED_DIR}/runtime"
+COMPOSE_FILE=${AFCT_COMPOSE_FILE:-${RUNTIME_DIR}/docker-compose.yml}
 ENV_FILE=${AFCT_ENV_FILE:-${SHARED_DIR}/.env.production}
 ENV_EXAMPLE=${AFCT_ENV_EXAMPLE:-${RELEASE_DIR}/.env.production.example}
 LOG_FILE=${AFCT_LOG_FILE:-${SHARED_DIR}/install.log}
@@ -87,6 +93,9 @@ MODE_SET="false"
 # help, but `afctctl --non-interactive` (options, no command) means install, matching the
 # original installer where `install.sh [flags]` was a guided install.
 ARGC=$#
+# The user's explicit service-account choice, captured verbatim so a self-update re-exec
+# can replay the original intent (SERVICE_USER itself gets mutated by marker detection).
+SERVICE_USER_CHOICE=""
 ASSUME_YES="false"
 NON_INTERACTIVE="false"
 FORCE_RECONFIGURE="false"
@@ -118,7 +127,7 @@ DIAG_WORK=""
 # Load the library modules (functions only; no side effects on source).
 # --------------------------------------------------------------------------- #
 for _mod in output common validation prompts environment docker compose \
-            service-user migration deployment update diagnostics doctor; do
+            service-user migration manifest deployment update diagnostics doctor; do
   # shellcheck source=/dev/null
   . "${LIB_DIR}/${_mod}.sh"
 done
@@ -146,6 +155,9 @@ Commands:
   disable-updater Stop and remove the updater sidecar.
   doctor          Run a comprehensive, read-only system check.
   recover         Restore the newest protected .env.production backup.
+  migrate-legacy  Migrate a legacy flat install (config, backups, service account, and
+                  Compose project name) into the shared directory. Run by the compatibility
+                  shim; idempotent and safe to re-run. Does not deploy or rotate secrets.
   diagnostics     Create a support archive with known secrets redacted.
   version         Show deployment-tool and deployed application version information.
   help            Show this help.
@@ -208,6 +220,7 @@ while [ "$#" -gt 0 ]; do
     disable-updater|--disable-updater) set_mode "disable-updater" ;;
     doctor|--doctor) set_mode "doctor" ;;
     recover|--recover) set_mode "recover" ;;
+    migrate-legacy|--migrate-legacy) set_mode "migrate-legacy" ;;
     diagnostics|--diagnostics) set_mode "diagnostics" ;;
     version|--version) set_mode "version" ;;
     help|-h|--help) set_mode "help" ;;
@@ -215,13 +228,13 @@ while [ "$#" -gt 0 ]; do
     --non-interactive|--noninteractive) NON_INTERACTIVE="true" ;;
     --reconfigure) FORCE_RECONFIGURE="true" ;;
     --with-updater) WITH_UPDATER="true" ;;
-    --no-service-user) SERVICE_USER="" ;;
+    --no-service-user) SERVICE_USER=""; SERVICE_USER_CHOICE="--no-service-user" ;;
     --service-user)
       shift
       [ "$#" -gt 0 ] || { printf '[afct] ERROR: --service-user needs a username.\n' >&2; exit 2; }
-      SERVICE_USER="$1"
+      SERVICE_USER="$1"; SERVICE_USER_CHOICE="--service-user=$1"
       ;;
-    --service-user=*) SERVICE_USER="${1#--service-user=}" ;;
+    --service-user=*) SERVICE_USER="${1#--service-user=}"; SERVICE_USER_CHOICE="--service-user=${1#--service-user=}" ;;
     --no-color) COLOR_FORCED_OFF="true" ;;
     --)
       shift
@@ -263,11 +276,20 @@ activate_service_mode_from_marker
 _persisted_project=$(state_get PROJECT_NAME 2>/dev/null || true)
 [ -n "$_persisted_project" ] && COMPOSE_PROJECT_NAME=$_persisted_project
 
+# Seed (or refresh) the mutable runtime Compose file from the active release before any
+# command that reads or drives Compose. Read-only/among-tooling commands skip it.
+case "$MODE" in
+  install|status|logs|update|restart|stop|enable-updater|disable-updater|doctor|recover|migrate-legacy)
+    ensure_runtime_compose
+    ;;
+esac
+
 case "$MODE" in
   help) usage ;;
   version) show_deployed_versions ;;
   doctor) do_doctor ;;
   recover) init_log; do_recover ;;
+  migrate-legacy) init_log; do_migrate_legacy ;;
   diagnostics) LOG_ENABLED="false"; collect_diagnostics "manual" ;;
   status) show_status ;;
   logs) show_logs ;;

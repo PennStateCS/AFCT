@@ -90,10 +90,9 @@ EOF
 
 @test "update notes a newer deployment tool and continues (non-interactive)" {
   write_complete_env
-  # The published bootstrap advertises a newer deployment-tool version than this one.
-  export MOCK_CURL_BODY='#!/bin/sh
-INSTALLER_VERSION="9999.0.0"
-'
+  # The deployment manifest advertises a newer deployment-tool version than this one. The
+  # mock curl serves MOCK_CURL_BODY for the manifest URL (not versions.json/compose).
+  export MOCK_CURL_BODY='{"schema":"afct-deployment-manifest/v1","deploymentToolVersion":"9999.0.0","bundle":"afct-linux-deploy-9999.0.0.tar.gz","sha256":"0000000000000000000000000000000000000000000000000000000000000000","bootstrap":"install.sh"}'
   run sh install.sh update --non-interactive
   [ "$status" -eq 0 ]
   [[ "$output" == *"newer deployment tool (9999.0.0)"* ]]

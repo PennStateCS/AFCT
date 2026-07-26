@@ -330,14 +330,12 @@ print_completion() {
 
 do_install() {
   DIAG_ON_EXIT="false"
-  # Fresh root install: set up the service account. No relocation/re-exec: the bootstrap
-  # already installed under /opt/afct. Skipped when a config already exists or already in
-  # service mode.
-  if [ "$SERVICE_MODE" != "true" ] && [ ! -f "$ENV_FILE" ]; then
-    maybe_setup_service_user
-  fi
+  # Decide the service-account mode BEFORE creating any account, preserving a legacy
+  # install's mode (dedicated/custom/current-user) rather than silently converting it. No
+  # relocation/re-exec: the bootstrap already installed under /opt/afct.
+  preserve_or_setup_service_account
   # Bring a legacy flat install's config into the shared directory and pin the project
-  # name from the existing data volumes so nothing is orphaned.
+  # name from the running container / existing data volumes so nothing is orphaned.
   migrate_legacy_install
   acquire_lock
   preflight

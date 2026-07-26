@@ -83,6 +83,59 @@ activate_service_mode_from_marker() {
   SERVICE_MODE="true"
 }
 
+# Decide the service-account mode for an install/migration, preserving what a legacy
+# installation used instead of silently converting it. Order of precedence:
+#   1. An explicit command-line choice (--service-user NAME / --no-service-user) always wins.
+#   2. A legacy install WITH a service-account marker: preserve that exact account (and warn
+#      if the named account no longer exists, falling back to current-user mode).
+#   3. A legacy install with NO marker: it ran as the invoking user, so keep current-user mode.
+#   4. A genuinely fresh install: offer/create the default dedicated account as before.
+# This runs BEFORE any account is created, so a legacy custom or current-user install is
+# never quietly turned into the default 'afct' account.
+preserve_or_setup_service_account() {
+  # Already service-managed (marker activated at startup), or a completed install exists:
+  # nothing to decide.
+  [ "$SERVICE_MODE" = "true" ] && return 0
+  [ -f "$ENV_FILE" ] && return 0
+
+  # 1) Explicit command-line intent wins over any inference.
+  case "${SERVICE_USER_CHOICE:-}" in
+    --no-service-user)
+      return 0
+      ;;
+    --service-user=*)
+      maybe_setup_service_user
+      return 0
+      ;;
+  esac
+
+  # 2 and 3) A legacy installation: preserve its recorded mode rather than converting it.
+  _legacy=$(legacy_source_dir)
+  if [ -n "$_legacy" ]; then
+    _marker="${_legacy}/${SERVICE_MARKER_NAME}"
+    if [ -f "$_marker" ]; then
+      _u=$(sed -n '1p' "$_marker" 2>/dev/null | tr -d ' \011')
+      if [ -n "$_u" ]; then
+        if id "$_u" >/dev/null 2>&1; then
+          SERVICE_USER=$_u
+          SERVICE_MODE="true"
+          info "preserving the existing '${_u}' service account from the legacy installation."
+        else
+          warn "the '${_u}' service account named in the legacy marker no longer exists; operating as the current user. Recreate the account or reinstall with --service-user ${_u} to restore it."
+          SERVICE_USER=""
+        fi
+        return 0
+      fi
+    fi
+    info "the legacy installation used no dedicated service account; keeping current-user mode."
+    SERVICE_USER=""
+    return 0
+  fi
+
+  # 4) Genuinely fresh: the normal dedicated-account offer.
+  maybe_setup_service_user
+}
+
 # Fresh root install only: create the account, own the tree, write the marker, and enter
 # service mode. No relocation/re-exec: the bootstrap already installed under /opt/afct.
 maybe_setup_service_user() {

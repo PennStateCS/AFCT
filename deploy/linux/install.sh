@@ -80,6 +80,31 @@ done
 # "$@" now holds only the forwarded install arguments, in their original order.
 
 # --------------------------------------------------------------------------- #
+# Require an absolute, traversal-free install prefix, and canonicalize it. A relative or
+# ../-containing prefix could place releases outside the intended tree; an existing
+# symlinked prefix is only followed to a validated absolute target.
+# --------------------------------------------------------------------------- #
+validate_prefix() {
+  case "$PREFIX" in
+    /*) ;;
+    *) die "the install prefix must be an absolute path (got '${PREFIX}'). Use --prefix /opt/afct." ;;
+  esac
+  case "$PREFIX" in
+    */../*|*/..|../*|*/./*|*/.) die "the install prefix must not contain '.' or '..' path segments (got '${PREFIX}')." ;;
+  esac
+  # Resolve an existing prefix (which may itself be a symlink) to a real absolute path so
+  # releases/ and current are created under it, not through an unexpected link target.
+  if [ -e "$PREFIX" ] && command -v realpath >/dev/null 2>&1; then
+    _rp=$(realpath "$PREFIX" 2>/dev/null || printf '')
+    case "$_rp" in
+      /*) PREFIX=$_rp ;;
+      *) die "could not resolve the install prefix '${PREFIX}' to an absolute path." ;;
+    esac
+  fi
+}
+validate_prefix
+
+# --------------------------------------------------------------------------- #
 # Preconditions
 # --------------------------------------------------------------------------- #
 [ "$(uname -s 2>/dev/null || printf unknown)" = "Linux" ] || {
@@ -127,18 +152,23 @@ download() {
   fi
 }
 
-# Print a field's value from a GitHub release JSON. Prefers jq; falls back to a tolerant
-# line scan. Used only to resolve the bundle's download URL, never anything sensitive.
+# Resolve a bundle asset's download URL from a GitHub release document, which may be a
+# single release object (…/releases/latest) or an ARRAY of releases (…/releases). jq is
+# preferred; a tolerant line scan is the fallback. Used only to resolve the download URL.
+
+# Latest: the first asset whose name starts with the bundle prefix and ends with the
+# suffix. Only used against the single latest release, where one bundle is expected.
 resolve_asset_url() {
   _json=$1
   _suffix=$2   # e.g. .tar.gz or .tar.gz.sha256
   if command -v jq >/dev/null 2>&1; then
-    jq -r --arg p "$ASSET_PREFIX" --arg s "$_suffix" \
-      '.assets[]? | select(.name | startswith($p) and endswith($s)) | .browser_download_url' \
-      "$_json" 2>/dev/null | head -n 1
+    jq -r --arg p "$ASSET_PREFIX" --arg s "$_suffix" '
+      (if type == "array" then . else [.] end)
+      | .[]?.assets[]?
+      | select((.name | startswith($p)) and (.name | endswith($s)))
+      | .browser_download_url' "$_json" 2>/dev/null | head -n 1
     return 0
   fi
-  # Portable fallback: pull browser_download_url values whose basename matches.
   awk -v p="$ASSET_PREFIX" -v s="$_suffix" '
     {
       while (match($0, /"browser_download_url"[ \t]*:[ \t]*"[^"]*"/)) {
@@ -155,6 +185,43 @@ resolve_asset_url() {
       }
     }
   ' "$_json"
+}
+
+# A specific asset by EXACT filename, so afct-linux-deploy-2.2.0.tar.gz can never match
+# afct-linux-deploy-2.2.0-rc1.tar.gz or afct-linux-deploy-2.2.10.tar.gz. Handles the array
+# response used when searching across releases for a requested --deploy-version.
+resolve_exact_asset() {
+  _json=$1
+  _name=$2
+  if command -v jq >/dev/null 2>&1; then
+    jq -r --arg n "$_name" '
+      (if type == "array" then . else [.] end)
+      | .[]?.assets[]? | select(.name == $n) | .browser_download_url' \
+      "$_json" 2>/dev/null | head -n 1
+    return 0
+  fi
+  awk -v n="$_name" '
+    {
+      while (match($0, /"browser_download_url"[ \t]*:[ \t]*"[^"]*"/)) {
+        tok = substr($0, RSTART, RLENGTH)
+        $0 = substr($0, RSTART + RLENGTH)
+        sub(/^"browser_download_url"[ \t]*:[ \t]*"/, "", tok)
+        sub(/"$/, "", tok)
+        m = split(tok, a, "/")
+        if (a[m] == n) { print tok; exit }
+      }
+    }
+  ' "$_json"
+}
+
+# Number of releases in a listing (array length, or 1 for a single object), used to stop
+# paginating once the last page is reached. jq when present; 0 otherwise (single-page).
+release_count() {
+  if command -v jq >/dev/null 2>&1; then
+    jq 'if type == "array" then length else 1 end' "$1" 2>/dev/null || printf '0'
+    return 0
+  fi
+  printf '0'
 }
 
 # --------------------------------------------------------------------------- #
@@ -175,23 +242,40 @@ if [ -n "$BUNDLE_FILE" ]; then
     _checksum=""
   fi
 else
-  if [ -z "$BUNDLE_URL" ]; then
-    # Resolve the bundle asset from a GitHub release. Latest by default; a specific
-    # deployment-tool version can be requested by tag-less asset name match on a listing.
+  if [ -z "$BUNDLE_URL" ] && [ -n "$DEPLOY_VERSION" ]; then
+    # A specific deployment-tool version: the bundle carries the version in its exact file
+    # name, so match it exactly and search releases with bounded pagination. The default
+    # cap is documented in the not-found message so a large history is never silently
+    # truncated (raise it with AFCT_RELEASE_MAX_PAGES if needed).
+    _name_tar="afct-linux-deploy-${DEPLOY_VERSION}.tar.gz"
+    _name_sha="${_name_tar}.sha256"
+    _max_pages=${AFCT_RELEASE_MAX_PAGES:-5}
+    case "$_max_pages" in ''|*[!0-9]*) _max_pages=5 ;; esac
+    log "resolving AFCT Linux deployment bundle ${DEPLOY_VERSION} from ${REPO}..."
+    _page=1
+    while [ "$_page" -le "$_max_pages" ]; do
+      _rel="${WORK_DIR}/release-${_page}.json"
+      download "${RELEASE_API}?per_page=100&page=${_page}" "$_rel" || die "could not query releases from ${RELEASE_API}."
+      BUNDLE_URL=$(resolve_exact_asset "$_rel" "$_name_tar")
+      if [ -n "$BUNDLE_URL" ]; then
+        BUNDLE_SHA_URL=$(resolve_exact_asset "$_rel" "$_name_sha")
+        break
+      fi
+      _cnt=$(release_count "$_rel")
+      case "$_cnt" in ''|*[!0-9]*) _cnt=0 ;; esac
+      [ "$_cnt" -lt 100 ] && break     # a short page is the last page
+      _page=$((_page + 1))
+    done
+    [ -n "$BUNDLE_URL" ] || \
+      die "deployment bundle ${DEPLOY_VERSION} (${_name_tar}) was not found in the most recent $((_max_pages * 100)) releases of ${REPO}. Check the version, or raise AFCT_RELEASE_MAX_PAGES / set AFCT_BUNDLE_URL."
+  elif [ -z "$BUNDLE_URL" ]; then
+    # The latest release. One bundle is expected, so match by prefix + suffix.
     log "resolving the latest AFCT Linux deployment bundle from ${REPO}..."
     _rel="${WORK_DIR}/release.json"
-    if [ -n "$DEPLOY_VERSION" ]; then
-      # Search across releases for the requested bundle version (asset name carries it).
-      download "${RELEASE_API}?per_page=30" "$_rel" || die "could not query releases from ${RELEASE_API}."
-    else
-      download "${RELEASE_API}/latest" "$_rel" || die "could not query the latest release from ${RELEASE_API}."
-    fi
-    if [ -n "$DEPLOY_VERSION" ]; then
-      ASSET_PREFIX="afct-linux-deploy-${DEPLOY_VERSION}"
-    fi
+    download "${RELEASE_API}/latest" "$_rel" || die "could not query the latest release from ${RELEASE_API}."
     BUNDLE_URL=$(resolve_asset_url "$_rel" ".tar.gz" || true)
     BUNDLE_SHA_URL=$(resolve_asset_url "$_rel" ".tar.gz.sha256" || true)
-    [ -n "$BUNDLE_URL" ] || die "no AFCT Linux deployment bundle asset was found on the release. If this is a fork, set AFCT_BUNDLE_URL."
+    [ -n "$BUNDLE_URL" ] || die "no AFCT Linux deployment bundle asset was found on the latest release. If this is a fork, set AFCT_BUNDLE_URL."
   fi
 
   log "downloading the deployment bundle..."
@@ -207,6 +291,7 @@ else
 fi
 
 # Verify BEFORE anything from the archive is read or executed.
+_digest=""
 if [ -n "$_checksum" ] && [ -s "$_checksum" ]; then
   log "verifying the bundle checksum..."
   _expected=$(awk '{ print $1; exit }' "$_checksum")
@@ -217,10 +302,20 @@ if [ -n "$_checksum" ] && [ -s "$_checksum" ]; then
   [ "$_expected" = "$_actual" ] || \
     die "bundle checksum mismatch (expected ${_expected}, got ${_actual}); refusing to install."
   log "checksum verified."
+  _digest=$_actual
 else
   # A remote install with no checksum is unsafe; only a local --bundle-file may proceed.
   [ -n "$BUNDLE_FILE" ] || die "no checksum was available for the downloaded bundle; refusing to install."
 fi
+
+# The verified content digest gives each release a content-addressed identity, so a
+# release directory is never modified in place: the same bundle always maps to the same
+# directory, and different content maps to a different one.
+[ -n "$_digest" ] || _digest=$($SHA_TOOL "$_archive" | awk '{ print $1; exit }')
+case "$_digest" in
+  ''|*[!0-9a-fA-F]*) die "could not compute the bundle content digest." ;;
+esac
+_digest_prefix=$(printf '%s' "$_digest" | cut -c1-12)
 
 # --------------------------------------------------------------------------- #
 # Inspect the archive for path-traversal and unsafe entries BEFORE extracting.
@@ -272,38 +367,64 @@ for _sh in "${_root}/bin/afctctl" "${_root}/lib/"*.sh; do
 done
 
 _releases="${PREFIX}/releases"
-_target="${_releases}/${_ver}"
+# Content-addressed release identity: <deploy-version>-<digest-prefix>. The same bundle
+# always maps to the same directory (so a repeat install is a no-op), and different
+# content maps to a different directory (so a release directory is never modified).
+_release_id="${_ver}-${_digest_prefix}"
+_target="${_releases}/${_release_id}"
 mkdir -p "$_releases" "${PREFIX}/bin" "${PREFIX}/shared"
 
-# Never extract over the active release. Stage into a fresh dir and rename into place.
-if [ -e "$_target" ]; then
-  rm -rf "${_target}.replacing.$$" 2>/dev/null || true
-  cp -R "$_root" "${_target}.replacing.$$" || die "could not stage the new release."
-  rm -rf "$_target" 2>/dev/null || true
-  mv "${_target}.replacing.$$" "$_target" || die "could not install the new release."
-else
-  cp -R "$_root" "${_target}.incoming.$$" || die "could not stage the new release."
-  mv "${_target}.incoming.$$" "$_target" || die "could not install the new release."
-fi
-chmod +x "${_target}/bin/afctctl" 2>/dev/null || true
-
-# Atomically switch the active-release symlink. Validate any existing target first so a
-# broken or foreign `current` is replaced rather than followed. Remember a valid previous
-# target so a failed switch-only self-update can roll the pointer back.
 _current="${PREFIX}/current"
+
+# Capture a valid previous target (inside our releases and not this release) so a failed
+# switch can roll the pointer back to a known-good directory.
 _prev_target=""
 if [ -L "$_current" ]; then
   _old=$(readlink "$_current" 2>/dev/null || true)
   case "$_old" in
-    "$_releases"/*) _prev_target=$_old ;;   # points inside our releases: safe to roll back to
+    "$_releases"/*)
+      [ -d "$_old" ] && [ "$_old" != "$_target" ] && _prev_target=$_old
+      ;;
     *) log "replacing an unexpected ${_current} symlink target (${_old})." ;;
   esac
 elif [ -e "$_current" ]; then
   die "${_current} exists and is not a symlink; move it aside and re-run."
 fi
-ln -sfn "$_target" "${_current}.new.$$" 2>/dev/null || ln -sf "$_target" "${_current}.new.$$" \
-  || die "could not create the active-release symlink."
-mv "${_current}.new.$$" "$_current" || die "could not switch the active release."
+
+# A version's bytes are fixed: refuse to install a different bundle under a version that is
+# already installed with other content. Bump the deployment-tool version instead.
+for _existing in "${_releases}/${_ver}-"*; do
+  [ -d "$_existing" ] || continue
+  [ "$_existing" = "$_target" ] && continue
+  die "deployment version ${_ver} is already installed with different content (${_existing##*/}). Bump the deployment-tool version rather than republishing ${_ver}."
+done
+
+# Publish immutably. The target name does not exist yet when the content is new (different
+# content => different name), so this never overwrites an existing release, and in
+# particular never the directory `current` points at. An identical bundle is a no-op.
+if [ -d "$_target" ] && [ -f "${_target}/bin/afctctl" ]; then
+  log "deployment tooling ${_ver} (${_digest_prefix}) is already installed; not re-extracting."
+else
+  _incoming="${_target}.incoming.$$"
+  rm -rf "$_incoming" 2>/dev/null || true
+  cp -R "$_root" "$_incoming" || die "could not stage the new release."
+  chmod +x "${_incoming}/bin/afctctl" 2>/dev/null || true
+  mv "$_incoming" "$_target" || { rm -rf "$_incoming" 2>/dev/null || true; die "could not publish the new release."; }
+fi
+
+# Switch the active-release symlink in place, unless it already points here. Use `ln -sfn`,
+# NOT a rename: a `mv` of a new symlink over an existing symlink-to-directory moves the new
+# link INTO the pointed-at directory (true on both GNU coreutils and busybox) rather than
+# replacing it, which would silently leave `current` unchanged. acquire_lock serialises
+# afctctl, so no reader observes the sub-millisecond swap. Never delete the previous target
+# during the switch; retention below keeps it for rollback.
+_already_current="false"
+[ "$(readlink "$_current" 2>/dev/null || true)" = "$_target" ] && _already_current="true"
+if [ "$_already_current" != "true" ]; then
+  ln -sfn "$_target" "$_current" 2>/dev/null \
+    || { rm -f "$_current" 2>/dev/null; ln -s "$_target" "$_current"; } \
+    || die "could not switch the active release."
+fi
 
 # Convenience entry point on PATH. A tiny wrapper (not a symlink) so it always resolves
 # through the current release even if PATH caching is odd.
@@ -358,8 +479,9 @@ if [ -n "${AFCT_SWITCH_ONLY:-}" ]; then
   fi
   err "the new deployment tooling failed validation; rolling back."
   if [ -n "$_prev_target" ] && [ -d "$_prev_target" ]; then
-    ln -sfn "$_prev_target" "${_current}.rb.$$" 2>/dev/null || ln -sf "$_prev_target" "${_current}.rb.$$"
-    mv "${_current}.rb.$$" "$_current" 2>/dev/null || true
+    # Same in-place symlink swap as above (a rename would move into the target directory).
+    ln -sfn "$_prev_target" "$_current" 2>/dev/null \
+      || { rm -f "$_current" 2>/dev/null; ln -s "$_prev_target" "$_current"; }
     rm -rf "$_target" 2>/dev/null || true
     die "rolled back to the previous deployment tooling."
   fi

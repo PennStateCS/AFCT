@@ -31,9 +31,11 @@ if [ -n "$_ctl" ] && [ -x "$_ctl" ]; then
   exec "$_ctl" "$@"
 fi
 
-# Not installed yet (or a legacy flat install): fetch and run the new bootstrap. Point it
-# at THIS directory so the migration preserves the existing .env.production, backups, and
-# service-account marker, and reuses the existing Docker volumes.
+# Not installed yet (or a legacy flat install): fetch the new bootstrap, install ONLY the
+# tooling (no forced `install`), migrate this directory's existing configuration and state
+# into the shared directory, then run the ORIGINAL command unchanged. This is what keeps
+# `sh install.sh status` (or logs/doctor/diagnostics/...) working on the very first run
+# after the move to afctctl, instead of being rewritten into `afctctl install status`.
 printf '[afct] The AFCT Linux installer now uses afctctl; bootstrapping the versioned deployment bundle...\n'
 
 _dir=$(unset CDPATH; cd -- "$(dirname -- "$0")" && pwd)
@@ -56,7 +58,23 @@ else
   exit 1
 fi
 
-sh "$_boot" "$@"
+# Step 1: install the deployment tooling only. AFCT_SWITCH_ONLY places, verifies, and
+# switches the versioned release without running `afctctl install`.
+AFCT_SWITCH_ONLY=1 sh "$_boot"
 _rc=$?
 rm -f "$_boot"
-exit "$_rc"
+[ "$_rc" -eq 0 ] || exit "$_rc"
+
+_ctl="${PREFIX}/current/bin/afctctl"
+[ -x "$_ctl" ] || _ctl=$(command -v afctctl 2>/dev/null || printf '')
+if [ -z "$_ctl" ] || [ ! -x "$_ctl" ]; then
+  printf '[afct] ERROR: the deployment tooling did not install correctly.\n' >&2
+  exit 1
+fi
+
+# Step 2: migrate a legacy flat install (config, backups, log, service-account marker) into
+# the shared directory and pin the Compose project name, preserving secrets and volumes.
+"$_ctl" migrate-legacy || exit $?
+
+# Step 3: run the command the user actually asked for, unchanged.
+exec "$_ctl" "$@"
