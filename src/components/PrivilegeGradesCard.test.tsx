@@ -106,6 +106,13 @@ describe('PrivilegeGradesCard', () => {
     expect(screen.getByText('Turing')).toBeInTheDocument();
     expect(screen.getByText('8.00')).toBeInTheDocument();
     expect(screen.queryByText('/10')).toBeNull();
+
+    // Leading columns are avatar, then Last Name, then First Name.
+    const leadCols = Array.from(document.querySelectorAll('[data-col]'))
+      .map((el) => el.getAttribute('data-col'))
+      .filter((c) => c === 'avatar' || c === 'lastName' || c === 'firstName')
+      .slice(0, 3);
+    expect(leadCols).toEqual(['avatar', 'lastName', 'firstName']);
   });
 
   it('shows the loading state before the fetch resolves', async () => {

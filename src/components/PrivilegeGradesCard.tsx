@@ -220,6 +220,27 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
 
   const columns = useMemo<ColumnDef<StudentRow, unknown>[]>(() => {
+    // The student's average across graded assignments, as a percentage. Undefined when
+    // they have no graded work. Shared by the Average cell and its sort accessor.
+    const computeAveragePct = (row: StudentRow): number | undefined => {
+      let earned = 0;
+      let possible = 0;
+      let gradeCount = 0;
+      for (const a of assignments) {
+        const val = row[a.id];
+        if (val !== null && val !== undefined) {
+          earned += Number(val);
+          possible += a.maxPoints ?? 0;
+          gradeCount++;
+        }
+      }
+      if (gradeCount === 0 || possible === 0) return undefined;
+      return (earned / possible) * 100;
+    };
+
+    // Total points across all assignments, shown under the Average header.
+    const totalPoints = assignments.reduce((sum, a) => sum + (a.maxPoints ?? 0), 0);
+
     const cols: ColumnDef<StudentRow, unknown>[] = [
       {
         id: 'avatar',
@@ -229,32 +250,34 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         cell: ({ row }) => {
           const user = row.original;
           return (
-            <Avatar className="h-10 w-10">
-              <AvatarImage
-                src={user.avatar ? apiPaths.files.pfp(String(user.avatar)) : undefined}
-                alt={`${user.firstName} ${user.lastName}`}
-                cropX={user.cropX ?? 0.5}
-                cropY={user.cropY ?? 0.5}
-                zoom={user.zoom ?? 1}
-              />
-              <AvatarFallback className="bg-secondary text-secondary-foreground">
-                {getInitials(user.firstName, user.lastName, user.email)}
-              </AvatarFallback>
-            </Avatar>
+            <div className="flex items-center justify-center">
+              <Avatar className="h-10 w-10">
+                <AvatarImage
+                  src={user.avatar ? apiPaths.files.pfp(String(user.avatar)) : undefined}
+                  alt={`${user.firstName} ${user.lastName}`}
+                  cropX={user.cropX ?? 0.5}
+                  cropY={user.cropY ?? 0.5}
+                  zoom={user.zoom ?? 1}
+                />
+                <AvatarFallback className="bg-secondary text-secondary-foreground">
+                  {getInitials(user.firstName, user.lastName, user.email)}
+                </AvatarFallback>
+              </Avatar>
+            </div>
           );
         },
+        meta: { priority: 1, align: 'center' },
+      },
+      {
+        accessorKey: 'lastName',
+        header: 'Last Name',
+        cell: ({ row }) => <div>{String(row.original.lastName ?? '')}</div>,
         meta: { priority: 1 },
       },
       {
         accessorKey: 'firstName',
         header: 'First Name',
         cell: ({ row }) => <div>{String(row.original.firstName ?? '')}</div>,
-        meta: { priority: 1 },
-      },
-      {
-        accessorKey: 'lastName',
-        header: 'Last Name',
-        cell: ({ row }) => <div>{String(row.original.lastName ?? '')}</div>,
         meta: { priority: 1 },
       },
     ];
@@ -321,25 +344,23 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
 
     cols.push({
       id: 'totalGrade',
-      header: 'Average',
+      // Two-line header like the assignment columns: "Average" over the total points
+      // available. filterLabel keeps the sort button's accessible name as "Average".
+      header: () => (
+        <div className="flex flex-col items-center leading-tight">
+          <span>Average</span>
+          <span className="text-muted-foreground text-xs font-normal">{totalPoints} pts</span>
+        </div>
+      ),
+      // Sortable via the derived average; students with no graded work sort to the end.
+      accessorFn: (row) => computeAveragePct(row),
+      sortUndefined: 'last',
       cell: ({ row }) => {
-        let earned = 0;
-        let possible = 0;
-        let gradeCount = 0;
-        for (const a of assignments) {
-          const val = row.original[a.id];
-          if (val !== null && val !== undefined) {
-            earned += Number(val);
-            possible += a.maxPoints ?? 0;
-            gradeCount++;
-          }
-        }
-        if (gradeCount === 0) return <span className="text-muted-foreground">-</span>;
-        if (possible === 0) return <span className="text-muted-foreground">-</span>;
-        const pct = ((earned / possible) * 100).toFixed(2);
-        return <span className="font-medium">{pct}%</span>;
+        const pct = computeAveragePct(row.original);
+        if (pct === undefined) return <span className="text-muted-foreground">-</span>;
+        return <span className="font-medium">{pct.toFixed(2)}%</span>;
       },
-      meta: { priority: 1, align: 'center' },
+      meta: { priority: 1, align: 'center', filterLabel: 'Average' },
     });
 
     return cols;
@@ -373,6 +394,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           loading={gradesQuery.isPending}
           tableLabel="Course grades table"
           bordered
+          defaultSorting={[{ id: 'lastName', desc: false }]}
           showExportButton={false}
           emptyTitle="No grades to show"
           emptyDescription="Grades appear once students are enrolled and have submitted work."
