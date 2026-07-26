@@ -76,7 +76,7 @@ export const useProblemColumns = ({
     },
     {
       accessorKey: 'originalFileName',
-      header: 'File',
+      header: 'Solution',
       cell: ({ row }) => {
         const file = row.original.originalFileName;
         const fileName = row.original.fileName;

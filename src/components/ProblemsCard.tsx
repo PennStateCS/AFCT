@@ -39,6 +39,9 @@ export function ProblemsCard({
           data={problems}
           loading={isLoading}
           tableLabel="Problems table"
+          // The creation date is rarely needed; hide it by default. It stays available
+          // through the Columns menu.
+          defaultColumnVisibility={{ createdAt: false }}
           emptyTitle="No problems yet"
           emptyDescription={
             courseIsArchived
