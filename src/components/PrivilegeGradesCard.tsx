@@ -232,24 +232,25 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     // cell and its sort accessor.
     const computeAverage = (
       row: StudentRow,
-    ): { pct: number; earned: number } | undefined => {
+    ): { pct: number; earned: number; available: number } | undefined => {
+      const assignedFlags = row[ASSIGNED_KEY] as Record<string, boolean> | undefined;
       let earned = 0;
-      let possible = 0;
+      let available = 0;
       let gradeCount = 0;
       for (const a of assignments) {
+        // Points available counts only assignments assigned to this student, so a
+        // student who isn't assigned everything isn't measured against the full total.
+        if (assignedFlags?.[a.id] === false) continue;
+        available += a.maxPoints ?? 0;
         const val = gradesMap?.[row.id]?.[a.id];
         if (val !== null && val !== undefined) {
           earned += Number(val);
-          possible += a.maxPoints ?? 0;
           gradeCount++;
         }
       }
-      if (gradeCount === 0 || possible === 0) return undefined;
-      return { pct: (earned / possible) * 100, earned };
+      if (gradeCount === 0 || available === 0) return undefined;
+      return { pct: (earned / available) * 100, earned, available };
     };
-
-    // Total points across all assignments, shown under the Average header.
-    const totalPoints = assignments.reduce((sum, a) => sum + (a.maxPoints ?? 0), 0);
 
     const cols: ColumnDef<StudentRow, unknown>[] = [
       {
@@ -359,14 +360,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
 
     cols.push({
       id: 'totalGrade',
-      // Two-line header like the assignment columns: "Average" over the total points
-      // available. filterLabel keeps the sort button's accessible name as "Average".
-      header: () => (
-        <div className="flex flex-col items-center leading-tight">
-          <span>Average</span>
-          <span className="text-muted-foreground text-xs font-normal">{totalPoints} pts</span>
-        </div>
-      ),
+      header: 'Average',
       // Sortable via the derived average; students with no graded work sort to the end.
       accessorFn: (row) => computeAverage(row)?.pct,
       sortUndefined: 'last',
@@ -374,16 +368,17 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         if (valuesLoading) return <GradeCellSkeleton />;
         const avg = computeAverage(row.original);
         if (avg === undefined) return <span className="text-muted-foreground">-</span>;
+        // Percentage over the points earned / points available (assigned assignments).
         return (
           <div className="flex flex-col items-center leading-tight">
             <span className="font-medium">{avg.pct.toFixed(2)}%</span>
             <span className="text-muted-foreground text-xs">
-              {Number(avg.earned.toFixed(2))} pts
+              {Number(avg.earned.toFixed(2))}/{Number(avg.available.toFixed(2))}
             </span>
           </div>
         );
       },
-      meta: { priority: 1, align: 'center', filterLabel: 'Average' },
+      meta: { priority: 1, align: 'center' },
     });
 
     return cols;
