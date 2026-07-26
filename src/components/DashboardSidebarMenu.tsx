@@ -302,8 +302,11 @@ export default function DashboardSidebarMenu() {
     staleTime: 30_000,
   });
 
-  const { state } = useSidebar();
-  const collapsed = state === 'collapsed';
+  const { state, isMobile } = useSidebar();
+  // The mobile drawer is a full-width sheet, not the icon rail, so it must always show
+  // full labels. Only treat the sidebar as collapsed on desktop, regardless of the saved
+  // (desktop) collapse preference.
+  const collapsed = state === 'collapsed' && !isMobile;
   const { isOpen, toggle } = useSidebarSections();
 
   if (!session?.user) return null;

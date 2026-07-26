@@ -511,4 +511,16 @@ describe('DashboardSidebarMenu — collapsible sections', () => {
     expect(screen.queryByRole('button', { name: /Administration/ })).toBeNull();
     expect(container.querySelector('a[href="/dashboard/users"]')).not.toBeNull();
   });
+
+  it('shows full labels in the mobile drawer even when the saved state is collapsed', () => {
+    // Mobile drawer: a full-width sheet, so labels must show regardless of the saved
+    // desktop collapse preference. The label span must not carry the icon-rail "hidden".
+    useSidebarMock.mockReturnValue({ state: 'collapsed', isMobile: true });
+
+    const { container } = renderWithClient(<DashboardSidebarMenu />);
+
+    const label = container.querySelector('a[href="/dashboard/users"] span');
+    expect(label).toHaveTextContent('User Accounts');
+    expect(label).not.toHaveClass('hidden');
+  });
 });
