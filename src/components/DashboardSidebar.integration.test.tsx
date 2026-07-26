@@ -30,7 +30,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('./dialogs/ChangePasswordDialog', () => ({ ChangePasswordDialog: () => null }));
 vi.mock('./dialogs/EditProfileDialog', () => ({ EditProfileDialog: () => null }));
 
-import { SidebarProvider, Sidebar } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, useSidebar } from '@/components/ui/sidebar';
 import { EnhancedSidebarTrigger } from '@/components/ui/EnhancedSidebarTrigger';
 import DashboardSidebarHeader from './DashboardSidebarHeader';
 import DashboardSidebarMenu from './DashboardSidebarMenu';
@@ -147,6 +147,30 @@ describe('dashboard sidebar (real primitives)', () => {
       'aria-expanded',
       'true',
     );
+  });
+
+  it('does not collapse the desktop state on mobile (the drawer shows full labels)', () => {
+    // A regression guard: auto-collapsing to the icon rail on a narrow screen would
+    // blank the mobile drawer's labels, since the menu renders icon-only when the
+    // state is collapsed. On mobile it must stay expanded.
+    isMobileMock.mockReturnValue(true);
+    const original = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 400 });
+    try {
+      const StateProbe = () => <span data-testid="sidebar-state">{useSidebar().state}</span>;
+      render(
+        <SidebarProvider defaultOpen>
+          <StateProbe />
+        </SidebarProvider>,
+      );
+      expect(screen.getByTestId('sidebar-state')).toHaveTextContent('expanded');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: original,
+      });
+    }
   });
 
   describe('on mobile', () => {
