@@ -78,8 +78,8 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
@@ -91,8 +91,8 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
@@ -187,8 +187,8 @@ jobs:
         with:
           context: docker/nginx
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=nginx
+          cache-to: type=gha,mode=max,scope=nginx
           tags: |
             ghcr.io/pennstatecs/afct-nginx:main
             ghcr.io/pennstatecs/afct-nginx:sha-${{ github.event.workflow_run.head_sha }}
@@ -199,8 +199,8 @@ jobs:
         with:
           context: docker/backup
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,mode=max,scope=backup
           tags: |
             ghcr.io/pennstatecs/afct-backup:main
             ghcr.io/pennstatecs/afct-backup:sha-${{ github.event.workflow_run.head_sha }}
@@ -211,8 +211,8 @@ jobs:
         with:
           context: docker/updater
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=updater
+          cache-to: type=gha,mode=max,scope=updater
           tags: |
             ghcr.io/pennstatecs/afct-updater:main
             ghcr.io/pennstatecs/afct-updater:sha-${{ github.event.workflow_run.head_sha }}
