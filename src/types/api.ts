@@ -1666,6 +1666,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/problems/{pid}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duplicate a course problem
+         * @description Duplicate a problem within the same course. The title/description come from the  request; the type, state cap, determinism flag, and the solution file (answer key) are  copied from the source and stay editable afterward. The solution file is copied to a  fresh name on disk so the two problems never share a file.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/problems/[pid]/duplicate/route.ts)
+         */
+        post: operations["postCoursesByIdProblemsByPidDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/problems/{pid}": {
         parameters: {
             query?: never;
@@ -7880,6 +7902,70 @@ export interface operations {
             };
             /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdProblemsByPidDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                    description?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The newly created problem. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Source problem not found in this course. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

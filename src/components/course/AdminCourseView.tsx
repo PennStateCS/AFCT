@@ -19,6 +19,10 @@ import {
   DuplicateAssignmentDialog,
   type DuplicateSourceAssignment,
 } from '@/components/dialogs/DuplicateAssignmentDialog';
+import {
+  DuplicateProblemDialog,
+  type DuplicateSourceProblem,
+} from '@/components/dialogs/DuplicateProblemDialog';
 import type { FullCourse, TabType } from '@/types/course';
 import type { Problem, Course } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -80,10 +84,15 @@ export function AdminCourseView({
     setDuplicateTarget,
   );
 
+  // The problem being duplicated (opens the dialog); null when closed.
+  const [duplicateProblemTarget, setDuplicateProblemTarget] =
+    useState<DuplicateSourceProblem | null>(null);
+
   const { columns: problemColumns, viewDialog: problemViewDialog } = useProblemColumns({
     courseIsArchived: course.isArchived,
     onEdit: onProblemEdit,
     onDelete: onProblemDelete,
+    onDuplicate: setDuplicateProblemTarget,
     timeZone: timezone,
   });
 
@@ -218,6 +227,21 @@ export function AdminCourseView({
       onDuplicated={() => {
         setDuplicateTarget(null);
         // The new (unpublished) assignment now exists; refresh the list to show it.
+        onRefreshCourse();
+      }}
+    />
+
+    <DuplicateProblemDialog
+      open={!!duplicateProblemTarget}
+      setOpen={(v) => {
+        if (!v) setDuplicateProblemTarget(null);
+      }}
+      courseId={course.id}
+      courseIsArchived={course.isArchived}
+      problem={duplicateProblemTarget}
+      onDuplicated={() => {
+        setDuplicateProblemTarget(null);
+        // Back on the Problems tab: refresh so the new problem appears in the list.
         onRefreshCourse();
       }}
     />

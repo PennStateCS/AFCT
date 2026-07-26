@@ -36,11 +36,16 @@ Open **Manage** to:
 
 - **View Answer** using the viewer for that problem type
 - **Edit Problem** details and replace the answer file
+- **Duplicate Problem** to create a copy in the same bank
 - **Delete Problem** when the problem is not used by an assignment
 
 Editing a problem from the problem bank uses the same wizard and changes the definition only: title, description, type, state limit, deterministic requirement, and answer file. If you change the problem type, you must upload a new answer file of the matching type.
 
 Points, the accepted-submission limit, and automatic grading belong to each assignment, not to the bank problem. Set them when you add the problem to an assignment, or change them later from the assignment's **Problems** tab (**Manage** the problem and open its settings). The same problem can carry different values in different assignments.
+
+## Duplicate a problem
+
+**Duplicate Problem** creates a fresh copy of an existing problem in the same bank. Edit the copy's title and description in the dialog; the type, state limit, deterministic requirement, and the answer file are copied from the original. The copy gets its own answer file, so replacing it later never touches the original. Once the copy is created you can edit any of the remaining details from **Edit Problem**.
 
 ## Before publishing
 
