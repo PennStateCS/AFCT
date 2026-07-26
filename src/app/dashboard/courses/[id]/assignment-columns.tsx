@@ -202,17 +202,23 @@ export function useAssignmentColumns(
       ),
     },
     {
-      accessorKey: 'dueDate',
-      header: 'Due Date',
-      cell: ({ row }) => <DueDateCell assignment={row.original} timeZone={timeZone} />,
-    },
-    {
       id: 'isGroup',
       header: 'Type',
       accessorFn: (row) => (row.isGroup ? 'Group' : 'Individual'),
       cell: ({ row }) => <div>{row.original.isGroup ? 'Group' : 'Individual'}</div>,
       enableSorting: true,
       meta: { priority: 2, filterVariant: 'multiselect', filterLabel: 'Type' },
+    },
+    {
+      accessorKey: 'dueDate',
+      header: 'Due Date',
+      cell: ({ row }) => <DueDateCell assignment={row.original} timeZone={timeZone} />,
+    },
+    {
+      accessorKey: 'unlockAt',
+      header: 'Available From',
+      cell: ({ row }) => <CompactDate value={row.original.unlockAt ?? null} timeZone={timeZone} />,
+      meta: { priority: 3 },
     },
     {
       accessorKey: 'maxPoints',
