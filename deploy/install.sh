@@ -28,7 +28,7 @@ umask 077
 # --------------------------------------------------------------------------- #
 # Installer configuration
 # --------------------------------------------------------------------------- #
-INSTALLER_VERSION="2.1.1"
+INSTALLER_VERSION="2.1.2"
 
 INVOCATION_DIR=$(pwd -P 2>/dev/null || pwd)
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -2379,7 +2379,14 @@ do_enable_updater() {
   fi
 
   DIAG_ON_EXIT="true"
-  start_updater || die "could not pull or start the updater image. If this repository's afct-updater package is private, make it public or run 'docker login ghcr.io'. See ${LOG_FILE}."
+  if ! start_updater; then
+    # start_updater flips AFCT_UPDATER_ENABLED to true BEFORE pulling. If the pull or
+    # start then fails, clear it again: otherwise every later compose command keeps
+    # '--profile updater' and fails trying to pull the unavailable updater image, so a
+    # failed enable would break `update`/`restart` until the flag is fixed by hand.
+    set_env_flag AFCT_UPDATER_ENABLED false
+    die "could not pull or start the updater image. If this repository's afct-updater package is private, make it public or run 'docker login ghcr.io'. See ${LOG_FILE}."
+  fi
   DIAG_ON_EXIT="false"
   success "in-app updater enabled. Manage versions in Admin -> System Settings -> Updates."
 }
@@ -2588,11 +2595,29 @@ check_installer_freshness() {
         info "installer self-update failed; continuing with ${INSTALLER_VERSION}."
         return 0
       fi
-      _yflag=""
-      [ "$ASSUME_YES" = "true" ] && _yflag="-y"
       info "re-running with the updated installer ..."
+      # do_self_update took the installer lock. `exec` does not run the EXIT trap, so
+      # release the lock by hand first: exec keeps this PID, so a still-held lock would
+      # make the fresh run's acquire_lock see its own PID as a second concurrent
+      # operation and abort.
+      release_lock
+      # Preserve the mode and every flag that affects the run (only $MODE and -y were
+      # carried before, so --reconfigure/--non-interactive/... were silently dropped).
+      # Env-var config (ADMIN_EMAIL, APP_URL, AFCT_*) is inherited across exec; the
+      # --service-user NAME is a shell variable, not exported, so it must be re-passed.
+      set -- "$MODE"
+      [ "$NON_INTERACTIVE" = "true" ] && set -- "$@" --non-interactive
+      [ "$ASSUME_YES" = "true" ] && set -- "$@" -y
+      [ "$FORCE_RECONFIGURE" = "true" ] && set -- "$@" --reconfigure
+      [ "$WITH_UPDATER" = "true" ] && set -- "$@" --with-updater
+      [ "$COLOR_FORCED_OFF" = "true" ] && set -- "$@" --no-color
+      if service_user_enabled; then
+        set -- "$@" --service-user "$SERVICE_USER"
+      else
+        set -- "$@" --no-service-user
+      fi
       # The guard stops the fresh installer from checking again in a loop.
-      AFCT_INSTALLER_SELF_CHECKED=1 exec sh "$0" "$MODE" $_yflag
+      AFCT_INSTALLER_SELF_CHECKED=1 exec sh "$0" "$@"
       ;;
     *) return 0 ;;
   esac
