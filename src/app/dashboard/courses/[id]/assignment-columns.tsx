@@ -75,7 +75,7 @@ export function DueDateCell({
   const everyoneLabel = assignment.assignedToEveryone === false ? 'Everyone else' : 'Everyone';
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex flex-col items-start gap-1">
       <CompactDate value={assignment.dueDate} timeZone={timeZone} />
       {overrides.length > 0 && (
         <Popover>
