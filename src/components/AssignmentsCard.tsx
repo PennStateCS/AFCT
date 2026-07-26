@@ -47,8 +47,6 @@ export function AssignmentsCard({
           loading={isLoading}
           tableLabel="Assignments table"
           defaultSorting={[{ id: 'dueDate', desc: false }]}
-          // Comments is niche; hide it by default. It stays available via the Columns menu.
-          defaultColumnVisibility={{ commentCount: false }}
           emptyTitle="No assignments yet"
           emptyDescription={
             courseIsArchived

@@ -258,22 +258,6 @@ export function useAssignmentColumns(
       meta: { priority: 4 },
     },
     {
-      id: 'submissionCount',
-      header: 'Submissions',
-      accessorKey: 'submissionCount',
-      cell: ({ row }) => <div>{row.original.submissionCount ?? 0}</div>,
-      enableSorting: true,
-      meta: { priority: 3 },
-    },
-    {
-      id: 'commentCount',
-      header: 'Comments',
-      accessorKey: 'commentCount',
-      cell: ({ row }) => <div>{row.original.commentCount ?? 0}</div>,
-      enableSorting: true,
-      meta: { priority: 4 },
-    },
-    {
       accessorKey: 'isPublished',
       header: 'Published',
       meta: {
