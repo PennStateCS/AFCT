@@ -11,10 +11,8 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Stepper } from '@/components/ui/stepper';
+import { WizardSteps } from '@/components/dialogs/wizard/WizardSteps';
+import { WizardTitleDescription } from '@/components/dialogs/wizard/WizardTitleDescription';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
@@ -144,56 +142,26 @@ export function DuplicateAssignmentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Stepper
-          steps={STEP_TITLES as unknown as string[]}
+        <WizardSteps
+          steps={STEP_TITLES}
           current={step}
           onStepClick={(index) => setStep(index)}
           className="mb-2"
         />
-        <div className="sr-only" role="status" aria-live="polite">
-          {`Step ${step + 1} of ${STEP_TITLES.length}: ${STEP_TITLES[step]}`}
-        </div>
 
         <div className="min-h-[320px] space-y-4">
           {step === 0 && (
-            <>
-              <div>
-                <Label htmlFor="dup-title" className="mb-2 block">
-                  Title
-                </Label>
-                <Input
-                  id="dup-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  aria-invalid={!!titleError}
-                  aria-describedby={titleError ? 'dup-title-error' : undefined}
-                  placeholder="Assignment title"
-                />
-                {titleError && (
-                  <p id="dup-title-error" className="mt-1 text-xs text-red-600" role="alert">
-                    {titleError}
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="dup-description" className="mb-2 block">
-                  Description
-                </Label>
-                <Textarea
-                  id="dup-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Enter assignment description"
-                  className="min-h-[120px]"
-                />
-              </div>
-              <p className="text-muted-foreground text-xs">
-                The title and description start as the original&apos;s. Edit them here or leave them
-                unchanged. The assignment type and the Assign To settings (audience, dates, and any
-                exceptions) are copied from the original and can be changed after the copy is
-                created.
-              </p>
-            </>
+            <WizardTitleDescription
+              idPrefix="dup"
+              title={title}
+              onTitleChange={setTitle}
+              description={description}
+              onDescriptionChange={setDescription}
+              titleError={titleError}
+              titlePlaceholder="Assignment title"
+              descriptionPlaceholder="Enter assignment description"
+              note="The title and description start as the original's. Edit them here or leave them unchanged. The assignment type and the Assign To settings (audience, dates, and any exceptions) are copied from the original and can be changed after the copy is created."
+            />
           )}
 
           {step === 1 && (

@@ -171,6 +171,8 @@ describe('GET /api/courses/[id]/assignments', () => {
         description: null,
         totalGrade: 10,
         maxGrade: 15,
+        problemCount: 2,
+        isGroup: false,
       },
     ]);
   });

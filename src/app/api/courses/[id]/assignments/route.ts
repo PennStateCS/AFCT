@@ -58,6 +58,9 @@ export const GET = withCourseAuth(
           title: true,
           dueDate: true,
           description: true,
+          // Individual vs group is carried by groupSetId (null = individual); surfaced as
+          // an isGroup flag below so callers don't have to know the column.
+          groupSetId: true,
           problems: {
             select: {
               problemId: true,
@@ -74,10 +77,16 @@ export const GET = withCourseAuth(
         },
       });
 
-      const result = assignments.map(({ problems, ...assignment }) => {
+      const result = assignments.map(({ problems, groupSetId, ...assignment }) => {
         const maxGrade = problems.reduce((sum, p) => sum + p.maxPoints, 0);
         const totalGrade = problems.reduce((sum, p) => sum + (p.grades[0]?.grade ?? 0), 0);
-        return { ...assignment, totalGrade, maxGrade };
+        return {
+          ...assignment,
+          totalGrade,
+          maxGrade,
+          problemCount: problems.length,
+          isGroup: groupSetId != null,
+        };
       });
 
       return NextResponse.json(result);

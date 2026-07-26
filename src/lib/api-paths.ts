@@ -52,6 +52,8 @@ export const apiPaths = {
   courseProblem: (id: string, pid: string) => `/api/courses/${id}/problems/${pid}`,
   courseProblemDuplicate: (id: string, pid: string) =>
     `/api/courses/${id}/problems/${pid}/duplicate`,
+  // Import a problem from another course INTO this (destination) course.
+  courseProblemImport: (id: string) => `/api/courses/${id}/problems/import`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
   courseRosterResetPassword: (id: string, userId: string) =>
     `/api/courses/${id}/roster/${userId}/reset-password`,
@@ -65,12 +67,17 @@ export const apiPaths = {
   myCourses: (opts?: { view?: 'nav' }) => `/api/me/courses${qs({ view: opts?.view })}`,
   myEnrollments: () => '/api/me/enrollments',
   myAssignments: (start?: string, end?: string) => `/api/me/assignments${qs({ start, end })}`,
+  // Courses the caller can manage (faculty/TA, or all for admins), for the import picker.
+  myManageableCourses: (opts?: { excludeCourseId?: string }) =>
+    `/api/me/manageable-courses${qs({ excludeCourseId: opts?.excludeCourseId })}`,
 
   // --- Assignments (course-nested under /assignments/[aid]) ----------------
   assignment: (courseId: string, aid: string, opts?: { view?: string }) =>
     `/api/courses/${courseId}/assignments/${aid}${qs({ view: opts?.view })}`,
   assignmentDuplicate: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/duplicate`,
+  // Import an assignment from another course INTO this (destination) course.
+  assignmentImport: (courseId: string) => `/api/courses/${courseId}/assignments/import`,
   assignmentProblems: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/problems`,
   assignmentProblem: (courseId: string, aid: string, pid: string) =>

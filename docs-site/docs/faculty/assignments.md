@@ -96,6 +96,17 @@ Use the **Published** switch to show or hide an assignment. AFCT asks for confir
 
 The assignment type and all of the Assign To settings (audience, dates, and any date exceptions) are copied from the original and can be changed afterward. The copy is always created **unpublished**, regardless of the original. Submissions and grades are never copied.
 
+### Import an assignment from another course
+
+**Import Assignment** (next to Create Assignment) copies an assignment out of a different course you teach or assist into this one. It is a short wizard:
+
+1. **Source** - pick a course, then an assignment. The course list shows every course where you are faculty or a TA (administrators see all courses), including archived courses. Unpublished draft assignments in the source course can be imported too.
+2. **Details** - the title and description start as the source assignment's; edit them or leave them as is.
+3. **Problems** - choose whether to **copy the problems into this course** (each problem is copied here with its own solution file, leaving the originals untouched) or **import without problems**.
+4. **Review** - a summary before you import.
+
+Because audiences, groups, and problems belong to a specific course, an import cannot carry them across. The imported assignment is always created **unpublished**, assigned to **all students**, and as an **individual** assignment; change the audience and type afterward. Importing a **group** assignment converts it to individual (the wizard flags this), because group sets are specific to each course; recreate it as a group assignment in the new course once its groups exist. Its schedule (due date, available-from, and late settings) is copied from the source as a starting point and may be from another term, so review the dates before publishing. Submissions and grades are never imported. To copy an assignment *within* the same course, use Duplicate instead.
+
 Keep these safeguards in mind:
 
 - You cannot unpublish an assignment after it has submissions or grades.

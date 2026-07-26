@@ -247,6 +247,26 @@ export const AssignmentDuplicateApiSchema = z.object({
   problemMode: AssignmentProblemDuplicateMode,
 });
 
+// How to handle the source assignment's problems on IMPORT. Unlike duplicate there is
+// no "link" option: problems are course-scoped, so a problem from the source course
+// can't be shared with an assignment in the destination course.
+//   none - the imported assignment starts with no problems
+//   copy - each problem is copied into the destination course (with its own solution file)
+export const AssignmentImportProblemMode = z.enum(['none', 'copy']);
+export type AssignmentImportProblemMode = z.infer<typeof AssignmentImportProblemMode>;
+
+// Import an assignment from another course the caller can manage. Audience, group set,
+// and date exceptions are NOT carried across (they reference course-scoped records);
+// the copy is created unpublished and assigned to everyone. The schedule (due date,
+// available-from, late settings) IS copied from the source as a starting point.
+export const AssignmentImportApiSchema = z.object({
+  sourceCourseId: z.string().min(1, 'Select a course to import from.'),
+  sourceAssignmentId: z.string().min(1, 'Select an assignment to import.'),
+  title: z.string().min(1, 'A title is required.').max(200, 'Title is too long.'),
+  description: z.string().max(20000, 'Description is too long.').nullable().optional(),
+  problemMode: AssignmentImportProblemMode,
+});
+
 export const AssignmentUpdateApiSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),

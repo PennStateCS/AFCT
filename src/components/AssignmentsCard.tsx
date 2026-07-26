@@ -3,7 +3,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus, BookOpen } from 'lucide-react';
+import { Plus, BookOpen, Download } from 'lucide-react';
 import type { AssignmentWithProblemCount } from '@/types/course';
 
 interface AssignmentsCardProps {
@@ -12,6 +12,7 @@ interface AssignmentsCardProps {
   assignments: AssignmentWithProblemCount[];
   assignmentColumns: ColumnDef<AssignmentWithProblemCount>[];
   onCreateAssignment: () => void;
+  onImportAssignment?: () => void;
   isLoading?: boolean;
 }
 
@@ -20,6 +21,7 @@ export function AssignmentsCard({
   assignments,
   assignmentColumns,
   onCreateAssignment,
+  onImportAssignment,
   isLoading = false,
 }: AssignmentsCardProps) {
   return (
@@ -29,16 +31,23 @@ export function AssignmentsCard({
           <BookOpen className="h-6 w-6" />
           Assignments
         </h2>
-        <Button
-          style={{
-            backgroundColor: 'var(--color-primary)',
-            color: 'var(--color-secondary-foreground)',
-          }}
-          onClick={onCreateAssignment}
-          hidden={courseIsArchived}
-        >
-          <Plus /> Create Assignment
-        </Button>
+        <div className="flex items-center gap-2">
+          {onImportAssignment && (
+            <Button variant="outline" onClick={onImportAssignment} hidden={courseIsArchived}>
+              <Download /> Import Assignment
+            </Button>
+          )}
+          <Button
+            style={{
+              backgroundColor: 'var(--color-primary)',
+              color: 'var(--color-secondary-foreground)',
+            }}
+            onClick={onCreateAssignment}
+            hidden={courseIsArchived}
+          >
+            <Plus /> Create Assignment
+          </Button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <DataTable

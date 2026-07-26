@@ -158,6 +158,20 @@ export const ProblemDuplicateApiSchema = z.object({
   description: z.string().trim().max(20000, 'Description is too long.').nullable().optional(),
 });
 
+// Import a problem from another course the caller can manage into this course. Like
+// duplicate, only the title/description are editable; the type, state cap, determinism
+// flag, and the solution file are copied from the source.
+export const ProblemImportApiSchema = z.object({
+  sourceCourseId: z.string().min(1, 'Select a course to import from.'),
+  sourceProblemId: z.string().min(1, 'Select a problem to import.'),
+  title: z
+    .string()
+    .trim()
+    .min(3, 'Title must be at least 3 characters.')
+    .max(200, 'Title is too long.'),
+  description: z.string().trim().max(20000, 'Description is too long.').nullable().optional(),
+});
+
 /**
  * Per-problem settings sent when associating an existing problem with an
  * assignment (AssociateProblemsDialog). `maxSubmissions === -1` means unlimited;

@@ -11,9 +11,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { WizardTitleDescription } from '@/components/dialogs/wizard/WizardTitleDescription';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
@@ -91,40 +89,17 @@ export function DuplicateProblemDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div>
-            <Label htmlFor="dup-problem-title" className="mb-2 block">
-              Title
-            </Label>
-            <Input
-              id="dup-problem-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              aria-invalid={!!titleError}
-              aria-describedby={titleError ? 'dup-problem-title-error' : undefined}
-              placeholder="Problem title"
-            />
-            {titleError && (
-              <p id="dup-problem-title-error" className="mt-1 text-xs text-red-600" role="alert">
-                {titleError}
-              </p>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="dup-problem-description" className="mb-2 block">
-              Description
-            </Label>
-            <Textarea
-              id="dup-problem-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter problem description"
-              className="min-h-[120px]"
-            />
-          </div>
-          <p className="text-muted-foreground text-xs">
-            The solution file and the other settings (type, state limit, and determinism) are copied
-            from the original. You can edit the remaining details after the copy is created.
-          </p>
+          <WizardTitleDescription
+            idPrefix="dup-problem"
+            title={title}
+            onTitleChange={setTitle}
+            description={description}
+            onDescriptionChange={setDescription}
+            titleError={titleError}
+            titlePlaceholder="Problem title"
+            descriptionPlaceholder="Enter problem description"
+            note="The solution file and the other settings (type, state limit, and determinism) are copied from the original. You can edit the remaining details after the copy is created."
+          />
         </div>
 
         <DialogFooter>
