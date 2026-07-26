@@ -11,26 +11,17 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import SelectField from '@/components/ui/SelectField';
-import { Stepper } from '@/components/ui/stepper';
+import { WizardSteps } from '@/components/dialogs/wizard/WizardSteps';
+import { WizardTitleDescription } from '@/components/dialogs/wizard/WizardTitleDescription';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
+import { useManageableCourses, courseLabel } from '@/hooks/use-manageable-courses';
 import type { Problem } from '@prisma/client';
 
 const STEP_TITLES = ['Source', 'Details', 'Review'] as const;
 const LAST_STEP = STEP_TITLES.length - 1;
-
-type ManageableCourse = {
-  id: string;
-  name: string;
-  code: string | null;
-  semester: string | null;
-  isArchived: boolean;
-};
 
 type SourceProblem = {
   id: string;
@@ -47,15 +38,6 @@ type Props = {
   onImported?: (created: Problem) => void;
 };
 
-/** "Theory (CS 301) · Spring 2026 · Archived" style label for a source course. */
-function courseLabel(c: ManageableCourse): string {
-  let label = c.name;
-  if (c.code) label += ` (${c.code})`;
-  if (c.semester) label += ` · ${c.semester}`;
-  if (c.isArchived) label += ' · Archived';
-  return label;
-}
-
 /**
  * Import a problem from another course the user can manage into this course. Mirrors the
  * Import Assignment wizard: pick a source course and problem, edit the title/description,
@@ -71,8 +53,7 @@ export function ImportProblemDialog({
 }: Props) {
   const [step, setStep] = useState(0);
 
-  const [courses, setCourses] = useState<ManageableCourse[]>([]);
-  const [coursesLoading, setCoursesLoading] = useState(false);
+  const { courses, loading: coursesLoading } = useManageableCourses(open, courseId);
   const [sourceCourseId, setSourceCourseId] = useState('');
 
   const [problems, setProblems] = useState<SourceProblem[]>([]);
@@ -83,7 +64,7 @@ export function ImportProblemDialog({
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Reset and load the manageable-course list each time the dialog opens.
+  // Reset the wizard's own state each time it opens (the course list is loaded by the hook).
   useEffect(() => {
     if (!open) return;
     setStep(0);
@@ -93,25 +74,7 @@ export function ImportProblemDialog({
     setTitle('');
     setDescription('');
     setSubmitting(false);
-
-    let cancelled = false;
-    setCoursesLoading(true);
-    void (async () => {
-      try {
-        const list = await apiClient.get<ManageableCourse[]>(
-          apiPaths.myManageableCourses({ excludeCourseId: courseId }),
-        );
-        if (!cancelled) setCourses(list);
-      } catch {
-        if (!cancelled) showToast.error('Failed to load courses');
-      } finally {
-        if (!cancelled) setCoursesLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, courseId]);
+  }, [open]);
 
   // When the source course changes, load its problems and clear the selection.
   useEffect(() => {
@@ -188,15 +151,12 @@ export function ImportProblemDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Stepper
-          steps={STEP_TITLES as unknown as string[]}
+        <WizardSteps
+          steps={STEP_TITLES}
           current={step}
           onStepClick={(index) => setStep(index)}
           className="mb-2"
         />
-        <div className="sr-only" role="status" aria-live="polite">
-          {`Step ${step + 1} of ${STEP_TITLES.length}: ${STEP_TITLES[step]}`}
-        </div>
 
         <div className="min-h-[300px] space-y-4">
           {step === 0 && (
@@ -243,47 +203,17 @@ export function ImportProblemDialog({
           )}
 
           {step === 1 && (
-            <>
-              <div>
-                <Label htmlFor="import-problem-title" className="mb-2 block">
-                  Title
-                </Label>
-                <Input
-                  id="import-problem-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  aria-invalid={!!titleError}
-                  aria-describedby={titleError ? 'import-problem-title-error' : undefined}
-                  placeholder="Problem title"
-                />
-                {titleError && (
-                  <p
-                    id="import-problem-title-error"
-                    className="mt-1 text-xs text-red-600"
-                    role="alert"
-                  >
-                    {titleError}
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="import-problem-description" className="mb-2 block">
-                  Description
-                </Label>
-                <Textarea
-                  id="import-problem-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Enter problem description"
-                  className="min-h-[120px]"
-                />
-              </div>
-              <p className="text-muted-foreground text-xs">
-                The title and description start as the source problem&apos;s. The type, state limit,
-                determinism, and the solution file are copied from the source; you can edit the
-                remaining details after the copy is created.
-              </p>
-            </>
+            <WizardTitleDescription
+              idPrefix="import-problem"
+              title={title}
+              onTitleChange={setTitle}
+              description={description}
+              onDescriptionChange={setDescription}
+              titleError={titleError}
+              titlePlaceholder="Problem title"
+              descriptionPlaceholder="Enter problem description"
+              note="The title and description start as the source problem's. The type, state limit, determinism, and the solution file are copied from the source; you can edit the remaining details after the copy is created."
+            />
           )}
 
           {step === LAST_STEP && (

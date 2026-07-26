@@ -11,27 +11,18 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import SelectField from '@/components/ui/SelectField';
-import { Stepper } from '@/components/ui/stepper';
+import { WizardSteps } from '@/components/dialogs/wizard/WizardSteps';
+import { WizardTitleDescription } from '@/components/dialogs/wizard/WizardTitleDescription';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
+import { useManageableCourses, courseLabel } from '@/hooks/use-manageable-courses';
 import type { Assignment } from '@prisma/client';
 import type { AssignmentImportProblemMode } from '@/schemas/assignment';
 
 const STEP_TITLES = ['Source', 'Details', 'Problems', 'Review'] as const;
 const LAST_STEP = STEP_TITLES.length - 1;
-
-type ManageableCourse = {
-  id: string;
-  name: string;
-  code: string | null;
-  semester: string | null;
-  isArchived: boolean;
-};
 
 type SourceAssignment = {
   id: string;
@@ -49,15 +40,6 @@ type Props = {
   onImported?: (created: Assignment) => void;
 };
 
-/** "CS 101 (CMPSC 131) · Spring 2026 · Archived" style label for a source course. */
-function courseLabel(c: ManageableCourse): string {
-  let label = c.name;
-  if (c.code) label += ` (${c.code})`;
-  if (c.semester) label += ` · ${c.semester}`;
-  if (c.isArchived) label += ' · Archived';
-  return label;
-}
-
 /**
  * Import an assignment from another course the user can manage into this course. Modeled
  * on the Duplicate Assignment wizard, but the source is a different course: audience,
@@ -74,8 +56,7 @@ export function ImportAssignmentDialog({
 }: Props) {
   const [step, setStep] = useState(0);
 
-  const [courses, setCourses] = useState<ManageableCourse[]>([]);
-  const [coursesLoading, setCoursesLoading] = useState(false);
+  const { courses, loading: coursesLoading } = useManageableCourses(open, courseId);
   const [sourceCourseId, setSourceCourseId] = useState('');
 
   const [assignments, setAssignments] = useState<SourceAssignment[]>([]);
@@ -87,7 +68,7 @@ export function ImportAssignmentDialog({
   const [problemMode, setProblemMode] = useState<AssignmentImportProblemMode>('copy');
   const [submitting, setSubmitting] = useState(false);
 
-  // Reset everything and load the manageable-course list each time the dialog opens.
+  // Reset the wizard's own state each time it opens (the course list is loaded by the hook).
   useEffect(() => {
     if (!open) return;
     setStep(0);
@@ -98,25 +79,7 @@ export function ImportAssignmentDialog({
     setDescription('');
     setProblemMode('copy');
     setSubmitting(false);
-
-    let cancelled = false;
-    setCoursesLoading(true);
-    void (async () => {
-      try {
-        const list = await apiClient.get<ManageableCourse[]>(
-          apiPaths.myManageableCourses({ excludeCourseId: courseId }),
-        );
-        if (!cancelled) setCourses(list);
-      } catch {
-        if (!cancelled) showToast.error('Failed to load courses');
-      } finally {
-        if (!cancelled) setCoursesLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, courseId]);
+  }, [open]);
 
   // When the source course changes, load its assignments (drafts included) and clear the
   // downstream selection.
@@ -211,15 +174,12 @@ export function ImportAssignmentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Stepper
-          steps={STEP_TITLES as unknown as string[]}
+        <WizardSteps
+          steps={STEP_TITLES}
           current={step}
           onStepClick={(index) => setStep(index)}
           className="mb-2"
         />
-        <div className="sr-only" role="status" aria-live="polite">
-          {`Step ${step + 1} of ${STEP_TITLES.length}: ${STEP_TITLES[step]}`}
-        </div>
 
         <div className="min-h-[320px] space-y-4">
           {step === 0 && (
@@ -266,51 +226,31 @@ export function ImportAssignmentDialog({
           )}
 
           {step === 1 && (
-            <>
-              <div>
-                <Label htmlFor="import-title" className="mb-2 block">
-                  Title
-                </Label>
-                <Input
-                  id="import-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  aria-invalid={!!titleError}
-                  aria-describedby={titleError ? 'import-title-error' : undefined}
-                  placeholder="Assignment title"
-                />
-                {titleError && (
-                  <p id="import-title-error" className="mt-1 text-xs text-red-600" role="alert">
-                    {titleError}
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="import-description" className="mb-2 block">
-                  Description
-                </Label>
-                <Textarea
-                  id="import-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Enter assignment description"
-                  className="min-h-[120px]"
-                />
-              </div>
-              <p className="text-muted-foreground text-xs">
-                The title and description start as the source assignment&apos;s. The imported copy
-                is assigned to <strong>all students</strong> and created as an individual assignment;
-                you can change the audience and type after it is created.
-              </p>
-              {groupNote && (
-                <p
-                  role="note"
-                  className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800"
-                >
-                  {groupNote}
-                </p>
-              )}
-            </>
+            <WizardTitleDescription
+              idPrefix="import-assignment"
+              title={title}
+              onTitleChange={setTitle}
+              description={description}
+              onDescriptionChange={setDescription}
+              titleError={titleError}
+              titlePlaceholder="Assignment title"
+              descriptionPlaceholder="Enter assignment description"
+              note={
+                <>
+                  The title and description start as the source assignment&apos;s. The imported copy
+                  is assigned to <strong>all students</strong> and created as an individual
+                  assignment; you can change the audience and type after it is created.
+                  {groupNote && (
+                    <span
+                      role="note"
+                      className="mt-2 block rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-800"
+                    >
+                      {groupNote}
+                    </span>
+                  )}
+                </>
+              }
+            />
           )}
 
           {step === 2 && (
