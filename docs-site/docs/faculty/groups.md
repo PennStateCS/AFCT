@@ -15,7 +15,7 @@ Set names must be unique within the course. After the set is created it opens au
 
 ## Work with a group set
 
-When a course has more than one set, use the **Group set** selector to switch between them. The selector shows each set's group count and how many students are assigned.
+When a course has more than one set, use the **Group set** selector to switch between them. The selected set's group and assignment counts appear in its summary below.
 
 The selected set shows summary counts (groups, eligible students, assigned, and unassigned), a searchable list of unassigned students, and a card for each group.
 
