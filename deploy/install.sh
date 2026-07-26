@@ -1215,7 +1215,11 @@ port_in_use() {
 # measured (callers treat that as "unknown", never as "full").
 free_disk_mb() {
   command -v df >/dev/null 2>&1 || return 0
-  _df_path=/var/lib/docker
+  # Prefer Docker's actual data-root: a custom `data-root`, or /var/lib/docker on its
+  # own mount, can be a different filesystem than the conventional path. Best-effort and
+  # never prompts; falls back to the conventional path, then the deploy directory.
+  _df_path=$(docker_cmd info -f '{{.DockerRootDir}}' 2>/dev/null || true)
+  [ -n "$_df_path" ] && [ -d "$_df_path" ] || _df_path=/var/lib/docker
   [ -d "$_df_path" ] || _df_path=$SCRIPT_DIR
   _free=$(df -Pm "$_df_path" 2>/dev/null | awk 'NR == 2 { print $4 }')
   case "$_free" in
@@ -1461,6 +1465,10 @@ wait_for_health() {
   info "waiting for the application health check..."
 
   _elapsed=0
+  # Count how often the container is seen mid-restart. A single restart can happen
+  # during a normal recreate, but repeated restarts mean it is crash-looping and will
+  # never become healthy, so fail fast instead of waiting out the whole timeout.
+  _restarting=0
   while [ "$_elapsed" -lt "$HEALTH_TIMEOUT" ]; do
     _app_id=$(compose_project ps -q "$APP_SERVICE" 2>/dev/null || true)
 
@@ -1486,6 +1494,12 @@ wait_for_health() {
           ;;
         exited\|*|dead\|*)
           die "the application container stopped before becoming healthy."
+          ;;
+        restarting\|*)
+          _restarting=$((_restarting + 1))
+          if [ "$_restarting" -ge 3 ]; then
+            die "the ${APP_SERVICE} container keeps restarting (crash loop) instead of becoming healthy. Check the logs: sh install.sh logs"
+          fi
           ;;
         running\|none)
           die "the ${APP_SERVICE} service has no Docker health check configured."
@@ -2558,6 +2572,29 @@ case "$HEALTH_INTERVAL" in ''|*[!0-9]*) die "AFCT_HEALTH_INTERVAL must be a posi
 [ "$HEALTH_TIMEOUT" -ge 1 ] || die "AFCT_HEALTH_TIMEOUT must be at least 1 second."
 [ "$HEALTH_INTERVAL" -ge 1 ] || die "AFCT_HEALTH_INTERVAL must be at least 1 second."
 
+# True when dotted-numeric version $1 is strictly newer than $2 (field by field, so
+# 2.1.10 > 2.1.9). If either version isn't purely digits-and-dots, fall back to a plain
+# inequality so an unusual scheme still offers an update rather than getting stuck.
+# Portable: no `sort -V`, which busybox/older shells may lack.
+version_gt() {
+  _va=$1
+  _vb=$2
+  case "$_va$_vb" in
+    *[!0-9.]*) [ "$_va" != "$_vb" ]; return $? ;;
+  esac
+  while [ -n "$_va" ] || [ -n "$_vb" ]; do
+    _fa=${_va%%.*}
+    _fb=${_vb%%.*}
+    [ -n "$_fa" ] || _fa=0
+    [ -n "$_fb" ] || _fb=0
+    [ "$_fa" -gt "$_fb" ] && return 0
+    [ "$_fa" -lt "$_fb" ] && return 1
+    case "$_va" in *.*) _va=${_va#*.} ;; *) _va="" ;; esac
+    case "$_vb" in *.*) _vb=${_vb#*.} ;; *) _vb="" ;; esac
+  done
+  return 1
+}
+
 # Before a mutating run, offer to update the installer itself when a newer one is
 # published, so the console path stays current without a separate `self-update`. Skips
 # when re-executed (AFCT_INSTALLER_SELF_CHECKED), offline, or already up to date. On a
@@ -2574,10 +2611,10 @@ check_installer_freshness() {
   _remote_ver=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$_rf" | head -n 1)
   rm -f "$_rf"
   [ -n "$_remote_ver" ] || return 0
-  # Releases move forward only, so a version that differs from the published one means
-  # the local installer is behind. Kept as a plain string compare for portability (no
-  # sort -V, which busybox/older shells may lack).
-  [ "$_remote_ver" = "$INSTALLER_VERSION" ] && return 0
+  # Only offer to move when the published installer is strictly newer. A plain "differs"
+  # test would treat a stale or rolled-back remote (or a locally newer build) as an
+  # update and, under -y, silently downgrade the installer and re-exec.
+  version_gt "$_remote_ver" "$INSTALLER_VERSION" || return 0
 
   info "a newer installer (${_remote_ver}) is available; you have ${INSTALLER_VERSION}."
   if [ "$ASSUME_YES" = "true" ]; then
