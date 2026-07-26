@@ -6,7 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import type { AccessorFnColumnDef } from '@tanstack/react-table';
-import { MaxPointsCell, DueDateCell, useAssignmentColumns } from './assignment-columns';
+import {
+  MaxPointsCell,
+  DueDateCell,
+  OverrideAwareCell,
+  useAssignmentColumns,
+} from './assignment-columns';
 import type { AssignmentWithProblemCount } from '@/types/course';
 
 // Fresh QueryClient per test (retry off, no lingering cache) so each render starts
@@ -94,6 +99,65 @@ describe('DueDateCell', () => {
     expect(screen.getByText('Everyone')).toBeInTheDocument();
     // The late-only override surfaces its late deadline.
     expect(screen.getByText(/late until/i)).toBeInTheDocument();
+  });
+});
+
+describe('OverrideAwareCell', () => {
+  const base = {
+    id: 'a1',
+    courseId: 'c1',
+    unlockAt: new Date('2026-01-10T00:00:00.000Z'),
+    allowLateSubmissions: false,
+    lateCutoff: null,
+  } as unknown as AssignmentWithProblemCount;
+
+  it('shows the base value (no badge) when overrides do not change the field', () => {
+    // The override only moves the due date; the unlock date is the same for everyone.
+    const assignment = {
+      ...base,
+      overrides: [{ studentName: 'Ada Lovelace', unlockAt: null, dueDate: new Date() }],
+    } as unknown as AssignmentWithProblemCount;
+
+    render(
+      <OverrideAwareCell
+        assignment={assignment}
+        timeZone="UTC"
+        field="unlockAt"
+        label="Available From"
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /multiple/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a "Multiple" badge and per-student values when the field varies', async () => {
+    const user = userEvent.setup();
+    const assignment = {
+      ...base,
+      overrides: [
+        { studentName: 'Ada Lovelace', unlockAt: new Date('2026-01-15T00:00:00.000Z') },
+      ],
+    } as unknown as AssignmentWithProblemCount;
+
+    render(
+      <OverrideAwareCell
+        assignment={assignment}
+        timeZone="UTC"
+        field="unlockAt"
+        label="Available From"
+      />,
+    );
+
+    const badge = screen.getByRole('button', { name: /multiple available from values/i });
+    await user.click(badge);
+    expect(await screen.findByText('Everyone')).toBeInTheDocument();
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+  });
+
+  it('renders Yes/No for the allow-late field', () => {
+    render(
+      <OverrideAwareCell assignment={base} timeZone="UTC" field="allowLateSubmissions" label="Allow Late" />,
+    );
+    expect(screen.getByText('No')).toBeInTheDocument();
   });
 });
 
