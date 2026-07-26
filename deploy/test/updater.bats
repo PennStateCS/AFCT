@@ -88,11 +88,14 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   run grep -Eq 'pull +updater' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
   # ...and spawned a detached helper (docker run) to recreate it.
   run grep -Eq '^run .*-d' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
-  # The recreate must run compose FROM the real host deploy dir (the mock reports
-  # /host/afct), mounted at its own path, so the relative `.:/afct` mount and the
-  # services' relative env_file both resolve there instead of a bare /afct.
-  run grep -q -- "cd '/host/afct'" "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  # The recreate mounts the runtime compose and shared directories at their real host
+  # paths (the mock reports /host/afct for both) and drives compose with ABSOLUTE
+  # --env-file / -f paths, so no path depends on the helper's working directory. It also
+  # exports AFCT_RUNTIME_ENV_FILE so the services' env_file resolves inside the helper.
   run grep -q -- '-v /host/afct:/host/afct' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  run grep -q -- "-f '/host/afct/docker-compose.yml'" "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  run grep -q -- "--env-file '/host/afct/.env.production'" "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  run grep -q -- "AFCT_RUNTIME_ENV_FILE='/host/afct/.env.production'" "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
   # A self-update must not touch the app's version pin.
   [ "$(tag_now)" = "v1.0.0" ]
 }

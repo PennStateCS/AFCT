@@ -812,33 +812,45 @@ recreate_updater() {
   [ -n "$_self" ] || { progress_note "could not determine the updater container"; return 1; }
   # The helper runs the updater's OWN image (it has docker + compose); the new image
   # is picked up by its `up -d`. `docker run -v` needs HOST paths, so resolve the host
-  # source backing this container's /afct mount.
+  # sources backing this container's scoped compose and shared mounts.
   _self_image=$(docker inspect --format '{{.Config.Image}}' "$_self" 2>/dev/null || printf '')
   [ -n "$_self_image" ] || { progress_note "could not resolve the updater image"; return 1; }
-  _afct_src=$(docker inspect \
-    --format '{{ range .Mounts }}{{ if eq .Destination "/afct" }}{{ .Source }}{{ end }}{{ end }}' \
+  _compose_src=$(docker inspect \
+    --format '{{ range .Mounts }}{{ if eq .Destination "/afct-compose" }}{{ .Source }}{{ end }}{{ end }}' \
     "$_self" 2>/dev/null || printf '')
-  [ -n "$_afct_src" ] || { progress_note "could not resolve the deploy directory"; return 1; }
+  _shared_src=$(docker inspect \
+    --format '{{ range .Mounts }}{{ if eq .Destination "/afct-shared" }}{{ .Source }}{{ end }}{{ end }}' \
+    "$_self" 2>/dev/null || printf '')
+  [ -n "$_compose_src" ] || { progress_note "could not resolve the runtime compose directory"; return 1; }
+  [ -n "$_shared_src" ] || { progress_note "could not resolve the shared configuration directory"; return 1; }
 
-  # Mount the deploy dir at its REAL host path (not /afct) and run compose from there.
-  # This is what keeps the recreated updater pointed at the real deploy directory. The
-  # compose file mounts it with a relative `.:/afct` AND its services read a relative
-  # `env_file: .env.production`; compose resolves BOTH against the project directory
-  # (the working dir). If we ran from a dir the helper doesn't actually have (e.g. via
-  # --project-directory, or the compose file's own /afct dir), the env-file read fails
-  # inside the helper and the swap dies silently, or `.` binds a bare literal /afct.
-  # Mounting the source at the same path and cd-ing there makes every relative path
-  # resolve identically in the helper and on the daemon.
-  _env_base=$(basename "$ENV_FILE")
-  _compose_base=$(basename "$COMPOSE_FILE")
-  _cmd="sleep 3; cd '${_afct_src}' && docker compose -p '${_proj}' --env-file '${_env_base}' -f '${_compose_base}' --profile updater up -d --no-deps ${UPDATER_SERVICE}"
-  docker run -d --rm \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "${_afct_src}:${_afct_src}" \
-    "$_self_image" sh -c "$_cmd" >/dev/null 2>&1 || {
-    progress_note "could not start the update-service swap helper"
-    return 1
-  }
+  # Mount both source directories at their REAL host paths so every path the helper hands
+  # the daemon (bind sources, the env_file the Compose file references via
+  # AFCT_RUNTIME_ENV_FILE) resolves identically inside the helper and on the host. The
+  # compose file and the env file may live in different directories (the versioned Linux
+  # layout) or the same one (Windows, where both mounts point at the deploy directory);
+  # mounting each at its own host path handles both without special-casing.
+  _env_file="${_shared_src}/.env.production"
+  _compose_file="${_compose_src}/docker-compose.yml"
+  _cmd="sleep 3; export AFCT_RUNTIME_ENV_FILE='${_env_file}'; docker compose -p '${_proj}' --env-file '${_env_file}' -f '${_compose_file}' --profile updater up -d --no-deps ${UPDATER_SERVICE}"
+  if [ "$_compose_src" = "$_shared_src" ]; then
+    docker run -d --rm \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v "${_compose_src}:${_compose_src}" \
+      "$_self_image" sh -c "$_cmd" >/dev/null 2>&1 || {
+      progress_note "could not start the update-service swap helper"
+      return 1
+    }
+  else
+    docker run -d --rm \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v "${_compose_src}:${_compose_src}" \
+      -v "${_shared_src}:${_shared_src}" \
+      "$_self_image" sh -c "$_cmd" >/dev/null 2>&1 || {
+      progress_note "could not start the update-service swap helper"
+      return 1
+    }
+  fi
   return 0
 }
 

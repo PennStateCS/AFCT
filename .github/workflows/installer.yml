@@ -29,6 +29,11 @@ jobs:
       - name: Syntax check
         run: |
           sh -n deploy/install.sh
+          sh -n deploy/linux/install.sh
+          sh -n deploy/linux/build-bundle.sh
+          sh -n deploy/linux/bin/afctctl
+          for f in deploy/linux/lib/*.sh; do sh -n "$f"; done
+          sh -n deploy/test/compose-config.sh
           sh -n docker/updater/updater.sh
           sh -n docker/backup/backup.sh
 
@@ -45,17 +50,59 @@ jobs:
           }
           Write-Host 'install.ps1 parses cleanly.'
 
-      # Advisory for now (the scripts predate shellcheck); surfaces issues without
-      # blocking. Tighten to a hard gate once the existing findings are cleared.
+      # The new Linux tooling (deploy/linux/) is written clean, so gate on it. The
+      # .shellcheckrc in that directory documents the two shared-globals suppressions.
+      - name: Shellcheck the Linux deployment tooling
+        run: |
+          cd deploy/linux
+          shellcheck -s sh install.sh build-bundle.sh bin/afctctl lib/*.sh
+
+      # The legacy compat shim still ships; keep it advisory alongside the sidecars.
       - name: Shellcheck (advisory)
         run: |
           shellcheck -s sh deploy/install.sh || true
           shellcheck -s sh docker/updater/updater.sh || true
 
       # Run in the bats container as root: the dedicated-service-account tests are
-      # root-only by design (they create a system user), so running as the non-root
-      # runner would skip them. This mirrors the documented local command.
-      - name: Run installer + updater tests
+      # root-only by design (they create a system user), and the bundle/extraction tests
+      # are happiest as root. curl + python3 back the mocked-HTTP release-resolution tests.
+      # This mirrors the documented local command.
+      - name: Run deployment + updater tests
         run: |
           docker run --rm -v "$PWD:/code" -w /code --entrypoint sh bats/bats:latest -c \
-            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache jq >/dev/null 2>&1; bats deploy/test/install.bats deploy/test/updater.bats"
+            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache jq tar curl python3 util-linux shadow >/dev/null 2>&1; bats deploy/test/afctctl.bats deploy/test/linux-deploy.bats deploy/test/deploy-fixes.bats deploy/test/deploy-remote.bats deploy/test/deploy-hardening.bats deploy/test/deploy-migrate.bats deploy/test/updater.bats"
+
+      # A real `docker compose config` against the actual installed layout (versioned
+      # Compose file in a release directory, .env.production under shared), NOT a mock that
+      # ignores paths. The ubuntu runner ships the compose plugin; config needs no daemon.
+      - name: Real docker compose config (split release/shared layout)
+        run: sh deploy/test/compose-config.sh
+
+      # A version's bytes are fixed: if any file that goes into the deployment bundle
+      # changed versus the base branch, the deployment-tool version (INSTALLER_VERSION in
+      # bin/afctctl) must change too. This enforces the content-addressed release identity
+      # at the source. Skipped when the base has no bundle yet (the tree is brand new).
+      - name: Enforce a deployment-version bump on bundle-source changes
+        if: github.event_name == 'pull_request'
+        run: |
+          set -eu
+          git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+          BASE=$(git merge-base FETCH_HEAD HEAD 2>/dev/null || echo FETCH_HEAD)
+          CHANGED=$(git diff --name-only "$BASE"...HEAD -- \
+            deploy/linux deploy/docker-compose.yml deploy/.env.production.example || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No bundle-source changes; nothing to enforce."
+            exit 0
+          fi
+          BASE_VER=$(git show "$BASE:deploy/linux/bin/afctctl" 2>/dev/null \
+            | sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' | head -n1 || true)
+          HEAD_VER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' deploy/linux/bin/afctctl | head -n1)
+          if [ -z "$BASE_VER" ]; then
+            echo "Base has no deployment bundle yet; skipping the bump check."
+            exit 0
+          fi
+          if [ "$BASE_VER" = "$HEAD_VER" ]; then
+            echo "::error::Bundle sources changed but the deployment-tool version is still ${HEAD_VER}. Bump INSTALLER_VERSION in deploy/linux/bin/afctctl."
+            exit 1
+          fi
+          echo "OK: deployment-tool version ${BASE_VER} -> ${HEAD_VER}"
