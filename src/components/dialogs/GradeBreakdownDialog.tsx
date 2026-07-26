@@ -198,12 +198,6 @@ export function GradeBreakdownDialog({
         meta: { priority: 1 },
       },
       {
-        accessorKey: 'Max Points',
-        header: 'Max',
-        cell: ({ row }) => <div>{row.original.maxPoints}</div>,
-        meta: { priority: 2 },
-      },
-      {
         id: 'Grading',
         header: 'Grading',
         cell: ({ row }) =>
@@ -212,6 +206,12 @@ export function GradeBreakdownDialog({
           ) : (
             <Badge variant="outline">Manual</Badge>
           ),
+        meta: { priority: 2 },
+      },
+      {
+        accessorKey: 'Max Points',
+        header: 'Max',
+        cell: ({ row }) => <div>{row.original.maxPoints}</div>,
         meta: { priority: 2 },
       },
       {
