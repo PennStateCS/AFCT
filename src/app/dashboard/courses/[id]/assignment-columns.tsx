@@ -76,8 +76,11 @@ export function DueDateCell({
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <CompactDate value={assignment.dueDate} timeZone={timeZone} />
-      {overrides.length > 0 && (
+      {/* With per-student overrides the single base date is misleading, so show only
+          the badge; its popover lists every effective date. */}
+      {overrides.length === 0 ? (
+        <CompactDate value={assignment.dueDate} timeZone={timeZone} />
+      ) : (
         <Popover>
           <PopoverTrigger asChild>
             <button
