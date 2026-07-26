@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import { ClipboardList, Loader2 } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
@@ -29,6 +30,7 @@ type Row = {
   title: string;
   maxPoints: number;
   grade: number | null;
+  autograded: boolean;
 };
 
 interface GradeBreakdownDialogProps {
@@ -63,7 +65,11 @@ export function GradeBreakdownDialog({
     queryKey: queryKeys.assignment.gradeBreakdown(courseId, assignmentId),
     queryFn: () =>
       fetchJson<{
-        problems?: Array<{ problem: { id: string; title?: string | null }; maxPoints: number }>;
+        problems?: Array<{
+          problem: { id: string; title?: string | null };
+          maxPoints: number;
+          autograderEnabled: boolean;
+        }>;
       }>(apiPaths.assignment(courseId, assignmentId)),
     enabled: open,
     staleTime: 30_000,
@@ -106,6 +112,7 @@ export function GradeBreakdownDialog({
       title: link.problem.title ?? 'Untitled',
       maxPoints: link.maxPoints,
       grade: grades[link.problem.id]?.grade ?? null,
+      autograded: link.autograderEnabled,
     }));
     setRows(newRows);
     setOriginalRows(newRows);
@@ -194,6 +201,17 @@ export function GradeBreakdownDialog({
         accessorKey: 'Max Points',
         header: 'Max',
         cell: ({ row }) => <div>{row.original.maxPoints}</div>,
+        meta: { priority: 2 },
+      },
+      {
+        id: 'Grading',
+        header: 'Grading',
+        cell: ({ row }) =>
+          row.original.autograded ? (
+            <Badge variant="secondary">Autograded</Badge>
+          ) : (
+            <Badge variant="outline">Manual</Badge>
+          ),
         meta: { priority: 2 },
       },
       {
