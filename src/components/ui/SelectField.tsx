@@ -34,6 +34,9 @@ export interface SelectFieldProps extends Omit<React.ComponentProps<typeof Selec
   contentProps?: React.ComponentProps<typeof SelectContent>;
   children?: React.ReactNode;
   id?: string;
+  // Options truncate to one line by default (keeps most dropdowns compact). Pass false
+  // to let long labels wrap and show in full, e.g. long assignment titles.
+  truncateOptions?: boolean;
 }
 
 const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, SelectFieldProps>(
@@ -55,6 +58,7 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
       children,
       id,
       disabled,
+      truncateOptions = true,
       ...selectProps
     },
     ref,
@@ -115,7 +119,14 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
             <SelectContent {...contentProps}>
               {options?.map((option) => (
                 <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-                  <span className="block truncate max-w-[16rem]">{option.label}</span>
+                  <span
+                    className={cn(
+                      'block',
+                      truncateOptions ? 'max-w-[16rem] truncate' : 'break-words',
+                    )}
+                  >
+                    {option.label}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

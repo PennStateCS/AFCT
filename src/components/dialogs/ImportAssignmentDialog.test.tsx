@@ -123,4 +123,28 @@ describe('ImportAssignmentDialog', () => {
     );
     expect(onImported).toHaveBeenCalledWith({ id: 'a2' });
   });
+
+  it('warns that a group source assignment will become individual', async () => {
+    getMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('manageable-courses')
+          ? courses
+          : [{ id: 'g1', title: 'Team Project', description: null, problemCount: 0, isGroup: true }],
+      ),
+    );
+    renderDialog();
+
+    fireEvent.change(await screen.findByLabelText('Course to import from'), {
+      target: { value: 'src' },
+    });
+    fireEvent.change(await screen.findByLabelText('Assignment to import'), {
+      target: { value: 'g1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('note')).toHaveTextContent(/group assignment/i),
+    );
+    expect(screen.getByRole('note')).toHaveTextContent(/individual assignment/i);
+  });
 });

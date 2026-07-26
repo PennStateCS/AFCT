@@ -172,6 +172,7 @@ describe('GET /api/courses/[id]/assignments', () => {
         totalGrade: 10,
         maxGrade: 15,
         problemCount: 2,
+        isGroup: false,
       },
     ]);
   });

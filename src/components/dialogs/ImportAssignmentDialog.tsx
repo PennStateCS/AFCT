@@ -38,6 +38,7 @@ type SourceAssignment = {
   title: string;
   description?: string | null;
   problemCount?: number;
+  isGroup?: boolean;
 };
 
 type Props = {
@@ -153,7 +154,14 @@ export function ImportAssignmentDialog({
   }, [selected]);
 
   const hasProblems = (selected?.problemCount ?? 0) > 0;
+  const sourceIsGroup = Boolean(selected?.isGroup);
   const titleError = title.trim().length === 0 ? 'A title is required.' : undefined;
+
+  // Shown whenever the source is a group assignment: the import can't carry the group set
+  // (groups are course-specific), so it lands as individual.
+  const groupNote = sourceIsGroup
+    ? 'The source is a group assignment. It will be imported as an individual assignment because groups are specific to each course. Set it up as a group assignment here after importing.'
+    : null;
   const sourceComplete = Boolean(sourceCourseId && sourceAssignmentId);
 
   const next = () => {
@@ -220,6 +228,7 @@ export function ImportAssignmentDialog({
                 label="Course to import from"
                 name="import-source-course"
                 requiredMark
+                truncateOptions={false}
                 value={sourceCourseId || undefined}
                 onValueChange={setSourceCourseId}
                 disabled={coursesLoading}
@@ -237,13 +246,14 @@ export function ImportAssignmentDialog({
                   label="Assignment to import"
                   name="import-source-assignment"
                   requiredMark
+                  truncateOptions={false}
                   value={sourceAssignmentId || undefined}
                   onValueChange={setSourceAssignmentId}
                   disabled={assignmentsLoading}
                   placeholder={assignmentsLoading ? 'Loading assignments…' : 'Select an assignment'}
                   options={assignments.map((a) => ({
                     value: a.id,
-                    label: `${a.title}${(a.problemCount ?? 0) > 0 ? ` (${a.problemCount} problem${a.problemCount === 1 ? '' : 's'})` : ''}`,
+                    label: `${a.title}${a.isGroup ? ' (Group)' : ''}${(a.problemCount ?? 0) > 0 ? ` · ${a.problemCount} problem${a.problemCount === 1 ? '' : 's'}` : ''}`,
                   }))}
                 />
               )}
@@ -292,6 +302,14 @@ export function ImportAssignmentDialog({
                 is assigned to <strong>all students</strong> and created as an individual assignment;
                 you can change the audience and type after it is created.
               </p>
+              {groupNote && (
+                <p
+                  role="note"
+                  className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800"
+                >
+                  {groupNote}
+                </p>
+              )}
             </>
           )}
 
@@ -356,10 +374,18 @@ export function ImportAssignmentDialog({
                 <dt className="text-muted-foreground">Title</dt>
                 <dd className="font-medium">{title.trim() || '(untitled)'}</dd>
                 <dt className="text-muted-foreground">Assign To</dt>
-                <dd>All students</dd>
+                <dd>All students{sourceIsGroup ? ' (individual; was a group assignment)' : ''}</dd>
                 <dt className="text-muted-foreground">Problems</dt>
                 <dd>{problemSummary}</dd>
               </dl>
+              {groupNote && (
+                <p
+                  role="note"
+                  className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800"
+                >
+                  {groupNote}
+                </p>
+              )}
               <p className="text-muted-foreground text-xs">
                 The assignment is imported <strong>unpublished</strong> and assigned to everyone.
                 Its schedule (due date, available-from, and late settings) is copied from the source
