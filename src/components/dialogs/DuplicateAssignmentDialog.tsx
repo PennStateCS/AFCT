@@ -166,10 +166,11 @@ export function DuplicateAssignmentDialog({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   aria-invalid={!!titleError}
+                  aria-describedby={titleError ? 'dup-title-error' : undefined}
                   placeholder="Assignment title"
                 />
                 {titleError && (
-                  <p className="mt-1 text-xs text-red-600" role="alert">
+                  <p id="dup-title-error" className="mt-1 text-xs text-red-600" role="alert">
                     {titleError}
                   </p>
                 )}
