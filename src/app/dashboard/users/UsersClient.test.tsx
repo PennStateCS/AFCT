@@ -104,6 +104,20 @@ describe('UsersClient', () => {
     });
   });
 
+  it('defaults to showing only active users', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(pageResponse(1));
+
+    renderWithClient(<UsersClient />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('table-loading').textContent).toBe('false');
+    });
+
+    const url = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(url).toContain('status=active');
+    expect(url).not.toContain('status=inactive');
+  });
+
   it('shows error banner and retries successfully', async () => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) });

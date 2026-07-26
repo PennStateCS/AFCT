@@ -45,7 +45,9 @@ export default function UsersClient() {
 
   // Multi-select filters (server-side). Values match the API's query tokens.
   const [admin, setAdmin] = useState<string[]>([]);
-  const [status, setStatus] = useState<string[]>([]);
+  // Default to active-only; inactive accounts are hidden until an admin clears or
+  // changes the Status filter.
+  const [status, setStatus] = useState<string[]>(['active']);
   const [lock, setLock] = useState<string[]>([]);
   const [temp, setTemp] = useState<string[]>([]);
 

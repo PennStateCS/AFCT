@@ -10282,6 +10282,8 @@ export interface operations {
                     /** @description Global admin flag (only writable by admins) */
                     isAdmin?: boolean;
                     inactive?: boolean;
+                    /** @description New login email (admins only; must be unused) */
+                    email?: string;
                     timezone?: string;
                 };
                 "multipart/form-data": {
@@ -10332,7 +10334,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The change would remove the last active administrator. */
+            /** @description The change would remove the last active administrator, or the new email is already in use. */
             409: {
                 headers: {
                     [name: string]: unknown;

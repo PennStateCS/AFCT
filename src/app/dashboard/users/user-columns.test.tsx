@@ -24,6 +24,9 @@ vi.mock('@/components/dialogs/EditUserDialog', () => ({ EditUserDialog: () => nu
 vi.mock('@/components/dialogs/ResetPasswordDialog', () => ({
   ResetPasswordDialog: () => null,
 }));
+vi.mock('@/components/dialogs/ChangeUserEmailDialog', () => ({
+  ChangeUserEmailDialog: () => null,
+}));
 vi.mock('@/components/dialogs/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
 
 import { getUserColumns } from './user-columns';
@@ -106,6 +109,39 @@ describe('user-columns display cells', () => {
 
     renderCell('inactive', { ...baseUser, inactive: false, lockedUntil: null });
     expect(screen.queryByText(/^Locked/)).not.toBeInTheDocument();
+  });
+
+  it('offers Deactivate (not Reactivate) for an active user', () => {
+    renderCell('actions', { ...baseUser, inactive: false });
+    expect(screen.getByText('Deactivate Account')).toBeInTheDocument();
+    expect(screen.queryByText('Reactivate Account')).not.toBeInTheDocument();
+  });
+
+  it('offers Reactivate (not Deactivate) for an inactive user', () => {
+    renderCell('actions', { ...baseUser, inactive: true });
+    expect(screen.getByText('Reactivate Account')).toBeInTheDocument();
+    expect(screen.queryByText('Deactivate Account')).not.toBeInTheDocument();
+  });
+
+  it('includes Change Email Address in the manage menu', () => {
+    renderCell('actions', baseUser);
+    expect(screen.getByText('Change Email Address')).toBeInTheDocument();
+  });
+
+  it('alphabetizes the safe actions and pins Delete at the bottom', () => {
+    const { container } = renderCell('actions', { ...baseUser, inactive: false });
+    const text = container.textContent ?? '';
+    const order = [
+      'Change Email Address',
+      'Deactivate Account',
+      'Edit User Profile',
+      'Reset Password',
+      'Unlock Account',
+      'Delete Inactive User',
+    ].map((label) => text.indexOf(label));
+    // Every label is present and appears in this exact order.
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
   it('classifies rows for the lock-status filter by current lock state', () => {

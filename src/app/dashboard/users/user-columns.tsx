@@ -10,11 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { ResetPasswordDialog } from '@/components/dialogs/ResetPasswordDialog';
+import { ChangeUserEmailDialog } from '@/components/dialogs/ChangeUserEmailDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Pencil, Trash2, Lock, LockOpen, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, Lock, LockOpen, ChevronDown, Mail, UserX, UserCheck } from 'lucide-react';
 import { CompactDate } from '@/components/ui/CompactDate';
 
 import {
@@ -227,6 +228,34 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
   const [resetOpen, setResetOpen] = useState(false);
   const [ unlockConfirmOpen, setUnlockConfirmOpen ] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [changeEmailOpen, setChangeEmailOpen] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
+
+  const fullName = `${user.firstName} ${user.lastName}`;
+
+  // Flip the account's active status. The route enforces admin-only, blocks
+  // deactivating the last active admin or a user still on a live course, and clears
+  // their session; surface whatever it rejects with.
+  async function handleStatusChange(inactive: boolean) {
+    try {
+      const res = await fetch(apiPaths.user(user.id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inactive }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to update account status.');
+      }
+      showToast.success(inactive ? 'Account deactivated.' : 'Account reactivated.');
+      setDeactivateOpen(false);
+      setReactivateOpen(false);
+      onUserUpdate();
+    } catch (error) {
+      showToast.error(error instanceof Error ? error.message : 'Failed to update account status.');
+    }
+  }
 
   async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
@@ -289,6 +318,95 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
     }
   }
 
+  // The safe (non-destructive) actions, alphabetized by their visible label so the menu
+  // order stays predictable. The account-status item swaps between Deactivate and
+  // Reactivate depending on the current state; only one is ever shown. Delete is
+  // deliberately kept out of this list and pinned at the bottom in its red group.
+  const statusItem = user.inactive
+    ? {
+        label: 'Reactivate Account',
+        node: (
+          <DropdownMenuItem
+            key="status"
+            onClick={() => setReactivateOpen(true)}
+            className="hover:bg-secondary flex items-center gap-2"
+          >
+            <UserCheck className="h-4 w-4" />
+            Reactivate Account
+          </DropdownMenuItem>
+        ),
+      }
+    : {
+        label: 'Deactivate Account',
+        node: (
+          <DropdownMenuItem
+            key="status"
+            onClick={() => setDeactivateOpen(true)}
+            className="hover:bg-secondary flex items-center gap-2"
+          >
+            <UserX className="h-4 w-4" />
+            Deactivate Account
+          </DropdownMenuItem>
+        ),
+      };
+
+  const safeItems = [
+    {
+      label: 'Change Email Address',
+      node: (
+        <DropdownMenuItem
+          key="email"
+          onClick={() => setChangeEmailOpen(true)}
+          className="hover:bg-secondary flex items-center gap-2"
+        >
+          <Mail className="h-4 w-4" />
+          Change Email Address
+        </DropdownMenuItem>
+      ),
+    },
+    statusItem,
+    {
+      label: 'Edit User Profile',
+      node: (
+        <DropdownMenuItem
+          key="edit"
+          onClick={() => setEditUserOpen(true)}
+          className="hover:bg-secondary flex items-center gap-2"
+        >
+          <Pencil className="h-4 w-4" />
+          Edit User Profile
+        </DropdownMenuItem>
+      ),
+    },
+    {
+      label: 'Reset Password',
+      node: (
+        <DropdownMenuItem
+          key="reset"
+          onClick={() => setResetOpen(true)}
+          className="hover:bg-secondary flex items-center gap-2"
+        >
+          <Lock className="h-4 w-4" />
+          Reset Password
+        </DropdownMenuItem>
+      ),
+    },
+    {
+      label: 'Unlock Account',
+      node: (
+        <DropdownMenuItem
+          key="unlock"
+          onClick={() => setUnlockConfirmOpen(true)}
+          disabled={!isLockedNow(user.lockedUntil)}
+          className="hover:bg-secondary flex items-center gap-2"
+        >
+          <LockOpen className="h-4 w-4" />
+          Unlock Account
+        </DropdownMenuItem>
+      ),
+    },
+  ].sort((a, b) => a.label.localeCompare(b.label));
+
   return (
     <>
       <EditUserDialog
@@ -304,7 +422,36 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         open={resetOpen}
         setOpen={setResetOpen}
         onResetPassword={handlePasswordReset}
-        targetUserName={`${user.firstName} ${user.lastName}`}
+        targetUserName={fullName}
+      />
+
+      <ChangeUserEmailDialog
+        open={changeEmailOpen}
+        setOpen={setChangeEmailOpen}
+        userId={user.id}
+        currentEmail={user.email}
+        userName={fullName}
+        onChanged={onUserUpdate}
+      />
+
+      <ConfirmDialog
+        open={deactivateOpen}
+        onCancel={() => setDeactivateOpen(false)}
+        onConfirm={() => handleStatusChange(true)}
+        title="Deactivate Account"
+        description={`Deactivate ${fullName}? They will no longer be able to sign in to AFCT. You can reactivate the account later.`}
+        confirmText="Deactivate"
+        cancelText="Cancel"
+      />
+
+      <ConfirmDialog
+        open={reactivateOpen}
+        onCancel={() => setReactivateOpen(false)}
+        onConfirm={() => handleStatusChange(false)}
+        title="Reactivate Account"
+        description={`Reactivate ${fullName}? They will be able to sign in again.`}
+        confirmText="Reactivate"
+        cancelText="Cancel"
       />
 
       <ConfirmDialog
@@ -312,7 +459,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={handleDelete}
         title="Delete User"
-        description={`Are you sure you want to delete ${user.firstName} ${user.lastName}?`}
+        description={`Are you sure you want to delete ${fullName}?`}
         confirmText="Delete"
         cancelText="Cancel"
       />
@@ -322,7 +469,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         onCancel={() => setUnlockConfirmOpen(false)}
         onConfirm={handleUnlock}
         title="Unlock Account"
-        description={`Unlock ${user.firstName} ${user.lastName}? They will be able to sign in again immediately. Repeated failed logins can re-lock the account.`}
+        description={`Unlock ${fullName}? They will be able to sign in again immediately. Repeated failed logins can re-lock the account.`}
         confirmText="Unlock"
         cancelText="Cancel"
       />
@@ -331,41 +478,18 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         <DropdownMenuTrigger asChild>
           <Button
             variant="secondary"
-            aria-label={`Manage user ${user.firstName} ${user.lastName}`}
+            aria-label={`Manage user ${fullName}`}
             className="inline-flex items-center gap-2"
           >
             Manage
             <ChevronDown className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-50">
-          <DropdownMenuLabel className="font-medium">{`${user.firstName} ${user.lastName}`}</DropdownMenuLabel>
+        <DropdownMenuContent className="w-56">
+          <DropdownMenuLabel className="font-medium">{fullName}</DropdownMenuLabel>
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem
-            onClick={() => setEditUserOpen(true)}
-            className="hover:bg-secondary flex items-center gap-2"
-          >
-            <Pencil className="h-4 w-4" />
-            Edit User Profile
-          </DropdownMenuItem>
-
-          <DropdownMenuItem
-            onClick={() => setResetOpen(true)}
-            className="hover:bg-secondary flex items-center gap-2"
-          >
-            <Lock className="h-4 w-4" />
-            Reset Password
-          </DropdownMenuItem>
-
-          <DropdownMenuItem
-            onClick={() => setUnlockConfirmOpen(true)}
-            disabled={!isLockedNow(user.lockedUntil)}
-            className="hover:bg-secondary flex items-center gap-2"
-          >
-            <LockOpen className="h-4 w-4" />
-            Unlock Account
-          </DropdownMenuItem>
+          {safeItems.map((item) => item.node)}
 
           <DropdownMenuSeparator />
 

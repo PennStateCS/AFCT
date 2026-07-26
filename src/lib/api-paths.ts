@@ -115,6 +115,9 @@ export const apiPaths = {
 
   // --- Public / settings ---------------------------------------------------
   systemSettingsPublic: () => '/api/system-settings/public',
+  // Whether an email is already registered (used by signup and the admin
+  // Change Email dialog to warn before submitting).
+  checkEmail: (email: string) => `/api/auth/check-email${qs({ email })}`,
 
   // --- Served files (avatars, uploads, solutions) --------------------------
   // Callers pass the filename already encoded where they previously did so; these
