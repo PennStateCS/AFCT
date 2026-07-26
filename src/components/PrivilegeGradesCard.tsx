@@ -359,6 +359,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           data={students}
           loading={gradesQuery.isPending}
           tableLabel="Course grades table"
+          bordered
           showExportButton={false}
           emptyTitle="No grades to show"
           emptyDescription="Grades appear once students are enrolled and have submitted work."
