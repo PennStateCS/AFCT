@@ -1,0 +1,285 @@
+#!/bin/sh
+# afctctl: the AFCT deployment control command.
+#
+# Installed at /opt/afct/current/bin/afctctl (with a /usr/local/bin/afctctl wrapper). It
+# sources the library modules next to it and dispatches the operational commands. All
+# persistent configuration and data live under /opt/afct/shared and in Docker volumes,
+# never inside a versioned release directory.
+#
+#   sudo afctctl status | logs | update | restart | stop | doctor | diagnostics ...
+
+set -eu
+umask 077
+
+# --------------------------------------------------------------------------- #
+# Resolve this script's real location (works through the /usr/local/bin wrapper and the
+# current -> releases/<ver> symlink), then the release, lib, and /opt/afct layout.
+# --------------------------------------------------------------------------- #
+INVOCATION_DIR=$(pwd -P 2>/dev/null || pwd)
+
+_self=$0
+case "$_self" in
+  */*) ;;
+  *) _self=$(command -v "$_self" 2>/dev/null || printf '%s' "$_self") ;;
+esac
+if command -v realpath >/dev/null 2>&1; then
+  _self=$(realpath "$_self" 2>/dev/null || printf '%s' "$_self")
+elif command -v readlink >/dev/null 2>&1; then
+  while [ -L "$_self" ]; do
+    _link=$(readlink "$_self")
+    case "$_link" in
+      /*) _self=$_link ;;
+      *) _self=$(dirname "$_self")/$_link ;;
+    esac
+  done
+fi
+BIN_DIR=$(unset CDPATH; cd -- "$(dirname -- "$_self")" && pwd)
+RELEASE_DIR=$(unset CDPATH; cd -- "${BIN_DIR}/.." && pwd)
+LIB_DIR="${RELEASE_DIR}/lib"
+
+# The install root (parent of releases/). Derivable from the release path; overridable so
+# afctctl can run from a bundle checkout (tests) or a non-default prefix.
+PREFIX=${AFCT_PREFIX:-}
+if [ -z "$PREFIX" ]; then
+  case "$RELEASE_DIR" in
+    */releases/*) PREFIX=${RELEASE_DIR%/releases/*} ;;
+    *) PREFIX=$RELEASE_DIR ;;
+  esac
+fi
+SHARED_DIR="${PREFIX}/shared"
+STATE_DIR="$SHARED_DIR"
+
+# --------------------------------------------------------------------------- #
+# Configuration (deployment-tool version is distinct from the app image version)
+# --------------------------------------------------------------------------- #
+INSTALLER_VERSION="2.2.0"
+REPO=${AFCT_REPO:-PennStateCS/AFCT}
+
+COMPOSE_FILE=${AFCT_COMPOSE_FILE:-${RELEASE_DIR}/docker-compose.yml}
+ENV_FILE=${AFCT_ENV_FILE:-${SHARED_DIR}/.env.production}
+ENV_EXAMPLE=${AFCT_ENV_EXAMPLE:-${RELEASE_DIR}/.env.production.example}
+LOG_FILE=${AFCT_LOG_FILE:-${SHARED_DIR}/install.log}
+# The app release manifest (versions.json) is still served from the repo; it is the
+# APPLICATION version list, separate from the deployment-tool bundle.
+INSTALLER_BASE_URL=${AFCT_INSTALLER_BASE_URL:-https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy}
+APP_SERVICE=${AFCT_APP_SERVICE:-app}
+UPDATER_SERVICE=${AFCT_UPDATER_SERVICE:-updater}
+SERVICE_USER=${AFCT_SERVICE_USER-afct}
+SERVICE_MARKER_NAME=${AFCT_SERVICE_MARKER:-.afct-service-user}
+SERVICE_MODE="false"
+HEALTH_PATH=${AFCT_HEALTH_PATH:-/api/health}
+HEALTH_TIMEOUT=${AFCT_HEALTH_TIMEOUT:-300}
+HEALTH_INTERVAL=${AFCT_HEALTH_INTERVAL:-5}
+INSTALL_MIN_FREE_MB=${AFCT_INSTALL_MIN_FREE_MB:-15360}
+UPDATE_MIN_FREE_MB=${AFCT_UPDATE_MIN_FREE_MB:-12288}
+DIAG_PREFIX="afct-diagnostics"
+LOCK_KEY=$(printf '%s' "$PREFIX" | cksum 2>/dev/null | awk '{ print $1 }')
+[ -n "$LOCK_KEY" ] || LOCK_KEY="default"
+LOCK_DIR="${TMPDIR:-/tmp}/afct-installer-${LOCK_KEY}.lock"
+
+# The Compose project name keeps the data volumes attached; default until resolved from
+# persisted state or the existing volumes during install/migration.
+COMPOSE_PROJECT_NAME="afct"
+
+MODE="help"
+MODE_SET="false"
+# Number of arguments supplied. Used to decide the default action: bare `afctctl` prints
+# help, but `afctctl --non-interactive` (options, no command) means install, matching the
+# original installer where `install.sh [flags]` was a guided install.
+ARGC=$#
+ASSUME_YES="false"
+NON_INTERACTIVE="false"
+FORCE_RECONFIGURE="false"
+WITH_UPDATER="false"
+RECONFIGURING="false"
+COLOR_ENABLED="false"
+COLOR_FORCED_OFF="false"
+LOG_ENABLED="false"
+DOCKER_SUDO=""
+COMPOSE_KIND=""
+OS=$(uname -s 2>/dev/null || printf 'unknown')
+
+DIAG_ON_EXIT="false"
+DIAG_IN_PROGRESS="false"
+TTY_ECHO_DISABLED="false"
+LOCK_HELD="false"
+STEP_NUM=0
+DOCTOR_OK=0
+DOCTOR_WARN=0
+
+TMP_ENV=""
+DOCKER_INSTALL_SCRIPT=""
+DOCKER_INSTALL_OUTPUT=""
+PULL_OUTPUT=""
+UPDATE_IMAGE_SNAPSHOT=""
+DIAG_WORK=""
+
+# --------------------------------------------------------------------------- #
+# Load the library modules (functions only; no side effects on source).
+# --------------------------------------------------------------------------- #
+for _mod in output common validation prompts environment docker compose \
+            service-user migration deployment update diagnostics doctor; do
+  # shellcheck source=/dev/null
+  . "${LIB_DIR}/${_mod}.sh"
+done
+
+# --------------------------------------------------------------------------- #
+# Usage and argument parsing
+# --------------------------------------------------------------------------- #
+usage() {
+  cat <<'EOF'
+afctctl: AFCT deployment control
+
+Usage:
+  sudo afctctl <command> [options]
+
+Commands:
+  install         Configure and deploy AFCT (run by the bootstrap installer).
+  status          Show container and application health status.
+  logs            Follow application logs. Press Ctrl+C to stop.
+  update          Pull the latest application images, recreate the stack, verify health.
+  self-update     Update the deployment tooling to the newest verified bundle. Does not
+                  touch .env.production, data, or the application image.
+  restart         Recreate the stack without pulling new images.
+  stop            Stop the stack without deleting its data volumes.
+  enable-updater  Enable the in-app updater sidecar (in-app upgrades/downgrades).
+  disable-updater Stop and remove the updater sidecar.
+  doctor          Run a comprehensive, read-only system check.
+  recover         Restore the newest protected .env.production backup.
+  diagnostics     Create a support archive with known secrets redacted.
+  version         Show deployment-tool and deployed application version information.
+  help            Show this help.
+
+Options:
+  -y, --yes                 Accept confirmation prompts using their default answers.
+  --non-interactive         Never prompt; required values come from env vars / files.
+  --reconfigure             Rebuild .env.production even when a complete config exists.
+  --with-updater            Also enable the in-app updater during install.
+  --service-user NAME       Deploy under the given system account (fresh root install).
+  --no-service-user         Install as the invoking user, not a dedicated account.
+  --no-color                Disable colored terminal output.
+
+Configuration and data live in /opt/afct/shared and in Docker volumes; they are never
+stored inside a versioned release directory.
+EOF
+}
+
+existing_install_menu() {
+  heading "Existing AFCT installation detected"
+  info "1. Start or repair the installation"
+  info "2. Update to the latest published images"
+  info "3. Reconfigure the public URL or bootstrap settings"
+  info "4. Run system checks"
+  info "5. Create a diagnostics archive"
+  info "6. Exit"
+  _choice=$(prompt_default "Choose an action" "1")
+  case "$_choice" in
+    1|"") return 0 ;;
+    2) do_update; exit $? ;;
+    3) RECONFIGURING="true"; return 0 ;;
+    4) do_doctor; exit $? ;;
+    5) collect_diagnostics "manual"; exit $? ;;
+    6) info "no changes were made."; exit 0 ;;
+    *) die "unknown menu choice: ${_choice}" ;;
+  esac
+}
+
+set_mode() {
+  _new_mode=$1
+  if [ "$MODE_SET" = "true" ] && [ "$MODE" != "$_new_mode" ]; then
+    printf '[afct] ERROR: choose only one command (%s and %s were supplied).\n' \
+      "$MODE" "$_new_mode" >&2
+    exit 2
+  fi
+  MODE=$_new_mode
+  MODE_SET="true"
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    install) set_mode "install" ;;
+    status|--status) set_mode "status" ;;
+    logs|--logs) set_mode "logs" ;;
+    update|--update) set_mode "update" ;;
+    self-update|--self-update) set_mode "self-update" ;;
+    restart|--restart) set_mode "restart" ;;
+    stop|--stop) set_mode "stop" ;;
+    enable-updater|--enable-updater) set_mode "enable-updater" ;;
+    disable-updater|--disable-updater) set_mode "disable-updater" ;;
+    doctor|--doctor) set_mode "doctor" ;;
+    recover|--recover) set_mode "recover" ;;
+    diagnostics|--diagnostics) set_mode "diagnostics" ;;
+    version|--version) set_mode "version" ;;
+    help|-h|--help) set_mode "help" ;;
+    -y|--yes) ASSUME_YES="true" ;;
+    --non-interactive|--noninteractive) NON_INTERACTIVE="true" ;;
+    --reconfigure) FORCE_RECONFIGURE="true" ;;
+    --with-updater) WITH_UPDATER="true" ;;
+    --no-service-user) SERVICE_USER="" ;;
+    --service-user)
+      shift
+      [ "$#" -gt 0 ] || { printf '[afct] ERROR: --service-user needs a username.\n' >&2; exit 2; }
+      SERVICE_USER="$1"
+      ;;
+    --service-user=*) SERVICE_USER="${1#--service-user=}" ;;
+    --no-color) COLOR_FORCED_OFF="true" ;;
+    --)
+      shift
+      [ "$#" -eq 0 ] || { printf '[afct] ERROR: unexpected argument after --: %s\n' "$1" >&2; exit 2; }
+      break
+      ;;
+    *)
+      printf '[afct] ERROR: unknown option or command: %s\n' "$1" >&2
+      printf '[afct] Run: afctctl --help\n' >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+# Options were supplied but no command: treat it as an install (the guided-install entry
+# point). Bare `afctctl` with no arguments still falls through to help.
+if [ "$MODE_SET" = "false" ] && [ "$ARGC" -gt 0 ]; then
+  MODE="install"
+fi
+
+if [ "$COLOR_FORCED_OFF" != "true" ] && [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  COLOR_ENABLED="true"
+fi
+init_colors
+install_traps
+
+# --------------------------------------------------------------------------- #
+# Entry point
+# --------------------------------------------------------------------------- #
+case "$HEALTH_TIMEOUT" in ''|*[!0-9]*) die "AFCT_HEALTH_TIMEOUT must be a positive integer." ;; esac
+case "$HEALTH_INTERVAL" in ''|*[!0-9]*) die "AFCT_HEALTH_INTERVAL must be a positive integer." ;; esac
+[ "$HEALTH_TIMEOUT" -ge 1 ] || die "AFCT_HEALTH_TIMEOUT must be at least 1 second."
+[ "$HEALTH_INTERVAL" -ge 1 ] || die "AFCT_HEALTH_INTERVAL must be at least 1 second."
+
+# Re-enter service mode when this deployment is service-account managed, and pin the
+# Compose project name from persisted state (default "afct" until install resolves it).
+activate_service_mode_from_marker
+_persisted_project=$(state_get PROJECT_NAME 2>/dev/null || true)
+[ -n "$_persisted_project" ] && COMPOSE_PROJECT_NAME=$_persisted_project
+
+case "$MODE" in
+  help) usage ;;
+  version) show_deployed_versions ;;
+  doctor) do_doctor ;;
+  recover) init_log; do_recover ;;
+  diagnostics) LOG_ENABLED="false"; collect_diagnostics "manual" ;;
+  status) show_status ;;
+  logs) show_logs ;;
+  update) init_log; check_deploy_tool_update; do_update ;;
+  self-update) init_log; do_self_update ;;
+  restart) init_log; check_deploy_tool_update; do_restart ;;
+  stop) init_log; do_stop ;;
+  enable-updater) init_log; do_enable_updater ;;
+  disable-updater) init_log; do_disable_updater ;;
+  install) init_log; check_deploy_tool_update; do_install ;;
+  *)
+    printf '[afct] ERROR: unsupported mode: %s\n' "$MODE" >&2
+    exit 2
+    ;;
+esac

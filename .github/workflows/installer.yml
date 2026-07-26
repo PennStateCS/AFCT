@@ -29,6 +29,10 @@ jobs:
       - name: Syntax check
         run: |
           sh -n deploy/install.sh
+          sh -n deploy/linux/install.sh
+          sh -n deploy/linux/build-bundle.sh
+          sh -n deploy/linux/bin/afctctl
+          for f in deploy/linux/lib/*.sh; do sh -n "$f"; done
           sh -n docker/updater/updater.sh
           sh -n docker/backup/backup.sh
 
@@ -45,17 +49,23 @@ jobs:
           }
           Write-Host 'install.ps1 parses cleanly.'
 
-      # Advisory for now (the scripts predate shellcheck); surfaces issues without
-      # blocking. Tighten to a hard gate once the existing findings are cleared.
+      # The new Linux tooling (deploy/linux/) is written clean, so gate on it. The
+      # .shellcheckrc in that directory documents the two shared-globals suppressions.
+      - name: Shellcheck the Linux deployment tooling
+        run: |
+          cd deploy/linux
+          shellcheck -s sh install.sh build-bundle.sh bin/afctctl lib/*.sh
+
+      # The legacy compat shim still ships; keep it advisory alongside the sidecars.
       - name: Shellcheck (advisory)
         run: |
           shellcheck -s sh deploy/install.sh || true
           shellcheck -s sh docker/updater/updater.sh || true
 
       # Run in the bats container as root: the dedicated-service-account tests are
-      # root-only by design (they create a system user), so running as the non-root
-      # runner would skip them. This mirrors the documented local command.
-      - name: Run installer + updater tests
+      # root-only by design (they create a system user), and the bundle/extraction tests
+      # are happiest as root. This mirrors the documented local command.
+      - name: Run deployment + updater tests
         run: |
           docker run --rm -v "$PWD:/code" -w /code --entrypoint sh bats/bats:latest -c \
-            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache jq >/dev/null 2>&1; bats deploy/test/install.bats deploy/test/updater.bats"
+            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache jq tar >/dev/null 2>&1; bats deploy/test/afctctl.bats deploy/test/linux-deploy.bats deploy/test/updater.bats"

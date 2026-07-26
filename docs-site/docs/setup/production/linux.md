@@ -78,32 +78,49 @@ Do not continue until all three commands succeed.
 
 ## Guided installation (recommended)
 
-:::warning Use the deployment Compose file
-Download the bundle into a fresh directory as shown below. If you already cloned the repository, run the guided installer from its `deploy/` directory, not the repository root. The root Compose file is for the source-based manual method, while `deploy/docker-compose.yml` pulls the published images used by the installer.
+Download the bootstrap installer and run it. It is a small script that fetches a
+signed, versioned deployment bundle from the latest GitHub release, verifies its
+checksum before running anything, and installs AFCT under `/opt/afct`:
+
+```bash
+curl -fsSLO https://github.com/PennStateCS/AFCT/releases/latest/download/install.sh
+sudo sh install.sh
+```
+
+`wget https://github.com/PennStateCS/AFCT/releases/latest/download/install.sh` works
+too. Nothing is cloned and no authentication is needed; the bundle and its `.sha256`
+come from the public release assets over HTTPS.
+
+After installation, all operations run through the `afctctl` command, which the
+installer places on your `PATH`. You do not keep a copy of `install.sh` around or run
+it again for day-to-day tasks. See [Manage a running deployment](#manage-a-running-deployment).
+
+### Where AFCT is installed
+
+The bootstrap installs into a versioned layout so the tooling can be updated and rolled
+back without touching your configuration or data:
+
+```text
+/opt/afct/
+  bin/afctctl                # symlink to the active release's afctctl
+  current -> releases/<ver>  # the active deployment-tool release
+  releases/<ver>/            # bundle contents: afctctl, libraries, docker-compose.yml
+  shared/                    # persistent, never replaced by an update
+    .env.production          # your configuration and secrets
+    install.log
+    backups/
+```
+
+Your `.env.production`, backups, and logs live in `shared/` and are never inside a
+release directory, so updating the tooling cannot overwrite them. At least one previous
+release is kept for rollback.
+
+:::note Installing from a fork or mirror
+To install from a fork or an internal mirror, point the bootstrap at your own release
+assets before running it: set `AFCT_RELEASE_API` to the fork's releases API, or
+`AFCT_BUNDLE_URL` / `AFCT_BUNDLE_FILE` to a specific bundle. The default is the official
+`PennStateCS/AFCT` release assets.
 :::
-
-Create a deployment directory and download the installer bundle:
-
-```bash
-mkdir afct
-cd afct
-
-BASE=https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy
-
-curl -fLO "$BASE/install.sh"
-curl -fLO "$BASE/docker-compose.yml"
-curl -fLO "$BASE/.env.production.example"
-```
-
-These files come from the public repository over HTTPS. No Git checkout or authentication is needed. `wget "$BASE/install.sh"` and the equivalent commands work too.
-
-Run the installer:
-
-```bash
-sh install.sh
-```
-
-Later, you can refresh these files in place with `sh install.sh self-update` before an update. See [Update AFCT](../../operations/updates.md).
 
 ### What the installer asks for
 
@@ -115,21 +132,26 @@ The installer prompts for:
 
 It then verifies Docker, generates the PostgreSQL password and authentication secret, writes `.env.production` with restricted permissions, shows a short review, downloads the images, and starts AFCT. A generated administrator password is printed once at the end and is never written to the log, so save it before closing the terminal.
 
-Re-running `sh install.sh` on a configured host detects the existing installation and offers a menu: start or repair it, update it, reconfigure the public URL or bootstrap settings, run system checks, or create a diagnostics archive. Existing database and authentication secrets are preserved during reconfiguration.
+Running `afctctl install` again on a configured host detects the existing installation and offers a menu: start or repair it, update it, reconfigure the public URL or bootstrap settings, run system checks, or create a diagnostics archive. Existing database and authentication secrets are preserved during reconfiguration.
+
+:::note Upgrading from an earlier release
+If you previously installed AFCT by downloading `install.sh` and the Compose file into a
+directory of your own, the bootstrap migrates that directory into `/opt/afct` in place.
+It preserves your `.env.production`, backups, and log, and reuses the existing Docker
+volumes and Compose project so your database is not disturbed. Your old `sh install.sh <command>`
+habit keeps working: that file is now a thin shim that forwards to `afctctl`.
+:::
 
 ### Dedicated service account
 
-When you run a fresh install as root (for example with `sudo sh install.sh`), the installer deploys AFCT under a dedicated `afct` system account rather than your login. The deploy files and the Docker-socket access then belong to a purpose-built user that is not tied to any one administrator, which is the recommended setup for a shared or long-lived server.
-
-Because the account has to be able to read the deploy files, a service install is placed in `/opt/afct`. If you downloaded the bundle elsewhere, the installer copies it there and continues from that location. Run later commands from `/opt/afct`, for example:
+A root install (`sudo sh install.sh`) runs AFCT under a dedicated `afct` system account rather than your login. The deploy files and the Docker-socket access then belong to a purpose-built user that is not tied to any one administrator, which is the recommended setup for a shared or long-lived server. AFCT is installed under `/opt/afct` in all cases; `afctctl` is on your `PATH`, so you can run it from anywhere:
 
 ```bash
-cd /opt/afct
-sudo sh install.sh status
-sudo sh install.sh update
+sudo afctctl status
+sudo afctctl update
 ```
 
-To install as the current user instead (the older behavior), pass `--no-service-user`, or set `AFCT_SERVICE_USER=` (empty). To use a different account name, pass `--service-user NAME`. Installs that are not run as root always use the current user.
+To install as the current user instead, pass `--no-service-user`, or set `AFCT_SERVICE_USER=` (empty). To use a different account name, pass `--service-user NAME`. Installs that are not run as root always use the current user.
 
 For unattended installs, supply the values as environment variables and pass `--non-interactive`. Docker and the Compose plugin must already be installed:
 
@@ -137,12 +159,12 @@ For unattended installs, supply the values as environment variables and pass `--
 ADMIN_EMAIL=admin@example.edu \
 ADMIN_PASSWORD_FILE=/run/secrets/afct-admin-password \
 APP_URL=https://afct.example.edu \
-  sh install.sh --non-interactive
+  sudo sh install.sh --non-interactive
 ```
 
 ### Installer diagnostics
 
-A failed installation creates a redacted archive in the installation directory:
+A failed installation creates a redacted archive under `/opt/afct/shared`:
 
 ```text
 afct-diagnostics-<timestamp>.zip
@@ -151,7 +173,7 @@ afct-diagnostics-<timestamp>.zip
 Create one manually with:
 
 ```bash
-sh install.sh diagnostics
+sudo afctctl diagnostics
 ```
 
 Review the archive before sharing it.
@@ -214,34 +236,47 @@ A certificate warning is expected until you replace the default self-signed cert
 
 ## Manage a running deployment
 
-The installer also serves as an operations helper. Run these from the directory that contains `docker-compose.yml`:
+`afctctl` is the operations helper. It can be run from any directory:
 
 ```bash
-sh install.sh status      # container and application health
-sh install.sh logs        # follow the application log (Ctrl+C to stop)
-sh install.sh doctor      # read-only system and configuration checks
-sh install.sh update      # pull the latest images, recreate, and verify health
-sh install.sh restart     # recreate the stack without pulling images
-sh install.sh stop        # stop the stack without deleting data volumes
-sh install.sh diagnostics # create a redacted support archive
+sudo afctctl status      # container and application health
+sudo afctctl logs        # follow the application log (Ctrl+C to stop)
+sudo afctctl doctor      # read-only system and configuration checks
+sudo afctctl update      # pull the latest app images, recreate, and verify health
+sudo afctctl restart     # recreate the stack without pulling images
+sudo afctctl stop        # stop the stack without deleting data volumes
+sudo afctctl diagnostics # create a redacted support archive
+sudo afctctl self-update # update the deployment tooling itself (see below)
 ```
 
-`sh install.sh update` records the running image versions before pulling and automatically rolls back if the new version fails its health check.
+`afctctl update` records the running image versions before pulling and automatically rolls back if the new version fails its health check.
+
+### Two kinds of version
+
+The **application** and the **deployment tooling** version independently:
+
+- `afctctl update` moves the running AFCT **application** to a newer image.
+- `afctctl self-update` updates the **`afctctl` tooling itself** to a newer bundle. It
+  downloads the newest bundle, verifies its checksum, syntax-checks it, switches the
+  `current` release atomically, and keeps the previous release so it can roll back if the
+  new one fails to run. It does not pull application images or touch your database.
+
+`afctctl version` prints the tooling version. The application version is shown by
+`afctctl status` and in **Admin Menu > System Settings**.
 
 ### In-app upgrades (optional)
 
 To run upgrades and downgrades from **Admin Menu > System Settings > Updates** instead of the command line, enable the updater sidecar:
 
 ```bash
-sh install.sh enable-updater    # sh install.sh disable-updater to turn it off
+sudo afctctl enable-updater    # sudo afctctl disable-updater to turn it off
 ```
 
 A fresh interactive install also offers to enable it at the end; to opt in
-non-interactively, pass `--with-updater` (equivalent to running `enable-updater`
-afterward):
+non-interactively, pass `--with-updater` on the install:
 
 ```bash
-sh install.sh --with-updater
+sudo sh install.sh --with-updater
 ```
 
 This is **off by default** because the updater holds the Docker socket, which is effectively root access on the host. Once enabled, `update`, `restart`, and `status` include it automatically. A downgrade restores a pre-upgrade database backup and permanently discards database records created since it. Uploaded files are left in place and can become unreferenced. Treat downgrade as recovery, not a casual undo.

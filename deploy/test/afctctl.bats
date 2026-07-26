@@ -1,14 +1,37 @@
 #!/usr/bin/env bats
 #
-# Release-gate tests for deploy/install.sh. Docker is mocked (deploy/test/mocks),
-# so these exercise the installer's own logic — argument parsing, the interactive /
-# non-interactive split, config writing, the operational commands, and the failure
-# paths — without a daemon. Run: bats deploy/test/install.bats
+# Release-gate tests for the afctctl operations command (deploy/linux/). Docker is mocked
+# (deploy/test/mocks), so these exercise afctctl's own logic - argument parsing, the
+# interactive / non-interactive split, config writing, the operational commands, the
+# no-secrets-in-the-log guarantee, and the failure paths - without a daemon.
+#
+# The harness lays out an installed afctctl release under TESTDIR and drives it through
+# the compatibility shim (deploy/install.sh), so `sh install.sh <command>` forwards to
+# afctctl exactly as it does on a migrated host. Configuration, the log, and the compose
+# file are redirected into TESTDIR with the documented AFCT_* overrides so the assertions
+# can read .env.production in the working directory, the way the old monolith wrote it.
+#
+# The bundle machinery itself (verified download, safe extraction, atomic switch,
+# rollback, retention, self-update) is covered separately in linux-deploy.bats.
+#
+# Run: bats deploy/test/afctctl.bats
 
 setup() {
   DEPLOY_DIR="$BATS_TEST_DIRNAME/.."
+  LINUX_DIR="$DEPLOY_DIR/linux"
   TESTDIR="$(mktemp -d)"
+
+  # An installed release the shim can forward to: bin/afctctl + the library modules,
+  # with current -> releases/dev. PREFIX is TESTDIR/opt; shared/ holds state.
+  REL="$TESTDIR/opt/releases/dev"
+  mkdir -p "$REL/bin" "$REL/lib" "$TESTDIR/opt/shared"
+  cp "$LINUX_DIR/bin/afctctl" "$REL/bin/afctctl"
+  cp "$LINUX_DIR"/lib/*.sh "$REL/lib/"
+  ln -s releases/dev "$TESTDIR/opt/current"
+
+  # The shim (deploy/install.sh) forwards to $AFCT_PREFIX/current/bin/afctctl.
   cp "$DEPLOY_DIR/install.sh" "$TESTDIR/install.sh"
+
   # A compose file must exist for `-f docker-compose.yml`; the mock ignores contents.
   cp "$DEPLOY_DIR/docker-compose.yml" "$TESTDIR/docker-compose.yml" 2>/dev/null \
     || printf 'services: {}\n' > "$TESTDIR/docker-compose.yml"
@@ -26,10 +49,18 @@ setup() {
   # Keep the health-wait loop short so timeout cases finish quickly (sleep is mocked).
   export AFCT_HEALTH_TIMEOUT=10
   export AFCT_HEALTH_INTERVAL=1
+
+  # Point config/log/compose at TESTDIR so the assertions read them in the working
+  # directory. These are the documented test/override seams afctctl honors.
+  export AFCT_PREFIX="$TESTDIR/opt"
+  export AFCT_COMPOSE_FILE="$TESTDIR/docker-compose.yml"
+  export AFCT_ENV_FILE="$TESTDIR/.env.production"
+  export AFCT_ENV_EXAMPLE="$TESTDIR/.env.production.example"
+  export AFCT_LOG_FILE="$TESTDIR/install.log"
+
   # These tests run as root inside the bats image, which would otherwise trigger the
-  # dedicated-service-account path (create a user, relocate to /opt/afct, re-exec).
-  # Default the suite to the legacy "install as the current user" behavior; the
-  # service-account path has its own tests that opt in explicitly.
+  # dedicated-service-account path. Default the suite to installing as the current user;
+  # the service-account path has its own tests that opt in explicitly.
   export AFCT_SERVICE_USER=""
 
   cd "$TESTDIR"
@@ -39,7 +70,7 @@ teardown() {
   [ -n "${TESTDIR:-}" ] && rm -rf "$TESTDIR"
 }
 
-# A complete managed configuration, as the installer would have written it.
+# A complete managed configuration, as afctctl would have written it.
 write_complete_env() {
   cat > .env.production <<'EOF'
 NODE_ENV=production
@@ -50,21 +81,22 @@ ADMIN_PASSWORD=Str0ng!Pass1
 NEXTAUTH_SECRET=secretsecretsecretsecretsecret12
 NEXTAUTH_URL=https://afct.test
 AUTH_TRUST_HOST=true
+AFCT_APP_TAG=v0.0.1
 EOF
   chmod 600 .env.production
 }
 
 # --- CLI surface ---------------------------------------------------------------
 
-@test "update notes a newer installer and continues (non-interactive)" {
+@test "update notes a newer deployment tool and continues (non-interactive)" {
   write_complete_env
-  # The published installer advertises a newer version than this one.
+  # The published bootstrap advertises a newer deployment-tool version than this one.
   export MOCK_CURL_BODY='#!/bin/sh
 INSTALLER_VERSION="9999.0.0"
 '
   run sh install.sh update --non-interactive
   [ "$status" -eq 0 ]
-  [[ "$output" == *"newer installer (9999.0.0)"* ]]
+  [[ "$output" == *"newer deployment tool (9999.0.0)"* ]]
   # Non-interactive without -y must not self-update; it points at the command instead.
   [[ "$output" == *"self-update"* ]]
 }
@@ -357,62 +389,16 @@ sha256:pg|postgres:15-alpine"
   [[ "$output" == *"rollback"* ]]
 }
 
-@test "self-update refreshes the deploy files and never touches .env.production" {
-  write_complete_env
-  _env_before=$(cat .env.production)
-  # The 'downloaded' files carry a marker so we can confirm they replaced the originals.
-  export MOCK_CURL_BODY='#!/bin/sh
-# refreshed-by-self-update
-exit 0'
-  # The compose download is served separately (and must look like a Compose file).
-  export MOCK_COMPOSE_BODY='services: {}
-# refreshed-by-self-update'
-  run sh install.sh self-update
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"Updated:"* ]]
-  # The secrets file is byte-for-byte untouched.
-  [ "$(cat .env.production)" = "$_env_before" ]
-  # The compose file now holds the refreshed content.
-  run grep -q "refreshed-by-self-update" docker-compose.yml
-  [ "$status" -eq 0 ]
-  # The previous installer was backed up before being replaced.
-  run sh -c 'ls install.sh.backup.* >/dev/null 2>&1'
-  [ "$status" -eq 0 ]
-}
-
-@test "self-update refuses an empty download and keeps the current installer" {
-  write_complete_env
-  cp install.sh install.sh.orig
-  export MOCK_CURL_BODY=''        # simulate a truncated/empty download
-  run sh install.sh self-update
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"invalid"* ]]
-  # The working installer was not clobbered by the bad download.
-  run cmp -s install.sh install.sh.orig
-  [ "$status" -eq 0 ]
-}
-
-@test "self-update refuses a compose file that is not a Compose file" {
-  write_complete_env
-  cp docker-compose.yml docker-compose.yml.orig
-  export MOCK_COMPOSE_BODY='this is not compose'
-  run sh install.sh self-update
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"compose file is invalid"* ]]
-  run cmp -s docker-compose.yml docker-compose.yml.orig
-  [ "$status" -eq 0 ]
-}
-
 @test "doctor runs read-only and prints a result summary" {
   write_complete_env
   run sh install.sh doctor
   [[ "$output" == *"Doctor result:"* ]]
 }
 
-@test "version reports the installer version" {
+@test "version reports the deployment-tool version" {
   run sh install.sh version
   [ "$status" -eq 0 ]
-  [[ "$output" == *"installer version: 2.1.1"* ]]
+  [[ "$output" == *"deployment tool version"* ]]
 }
 
 @test "recover restores the newest protected env backup" {
@@ -492,30 +478,45 @@ exit 0'
 #
 # These opt into service mode (the shared setup disables it). The bats image runs as
 # root and has busybox adduser, so a real 'afct' account is created; a runuser mock
-# (mocks-service/) lets the installer "run docker as afct" without a real login. The
-# deploy dir is pointed at TESTDIR so no relocation/re-exec is exercised here (that
-# path needs a real VM). AFCT_SERVICE_USER uses `-` semantics: empty disables it.
+# (mocks-service/) lets afctctl "run docker as afct" without a real login. In the new
+# layout the service account owns the install root (/opt/afct = TESTDIR/opt) and the
+# marker plus configuration live under shared/, so these use afctctl's default file
+# locations rather than the cwd overrides the rest of the suite uses.
 
-# Opt back in and put the runuser mock ahead of everything.
 service_mode_env() {
   export AFCT_SERVICE_USER="afct"
-  export AFCT_SERVICE_HOME="$TESTDIR"     # already the deploy dir: no relocation
+  # Use the default in-prefix locations so ownership and the marker land where afctctl
+  # (and a later run's marker detection) expect them: PREFIX/shared.
+  unset AFCT_ENV_FILE AFCT_COMPOSE_FILE AFCT_LOG_FILE AFCT_ENV_EXAMPLE
+  cp "$DEPLOY_DIR/docker-compose.yml" "$REL/docker-compose.yml" 2>/dev/null \
+    || printf 'services: {}\n' > "$REL/docker-compose.yml"
+  cp "$DEPLOY_DIR/.env.production.example" "$REL/.env.production.example" 2>/dev/null \
+    || printf '# example\n' > "$REL/.env.production.example"
   chmod +x "$BATS_TEST_DIRNAME/mocks-service/"* 2>/dev/null || true
   PATH="$BATS_TEST_DIRNAME/mocks-service:$PATH"
   export PATH
 }
 
-@test "a root install sets up the service account, marks it, and owns the deploy files" {
+# The service account's copy of a complete configuration, under shared/.
+write_complete_env_shared() {
+  write_complete_env
+  mv .env.production "$TESTDIR/opt/shared/.env.production"
+}
+
+@test "a root install sets up the service account, marks it, and owns the install root" {
   service_mode_env
   export ADMIN_EMAIL="admin@example.com" ADMIN_PASSWORD="Str0ng!Pass1"
   export MOCK_ARGS_LOG="$TESTDIR/svc-args.log"
   run sh install.sh --non-interactive
   [ "$status" -eq 0 ]
   # The marker records the owning account so later runs re-enter service mode.
-  [ -f "$TESTDIR/.afct-service-user" ]
-  run cat "$TESTDIR/.afct-service-user"; [ "$output" = "afct" ]
-  # The deploy files are owned by the service account, not root.
-  run stat -c '%U' "$TESTDIR/.env.production"; [ "$output" = "afct" ]
+  _marker="$TESTDIR/opt/shared/.afct-service-user"
+  [ -f "$_marker" ] || _marker="$TESTDIR/opt/.afct-service-user"
+  [ -f "$_marker" ]
+  run cat "$_marker"
+  [ "$output" = "afct" ]
+  # The configuration is owned by the service account, not root.
+  run stat -c '%U' "$TESTDIR/opt/shared/.env.production"; [ "$output" = "afct" ]
   # Docker was actually driven (as the service account, via the runuser mock).
   run grep -Eq 'up +-d' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
 }
@@ -523,8 +524,8 @@ service_mode_env() {
 @test "a later run re-enters service mode from the marker" {
   service_mode_env
   adduser -S -H -s /sbin/nologin afct 2>/dev/null || true
-  printf 'afct\n' > "$TESTDIR/.afct-service-user"
-  write_complete_env
+  printf 'afct\n' > "$TESTDIR/opt/shared/.afct-service-user"
+  write_complete_env_shared
   export MOCK_ARGS_LOG="$TESTDIR/svc-args2.log"
   run sh install.sh status
   [ "$status" -eq 0 ]
@@ -537,6 +538,7 @@ service_mode_env() {
   export ADMIN_EMAIL="admin@example.com" ADMIN_PASSWORD="Str0ng!Pass1"
   run sh install.sh --non-interactive --no-service-user
   [ "$status" -eq 0 ]
-  # No service marker: this was a legacy install.
-  [ ! -f "$TESTDIR/.afct-service-user" ]
+  # No service marker: this was a current-user install.
+  [ ! -f "$TESTDIR/opt/shared/.afct-service-user" ]
+  [ ! -f "$TESTDIR/opt/.afct-service-user" ]
 }

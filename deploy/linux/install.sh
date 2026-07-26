@@ -1,0 +1,375 @@
+#!/bin/sh
+# AFCT Linux bootstrap installer.
+#
+# This is a small, inspectable bootstrap. It downloads ONE verified, versioned Linux
+# deployment bundle, installs it under /opt/afct, and hands off to the bundled
+# `afctctl install`. Everything else (Docker setup, configuration, deployment, updates,
+# diagnostics) lives in the downloaded deployment tooling, not here.
+#
+#   curl -fsSLO https://github.com/PennStateCS/AFCT/releases/latest/download/install.sh
+#   sudo sh install.sh
+#
+# The bundle and its SHA-256 are published as assets on each AFCT GitHub release. A fork
+# or mirror can be pointed at with AFCT_RELEASE_API / AFCT_BUNDLE_URL, and an air-gapped
+# install can hand over a pre-downloaded archive with AFCT_BUNDLE_FILE.
+#
+# Bootstrap-only options (everything else is forwarded verbatim to `afctctl install`):
+#   --deploy-version <v>   Install a specific deployment-tool bundle instead of the latest.
+#   --bundle-file <path>    Install from a local bundle archive (offline); still verified
+#                           against <path>.sha256 when present.
+#   --prefix <dir>          Install root (default: /opt/afct).
+#   -h, --help              Show this help.
+
+set -eu
+umask 077
+
+# --------------------------------------------------------------------------- #
+# Configuration
+# --------------------------------------------------------------------------- #
+REPO=${AFCT_REPO:-PennStateCS/AFCT}
+PREFIX=${AFCT_PREFIX:-/opt/afct}
+# Where release assets are resolved from. The API lists the assets on a release; the
+# override lets a fork/mirror publish its own bundle. AFCT_BUNDLE_URL skips the API and
+# downloads a specific archive directly.
+RELEASE_API=${AFCT_RELEASE_API:-https://api.github.com/repos/${REPO}/releases}
+BUNDLE_URL=${AFCT_BUNDLE_URL:-}
+BUNDLE_SHA_URL=${AFCT_BUNDLE_SHA256_URL:-}
+BUNDLE_FILE=${AFCT_BUNDLE_FILE:-}
+DEPLOY_VERSION=${AFCT_DEPLOY_VERSION:-}
+# The bundle asset is named afct-linux-deploy-<deploy-version>.tar.gz.
+ASSET_PREFIX="afct-linux-deploy-"
+
+WORK_DIR=""
+
+log()  { printf '[afct] %s\n' "$*"; }
+err()  { printf '[afct] ERROR: %s\n' "$*" >&2; }
+die()  { err "$*"; exit 1; }
+
+usage() {
+  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+cleanup() {
+  [ -n "$WORK_DIR" ] && rm -rf "$WORK_DIR" 2>/dev/null || true
+}
+# Clean up partial downloads on success, failure, or interruption.
+trap 'cleanup' EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
+
+# --------------------------------------------------------------------------- #
+# Argument parsing: consume bootstrap-only options, forward the rest to afctctl.
+# --------------------------------------------------------------------------- #
+_argc=$#
+while [ "$_argc" -gt 0 ]; do
+  _arg=$1
+  shift
+  _argc=$((_argc - 1))
+  case "$_arg" in
+    --deploy-version) [ "$#" -gt 0 ] || die "--deploy-version needs a value."; DEPLOY_VERSION=$1; shift; _argc=$((_argc - 1)) ;;
+    --deploy-version=*) DEPLOY_VERSION=${_arg#*=} ;;
+    --bundle-file) [ "$#" -gt 0 ] || die "--bundle-file needs a path."; BUNDLE_FILE=$1; shift; _argc=$((_argc - 1)) ;;
+    --bundle-file=*) BUNDLE_FILE=${_arg#*=} ;;
+    --prefix) [ "$#" -gt 0 ] || die "--prefix needs a directory."; PREFIX=$1; shift; _argc=$((_argc - 1)) ;;
+    --prefix=*) PREFIX=${_arg#*=} ;;
+    -h|--help) usage; exit 0 ;;
+    # Not a bootstrap flag: keep it (in order) to forward to `afctctl install`.
+    *) set -- "$@" "$_arg" ;;
+  esac
+done
+# "$@" now holds only the forwarded install arguments, in their original order.
+
+# --------------------------------------------------------------------------- #
+# Preconditions
+# --------------------------------------------------------------------------- #
+[ "$(uname -s 2>/dev/null || printf unknown)" = "Linux" ] || {
+  err "this bootstrap installs AFCT on Linux only."
+  case "$(uname -s 2>/dev/null || printf unknown)" in
+    Darwin) err "on macOS, install Docker Desktop and see the AFCT documentation." ;;
+  esac
+  exit 1
+}
+
+[ "$(id -u 2>/dev/null || printf 1)" = "0" ] || \
+  die "run this as root, for example: sudo sh install.sh"
+
+# One downloader and the archive tools. Docker itself is handled later by afctctl.
+if command -v curl >/dev/null 2>&1; then
+  DOWNLOADER=curl
+elif command -v wget >/dev/null 2>&1; then
+  DOWNLOADER=wget
+else
+  die "curl or wget is required to download the AFCT deployment bundle."
+fi
+command -v tar >/dev/null 2>&1 || die "tar is required to unpack the AFCT deployment bundle."
+command -v gzip >/dev/null 2>&1 || command -v gunzip >/dev/null 2>&1 || \
+  die "gzip is required to unpack the AFCT deployment bundle."
+if command -v sha256sum >/dev/null 2>&1; then
+  SHA_TOOL="sha256sum"
+elif command -v shasum >/dev/null 2>&1; then
+  SHA_TOOL="shasum -a 256"
+else
+  die "sha256sum (or shasum) is required to verify the deployment bundle."
+fi
+
+# --------------------------------------------------------------------------- #
+# Download helpers
+# --------------------------------------------------------------------------- #
+download() {
+  # download <url> <dest>. Bounded timeouts + a few retries so a flaky network fails
+  # predictably instead of hanging.
+  _u=$1
+  _d=$2
+  if [ "$DOWNLOADER" = "curl" ]; then
+    curl -fsSL --connect-timeout 10 --max-time 300 --retry 3 --retry-delay 2 "$_u" -o "$_d"
+  else
+    wget -q --timeout=30 --tries=3 -O "$_d" "$_u"
+  fi
+}
+
+# Print a field's value from a GitHub release JSON. Prefers jq; falls back to a tolerant
+# line scan. Used only to resolve the bundle's download URL, never anything sensitive.
+resolve_asset_url() {
+  _json=$1
+  _suffix=$2   # e.g. .tar.gz or .tar.gz.sha256
+  if command -v jq >/dev/null 2>&1; then
+    jq -r --arg p "$ASSET_PREFIX" --arg s "$_suffix" \
+      '.assets[]? | select(.name | startswith($p) and endswith($s)) | .browser_download_url' \
+      "$_json" 2>/dev/null | head -n 1
+    return 0
+  fi
+  # Portable fallback: pull browser_download_url values whose basename matches.
+  awk -v p="$ASSET_PREFIX" -v s="$_suffix" '
+    {
+      while (match($0, /"browser_download_url"[ \t]*:[ \t]*"[^"]*"/)) {
+        tok = substr($0, RSTART, RLENGTH)
+        $0 = substr($0, RSTART + RLENGTH)
+        sub(/^"browser_download_url"[ \t]*:[ \t]*"/, "", tok)
+        sub(/"$/, "", tok)
+        n = split(tok, parts, "/")
+        base = parts[n]
+        if (index(base, p) == 1 && substr(base, length(base) - length(s) + 1) == s) {
+          print tok
+          exit
+        }
+      }
+    }
+  ' "$_json"
+}
+
+# --------------------------------------------------------------------------- #
+# Resolve, download, and verify the bundle into $WORK_DIR/bundle.tar.gz
+# --------------------------------------------------------------------------- #
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/afct-bootstrap.XXXXXX") || die "could not create a temporary directory."
+_archive="${WORK_DIR}/bundle.tar.gz"
+_checksum="${WORK_DIR}/bundle.tar.gz.sha256"
+
+if [ -n "$BUNDLE_FILE" ]; then
+  # Offline / air-gapped: use a local archive. Verify against a sibling .sha256 if present.
+  [ -f "$BUNDLE_FILE" ] || die "bundle file not found: ${BUNDLE_FILE}"
+  cp "$BUNDLE_FILE" "$_archive" || die "could not read the bundle file."
+  if [ -f "${BUNDLE_FILE}.sha256" ]; then
+    cp "${BUNDLE_FILE}.sha256" "$_checksum" || die "could not read the bundle checksum."
+  else
+    log "no ${BUNDLE_FILE}.sha256 alongside the bundle; skipping checksum verification for this local install."
+    _checksum=""
+  fi
+else
+  if [ -z "$BUNDLE_URL" ]; then
+    # Resolve the bundle asset from a GitHub release. Latest by default; a specific
+    # deployment-tool version can be requested by tag-less asset name match on a listing.
+    log "resolving the latest AFCT Linux deployment bundle from ${REPO}..."
+    _rel="${WORK_DIR}/release.json"
+    if [ -n "$DEPLOY_VERSION" ]; then
+      # Search across releases for the requested bundle version (asset name carries it).
+      download "${RELEASE_API}?per_page=30" "$_rel" || die "could not query releases from ${RELEASE_API}."
+    else
+      download "${RELEASE_API}/latest" "$_rel" || die "could not query the latest release from ${RELEASE_API}."
+    fi
+    if [ -n "$DEPLOY_VERSION" ]; then
+      ASSET_PREFIX="afct-linux-deploy-${DEPLOY_VERSION}"
+    fi
+    BUNDLE_URL=$(resolve_asset_url "$_rel" ".tar.gz" || true)
+    BUNDLE_SHA_URL=$(resolve_asset_url "$_rel" ".tar.gz.sha256" || true)
+    [ -n "$BUNDLE_URL" ] || die "no AFCT Linux deployment bundle asset was found on the release. If this is a fork, set AFCT_BUNDLE_URL."
+  fi
+
+  log "downloading the deployment bundle..."
+  download "$BUNDLE_URL" "$_archive" || die "could not download the deployment bundle from ${BUNDLE_URL}."
+  if [ -n "$BUNDLE_SHA_URL" ]; then
+    download "$BUNDLE_SHA_URL" "$_checksum" || die "could not download the bundle checksum."
+  elif [ -n "${AFCT_BUNDLE_URL:-}" ]; then
+    # Direct URL override without a checksum URL: try the conventional sibling name.
+    download "${BUNDLE_URL}.sha256" "$_checksum" 2>/dev/null || _checksum=""
+  else
+    _checksum=""
+  fi
+fi
+
+# Verify BEFORE anything from the archive is read or executed.
+if [ -n "$_checksum" ] && [ -s "$_checksum" ]; then
+  log "verifying the bundle checksum..."
+  _expected=$(awk '{ print $1; exit }' "$_checksum")
+  case "$_expected" in
+    ''|*[!0-9a-fA-F]*) die "the bundle checksum file is malformed." ;;
+  esac
+  _actual=$($SHA_TOOL "$_archive" | awk '{ print $1; exit }')
+  [ "$_expected" = "$_actual" ] || \
+    die "bundle checksum mismatch (expected ${_expected}, got ${_actual}); refusing to install."
+  log "checksum verified."
+else
+  # A remote install with no checksum is unsafe; only a local --bundle-file may proceed.
+  [ -n "$BUNDLE_FILE" ] || die "no checksum was available for the downloaded bundle; refusing to install."
+fi
+
+# --------------------------------------------------------------------------- #
+# Inspect the archive for path-traversal and unsafe entries BEFORE extracting.
+# --------------------------------------------------------------------------- #
+log "inspecting the bundle contents..."
+_listing="${WORK_DIR}/listing.txt"
+tar -tzf "$_archive" > "$_listing" 2>/dev/null || die "the bundle archive could not be read."
+[ -s "$_listing" ] || die "the bundle archive is empty."
+while IFS= read -r _entry; do
+  case "$_entry" in
+    /*|*/../*|../*|*/..) die "the bundle contains an unsafe path (${_entry}); refusing to extract." ;;
+  esac
+done < "$_listing"
+# Reject symlinks/hardlinks/devices: only regular files and directories are expected.
+if tar -tvzf "$_archive" 2>/dev/null | awk '{ print substr($1,1,1) }' | grep -q '[^d-]'; then
+  die "the bundle contains a symbolic link, device, or other special file; refusing to extract."
+fi
+
+# --------------------------------------------------------------------------- #
+# Extract into a staging directory, validate, then publish as a versioned release.
+# --------------------------------------------------------------------------- #
+_stage="${WORK_DIR}/stage"
+mkdir -p "$_stage"
+tar -xzf "$_archive" -C "$_stage" || die "could not extract the deployment bundle."
+
+# The bundle may be a single top-level directory or a flat set of files; normalize to
+# the directory that actually contains bin/afctctl.
+_root="$_stage"
+if [ ! -f "${_root}/bin/afctctl" ]; then
+  for _d in "$_stage"/*/; do
+    [ -f "${_d}bin/afctctl" ] && { _root=${_d%/}; break; }
+  done
+fi
+[ -f "${_root}/bin/afctctl" ] || die "the bundle is missing bin/afctctl."
+[ -d "${_root}/lib" ] || die "the bundle is missing its lib directory."
+[ -f "${_root}/docker-compose.yml" ] || die "the bundle is missing docker-compose.yml."
+
+# Determine the deployment-tool version this bundle carries (metadata file, else the
+# asset version, else a timestamp). Never trust it for anything but the directory name.
+_ver=""
+[ -f "${_root}/DEPLOY_VERSION" ] && _ver=$(sed -n '1p' "${_root}/DEPLOY_VERSION" | tr -dc '0-9A-Za-z._-')
+[ -n "$_ver" ] || _ver=$DEPLOY_VERSION
+[ -n "$_ver" ] || _ver=$(date -u '+%Y%m%d%H%M%S' 2>/dev/null || printf 'unknown')
+
+# Structural syntax checks on the shell we are about to make active.
+for _sh in "${_root}/bin/afctctl" "${_root}/lib/"*.sh; do
+  [ -f "$_sh" ] || continue
+  sh -n "$_sh" 2>/dev/null || die "a bundled script failed its syntax check (${_sh##*/}); refusing to install."
+done
+
+_releases="${PREFIX}/releases"
+_target="${_releases}/${_ver}"
+mkdir -p "$_releases" "${PREFIX}/bin" "${PREFIX}/shared"
+
+# Never extract over the active release. Stage into a fresh dir and rename into place.
+if [ -e "$_target" ]; then
+  rm -rf "${_target}.replacing.$$" 2>/dev/null || true
+  cp -R "$_root" "${_target}.replacing.$$" || die "could not stage the new release."
+  rm -rf "$_target" 2>/dev/null || true
+  mv "${_target}.replacing.$$" "$_target" || die "could not install the new release."
+else
+  cp -R "$_root" "${_target}.incoming.$$" || die "could not stage the new release."
+  mv "${_target}.incoming.$$" "$_target" || die "could not install the new release."
+fi
+chmod +x "${_target}/bin/afctctl" 2>/dev/null || true
+
+# Atomically switch the active-release symlink. Validate any existing target first so a
+# broken or foreign `current` is replaced rather than followed. Remember a valid previous
+# target so a failed switch-only self-update can roll the pointer back.
+_current="${PREFIX}/current"
+_prev_target=""
+if [ -L "$_current" ]; then
+  _old=$(readlink "$_current" 2>/dev/null || true)
+  case "$_old" in
+    "$_releases"/*) _prev_target=$_old ;;   # points inside our releases: safe to roll back to
+    *) log "replacing an unexpected ${_current} symlink target (${_old})." ;;
+  esac
+elif [ -e "$_current" ]; then
+  die "${_current} exists and is not a symlink; move it aside and re-run."
+fi
+ln -sfn "$_target" "${_current}.new.$$" 2>/dev/null || ln -sf "$_target" "${_current}.new.$$" \
+  || die "could not create the active-release symlink."
+mv "${_current}.new.$$" "$_current" || die "could not switch the active release."
+
+# Convenience entry point on PATH. A tiny wrapper (not a symlink) so it always resolves
+# through the current release even if PATH caching is odd.
+_wrapper="/usr/local/bin/afctctl"
+if [ -d /usr/local/bin ] || mkdir -p /usr/local/bin 2>/dev/null; then
+  if {
+       printf '#!/bin/sh\n'
+       printf '# AFCT control command. Resolves the active release under %s.\n' "$PREFIX"
+       printf 'exec "%s/current/bin/afctctl" "$@"\n' "$PREFIX"
+     } > "${_wrapper}.new.$$" 2>/dev/null &&
+     chmod 0755 "${_wrapper}.new.$$" 2>/dev/null &&
+     mv "${_wrapper}.new.$$" "$_wrapper" 2>/dev/null
+  then
+    :
+  else
+    rm -f "${_wrapper}.new.$$" 2>/dev/null || true
+    log "could not install ${_wrapper}; run AFCT with ${PREFIX}/current/bin/afctctl."
+  fi
+fi
+
+# Keep the current release plus a bounded number of previous ones for rollback; remove
+# older releases. Never removes the active or the immediately-previous target.
+prune_old_releases() {
+  _keep=${AFCT_KEEP_RELEASES:-2}
+  case "$_keep" in ''|*[!0-9]*) _keep=2 ;; esac
+  _cur=$(readlink "$_current" 2>/dev/null || true)
+  _i=0
+  # release dir names are version strings (no spaces); ls -t gives newest-first ordering.
+  # shellcheck disable=SC2012,SC2045
+  for _d in $(ls -1dt "${_releases}"/*/ 2>/dev/null); do
+    _d=${_d%/}
+    _i=$((_i + 1))
+    [ "$_i" -le "$_keep" ] && continue
+    [ "$_d" = "$_cur" ] && continue
+    [ "$_d" = "$_prev_target" ] && continue
+    rm -rf "$_d" 2>/dev/null || true
+  done
+}
+
+log "installed the AFCT deployment tooling ${_ver} at ${_target}."
+
+if [ -n "${AFCT_SWITCH_ONLY:-}" ]; then
+  # Deployment-tool self-update: the active release is now the new bundle. Validate that
+  # the new afctctl at least loads; on failure roll the pointer back to the previous
+  # release and remove the broken one. Do NOT run `afctctl install`.
+  if "${PREFIX}/current/bin/afctctl" version >/dev/null 2>&1; then
+    prune_old_releases
+    log "the deployment tooling is now ${_ver}."
+    cleanup
+    trap - EXIT INT TERM
+    exit 0
+  fi
+  err "the new deployment tooling failed validation; rolling back."
+  if [ -n "$_prev_target" ] && [ -d "$_prev_target" ]; then
+    ln -sfn "$_prev_target" "${_current}.rb.$$" 2>/dev/null || ln -sf "$_prev_target" "${_current}.rb.$$"
+    mv "${_current}.rb.$$" "$_current" 2>/dev/null || true
+    rm -rf "$_target" 2>/dev/null || true
+    die "rolled back to the previous deployment tooling."
+  fi
+  die "no previous release to roll back to; the deployment tooling may be broken."
+fi
+
+prune_old_releases
+cleanup
+trap - EXIT INT TERM
+
+# Hand off to the bundled controller for Docker setup, configuration, and deployment.
+# The original install arguments are forwarded verbatim.
+exec "${PREFIX}/current/bin/afctctl" install "$@"

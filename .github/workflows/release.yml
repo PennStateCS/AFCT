@@ -195,3 +195,23 @@ jobs:
           else
             gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
           fi
+
+      # Build the versioned Linux deployment bundle from a single source (deploy/linux/*
+      # plus the shared deploy/docker-compose.yml and deploy/.env.production.example) and
+      # attach it, its checksum, and the bootstrap installer as release assets. The
+      # deployment-tool version (in bin/afctctl) is independent of this app tag; the
+      # bootstrap and afctctl resolve the newest bundle from these assets.
+      - name: Build and attach the Linux deployment bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          sh deploy/linux/build-bundle.sh deploy/dist
+          gh release upload "$TAG" \
+            deploy/dist/afct-linux-deploy-*.tar.gz \
+            deploy/dist/afct-linux-deploy-*.tar.gz.sha256 \
+            --clobber
+          # The bootstrap is served as `install.sh` so
+          # releases/latest/download/install.sh resolves for new installs and self-update.
+          gh release upload "$TAG" deploy/linux/install.sh --clobber
