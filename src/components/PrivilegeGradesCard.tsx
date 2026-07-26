@@ -87,11 +87,19 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
 
       const { students: s, assignments: a, grades, assigned } = body;
 
-      // maxPoints is already computed by the grades API (sum of problem max points)
-      const assignmentsWithPoints: Assignment[] = a.map((asg) => ({
-        ...asg,
-        maxPoints: (asg as Assignment & { maxPoints?: number }).maxPoints ?? 0,
-      }));
+      // maxPoints is already computed by the grades API (sum of problem max points).
+      // Order the columns left-to-right by due date (earliest first); assignments with
+      // no due date sort to the end.
+      const dueTime = (asg: Assignment) => {
+        const t = asg.dueDate ? Date.parse(asg.dueDate) : NaN;
+        return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+      };
+      const assignmentsWithPoints: Assignment[] = a
+        .map((asg) => ({
+          ...asg,
+          maxPoints: (asg as Assignment & { maxPoints?: number }).maxPoints ?? 0,
+        }))
+        .sort((x, y) => dueTime(x) - dueTime(y));
 
       // Build rows
       const rows: StudentRow[] = s.map((stu) => {
@@ -255,27 +263,35 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       cols.push({
         id: a.id,
         accessorKey: a.id,
-        header: a.title,
+        // Two-line header: the assignment title, with the points it's worth beneath it
+        // (the cells now show only the earned grade). filterLabel keeps the sort
+        // button's accessible name as the title even though the header is JSX.
+        header: () => (
+          <div className="flex flex-col items-center leading-tight">
+            <span>{a.title}</span>
+            <span className="text-muted-foreground text-xs font-normal">{a.maxPoints ?? 0} pts</span>
+          </div>
+        ),
         cell: ({ row }) => {
           const user = row.original;
           const val = user[a.id];
-          const max = a.maxPoints;
           const assignedFlags = user[ASSIGNED_KEY] as Record<string, boolean> | undefined;
           const isAssigned = assignedFlags?.[a.id] !== false;
 
-          // Not assigned to this student: show a solid gray box instead of a grade.
-          // role="img" so the accessible name is announced (a bare div's aria-label is
-          // not reliably surfaced); the sr-only text is a belt-and-braces fallback.
+          // Not assigned to this student: show a dash instead of a grade. role="img"
+          // with aria-label so the accessible name is announced as "Not assigned"
+          // rather than a bare "-" (which reads the same as an assigned-but-ungraded
+          // cell); the title gives the same hint on hover.
           if (!isAssigned) {
             return (
-              <div
+              <span
                 role="img"
                 aria-label="Not assigned"
                 title="Not assigned"
-                className="bg-muted mx-auto h-6 w-full rounded"
+                className="text-muted-foreground"
               >
-                <span className="sr-only">Not assigned</span>
-              </div>
+                -
+              </span>
             );
           }
 
@@ -294,21 +310,18 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               aria-label={`View breakdown for ${user.firstName} ${user.lastName} on ${a.title}`}
             >
               <span className="text-sm">
-                {val === null || val === undefined ? '-' : String(val)}
-              </span>
-              <span className="text-muted-foreground text-sm">
-                {max === null || max === undefined ? '/-' : `/${String(max)}`}
+                {val === null || val === undefined ? '-' : Number(val).toFixed(2)}
               </span>
             </button>
           );
         },
-        meta: { priority: 2, align: 'center' },
+        meta: { priority: 2, align: 'center', filterLabel: a.title },
       });
     }
 
     cols.push({
       id: 'totalGrade',
-      header: 'Total',
+      header: 'Average',
       cell: ({ row }) => {
         let earned = 0;
         let possible = 0;
@@ -323,7 +336,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         }
         if (gradeCount === 0) return <span className="text-muted-foreground">-</span>;
         if (possible === 0) return <span className="text-muted-foreground">-</span>;
-        const pct = ((earned / possible) * 100).toFixed(1);
+        const pct = ((earned / possible) * 100).toFixed(2);
         return <span className="font-medium">{pct}%</span>;
       },
       meta: { priority: 1, align: 'center' },

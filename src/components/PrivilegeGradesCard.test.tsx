@@ -100,12 +100,12 @@ describe('PrivilegeGradesCard', () => {
       expect(screen.getByTestId('table-rows').textContent).toBe('2');
     });
 
-    // Student names and the graded cell (8/10) come from the derived matrix.
+    // Student names and the graded cell come from the derived matrix. Cells show only
+    // the earned grade, formatted to two decimals (the points live in the header).
     expect(screen.getByText('Ada')).toBeInTheDocument();
     expect(screen.getByText('Turing')).toBeInTheDocument();
-    expect(screen.getByText('8')).toBeInTheDocument();
-    // maxPoints "/10" renders for every student cell in the assignment column.
-    expect(screen.getAllByText('/10').length).toBe(2);
+    expect(screen.getByText('8.00')).toBeInTheDocument();
+    expect(screen.queryByText('/10')).toBeNull();
   });
 
   it('shows the loading state before the fetch resolves', async () => {
@@ -129,12 +129,12 @@ describe('PrivilegeGradesCard', () => {
     });
   });
 
-  it('renders a gray "Not assigned" box for unassigned cells and a normal grade otherwise', async () => {
+  it('renders a dash for unassigned cells and a normal grade otherwise', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({
         ...gradesPayload,
-        // s1 is assigned a1 (normal cell); s2 is not assigned (gray box).
+        // s1 is assigned a1 (normal cell); s2 is not assigned (dash).
         assigned: {
           s1: { a1: true },
           s2: { a1: false },
@@ -144,13 +144,36 @@ describe('PrivilegeGradesCard', () => {
 
     renderWithClient(<PrivilegeGradesCard courseId="c1" />);
 
-    // The unassigned cell renders exactly one gray box.
+    // The unassigned cell renders exactly one "Not assigned" dash.
     const notAssigned = await screen.findAllByLabelText('Not assigned');
     expect(notAssigned).toHaveLength(1);
 
-    // The assigned cell renders its grade normally (8/10), and the gray box has no grade.
-    expect(screen.getByText('8')).toBeInTheDocument();
-    expect(screen.getAllByText('/10')).toHaveLength(1);
+    // The assigned cell renders its grade (two decimals), and the dash has no grade.
+    expect(screen.getByText('8.00')).toBeInTheDocument();
+  });
+
+  it('orders the assignment columns by due date, earliest first', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        students: [{ id: 's1', email: 'ada@x.io', firstName: 'Ada', lastName: 'Lovelace' }],
+        assignments: [
+          { id: 'late', title: 'Late', maxPoints: 10, dueDate: '2026-03-01T00:00:00Z' },
+          { id: 'early', title: 'Early', maxPoints: 10, dueDate: '2026-01-01T00:00:00Z' },
+          { id: 'nodue', title: 'No due date', maxPoints: 10 },
+        ],
+        grades: { s1: {} },
+      }),
+    });
+
+    renderWithClient(<PrivilegeGradesCard courseId="c1" />);
+    await waitFor(() => expect(screen.getByTestId('table-rows').textContent).toBe('1'));
+
+    const assignmentCols = Array.from(document.querySelectorAll('[data-col]'))
+      .map((el) => el.getAttribute('data-col'))
+      .filter((c) => c === 'early' || c === 'late' || c === 'nodue');
+    // Earliest due date first; the assignment with no due date sorts to the end.
+    expect(assignmentCols).toEqual(['early', 'late', 'nodue']);
   });
 
   it('surfaces an error toast when the fetch fails', async () => {
