@@ -15,10 +15,14 @@ import { GroupSetsCard } from '@/components/groups/GroupSetsCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
+import {
+  DuplicateAssignmentDialog,
+  type DuplicateSourceAssignment,
+} from '@/components/dialogs/DuplicateAssignmentDialog';
 import type { FullCourse, TabType } from '@/types/course';
 import type { Problem, Course } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 interface AdminCourseViewProps {
   course: FullCourse;
@@ -65,11 +69,15 @@ export function AdminCourseView({
   const problemCount = course.problemTotal ?? course.problems.length;
   const rosterCount = course.rosterTotal ?? enrolled.length;
 
+  // The assignment being duplicated (opens the wizard); null when closed.
+  const [duplicateTarget, setDuplicateTarget] = useState<DuplicateSourceAssignment | null>(null);
+
   const assignmentColumns = useAssignmentColumns(
     course.isArchived,
     onAssignmentDelete,
     onAssignmentPublishToggle,
     timezone,
+    setDuplicateTarget,
   );
 
   const { columns: problemColumns, viewDialog: problemViewDialog } = useProblemColumns({
@@ -101,6 +109,7 @@ export function AdminCourseView({
   );
 
   return (
+    <>
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
       <Card>
         <CardHeader className="grid grid-cols-1 gap-3">
@@ -197,5 +206,21 @@ export function AdminCourseView({
         </CardContent>
       </Card>
     </Tabs>
+
+    <DuplicateAssignmentDialog
+      open={!!duplicateTarget}
+      setOpen={(v) => {
+        if (!v) setDuplicateTarget(null);
+      }}
+      courseId={course.id}
+      courseIsArchived={course.isArchived}
+      assignment={duplicateTarget}
+      onDuplicated={() => {
+        setDuplicateTarget(null);
+        // The new (unpublished) assignment now exists; refresh the list to show it.
+        onRefreshCourse();
+      }}
+    />
+    </>
   );
 }

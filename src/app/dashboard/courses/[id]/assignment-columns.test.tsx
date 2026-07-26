@@ -216,6 +216,43 @@ describe('useAssignmentColumns — Manage menu', () => {
       `${base}?tab=similarity`,
     );
   });
+
+  it('offers Duplicate Assignment and calls onDuplicate with the row', async () => {
+    const user = userEvent.setup();
+    const onDuplicate = vi.fn();
+    const { result } = renderHook(() =>
+      useAssignmentColumns(false, vi.fn(), vi.fn(), 'UTC', onDuplicate),
+    );
+    const actions = result.current.find((c) => c.id === 'actions');
+    if (!actions?.cell || typeof actions.cell !== 'function') throw new Error('actions cell not found');
+
+    const row = {
+      original: { id: 'a1', courseId: 'c1', title: 'HW 1', isGroup: false, problemCount: 2 },
+    };
+    render(<>{(actions.cell as (ctx: unknown) => React.ReactNode)({ row })}</>);
+
+    await user.click(screen.getByRole('button', { name: /manage assignment hw 1/i }));
+    await user.click(screen.getByRole('menuitem', { name: /duplicate assignment/i }));
+    expect(onDuplicate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'a1', title: 'HW 1', isGroup: false, problemCount: 2 }),
+    );
+  });
+
+  it('hides Duplicate Assignment when no onDuplicate is provided', async () => {
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useAssignmentColumns(false, vi.fn(), vi.fn(), 'UTC'));
+    const actions = result.current.find((c) => c.id === 'actions');
+    if (!actions?.cell || typeof actions.cell !== 'function') throw new Error('actions cell not found');
+    render(
+      <>
+        {(actions.cell as (ctx: unknown) => React.ReactNode)({
+          row: { original: { id: 'a1', courseId: 'c1', title: 'HW 1' } },
+        })}
+      </>,
+    );
+    await user.click(screen.getByRole('button', { name: /manage assignment hw 1/i }));
+    expect(screen.queryByRole('menuitem', { name: /duplicate assignment/i })).not.toBeInTheDocument();
+  });
 });
 
 describe('useAssignmentColumns — Type (individual/group) column', () => {

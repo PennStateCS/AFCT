@@ -67,6 +67,8 @@ export const apiPaths = {
   // --- Assignments (course-nested under /assignments/[aid]) ----------------
   assignment: (courseId: string, aid: string, opts?: { view?: string }) =>
     `/api/courses/${courseId}/assignments/${aid}${qs({ view: opts?.view })}`,
+  assignmentDuplicate: (courseId: string, aid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/duplicate`,
   assignmentProblems: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/problems`,
   assignmentProblem: (courseId: string, aid: string, pid: string) =>

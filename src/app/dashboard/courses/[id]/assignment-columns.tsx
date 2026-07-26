@@ -12,10 +12,12 @@ import {
   ChevronDown,
   BookOpen,
   CalendarClock,
+  Copy,
   Package,
   BarChart3,
   Fingerprint,
 } from 'lucide-react';
+import type { DuplicateSourceAssignment } from '@/components/dialogs/DuplicateAssignmentDialog';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import {
@@ -340,6 +342,7 @@ export function useAssignmentColumns(
   handleAssignmentDeleteClick: (id: string) => void,
   handlePublishToggle: (assignmentId: string, newValue: boolean) => void,
   timeZone: string,
+  onDuplicate?: (assignment: DuplicateSourceAssignment) => void,
 ): ColumnDef<AssignmentWithProblemCount>[] {
   return [
     {
@@ -496,6 +499,23 @@ export function useAssignmentColumns(
                     Similarity
                   </Link>
                 </DropdownMenuItem>
+                {onDuplicate && !courseIsArchived && (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      onDuplicate({
+                        id: row.original.id,
+                        title: row.original.title,
+                        description: row.original.description,
+                        isGroup: row.original.isGroup,
+                        problemCount: row.original.problemCount,
+                      })
+                    }
+                    className="flex items-center gap-2"
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    Duplicate Assignment
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
 
                 <DropdownMenuItem

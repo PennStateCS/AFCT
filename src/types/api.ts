@@ -994,6 +994,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duplicate an assignment
+         * @description Duplicate an assignment within the same course. The title/description come from the  request; the type (groupSetId), audience (AssignmentAssignee), schedule, and date  exceptions (AssignmentOverride) are copied verbatim from the source and are editable  afterward. The copy is always created unpublished. Submissions and grades are never  copied.   Problems are handled by `problemMode`:    - none      : the copy has no problems.    - link      : the copy shares the source's Problem records (editing one edits both).    - duplicate : each problem is copied to a new Problem (with its own solution file).
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/duplicate/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsByAidDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/overrides/{oid}": {
         parameters: {
             query?: never;
@@ -5071,6 +5093,72 @@ export interface operations {
                 };
             };
             /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignmentsByAidDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                    description?: string | null;
+                    /** @enum {string} */
+                    problemMode: "none" | "link" | "duplicate";
+                };
+            };
+        };
+        responses: {
+            /** @description The newly created (unpublished) assignment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Source assignment not found in this course. */
             404: {
                 headers: {
                     [name: string]: unknown;
