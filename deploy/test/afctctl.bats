@@ -93,6 +93,7 @@ EOF
   # The deployment manifest advertises a newer deployment-tool version than this one. The
   # mock curl serves MOCK_CURL_BODY for the manifest URL (not versions.json/compose).
   export MOCK_CURL_BODY='{"schema":"afct-deployment-manifest/v1","deploymentToolVersion":"9999.0.0","bundle":"afct-linux-deploy-9999.0.0.tar.gz","sha256":"0000000000000000000000000000000000000000000000000000000000000000","bootstrap":"install.sh"}'
+  # (already carries the schema and the exact bundle filename the stricter manifest requires)
   run sh install.sh update --non-interactive
   [ "$status" -eq 0 ]
   [[ "$output" == *"newer deployment tool (9999.0.0)"* ]]

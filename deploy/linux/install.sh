@@ -231,15 +231,24 @@ WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/afct-bootstrap.XXXXXX") || die "could not 
 _archive="${WORK_DIR}/bundle.tar.gz"
 _checksum="${WORK_DIR}/bundle.tar.gz.sha256"
 
+_unverified_local=""
 if [ -n "$BUNDLE_FILE" ]; then
-  # Offline / air-gapped: use a local archive. Verify against a sibling .sha256 if present.
+  # Offline / air-gapped: use a local archive. A checksum is REQUIRED by default; an
+  # unverified local bundle only proceeds when the operator explicitly opts in.
   [ -f "$BUNDLE_FILE" ] || die "bundle file not found: ${BUNDLE_FILE}"
   cp "$BUNDLE_FILE" "$_archive" || die "could not read the bundle file."
   if [ -f "${BUNDLE_FILE}.sha256" ]; then
     cp "${BUNDLE_FILE}.sha256" "$_checksum" || die "could not read the bundle checksum."
-  else
-    log "no ${BUNDLE_FILE}.sha256 alongside the bundle; skipping checksum verification for this local install."
+  elif [ -n "${AFCT_BUNDLE_SHA256:-}" ]; then
+    # An explicitly supplied trusted checksum value.
+    printf '%s  %s\n' "$AFCT_BUNDLE_SHA256" "$(basename "$BUNDLE_FILE")" > "$_checksum"
+  elif [ "${AFCT_ALLOW_UNVERIFIED_LOCAL_BUNDLE:-}" = "1" ]; then
+    _unverified_local=1
+    err "WARNING: installing a LOCAL bundle WITHOUT checksum verification (AFCT_ALLOW_UNVERIFIED_LOCAL_BUNDLE=1)."
+    err "WARNING: this bypasses corruption AND authenticity checks. The bundle is NOT verified; only its archive safety and internal version consistency are still checked."
     _checksum=""
+  else
+    die "no ${BUNDLE_FILE}.sha256 alongside the local bundle. Provide the checksum file, set AFCT_BUNDLE_SHA256=<sha256>, or set AFCT_ALLOW_UNVERIFIED_LOCAL_BUNDLE=1 to install without verification."
   fi
 else
   if [ -z "$BUNDLE_URL" ] && [ -n "$DEPLOY_VERSION" ]; then
@@ -304,8 +313,9 @@ if [ -n "$_checksum" ] && [ -s "$_checksum" ]; then
   log "checksum verified."
   _digest=$_actual
 else
-  # A remote install with no checksum is unsafe; only a local --bundle-file may proceed.
-  [ -n "$BUNDLE_FILE" ] || die "no checksum was available for the downloaded bundle; refusing to install."
+  # No checksum available. Only a LOCAL bundle under the explicit unverified override may
+  # proceed; a remote download without a checksum is always refused.
+  [ -n "$_unverified_local" ] || die "no checksum was available for the bundle; refusing to install."
 fi
 
 # The verified content digest gives each release a content-addressed identity, so a
@@ -353,12 +363,32 @@ fi
 [ -d "${_root}/lib" ] || die "the bundle is missing its lib directory."
 [ -f "${_root}/docker-compose.yml" ] || die "the bundle is missing docker-compose.yml."
 
-# Determine the deployment-tool version this bundle carries (metadata file, else the
-# asset version, else a timestamp). Never trust it for anything but the directory name.
-_ver=""
-[ -f "${_root}/DEPLOY_VERSION" ] && _ver=$(sed -n '1p' "${_root}/DEPLOY_VERSION" | tr -dc '0-9A-Za-z._-')
-[ -n "$_ver" ] || _ver=$DEPLOY_VERSION
-[ -n "$_ver" ] || _ver=$(date -u '+%Y%m%d%H%M%S' 2>/dev/null || printf 'unknown')
+# Version agreement: the bundle's DEPLOY_VERSION, its bundled afctctl INSTALLER_VERSION, any
+# requested --deploy-version, and the bundle filename (when it follows the standard name)
+# must all name the SAME deployment-tool version. This protects against a fork, mirror,
+# stale cache, or operator-supplied asset that pairs mismatched pieces, and does not trust a
+# version merely because CI usually builds releases correctly.
+_dv=$(sed -n '1p' "${_root}/DEPLOY_VERSION" 2>/dev/null | tr -dc '0-9A-Za-z._-')
+_iv=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "${_root}/bin/afctctl" 2>/dev/null | head -n1)
+[ -n "$_dv" ] || die "the bundle is missing a usable DEPLOY_VERSION."
+[ -n "$_iv" ] || die "the bundle's afctctl is missing INSTALLER_VERSION."
+[ "$_dv" = "$_iv" ] || die "bundle version metadata disagrees: DEPLOY_VERSION=${_dv} but afctctl INSTALLER_VERSION=${_iv}; refusing to install."
+if [ -n "$DEPLOY_VERSION" ] && [ "$DEPLOY_VERSION" != "$_dv" ]; then
+  die "requested deployment version ${DEPLOY_VERSION}, but the bundle contains ${_dv}."
+fi
+# When the source filename carries the version (an asset or a standard local name), it must
+# match the internal version exactly.
+_fname=""
+[ -n "$BUNDLE_FILE" ] && _fname=$(basename "$BUNDLE_FILE")
+[ -z "$_fname" ] && [ -n "$BUNDLE_URL" ] && _fname=$(basename "${BUNDLE_URL%%\?*}")
+case "$_fname" in
+  afct-linux-deploy-*.tar.gz)
+    _fver=${_fname#afct-linux-deploy-}
+    _fver=${_fver%.tar.gz}
+    [ "$_fver" = "$_dv" ] || die "bundle filename ${_fname} does not match its DEPLOY_VERSION ${_dv}."
+    ;;
+esac
+_ver=$_dv
 
 # Structural syntax checks on the shell we are about to make active.
 for _sh in "${_root}/bin/afctctl" "${_root}/lib/"*.sh; do
@@ -392,19 +422,52 @@ elif [ -e "$_current" ]; then
 fi
 
 # A version's bytes are fixed: refuse to install a different bundle under a version that is
-# already installed with other content. Bump the deployment-tool version instead.
+# already installed with other content. Bump the deployment-tool version instead. Quarantine
+# leftovers (.corrupt/.incoming) never count as a real installed release.
 for _existing in "${_releases}/${_ver}-"*; do
   [ -d "$_existing" ] || continue
+  case "$_existing" in *.corrupt.*|*.incoming.*) continue ;; esac
   [ "$_existing" = "$_target" ] && continue
   die "deployment version ${_ver} is already installed with different content (${_existing##*/}). Bump the deployment-tool version rather than republishing ${_ver}."
 done
 
+# A content-addressed release is only treated as an idempotent no-op when it is COMPLETE:
+# the expected structure exists, afctctl parses, every library module is present, and the
+# installed version metadata agrees with this bundle. A truncated or corrupt directory (for
+# example an interrupted earlier extract) must never be trusted or switched to.
+_release_dir_complete() {
+  _d=$1
+  [ -f "${_d}/bin/afctctl" ] || return 1
+  [ -d "${_d}/lib" ] || return 1
+  [ -f "${_d}/docker-compose.yml" ] || return 1
+  [ -f "${_d}/DEPLOY_VERSION" ] || return 1
+  sh -n "${_d}/bin/afctctl" 2>/dev/null || return 1
+  for _m in output common validation prompts environment docker compose \
+            service-user migration manifest deployment update diagnostics doctor; do
+    [ -f "${_d}/lib/${_m}.sh" ] || return 1
+  done
+  _edv=$(sed -n '1p' "${_d}/DEPLOY_VERSION" 2>/dev/null | tr -dc '0-9A-Za-z._-')
+  _eiv=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "${_d}/bin/afctctl" 2>/dev/null | head -n1)
+  [ -n "$_edv" ] && [ "$_edv" = "$_eiv" ] && [ "$_edv" = "$_ver" ] || return 1
+  return 0
+}
+
 # Publish immutably. The target name does not exist yet when the content is new (different
 # content => different name), so this never overwrites an existing release, and in
-# particular never the directory `current` points at. An identical bundle is a no-op.
-if [ -d "$_target" ] && [ -f "${_target}/bin/afctctl" ]; then
-  log "deployment tooling ${_ver} (${_digest_prefix}) is already installed; not re-extracting."
-else
+# particular never the directory `current` points at.
+_need_publish=1
+if [ -d "$_target" ]; then
+  if _release_dir_complete "$_target"; then
+    log "deployment tooling ${_ver} (${_digest_prefix}) is already installed; not re-extracting."
+    _need_publish=0
+  else
+    _quarantine="${_target}.corrupt.$$"
+    err "the existing release ${_release_id} is incomplete or corrupt; quarantining it to ${_quarantine} and reinstalling."
+    mv "$_target" "$_quarantine" 2>/dev/null || \
+      die "could not quarantine the incomplete release at ${_target}. Move it aside manually and re-run."
+  fi
+fi
+if [ "$_need_publish" = "1" ]; then
   _incoming="${_target}.incoming.$$"
   rm -rf "$_incoming" 2>/dev/null || true
   cp -R "$_root" "$_incoming" || die "could not stage the new release."
@@ -465,6 +528,15 @@ prune_old_releases() {
 }
 
 log "installed the AFCT deployment tooling ${_ver} at ${_target}."
+
+# Record an unverified-override install in the installer log, so an operator can later see
+# that this release went in without checksum verification. Never described as "verified".
+if [ -n "$_unverified_local" ]; then
+  mkdir -p "${PREFIX}/shared" 2>/dev/null || true
+  printf '%s WARNING: installed UNVERIFIED local bundle %s as release %s (AFCT_ALLOW_UNVERIFIED_LOCAL_BUNDLE=1)\n' \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'unknown')" "$BUNDLE_FILE" "$_release_id" \
+    >> "${PREFIX}/shared/install.log" 2>/dev/null || true
+fi
 
 if [ -n "${AFCT_SWITCH_ONLY:-}" ]; then
   # Deployment-tool self-update: the active release is now the new bundle. Validate that

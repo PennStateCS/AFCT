@@ -134,7 +134,9 @@ repackage_variant() {
   printf '2.2.1\n' > "$_work/$_top/DEPLOY_VERSION"
   cat > "$_work/$_top/bin/afctctl" <<'EOF'
 #!/bin/sh
-# Deliberately broken tooling: passes `sh -n`, but fails its post-switch validation.
+# Deliberately broken tooling: passes `sh -n` and the version-agreement check (its
+# INSTALLER_VERSION matches DEPLOY_VERSION), but fails its post-switch validation.
+INSTALLER_VERSION="2.2.1"
 [ "$1" = "version" ] && exit 7
 exit 0
 EOF
@@ -171,7 +173,7 @@ EOF
     SHARED_DIR="'"$TESTROOT"'"; REPO="x/y"
     . "'"$LINUX_DIR"'/lib/manifest.sh"
     good="'"$TESTROOT"'/good.json"
-    printf "%s" "{\"deploymentToolVersion\":\"2.2.0\",\"bundle\":\"afct-linux-deploy-2.2.0.tar.gz\",\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"bootstrap\":\"install.sh\"}" > "$good"
+    printf "%s" "{\"schema\":\"afct-deployment-manifest/v1\",\"deploymentToolVersion\":\"2.2.0\",\"bundle\":\"afct-linux-deploy-2.2.0.tar.gz\",\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"bootstrap\":\"install.sh\"}" > "$good"
     manifest_valid "$good" && echo GOOD_OK || echo GOOD_FAIL
     printf "%s" "{not json" > "'"$TESTROOT"'/bad1.json"; manifest_valid "'"$TESTROOT"'/bad1.json" && echo BAD1_ACCEPTED || echo BAD1_REJECTED
     printf "%s" "{\"bundle\":\"x.tar.gz\",\"sha256\":\"00\"}" > "'"$TESTROOT"'/bad2.json"; manifest_valid "'"$TESTROOT"'/bad2.json" && echo BAD2_ACCEPTED || echo BAD2_REJECTED

@@ -50,24 +50,39 @@ manifest_field() {
     }' "$_file"
 }
 
-# Validate the manifest schema before anything trusts it: the three required fields must be
-# present and well-formed (a version string, a bundle filename with no path separators, and
-# a 64-hex SHA-256). Returns 0 when the manifest is usable.
+# The bundle filename a manifest MUST name for a given deployment-tool version. The bundle
+# is never an arbitrary .tar.gz; it is exactly this name, so a mismatch is rejected.
+manifest_expected_bundle() {
+  printf 'afct-linux-deploy-%s.tar.gz' "$1"
+}
+
+# Validate the manifest before anything privileged trusts it. This drives self-update, so
+# it is strict:
+#   * jq is REQUIRED. A loose regex scan cannot prove a document is well-formed JSON, and a
+#     self-update must never act on weakly parsed metadata. Without jq this returns non-zero
+#     and callers simply skip the update (normal operations continue).
+#   * the schema field must be exactly "afct-deployment-manifest/v1".
+#   * deploymentToolVersion, bundle, and sha256 must be present and well-formed.
+#   * the bundle filename must be exactly afct-linux-deploy-<version>.tar.gz (no path
+#     separators, no other name).
 manifest_valid() {
   _file=$1
   [ -s "$_file" ] || return 1
-  # jq, when present, also rejects malformed JSON outright.
-  if command -v jq >/dev/null 2>&1; then
-    jq -e . "$_file" >/dev/null 2>&1 || return 1
-  fi
+  command -v jq >/dev/null 2>&1 || return 1
+  jq -e . "$_file" >/dev/null 2>&1 || return 1
+
+  _schema=$(manifest_field schema "$_file")
+  [ "$_schema" = "afct-deployment-manifest/v1" ] || return 1
+
   _v=$(manifest_field deploymentToolVersion "$_file")
   _b=$(manifest_field bundle "$_file")
   _s=$(manifest_field sha256 "$_file")
   [ -n "$_v" ] && [ -n "$_b" ] && [ -n "$_s" ] || return 1
   case "$_v" in ''|*[!0-9A-Za-z._-]*) return 1 ;; esac
-  case "$_b" in ''|*/*) return 1 ;; esac
   case "$_s" in ''|*[!0-9a-fA-F]*) return 1 ;; esac
   [ "${#_s}" -eq 64 ] || return 1
+  case "$_b" in *"/"*|*"\\"*) return 1 ;; esac
+  [ "$_b" = "$(manifest_expected_bundle "$_v")" ] || return 1
   return 0
 }
 

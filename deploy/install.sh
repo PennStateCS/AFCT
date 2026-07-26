@@ -74,7 +74,30 @@ fi
 
 # Step 2: migrate a legacy flat install (config, backups, log, service-account marker) into
 # the shared directory and pin the Compose project name, preserving secrets and volumes.
-"$_ctl" migrate-legacy || exit $?
+#
+# The migration must honour an explicit service-account choice from the ORIGINAL command,
+# so --no-service-user / --service-user NAME on the very first shim invocation take effect
+# during migration (not only in the final command). Extract just that choice, POSIX and
+# eval-free; the final command below still receives the complete, unchanged argument list.
+_svc_flag=""
+_svc_val=""
+_svc_next=""
+for _a in "$@"; do
+  if [ "$_svc_next" = "1" ]; then _svc_val=$_a; _svc_next=""; continue; fi
+  case "$_a" in
+    --no-service-user)   _svc_flag="--no-service-user"; _svc_val="" ;;
+    --service-user=*)    _svc_flag="--service-user"; _svc_val=${_a#--service-user=} ;;
+    --service-user)      _svc_flag="--service-user"; _svc_next="1" ;;
+  esac
+done
 
-# Step 3: run the command the user actually asked for, unchanged.
+if [ "$_svc_flag" = "--no-service-user" ]; then
+  "$_ctl" migrate-legacy --no-service-user || exit $?
+elif [ "$_svc_flag" = "--service-user" ] && [ -n "$_svc_val" ]; then
+  "$_ctl" migrate-legacy --service-user "$_svc_val" || exit $?
+else
+  "$_ctl" migrate-legacy || exit $?
+fi
+
+# Step 3: run the command the user actually asked for, unchanged (full original argv).
 exec "$_ctl" "$@"

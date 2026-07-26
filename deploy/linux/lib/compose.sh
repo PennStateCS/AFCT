@@ -40,22 +40,76 @@ updater_profile_args() {
   return 0
 }
 
+# Restore the recorded runtime-Compose checksum to a prior value, or clear it when there
+# was none. Used on the rollback path so deploy.state never records a checksum that no
+# published runtime file matches.
+_restore_runtime_sha() {
+  if [ -n "${1:-}" ]; then
+    state_set RUNTIME_COMPOSE_SHA "$1" || true
+  else
+    state_unset RUNTIME_COMPOSE_SHA || true
+  fi
+}
+
+# Publish the mutable runtime Compose file from <src> as a transaction: stage a copy,
+# checksum it, record the intended checksum in deploy.state FIRST, publish the file
+# atomically, then verify the published bytes match the record. Any failure restores BOTH
+# the previous file and the previous state, so the runtime file and deploy.state are never
+# left disagreeing and a new file is never installed without matching provenance.
+_write_runtime_compose() {
+  _src=$1
+  _rt=$COMPOSE_FILE
+  _rt_dir=$(dirname "$_rt")
+  mkdir -p "$_rt_dir" 2>/dev/null || die "could not create the runtime Compose directory ${_rt_dir}."
+
+  # 1) Stage the candidate and compute its digest.
+  _new=$(mktemp "${_rt}.new.XXXXXX" 2>/dev/null) || die "could not stage the runtime Compose file."
+  cp "$_src" "$_new" || { rm -f "$_new"; die "could not stage the runtime Compose file."; }
+  chmod 600 "$_new" 2>/dev/null || true
+  _newsha=$(sha_of "$_new")
+  [ -n "$_newsha" ] || { rm -f "$_new"; die "could not checksum the staged runtime Compose file."; }
+
+  # 2) Snapshot the current file + recorded checksum so both can roll back together.
+  _bak=""
+  if [ -f "$_rt" ]; then
+    _bak=$(mktemp "${_rt}.bak.XXXXXX" 2>/dev/null) || { rm -f "$_new"; die "could not back up the runtime Compose file."; }
+    cp -p "$_rt" "$_bak" 2>/dev/null || { rm -f "$_new" "$_bak"; die "could not back up the runtime Compose file."; }
+  fi
+  _oldsha=$(state_get RUNTIME_COMPOSE_SHA)
+
+  # 3) Record the intended checksum FIRST. If this fails, nothing has been published yet.
+  if ! state_set RUNTIME_COMPOSE_SHA "$_newsha"; then
+    rm -f "$_new"; [ -n "$_bak" ] && rm -f "$_bak"
+    die "could not persist the runtime Compose provenance to ${SHARED_DIR}; runtime Compose left unchanged."
+  fi
+
+  # 4) Publish atomically.
+  if ! mv "$_new" "$_rt"; then
+    rm -f "$_new" 2>/dev/null || true
+    [ -n "$_bak" ] && mv "$_bak" "$_rt" 2>/dev/null || true
+    _restore_runtime_sha "$_oldsha"
+    die "could not publish the runtime Compose file; restored the previous file and state."
+  fi
+  own_deploy_path "$_rt"
+  chmod 600 "$_rt" 2>/dev/null || true
+
+  # 5) Verify the published bytes match what state records; roll back both if not.
+  if [ "$(sha_of "$_rt")" != "$_newsha" ]; then
+    if [ -n "$_bak" ]; then
+      mv "$_bak" "$_rt" 2>/dev/null || true
+    else
+      rm -f "$_rt" 2>/dev/null || true
+    fi
+    _restore_runtime_sha "$_oldsha"
+    die "the runtime Compose file did not match its recorded checksum after publish; restored the previous state."
+  fi
+  [ -n "$_bak" ] && rm -f "$_bak" 2>/dev/null || true
+}
+
 # Seed or refresh the mutable runtime Compose file from the active release. The runtime
 # file is the single stack definition afctctl and the updater both drive, so release
 # directories are never modified after install. Skipped when AFCT_COMPOSE_FILE overrides
 # the location (tests and bespoke deployments manage their own file).
-_write_runtime_compose() {
-  _src=$1
-  _rt_dir=$(dirname "$COMPOSE_FILE")
-  mkdir -p "$_rt_dir" 2>/dev/null || die "could not create the runtime Compose directory ${_rt_dir}."
-  _tmp=$(mktemp "${COMPOSE_FILE}.XXXXXX" 2>/dev/null) || die "could not stage the runtime Compose file."
-  cp "$_src" "$_tmp" || { rm -f "$_tmp"; die "could not stage the runtime Compose file."; }
-  chmod 644 "$_tmp" 2>/dev/null || true
-  mv "$_tmp" "$COMPOSE_FILE" || { rm -f "$_tmp"; die "could not install the runtime Compose file."; }
-  own_deploy_path "$COMPOSE_FILE"
-  state_set RUNTIME_COMPOSE_SHA "$(sha_of "$COMPOSE_FILE")" || true
-}
-
 ensure_runtime_compose() {
   [ -z "${AFCT_COMPOSE_FILE:-}" ] || return 0
   [ -f "$RELEASE_COMPOSE_FILE" ] || return 0
@@ -63,14 +117,18 @@ ensure_runtime_compose() {
     _write_runtime_compose "$RELEASE_COMPOSE_FILE"
     return 0
   fi
-  # Refresh only when afctctl last wrote it (recorded SHA still matches, so the updater
-  # has not diverged it) and the active release ships a different Compose. This lets a
-  # tooling update deliver a Compose fix without overwriting an updater-applied layout.
+  # Nothing to do when the runtime file already equals the active release.
+  cmp -s "$RELEASE_COMPOSE_FILE" "$COMPOSE_FILE" && return 0
+  # The runtime file differs from the release. Refresh it ONLY when afctctl last wrote it
+  # (its recorded checksum still matches the file on disk); otherwise it was changed by the
+  # in-app updater or an administrator, and must be left in place.
   _cur=$(sha_of "$COMPOSE_FILE")
   _rec=$(state_get RUNTIME_COMPOSE_SHA)
-  if [ -n "$_rec" ] && [ "$_cur" = "$_rec" ] && ! cmp -s "$RELEASE_COMPOSE_FILE" "$COMPOSE_FILE"; then
+  if [ -n "$_rec" ] && [ "$_cur" = "$_rec" ]; then
     info "refreshing the runtime Compose file from the active release."
     _write_runtime_compose "$RELEASE_COMPOSE_FILE"
+  else
+    info "runtime Compose file differs from the active release and was changed outside afctctl (the in-app updater or a manual edit); leaving it in place. Run 'afctctl update' to apply application changes."
   fi
 }
 

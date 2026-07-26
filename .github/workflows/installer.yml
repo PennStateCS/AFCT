@@ -70,7 +70,7 @@ jobs:
       - name: Run deployment + updater tests
         run: |
           docker run --rm -v "$PWD:/code" -w /code --entrypoint sh bats/bats:latest -c \
-            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache jq tar curl python3 >/dev/null 2>&1; bats deploy/test/afctctl.bats deploy/test/linux-deploy.bats deploy/test/deploy-fixes.bats deploy/test/deploy-remote.bats deploy/test/updater.bats"
+            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache jq tar curl python3 util-linux shadow >/dev/null 2>&1; bats deploy/test/afctctl.bats deploy/test/linux-deploy.bats deploy/test/deploy-fixes.bats deploy/test/deploy-remote.bats deploy/test/deploy-hardening.bats deploy/test/deploy-migrate.bats deploy/test/updater.bats"
 
       # A real `docker compose config` against the actual installed layout (versioned
       # Compose file in a release directory, .env.production under shared), NOT a mock that

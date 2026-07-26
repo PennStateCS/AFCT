@@ -39,6 +39,19 @@ state_set() {
   own_deploy_path "$_sf"
 }
 
+# Remove a single key from the state file atomically. Returns non-zero on failure so a
+# caller that must keep the file and state consistent can react.
+state_unset() {
+  _sf=$(state_file)
+  [ -f "$_sf" ] || return 0
+  _k=$1
+  _tmp=$(mktemp "${_sf}.XXXXXX" 2>/dev/null) || return 1
+  awk -v k="$_k" 'index($0, k "=") == 1 { next } { print }' "$_sf" > "$_tmp" || { rm -f "$_tmp"; return 1; }
+  chmod 600 "$_tmp" 2>/dev/null || true
+  mv "$_tmp" "$_sf" || { rm -f "$_tmp"; return 1; }
+  own_deploy_path "$_sf"
+}
+
 # Normalize a directory basename to a Docker Compose project name the way Compose does:
 # lowercase, keep only [a-z0-9_-], and strip any leading separators.
 docker_normalize_name() {
@@ -149,6 +162,13 @@ resolve_and_persist_project_name() {
 # the compatibility shim before it forwards the user's original command.
 do_migrate_legacy() {
   preserve_or_setup_service_account
+  # When service-managed (freshly preserved or already active from the marker), reapply the
+  # ownership/permission model. Idempotent, and it repairs an interrupted ownership pass on
+  # a re-run.
+  if [ "$SERVICE_MODE" = "true" ]; then
+    own_service_tree
+    verify_service_access || warn "the '${SERVICE_USER}' service account cannot fully access ${PREFIX}; check permissions under ${PREFIX}."
+  fi
   migrate_legacy_install
   # Ensure the project name is resolved and persisted even when there was nothing to move
   # (a genuinely fresh system): later commands then reuse it.
@@ -204,10 +224,13 @@ migrate_legacy_install() {
       { chmod 600 "${SHARED_DIR}/install.log" 2>/dev/null || true; own_deploy_path "${SHARED_DIR}/install.log"; }
   fi
 
-  # The service-account marker, so service mode is preserved.
-  if [ -f "${_src}/${SERVICE_MARKER_NAME}" ] && [ ! -f "${SHARED_DIR}/${SERVICE_MARKER_NAME}" ]; then
-    cp -p "${_src}/${SERVICE_MARKER_NAME}" "${SHARED_DIR}/${SERVICE_MARKER_NAME}" 2>/dev/null || true
-    [ "$_src" = "$PREFIX" ] && rm -f "${_src}/${SERVICE_MARKER_NAME}" 2>/dev/null || true
+  # The service-account marker is NOT copied here: preserve_or_setup_service_account (run
+  # before this) already wrote it atomically into the shared directory via
+  # write_service_marker when a legacy service account was preserved. It is the single
+  # marker writer. A leftover legacy marker at the source root is harmless; remove it only
+  # when the source is the prefix itself (an in-place flat upgrade).
+  if [ -f "${_src}/${SERVICE_MARKER_NAME}" ] && [ "$_src" = "$PREFIX" ]; then
+    rm -f "${_src}/${SERVICE_MARKER_NAME}" 2>/dev/null || true
   fi
 
   # A legacy flat install root also holds an install.sh / docker-compose.yml; leave them

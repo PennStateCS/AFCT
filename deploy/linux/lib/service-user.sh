@@ -58,11 +58,92 @@ ensure_service_docker_access() {
   die "the '${SERVICE_USER}' service account cannot reach Docker. Ensure a 'docker' group exists and the account belongs to it, or reinstall with --no-service-user."
 }
 
-# Give the whole /opt/afct tree to the service account so it can read every release and
-# the shared configuration.
+# Give the /opt/afct tree to the service account AND set an explicit, safe permission model
+# so a preserved or freshly created account can operate the deployment immediately. The
+# bootstrap runs with umask 077, so without this the tree is root-owned and 0700, which the
+# non-root service account cannot traverse. Ownership is recursive; modes are set per path
+# so sensitive files are never widened by a blanket chmod.
+#
+#   /opt/afct                      0755  (traverse into releases/current/shared)
+#   /opt/afct/releases             0755
+#   /opt/afct/releases/<rel>       dirs 0755, bin/afctctl 0755 (readable + executable)
+#   /opt/afct/current              symlink (mode not meaningful)
+#   /opt/afct/shared               0700  (private to the service account)
+#   /opt/afct/shared/runtime       0700
+#   /opt/afct/shared/backups       0700
+#   .env.production / deploy.state / install.log / manifest / marker / runtime compose  0600
 own_service_tree() {
   [ "$(id -u 2>/dev/null || echo 1)" = "0" ] || return 0
-  chown -R "$SERVICE_USER:$(service_user_group)" "$PREFIX" 2>/dev/null || true
+  service_user_enabled || return 0
+  _grp=$(service_user_group)
+
+  chown -R "$SERVICE_USER:$_grp" "$PREFIX" 2>/dev/null || true
+
+  chmod 0755 "$PREFIX" 2>/dev/null || true
+  [ -d "${PREFIX}/releases" ] && chmod 0755 "${PREFIX}/releases" 2>/dev/null || true
+  for _rel in "${PREFIX}/releases"/*/; do
+    [ -d "$_rel" ] || continue
+    find "$_rel" -type d -exec chmod 0755 {} + 2>/dev/null || true
+    [ -f "${_rel}bin/afctctl" ] && chmod 0755 "${_rel}bin/afctctl" 2>/dev/null || true
+  done
+
+  [ -d "$SHARED_DIR" ] && chmod 0700 "$SHARED_DIR" 2>/dev/null || true
+  [ -d "${SHARED_DIR}/runtime" ] && chmod 0700 "${SHARED_DIR}/runtime" 2>/dev/null || true
+  [ -d "${SHARED_DIR}/backups" ] && chmod 0700 "${SHARED_DIR}/backups" 2>/dev/null || true
+  # Sensitive files stay 0600 (never widened). These live under shared/ (0700), so the
+  # account is the only non-root reader in any case.
+  for _f in "$ENV_FILE" "$(state_file)" "$LOG_FILE" "$(manifest_cache_file)" \
+            "${SHARED_DIR}/${SERVICE_MARKER_NAME}" "${SHARED_DIR}/runtime/docker-compose.yml"; do
+    [ -f "$_f" ] && chmod 0600 "$_f" 2>/dev/null || true
+  done
+}
+
+# Atomically persist the service-account marker (one validated username line, mode 0600,
+# owned by the account) under the shared directory. The marker is durable deployment state,
+# so this is a hard failure when service mode is expected, never best-effort. This is the
+# ONLY place a marker is written, so there is one implementation across all callers.
+write_service_marker() {
+  _user=$1
+  case "$_user" in
+    ''|*[!a-z0-9._-]*) die "refusing to write a service marker for an invalid username '${_user}'." ;;
+  esac
+  mkdir -p "$SHARED_DIR" 2>/dev/null || die "could not create ${SHARED_DIR} for the service marker."
+  _marker="${SHARED_DIR}/${SERVICE_MARKER_NAME}"
+  _tmp=$(mktemp "${_marker}.XXXXXX" 2>/dev/null) || die "could not stage the service marker."
+  printf '%s\n' "$_user" > "$_tmp" || { rm -f "$_tmp"; die "could not write the service marker."; }
+  chmod 600 "$_tmp" 2>/dev/null || true
+  if [ "$(id -u 2>/dev/null || echo 1)" = "0" ] && id "$_user" >/dev/null 2>&1; then
+    chown "$_user:$(id -gn "$_user" 2>/dev/null || printf '%s' "$_user")" "$_tmp" 2>/dev/null || true
+  fi
+  mv "$_tmp" "$_marker" || { rm -f "$_tmp"; die "could not install the service marker at ${_marker}."; }
+  _rb=$(sed -n '1p' "$_marker" 2>/dev/null | tr -d ' \011')
+  [ "$_rb" = "$_user" ] || die "service marker verification failed after writing ${_marker}."
+}
+
+# Remove a stale shared marker. Only called when current-user mode is EXPLICITLY selected
+# (--no-service-user), so an accidental run never silently drops service mode.
+remove_service_marker() {
+  _marker="${SHARED_DIR}/${SERVICE_MARKER_NAME}"
+  [ -f "$_marker" ] || return 0
+  rm -f "$_marker" 2>/dev/null || die "could not remove the stale service marker ${_marker}."
+}
+
+# Confirm the service account can traverse the deployment tree and read the files it needs,
+# after ownership has been applied. Best-effort where a real user switch is unavailable
+# (returns 0), but a definitive failure returns non-zero so the caller can warn or abort.
+verify_service_access() {
+  service_user_enabled || return 0
+  [ "$(id -u 2>/dev/null || echo 1)" = "0" ] || return 0
+  id "$SERVICE_USER" >/dev/null 2>&1 || return 1
+  # Traverse to and read the active controller as the service account.
+  if [ -e "${PREFIX}/current/bin/afctctl" ]; then
+    run_as_service test -r "${PREFIX}/current/bin/afctctl" >/dev/null 2>&1 || return 1
+  fi
+  # Read the shared configuration when present.
+  if [ -f "$ENV_FILE" ]; then
+    run_as_service test -r "$ENV_FILE" >/dev/null 2>&1 || return 1
+  fi
+  return 0
 }
 
 # Re-enter service mode on a later run when this deployment is service-account managed.
@@ -93,21 +174,33 @@ activate_service_mode_from_marker() {
 # This runs BEFORE any account is created, so a legacy custom or current-user install is
 # never quietly turned into the default 'afct' account.
 preserve_or_setup_service_account() {
-  # Already service-managed (marker activated at startup), or a completed install exists:
-  # nothing to decide.
-  [ "$SERVICE_MODE" = "true" ] && return 0
-  [ -f "$ENV_FILE" ] && return 0
-
-  # 1) Explicit command-line intent wins over any inference.
+  # 1) An explicit command-line choice always wins, even over an active marker.
   case "${SERVICE_USER_CHOICE:-}" in
     --no-service-user)
+      # Explicit current-user mode: drop a stale shared marker (clearly intended) so later
+      # runs do not re-enter service mode, and never create the default account.
+      remove_service_marker
+      SERVICE_MODE="false"
+      SERVICE_USER=""
       return 0
       ;;
     --service-user=*)
+      # Explicit account: create or preserve exactly this one (even converting a legacy
+      # current-user install). maybe_setup_service_user writes the marker and owns the tree.
       maybe_setup_service_user
       return 0
       ;;
   esac
+
+  # No explicit choice. If already service-managed (marker activated at startup), just
+  # (re)apply ownership so a preserved account can operate immediately, then stop.
+  if [ "$SERVICE_MODE" = "true" ]; then
+    write_service_marker "$SERVICE_USER"
+    own_service_tree
+    return 0
+  fi
+  # A completed install with no explicit choice and no active marker: current-user mode.
+  [ -f "$ENV_FILE" ] && return 0
 
   # 2 and 3) A legacy installation: preserve its recorded mode rather than converting it.
   _legacy=$(legacy_source_dir)
@@ -120,9 +213,16 @@ preserve_or_setup_service_account() {
           SERVICE_USER=$_u
           SERVICE_MODE="true"
           info "preserving the existing '${_u}' service account from the legacy installation."
+          write_service_marker "$_u"
+          own_service_tree
+          verify_service_access || warn "the preserved '${_u}' service account cannot fully access ${PREFIX} yet; check the account, its docker group membership, and permissions under ${PREFIX}."
         else
-          warn "the '${_u}' service account named in the legacy marker no longer exists; operating as the current user. Recreate the account or reinstall with --service-user ${_u} to restore it."
+          # Missing account: do NOT write a marker, do NOT leave service mode on, and do
+          # NOT create the account (only an explicit --service-user may do that). Warn with
+          # enough detail to repair the setup later.
+          warn "the '${_u}' service account named in the legacy marker (${_marker}) no longer exists. Operating as the current user. To restore the dedicated account, recreate the '${_u}' system user and reinstall with --service-user ${_u}, or continue with --no-service-user."
           SERVICE_USER=""
+          SERVICE_MODE="false"
         fi
         return 0
       fi
@@ -136,31 +236,34 @@ preserve_or_setup_service_account() {
   maybe_setup_service_user
 }
 
-# Fresh root install only: create the account, own the tree, write the marker, and enter
-# service mode. No relocation/re-exec: the bootstrap already installed under /opt/afct.
+# Fresh root install (or explicit --service-user conversion): create the account, own the
+# tree, write the marker, verify access, and enter service mode. No relocation/re-exec: the
+# bootstrap already installed under /opt/afct.
 maybe_setup_service_user() {
-  [ "$SERVICE_MODE" = "true" ] && return 0
   service_user_enabled || return 0
   [ "$(id -u 2>/dev/null || echo 1)" = "0" ] || return 0
 
-  if can_prompt && [ "$ASSUME_YES" != "true" ]; then
+  # Prompt only for a genuinely fresh install with no explicit choice.
+  if [ "${SERVICE_USER_CHOICE:-}" = "" ] && can_prompt && [ "$ASSUME_YES" != "true" ]; then
     heading "Dedicated service account"
     info "AFCT can run under a dedicated '${SERVICE_USER}' system account instead of your"
     info "login, so the deploy files and Docker access belong to a purpose-built user."
     if ! confirm "Install under the '${SERVICE_USER}' service account?" "y"; then
       info "Installing as the current user."
+      SERVICE_USER=""
       return 0
     fi
   fi
 
   create_service_user || {
     warn "could not create the '${SERVICE_USER}' account; installing as the current user."
+    SERVICE_USER=""
     return 0
   }
 
-  mkdir -p "$SHARED_DIR" 2>/dev/null || true
-  printf '%s\n' "$SERVICE_USER" > "${SHARED_DIR}/${SERVICE_MARKER_NAME}" 2>/dev/null || true
+  write_service_marker "$SERVICE_USER"
   own_service_tree
   SERVICE_MODE="true"
+  verify_service_access || warn "the '${SERVICE_USER}' service account cannot fully access ${PREFIX} yet; check permissions under ${PREFIX}."
   success "Using the '${SERVICE_USER}' service account (deploy root ${PREFIX})."
 }

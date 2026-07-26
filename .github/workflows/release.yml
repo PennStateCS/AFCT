@@ -226,16 +226,22 @@ jobs:
           for f in "$ROOT"/lib/*.sh; do sh -n "$f"; done
           ( cd "$ROOT" && shellcheck -s sh install.sh bin/afctctl lib/*.sh )
 
-          # 3) The manifest references the exact uploaded filename and digest, and its
-          #    deployment-tool version matches afctctl's INSTALLER_VERSION.
+          # 3) Every version identifier must agree before anything is uploaded: the manifest
+          #    schema, its deploymentToolVersion, its exact bundle filename and sha256, the
+          #    bundle's DEPLOY_VERSION, and the bundle's afctctl INSTALLER_VERSION.
+          MSCHEMA=$(jq -r '.schema // ""' "$MANIFEST")
           MVER=$(jq -r .deploymentToolVersion "$MANIFEST")
           MBUNDLE=$(jq -r .bundle "$MANIFEST")
           MSHA=$(jq -r .sha256 "$MANIFEST")
           AVER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$ROOT/bin/afctctl" | head -n1)
+          DVER=$(sed -n '1p' "$ROOT/DEPLOY_VERSION" | tr -dc '0-9A-Za-z._-')
           ASHA=$(awk '{print $1; exit}' "${TARBALL}.sha256")
+          [ "$MSCHEMA" = "afct-deployment-manifest/v1" ] || { echo "manifest schema ($MSCHEMA) is not afct-deployment-manifest/v1"; exit 1; }
           [ "$MBUNDLE" = "$BASENAME" ] || { echo "manifest bundle ($MBUNDLE) != $BASENAME"; exit 1; }
+          [ "$MBUNDLE" = "afct-linux-deploy-${MVER}.tar.gz" ] || { echo "manifest bundle name does not match version $MVER"; exit 1; }
           [ "$MSHA" = "$ASHA" ] || { echo "manifest sha256 mismatch"; exit 1; }
           [ "$MVER" = "$AVER" ] || { echo "manifest version ($MVER) != afctctl INSTALLER_VERSION ($AVER)"; exit 1; }
+          [ "$MVER" = "$DVER" ] || { echo "manifest version ($MVER) != bundle DEPLOY_VERSION ($DVER)"; exit 1; }
 
           # 4) A real docker compose config against the split release/shared layout.
           sh deploy/test/compose-config.sh

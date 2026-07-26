@@ -220,6 +220,27 @@ do_self_update() {
     rm -rf "$_dir"
     die "deployment bundle checksum mismatch (expected ${_sha}, got ${_actual}); refusing to self-update."
   fi
+
+  # Confirm the manifest names the standard bundle filename for its version, and that the
+  # bundle's OWN versions (DEPLOY_VERSION and bundled afctctl INSTALLER_VERSION) agree with
+  # the manifest version. Read members to stdout (no filesystem write, so no traversal
+  # risk) rather than extracting the untrusted archive here; the trusted bootstrap does the
+  # authoritative safe extraction next.
+  _exp_bundle=$(manifest_expected_bundle "$_new_ver")
+  if [ "$_bundle" != "$_exp_bundle" ]; then
+    rm -rf "$_dir"
+    die "manifest bundle name ${_bundle} does not match version ${_new_ver} (expected ${_exp_bundle}); refusing to self-update."
+  fi
+  _members=$(tar -tzf "$_arch" 2>/dev/null)
+  _dv_member=$(printf '%s\n' "$_members" | grep -E '(^|/)DEPLOY_VERSION$' | head -n1)
+  _iv_member=$(printf '%s\n' "$_members" | grep -E '(^|/)bin/afctctl$' | head -n1)
+  _a_dv=$(tar -xzOf "$_arch" "$_dv_member" 2>/dev/null | sed -n '1p' | tr -dc '0-9A-Za-z._-')
+  _a_iv=$(tar -xzOf "$_arch" "$_iv_member" 2>/dev/null | sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' | head -n1)
+  if [ -z "$_a_dv" ] || [ -z "$_a_iv" ] || [ "$_a_dv" != "$_new_ver" ] || [ "$_a_iv" != "$_new_ver" ]; then
+    rm -rf "$_dir"
+    die "the downloaded bundle's versions (DEPLOY_VERSION=${_a_dv:-?}, INSTALLER_VERSION=${_a_iv:-?}) do not both match the manifest version ${_new_ver}; refusing to self-update."
+  fi
+
   printf '%s  %s\n' "$_sha" "$_bundle" > "${_arch}.sha256"
 
   # The installed bootstrap was verified when it was installed; run THAT one (never a

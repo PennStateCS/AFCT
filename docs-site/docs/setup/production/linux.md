@@ -79,7 +79,7 @@ Do not continue until all three commands succeed.
 ## Guided installation (recommended)
 
 Download the bootstrap installer and run it. It is a small script that fetches a
-signed, versioned deployment bundle from the latest GitHub release, verifies its
+versioned deployment bundle from the latest GitHub release, verifies its SHA-256
 checksum before running anything, and installs AFCT under `/opt/afct`:
 
 ```bash
@@ -102,24 +102,55 @@ back without touching your configuration or data:
 
 ```text
 /opt/afct/
-  bin/afctctl                # symlink to the active release's afctctl
-  current -> releases/<ver>  # the active deployment-tool release
-  releases/<ver>/            # bundle contents: afctctl, libraries, docker-compose.yml
-  shared/                    # persistent, never replaced by an update
-    .env.production          # your configuration and secrets
+  current -> releases/<ver>-<digest>   # the active deployment-tool release
+  releases/<ver>-<digest>/             # immutable bundle: afctctl, libraries, docker-compose.yml
+  shared/                              # persistent, never replaced by an update
+    .env.production                    # your configuration and secrets
+    deploy.state                       # Compose project name and runtime provenance
     install.log
     backups/
+    runtime/
+      docker-compose.yml               # the mutable stack file the deployment drives
 ```
 
-Your `.env.production`, backups, and logs live in `shared/` and are never inside a
-release directory, so updating the tooling cannot overwrite them. At least one previous
-release is kept for rollback.
+Release directories are content addressed (`<version>-<digest>`) and immutable: an update
+adds a new one and never edits an existing one, so a rollback is just repointing `current`.
+Your configuration and data live in `shared/` and are never inside a release directory.
+
+The stack is defined by a mutable Compose file at `shared/runtime/docker-compose.yml`, not
+by the immutable release. `afctctl` seeds it from the active release and records its
+checksum in `deploy.state` (`RUNTIME_COMPOSE_SHA`). That checksum is how the tooling tells a
+runtime file it wrote from one the in-app updater or an administrator changed: a tooling
+update refreshes the runtime file only when it still matches the recorded checksum, and
+otherwise leaves the changed file in place and tells you so.
 
 :::note Installing from a fork or mirror
 To install from a fork or an internal mirror, point the bootstrap at your own release
 assets before running it: set `AFCT_RELEASE_API` to the fork's releases API, or
 `AFCT_BUNDLE_URL` / `AFCT_BUNDLE_FILE` to a specific bundle. The default is the official
 `PennStateCS/AFCT` release assets.
+:::
+
+### Installing from a local bundle
+
+For an air-gapped install, hand the bootstrap a downloaded bundle with `AFCT_BUNDLE_FILE`.
+By default a local bundle must be accompanied by its checksum: either a sibling
+`<bundle>.tar.gz.sha256` file, or an explicit `AFCT_BUNDLE_SHA256=<sha256>`. A local bundle
+with no checksum is refused.
+
+To install a local bundle without checksum verification (for example a bundle you built
+yourself), set `AFCT_ALLOW_UNVERIFIED_LOCAL_BUNDLE=1`. This bypasses corruption and
+authenticity checks, so the bundle is not verified: the installer prints a prominent
+warning, still inspects the archive for unsafe paths and confirms the bundle's internal
+version consistency, and records the unverified install in `shared/install.log`. This
+override is never allowed for a remote download.
+
+:::note Checksummed, not signed
+Release bundles are verified with a SHA-256 checksum, which detects corruption and a
+truncated or altered download. It is not a cryptographic signature: a checksum published
+next to the bundle does not by itself prove the release account was not compromised. Signed
+or attested releases are a planned follow-up; until then, treat the bundle as checksummed
+rather than signed.
 :::
 
 ### What the installer asks for
@@ -152,6 +183,27 @@ sudo afctctl update
 ```
 
 To install as the current user instead, pass `--no-service-user`, or set `AFCT_SERVICE_USER=` (empty). To use a different account name, pass `--service-user NAME`. Installs that are not run as root always use the current user.
+
+The service account is recorded in a marker file at `/opt/afct/shared/.afct-service-user`,
+and the installer gives the account an explicit ownership and permission model so it can
+operate the deployment immediately:
+
+- `/opt/afct`, `/opt/afct/releases`, and each release directory are owned by the service
+  account and world-traversable (`0755`), so the account can reach the active `afctctl`.
+- `/opt/afct/shared` and `/opt/afct/shared/runtime` are owned by the account and private
+  (`0700`).
+- `.env.production`, `deploy.state`, `install.log`, the runtime Compose file, and the
+  marker are owned by the account and `0600`. Sensitive files are never widened.
+
+**Migrating a legacy install preserves its mode.** If the directory you are upgrading from
+used a dedicated service account (including a custom name), that account is preserved and
+given ownership of the new tree; if it ran as the invoking user, current-user mode is kept.
+The tooling never silently converts a legacy install to the default `afct` account. If a
+marker names an account that no longer exists, the migration warns, stays in current-user
+mode, and does not recreate the account. An explicit `--service-user NAME` or
+`--no-service-user` on the command line always overrides the inferred mode, and works on the
+first `sh install.sh` invocation because the compatibility shim passes your choice into the
+migration.
 
 For unattended installs, supply the values as environment variables and pass `--non-interactive`. Docker and the Compose plugin must already be installed:
 

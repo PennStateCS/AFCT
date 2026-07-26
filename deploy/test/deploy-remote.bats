@@ -21,15 +21,13 @@ setup() {
   mkdir -p "$WEB/assets"
   export DEPLOY_DIR LINUX_DIR TESTROOT WEB DIST
 
-  # Build a real bundle and publish it as an asset under two version names so exact
-  # matching can be exercised (2.2.0 = the real bundle, 2.2.10 = a decoy).
+  # Build a real bundle and publish it as an asset under two DISTINCT versions so exact
+  # matching can be exercised (2.2.0 = the real bundle; 2.2.10 = a genuine variant whose
+  # internal DEPLOY_VERSION and INSTALLER_VERSION are 2.2.10, so the bootstrap's version
+  # agreement check passes for it too).
   TARBALL="$(sh "$LINUX_DIR/build-bundle.sh" "$DIST")"
-  cp "$TARBALL" "$WEB/assets/afct-linux-deploy-2.2.0.tar.gz"
-  cp "${TARBALL}.sha256" "$WEB/assets/afct-linux-deploy-2.2.0.tar.gz.sha256"
-  # Recompute the checksum under the published name so it verifies.
-  ( cd "$WEB/assets" && sha256sum afct-linux-deploy-2.2.0.tar.gz > afct-linux-deploy-2.2.0.tar.gz.sha256 )
-  cp "$TARBALL" "$WEB/assets/afct-linux-deploy-2.2.10.tar.gz"
-  ( cd "$WEB/assets" && sha256sum afct-linux-deploy-2.2.10.tar.gz > afct-linux-deploy-2.2.10.tar.gz.sha256 )
+  publish_version_asset 2.2.0
+  publish_version_asset 2.2.10
 
   # A tiny static file server. Query strings (?per_page&page) are ignored, so a request for
   # /releases?... serves the `releases` file, matching the GitHub API shape closely enough.
@@ -47,6 +45,23 @@ setup() {
 teardown() {
   [ -n "${HTTPD_PID:-}" ] && kill "$HTTPD_PID" 2>/dev/null || true
   [ -n "${TESTROOT:-}" ] && rm -rf "$TESTROOT"
+}
+
+# Repackage the built bundle as afct-linux-deploy-<ver>.tar.gz with matching internal
+# DEPLOY_VERSION and INSTALLER_VERSION (so the bootstrap's version-agreement check passes),
+# publish it under /assets, and write its checksum next to it.
+publish_version_asset() {
+  _v=$1
+  _w="$TESTROOT/pkg.$_v"; rm -rf "$_w"; mkdir -p "$_w"
+  tar -xzf "$TARBALL" -C "$_w"
+  _top=$(ls "$_w")
+  printf '%s\n' "$_v" > "$_w/$_top/DEPLOY_VERSION"
+  sed "s/^INSTALLER_VERSION=.*/INSTALLER_VERSION=\"$_v\"/" "$_w/$_top/bin/afctctl" > "$_w/$_top/bin/afctctl.new"
+  mv "$_w/$_top/bin/afctctl.new" "$_w/$_top/bin/afctctl"
+  chmod +x "$_w/$_top/bin/afctctl"
+  ( cd "$_w" && tar -czf "$WEB/assets/afct-linux-deploy-${_v}.tar.gz" "$_top" )
+  ( cd "$WEB/assets" && sha256sum "afct-linux-deploy-${_v}.tar.gz" > "afct-linux-deploy-${_v}.tar.gz.sha256" )
+  rm -rf "$_w"
 }
 
 # Write the releases listing (a JSON array) that the mock API returns. Args are asset
