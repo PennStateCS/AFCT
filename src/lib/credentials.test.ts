@@ -88,6 +88,20 @@ describe('verifyCredentials account lockout', () => {
     expect(await call()).toMatchObject({ ok: true });
   });
 
+  it('only looks up active accounts, so a deactivated user cannot sign in', async () => {
+    // The query scopes to inactive: false; an inactive row therefore never matches
+    // and the lookup returns null, which the caller treats as an invalid login.
+    prismaMock.user.findFirst.mockResolvedValue(null);
+
+    const res = await call();
+
+    expect(res).toMatchObject({ ok: false, reason: 'invalid' });
+    expect(bcryptMock.compare).not.toHaveBeenCalled();
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ inactive: false }) }),
+    );
+  });
+
   it('persists a lock to the user row when the account limiter blocks', async () => {
     evaluateMock.mockReturnValue({ status: 'blocked', retryAfterMs: 15 * 60_000 });
 

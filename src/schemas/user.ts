@@ -83,7 +83,6 @@ export const UpdateUserSchema = z.object({
   cropY: z.number().min(0).max(1).default(0.5),
   zoom: z.number().min(0.6).max(2.6).default(1),
   deleteAvatar: z.boolean().default(false),
-  inactive: z.boolean(),
   timezone: z.string().trim().optional(),
 });
 
@@ -106,6 +105,15 @@ export const UserUpdateJsonApiSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   inactive: z.boolean().optional(),
+  // Admin-only email change (Change Email dialog). Normalized + uniqueness-checked
+  // in the route; the transform keeps it lowercase to match the stored form.
+  email: z
+    .string()
+    .trim()
+    .email('Enter a valid email.')
+    .max(254, 'Email is too long.')
+    .transform((v) => v.toLowerCase())
+    .optional(),
   timezone: z.string().optional(),
   isAdmin: z.boolean().optional(),
   cropX: z.number().min(0).max(1).optional(),

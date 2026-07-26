@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  user: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
+  user: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    count: vi.fn(),
+  },
   roster: { findMany: vi.fn() },
   activityLog: { deleteMany: vi.fn() },
 }));
@@ -35,6 +41,8 @@ beforeEach(() => {
   prismaMock.roster.findMany.mockResolvedValue([]);
   // Another active admin exists by default; the last-admin tests override this.
   prismaMock.user.count.mockResolvedValue(1);
+  // No email collision by default; the duplicate-email test overrides this.
+  prismaMock.user.findFirst.mockResolvedValue(null);
 });
 
 describe('PATCH /api/users/[id]', () => {
@@ -736,6 +744,96 @@ describe('PATCH /api/users/[id]', () => {
     expect(prismaMock.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ isAdmin: false }) }),
     );
+  });
+
+  it('lets an admin change a user email to an unused address', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, email: 'old@example.com' });
+    prismaMock.user.findFirst.mockResolvedValue(null); // not taken
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'new@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      isAdmin: false,
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ email: 'New@Example.com' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(200);
+    // The schema lowercases the address before it reaches the DB.
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ email: 'new@example.com' }) }),
+    );
+  });
+
+  it('returns 409 when the new email is already in use', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, email: 'old@example.com' });
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'someone-else' }); // taken
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ email: 'taken@example.com' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('ignores an email change from a non-admin editing their own account', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, email: 'old@example.com' });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'old@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      isAdmin: false,
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ email: 'new@example.com' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(200);
+    // No uniqueness check runs, and the email is not part of the write.
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ email: undefined }) }),
+    );
+  });
+
+  it('surfaces a unique-constraint race on email as a 409', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, email: 'old@example.com' });
+    prismaMock.user.findFirst.mockResolvedValue(null); // passes the pre-check
+    prismaMock.user.update.mockRejectedValue(
+      Object.assign(new Error('unique'), { code: 'P2002' }),
+    );
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ email: 'raced@example.com' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe('That email is already in use');
   });
 });
 
