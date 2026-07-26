@@ -19,6 +19,7 @@ import { useUpgrade, isUpgradeInProgress, type SelfUpdateState } from './useUpgr
 import {
   upgradePhaseLabel,
   formatBackupTs,
+  formatBackupTsLocal,
   formatBytes,
   isNewerThan,
 } from './system-settings-shared';
@@ -106,8 +107,11 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
     {
       accessorKey: 'backup',
       header: 'Backup taken',
+      // Local time for the admin; raw server (UTC) time in the tooltip.
       cell: ({ row }) => (
-        <span className="whitespace-nowrap">{formatBackupTs(row.original.backup)}</span>
+        <span className="whitespace-nowrap" title={`${formatBackupTs(row.original.backup)} UTC`}>
+          {formatBackupTsLocal(row.original.backup)}
+        </span>
       ),
       meta: { priority: 1 },
     },
@@ -162,7 +166,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             type="button"
             size="sm"
             variant="destructive"
-            aria-label={`Delete the ${formatBackupTs(row.original.backup)} backup for version ${row.original.version}`}
+            aria-label={`Delete the ${formatBackupTsLocal(row.original.backup)} backup for version ${row.original.version}`}
             disabled={disabled || deleteBusy || downgradeBusy || upgradeInProgress}
             onClick={() =>
               setDeleteTarget({ version: row.original.version, backup: row.original.backup })
@@ -179,16 +183,22 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
     <>
       <div className="text-muted-foreground mb-4 max-w-2xl space-y-2 text-sm xl:max-w-4xl">
         <p>
-          Upgrade AFCT to a newer published release, all from here — no server login needed. When
-          you start an upgrade, AFCT backs up the database, downloads the new version, and restarts.
-          If the new version fails its health check it is rolled back to the current one
+          Upgrade AFCT to a newer published release, all from here, with no server login needed.
+          When you start an upgrade, AFCT backs up the database, downloads the new version, and
+          restarts. If the new version fails its health check it is rolled back to the current one
           automatically, so a bad release won&apos;t leave the site down.
         </p>
         <p>
           Some releases also improve the update system itself. Because the updater can&apos;t replace
-          its own container while it&apos;s running, those show a second step afterward — an{' '}
-          <span className="font-medium">Update the update service</span> button — so the next upgrade
+          its own container while it&apos;s running, those show a second step afterward, an{' '}
+          <span className="font-medium">Update the update service</span> button, so the next upgrade
           uses the newest logic. Both steps run here.
+        </p>
+        <p>
+          Prefer the command line? You can still update from the server instead. In the directory
+          that holds <code className="font-mono">docker-compose.yml</code>, run{' '}
+          <code className="font-mono">sh install.sh update</code>. It does the same backup, swap, and
+          health check as the in-app upgrade above.
         </p>
       </div>
 
@@ -317,7 +327,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               {/* Only show the step checklist for a run that is actually happening (or one
                   this session started). A completed run leaves the status at `healthy`, and
                   on a later page load that would otherwise render every step as a green
-                  check — making a not-yet-started upgrade look already done. */}
+                  check, making a not-yet-started upgrade look already done. */}
               {(upgradeInProgress || lastAction) && (
                 <UpgradeProgress
                   phase={upgradeInfo.status.phase}
@@ -483,7 +493,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         </DialogContent>
       </Dialog>
 
-      {/* Restore / downgrade — destructive, so kept visually separate. */}
+      {/* Restore / downgrade: destructive, so kept visually separate. */}
       {restorePoints.length > 0 && (
         <div className="mt-8 max-w-2xl space-y-3 border-t pt-6 xl:max-w-4xl">
           <h3 className="text-destructive text-sm font-semibold">Restore a previous version</h3>
@@ -492,7 +502,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             <span className="text-destructive font-medium">
               permanently discards everything created since that backup
             </span>{' '}
-            — submissions, grades, and accounts. Use this only for recovery.
+            (submissions, grades, and accounts). Use this only for recovery.
           </p>
           <DataTable
             columns={restoreColumns}
@@ -532,10 +542,10 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             <DialogDescription>
               This restores the database backup from{' '}
               <span className="font-mono">
-                {restoreTarget ? formatBackupTs(restoreTarget.backup) : ''}
+                {restoreTarget ? formatBackupTsLocal(restoreTarget.backup) : ''}
               </span>{' '}
               and runs <span className="font-mono">{restoreTarget?.version}</span>. Everything created
-              since that backup — submissions, grades, accounts — is{' '}
+              since that backup (submissions, grades, accounts) is{' '}
               <span className="text-destructive font-medium">permanently lost</span>. A safety backup
               of the current state is taken first. Type{' '}
               <span className="font-mono">{restoreTarget?.version}</span> to confirm.
@@ -591,7 +601,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             <DialogDescription>
               This deletes the backup from{' '}
               <span className="font-mono">
-                {deleteTarget ? formatBackupTs(deleteTarget.backup) : ''}
+                {deleteTarget ? formatBackupTsLocal(deleteTarget.backup) : ''}
               </span>{' '}
               and removes <span className="font-mono">{deleteTarget?.version}</span> from the restore
               list, so you can no longer downgrade to it. It does not affect the running application.

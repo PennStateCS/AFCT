@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import SystemSettingsClient from './SystemSettingsClient';
+import { formatBackupTsLocal } from './system-settings-shared';
 
 // The component is compiled with the classic JSX runtime here (it doesn't import
 // React itself and tsconfig uses jsx: "preserve"), so its emitted
@@ -236,7 +237,9 @@ describe('SystemSettingsClient', () => {
     renderWithClient(<SystemSettingsClient />);
 
     // One archive per backup now, so one download link -- plus its encryption state.
-    const cell = await screen.findByText('2026-01-15 03:02:01');
+    // Backups render in the viewer's local timezone; assert against the same helper so
+    // the test is independent of the runner's zone.
+    const cell = await screen.findByText(formatBackupTsLocal('20260115-030201'));
     const row = cell.closest('tr') as HTMLElement;
     const links = within(row).getAllByRole('link', { name: /Download/ });
     expect(links).toHaveLength(1);
