@@ -35,7 +35,7 @@ const detail = {
   ],
 };
 
-const renderView = () => {
+const renderView = (courseIsArchived = false) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={client}>
@@ -45,7 +45,7 @@ const renderView = () => {
         suggestedDuplicateName="Project 1 Copy"
         onListChanged={vi.fn()}
         onSelectSet={vi.fn()}
-        courseIsArchived={false}
+        courseIsArchived={courseIsArchived}
       />
     </QueryClientProvider>,
   );
@@ -66,6 +66,24 @@ describe('GroupSetView', () => {
     expect(screen.getByText('Inactive')).toBeInTheDocument();
     // Cara is eligible but unassigned.
     expect(screen.getByText('Cara C')).toBeInTheDocument();
+  });
+
+  it('offers a drag handle for active students but not inactive ones', async () => {
+    renderView();
+    await screen.findByText('Group 1');
+    // Active students (assigned or unassigned) get a handle.
+    expect(screen.getByLabelText('Drag Ann A')).toBeInTheDocument();
+    expect(screen.getByLabelText('Drag Cara C')).toBeInTheDocument();
+    // Bob is inactive, so he can't be dragged.
+    expect(screen.queryByLabelText('Drag Bob B')).not.toBeInTheDocument();
+  });
+
+  it('hides the drag handles when the course is archived (checkboxes still render)', async () => {
+    renderView(true);
+    await screen.findByText('Group 1');
+    expect(screen.queryByLabelText('Drag Ann A')).not.toBeInTheDocument();
+    // The keyboard/AT path (the checkbox) is still present.
+    expect(screen.getByLabelText('Select Ann A')).toBeInTheDocument();
   });
 
   it('reveals the selection action bar when a student is selected', async () => {

@@ -29,10 +29,12 @@ Only active students on the course roster are eligible. A student who is inactiv
 
 ### Assign students to groups
 
-Assignment uses a selection model rather than drag and drop:
+You can assign students two ways:
 
 1. Check one or more students in the unassigned list or in any group card.
 2. Use **Move to** and choose a target group, or **Remove from group** to send them back to unassigned.
+
+Or drag a student by the handle on the right of their row onto a group card, or onto the unassigned panel to remove them from their group. If the student you drag is part of a current checkbox selection, the whole selection moves with them. The drag is a convenience only; the checkboxes and **Move to** menu do everything the drag does, so you can also assign students entirely from the keyboard.
 
 Moving a student into a group also removes them from any other group in the same set, since a student holds at most one group per set. Only active students can be moved; inactive students in a selection are skipped.
 
