@@ -220,9 +220,12 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
 
   const columns = useMemo<ColumnDef<StudentRow, unknown>[]>(() => {
-    // The student's average across graded assignments, as a percentage. Undefined when
-    // they have no graded work. Shared by the Average cell and its sort accessor.
-    const computeAveragePct = (row: StudentRow): number | undefined => {
+    // The student's average across graded assignments: the percentage plus the raw
+    // points earned. Undefined when they have no graded work. Shared by the Average
+    // cell and its sort accessor.
+    const computeAverage = (
+      row: StudentRow,
+    ): { pct: number; earned: number } | undefined => {
       let earned = 0;
       let possible = 0;
       let gradeCount = 0;
@@ -235,7 +238,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         }
       }
       if (gradeCount === 0 || possible === 0) return undefined;
-      return (earned / possible) * 100;
+      return { pct: (earned / possible) * 100, earned };
     };
 
     // Total points across all assignments, shown under the Average header.
@@ -353,12 +356,19 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         </div>
       ),
       // Sortable via the derived average; students with no graded work sort to the end.
-      accessorFn: (row) => computeAveragePct(row),
+      accessorFn: (row) => computeAverage(row)?.pct,
       sortUndefined: 'last',
       cell: ({ row }) => {
-        const pct = computeAveragePct(row.original);
-        if (pct === undefined) return <span className="text-muted-foreground">-</span>;
-        return <span className="font-medium">{pct.toFixed(2)}%</span>;
+        const avg = computeAverage(row.original);
+        if (avg === undefined) return <span className="text-muted-foreground">-</span>;
+        return (
+          <div className="flex flex-col items-center leading-tight">
+            <span className="font-medium">{avg.pct.toFixed(2)}%</span>
+            <span className="text-muted-foreground text-xs">
+              {Number(avg.earned.toFixed(2))} pts
+            </span>
+          </div>
+        );
       },
       meta: { priority: 1, align: 'center', filterLabel: 'Average' },
     });
