@@ -18,6 +18,13 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { CompactDate } from '@/components/ui/CompactDate';
 import { parseValidDate } from '@/lib/date-format';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -285,6 +292,49 @@ function PublishSwitchCell({
   );
 }
 
+// The assignment title (a link to its page) plus a "View description" link that opens
+// a read-only modal. Self-contained so each row owns its own modal state without the
+// column model threading dialog state through the table.
+function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblemCount }) {
+  const [descOpen, setDescOpen] = useState(false);
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <Link
+        href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
+        className="block max-w-[8rem] truncate text-blue-600 hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
+        title={assignment.title}
+      >
+        {assignment.title}
+      </Link>
+      {assignment.description ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setDescOpen(true)}
+            className="self-start text-xs text-blue-600 underline hover:text-blue-800"
+            title="View description"
+          >
+            View description
+          </button>
+          <Dialog open={descOpen} onOpenChange={setDescOpen}>
+            <DialogContent className="bg-card">
+              <DialogHeader>
+                <DialogTitle>Assignment Description</DialogTitle>
+                <DialogDescription className="text-muted-foreground">
+                  {assignment.title}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm break-words whitespace-pre-wrap">
+                {assignment.description}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function useAssignmentColumns(
   courseIsArchived: boolean,
   handleAssignmentDeleteClick: (id: string) => void,
@@ -295,17 +345,7 @@ export function useAssignmentColumns(
     {
       accessorKey: 'title',
       header: 'Title',
-      cell: ({ row }) => (
-        <div className="min-w-0">
-          <Link
-            href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}
-            className="block max-w-[8rem] truncate text-blue-600 hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
-            title={row.original.title}
-          >
-            {row.original.title}
-          </Link>
-        </div>
-      ),
+      cell: ({ row }) => <AssignmentTitleCell assignment={row.original} />,
     },
     {
       id: 'isGroup',

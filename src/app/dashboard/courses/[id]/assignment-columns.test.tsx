@@ -161,6 +161,34 @@ describe('OverrideAwareCell', () => {
   });
 });
 
+describe('useAssignmentColumns — Title cell', () => {
+  const titleCell = (original: Record<string, unknown>) => {
+    const { result } = renderHook(() => useAssignmentColumns(false, vi.fn(), vi.fn(), 'UTC'));
+    const col = result.current.find((c) => (c as { accessorKey?: string }).accessorKey === 'title');
+    if (!col?.cell || typeof col.cell !== 'function') throw new Error('title cell not found');
+    return (col.cell as (ctx: { row: { original: Record<string, unknown> } }) => React.ReactNode)({
+      row: { original },
+    });
+  };
+
+  it('links the title and opens a description modal when a description exists', async () => {
+    const user = userEvent.setup();
+    render(<>{titleCell({ id: 'a1', courseId: 'c1', title: 'HW 1', description: 'Do the thing' })}</>);
+
+    expect(screen.getByRole('link', { name: 'HW 1' })).toHaveAttribute(
+      'href',
+      '/dashboard/courses/c1/a1',
+    );
+    await user.click(screen.getByText('View description'));
+    expect(await screen.findByText('Do the thing')).toBeInTheDocument();
+  });
+
+  it('omits the description link when there is no description', () => {
+    render(<>{titleCell({ id: 'a1', courseId: 'c1', title: 'HW 1', description: null })}</>);
+    expect(screen.queryByText('View description')).not.toBeInTheDocument();
+  });
+});
+
 describe('useAssignmentColumns — Manage menu', () => {
   it('offers deep links to the assignment tabs', async () => {
     const user = userEvent.setup();
