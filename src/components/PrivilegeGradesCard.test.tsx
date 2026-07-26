@@ -96,7 +96,9 @@ describe('PrivilegeGradesCard', () => {
     renderWithClient(<PrivilegeGradesCard courseId="c1" />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/courses/c1/grades');
+      // The gradebook loads its structure and grade values in two requests.
+      expect(global.fetch).toHaveBeenCalledWith('/api/courses/c1/grades?part=structure');
+      expect(global.fetch).toHaveBeenCalledWith('/api/courses/c1/grades?part=values');
       expect(screen.getByTestId('table-rows').textContent).toBe('2');
     });
 

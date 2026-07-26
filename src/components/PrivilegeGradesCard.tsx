@@ -46,26 +46,18 @@ type ApiStudent = {
   zoom?: number;
 };
 
-type GradesResponse = {
-  students: ApiStudent[];
-  assignments: Assignment[];
-  grades: Record<string, Record<string, number | null>>;
-  // assigned[studentId][assignmentId]; a false cell renders as a gray "not assigned" box.
-  assigned?: Record<string, Record<string, boolean>>;
-};
-
 // Per-row key holding the student's assignment-assigned flags, so the cell renderer can
-// tell "not assigned" (gray box) apart from "assigned but ungraded" (blank).
+// tell "not assigned" apart from "assigned but ungraded".
 const ASSIGNED_KEY = '__assigned';
-
-type GradesData = {
-  students: StudentRow[];
-  assignments: Assignment[];
-  fetchedAt: number;
-};
 
 const EMPTY_STUDENTS: StudentRow[] = [];
 const EMPTY_ASSIGNMENTS: Assignment[] = [];
+
+// Placeholder shown in a grade/average cell while the grade values are still loading,
+// after the table's columns and rows have already painted from the structure request.
+const GradeCellSkeleton = () => (
+  <span aria-hidden="true" className="bg-muted mx-auto block h-4 w-10 animate-pulse rounded" />
+);
 
 export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const VISIBILITY_REFRESH_MS = 60_000;
@@ -75,34 +67,35 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const canExport = Boolean(session?.user?.isAdmin);
 
-  // Cached students × assignments grade matrix. Fetched cold on mount (no SSR
-  // seed) and re-pulled via invalidation after a grade edit or the visibility
-  // refresh.
-  const gradesQuery = useQuery<GradesData>({
-    queryKey: ['course', courseId, 'grades'],
+  // The gradebook loads in two halves so the table paints its columns and rows while the
+  // grade cells are still loading. `structure` (students + assignments + assigned) is the
+  // fast part and drives the table; `values` (the grades map) is the slower aggregation
+  // and fills the cells when it arrives. Both are invalidated together on refresh.
+  const structureQuery = useQuery({
+    queryKey: ['course', courseId, 'grades', 'structure'],
     queryFn: async () => {
-      const res = await fetch(apiPaths.courseGrades(courseId));
+      const res = await fetch(apiPaths.courseGrades(courseId, 'structure'));
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load grades');
-      const body = (await res.json()) as GradesResponse;
+      const body = (await res.json()) as {
+        students: ApiStudent[];
+        assignments: Assignment[];
+        assigned?: Record<string, Record<string, boolean>>;
+      };
 
-      const { students: s, assignments: a, grades, assigned } = body;
-
-      // maxPoints is already computed by the grades API (sum of problem max points).
       // Order the columns left-to-right by due date (earliest first); assignments with
-      // no due date sort to the end.
+      // no due date sort to the end. maxPoints comes from the API.
       const dueTime = (asg: Assignment) => {
         const t = asg.dueDate ? Date.parse(asg.dueDate) : NaN;
         return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
       };
-      const assignmentsWithPoints: Assignment[] = a
+      const assignmentsWithPoints: Assignment[] = body.assignments
         .map((asg) => ({
           ...asg,
           maxPoints: (asg as Assignment & { maxPoints?: number }).maxPoints ?? 0,
         }))
         .sort((x, y) => dueTime(x) - dueTime(y));
 
-      // Build rows
-      const rows: StudentRow[] = s.map((stu) => {
+      const rows: StudentRow[] = body.students.map((stu) => {
         const row: StudentRow = {
           id: stu.id,
           email: stu.email,
@@ -114,34 +107,47 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           zoom: stu.zoom,
         };
         const assignedFlags: Record<string, boolean> = {};
-        for (const asg of a) {
-          const grade = grades?.[stu.id]?.[asg.id];
-          row[asg.id] = grade ?? null;
+        for (const asg of body.assignments) {
           // Default to assigned when the flag is absent (older payloads / safety).
-          assignedFlags[asg.id] = assigned?.[stu.id]?.[asg.id] !== false;
+          assignedFlags[asg.id] = body.assigned?.[stu.id]?.[asg.id] !== false;
         }
         row[ASSIGNED_KEY] = assignedFlags;
         return row;
       });
 
-      return {
-        students: rows,
-        assignments: assignmentsWithPoints,
-        fetchedAt: Date.now(),
-      };
+      return { students: rows, assignments: assignmentsWithPoints };
     },
     staleTime: 30_000,
   });
 
-  const students = gradesQuery.data?.students ?? EMPTY_STUDENTS;
-  const assignments = gradesQuery.data?.assignments ?? EMPTY_ASSIGNMENTS;
+  const valuesQuery = useQuery({
+    queryKey: ['course', courseId, 'grades', 'values'],
+    queryFn: async () => {
+      const res = await fetch(apiPaths.courseGrades(courseId, 'values'));
+      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load grades');
+      const body = (await res.json()) as {
+        grades: Record<string, Record<string, number | null>>;
+      };
+      return { grades: body.grades, fetchedAt: Date.now() };
+    },
+    staleTime: 30_000,
+  });
+
+  const students = structureQuery.data?.students ?? EMPTY_STUDENTS;
+  const assignments = structureQuery.data?.assignments ?? EMPTY_ASSIGNMENTS;
+  const gradesMap = valuesQuery.data?.grades;
+  // Cells show a skeleton only on the first values load; a background refresh keeps the
+  // previous grades visible instead of flashing skeletons.
+  const valuesLoading = valuesQuery.isPending;
   // Drives the refresh/export button state (disabled + spinner) during any fetch.
-  // The grades table itself blocks only on a cold load (isPending); see below;
-  // so a background refresh doesn't hide the cached grid.
-  const loading = gradesQuery.isPending || gradesQuery.isFetching;
+  const loading =
+    structureQuery.isPending ||
+    structureQuery.isFetching ||
+    valuesQuery.isPending ||
+    valuesQuery.isFetching;
   const lastUpdated = useMemo(
-    () => (gradesQuery.data ? new Date(gradesQuery.data.fetchedAt) : null),
-    [gradesQuery.data],
+    () => (valuesQuery.data ? new Date(valuesQuery.data.fetchedAt) : null),
+    [valuesQuery.data],
   );
 
   const refreshGrades = useCallback(
@@ -150,19 +156,20 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   );
 
   // Surface fetch failures as a toast, preserving the prior behavior.
+  const gradesError = structureQuery.isError || valuesQuery.isError;
   useEffect(() => {
-    if (gradesQuery.isError) {
-      console.error('Fetch grades error:', gradesQuery.error);
+    if (gradesError) {
+      console.error('Fetch grades error:', structureQuery.error ?? valuesQuery.error);
       showToast.error('Failed to load grades');
     }
-  }, [gradesQuery.isError, gradesQuery.error]);
+  }, [gradesError, structureQuery.error, valuesQuery.error]);
 
   // Refresh data when the tab becomes visible again and the cached matrix is stale.
+  const valuesFetchedAt = valuesQuery.data?.fetchedAt;
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        const fetchedAt = gradesQuery.data?.fetchedAt ?? 0;
-        if (Date.now() - fetchedAt < VISIBILITY_REFRESH_MS) {
+        if (Date.now() - (valuesFetchedAt ?? 0) < VISIBILITY_REFRESH_MS) {
           return;
         }
         // Page became visible and data is stale, refresh data.
@@ -174,7 +181,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [gradesQuery.data?.fetchedAt, refreshGrades]);
+  }, [valuesFetchedAt, refreshGrades]);
 
   const exportGrades = useCallback(
     (platform: LmsPlatform, assignmentIds: string[]) => {
@@ -230,7 +237,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       let possible = 0;
       let gradeCount = 0;
       for (const a of assignments) {
-        const val = row[a.id];
+        const val = gradesMap?.[row.id]?.[a.id];
         if (val !== null && val !== undefined) {
           earned += Number(val);
           possible += a.maxPoints ?? 0;
@@ -288,7 +295,9 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     for (const a of assignments) {
       cols.push({
         id: a.id,
-        accessorKey: a.id,
+        // Sort by this assignment's grade (from the values map); ungraded sorts last.
+        accessorFn: (row) => gradesMap?.[row.id]?.[a.id] ?? undefined,
+        sortUndefined: 'last',
         // Two-line header: the assignment title, with the points it's worth beneath it
         // (the cells now show only the earned grade). filterLabel keeps the sort
         // button's accessible name as the title even though the header is JSX.
@@ -300,7 +309,6 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         ),
         cell: ({ row }) => {
           const user = row.original;
-          const val = user[a.id];
           const assignedFlags = user[ASSIGNED_KEY] as Record<string, boolean> | undefined;
           const isAssigned = assignedFlags?.[a.id] !== false;
 
@@ -320,6 +328,10 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               </span>
             );
           }
+
+          // Grades still loading: skeleton (the column/row already painted).
+          if (valuesLoading) return <GradeCellSkeleton />;
+          const val = gradesMap?.[user.id]?.[a.id];
 
           const handleClick = () => {
             setSelectedStudent({ id: user.id, name: `${user.firstName} ${user.lastName}` });
@@ -359,6 +371,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       accessorFn: (row) => computeAverage(row)?.pct,
       sortUndefined: 'last',
       cell: ({ row }) => {
+        if (valuesLoading) return <GradeCellSkeleton />;
         const avg = computeAverage(row.original);
         if (avg === undefined) return <span className="text-muted-foreground">-</span>;
         return (
@@ -374,7 +387,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     });
 
     return cols;
-  }, [assignments]);
+  }, [assignments, gradesMap, valuesLoading]);
 
   return (
     <div className="space-y-6">
@@ -401,7 +414,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         <DataTable
           columns={columns}
           data={students}
-          loading={gradesQuery.isPending}
+          loading={structureQuery.isPending}
           tableLabel="Course grades table"
           bordered
           defaultSorting={[{ id: 'lastName', desc: false }]}

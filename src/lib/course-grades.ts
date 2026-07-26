@@ -20,23 +20,32 @@ export type GradeMatrixAssignment = {
   maxPoints: number;
 };
 
-export type CourseGradeMatrix = {
+// The table structure: who is in the gradebook and which assignments are the columns,
+// plus who is assigned what. This is the fast part (no per-problem grade aggregation),
+// so the UI can render columns and rows while the grade values are still loading.
+export type CourseGradeStructure = {
   students: GradeMatrixStudent[];
   assignments: GradeMatrixAssignment[];
-  // grades[studentId][assignmentId] = summed points earned (problem grades collapsed), or null.
-  grades: Record<string, Record<string, number | null>>;
   // assigned[studentId][assignmentId] = whether the student is actually assigned that
   // assignment (assigned to everyone, an individual override, or a group override on a
-  // group they belong to). Cells where this is false render as a gray "not assigned" box.
+  // group they belong to). Cells where this is false render as "not assigned".
   assigned: Record<string, Record<string, boolean>>;
 };
 
+// The cell values only: grades[studentId][assignmentId] = summed points earned (problem
+// grades collapsed), or null. This is the slower part (the grouped aggregation).
+export type CourseGradeValues = {
+  grades: Record<string, Record<string, number | null>>;
+};
+
+export type CourseGradeMatrix = CourseGradeStructure & CourseGradeValues;
+
 /**
- * The full gradebook matrix for a course: enrolled students, assignments (with the
- * summed max points), and each student's summed grade per assignment. Shared by the
- * grades API (read) and the LMS export endpoint so both see identical numbers.
+ * The gradebook structure for a course: enrolled students, assignments (with the summed
+ * max points), and the assigned map. No grade aggregation, so it returns quickly and the
+ * UI can paint the columns while `getCourseGradeValues` is still in flight.
  */
-export async function getCourseGradeMatrix(courseId: string): Promise<CourseGradeMatrix> {
+export async function getCourseGradeStructure(courseId: string): Promise<CourseGradeStructure> {
   const roster = await prisma.roster.findMany({
     where: { courseId, role: 'STUDENT' },
     select: { userId: true },
@@ -96,22 +105,16 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
     maxPoints: a.problems.reduce((sum, p) => sum + Number(p.maxPoints ?? 0), 0),
   }));
 
-  const assignmentIds = assignments.map((a) => a.id);
   const studentIds = students.map((s) => s.id);
 
-  const grades: Record<string, Record<string, number | null>> = {};
   const assigned: Record<string, Record<string, boolean>> = {};
   for (const s of studentIds) {
-    grades[s] = {};
     assigned[s] = {};
-    for (const a of assignmentIds) {
-      grades[s][a] = null;
-      assigned[s][a] = true;
-    }
+    for (const a of assignments) assigned[s][a.id] = true;
   }
 
-  if (assignmentIds.length === 0 || studentIds.length === 0) {
-    return { students, assignments, grades, assigned };
+  if (assignments.length === 0 || studentIds.length === 0) {
+    return { students, assignments, assigned };
   }
 
   // One batched membership read for the whole roster: each student's set of group ids,
@@ -144,6 +147,36 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
     }
   }
 
+  return { students, assignments, assigned };
+}
+
+/**
+ * The grade values for a course gradebook: each student's summed grade per assignment
+ * (null when ungraded). This is the slower half of the matrix, split out so it can be
+ * fetched after the structure and merged in as the cells arrive.
+ */
+export async function getCourseGradeValues(courseId: string): Promise<CourseGradeValues> {
+  const roster = await prisma.roster.findMany({
+    where: { courseId, role: 'STUDENT' },
+    select: { userId: true },
+  });
+  const studentIds = roster.map((r) => r.userId);
+  const assignmentRows = await prisma.assignment.findMany({
+    where: { courseId },
+    select: { id: true },
+  });
+  const assignmentIds = assignmentRows.map((a) => a.id);
+
+  const grades: Record<string, Record<string, number | null>> = {};
+  for (const s of studentIds) {
+    grades[s] = {};
+    for (const a of assignmentIds) grades[s][a] = null;
+  }
+
+  if (assignmentIds.length === 0 || studentIds.length === 0) {
+    return { grades };
+  }
+
   // Sum the per-problem grades into one assignment total per student.
   const gradeRows = await prisma.assignmentProblemGrade.groupBy({
     by: ['studentId', 'assignmentId'],
@@ -156,5 +189,18 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
     if (studentGrades) studentGrades[g.assignmentId] = g._sum.grade ?? 0;
   });
 
-  return { students, assignments, grades, assigned };
+  return { grades };
+}
+
+/**
+ * The full gradebook matrix (structure + values) for a course. Shared by the LMS export
+ * endpoint, which needs everything at once; the grades API serves the two halves
+ * separately so the table can render progressively.
+ */
+export async function getCourseGradeMatrix(courseId: string): Promise<CourseGradeMatrix> {
+  const [structure, values] = await Promise.all([
+    getCourseGradeStructure(courseId),
+    getCourseGradeValues(courseId),
+  ]);
+  return { ...structure, ...values };
 }

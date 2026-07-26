@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
-import { getCourseGradeMatrix } from '@/lib/course-grades';
+import {
+  getCourseGradeMatrix,
+  getCourseGradeStructure,
+  getCourseGradeValues,
+} from '@/lib/course-grades';
 
 // The grades tab refetches on focus and on an interval; only record a view once per
 // user / course / window so a background refetch doesn't flood the audit log.
@@ -17,6 +21,11 @@ const GRADES_VIEW_THROTTLE_MS = 10 * 60 * 1000;
  * summary: Get the course grade matrix
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - name: part
+ *     in: query
+ *     required: false
+ *     description: "`structure` returns students + assignments; `values` returns just the grades map; omitted returns the full matrix."
+ *     schema: { type: string, enum: [structure, values] }
  * responses:
  *   200:
  *     description: Students, assignments, and a nested grades map (grades[studentId][assignmentId]).
@@ -35,7 +44,18 @@ const GRADES_VIEW_THROTTLE_MS = 10 * 60 * 1000;
 export const GET = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const matrix = await getCourseGradeMatrix(courseId);
+      // The gradebook loads in two parts so the table can paint its columns while the
+      // grade cells are still loading: `?part=structure` returns students + assignments
+      // (fast); `?part=values` returns just the grades (the slower aggregation). No part
+      // returns the full matrix (used by the LMS export path). The grade *values* are
+      // the FERPA-relevant read, so that's what the throttled audit records.
+      const part = new URL(req.url).searchParams.get('part');
+
+      if (part === 'structure') {
+        return NextResponse.json(await getCourseGradeStructure(courseId));
+      }
+
+      const payload = part === 'values' ? await getCourseGradeValues(courseId) : await getCourseGradeMatrix(courseId);
 
       // Best-effort, throttled read audit — never block the response on it.
       try {
@@ -55,17 +75,14 @@ export const GET = withCourseAuth(
             severity: 'INFO',
             category: 'GRADE',
             courseId,
-            metadata: {
-              studentCount: matrix.students.length,
-              assignmentCount: matrix.assignments.length,
-            },
+            metadata: { studentCount: Object.keys(payload.grades).length },
           });
         }
       } catch (logErr) {
         console.error('Failed to log grades view:', logErr);
       }
 
-      return NextResponse.json(matrix);
+      return NextResponse.json(payload);
     } catch (error) {
       console.error('GET /api/courses/[id]/grades error:', error);
       const detail = error instanceof Error ? error.message : String(error);

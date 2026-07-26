@@ -6894,7 +6894,10 @@ export interface operations {
     };
     getCoursesByIdGrades: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `structure` returns students + assignments; `values` returns just the grades map; omitted returns the full matrix. */
+                part?: "structure" | "values";
+            };
             header?: never;
             path: {
                 id: string;
