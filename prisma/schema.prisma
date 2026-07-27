@@ -12,6 +12,16 @@ enum CourseRole {
   STUDENT
 }
 
+// A student's standing in a course, distinct from their CourseRole. ENROLLED students
+// can see and interact with the course; DROPPED students keep their association and all
+// their work (submissions, grades, group membership, audience/override rows) but lose
+// access, and staff-facing views mark them "Dropped". Applies only to STUDENT rows;
+// FACULTY/TA are always ENROLLED. See lib/roster-status for the shared predicates.
+enum EnrollmentStatus {
+  ENROLLED
+  DROPPED
+}
+
 enum ProblemType {
   PDA
   RE
@@ -177,6 +187,13 @@ model Roster {
   id   String     @id @default(cuid())
   role CourseRole
 
+  // Student standing in the course. Only meaningful for STUDENT rows; FACULTY/TA stay
+  // ENROLLED. A DROPPED student is treated as a non-member by the access gate but keeps
+  // this row (and all their work) so a re-enroll is a clean restore. droppedAt records
+  // when the drop happened, for the retained record and the research/activity log.
+  status    EnrollmentStatus @default(ENROLLED)
+  droppedAt DateTime?
+
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
@@ -193,6 +210,8 @@ model Roster {
   @@index([courseId])
   @@index([userId])
   @@index([role])
+  // Enumerations of active students filter on (course, role, status), so index the trio.
+  @@index([courseId, role, status])
 }
 
 model Assignment {
@@ -430,8 +449,10 @@ model GroupMembership {
   groupId String
 
   // The member must be a roster row in the course (the service layer always sets
-  // courseId from the set, and additionally requires role STUDENT + active). This
-  // composite reference to Roster is the database-level "is enrolled here" guard.
+  // courseId from the set, and eligibility additionally requires role STUDENT, an
+  // active account, and ENROLLED status). This composite reference to Roster is the
+  // database-level "has a roster row here" guard; note it does NOT enforce status, so
+  // a dropped student keeps their membership row until re-enrolled (by design).
   roster   Roster @relation(fields: [courseId, userId], references: [courseId, userId], onDelete: Cascade)
   courseId String
   userId   String

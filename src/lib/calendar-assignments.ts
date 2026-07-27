@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { ACTIVE_STUDENT_ROSTER } from '@/lib/roster-status';
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import type { CalendarAssignment } from '@/lib/calendar-shared';
 export { getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
@@ -15,7 +16,9 @@ export async function getAssignmentsForUserRange(params: {
 
   const [rosterEntries, viewer] = await Promise.all([
     prisma.roster.findMany({
-      where: { userId },
+      // A course the viewer was dropped from (as a student) leaves their calendar; their
+      // staff courses and active enrollments stay.
+      where: { userId, NOT: { role: 'STUDENT', status: 'DROPPED' } },
       select: { courseId: true, role: true },
     }),
     prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } }),
@@ -130,7 +133,8 @@ export async function getAssignmentsForUserRange(params: {
 
     const studentCounts = await prisma.roster.groupBy({
       by: ['courseId'],
-      where: { courseId: { in: staffCourseIdList }, role: 'STUDENT' },
+      // Count active students only (a dropped student is not part of the active class).
+      where: { courseId: { in: staffCourseIdList }, ...ACTIVE_STUDENT_ROSTER },
       _count: { _all: true },
     });
     studentCounts.forEach((c) => {

@@ -82,6 +82,7 @@ export const GET = withCourseAuth(
                 roster: {
                   select: {
                     role: true,
+                    status: true,
                     user: {
                       select: {
                         id: true,
@@ -172,7 +173,7 @@ export const GET = withCourseAuth(
         typeof course,
         'roster' | 'assignments' | 'problems' | '_count'
       > & {
-        roster?: Array<{ role: string; user: Record<string, unknown> }>;
+        roster?: Array<{ role: string; status?: string; user: Record<string, unknown> }>;
         assignments?: AssignmentRow[];
         problems?: Array<Record<string, unknown>>;
         _count?: { assignments?: number; problems?: number; roster?: number };
@@ -208,6 +209,9 @@ export const GET = withCourseAuth(
         enrolled = rosterRows.map((r) => ({
           ...r.user,
           courseRole: r.role,
+          // Enrollment standing, so the roster can badge dropped students (staff view only;
+          // students never receive peer roster rows). Only meaningful for STUDENT rows.
+          enrollmentStatus: r.status,
           hasSubmissions:
             r.role === 'STUDENT' ? submittedStudentIds.has(String(r.user.id)) : false,
         }));

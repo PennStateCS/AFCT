@@ -75,10 +75,11 @@ export const POST = withCourseAuth(
           userId,
           role: roleToAssign,
         },
-        // Additive only: leave an existing member's role exactly as it is. Resetting it to
-        // STUDENT here would let any course staff (TAs included) silently demote a FACULTY
-        // or TA member, bypassing the faculty-gated, last-faculty-guarded role-change route.
-        update: {},
+        // Re-adding restores access: a previously DROPPED student is re-enrolled. We set
+        // only status/droppedAt, never role, so this can't demote a FACULTY/TA member
+        // (that stays the faculty-gated role-change route's job); for an already-enrolled
+        // member or a staff row it's a no-op (they are ENROLLED with droppedAt null already).
+        update: { status: 'ENROLLED', droppedAt: null },
       });
 
       await createEnhancedActivityLog(prisma, req, {

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { ChevronDown, Lock, Pencil, Tag, UserRoundX } from 'lucide-react';
+import { ChevronDown, Lock, Pencil, Tag, UserRoundX, UserRoundMinus, UserRoundCheck } from 'lucide-react';
 import type { User } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -25,7 +25,12 @@ import { apiPaths } from '@/lib/api-paths';
 import { useState } from 'react';
 
 
-type RosterUser = User & { role?: string; hasSubmissions?: boolean };
+type RosterUser = User & {
+  role?: string;
+  hasSubmissions?: boolean;
+  // Enrollment standing for a student ('ENROLLED' | 'DROPPED'); undefined for staff.
+  enrollmentStatus?: string;
+};
 
 type ActionsCellProps = {
   user: RosterUser;
@@ -71,6 +76,27 @@ function ActionsCell({
     }
   }
 
+  const handleStatusChange = async (newStatus: 'ENROLLED' | 'DROPPED') => {
+    try {
+      const res = await fetch(apiPaths.courseRosterStatus(courseId, user.id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to update enrollment.');
+      }
+      onChange();
+      showToast.success(
+        newStatus === 'DROPPED' ? 'Student dropped from course' : 'Student re-enrolled',
+      );
+    } catch (error) {
+      showToast.error(error instanceof Error ? error.message : 'Failed to update enrollment.');
+    }
+  };
+
   const handleDelete = async () => {
     try {
       // remove user from the course roster instead of deleting the user record
@@ -100,6 +126,11 @@ function ActionsCell({
   const courseRole = rUser.role ?? null;
   const hasSubmissions = Boolean(rUser.hasSubmissions);
   const isPrivileged = viewerIsAdmin || viewerRole === 'FACULTY' || viewerRole === 'TA';
+  // Dropping / re-enrolling is faculty/admin only (matches the status endpoint; TAs may
+  // not), and only applies to students.
+  const canManageEnrollment = Boolean(viewerIsAdmin || viewerRole === 'FACULTY');
+  const isStudent = courseRole === 'STUDENT';
+  const isDropped = rUser.enrollmentStatus === 'DROPPED';
 
   const deleteTitle = `Remove ${user.firstName} ${user.lastName}?`;
   const deleteDescription = `This will remove the user from the roster for this course. This action cannot be undone.`
@@ -110,7 +141,7 @@ function ActionsCell({
     : !isPrivileged
       ? 'You do not have permission to remove this user'
       : hasSubmissions
-        ? 'This user cannot be removed from the course'
+        ? 'This student has work in the course and cannot be removed. Drop them instead to revoke access while keeping their submissions.'
         : undefined;
 
   return (
@@ -154,6 +185,29 @@ function ActionsCell({
               <Lock className="h-4 w-4" />
               Reset Password
             </DropdownMenuItem>
+          ) : null}
+          {isStudent && canManageEnrollment ? (
+            isDropped ? (
+              <DropdownMenuItem
+                onClick={() => void handleStatusChange('ENROLLED')}
+                disabled={courseIsArchived}
+                title={courseIsArchived ? 'Cannot change enrollment in an archived course' : undefined}
+                className="flex items-center gap-2"
+              >
+                <UserRoundCheck className="h-4 w-4" />
+                Re-enroll
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                onClick={() => void handleStatusChange('DROPPED')}
+                disabled={courseIsArchived}
+                title={courseIsArchived ? 'Cannot change enrollment in an archived course' : undefined}
+                className="flex items-center gap-2"
+              >
+                <UserRoundMinus className="h-4 w-4" />
+                Drop From Course
+              </DropdownMenuItem>
+            )
           ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -304,6 +358,35 @@ export const userColumns = (
         />
       ),
       sortingFn: roleSortingFn,
+    },
+    {
+      id: 'enrollmentStatus',
+      header: 'Status',
+      // Staff have no enrollment standing; report ENROLLED so the "Enrolled" filter keeps
+      // them and only "Dropped" isolates dropped students. (Student rows always carry a
+      // real status from the server.)
+      accessorFn: (row) => (row as RosterUser).enrollmentStatus ?? 'ENROLLED',
+      meta: {
+        priority: 2,
+        filterVariant: 'multiselect',
+        filterLabel: 'Status',
+        filterOptions: [
+          { label: 'Enrolled', value: 'ENROLLED' },
+          { label: 'Dropped', value: 'DROPPED' },
+        ],
+      },
+      cell: ({ row }) => {
+        const r = row.original as RosterUser;
+        // Status only applies to students; staff show a dash.
+        if (r.role !== 'STUDENT') return <span className="text-muted-foreground">—</span>;
+        return r.enrollmentStatus === 'DROPPED' ? (
+          <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+            Dropped
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-sm">Enrolled</span>
+        );
+      },
     },
   ];
 

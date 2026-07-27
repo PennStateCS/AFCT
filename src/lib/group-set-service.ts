@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { ACTIVE_STUDENT_ROSTER } from '@/lib/roster-status';
 import { computeMembershipBasis, GroupSetLockedError } from '@/lib/group-sets';
 
 /**
@@ -110,10 +111,15 @@ export type GroupSetDetailDTO = {
   basis: string;
 };
 
-/** The Prisma where-clause for "active STUDENT roster member of this course". */
+/**
+ * The Prisma where-clause for "active STUDENT roster member of this course": role
+ * STUDENT, an active account, and ENROLLED standing. A dropped student is excluded from
+ * eligibility so they are not offered for new group assignments (their existing group
+ * memberships are kept, per the drop design, until they are re-enrolled or removed).
+ */
 export const activeStudentRosterWhere = (courseId: string) => ({
   courseId,
-  role: 'STUDENT' as const,
+  ...ACTIVE_STUDENT_ROSTER,
   user: { inactive: false },
 });
 

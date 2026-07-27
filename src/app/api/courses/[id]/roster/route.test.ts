@@ -131,7 +131,7 @@ describe('POST /api/courses/[id]/roster', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('adds a new member as STUDENT but never re-roles an existing member', async () => {
+  it('adds a new member as STUDENT and re-enrolls without ever re-roling', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', inactive: false });
 
@@ -143,14 +143,13 @@ describe('POST /api/courses/[id]/roster', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(200);
-    // New rows are STUDENT; the update branch is empty so an already-enrolled FACULTY/TA
+    // New rows are STUDENT; the update branch restores access (ENROLLED, droppedAt null)
+    // for a re-added dropped student but sets NO role, so an already-enrolled FACULTY/TA
     // member is never silently demoted by an "enroll" call (that's the role-change route).
-    expect(prismaMock.roster.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ role: 'STUDENT' }),
-        update: {},
-      }),
-    );
+    const upsertArg = prismaMock.roster.upsert.mock.calls[0][0];
+    expect(upsertArg.create).toEqual(expect.objectContaining({ role: 'STUDENT' }));
+    expect(upsertArg.update).toEqual({ status: 'ENROLLED', droppedAt: null });
+    expect(upsertArg.update).not.toHaveProperty('role');
   });
 
   it('returns 500 when the roster upsert fails', async () => {

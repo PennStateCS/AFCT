@@ -51,6 +51,32 @@ describe('GET /api/courses/[id]/students', () => {
     ]);
     // The role filter must be in the query, not applied in JS after fetching all roles.
     expect(prismaMock.roster.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { courseId: 'c1', role: 'STUDENT', status: 'ENROLLED' } }),
+    );
+  });
+
+  it('includes dropped students (any standing) with their status when includeDropped is set', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.roster.findMany.mockResolvedValue([
+      {
+        role: 'STUDENT',
+        status: 'DROPPED',
+        user: { id: 's2', firstName: 'D', lastName: 'R', email: 'd@example.com' },
+      },
+    ]);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/students?includeDropped=1'),
+      { params: Promise.resolve({ id: 'c1' }) },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([
+      { id: 's2', firstName: 'D', lastName: 'R', email: 'd@example.com', enrollmentStatus: 'DROPPED' },
+    ]);
+    // includeDropped drops the status filter: all students regardless of standing.
+    expect(prismaMock.roster.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { courseId: 'c1', role: 'STUDENT' } }),
     );
   });

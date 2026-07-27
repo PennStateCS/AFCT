@@ -58,6 +58,15 @@ export const POST = withCourseAuth(
         skipDuplicates: true,
       });
 
+      // Re-enroll any of these who were previously DROPPED: re-adding a dropped student
+      // to the roster restores their access. Scoped to role STUDENT and status DROPPED so
+      // it can never touch a FACULTY/TA row or change anyone's role (that stays the
+      // faculty-gated role-change endpoint's job).
+      const reEnrolled = await prisma.roster.updateMany({
+        where: { courseId, userId: { in: userIds }, role: 'STUDENT', status: 'DROPPED' },
+        data: { status: 'ENROLLED', droppedAt: null },
+      });
+
       // Log bulk enrollment action
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
@@ -69,6 +78,7 @@ export const POST = withCourseAuth(
           courseId: courseId,
           enrolledIds: userIds,
           enrolledCount: userIds.length,
+          reEnrolledCount: reEnrolled.count,
         },
       });
       return NextResponse.json({ success: true, enrolled: userIds.length }, { status: 200 });

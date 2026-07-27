@@ -1866,6 +1866,28 @@ export interface paths {
         patch: operations["patchCoursesByIdRosterByUserId"];
         trace?: never;
     };
+    "/api/courses/{id}/roster/{userId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Drop or re-enroll a student
+         * @description Drop or re-enroll a student in a course.   A DROPPED student keeps their roster row and all their work (submissions, grades,  group membership, audience/override rows) but loses access: `canAccessCourse` denies  them, so they can't see or interact with the course, and it disappears from their own  lists. Staff review surfaces still show them, marked "Dropped". Re-enrolling flips  them back to ENROLLED and restores everything.   This is distinct from removal (`DELETE .../roster/[userId]`): removal is a hard delete  for a student with no work; drop is the reversible action for a student who has work.  Only a global admin or a course FACULTY member may do it (TAs may not, matching the  other roster mutations), and it applies only to STUDENT rows.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/[userId]/status/route.ts)
+         */
+        patch: operations["patchCoursesByIdRosterByUserIdStatus"];
+        trace?: never;
+    };
     "/api/courses/{id}/roster/bulk": {
         parameters: {
             query?: never;
@@ -1981,7 +2003,7 @@ export interface paths {
         };
         /**
          * List a course's students
-         * @description Returns just the STUDENT members of a course (user profiles). Course staff  (faculty or TAs) or a system admin.
+         * @description Returns the STUDENT members of a course (user profiles, each tagged with its  `enrollmentStatus`). Course staff (faculty or TAs) or a system admin.   By default only ACTIVE (ENROLLED) students are returned, since the main caller is the  assignment-audience picker, where a dropped student must not be offered as a new  target. Pass `?includeDropped=1` to also return dropped students (for staff review  surfaces like the submissions view, which show them labeled).
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/students/route.ts)
          */
@@ -2029,7 +2051,7 @@ export interface paths {
          * Join a course by registration code
          * @description Enrolls the signed-in user in a course via its registration code,  as a STUDENT. Users never learn that an unpublished/archived course exists  (masked as 404). Global admins can't self-enroll, and the registration window  must be open.
          *
-         *     **Auth:** required
+         *     **Auth:** requires STUDENT
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/join/route.ts)
          */
@@ -8828,6 +8850,88 @@ export interface operations {
             };
         };
     };
+    patchCoursesByIdRosterByUserIdStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    status: "ENROLLED" | "DROPPED";
+                };
+            };
+        };
+        responses: {
+            /** @description Status updated (or already at the requested status). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body, or the target is not a student. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system admin or a course faculty member. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Roster entry not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course is archived. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     postCoursesByIdRosterBulk: {
         parameters: {
             query?: never;
@@ -9235,7 +9339,10 @@ export interface operations {
     };
     getCoursesByIdStudents: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description "1"/"true" also returns dropped students (default: enrolled only). */
+                includeDropped?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -9244,7 +9351,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The course's students. */
+            /** @description The course's students, each with an enrollmentStatus. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9369,6 +9476,15 @@ export interface operations {
             };
             /** @description Not signed in. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Enrollment was dropped; re-enrollment is a staff action. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

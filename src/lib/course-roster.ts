@@ -12,6 +12,10 @@ export type EnrolledUser = {
   avatar?: string | null;
   role?: string; // global role
   courseRole?: string; // course-specific role
+  // Enrollment standing for a student (ENROLLED / DROPPED). Present on the staff roster
+  // view so the table can badge dropped students; undefined for staff rows and the
+  // privacy-safe student view.
+  enrollmentStatus?: string;
   hasSubmissions?: boolean;
 };
 

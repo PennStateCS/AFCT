@@ -27,7 +27,8 @@ export const apiPaths = {
   courseArchive: (id: string) => `/api/courses/${id}/archive`,
   courseActivity: (id: string, opts?: { limit?: number; offset?: number }) =>
     `/api/courses/${id}/activity${qs({ limit: opts?.limit, offset: opts?.offset })}`,
-  courseStudents: (id: string) => `/api/courses/${id}/students`,
+  courseStudents: (id: string, opts?: { includeDropped?: boolean }) =>
+    `/api/courses/${id}/students${opts?.includeDropped ? '?includeDropped=1' : ''}`,
   courseGrades: (id: string, part?: 'structure' | 'values') =>
     `/api/courses/${id}/grades${part ? `?part=${part}` : ''}`,
   courseGradesExport: (id: string) => `/api/courses/${id}/grades/export`,
@@ -55,6 +56,9 @@ export const apiPaths = {
   // Import a problem from another course INTO this (destination) course.
   courseProblemImport: (id: string) => `/api/courses/${id}/problems/import`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
+  // Drop / re-enroll a student (PATCH { status }).
+  courseRosterStatus: (id: string, userId: string) =>
+    `/api/courses/${id}/roster/${userId}/status`,
   courseRosterResetPassword: (id: string, userId: string) =>
     `/api/courses/${id}/roster/${userId}/reset-password`,
   courseAssignments: (id: string, opts?: { includeUnpublished?: boolean }) =>

@@ -13,6 +13,13 @@ export const CourseRoleEnum = z.enum(['FACULTY', 'TA', 'STUDENT']);
 /** Body for changing a user's course role (CourseEditUserDialog ↔ roster/[userId] PATCH). */
 export const CourseRoleChangeSchema = z.object({ role: CourseRoleEnum });
 
+// Keep in sync with the Prisma `EnrollmentStatus` enum. String literals (not
+// z.nativeEnum) so this stays importable from client components.
+export const EnrollmentStatusEnum = z.enum(['ENROLLED', 'DROPPED']);
+
+/** Body for dropping / re-enrolling a student (roster/[userId]/status PATCH). */
+export const EnrollmentStatusChangeSchema = z.object({ status: EnrollmentStatusEnum });
+
 /**
  * Strong password: capped at the bcrypt 72-byte limit and checked against the
  * shared {@link passwordRules} (the same rules the checklist UI shows), so the
