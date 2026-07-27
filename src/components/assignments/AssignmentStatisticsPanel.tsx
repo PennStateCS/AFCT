@@ -75,7 +75,7 @@ export function AssignmentStatisticsPanel() {
   });
 
   const heading = (
-    <h2 role="heading" aria-level={2} className="flex items-center gap-2 text-2xl font-semibold">
+    <h2 className="flex items-center gap-2 text-2xl font-semibold">
       <BarChart3 className="h-6 w-6" />
       Statistics
     </h2>

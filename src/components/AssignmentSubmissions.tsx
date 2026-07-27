@@ -632,11 +632,7 @@ export default function AssignmentSubmissions({
       {selectedStudent && (
         <div className="space-y-4">
           <div>
-            <h2
-              role="heading"
-              aria-level={2}
-              className="flex items-center gap-2 text-2xl font-semibold"
-            >
+            <h2 className="flex items-center gap-2 text-2xl font-semibold">
               <FileText className="h-6 w-6" /> Submissions
             </h2>
 

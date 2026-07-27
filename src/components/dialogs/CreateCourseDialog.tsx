@@ -192,6 +192,15 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
           className="mb-2"
         />
 
+        {/* Announce step changes to screen readers (the Stepper is visual). */}
+        <div className="sr-only" role="status" aria-live="polite">
+          {`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]?.title ?? ''}`}
+        </div>
+
+        {/* The onKeyDown below scopes Enter to single-line text inputs so it advances
+            the wizard instead of submitting early: deliberate keyboard management on the
+            form element, not an interactive-role gap. */}
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
         <form
           // Only the Review step may submit. Earlier steps swallow any submit that
           // slips through (backstop for the button-swap hazard handled below).

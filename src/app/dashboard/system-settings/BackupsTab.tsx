@@ -133,7 +133,7 @@ export function BackupsTab({
       </p>
 
       <div className="mt-6 space-y-3">
-        <h3 className="text-sm font-medium">Available backups</h3>
+        <h2 className="text-sm font-medium">Available backups</h2>
         <Button
           type="button"
           size="sm"

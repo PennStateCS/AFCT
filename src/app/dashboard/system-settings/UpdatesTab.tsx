@@ -204,7 +204,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
 
       <div className="max-w-2xl space-y-5 xl:max-w-4xl">
         <div className="space-y-2">
-          <h3 className="text-sm font-medium">Current version</h3>
+          <h2 className="text-sm font-medium">Current version</h2>
           <Badge variant="secondary" className="w-fit font-mono">
             {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
           </Badge>
@@ -300,7 +300,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             it runs so the updater's transient self-update phases don't show here too. */}
         {upgradeInfo?.status?.phase && selfUpdate.phase === 'idle' && (
           <div className="space-y-2" ref={upgradeStatusRef} tabIndex={-1}>
-            <h3 className="text-sm font-medium">Update status</h3>
+            <h2 className="text-sm font-medium">Update status</h2>
             {/* role="status": phase changes arrive via background polling,
                 so announce them to screen readers as they happen. */}
             <div
@@ -496,7 +496,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
       {/* Restore / downgrade: destructive, so kept visually separate. */}
       {restorePoints.length > 0 && (
         <div className="mt-8 max-w-2xl space-y-3 border-t pt-6 xl:max-w-4xl">
-          <h3 className="text-destructive text-sm font-semibold">Restore a previous version</h3>
+          <h2 className="text-destructive text-sm font-semibold">Restore a previous version</h2>
           <p className="text-muted-foreground text-sm">
             Downgrading restores the database backup taken before that version was replaced. It{' '}
             <span className="text-destructive font-medium">

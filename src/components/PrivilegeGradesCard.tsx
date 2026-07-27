@@ -283,7 +283,9 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         accessorKey: 'lastName',
         header: 'Last Name',
         cell: ({ row }) => <div>{String(row.original.lastName ?? '')}</div>,
-        meta: { priority: 1 },
+        // Row header for the matrix: screen readers announce this name with each grade
+        // cell in the row, so a grade is never read as a bare number.
+        meta: { priority: 1, rowHeader: true },
       },
       {
         accessorKey: 'firstName',
