@@ -16,7 +16,13 @@ setup() {
   DEPLOY_DIR="$BATS_TEST_DIRNAME/.."
   MACOS_DIR="$DEPLOY_DIR/macos"
   UNIX_DIR="$DEPLOY_DIR/unix"
-  TESTROOT="$(mktemp -d)"
+  # Resolve symlinks in the temp root. On macOS `mktemp -d` returns a path under
+  # /var/folders, and /var is itself a symlink to /private/var, so the bootstrap's
+  # realpath-based prefix canonicalization and the controller's self-path resolution
+  # produce /private/var/... while a naive comparison would use /var/.... Canonicalizing
+  # once here keeps every path comparison on equal footing (a no-op on Linux, where the
+  # temp dir is not behind a symlink).
+  TESTROOT="$(cd "$(mktemp -d)" && pwd -P)"
   DIST="$TESTROOT/dist"
   HOME="$TESTROOT/home"; mkdir -p "$HOME"
   VERSION="$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$UNIX_DIR/bin/afctctl" | head -n 1)"
