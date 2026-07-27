@@ -429,4 +429,5 @@ jobs:
                    deployment-manifest.json deployment-manifest-macos.json deployment-manifest-windows.json; do
             ls dist/$f >/dev/null 2>&1 || { echo "::error::missing expected release asset: $f"; exit 1; }
           done
-          gh release upload "$TAG" dist/* --clobber
+          # This job does not check out the repo, so name it explicitly for gh.
+          gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
