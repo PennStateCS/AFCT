@@ -55,6 +55,9 @@ export const apiPaths = {
   // Import a problem from another course INTO this (destination) course.
   courseProblemImport: (id: string) => `/api/courses/${id}/problems/import`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
+  // Drop / re-enroll a student (PATCH { status }).
+  courseRosterStatus: (id: string, userId: string) =>
+    `/api/courses/${id}/roster/${userId}/status`,
   courseRosterResetPassword: (id: string, userId: string) =>
     `/api/courses/${id}/roster/${userId}/reset-password`,
   courseAssignments: (id: string, opts?: { includeUnpublished?: boolean }) =>

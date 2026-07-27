@@ -1866,6 +1866,28 @@ export interface paths {
         patch: operations["patchCoursesByIdRosterByUserId"];
         trace?: never;
     };
+    "/api/courses/{id}/roster/{userId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Drop or re-enroll a student
+         * @description Drop or re-enroll a student in a course.   A DROPPED student keeps their roster row and all their work (submissions, grades,  group membership, audience/override rows) but loses access: `canAccessCourse` denies  them, so they can't see or interact with the course, and it disappears from their own  lists. Staff review surfaces still show them, marked "Dropped". Re-enrolling flips  them back to ENROLLED and restores everything.   This is distinct from removal (`DELETE .../roster/[userId]`): removal is a hard delete  for a student with no work; drop is the reversible action for a student who has work.  Only a global admin or a course FACULTY member may do it (TAs may not, matching the  other roster mutations), and it applies only to STUDENT rows.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/[userId]/status/route.ts)
+         */
+        patch: operations["patchCoursesByIdRosterByUserIdStatus"];
+        trace?: never;
+    };
     "/api/courses/{id}/roster/bulk": {
         parameters: {
             query?: never;
@@ -8810,6 +8832,88 @@ export interface operations {
             };
             /** @description Roster entry not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patchCoursesByIdRosterByUserIdStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    status: "ENROLLED" | "DROPPED";
+                };
+            };
+        };
+        responses: {
+            /** @description Status updated (or already at the requested status). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body, or the target is not a student. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system admin or a course faculty member. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Roster entry not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course is archived. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
