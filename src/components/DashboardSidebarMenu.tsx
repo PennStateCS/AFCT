@@ -282,7 +282,7 @@ function SidebarNavItem({
 
 export default function DashboardSidebarMenu() {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { data: session, update } = useSession();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
@@ -643,6 +643,10 @@ export default function DashboardSidebarMenu() {
             toast.error(error || 'Failed to change password');
             throw new Error(error || 'Failed to change password');
           }
+          // Re-sync the JWT to the new password instant. Otherwise the token still
+          // snapshots the old one and the session callback revokes it on the next
+          // request, signing the user out moments after they change their password.
+          await update({ refreshCredentials: true });
           toast.success('Password changed!');
         }}
       />

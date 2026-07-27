@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ import { apiPaths } from '@/lib/api-paths';
 
 export function ForcedPasswordChangeForm() {
   const router = useRouter();
+  const { update } = useSession();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const {
     control,
@@ -53,6 +55,10 @@ export function ForcedPasswordChangeForm() {
     }
 
     showToast.success('Password changed successfully.');
+    // Re-sync the JWT to the just-changed credentials before navigating. Without this the
+    // token still snapshots the old password instant, so the session callback revokes it
+    // and bounces the user right back to this screen. Then send them to the dashboard.
+    await update({ refreshCredentials: true });
     router.push('/dashboard');
     router.refresh();
   };
