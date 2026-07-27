@@ -328,3 +328,64 @@ jobs:
             --clobber
           cp deploy/macos/install.sh deploy/dist/install-macos.sh
           gh release upload "$TAG" deploy/dist/install-macos.sh --clobber
+
+      # Build the Windows deployment bundle (shared deploy/docker-compose.yml and
+      # deploy/.env.production.example plus the Windows controller, libraries, and bootstrap),
+      # verify it the same way, then attach the ZIP, its checksum, the Windows deployment
+      # manifest, and the Windows bootstrap. Built with pwsh on the Linux runner: the builder
+      # uses only cross-platform .NET ZIP + Get-FileHash, so the bytes match a Windows build.
+      # Windows is a testing/evaluation/demo target; Linux remains recommended for production.
+      - name: Build, verify, and attach the Windows deployment bundle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zipPath = (& deploy/windows/build-bundle.ps1 -OutDir deploy/dist | Select-Object -Last 1).Trim()
+          $manifestPath = 'deploy/dist/deployment-manifest-windows.json'
+          $basename = Split-Path -Leaf $zipPath
+
+          # 1) The checksum sidecar matches the bytes.
+          $sidecar = (Get-Content "$zipPath.sha256" -Raw).Trim()
+          $recorded = ($sidecar -split '\s+')[0].ToLower()
+          $actual = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLower()
+          if ($recorded -ne $actual) { throw "sha256 sidecar mismatch: $recorded != $actual" }
+
+          # 2) Read the manifest and the identifiers that must all agree.
+          $m = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $controllerVer = (Select-String -LiteralPath 'deploy/windows/bin/afctctl.ps1' `
+              -Pattern "^\s*\`$InstallerVersion\s*=\s*'([^']+)'" | Select-Object -First 1).Matches.Groups[1].Value
+
+          # Inspect the ZIP: DEPLOY_VERSION, required modules, and entry safety.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zipPath))
+          try {
+            $names = $zip.Entries | ForEach-Object { $_.FullName }
+            foreach ($n in $names) {
+              if ($n -match '^([A-Za-z]:|/|\\)' -or $n -match '\\' -or ($n -split '/') -contains '..') {
+                throw "unsafe ZIP entry: $n"
+              }
+            }
+            $dvEntry = $zip.Entries | Where-Object { $_.FullName -match '/DEPLOY_VERSION$' } | Select-Object -First 1
+            if (-not $dvEntry) { throw 'bundle is missing DEPLOY_VERSION' }
+            $sr = New-Object System.IO.StreamReader($dvEntry.Open())
+            try { $deployVer = $sr.ReadToEnd().Trim() } finally { $sr.Dispose() }
+            foreach ($mod in 'Output','Platform','Docker','Validation','Environment','Config',
+                             'Compose','Update','Deploy','Doctor','Diagnostics','Recover','Uninstall') {
+              if (-not ($names | Where-Object { $_ -match "/lib/$mod\.ps1$" })) { throw "bundle missing lib/$mod.ps1" }
+            }
+          } finally { $zip.Dispose() }
+
+          if ($m.schema -ne 'afct-deployment-manifest/v1') { throw "manifest schema ($($m.schema)) is not afct-deployment-manifest/v1" }
+          if ($m.bundle -ne $basename) { throw "manifest bundle ($($m.bundle)) != $basename" }
+          if ($m.bundle -ne "afct-windows-deploy-$($m.deploymentToolVersion).zip") { throw 'manifest bundle name does not match version' }
+          if ($m.bootstrap -ne 'install-windows.ps1') { throw "manifest bootstrap ($($m.bootstrap)) != install-windows.ps1" }
+          if ($m.sha256 -ne $actual) { throw 'manifest sha256 mismatch' }
+          if ($m.deploymentToolVersion -ne $controllerVer) { throw "manifest version ($($m.deploymentToolVersion)) != controller InstallerVersion ($controllerVer)" }
+          if ($m.deploymentToolVersion -ne $deployVer) { throw "manifest version ($($m.deploymentToolVersion)) != bundle DEPLOY_VERSION ($deployVer)" }
+
+          # All checks passed: publish the Windows assets. The bootstrap is served as
+          # `install-windows.ps1` so releases/latest/download/install-windows.ps1 resolves.
+          Copy-Item deploy/windows/install.ps1 deploy/dist/install-windows.ps1 -Force
+          gh release upload "$env:TAG" $zipPath "$zipPath.sha256" $manifestPath deploy/dist/install-windows.ps1 --clobber
