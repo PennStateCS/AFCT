@@ -263,22 +263,23 @@ function CourseActionsCell({
         open={confirmOpen}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={handleDelete}
-        title="Delete Course"
-        description={`Delete "${course.name}"? If it has no assignments, problems, or students, it is removed permanently. Otherwise it is hidden and its data is retained.`}
-        confirmText="Delete"
+        variant="destructive"
+        title="Delete course?"
+        description={`If "${course.name}" has no assignments, problems, or students, it is removed permanently. Otherwise it is hidden and its data is retained.`}
+        confirmText="Delete course"
       />
 
       <ConfirmDialog
         open={archiveConfirmOpen}
         onCancel={() => setArchiveConfirmOpen(false)}
-        onConfirm={() => void handleArchiveToggle()}
-        title={course.isArchived ? 'Restore Course' : 'Archive Course'}
+        onConfirm={handleArchiveToggle}
+        title={course.isArchived ? 'Restore course?' : 'Archive course?'}
         description={
           course.isArchived
-            ? `Restore "${course.name}"? It becomes editable again and returns to the active courses list.`
-            : `Archive "${course.name}"? It becomes read-only for everyone and moves to the Archived Courses page.`
+            ? `"${course.name}" becomes editable again and returns to the active courses list.`
+            : `"${course.name}" becomes read-only for everyone and moves to the Archived Courses page.`
         }
-        confirmText={course.isArchived ? 'Restore' : 'Archive'}
+        confirmText={course.isArchived ? 'Restore course' : 'Archive course'}
       />
 
       {isAdmin && (

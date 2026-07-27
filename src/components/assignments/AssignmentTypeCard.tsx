@@ -159,10 +159,11 @@ export function AssignmentTypeCard({
 
       <ConfirmDialog
         open={confirmOpen}
+        busy={saving}
         title="Change assignment type?"
         description="Switching between individual and group resets who this assignment is assigned to back to everyone and removes any date exceptions. You can set the new audience and exceptions on the Assign To tab afterward."
         confirmText="Change type"
-        onConfirm={() => void applyChange()}
+        onConfirm={applyChange}
         onCancel={() => setConfirmOpen(false)}
       />
     </div>

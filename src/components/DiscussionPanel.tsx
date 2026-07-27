@@ -238,10 +238,10 @@ export default function DiscussionPanel({
 
       <ConfirmDialog
         open={!!commentToDelete}
-        title="Delete Comment"
-        description="Are you sure you want to delete this comment? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        variant="destructive"
+        title="Delete comment?"
+        description="This permanently deletes the comment and cannot be undone."
+        confirmText="Delete comment"
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
       />

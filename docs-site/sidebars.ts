@@ -97,6 +97,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'reference/client-api',
             'reference/code-and-documentation-style',
+            'reference/confirmation-dialogs',
             'reference/content-security-policy',
             'reference/contributing',
             'reference/creating-a-release',

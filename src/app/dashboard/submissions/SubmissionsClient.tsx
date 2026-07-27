@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { FeedbackDialog } from '@/components/dialogs/FeedbackDialog';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import Link from 'next/link';
 import {
@@ -198,6 +199,7 @@ export default function SubmissionsClient() {
   const [jffViewerCourseId, setJffViewerCourseId] = useState<string | null>(null);
   const jffEpsSymbol = useEmptyStringSymbol(jffViewerCourseId);
   const isRerunning = useMemo(() => Object.values(rerunning).some(Boolean), [rerunning]);
+  const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
 
   // --- Filter data (cascading: courses → assignments → problems) -------------
   // Each list is a cached, deduped, retried query. staleTime:Infinity means a
@@ -423,12 +425,27 @@ export default function SubmissionsClient() {
           <Button
             size="sm"
             variant="secondary"
-            onClick={handleRerunVisible}
+            onClick={() => setRerunConfirmOpen(true)}
             disabled={visibleSubmissions.length === 0 || isRerunning}
             className="whitespace-nowrap"
           >
             {isRerunning ? 'Rerunning…' : 'Rerun'}
           </Button>
+
+          <ConfirmDialog
+            open={rerunConfirmOpen}
+            busy={isRerunning}
+            title="Rerun all visible submissions?"
+            description={`This re-runs the autograder on all ${visibleSubmissions.length} submission${
+              visibleSubmissions.length === 1 ? '' : 's'
+            } currently shown. Autograded results may change.`}
+            confirmText="Rerun all"
+            onConfirm={async () => {
+              await handleRerunVisible();
+              setRerunConfirmOpen(false);
+            }}
+            onCancel={() => setRerunConfirmOpen(false)}
+          />
         </div>
 
         <div className="mt-3 flex gap-2">

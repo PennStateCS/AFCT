@@ -270,8 +270,7 @@ function PublishSwitchCell({
     setConfirmOpen(false);
   };
 
-  const action = pendingValue ? 'publish' : 'unpublish';
-  const description = `Are you sure you want to ${action} "${assignment.title}"? This will ${pendingValue ? 'make it visible to students' : 'hide it from students'}.`;
+  const description = `"${assignment.title}" will ${pendingValue ? 'become visible to students' : 'be hidden from students'}.`;
 
   return (
     <>
@@ -283,10 +282,9 @@ function PublishSwitchCell({
       />
       <ConfirmDialog
         open={confirmOpen}
-        title={`${action.charAt(0).toUpperCase() + action.slice(1)} Assignment`}
+        title={pendingValue ? 'Publish assignment?' : 'Unpublish assignment?'}
         description={description}
-        confirmText={action.charAt(0).toUpperCase() + action.slice(1)}
-        cancelText="Cancel"
+        confirmText={pendingValue ? 'Publish' : 'Unpublish'}
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />

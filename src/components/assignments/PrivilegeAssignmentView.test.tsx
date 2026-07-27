@@ -621,6 +621,8 @@ describe('PrivilegeAssignmentView — publish toggle', () => {
     renderView();
     // The header switch reflects the current isPublished (true) and toggles to false.
     fireEvent.click(screen.getByRole('switch', { name: /Published/i }));
+    // Toggling now opens a confirmation before the change is applied.
+    fireEvent.click(screen.getByRole('button', { name: 'confirm-remove' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -645,6 +647,7 @@ describe('PrivilegeAssignmentView — publish toggle', () => {
     // Seed from SSR so the view renders without depending on the failing shell fetch.
     renderView();
     fireEvent.click(screen.getByRole('switch', { name: /Published/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'confirm-remove' }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('nope'));
   });
 });
