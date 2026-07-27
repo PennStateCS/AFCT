@@ -101,6 +101,11 @@ function Invoke-AfctDiagnostics {
     }
     Remove-Item -Recurse -Force -LiteralPath $work -ErrorAction SilentlyContinue
 
+    # The archive can still contain host details even after redaction, so restrict it to the
+    # current user. This is a diagnostics artifact, not a secret store, so a lockdown failure
+    # warns rather than aborts.
+    Protect-AfctFileBestEffort $archive
+
     Write-AfctSuccess "Diagnostics saved to $archive"
     Write-AfctWarn 'known configuration secrets were redacted, but logs and Compose files can still contain sensitive information. Review the archive before sharing it.'
     return $archive

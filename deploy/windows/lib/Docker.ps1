@@ -128,10 +128,14 @@ function Test-AfctPortInUse {
 }
 
 # The Windows analog of the Linux NTP check: the Windows Time service should be running.
+# Returns $true only when the service exists and is running; $false when it is stopped,
+# missing, or cannot be queried at all. This is a diagnostic/warning signal, never an
+# installation blocker.
 function Test-AfctClockSync {
     try {
         $svc = Get-Service -Name W32Time -ErrorAction Stop
-        if ($svc.Status -ne 'Running') { return $false }
-    } catch { }
-    return $true
+        return ($svc.Status -eq 'Running')
+    } catch {
+        return $false
+    }
 }

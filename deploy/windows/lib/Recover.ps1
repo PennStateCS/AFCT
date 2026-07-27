@@ -22,7 +22,7 @@ function Invoke-AfctRecover {
         if ($a -match '^(n|no)$') { throw 'afct-fatal: recovery cancelled.' }
     }
     Copy-Item -LiteralPath $latest.FullName -Destination $EnvFile
-    Protect-AfctFile $EnvFile
+    Protect-AfctCriticalFile $EnvFile
     if (-not (Test-AfctEnvFileComplete $EnvFile)) { throw 'afct-fatal: the restored environment file is incomplete.' }
     Write-AfctSuccess "Configuration restored from $($latest.Name)."
     Write-AfctInfo 'Run: afctctl doctor'

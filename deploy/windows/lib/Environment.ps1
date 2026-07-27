@@ -14,16 +14,48 @@ Set-StrictMode -Version Latest
 $script:AfctManagedKeys = @('NODE_ENV', 'POSTGRES_PASSWORD', 'DATABASE_URL', 'ADMIN_EMAIL',
     'ADMIN_PASSWORD', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'AUTH_TRUST_HOST')
 
-# Best-effort: restrict a file to the current user (the Windows analog of chmod 600). Uses
-# the account SID rather than DOMAIN\user so it works even when a domain controller is
-# unreachable. Never throws.
+# Apply the restrictive ACL to a file with icacls: strip inheritance and grant the current
+# account (by SID) FullControl. The SID is given as a literal (the leading '*'), so icacls
+# never resolves a name and never contacts a domain controller. That matters on a
+# domain-joined machine whose DC is unreachable, where Set-Acl and name-based grants fail
+# with a trust-relationship error; it is also inherently correct when the username contains
+# spaces or is domain-qualified (there is no name string to parse). Throws on a nonzero
+# icacls exit or when icacls is unavailable. This is the single seam the tests mock.
+function Set-AfctFileAcl {
+    param([string]$Path, [string]$Sid)
+    if (-not (Get-Command icacls -ErrorAction SilentlyContinue)) {
+        throw 'icacls is not available to restrict file permissions.'
+    }
+    $out = & icacls $Path /inheritance:r /grant:r "*${Sid}:(F)" 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "icacls could not restrict $Path (exit $LASTEXITCODE): $($out -join ' ')" }
+}
+
+# Restrict a file to the current user (the Windows analog of chmod 600). THROWS on failure;
+# callers decide whether that is fatal (secrets, safety markers) or a warning (logs,
+# diagnostics). A no-op when the file does not exist.
 function Protect-AfctFile {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return }
-    try {
-        $sid = ([Security.Principal.WindowsIdentity]::GetCurrent()).User.Value
-        & icacls $Path /inheritance:r /grant:r "*${sid}:F" *> $null
-    } catch { }
+    $sid = ([Security.Principal.WindowsIdentity]::GetCurrent()).User.Value
+    Set-AfctFileAcl -Path $Path -Sid $sid
+}
+
+# Critical files (secrets and safety markers: .env.production, its backups, install-root,
+# active-release, deploy.state). If the ACL cannot be applied, stop before deployment
+# continues rather than leaving a secret or a safety marker readable by other users. The
+# message names the path and never includes its contents.
+function Protect-AfctCriticalFile {
+    param([string]$Path)
+    try { Protect-AfctFile $Path }
+    catch { throw "afct-fatal: could not restrict permissions on $Path (it must be readable only by your account). $($_.Exception.Message)" }
+}
+
+# Non-critical files (logs, diagnostics archives). A lockdown failure is surfaced
+# prominently but does not stop the operation. These files must never contain secrets.
+function Protect-AfctFileBestEffort {
+    param([string]$Path)
+    try { Protect-AfctFile $Path }
+    catch { Write-AfctWarn "could not restrict permissions on $Path; it remains under your user profile. $($_.Exception.Message)" }
 }
 
 # True when the file exists and defines every key AFCT cannot run without.
@@ -83,7 +115,7 @@ function Set-AfctEnvFlag {
     $tmp = "$File.tmp.$PID"
     Write-AfctEnvContent $tmp $out
     Move-Item -LiteralPath $tmp -Destination $File -Force
-    Protect-AfctFile $File
+    Protect-AfctCriticalFile $File
 }
 
 # Copy the current env file aside before a rewrite. These .backup.* files are what
@@ -94,7 +126,7 @@ function Backup-AfctEnvFile {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $backup = "$File.backup.$stamp.$PID"
     Copy-Item -LiteralPath $File -Destination $backup
-    Protect-AfctFile $backup
+    Protect-AfctCriticalFile $backup
     return $backup
 }
 
@@ -151,7 +183,7 @@ function Write-AfctEnvironmentFile {
     $tmp = "$File.tmp.$PID"
     Write-AfctEnvContent $tmp ($kept + $block)
     Move-Item -LiteralPath $tmp -Destination $File -Force
-    Protect-AfctFile $File
+    Protect-AfctCriticalFile $File
 }
 
 # 48 lowercase hex characters (mirrors gen_secret in install.sh).
