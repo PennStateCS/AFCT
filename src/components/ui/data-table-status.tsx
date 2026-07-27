@@ -48,7 +48,13 @@ export function DataTableEmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn('text-muted-foreground flex flex-col items-center', className)}>
+    // role="status" so a filter/search that narrows the rows to zero announces the
+    // empty message instead of leaving the table silently blank. (Live regions do not
+    // announce their initial content, so this stays quiet on a first-load empty table.)
+    <div
+      className={cn('text-muted-foreground flex flex-col items-center', className)}
+      role="status"
+    >
       <Icon className="mb-2 h-10 w-10 text-gray-400" aria-hidden={true} />
       <p className="font-medium">{title}</p>
       <p className="text-sm">{description}</p>

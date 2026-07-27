@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { ForcedPasswordChangeForm } from '@/components/auth/ForcedPasswordChangeForm';
 
+export const metadata = { title: 'Change Password' };
+
 export default async function ChangePasswordPage() {
   const session = await auth();
 

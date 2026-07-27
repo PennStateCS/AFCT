@@ -68,7 +68,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
       <div className="space-y-5">
         {/* Current status */}
         <div className="space-y-2">
-          <h3 className="text-sm font-medium">Current certificate</h3>
+          <h2 className="text-sm font-medium">Current certificate</h2>
           <div className="bg-muted/10 w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
             {tls?.installed ? (
               <>
@@ -153,7 +153,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
 
         {/* Method chooser */}
         <div className="space-y-2">
-          <h3 className="text-sm font-medium">Set up a certificate</h3>
+          <h2 className="text-sm font-medium">Set up a certificate</h2>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Certificate setup method">
             <Button
               type="button"

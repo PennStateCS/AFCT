@@ -513,15 +513,20 @@ export function DataTable<TData, TValue>({
                     {/* No forced nowrap on cells: on narrow screens long values
                         (emails, titles) wrap inside their cell instead of
                         stretching the whole table into a sideways scroll. */}
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                        nowrap={cell.column.columnDef.meta?.nowrap}
-                        className={`${responsiveClass(cell.column.columnDef.meta?.priority)} ${alignTextClass(cell.column.columnDef.meta?.align)}`}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
+                    {row.getVisibleCells().map((cell) => {
+                      const isRowHeader = cell.column.columnDef.meta?.rowHeader;
+                      return (
+                        <TableCell
+                          key={cell.id}
+                          as={isRowHeader ? 'th' : undefined}
+                          scope={isRowHeader ? 'row' : undefined}
+                          nowrap={cell.column.columnDef.meta?.nowrap}
+                          className={`${responsiveClass(cell.column.columnDef.meta?.priority)} ${alignTextClass(cell.column.columnDef.meta?.align)}`}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 ))
               ) : (

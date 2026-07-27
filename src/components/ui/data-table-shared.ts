@@ -24,6 +24,11 @@ declare module '@tanstack/react-table' {
     /** Keep this column's cell on one line. Cells wrap by default; set this for values
      *  that must not break (dates, counts, short codes, action buttons). */
     nowrap?: boolean;
+    /** Render this column's body cell as a row header (`<th scope="row">`) instead of a
+     *  plain `<td>`, so assistive tech associates the other cells in the row with it.
+     *  Use for the identity column of a matrix (e.g. the student in the gradebook).
+     *  At most one column per table should set this. */
+    rowHeader?: boolean;
   }
 }
 
