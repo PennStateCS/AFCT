@@ -258,7 +258,7 @@ jobs:
           cp deploy/linux/install.sh out/install.sh
           echo "Linux bundle verified: $BASENAME"
       - name: Stage the verified Linux assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bundle-linux
           path: out/
@@ -320,7 +320,7 @@ jobs:
           cp deploy/macos/install.sh out/install-macos.sh
           echo "macOS bundle verified: $BASENAME"
       - name: Stage the verified macOS assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bundle-macos
           path: out/
@@ -393,7 +393,7 @@ jobs:
           Copy-Item deploy/windows/install.ps1 out/install-windows.ps1
           Write-Host "Windows bundle verified: $basename"
       - name: Stage the verified Windows assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bundle-windows
           path: out/
@@ -409,7 +409,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Download all verified bundle assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist
           merge-multiple: true
