@@ -77,10 +77,10 @@ switch_only() {
   [[ "$output" == *"$VERSION"* ]]
 }
 
-@test "the bundle is version 2.2.1" {
-  [ "$VERSION" = "2.2.1" ]
+@test "the bundle is version 2.2.2" {
+  [ "$VERSION" = "2.2.2" ]
   case "$(basename "$TARBALL")" in
-    afct-macos-deploy-2.2.1.tar.gz) : ;;
+    afct-macos-deploy-2.2.2.tar.gz) : ;;
     *) echo "unexpected bundle: $TARBALL"; return 1 ;;
   esac
 }
@@ -258,15 +258,18 @@ prefix_safe() {
 }
 
 # --- Docker Desktop bind-mount preflight ---------------------------------------
+# Image availability (pull) and the bind-mount test are separate steps: a pull failure is a
+# network/registry problem and must NEVER be reported as a file-sharing problem.
 
-# Write a docker mock into a bin dir: `run` succeeds ($1=ok) or fails ($1=fail).
+# docker_mock <inspect_rc> <pull_rc> <run_rc>: exit codes for `image inspect`, `pull`, `run`.
 docker_mock() {
-  _b="$TESTROOT/mb-$1"; mkdir -p "$_b"
-  if [ "$1" = "ok" ]; then _rc=0; else _rc=1; fi
+  _b="$TESTROOT/mb-$1-$2-$3"; mkdir -p "$_b"
   cat > "$_b/docker" <<EOF
 #!/bin/sh
 case "\$1" in
-  run) exit ${_rc} ;;
+  image) [ "\$2" = inspect ] && exit $1; exit 0 ;;
+  pull) exit $2 ;;
+  run) exit $3 ;;
   *) exit 0 ;;
 esac
 EOF
@@ -288,16 +291,31 @@ bind_check() {
   '
 }
 
-@test "bind-mount preflight passes when Docker can mount the directory" {
-  bind_check "$(docker_mock ok)"
+@test "bind-mount preflight: image already present, no pull attempted, mount ok" {
+  # pull_rc=1 (would fail) but inspect_rc=0 means pull must not be called; still BIND_OK.
+  bind_check "$(docker_mock 0 1 0)"
   [ "$status" -eq 0 ]
   [[ "$output" == *"BIND_OK"* ]]
 }
 
-@test "bind-mount preflight fails with a file-sharing message when Docker cannot mount" {
-  bind_check "$(docker_mock fail)"
+@test "bind-mount preflight: image missing, pull succeeds, mount ok" {
+  bind_check "$(docker_mock 1 0 0)"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"BIND_OK"* ]]
+}
+
+@test "bind-mount preflight: image pull failure is reported as a download problem, not file sharing" {
+  bind_check "$(docker_mock 1 1 0)"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not download"* ]]
+  [[ "$output" != *"File sharing"* ]]
+}
+
+@test "bind-mount preflight: mount failure is reported as a file-sharing problem" {
+  bind_check "$(docker_mock 0 0 1)"
   [ "$status" -ne 0 ]
   [[ "$output" == *"File sharing"* ]]
+  [[ "$output" != *"could not download"* ]]
 }
 
 @test "bind-mount preflight is skipped when Docker is mocked off" {
@@ -313,4 +331,200 @@ bind_check() {
   '
   [ "$status" -eq 0 ]
   [[ "$output" == *"BIND_SKIPPED"* ]]
+}
+
+# --- bootstrap-to-controller handoff (no AFCT_SWITCH_ONLY) ---------------------
+# The AFCT_SWITCH_ONLY tests above cover tooling install + release switching (the
+# self-update path). These cover the FULL handoff: the bootstrap installs, then
+# exec's the installed controller and forwards the command + options. The controller's
+# test recorder (AFCT_TEST_RECORD_DISPATCH) captures what it received and exits before any
+# Docker or deployment action, so no Docker daemon is needed. Real Docker integration
+# (actual containers, volumes, health) remains uncovered here by design.
+
+@test "handoff: bootstrap forwards the command and options into the installed controller" {
+  P="$TESTROOT/h1"; D="$TESTROOT/d1.txt"
+  run env AFCT_OS=Darwin HOME="$HOME" AFCT_PREFIX="$P" AFCT_BUNDLE_FILE="$TARBALL" \
+    AFCT_TEST_RECORD_DISPATCH="$D" sh "$MACOS_DIR/install.sh" --non-interactive --reconfigure --no-color
+  [ "$status" -eq 0 ]
+  grep -qx 'arg=install' "$D"
+  grep -qx 'arg=--non-interactive' "$D"
+  grep -qx 'arg=--reconfigure' "$D"
+  grep -qx 'arg=--no-color' "$D"
+  grep -q "^self=${P}/" "$D"          # the installed controller path was used
+  grep -qx "prefix=${P}" "$D"         # the selected prefix was preserved
+  grep -qx 'os=Darwin' "$D"
+  ! grep -q 'arg=--prefix' "$D"       # bootstrap-only args are not forwarded
+}
+
+@test "handoff: an argument containing spaces is forwarded unchanged" {
+  P="$TESTROOT/h2"; D="$TESTROOT/d2.txt"
+  run env AFCT_OS=Darwin HOME="$HOME" AFCT_PREFIX="$P" AFCT_BUNDLE_FILE="$TARBALL" \
+    AFCT_TEST_RECORD_DISPATCH="$D" sh "$MACOS_DIR/install.sh" --non-interactive "keep this space"
+  [ "$status" -eq 0 ]
+  grep -qx 'arg=keep this space' "$D"
+}
+
+@test "handoff: --prefix is consumed by the bootstrap and not forwarded" {
+  P="$TESTROOT/h3"; D="$TESTROOT/d3.txt"
+  run env AFCT_OS=Darwin HOME="$HOME" AFCT_BUNDLE_FILE="$TARBALL" \
+    AFCT_TEST_RECORD_DISPATCH="$D" sh "$MACOS_DIR/install.sh" --prefix "$P" --non-interactive
+  [ "$status" -eq 0 ]
+  grep -qx "prefix=${P}" "$D"
+  ! grep -q 'arg=--prefix' "$D"
+  grep -qx 'arg=--non-interactive' "$D"
+}
+
+@test "handoff: an unknown option is forwarded and rejected by the controller, not swallowed" {
+  # No record hook: the controller really parses and must reject the forwarded unknown
+  # option with exit 2, proving the bootstrap forwarded it rather than eating it. Argument
+  # parsing happens before any Docker access, so no daemon is needed.
+  P="$TESTROOT/h4"
+  run env AFCT_OS=Darwin HOME="$HOME" AFCT_PREFIX="$P" AFCT_BUNDLE_FILE="$TARBALL" \
+    sh "$MACOS_DIR/install.sh" --bogus-option
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"unknown option or command"* ]]
+}
+
+# --- install-prefix marker failures are fatal ---------------------------------
+# The marker enables safe automatic uninstall, so a fresh install must abort if it cannot
+# be created, written, protected, or published, without leaving a current symlink or temp.
+
+# A bin dir whose mktemp/chmod/mv fail ONLY for the install-prefix marker, delegating to the
+# real tools otherwise. AFCT_FAIL_TOOL selects which step fails.
+marker_mock_bin() {
+  AFCT_REAL_MKTEMP=$(command -v mktemp); AFCT_REAL_CHMOD=$(command -v chmod); AFCT_REAL_MV=$(command -v mv)
+  export AFCT_REAL_MKTEMP AFCT_REAL_CHMOD AFCT_REAL_MV
+  _b="$TESTROOT/marker-mock"; mkdir -p "$_b"
+  cat > "$_b/mktemp" <<EOF
+#!/bin/sh
+case "\$*" in
+  *install-prefix*)
+    case "\${AFCT_FAIL_TOOL:-}" in
+      mktemp) exit 1 ;;
+      write)  printf '%s\n' "$TESTROOT/nope-dir/marker.tmp"; exit 0 ;;
+      *) exec "$AFCT_REAL_MKTEMP" "\$@" ;;
+    esac ;;
+  *) exec "$AFCT_REAL_MKTEMP" "\$@" ;;
+esac
+EOF
+  cat > "$_b/chmod" <<EOF
+#!/bin/sh
+case "\$*" in
+  *install-prefix*) [ "\${AFCT_FAIL_TOOL:-}" = chmod ] && exit 1; exec "$AFCT_REAL_CHMOD" "\$@" ;;
+  *) exec "$AFCT_REAL_CHMOD" "\$@" ;;
+esac
+EOF
+  cat > "$_b/mv" <<EOF
+#!/bin/sh
+case "\$*" in
+  *install-prefix*) [ "\${AFCT_FAIL_TOOL:-}" = mv ] && exit 1; exec "$AFCT_REAL_MV" "\$@" ;;
+  *) exec "$AFCT_REAL_MV" "\$@" ;;
+esac
+EOF
+  chmod +x "$_b/mktemp" "$_b/chmod" "$_b/mv"
+  printf '%s' "$_b"
+}
+
+# Run a switch-only install with the marker mock and a chosen failing step.
+marker_fail_install() {
+  _prefix=$1; _tool=$2; _mb=$(marker_mock_bin)
+  run env AFCT_OS=Darwin HOME="$HOME" AFCT_PREFIX="$_prefix" AFCT_SWITCH_ONLY=1 \
+    AFCT_BUNDLE_FILE="$TARBALL" AFCT_FAIL_TOOL="$_tool" PATH="${_mb}:${PATH}" \
+    sh "$MACOS_DIR/install.sh"
+}
+
+@test "marker: mktemp failure aborts the install" {
+  P="$TESTROOT/m1"; marker_fail_install "$P" mktemp
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not create the install-prefix marker"* ]]
+  [ ! -L "$P/current" ]
+  ! ls "$P"/shared/.install-prefix.* >/dev/null 2>&1
+}
+
+@test "marker: write failure aborts the install" {
+  P="$TESTROOT/m2"; marker_fail_install "$P" write
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not write the install-prefix marker"* ]]
+  [ ! -L "$P/current" ]
+  ! ls "$P"/shared/.install-prefix.* >/dev/null 2>&1
+}
+
+@test "marker: chmod failure aborts the install" {
+  P="$TESTROOT/m3"; marker_fail_install "$P" chmod
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not protect the install-prefix marker"* ]]
+  [ ! -L "$P/current" ]
+  ! ls "$P"/shared/.install-prefix.* >/dev/null 2>&1
+}
+
+@test "marker: rename failure aborts the install" {
+  P="$TESTROOT/m4"; marker_fail_install "$P" mv
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not publish the install-prefix marker"* ]]
+  [ ! -L "$P/current" ]
+  ! ls "$P"/shared/.install-prefix.* >/dev/null 2>&1
+}
+
+@test "marker: a successful install leaves the marker at mode 0600" {
+  P="$TESTROOT/m5"; switch_only "$P" "$TARBALL"
+  [ -f "$P/shared/install-prefix" ]
+  _mode=$(stat -c '%a' "$P/shared/install-prefix" 2>/dev/null || stat -f '%Lp' "$P/shared/install-prefix" 2>/dev/null)
+  [ "$_mode" = "600" ]
+}
+
+# --- uninstall wrapper ownership ----------------------------------------------
+# The wrapper is removed only when it belongs to THIS installation.
+
+@test "wrapper: uninstall removes the wrapper that targets this prefix" {
+  P="$HOME/.afct"
+  env AFCT_OS=Darwin HOME="$HOME" AFCT_SWITCH_ONLY=1 AFCT_BUNDLE_FILE="$TARBALL" \
+    sh "$MACOS_DIR/install.sh" >/dev/null 2>&1
+  [ -f "$HOME/.local/bin/afctctl" ]
+  run ctl_nodocker "$P" uninstall --non-interactive
+  [ "$status" -eq 0 ]
+  [ ! -e "$HOME/.local/bin/afctctl" ]
+}
+
+@test "wrapper: uninstall keeps a wrapper that points to another prefix" {
+  P="$TESTROOT/w1"; switch_only "$P" "$TARBALL"
+  mkdir -p "$HOME/.local/bin"
+  printf '#!/bin/sh\nexec "%s/current/bin/afctctl" "$@"\n' "$TESTROOT/other" > "$HOME/.local/bin/afctctl"
+  chmod +x "$HOME/.local/bin/afctctl"
+  run ctl_nodocker "$P" uninstall --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f "$HOME/.local/bin/afctctl" ]
+  [[ "$output" == *"left"* ]]
+}
+
+@test "wrapper: uninstall keeps a manually-replaced wrapper" {
+  P="$TESTROOT/w2"; switch_only "$P" "$TARBALL"
+  printf '#!/bin/sh\necho unrelated\n' > "$HOME/.local/bin/afctctl"; chmod +x "$HOME/.local/bin/afctctl"
+  run ctl_nodocker "$P" uninstall --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f "$HOME/.local/bin/afctctl" ]
+  [[ "$output" == *"left"* ]]
+}
+
+@test "wrapper: uninstall removes a symlink that targets this controller" {
+  P="$TESTROOT/w3"; switch_only "$P" "$TARBALL"
+  rm -f "$HOME/.local/bin/afctctl"; ln -s "$P/current/bin/afctctl" "$HOME/.local/bin/afctctl"
+  run ctl_nodocker "$P" uninstall --non-interactive
+  [ "$status" -eq 0 ]
+  [ ! -e "$HOME/.local/bin/afctctl" ]
+}
+
+@test "wrapper: uninstall keeps a symlink that targets elsewhere" {
+  P="$TESTROOT/w4"; switch_only "$P" "$TARBALL"
+  rm -f "$HOME/.local/bin/afctctl"; ln -s "$TESTROOT/other/current/bin/afctctl" "$HOME/.local/bin/afctctl"
+  run ctl_nodocker "$P" uninstall --non-interactive
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.local/bin/afctctl" ]
+  [[ "$output" == *"left"* ]]
+}
+
+@test "wrapper: uninstall tolerates a missing wrapper" {
+  P="$TESTROOT/w5"; switch_only "$P" "$TARBALL"
+  rm -f "$HOME/.local/bin/afctctl"
+  run ctl_nodocker "$P" uninstall --non-interactive
+  [ "$status" -eq 0 ]
 }

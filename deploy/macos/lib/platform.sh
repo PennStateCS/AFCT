@@ -71,9 +71,34 @@ platform_resolve_docker_access() {
 # sit outside Docker Desktop's file-sharing paths and would otherwise fail with a confusing
 # mount error at `up` time. Skipped when Docker is mocked for tests
 # (AFCT_SKIP_BIND_MOUNT_CHECK=1). Uses the shared docker wrapper and a tiny image.
+# Pull the bind-check image, sending Docker's (noisy, non-secret) output to the installer
+# log when one is configured and discarding it otherwise, so the terminal stays readable.
+_bind_check_pull() {
+  if [ -n "${LOG_FILE:-}" ]; then
+    docker_cmd pull "$1" >> "$LOG_FILE" 2>&1
+  else
+    docker_cmd pull "$1" >/dev/null 2>&1
+  fi
+}
+
 platform_check_bind_mounts() {
   [ "${AFCT_SKIP_BIND_MOUNT_CHECK:-}" = "1" ] && return 0
   _img=${AFCT_BIND_CHECK_IMAGE:-alpine:3.20}
+
+  # Step 1: make sure the test image is available. A pull failure is a network/registry
+  # problem (no internet, registry down, rate limit/auth, missing architecture, ...), NOT a
+  # file-sharing problem, so it gets its own message and never mentions file sharing.
+  if ! docker_cmd image inspect "$_img" >/dev/null 2>&1; then
+    info "downloading the small image used to test Docker Desktop file sharing (${_img})..."
+    if ! _bind_check_pull "$_img"; then
+      error "Docker Desktop could not download the small image used for the file-sharing test (${_img})."
+      info "Check your internet connection and Docker registry access, then rerun the installer."
+      die "could not download the bind-mount test image."
+    fi
+  fi
+
+  # Step 2: the image is present. Now verify Docker Desktop can bind-mount each required
+  # host directory. A failure here IS a file-sharing problem.
   for _dir in "$SHARED_DIR" "$RUNTIME_DIR"; do
     [ -d "$_dir" ] || continue
     if ! docker_cmd run --rm -v "${_dir}:/afct-bind-check:ro" "$_img" test -d /afct-bind-check >/dev/null 2>&1; then
@@ -161,9 +186,30 @@ do_uninstall() {
     warn "Start Docker Desktop and rerun 'afctctl uninstall' if you still need containers removed."
   fi
 
+  # Remove the user command wrapper ONLY when it belongs to this installation: either the
+  # generated wrapper whose exec line targets this prefix, or a symlink that resolves
+  # exactly to this prefix's controller. A wrapper pointing elsewhere (another AFCT prefix,
+  # a hand-managed command, or an unrelated program with the same name) is left untouched.
   _wrapper="${HOME}/.local/bin/afctctl"
-  if [ -f "$_wrapper" ]; then
-    rm -f "$_wrapper" 2>/dev/null && info "removed the command wrapper ${_wrapper}."
+  _wrapper_target="${PREFIX}/current/bin/afctctl"
+  _expected_line="exec \"${_wrapper_target}\" \"\$@\""
+  if [ -L "$_wrapper" ]; then
+    _link=$(readlink "$_wrapper" 2>/dev/null || true)
+    case "$_link" in
+      /*) _link_abs=$_link ;;
+      *)  _link_abs="$(dirname "$_wrapper")/$_link" ;;
+    esac
+    if [ "$_link_abs" = "$_wrapper_target" ]; then
+      rm -f "$_wrapper" 2>/dev/null && info "removed the command wrapper ${_wrapper}."
+    else
+      warn "left ${_wrapper} in place: it is a symlink to ${_link}, not this installation."
+    fi
+  elif [ -f "$_wrapper" ]; then
+    if grep -qxF "$_expected_line" "$_wrapper" 2>/dev/null; then
+      rm -f "$_wrapper" 2>/dev/null && info "removed the command wrapper ${_wrapper}."
+    else
+      warn "left ${_wrapper} in place: it does not point to this installation (${PREFIX})."
+    fi
   fi
 
   if [ "$NON_INTERACTIVE" = "true" ] || confirm "Remove the tooling directory ${PREFIX}?" "y"; then
