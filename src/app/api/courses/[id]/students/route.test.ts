@@ -51,7 +51,7 @@ describe('GET /api/courses/[id]/students', () => {
     ]);
     // The role filter must be in the query, not applied in JS after fetching all roles.
     expect(prismaMock.roster.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { courseId: 'c1', role: 'STUDENT' } }),
+      expect.objectContaining({ where: { courseId: 'c1', role: 'STUDENT', status: 'ENROLLED' } }),
     );
   });
 

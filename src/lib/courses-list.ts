@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import type { EmptyStringNotation, CourseRole } from '@prisma/client';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
+import { activeMemberOf } from '@/lib/roster-status';
 
 export type CourseListItem = {
   id: string;
@@ -48,7 +49,9 @@ export async function getCoursesListForUser(
       ? { deletedAt: null }
       : {
           deletedAt: null,
-          roster: { some: { userId } },
+          // A course the viewer was dropped from (as a student) leaves their list; their
+          // staff courses and active enrollments stay. (Access is also denied at the gate.)
+          roster: { some: activeMemberOf(userId) },
           OR: [
             { isPublished: true },
             { roster: { some: { userId, role: { in: ['FACULTY', 'TA'] as CourseRole[] } } } },

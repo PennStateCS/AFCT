@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ACTIVE_STUDENT_ROSTER } from '@/lib/roster-status';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
@@ -236,7 +237,8 @@ export const POST = withCourseAuth(
             );
           }
           const found = await prisma.roster.findMany({
-            where: { courseId, userId: { in: userIds }, role: 'STUDENT' },
+            // Active students only: a dropped student can't be a new assignment target.
+            where: { courseId, userId: { in: userIds }, ...ACTIVE_STUDENT_ROSTER },
             select: { userId: true },
           });
           const ok = new Set(found.map((r) => r.userId));

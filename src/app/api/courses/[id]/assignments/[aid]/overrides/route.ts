@@ -208,11 +208,13 @@ export const POST = withCourseAuth(
         const userId = data.userId as string;
         const rosterEntry = await prisma.roster.findUnique({
           where: { courseId_userId: { courseId, userId } },
-          select: { role: true },
+          select: { role: true, status: true },
         });
-        if (!rosterEntry || rosterEntry.role !== 'STUDENT') {
+        // A new override can only target an active student: not staff, and not a dropped
+        // student (their existing overrides are kept, but no new ones are added).
+        if (!rosterEntry || rosterEntry.role !== 'STUDENT' || rosterEntry.status === 'DROPPED') {
           return invalidTarget(
-            { targetUserId: userId, reason: 'not a student on the roster' },
+            { targetUserId: userId, reason: 'not an active student on the roster' },
             'Target must be a student enrolled in this course.',
           );
         }

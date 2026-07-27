@@ -39,7 +39,9 @@ export async function getCourseRole(
     select: { role: true, status: true },
   });
   if (!entry) return null;
-  if (entry.role === 'STUDENT' && entry.status !== 'ENROLLED') return null;
+  // A student is an active member unless explicitly DROPPED (the column is NOT NULL
+  // DEFAULT ENROLLED, so "not dropped" is the same as ENROLLED for real rows).
+  if (entry.role === 'STUDENT' && entry.status === 'DROPPED') return null;
   return entry.role;
 }
 
@@ -73,10 +75,11 @@ export async function canAccessCourse(user: PermissionUser, courseId: string): P
   // A soft-deleted course is inaccessible to non-admins (retained only for recovery).
   if (entry.course?.deletedAt) return false;
   if (entry.role === 'FACULTY' || entry.role === 'TA') return true;
-  // Students only once the course is published AND while they are ENROLLED. A DROPPED
-  // student keeps their roster row and all their work, but is denied access here (the
-  // single gate), which cascades to every course-scoped route and the native client.
-  return entry.course.isPublished && entry.status === 'ENROLLED';
+  // Students only once the course is published AND while not DROPPED. A DROPPED student
+  // keeps their roster row and all their work, but is denied access here (the single
+  // gate), which cascades to every course-scoped route and the native client. (The
+  // status column is NOT NULL DEFAULT ENROLLED, so "not dropped" means enrolled.)
+  return entry.course.isPublished && entry.status !== 'DROPPED';
 }
 
 /**

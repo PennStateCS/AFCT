@@ -40,3 +40,13 @@ export const ANY_STUDENT_ROSTER = {
 export function isEnrolled(status: EnrollmentStatus | null | undefined): boolean {
   return status === 'ENROLLED';
 }
+
+/**
+ * Roster fragment for an *active member* of a course: on the roster and not a dropped
+ * student (FACULTY/TA always count). Spread into `roster: { some: activeMemberOf(userId) }`
+ * for the "courses I belong to" lists, so a course a student was dropped from disappears
+ * from their own view while their staff courses stay.
+ */
+export function activeMemberOf(userId: string): Prisma.RosterWhereInput {
+  return { userId, NOT: { role: 'STUDENT', status: 'DROPPED' } };
+}

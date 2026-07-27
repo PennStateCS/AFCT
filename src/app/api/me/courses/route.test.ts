@@ -108,7 +108,7 @@ describe('GET /api/me/courses?view=nav', () => {
     expect(getCoursesListForUserMock).not.toHaveBeenCalled();
     expect(prismaMock.course.findMany).toHaveBeenCalledWith({
       where: {
-        roster: { some: { userId: 'student-1' } },
+        roster: { some: { userId: 'student-1', NOT: { role: 'STUDENT', status: 'DROPPED' } } },
         deletedAt: null,
         OR: [
           { isPublished: true },
@@ -149,7 +149,7 @@ describe('GET /api/me/courses?view=nav', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.course.findMany).toHaveBeenCalledWith({
       where: {
-        roster: { some: { userId: 'admin-1' } },
+        roster: { some: { userId: 'admin-1', NOT: { role: 'STUDENT', status: 'DROPPED' } } },
         deletedAt: null,
       },
       select: {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { ACTIVE_STUDENT_ROSTER } from '@/lib/roster-status';
 
 /**
  * Returns just the STUDENT members of a course (user profiles). Course staff
@@ -22,10 +23,11 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 export const GET = withCourseAuth(
   async (_req, _ctx, { courseId }) => {
     try {
-      // Filter to STUDENT in the query (indexed) rather than fetching every roster
-      // row and filtering in JS.
+      // Active students only (this list feeds assignment-audience pickers, where a
+      // dropped student should not be offered as a new target). Filtered in the query
+      // (indexed) rather than fetching every roster row and filtering in JS.
       const rosterEntries = await prisma.roster.findMany({
-        where: { courseId, role: 'STUDENT' },
+        where: { courseId, ...ACTIVE_STUDENT_ROSTER },
         include: {
           user: {
             select: {
