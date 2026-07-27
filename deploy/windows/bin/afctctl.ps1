@@ -107,13 +107,16 @@ Usage:
 
 Commands:
   install          Configure and deploy AFCT (run by the installer).
+                   Add -ImportExisting <dir> to migrate an old flat-directory install.
   status           Show container and application health status.
   logs             Follow application logs. Press Ctrl+C to stop.
   update           Pull the latest application images, recreate the stack, verify health.
+                   This is the recommended way to update AFCT on Windows.
   self-update      Update the deployment tooling to the newest verified bundle.
   restart          Recreate the stack without pulling new images.
   stop             Stop the stack without deleting its data volumes.
-  enable-updater   Enable the in-app updater sidecar (EXPERIMENTAL on Windows).
+  enable-updater   Enable the in-app updater sidecar (EXPERIMENTAL on Windows; prefer
+                   'afctctl update' from the command line).
   disable-updater  Stop and remove the updater sidecar.
   doctor           Run a comprehensive, read-only system check.
   recover          Restore the newest protected .env.production backup.

@@ -59,6 +59,7 @@ function Fail       { param([string]$m) Write-Err $m; exit 1 }
 
 if ($Help) {
     Write-Host "AFCT Windows bootstrap. Options: -DeployVersion <v> -BundleFile <path> -Prefix <dir> -SwitchOnly"
+    Write-Host "Migrate an old flat-directory install: install-windows.ps1 -ImportExisting <legacy-dir>"
     exit 0
 }
 

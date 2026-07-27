@@ -259,7 +259,7 @@ By default AFCT installs under `%LOCALAPPDATA%\AFCT`. To install somewhere else,
 powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Prefix "D:\AFCT"
 ```
 
-Docker Desktop can only bind-mount host directories that are on its file-sharing list. The default location under your user profile is already shared. A custom location may need to be added under **Docker Desktop > Settings > Resources > File sharing**. If Docker Desktop cannot access the directory, the installer stops before starting AFCT and explains how to fix it.
+Docker Desktop can only bind-mount host directories that are on its file-sharing list. The default location under your user profile is already shared. A custom location may need to be added under **Docker Desktop > Settings > Resources > File sharing**. Before starting the stack, the installer runs a quick path-access test (it mounts the install directory into a small `alpine` container). If Docker Desktop cannot mount the directory, the installer stops before starting AFCT and tells you the exact path and how to fix it. Network drives and removable drives are not reliably mountable; a local path such as `%LOCALAPPDATA%\AFCT` is recommended. If your environment cannot reach Docker Hub, set `AFCT_BIND_CHECK_IMAGE` to an image that is already present locally.
 
 ## Start AFCT after restarting the computer
 
@@ -286,6 +286,18 @@ afctctl install -Reconfigure
 ```
 
 Existing database data and authentication secrets are preserved during reconfiguration.
+
+## Migrate an existing flat-directory installation
+
+Earlier Windows installs kept everything in one folder (`install.ps1`, `docker-compose.yml`, `.env.production`, `install.log`, and `.env.production.backup.*`). To move that installation into the new layout under `%LOCALAPPDATA%\AFCT`, point the installer at the old folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -ImportExisting "C:\path\to\old\afct"
+```
+
+The import copies your existing `.env.production` and its backups exactly, preserves the Compose project name so your existing database and uploaded-file volumes reattach, and never generates new database credentials. It reads the old folder but does not modify it. After the new deployment comes up healthy and you have confirmed it works, you can archive or delete the old folder by hand.
+
+If the old folder does not look like an AFCT deployment, its configuration is incomplete, or the Compose project name cannot be determined safely, the import stops and explains what to do instead of guessing.
 
 ## Recover a lost configuration
 
