@@ -128,10 +128,107 @@ function Test-AfctPortInUse {
 }
 
 # The Windows analog of the Linux NTP check: the Windows Time service should be running.
+# Returns $true only when the service exists and is running; $false when it is stopped,
+# missing, or cannot be queried at all. This is a diagnostic/warning signal, never an
+# installation blocker.
 function Test-AfctClockSync {
     try {
         $svc = Get-Service -Name W32Time -ErrorAction Stop
-        if ($svc.Status -ne 'Running') { return $false }
-    } catch { }
-    return $true
+        return ($svc.Status -eq 'Running')
+    } catch {
+        return $false
+    }
+}
+
+# --------------------------------------------------------------------------- #
+# Docker Desktop bind-mount preflight
+# --------------------------------------------------------------------------- #
+# Docker Desktop can only bind-mount host paths on its file-sharing list. The default prefix
+# under %LOCALAPPDATA% is local and shared, but a custom prefix may sit on a network drive, a
+# removable drive, or an otherwise unshared path, and would fail with a confusing mount error
+# at `up` time. This preflight catches that before the stack starts. The four docker steps
+# below are separate seams so tests can mock them without a real daemon.
+
+# The tiny image used only to test path access. Overridable so a locked-down environment can
+# point at a mirror or an already-present image.
+function Get-AfctBindCheckImage {
+    $v = [Environment]::GetEnvironmentVariable('AFCT_BIND_CHECK_IMAGE')
+    if ([string]::IsNullOrEmpty($v)) { return 'alpine:3.20' }
+    return $v
+}
+
+# True when the image is already present locally (no pull needed).
+function Test-AfctDockerImagePresent {
+    param([string]$Image)
+    & docker image inspect $Image *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
+# Pull the bind-check image. Docker's (noisy, non-secret) output goes to the install log when
+# one is configured and is otherwise discarded, so the terminal stays readable. Returns the
+# child exit code.
+function Invoke-AfctDockerPull {
+    param([string]$Image)
+    if (-not [string]::IsNullOrEmpty($LogFile)) {
+        & docker pull $Image *>> $LogFile
+    } else {
+        & docker pull $Image *> $null
+    }
+    return $LASTEXITCODE
+}
+
+# True when Docker Desktop can bind-mount $Dir read-only. Mounts the directory and checks it
+# is visible inside the container.
+function Test-AfctDockerBindMount {
+    param([string]$Image, [string]$Dir)
+    & docker run --rm -v "${Dir}:/afct-bind-check:ro" $Image test -d /afct-bind-check *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
+# Heuristic: a UNC path or a non-fixed (network/removable) drive is a soft warning, because
+# Docker Desktop mounts of such paths are unreliable. Never throws.
+function Test-AfctPathIsNetworkish {
+    param([string]$Path)
+    if ([string]::IsNullOrEmpty($Path)) { return $false }
+    if ($Path.StartsWith('\\')) { return $true }
+    try {
+        $root = [System.IO.Path]::GetPathRoot($Path)
+        if ([string]::IsNullOrEmpty($root)) { return $false }
+        $di = New-Object System.IO.DriveInfo($root)
+        return ($di.DriveType -ne [System.IO.DriveType]::Fixed)
+    } catch { return $false }
+}
+
+# Verify Docker Desktop can bind-mount each required host directory before the stack starts.
+# Skipped when AFCT_SKIP_BIND_MOUNT_CHECK=1 (used by test mocks). A pull failure is a
+# network/registry problem and is reported as such, never as a file-sharing problem; a mount
+# failure names the exact directory and points at the fix.
+function Assert-AfctBindMounts {
+    param([string[]]$Directories)
+    if ([Environment]::GetEnvironmentVariable('AFCT_SKIP_BIND_MOUNT_CHECK') -eq '1') { return }
+    $img = Get-AfctBindCheckImage
+
+    # Step 1: make the tiny test image available. A pull failure is network/registry, NOT
+    # file sharing, so it gets its own message and never mentions file sharing.
+    if (-not (Test-AfctDockerImagePresent $img)) {
+        Write-AfctInfo "downloading the small image used to test Docker Desktop path access ($img)..."
+        if ((Invoke-AfctDockerPull $img) -ne 0) {
+            throw "afct-fatal: Docker Desktop could not download the small image used for the path-access test ($img). Check your network connection and Docker registry access, then rerun the installer."
+        }
+    }
+
+    # Step 2: the image is present. Now verify each directory can be mounted. A failure here
+    # IS a file-sharing problem.
+    foreach ($dir in $Directories) {
+        if ([string]::IsNullOrEmpty($dir) -or -not (Test-Path -LiteralPath $dir)) { continue }
+        if (Test-AfctPathIsNetworkish $dir) {
+            Write-AfctWarn "the installation directory is on a network or removable drive ($dir). Docker Desktop may not mount it reliably; a local path such as $(Join-Path $env:LOCALAPPDATA 'AFCT') is recommended."
+        }
+        if (-not (Test-AfctDockerBindMount -Image $img -Dir $dir)) {
+            $rec = Join-Path $env:LOCALAPPDATA 'AFCT'
+            throw ("afct-fatal: Docker Desktop could not mount the installation directory: $dir. " +
+                "Docker Desktop can only bind-mount host paths on its file-sharing list; the current drive or path may not be available to it, and network or removable drives may not work reliably. " +
+                "Fix this by adding the directory under Docker Desktop > Settings > Resources > File sharing, or reinstall using the default prefix ($rec), which is local and already shared.")
+        }
+    }
 }

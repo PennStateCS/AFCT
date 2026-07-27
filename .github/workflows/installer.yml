@@ -30,6 +30,7 @@ jobs:
         run: |
           sh -n deploy/install.sh
           sh -n deploy/ci-base-version.sh
+          sh -n deploy/ci-version-check.sh
           sh -n deploy/unix/bin/afctctl
           for f in deploy/unix/lib/*.sh; do sh -n "$f"; done
           sh -n deploy/linux/install.sh
@@ -48,12 +49,17 @@ jobs:
         shell: pwsh
         run: |
           $tokens = $null; $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/deploy/install.ps1", [ref]$tokens, [ref]$errors) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Host "PARSE ERROR: $($_.Message) (line $($_.Extent.StartLineNumber))" }
-            exit 1
+          $bad = $false
+          foreach ($f in @("$PWD/deploy/install.ps1", "$PWD/deploy/ci-windows-version.ps1")) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $bad = $true
+              $errors | ForEach-Object { Write-Host "PARSE ERROR in ${f}: $($_.Message) (line $($_.Extent.StartLineNumber))" }
+            }
           }
-          Write-Host 'install.ps1 parses cleanly.'
+          if ($bad) { exit 1 }
+          Write-Host 'legacy install.ps1 and ci-windows-version.ps1 parse cleanly.'
 
       # The new Linux tooling (deploy/linux/) is written clean, so gate on it. The
       # .shellcheckrc in that directory documents the two shared-globals suppressions.
@@ -89,37 +95,35 @@ jobs:
       - name: Real docker compose config (split release/shared layout)
         run: sh deploy/test/compose-config.sh
 
-      # A version's bytes are fixed: if any file that goes into the deployment bundle
-      # changed versus the base branch, the deployment-tool version (INSTALLER_VERSION in
-      # bin/afctctl) must change too. This enforces the content-addressed release identity
-      # at the source. Skipped when the base has no bundle yet (the tree is brand new).
+      # The deployment-tool version is unified across Linux, macOS, and Windows: the Unix
+      # controller (deploy/unix/bin/afctctl) and the Windows controller
+      # (deploy/windows/bin/afctctl.ps1) must always name the same version. Enforced on every
+      # build so a mismatch never merges.
+      - name: Verify Unix and Windows deployment-tool versions agree
+        run: sh deploy/ci-version-check.sh
+
+      # Cross-check the sed-based reader used above against the canonical PowerShell reader,
+      # so the two parsers can never silently diverge.
+      - name: Cross-check the Windows version reader (PowerShell)
+        shell: pwsh
+        run: |
+          $win = (& "$PWD/deploy/ci-windows-version.ps1").Trim()
+          $unix = (Select-String -Path "$PWD/deploy/unix/bin/afctctl" -Pattern '^INSTALLER_VERSION="([^"]+)"').Matches.Groups[1].Value
+          if ($win -ne $unix) { Write-Host "::error::Windows ($win) and Unix ($unix) deployment-tool versions differ."; exit 1 }
+          Write-Host "unified deployment-tool version: $win"
+
+      # A version's bytes are fixed: if any file that goes into ANY platform's deployment
+      # bundle changed versus the base branch (now including deploy/windows), the unified
+      # deployment-tool version must change too. This enforces the content-addressed release
+      # identity at the source. Skipped when the base has no bundle yet (the tree is brand
+      # new). See deploy/ci-version-check.sh (which also re-verifies the platform agreement).
       - name: Enforce a deployment-version bump on bundle-source changes
         if: github.event_name == 'pull_request'
         run: |
           set -eu
           git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
           BASE=$(git merge-base FETCH_HEAD HEAD 2>/dev/null || echo FETCH_HEAD)
-          CHANGED=$(git diff --name-only "$BASE"...HEAD -- \
-            deploy/unix deploy/linux deploy/macos \
-            deploy/docker-compose.yml deploy/.env.production.example || true)
-          if [ -z "$CHANGED" ]; then
-            echo "No bundle-source changes; nothing to enforce."
-            exit 0
-          fi
-          # Read the base version from the current controller path, falling back to the
-          # pre-refactor Linux path, so the shared-Unix reorg is not mistaken for the first
-          # bundle (which would skip enforcement). See deploy/ci-base-version.sh.
-          BASE_VER=$(sh deploy/ci-base-version.sh "$BASE" || true)
-          HEAD_VER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' deploy/unix/bin/afctctl | head -n1)
-          if [ -z "$BASE_VER" ]; then
-            echo "Base has no deployment bundle yet; skipping the bump check."
-            exit 0
-          fi
-          if [ "$BASE_VER" = "$HEAD_VER" ]; then
-            echo "::error::Bundle sources changed but the deployment-tool version is still ${HEAD_VER}. Bump INSTALLER_VERSION in deploy/unix/bin/afctctl."
-            exit 1
-          fi
-          echo "OK: deployment-tool version ${BASE_VER} -> ${HEAD_VER}"
+          sh deploy/ci-version-check.sh "$BASE"
 
   # The macOS installer runs on a real macOS runner: BSD tools, no sha256sum, Darwin
   # uname. Docker is NOT available on GitHub-hosted macOS runners, so the tests use a

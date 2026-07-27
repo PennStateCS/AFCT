@@ -34,6 +34,8 @@ Last updated: 2026-07-27. Everything below is **NT** until run on real hardware.
 | 12 | Login with generated administrator credentials | NT | |
 | 13 | Non-interactive install (`-NonInteractive` + env vars/password file) | NT | |
 | 14 | `Set-ExecutionPolicy`-restricted machine: `-ExecutionPolicy Bypass` path works | NT | |
+| 15 | WSL 2 unavailable: Docker Desktop guidance is clear | NT | |
+| 16 | Legacy flat-install import (`-ImportExisting`): data/volumes reattach, old dir untouched | NT | |
 
 ## Command availability
 
@@ -75,10 +77,14 @@ Last updated: 2026-07-27. Everything below is **NT** until run on real hardware.
 | 1 | Restart Docker Desktop | NT | |
 | 2 | Restart Windows | NT | |
 | 3 | AFCT containers recover after Docker Desktop starts | NT | |
-| 4 | Custom prefix INSIDE an allowed file-sharing path works | NT | |
-| 5 | Custom prefix OUTSIDE the allowed path fails clearly | NT | |
-| 6 | Error distinguishes image-pull failure from bind-mount failure | NT | Block the registry vs choose a non-shared prefix |
-| 7 | Low disk space: install warns, update refuses before pulling | NT | |
+| 4 | Bind-mount preflight: default prefix mounts cleanly | NT | |
+| 5 | Bind-mount preflight: custom prefix INSIDE an allowed file-sharing path works | NT | |
+| 6 | Bind-mount preflight: custom prefix OUTSIDE the allowed path fails, names the path | NT | |
+| 7 | Bind-mount preflight: network/removable-drive path warns (and fails the mount) | NT | |
+| 8 | Image-pull failure is reported as a network problem, NOT file sharing | NT | Block the registry; check the message |
+| 9 | Path-sharing failure is reported as file sharing, NOT a download problem | NT | Choose a non-shared prefix |
+| 10 | `AFCT_BIND_CHECK_IMAGE` override uses an already-present image | NT | |
+| 11 | Low disk space: install warns, update refuses before pulling | NT | |
 
 ## Experimental updater
 

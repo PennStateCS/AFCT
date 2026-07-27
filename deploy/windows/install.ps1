@@ -59,6 +59,7 @@ function Fail       { param([string]$m) Write-Err $m; exit 1 }
 
 if ($Help) {
     Write-Host "AFCT Windows bootstrap. Options: -DeployVersion <v> -BundleFile <path> -Prefix <dir> -SwitchOnly"
+    Write-Host "Migrate an old flat-directory install: install-windows.ps1 -ImportExisting <legacy-dir>"
     exit 0
 }
 
@@ -128,16 +129,16 @@ function Get-ControllerVersion([string]$controllerPath) {
 }
 
 # Restrict a file's ACL to the current user (no inheritance). Throws on failure so callers
-# can make it fatal for critical secrets/markers.
+# can make it fatal for critical secrets/markers. Uses icacls with the current user's SID as
+# a literal (leading '*'), so it never resolves a name and never contacts a domain
+# controller: a domain-joined machine with an unreachable DC can still lock its own files
+# (Set-Acl and name-based grants fail there with a trust-relationship error).
 function Protect-AfctFile([string]$path) {
     if (-not (Test-Path -LiteralPath $path)) { return }
-    # Use the current user's SID, not the DOMAIN\name, so this resolves offline (a
-    # domain-joined machine with an unreachable DC can still lock its own files).
-    $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
-    $acl = New-Object System.Security.AccessControl.FileSecurity
-    $acl.SetAccessRuleProtection($true, $false)
-    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'Allow')))
-    Set-Acl -LiteralPath $path -AclObject $acl -ErrorAction Stop
+    if (-not (Get-Command icacls -ErrorAction SilentlyContinue)) { throw 'icacls is not available to restrict file permissions.' }
+    $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $out = & icacls $path /inheritance:r /grant:r "*${sid}:(F)" 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "icacls could not restrict $path (exit $LASTEXITCODE): $($out -join ' ')" }
 }
 
 # Install the stable command wrappers under <prefix>\bin. The launcher resolves the active
@@ -313,11 +314,14 @@ try {
         Remove-Item -LiteralPath $markerTmp -Force -ErrorAction SilentlyContinue
         Fail "could not write the install-root marker in $Shared. $($_.Exception.Message)"
     }
-    # The marker holds an install path, not a secret; ACL-locking it is defense-in-depth on
-    # top of it already living under the per-user profile, so a lockdown failure warns
-    # rather than aborting. (Secrets like .env.production get stricter handling in the
-    # controller.)
-    try { Protect-AfctFile $markerTmp } catch { Write-Log "note: could not restrict permissions on the install-root marker ($($_.Exception.Message)); it remains under your user profile." }
+    # The install-root marker is a safety marker (a later uninstall trusts it before deleting
+    # the tree), so restrict it to the current user and treat a lockdown failure as fatal:
+    # stop rather than leave a safety marker world-writable. It already lives under the
+    # per-user profile; the ACL is defense in depth.
+    try { Protect-AfctFile $markerTmp } catch {
+        Remove-Item -LiteralPath $markerTmp -Force -ErrorAction SilentlyContinue
+        Fail "could not restrict permissions on the install-root marker in $Shared. $($_.Exception.Message)"
+    }
     try {
         Move-Item -LiteralPath $markerTmp -Destination $marker -Force -ErrorAction Stop
     } catch {
@@ -332,6 +336,9 @@ try {
     $stateTmp = "$stateFile.tmp.$PID"
     Set-Content -LiteralPath $stateTmp -Value $target -Encoding ASCII
     Move-Item -LiteralPath $stateTmp -Destination $stateFile -Force
+    # The active-release pointer decides which controller runs, so lock it to the current
+    # user; a lockdown failure is fatal (another user must not be able to redirect it).
+    try { Protect-AfctFile $stateFile } catch { Fail "could not restrict permissions on the active-release pointer in $Shared. $($_.Exception.Message)" }
     $current = Join-Path $Prefix 'current'
     try {
         if (Test-Path -LiteralPath $current) { (Get-Item -LiteralPath $current).Delete() }
