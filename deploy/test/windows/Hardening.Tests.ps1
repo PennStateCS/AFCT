@@ -76,24 +76,38 @@ Describe 'Protect-AfctFile and the critical/best-effort wrappers' {
 }
 
 Describe 'ci-windows-version.ps1' {
-    BeforeAll { $script:Helper = Join-Path $RepoRoot 'deploy\ci-windows-version.ps1' }
+    BeforeAll {
+        $script:Helper = Join-Path $RepoRoot 'deploy\ci-windows-version.ps1'
+        # Invoke through Start-Process -PassThru and read ExitCode, so the helper's stderr
+        # diagnostic is never routed through PowerShell's error stream (which Windows
+        # PowerShell 5.1 wraps as a terminating NativeCommandError under Pester).
+        function Invoke-Helper {
+            param([string]$ControllerPath)
+            $o = Join-Path $Work ((New-Guid).ToString('N') + '.out')
+            $e = Join-Path $Work ((New-Guid).ToString('N') + '.err')
+            $p = Start-Process -FilePath 'powershell.exe' -PassThru -Wait -WindowStyle Hidden `
+                -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $Helper, '-ControllerPath', $ControllerPath) `
+                -RedirectStandardOutput $o -RedirectStandardError $e
+            $stdout = ''
+            if (Test-Path $o) { $stdout = (Get-Content -LiteralPath $o -Raw); if ($null -eq $stdout) { $stdout = '' } }
+            return [pscustomobject]@{ ExitCode = $p.ExitCode; StdOut = $stdout.Trim() }
+        }
+    }
     It 'prints the version parsed from a controller' {
         $fix = Join-Path $Work 'ctl.ps1'
         Set-Content -LiteralPath $fix -Value "Set-StrictMode -Version Latest`n`$InstallerVersion = '9.9.9'`n"
-        $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Helper -ControllerPath $fix 2>$null | Out-String).Trim()
-        $LASTEXITCODE | Should -Be 0
-        $out | Should -Be '9.9.9'
+        $r = Invoke-Helper $fix
+        $r.ExitCode | Should -Be 0
+        $r.StdOut | Should -Be '9.9.9'
     }
     It 'exits nonzero when the version cannot be parsed' {
         $fix = Join-Path $Work 'noversion.ps1'
         Set-Content -LiteralPath $fix -Value "# nothing to parse here`n"
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Helper -ControllerPath $fix 2>$null | Out-Null
-        $LASTEXITCODE | Should -Be 1
+        (Invoke-Helper $fix).ExitCode | Should -Be 1
     }
     It 'reads the real Windows controller version' {
-        $real = Join-Path $RepoRoot 'deploy\windows\bin\afctctl.ps1'
-        $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Helper -ControllerPath $real 2>$null | Out-String).Trim()
-        $LASTEXITCODE | Should -Be 0
-        $out | Should -Match '^[0-9]+\.[0-9]+\.[0-9]+$'
+        $r = Invoke-Helper (Join-Path $RepoRoot 'deploy\windows\bin\afctctl.ps1')
+        $r.ExitCode | Should -Be 0
+        $r.StdOut | Should -Match '^[0-9]+\.[0-9]+\.[0-9]+$'
     }
 }
