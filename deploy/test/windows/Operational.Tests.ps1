@@ -8,7 +8,7 @@ directly without a running Docker daemon.
 BeforeAll {
     $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
     $script:LibDir   = Join-Path $RepoRoot 'deploy\windows\lib'
-    foreach ($m in 'Output', 'Validation', 'Environment', 'Config', 'Diagnostics') {
+    foreach ($m in 'Output', 'Docker', 'Validation', 'Environment', 'Config', 'Compose', 'Diagnostics') {
         . (Join-Path $LibDir "$m.ps1")
     }
     $script:Bootstrap   = Join-Path $RepoRoot 'deploy\windows\install.ps1'
@@ -211,6 +211,30 @@ Describe 'Diagnostics redaction' {
         Set-Content -LiteralPath (Join-Path $tree 'log.txt') -Value 'a stack trace leaked hunter2xyz here'
         Hide-AfctSecretsInTree $tree $envF
         (Get-Content (Join-Path $tree 'log.txt')) | Should -Not -Match 'hunter2xyz'
+    }
+}
+
+Describe 'Runtime Compose seeding' {
+    It 'seeds runtime from the release template, then refreshes with a backup on change' {
+        $ComposeTemplate = Join-Path $Work ((New-Guid).ToString('N') + '-template.yml')
+        $RuntimeDir = Join-Path $Work ((New-Guid).ToString('N') + '-runtime')
+        $RuntimeCompose = Join-Path $RuntimeDir 'docker-compose.yml'
+        Set-Content -LiteralPath $ComposeTemplate -Value "services:`n  app: {}"
+
+        # First seed: runtime file created from the template.
+        Sync-AfctRuntimeCompose
+        Test-Path $RuntimeCompose | Should -BeTrue
+        (Get-FileHash $RuntimeCompose).Hash | Should -Be (Get-FileHash $ComposeTemplate).Hash
+
+        # Unchanged template: no backup produced.
+        Sync-AfctRuntimeCompose
+        @(Get-ChildItem -Path "$RuntimeCompose.bak.*" -ErrorAction SilentlyContinue).Count | Should -Be 0
+
+        # Template changes: runtime refreshed, previous runtime backed up.
+        Set-Content -LiteralPath $ComposeTemplate -Value "services:`n  app: {}`n  worker: {}"
+        Sync-AfctRuntimeCompose
+        (Get-FileHash $RuntimeCompose).Hash | Should -Be (Get-FileHash $ComposeTemplate).Hash
+        @(Get-ChildItem -Path "$RuntimeCompose.bak.*" -ErrorAction SilentlyContinue).Count | Should -BeGreaterThan 0
     }
 }
 

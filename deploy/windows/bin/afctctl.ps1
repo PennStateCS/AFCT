@@ -9,10 +9,6 @@ a versioned release directory.
 
 Windows is for testing, evaluation, development, and demonstrations. Linux is the
 recommended production platform.
-
-FOUNDATION BUILD: this controller currently implements version/help and the dispatch
-surface. The full operational commands (install/status/update/...) are ported from the
-existing installer in the next phase; they are recognized here and report that clearly.
 #>
 [CmdletBinding()]
 param(
@@ -56,9 +52,28 @@ $EnvFile        = Join-Path $SharedDir '.env.production'
 $RuntimeDir     = Join-Path $SharedDir 'runtime'
 $RuntimeCompose = Join-Path $RuntimeDir 'docker-compose.yml'
 
+# The active release ships the Compose template and the env example; the runtime Compose
+# file above is seeded from the template. These live inside the (immutable) release dir.
+$ComposeTemplate = Join-Path $ReleaseDir 'docker-compose.yml'
+$EnvExample      = Join-Path $ReleaseDir '.env.production.example'
+
+# Service names, health probe, and disk/manifest settings (overridable for testing).
+function Get-AfctEnvOr { param([string]$Name, [string]$Fallback)
+    $v = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrEmpty($v)) { return $Fallback }
+    return $v
+}
+$AppService      = Get-AfctEnvOr 'AFCT_APP_SERVICE' 'app'
+$UpdaterService  = Get-AfctEnvOr 'AFCT_UPDATER_SERVICE' 'updater'
+$HealthPath      = Get-AfctEnvOr 'AFCT_HEALTH_PATH' '/api/health'
+$HealthTimeout   = [int](Get-AfctEnvOr 'AFCT_HEALTH_TIMEOUT' '300')
+$HealthInterval  = [int](Get-AfctEnvOr 'AFCT_HEALTH_INTERVAL' '5')
+$InstallerBaseUrl = Get-AfctEnvOr 'AFCT_INSTALLER_BASE_URL' 'https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy'
+
 # --- load library modules (functions only) -----------------------------------------------
 foreach ($mod in @('Output', 'Platform', 'Docker', 'Validation', 'Environment', 'Config',
-                   'Diagnostics', 'Recover', 'Uninstall')) {
+                   'Compose', 'Update', 'Deploy', 'Doctor', 'Diagnostics', 'Recover',
+                   'Uninstall')) {
     . (Join-Path $LibDir "$mod.ps1")
 }
 
@@ -127,16 +142,21 @@ if ($Help) { $Command = 'help' }
 # trace. Any other exception is unexpected and re-thrown.
 try {
     switch ($Command) {
-        'help'        { Show-AfctUsage; break }
-        'version'     { Show-AfctVersion; break }
-        'recover'     { Invoke-AfctRecover -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive); break }
-        'diagnostics' { Invoke-AfctDiagnostics 'manual' | Out-Null; break }
-        'uninstall'   { Invoke-AfctUninstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -PurgeData:([bool]$PurgeData); break }
-        { $_ -in @('install','status','logs','update','self-update','restart','stop',
-                   'enable-updater','disable-updater','doctor') } {
-            Write-AfctInfo "the '$Command' command is ported from the existing installer in the next AFCT Windows build."
-            break
-        }
+        'help'            { Show-AfctUsage; break }
+        'version'         { Show-AfctVersion; break }
+        'install'         { Invoke-AfctInstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -Reconfigure:([bool]$Reconfigure) -WithUpdater:([bool]$WithUpdater); break }
+        'status'          { Show-AfctStatus; break }
+        'logs'            { Show-AfctLogs; break }
+        'restart'         { Invoke-AfctRestart; break }
+        'stop'            { Invoke-AfctStop; break }
+        'update'          { Invoke-AfctUpdate; break }
+        'self-update'     { Invoke-AfctSelfUpdate; break }
+        'enable-updater'  { Invoke-AfctEnableUpdater -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive); break }
+        'disable-updater' { Invoke-AfctDisableUpdater; break }
+        'doctor'          { $ok = Invoke-AfctDoctor; if (-not $ok) { exit 1 }; break }
+        'recover'         { Invoke-AfctRecover -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive); break }
+        'diagnostics'     { Invoke-AfctDiagnostics 'manual' | Out-Null; break }
+        'uninstall'       { Invoke-AfctUninstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -PurgeData:([bool]$PurgeData); break }
         default {
             Write-AfctError "unknown option or command: $Command"
             Write-AfctInfo  "Run: afctctl help"
