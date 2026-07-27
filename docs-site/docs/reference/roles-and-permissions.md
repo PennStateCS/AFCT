@@ -90,7 +90,11 @@ A soft-deleted course remains in the database for record integrity but is hidden
 | Configure problems, points, attempt limits, and autograding | Yes               | Yes, unless archived                                                 | No                                           |
 | Upload, replace, or download an answer file                 | Yes               | Yes, unless the write is blocked by archive state                    | No                                           |
 
-Students receive `404 Not Found` for unpublished assignments. Unpublishing is blocked when submissions or grades exist. Changing between individual and group mode is blocked after submissions exist, and deletion is blocked when submissions or comments exist.
+Students receive `404 Not Found` for unpublished assignments. Once student work exists, several changes are blocked:
+
+- Unpublishing is blocked when submissions or grades exist.
+- Changing between individual and group mode is blocked after submissions exist.
+- Deletion is blocked when submissions or comments exist.
 
 ### Submissions, grades, comments, and groups
 

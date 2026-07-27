@@ -48,8 +48,8 @@ Dropping a student is the way to end their participation in a course while keepi
 
 From a student's **Manage** menu on the roster, Faculty (and site administrators) can:
 
-- **Drop From Course** — the student keeps their roster entry, submissions, grades, and group membership, but immediately loses access: the course disappears from their dashboard, sidebar, and calendar, and they can no longer open it or submit, including from the desktop client. The roster marks them with a **Dropped** badge.
-- **Re-enroll** — restores a dropped student to full access. Everything they had is exactly as they left it.
+- **Drop From Course**: the student keeps their roster entry, submissions, grades, and group membership, but immediately loses access. The course disappears from their dashboard, sidebar, and calendar, and they can no longer open it or submit, including from the desktop client. The roster marks them with a **Dropped** badge.
+- **Re-enroll**: restores a dropped student to full access. Everything they had is exactly as they left it.
 
 A dropped student stays visible to staff. They still appear, labeled **Dropped**, on the roster, in the gradebook (where you can still view and edit their grades), and in the submissions review view. They are left out of the active class everywhere it would be misleading to include them: new assignment audiences, group eligibility for new groups, assignment statistics, and student counts.
 

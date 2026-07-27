@@ -26,11 +26,11 @@ Assignment pages show deadlines in your effective timezone. When the course uses
 
 Open an assignment, choose a problem, and upload the requested file.
 
-A problem can allow unlimited attempts or set a maximum. Each accepted upload counts as an attempt. Submitted attempts cannot be edited or deleted, so check the file before uploading it. To correct your work, submit another attempt if the problem still allows one.
+A few rules the server enforces:
 
-After the due date, AFCT accepts work only when late submissions are enabled and any late cutoff has not passed. The server enforces deadlines, so changing a device clock or timezone does not change the result.
-
-AFCT may also require a short cooldown between attempts on the same problem. The page tells you when to try again.
+- A problem can allow unlimited attempts or set a maximum, and each accepted upload counts as an attempt. Submitted attempts cannot be edited or deleted, so check the file before uploading it. To correct your work, submit another attempt if the problem still allows one.
+- After the due date, AFCT accepts work only when late submissions are enabled and any late cutoff has not passed. The server enforces deadlines, so changing a device clock or timezone does not change the result.
+- AFCT may also require a short cooldown between attempts on the same problem. The page tells you when to try again.
 
 ## Review results and comments
 

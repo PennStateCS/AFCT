@@ -70,4 +70,8 @@ The number of failed attempts before a lockout and how long a lock lasts are set
 
 The **Delete Inactive User** action is enabled in the interface only after the account has been made inactive. You cannot delete your own signed-in administrator account.
 
-Account deletion is permanent and database relationships can remove course-linked records owned by that user. Activity log entries are retained without the deleted user link. Prefer inactive status for a real account, and delete only accounts created by mistake or used for testing after confirming that their data is not needed.
+:::danger
+Account deletion is permanent. Deleting an account can also remove course-linked records owned by that user through database relationships. Activity log entries are kept, but without the link to the deleted user.
+:::
+
+Prefer inactive status for a real account. Delete only accounts created by mistake or used for testing, and confirm their data is not needed first.

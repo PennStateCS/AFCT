@@ -19,9 +19,10 @@ This page explains how the tests work and, most importantly, **how to add your o
   flags, environment allow-list, timeout, and output cap the submission worker applies.
   It parses the evaluator's JSON output and checks `correct` against the manifest.
 - **CI** runs it. The `evaluator` job in `.github/workflows/ci.yml` sets up a JRE 21
-  (matching the runtime image) plus `fontconfig` and a font — JFLAP initializes Swing even
-  in headless CLI mode and throws `Fontconfig head is null` without them — then runs
-  `npm run test:evaluator` on every push and pull request. A failing case fails the build.
+  (matching the runtime image) plus `fontconfig` and a font, then runs
+  `npm run test:evaluator` on every push and pull request. The font matters because JFLAP
+  initializes Swing even in headless CLI mode and throws `Fontconfig head is null` without
+  it. A failing case fails the build.
 
 ## Running the tests locally
 
