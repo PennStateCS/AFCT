@@ -744,20 +744,22 @@ export function GroupSetView({
       />
       <ConfirmDialog
         open={deleteSetOpen}
-        title="Delete group set"
-        description={`Delete "${detail.name}" and all of its groups? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={() => void confirmDeleteSet()}
+        variant="destructive"
+        busy={busy}
+        title="Delete group set?"
+        description={`This permanently deletes "${detail.name}" and all of its groups and cannot be undone.`}
+        confirmText="Delete group set"
+        onConfirm={confirmDeleteSet}
         onCancel={() => setDeleteSetOpen(false)}
       />
       <ConfirmDialog
         open={!!deleteGroup}
-        title="Delete group"
+        variant="destructive"
+        busy={busy}
+        title="Delete group?"
         description={`Delete group "${deleteGroup?.name ?? ''}"? Its members return to unassigned.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={() => void confirmDeleteGroup()}
+        confirmText="Delete group"
+        onConfirm={confirmDeleteGroup}
         onCancel={() => setDeleteGroup(null)}
       />
     </div>

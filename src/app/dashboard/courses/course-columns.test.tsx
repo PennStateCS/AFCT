@@ -151,7 +151,7 @@ describe('course actions — Archive / Restore (admin-only)', () => {
     const user = userEvent.setup();
     expect(screen.queryByRole('button', { name: 'Restore Course' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Archive Course' }));
-    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    await user.click(screen.getByRole('button', { name: 'Archive course' }));
 
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/courses/c1/archive',
@@ -170,7 +170,7 @@ describe('course actions — Archive / Restore (admin-only)', () => {
     const user = userEvent.setup();
     expect(screen.queryByRole('button', { name: 'Archive Course' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Restore Course' }));
-    await user.click(screen.getByRole('button', { name: 'Restore' }));
+    await user.click(screen.getByRole('button', { name: 'Restore course' }));
 
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/courses/c1/archive',
@@ -211,7 +211,7 @@ describe('course actions — Delete Course (admin-only, active courses)', () => 
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Delete Course' }));
-    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Delete course' }));
 
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/courses/c1',

@@ -1,7 +1,15 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { ChevronDown, Lock, Pencil, Tag, UserRoundX, UserRoundMinus, UserRoundCheck } from 'lucide-react';
+import {
+  ChevronDown,
+  Lock,
+  Pencil,
+  Tag,
+  UserRoundX,
+  UserRoundMinus,
+  UserRoundCheck,
+} from 'lucide-react';
 import type { User } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -24,7 +32,6 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { useState } from 'react';
 
-
 type RosterUser = User & {
   role?: string;
   hasSubmissions?: boolean;
@@ -41,7 +48,6 @@ type ActionsCellProps = {
   viewerIsAdmin?: boolean | null;
 };
 
-
 function ActionsCell({
   user,
   onChange,
@@ -51,9 +57,10 @@ function ActionsCell({
   viewerIsAdmin,
 }: ActionsCellProps) {
   const [editUserOpen, setEditUserOpen] = useState(false);
-  const [ editRoleOpen, setEditRoleOpen ] = useState(false);
+  const [editRoleOpen, setEditRoleOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [dropConfirmOpen, setDropConfirmOpen] = useState(false);
 
   async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
@@ -132,8 +139,8 @@ function ActionsCell({
   const isStudent = courseRole === 'STUDENT';
   const isDropped = rUser.enrollmentStatus === 'DROPPED';
 
-  const deleteTitle = `Remove ${user.firstName} ${user.lastName}?`;
-  const deleteDescription = `This will remove the user from the roster for this course. This action cannot be undone.`
+  const deleteTitle = `Remove ${user.firstName} ${user.lastName} from the course?`;
+  const deleteDescription = `This removes their access and roster entry for this course and cannot be undone. To revoke access while keeping a student's work, drop them instead.`;
 
   const removeDisabled = courseIsArchived || hasSubmissions || !isPrivileged;
   const removeTitle = courseIsArchived
@@ -191,7 +198,9 @@ function ActionsCell({
               <DropdownMenuItem
                 onClick={() => void handleStatusChange('ENROLLED')}
                 disabled={courseIsArchived}
-                title={courseIsArchived ? 'Cannot change enrollment in an archived course' : undefined}
+                title={
+                  courseIsArchived ? 'Cannot change enrollment in an archived course' : undefined
+                }
                 className="flex items-center gap-2"
               >
                 <UserRoundCheck className="h-4 w-4" />
@@ -199,9 +208,11 @@ function ActionsCell({
               </DropdownMenuItem>
             ) : (
               <DropdownMenuItem
-                onClick={() => void handleStatusChange('DROPPED')}
+                onClick={() => setDropConfirmOpen(true)}
                 disabled={courseIsArchived}
-                title={courseIsArchived ? 'Cannot change enrollment in an archived course' : undefined}
+                title={
+                  courseIsArchived ? 'Cannot change enrollment in an archived course' : undefined
+                }
                 className="flex items-center gap-2"
               >
                 <UserRoundMinus className="h-4 w-4" />
@@ -214,7 +225,7 @@ function ActionsCell({
             onClick={() => setConfirmDeleteOpen(true)}
             disabled={removeDisabled}
             title={removeTitle}
-            className={`flex items-center gap-2 ${removeDisabled ? 'cursor-not-allowed text-muted-foreground' : 'text-destructive focus:text-destructive'}`}
+            className={`flex items-center gap-2 ${removeDisabled ? 'text-muted-foreground cursor-not-allowed' : 'text-destructive focus:text-destructive'}`}
           >
             <UserRoundX className="h-4 w-4" />
             Remove From Course
@@ -271,15 +282,26 @@ function ActionsCell({
           await handleDelete();
           setConfirmDeleteOpen(false);
         }}
+        variant="destructive"
         title={deleteTitle}
         description={deleteDescription}
-        confirmText="Remove"
-        cancelText="Cancel"
+        confirmText="Remove from course"
+      />
+
+      <ConfirmDialog
+        open={dropConfirmOpen}
+        onCancel={() => setDropConfirmOpen(false)}
+        onConfirm={async () => {
+          await handleStatusChange('DROPPED');
+          setDropConfirmOpen(false);
+        }}
+        title="Drop student from course?"
+        description={`${user.firstName} ${user.lastName} immediately loses access to the course but keeps their submissions, grades, and group membership. You can re-enroll them later.`}
+        confirmText="Drop student"
       />
     </div>
   );
 }
-
 
 export const userColumns = (
   onChange: () => void,
@@ -289,7 +311,8 @@ export const userColumns = (
   viewerIsAdmin?: boolean | null,
 ): ColumnDef<User>[] => {
   const currentCourseRole = viewerRole ?? null;
-  const viewerHasActions = viewerIsAdmin || currentCourseRole === 'FACULTY' || currentCourseRole === 'TA';
+  const viewerHasActions =
+    viewerIsAdmin || currentCourseRole === 'FACULTY' || currentCourseRole === 'TA';
 
   const cols: ColumnDef<User>[] = [
     {

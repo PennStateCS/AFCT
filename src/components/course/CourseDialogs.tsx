@@ -118,8 +118,14 @@ export function CourseDialogs({
 
       <ConfirmDialog
         open={confirmOpen}
-        title={pendingDelete?.type === 'assignment' ? 'Delete Assignment?' : 'Delete Problem?'}
-        description="Are you sure you want to delete this item? This action cannot be undone."
+        variant="destructive"
+        title={pendingDelete?.type === 'assignment' ? 'Delete assignment?' : 'Delete problem?'}
+        description={
+          pendingDelete?.type === 'assignment'
+            ? 'This permanently deletes the assignment and cannot be undone.'
+            : 'This permanently deletes the problem and cannot be undone.'
+        }
+        confirmText={pendingDelete?.type === 'assignment' ? 'Delete assignment' : 'Delete problem'}
         onConfirm={onConfirm}
         onCancel={onCancel}
       />
@@ -127,7 +133,7 @@ export function CourseDialogs({
       <ConfirmDialog
         open={publishConfirmOpen}
         confirmText={pendingPublish ? 'Publish' : 'Unpublish'}
-        title={pendingPublish ? 'Publish Course?' : 'Unpublish Course?'}
+        title={pendingPublish ? 'Publish course?' : 'Unpublish course?'}
         description={
           pendingPublish
             ? 'This takes effect immediately: the course becomes visible to enrolled students as soon as you confirm.'

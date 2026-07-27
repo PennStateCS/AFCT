@@ -2,19 +2,11 @@
 
 import { useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import SelectField from '@/components/ui/SelectField';
-import InputGroup from '@/components/ui/InputGroup';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { useUpgrade, isUpgradeInProgress, type SelfUpdateState } from './useUpgrade';
 import {
   upgradePhaseLabel,
@@ -68,7 +60,6 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
   const [restoreTarget, setRestoreTarget] = useState<{ version: string; backup: string } | null>(
     null,
   );
-  const [restoreConfirmText, setRestoreConfirmText] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ version: string; backup: string } | null>(
     null,
   );
@@ -155,10 +146,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             className="bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600/30"
             aria-label={`Restore version ${row.original.version}`}
             disabled={disabled || downgradeBusy || upgradeInProgress}
-            onClick={() => {
-              setRestoreTarget({ version: row.original.version, backup: row.original.backup });
-              setRestoreConfirmText('');
-            }}
+            onClick={() =>
+              setRestoreTarget({ version: row.original.version, backup: row.original.backup })
+            }
           >
             Restore
           </Button>
@@ -189,16 +179,16 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
           automatically, so a bad release won&apos;t leave the site down.
         </p>
         <p>
-          Some releases also improve the update system itself. Because the updater can&apos;t replace
-          its own container while it&apos;s running, those show a second step afterward, an{' '}
+          Some releases also improve the update system itself. Because the updater can&apos;t
+          replace its own container while it&apos;s running, those show a second step afterward, an{' '}
           <span className="font-medium">Update the update service</span> button, so the next upgrade
           uses the newest logic. Both steps run here.
         </p>
         <p>
           Prefer the command line? You can still update from the server instead. In the directory
           that holds <code className="font-mono">docker-compose.yml</code>, run{' '}
-          <code className="font-mono">sh install.sh update</code>. It does the same backup, swap, and
-          health check as the in-app upgrade above.
+          <code className="font-mono">sh install.sh update</code>. It does the same backup, swap,
+          and health check as the in-app upgrade above.
         </p>
       </div>
 
@@ -401,8 +391,8 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
           </div>
         ) : upgradeInfo?.manifestError ? (
           <p className="text-muted-foreground text-sm">
-            The list of available versions could not be loaded. Check the server’s network access and
-            reopen this tab to retry.
+            The list of available versions could not be loaded. Check the server’s network access
+            and reopen this tab to retry.
           </p>
         ) : upgradeableVersions.length === 0 ? (
           <p className="text-muted-foreground text-sm">
@@ -449,49 +439,38 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         )}
       </div>
 
-      <Dialog open={confirmUpgradeOpen} onOpenChange={setConfirmUpgradeOpen}>
-        <DialogContent
-          className="bg-card sm:max-w-lg"
-          onCloseAutoFocus={(e) => {
-            // Once the upgrade starts, the button that opened this dialog is
-            // disabled, so the default focus return would drop to <body>.
-            if ((upgradeBusy || upgradeInProgress) && upgradeStatusRef.current) {
-              e.preventDefault();
-              upgradeStatusRef.current.focus();
-            }
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Upgrade AFCT?</DialogTitle>
-            <DialogDescription>
-              AFCT will upgrade from <span className="font-mono">{upgradeInfo?.current}</span> to{' '}
-              <span className="font-mono">{selectedVersion}</span>. It backs up the database first,
-              downloads the new version, and restarts. This may take a few minutes, during which the
-              site may be briefly unavailable. A failed upgrade is rolled back automatically.
-            </DialogDescription>
+      <ConfirmDialog
+        open={confirmUpgradeOpen}
+        title="Upgrade AFCT?"
+        description={
+          <>
+            AFCT will upgrade from <span className="font-mono">{upgradeInfo?.current}</span> to{' '}
+            <span className="font-mono">{selectedVersion}</span>. It backs up the database first,
+            downloads the new version, and restarts. This may take a few minutes, during which the
+            site may be briefly unavailable. A failed upgrade is rolled back automatically.
             {selectedVersionInfo?.upgradeNote && (
-              <p className="text-sm font-medium whitespace-pre-line text-amber-700 dark:text-amber-300">
+              <span className="mt-2 block font-medium whitespace-pre-line text-amber-700 dark:text-amber-300">
                 {selectedVersionInfo.upgradeNote}
-              </p>
+              </span>
             )}
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setConfirmUpgradeOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                setLastAction('upgrade');
-                startUpgrade(selectedVersion);
-                setConfirmUpgradeOpen(false);
-              }}
-            >
-              Upgrade
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+        confirmText="Upgrade"
+        onConfirm={() => {
+          setLastAction('upgrade');
+          startUpgrade(selectedVersion);
+          setConfirmUpgradeOpen(false);
+        }}
+        onCancel={() => setConfirmUpgradeOpen(false)}
+        onCloseAutoFocus={(e) => {
+          // Once the upgrade starts, the button that opened this dialog is disabled, so the
+          // default focus return would drop to <body>. Send it to the progress panel.
+          if ((upgradeBusy || upgradeInProgress) && upgradeStatusRef.current) {
+            e.preventDefault();
+            upgradeStatusRef.current.focus();
+          }
+        }}
+      />
 
       {/* Restore / downgrade: destructive, so kept visually separate. */}
       {restorePoints.length > 0 && (
@@ -518,113 +497,72 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         </div>
       )}
 
-      <Dialog
+      <ConfirmDialog
         open={restoreTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setRestoreTarget(null);
+        variant="destructive"
+        busy={downgradeBusy}
+        title={`Restore and downgrade to ${restoreTarget?.version ?? ''}?`}
+        description={
+          <>
+            This restores the database backup from{' '}
+            <span className="font-mono">
+              {restoreTarget ? formatBackupTsLocal(restoreTarget.backup) : ''}
+            </span>{' '}
+            and runs <span className="font-mono">{restoreTarget?.version}</span>. Everything created
+            since that backup (submissions, grades, accounts) is{' '}
+            <span className="text-destructive font-medium">permanently lost</span>. A safety backup
+            of the current state is taken first.
+          </>
+        }
+        requireTypedConfirmation={restoreTarget?.version}
+        typedConfirmationLabel={`Type ${restoreTarget?.version ?? ''} to enable the restore button.`}
+        confirmText="Restore and downgrade"
+        onConfirm={() => {
+          if (restoreTarget) {
+            setLastAction('downgrade');
+            startDowngrade({
+              tag: restoreTarget.version,
+              restorePoint: restoreTarget.backup,
+            });
+          }
+          setRestoreTarget(null);
         }}
-      >
-        <DialogContent
-          className="bg-card sm:max-w-lg"
-          onCloseAutoFocus={(e) => {
-            // Same as the upgrade dialog: the row's Restore button is disabled
-            // once the downgrade starts, so send focus to the status panel.
-            if ((downgradeBusy || upgradeInProgress) && upgradeStatusRef.current) {
-              e.preventDefault();
-              upgradeStatusRef.current.focus();
-            }
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle className="text-destructive">
-              Restore and downgrade to {restoreTarget?.version}?
-            </DialogTitle>
-            <DialogDescription>
-              This restores the database backup from{' '}
-              <span className="font-mono">
-                {restoreTarget ? formatBackupTsLocal(restoreTarget.backup) : ''}
-              </span>{' '}
-              and runs <span className="font-mono">{restoreTarget?.version}</span>. Everything created
-              since that backup (submissions, grades, accounts) is{' '}
-              <span className="text-destructive font-medium">permanently lost</span>. A safety backup
-              of the current state is taken first. Type{' '}
-              <span className="font-mono">{restoreTarget?.version}</span> to confirm.
-            </DialogDescription>
-          </DialogHeader>
-          <InputGroup
-            label="Confirm version"
-            name="restoreConfirm"
-            // Carried on the field itself (aria-describedby) so screen-reader
-            // users can re-query what to type without re-reading the dialog.
-            description={`Type ${restoreTarget?.version ?? ''} to enable the restore button.`}
-            value={restoreConfirmText}
-            setValue={(v) => setRestoreConfirmText(v)}
-            disabled={downgradeBusy}
-          />
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setRestoreTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={downgradeBusy || restoreConfirmText !== restoreTarget?.version}
-              onClick={() => {
-                if (restoreTarget) {
-                  setLastAction('downgrade');
-                  startDowngrade({
-                    tag: restoreTarget.version,
-                    restorePoint: restoreTarget.backup,
-                  });
-                }
-                setRestoreTarget(null);
-              }}
-            >
-              Restore and downgrade
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onCancel={() => setRestoreTarget(null)}
+        onCloseAutoFocus={(e) => {
+          // The row's Restore button is disabled once the downgrade starts, so send focus
+          // to the status panel instead of letting it drop to <body>.
+          if ((downgradeBusy || upgradeInProgress) && upgradeStatusRef.current) {
+            e.preventDefault();
+            upgradeStatusRef.current.focus();
+          }
+        }}
+      />
 
       {/* Delete a restore point: removes the backup file(s) and drops it from the list.
           Less destructive than a downgrade (nothing in the running app changes), so a
           plain confirm is enough. */}
-      <Dialog
+      <ConfirmDialog
         open={deleteTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
+        variant="destructive"
+        busy={deleteBusy}
+        title="Delete this backup?"
+        description={
+          <>
+            This deletes the backup from{' '}
+            <span className="font-mono">
+              {deleteTarget ? formatBackupTsLocal(deleteTarget.backup) : ''}
+            </span>{' '}
+            and removes <span className="font-mono">{deleteTarget?.version}</span> from the restore
+            list, so you can no longer downgrade to it. It does not affect the running application.
+          </>
+        }
+        confirmText="Delete backup"
+        onConfirm={() => {
+          if (deleteTarget) startDeleteRestorePoint(deleteTarget.backup);
+          setDeleteTarget(null);
         }}
-      >
-        <DialogContent className="bg-card sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Delete this backup?</DialogTitle>
-            <DialogDescription>
-              This deletes the backup from{' '}
-              <span className="font-mono">
-                {deleteTarget ? formatBackupTsLocal(deleteTarget.backup) : ''}
-              </span>{' '}
-              and removes <span className="font-mono">{deleteTarget?.version}</span> from the restore
-              list, so you can no longer downgrade to it. It does not affect the running application.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deleteBusy}
-              onClick={() => {
-                if (deleteTarget) startDeleteRestorePoint(deleteTarget.backup);
-                setDeleteTarget(null);
-              }}
-            >
-              Delete backup
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

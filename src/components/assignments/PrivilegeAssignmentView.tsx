@@ -89,6 +89,8 @@ export default function AssignmentDashboardPage({
 
   const queryClient = useQueryClient();
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
+  // Holds the requested publish state while the confirmation dialog is open.
+  const [publishTarget, setPublishTarget] = useState<boolean | null>(null);
   const [addProblemDialogOpen, setAddProblemDialogOpen] = useState(false);
   const [createProblemOpen, setCreateProblemOpen] = useState(false);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
@@ -403,7 +405,7 @@ export default function AssignmentDashboardPage({
                 <Switch
                   aria-label="Published"
                   checked={!!assignment.isPublished}
-                  onCheckedChange={(checked) => void handlePublishChange(!!checked)}
+                  onCheckedChange={(checked) => setPublishTarget(!!checked)}
                   disabled={courseIsArchived}
                 />
                 Published
@@ -616,16 +618,34 @@ export default function AssignmentDashboardPage({
       />
       <ConfirmDialog
         open={!!problemToRemove}
-        title="Remove Problem from Assignment"
+        variant="destructive"
+        title="Remove problem from assignment?"
         description={
           problemToRemove
-            ? `Are you sure you want to remove "${problemToRemove.title}" from this assignment?`
+            ? `"${problemToRemove.title}" is removed from this assignment. The problem itself stays in the course problem bank.`
             : undefined
         }
-        confirmText="Remove"
-        cancelText="Cancel"
+        confirmText="Remove problem"
         onConfirm={handleConfirmRemoveProblem}
         onCancel={() => setProblemToRemove(null)}
+      />
+
+      <ConfirmDialog
+        open={publishTarget !== null}
+        title={publishTarget ? 'Publish assignment?' : 'Unpublish assignment?'}
+        description={
+          publishTarget
+            ? 'This assignment becomes visible to the students it is assigned to.'
+            : 'Students will no longer see this assignment.'
+        }
+        confirmText={publishTarget ? 'Publish' : 'Unpublish'}
+        onConfirm={async () => {
+          const next = publishTarget;
+          if (next === null) return;
+          await handlePublishChange(next);
+          setPublishTarget(null);
+        }}
+        onCancel={() => setPublishTarget(null)}
       />
       {problemToEdit && assignmentSettingsForDialog && (
         <AssignmentProblemSettingsDialog

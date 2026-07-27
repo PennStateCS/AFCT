@@ -454,6 +454,8 @@ describe('SystemSettingsClient — TLS certificate', () => {
     renderWithClient(<SystemSettingsClient />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Reset to self-signed' }));
+    // Resetting now opens a confirmation dialog; confirm it.
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset certificate' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -474,6 +476,7 @@ describe('SystemSettingsClient — TLS certificate', () => {
     renderWithClient(<SystemSettingsClient />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Reset to self-signed' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset certificate' }));
     await waitFor(() => expect(showToast.error).toHaveBeenCalledWith('cannot reset'));
   });
 

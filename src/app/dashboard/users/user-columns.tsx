@@ -438,40 +438,37 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         open={deactivateOpen}
         onCancel={() => setDeactivateOpen(false)}
         onConfirm={() => handleStatusChange(true)}
-        title="Deactivate Account"
-        description={`Deactivate ${fullName}? They will no longer be able to sign in to AFCT. You can reactivate the account later.`}
-        confirmText="Deactivate"
-        cancelText="Cancel"
+        title="Deactivate account?"
+        description={`${fullName} will no longer be able to sign in to AFCT. You can reactivate the account later.`}
+        confirmText="Deactivate account"
       />
 
       <ConfirmDialog
         open={reactivateOpen}
         onCancel={() => setReactivateOpen(false)}
         onConfirm={() => handleStatusChange(false)}
-        title="Reactivate Account"
-        description={`Reactivate ${fullName}? They will be able to sign in again.`}
-        confirmText="Reactivate"
-        cancelText="Cancel"
+        title="Reactivate account?"
+        description={`${fullName} will be able to sign in again.`}
+        confirmText="Reactivate account"
       />
 
       <ConfirmDialog
         open={confirmDeleteOpen}
         onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={handleDelete}
-        title="Delete User"
-        description={`Are you sure you want to delete ${fullName}?`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        variant="destructive"
+        title="Delete user?"
+        description={`This permanently deletes ${fullName}'s account and cannot be undone. Activity log entries are kept without the link to this user.`}
+        confirmText="Delete user"
       />
 
       <ConfirmDialog
         open={unlockConfirmOpen}
         onCancel={() => setUnlockConfirmOpen(false)}
         onConfirm={handleUnlock}
-        title="Unlock Account"
-        description={`Unlock ${fullName}? They will be able to sign in again immediately. Repeated failed logins can re-lock the account.`}
-        confirmText="Unlock"
-        cancelText="Cancel"
+        title="Unlock account?"
+        description={`${fullName} will be able to sign in again immediately. Repeated failed logins can re-lock the account.`}
+        confirmText="Unlock account"
       />
 
       <DropdownMenu>
