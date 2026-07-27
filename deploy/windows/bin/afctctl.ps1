@@ -29,7 +29,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$InstallerVersion = '2.2.3'
+$InstallerVersion = '2.2.4'
 
 # --- resolve this controller's release, lib, and install-root layout ---------------------
 $BinDir     = $PSScriptRoot
