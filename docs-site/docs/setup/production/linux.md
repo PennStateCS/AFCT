@@ -14,7 +14,7 @@ Other Linux distributions can also run AFCT. Install Docker Engine and the Docke
 You will need:
 
 - A Linux server or Linux computer
-- A user account with `sudo` access
+- A user account with sudo access
 - At least 15 GB of free disk space
 - Internet access during installation
 - Ports 80 and 443 available if other users will connect to AFCT

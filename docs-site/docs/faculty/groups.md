@@ -1,13 +1,13 @@
 # Groups
 
-Use **Groups** to organize students for group assignments. Groups are arranged into **group sets**: a group set is one complete arrangement of the course's students, such as `Project 1` or `Lab Partners`. Each set contains its own groups, and a student belongs to at most one group within a given set. A student can be in different groups across different sets.
+Use **Groups** to organize students for group assignments. Groups are arranged into **group sets**: a group set is one complete arrangement of the course's students, such as Project 1 or Lab Partners. Each set contains its own groups, and a student belongs to at most one group within a given set. A student can be in different groups across different sets.
 
 A [group assignment](assignments.md) is tied to exactly one group set, so you can keep separate arrangements for separate projects.
 
 ## Create a group set
 
 1. Select **Create group set**.
-2. Enter a name, such as `Project 1`.
+2. Enter a name, such as Project 1.
 3. Optionally, enter how many empty groups to start with. They are named Group 1, Group 2, and so on, and you can rename or add more later.
 4. Select **Create group set**.
 
