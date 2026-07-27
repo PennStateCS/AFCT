@@ -110,30 +110,115 @@ function Import-AfctLegacyInstall {
     # while the destination is still untouched.
     $project = Resolve-AfctLegacyProject $legacy
 
-    Write-AfctInfo "importing the existing AFCT configuration from $legacy ..."
     New-Item -ItemType Directory -Path $SharedDir -Force | Out-Null
 
-    # 1) The exact .env.production (secrets, release pin, updater flag all live here). Byte
-    # copy: never rewrite or regenerate.
-    Copy-Item -LiteralPath $legacyEnv -Destination $EnvFile -Force
-    Protect-AfctCriticalFile $EnvFile
-
-    # 2) Every protected configuration backup, so 'afctctl recover' still has history.
-    $backups = @(Get-ChildItem -LiteralPath $legacy -Filter '.env.production.backup.*' -File -ErrorAction SilentlyContinue)
+    # --------------------------------------------------------------------------- #
+    # Publication targets. The import is transactional: it publishes these live files, and if
+    # any step fails, every file it created is removed so the destination returns to its
+    # prior state. We therefore refuse up front to overwrite ANY pre-existing target (the
+    # .env.production guard above is the primary one). A pre-existing deploy.state means a
+    # previous import may be incomplete; that is safest to resolve by hand.
+    # --------------------------------------------------------------------------- #
+    $backups   = @(Get-ChildItem -LiteralPath $legacy -Filter '.env.production.backup.*' -File -ErrorAction SilentlyContinue)
+    $destState = Join-Path $SharedDir 'deploy.state'
+    if (Test-Path -LiteralPath $destState) {
+        throw "afct-fatal: a shared\deploy.state already exists, so a previous import may be incomplete. Review it, remove it only if it is a stale AFCT import artifact, then rerun the import."
+    }
     foreach ($b in $backups) {
-        $dest = Join-Path $SharedDir $b.Name
-        Copy-Item -LiteralPath $b.FullName -Destination $dest -Force
-        Protect-AfctCriticalFile $dest
+        $bd = Join-Path $SharedDir $b.Name
+        if (Test-Path -LiteralPath $bd) {
+            throw "afct-fatal: $bd already exists. Remove stale AFCT import files, then rerun the import."
+        }
+    }
+
+    # An unrelated leftover staging directory is reported, never deleted automatically.
+    foreach ($old in @(Get-ChildItem -LiteralPath $SharedDir -Directory -Filter '.import-*' -ErrorAction SilentlyContinue)) {
+        Write-AfctWarn "a previous import left a staging directory: $($old.FullName). It was not touched; review and remove it by hand if it is stale."
+    }
+
+    Write-AfctInfo "importing the existing AFCT configuration from $legacy ..."
+
+    # --------------------------------------------------------------------------- #
+    # Stage everything under shared\.import-<guid> first (same volume as the destination, so
+    # publication is a rename, not a cross-volume copy). Nothing live is touched until every
+    # staged file is written, protected, and revalidated.
+    # --------------------------------------------------------------------------- #
+    $staging   = Join-Path $SharedDir ('.import-' + [Guid]::NewGuid().ToString('N'))
+    $stagedEnv = Join-Path $staging '.env.production'
+    New-Item -ItemType Directory -Path $staging -Force | Out-Null
+    try {
+        # 1) The exact .env.production (secrets, release pin, updater flag all live here).
+        Copy-Item -LiteralPath $legacyEnv -Destination $stagedEnv -Force -ErrorAction Stop
+        Protect-AfctCriticalFile $stagedEnv
+
+        # 2) Every protected configuration backup, so 'afctctl recover' still has history.
+        $stagedBackups = @()
+        foreach ($b in $backups) {
+            $sb = Join-Path $staging $b.Name
+            Copy-Item -LiteralPath $b.FullName -Destination $sb -Force -ErrorAction Stop
+            Protect-AfctCriticalFile $sb
+            $stagedBackups += [pscustomobject]@{ From = $sb; To = (Join-Path $SharedDir $b.Name) }
+        }
+
+        # 3) The Compose project name, so existing data volumes reattach.
+        $stagedState = Join-Path $staging 'deploy.state'
+        Set-Content -LiteralPath $stagedState -Value "PROJECT_NAME=$project" -Encoding ASCII -ErrorAction Stop
+        Protect-AfctCriticalFile $stagedState
+
+        # 4) Revalidate the staged environment before anything is published.
+        if (-not (Test-AfctEnvFileComplete $stagedEnv)) {
+            throw 'afct-fatal: the staged configuration failed validation before publication.'
+        }
+    } catch {
+        Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+        $msg = "$($_.Exception.Message)"
+        if ($msg -like 'afct-fatal:*') { throw $msg }
+        throw "afct-fatal: the legacy AFCT import failed before publication. No live configuration files were changed. $msg"
+    }
+
+    # --------------------------------------------------------------------------- #
+    # Publish. Move each staged file into shared, tracking every live file created so a
+    # mid-way failure can be rolled back. The .env.production is published LAST: its presence
+    # is what marks the installation configured, and the up-front guard refuses to start if it
+    # already exists.
+    # --------------------------------------------------------------------------- #
+    $plan = @()
+    foreach ($sb in $stagedBackups) { $plan += $sb }
+    $plan += [pscustomobject]@{ From = $stagedState; To = $destState }
+    $plan += [pscustomobject]@{ From = $stagedEnv;   To = $EnvFile }
+
+    $published = New-Object System.Collections.Generic.List[string]
+    try {
+        foreach ($step in $plan) {
+            Move-Item -LiteralPath $step.From -Destination $step.To -Force -ErrorAction Stop
+            $published.Add($step.To)
+        }
+    } catch {
+        Write-AfctWarn "publication failed; rolling back the files this import created. $($_.Exception.Message)"
+        $remaining = New-Object System.Collections.Generic.List[string]
+        for ($i = $published.Count - 1; $i -ge 0; $i--) {
+            try { Remove-Item -LiteralPath $published[$i] -Force -ErrorAction Stop }
+            catch { $remaining.Add($published[$i]) }
+        }
+        try { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction Stop }
+        catch { $remaining.Add($staging) }
+        if ($remaining.Count -gt 0) {
+            Write-AfctError 'The import did not complete, and automatic cleanup could not remove the following paths:'
+            foreach ($r in $remaining) { Write-AfctError "  $r" }
+            throw 'afct-fatal: the legacy AFCT import failed during publication and could not be fully rolled back. Remove only the listed AFCT import files, then rerun the import.'
+        }
+        throw 'afct-fatal: the legacy AFCT import failed during publication and was rolled back. You may correct the reported problem and rerun the import.'
+    }
+
+    # Success. Remove our own staging directory (best effort: the data is already published).
+    Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $staging) {
+        Write-AfctWarn "the import completed, but its staging directory could not be removed: $staging. You may delete it by hand."
     }
     if ($backups.Count -gt 0) { Write-AfctInfo "carried over $($backups.Count) configuration backup file(s)." }
-
-    # 3) Preserve the Compose project name so existing data volumes reattach.
-    $stateFile = Join-Path $SharedDir 'deploy.state'
-    Set-Content -LiteralPath $stateFile -Value "PROJECT_NAME=$project" -Encoding ASCII
-    Protect-AfctCriticalFile $stateFile
     Write-AfctInfo "preserved the Compose project name '$project'."
 
-    # 4) Detect existing AFCT data volumes for that project (best effort; needs Docker).
+    # Detect existing AFCT data volumes for that project (best effort; needs Docker).
     $volumes = @(Get-AfctDockerVolumeNames | Where-Object { $_ -like "${project}_*" })
     if ($volumes.Count -gt 0) {
         Write-AfctInfo "found $($volumes.Count) existing Docker volume(s) for project '$project'; they will be reused."
