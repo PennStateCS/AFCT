@@ -132,12 +132,14 @@ repackage_variant() {
   broken="$TESTROOT/broken.tar.gz"
   _work="$TESTROOT/bw"; rm -rf "$_work"; mkdir -p "$_work"
   tar -xzf "$TARBALL" -C "$_work"; _top=$(ls "$_work")
-  printf '2.2.1\n' > "$_work/$_top/DEPLOY_VERSION"
+  # A clearly-newer version (release-independent) so this never collides with the base
+  # bundle's version and always exercises the switch-and-validate path.
+  printf '9.9.9\n' > "$_work/$_top/DEPLOY_VERSION"
   cat > "$_work/$_top/bin/afctctl" <<'EOF'
 #!/bin/sh
 # Deliberately broken tooling: passes `sh -n` and the version-agreement check (its
 # INSTALLER_VERSION matches DEPLOY_VERSION), but fails its post-switch validation.
-INSTALLER_VERSION="2.2.1"
+INSTALLER_VERSION="9.9.9"
 [ "$1" = "version" ] && exit 7
 exit 0
 EOF

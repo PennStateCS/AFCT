@@ -133,13 +133,15 @@ EOF
   [[ "$output" == *"unknown option or command"* ]]
 }
 
-@test "uninstall preserves data and refuses to delete a non-AFCT prefix" {
-  # No docker on PATH: container removal is skipped. PREFIX is not ~/.afct, so the tree
-  # removal is refused (a guard against nuking an unexpected directory). Exit 0.
+@test "uninstall preserves data and refuses a prefix with no install marker" {
+  # No docker on PATH: container removal is skipped. This prefix was extracted by hand in
+  # setup (no bootstrap), so it has no install-prefix marker; uninstall must refuse to
+  # delete the tree and print manual-cleanup guidance. Exit 0.
   run env AFCT_OS=Darwin AFCT_PREFIX="$P" PATH="/usr/bin:/bin" sh "$CTL" uninstall --non-interactive
   [ "$status" -eq 0 ]
   [[ "$output" == *"uninstalled"* ]]
-  [[ "$output" == *"refusing to remove an unexpected prefix"* ]]
+  [[ "$output" == *"not removing"* ]]
+  [ -d "$P" ]
 }
 
 # --- Docker Desktop resolution -------------------------------------------------

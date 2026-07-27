@@ -29,6 +29,7 @@ jobs:
       - name: Syntax check
         run: |
           sh -n deploy/install.sh
+          sh -n deploy/ci-base-version.sh
           sh -n deploy/unix/bin/afctctl
           for f in deploy/unix/lib/*.sh; do sh -n "$f"; done
           sh -n deploy/linux/install.sh
@@ -62,6 +63,7 @@ jobs:
           # the unix/, linux/, and macos/ trees alike.
           cd deploy
           shellcheck -s sh \
+            ci-base-version.sh \
             unix/bin/afctctl unix/lib/*.sh \
             linux/install.sh linux/build-bundle.sh linux/lib/*.sh \
             macos/install.sh macos/build-bundle.sh macos/lib/*.sh
@@ -79,7 +81,7 @@ jobs:
       - name: Run deployment + updater tests
         run: |
           docker run --rm -v "$PWD:/code" -w /code --entrypoint sh bats/bats:latest -c \
-            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache jq tar curl python3 util-linux shadow >/dev/null 2>&1; bats deploy/test/afctctl.bats deploy/test/linux-deploy.bats deploy/test/deploy-fixes.bats deploy/test/deploy-remote.bats deploy/test/deploy-hardening.bats deploy/test/deploy-migrate.bats deploy/test/updater.bats"
+            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache git jq tar curl python3 util-linux shadow >/dev/null 2>&1; bats deploy/test/afctctl.bats deploy/test/linux-deploy.bats deploy/test/deploy-fixes.bats deploy/test/deploy-remote.bats deploy/test/deploy-hardening.bats deploy/test/deploy-migrate.bats deploy/test/updater.bats deploy/test/ci-version-fallback.bats deploy/test/macos-deploy.bats deploy/test/macos-bootstrap.bats"
 
       # A real `docker compose config` against the actual installed layout (versioned
       # Compose file in a release directory, .env.production under shared), NOT a mock that
@@ -104,8 +106,10 @@ jobs:
             echo "No bundle-source changes; nothing to enforce."
             exit 0
           fi
-          BASE_VER=$(git show "$BASE:deploy/unix/bin/afctctl" 2>/dev/null \
-            | sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' | head -n1 || true)
+          # Read the base version from the current controller path, falling back to the
+          # pre-refactor Linux path, so the shared-Unix reorg is not mistaken for the first
+          # bundle (which would skip enforcement). See deploy/ci-base-version.sh.
+          BASE_VER=$(sh deploy/ci-base-version.sh "$BASE" || true)
           HEAD_VER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' deploy/unix/bin/afctctl | head -n1)
           if [ -z "$BASE_VER" ]; then
             echo "Base has no deployment bundle yet; skipping the bump check."
@@ -147,4 +151,4 @@ jobs:
             macos/install.sh macos/build-bundle.sh macos/lib/*.sh
 
       - name: Run the macOS deployment tests (Docker mocked/absent)
-        run: bats deploy/test/macos-deploy.bats
+        run: bats deploy/test/macos-deploy.bats deploy/test/macos-bootstrap.bats

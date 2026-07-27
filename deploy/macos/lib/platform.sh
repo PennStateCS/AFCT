@@ -35,6 +35,12 @@ platform_supports_service_user() { return 1; }
 # by default and prints the socket-access warning when enabled.
 platform_supports_updater() { return 0; }
 
+# The macOS updater path (Docker socket, host bind mounts, runtime Compose replacement,
+# self-recreation through Docker Desktop) is not yet validated on real Mac hardware, so it
+# is offered but flagged EXPERIMENTAL. The enable flow, help, install output, and docs all
+# say so; it is never presented as fully supported and never silently disabled.
+platform_updater_experimental() { return 0; }
+
 # Resolve Docker access on macOS. Docker Desktop exposes the daemon to the logged-in user
 # with no sudo, so the Linux escalation path in resolve_docker_access does not apply; this
 # is invoked from that function's Darwin branch. It distinguishes the three states the
@@ -60,6 +66,28 @@ platform_resolve_docker_access() {
   return 0
 }
 
+# Verify Docker Desktop can bind-mount the host directories the stack needs, before we try
+# to start it. The default prefix under $HOME is normally shared, but a custom prefix may
+# sit outside Docker Desktop's file-sharing paths and would otherwise fail with a confusing
+# mount error at `up` time. Skipped when Docker is mocked for tests
+# (AFCT_SKIP_BIND_MOUNT_CHECK=1). Uses the shared docker wrapper and a tiny image.
+platform_check_bind_mounts() {
+  [ "${AFCT_SKIP_BIND_MOUNT_CHECK:-}" = "1" ] && return 0
+  _img=${AFCT_BIND_CHECK_IMAGE:-alpine:3.20}
+  for _dir in "$SHARED_DIR" "$RUNTIME_DIR"; do
+    [ -d "$_dir" ] || continue
+    if ! docker_cmd run --rm -v "${_dir}:/afct-bind-check:ro" "$_img" test -d /afct-bind-check >/dev/null 2>&1; then
+      error "Docker Desktop cannot access the installation directory: ${_dir}"
+      info "Docker Desktop can only bind-mount host paths on its file-sharing list."
+      info "Fix this one of two ways:"
+      info "  - add the directory under Docker Desktop > Settings > Resources > File sharing, or"
+      info "  - reinstall using the default prefix (\$HOME/.afct), which is already shared."
+      die "the selected installation directory is not available to Docker Desktop."
+    fi
+  done
+  return 0
+}
+
 # Open a URL in the default browser (best effort). Used for optional convenience only.
 platform_open_browser() {
   [ -n "${1:-}" ] || return 1
@@ -75,6 +103,42 @@ platform_open_browser() {
 # named Docker volumes) is PRESERVED unless the operator explicitly opts in, either by
 # answering the confirmation or by setting AFCT_PURGE_DATA=1 for a non-interactive run.
 # --------------------------------------------------------------------------- #
+# Decide whether `afctctl uninstall` may delete PREFIX. Removing a directory tree is
+# irreversible, so this is deliberately strict: the install-prefix marker must exist and
+# record exactly this prefix, the AFCT release layout must be present, and the prefix must
+# not be root, a home directory, or an otherwise shallow/dangerous path. A custom prefix
+# from `--prefix` is removable, but only when all of these hold.
+uninstall_prefix_is_safe() {
+  _p=$1
+
+  # Must be absolute and at least two path segments deep (reject "/", "/usr", ...).
+  case "$_p" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  _rest=${_p#/}
+  case "$_rest" in
+    */*) ;;
+    *) return 1 ;;
+  esac
+  # Never a root or home-ish directory.
+  case "$_p" in
+    ""|"/"|"$HOME"|"$HOME/"|"$HOME/.local"|"$HOME/.local/") return 1 ;;
+  esac
+
+  # The marker must exist and record exactly this prefix (canonical match).
+  _m="${_p}/shared/install-prefix"
+  [ -f "$_m" ] || return 1
+  _recorded=$(sed -n '1p' "$_m" 2>/dev/null)
+  [ -n "$_recorded" ] && [ "$_recorded" = "$_p" ] || return 1
+
+  # The expected AFCT release structure must be present.
+  [ -L "${_p}/current" ] || return 1
+  [ -d "${_p}/releases" ] || return 1
+  [ -d "${_p}/shared" ] || return 1
+  return 0
+}
+
 do_uninstall() {
   heading "Uninstall AFCT (macOS)"
   info "This removes the AFCT tooling and containers from this Mac. Your data (the database"
@@ -103,13 +167,15 @@ do_uninstall() {
   fi
 
   if [ "$NON_INTERACTIVE" = "true" ] || confirm "Remove the tooling directory ${PREFIX}?" "y"; then
-    # Guard: only ever remove an AFCT-looking prefix under the user's home.
-    case "$PREFIX" in
-      "$HOME"/.afct|"$HOME"/.afct/*)
-        rm -rf "$PREFIX" 2>/dev/null && info "removed ${PREFIX}." ;;
-      *)
-        warn "refusing to remove an unexpected prefix (${PREFIX}); remove it by hand if intended." ;;
-    esac
+    if uninstall_prefix_is_safe "$PREFIX"; then
+      rm -rf "$PREFIX" 2>/dev/null && info "removed ${PREFIX}."
+    else
+      warn "not removing ${PREFIX} automatically: it does not look like an AFCT install created"
+      warn "by this installer (missing or mismatched ${PREFIX}/shared/install-prefix marker, or an"
+      warn "unexpected layout). This guards against deleting the wrong directory."
+      info "If you are sure, remove it by hand, for example:"
+      info "  rm -rf \"${PREFIX}\""
+    fi
   fi
 
   success "AFCT uninstalled."

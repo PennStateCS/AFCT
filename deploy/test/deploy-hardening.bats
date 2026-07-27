@@ -180,9 +180,11 @@ manifest_check() {
 @test "an existing target with only a fake bin/afctctl is quarantined and reinstalled" {
   build_bundle
   P="$TESTROOT/opt"
-  # Compute the release id this bundle will use, then pre-create a bogus target dir.
+  # Compute the release id this bundle will use, then pre-create a bogus target dir. The
+  # version comes from the controller (release-independent) so a version bump can't skew it.
   _sha=$(sha256sum "$TARBALL" | awk '{print $1}'); _pref=$(printf '%s' "$_sha" | cut -c1-12)
-  _rid="2.2.0-${_pref}"
+  _ver=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$UNIX_DIR/bin/afctctl" | head -n1)
+  _rid="${_ver}-${_pref}"
   mkdir -p "$P/releases/$_rid/bin"
   printf '#!/bin/sh\necho fake\n' > "$P/releases/$_rid/bin/afctctl"
   chmod +x "$P/releases/$_rid/bin/afctctl"
