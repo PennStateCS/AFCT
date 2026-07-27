@@ -159,6 +159,40 @@ describe('DataTable', () => {
     expect(await screen.findByText('Person 11')).toBeInTheDocument();
   });
 
+  it('renders a row-header cell (th scope="row") only for the column that opts in', () => {
+    const cols: ColumnDef<RowData>[] = [
+      {
+        accessorKey: 'name',
+        header: 'Name',
+        cell: ({ getValue }) => <span>{getValue<string>()}</span>,
+        meta: { priority: 1, rowHeader: true },
+      },
+      {
+        accessorKey: 'role',
+        header: 'Role',
+        cell: ({ getValue }) => <span>{getValue<string>()}</span>,
+        meta: { priority: 1 },
+      },
+    ];
+    render(<DataTable columns={cols} data={[{ id: '1', name: 'Alice', role: 'Admin' }]} />);
+
+    // The identity cell is a scoped row header so a screen reader ties each grade cell
+    // to the student; the other cell stays a plain td.
+    const rowHeader = screen.getByText('Alice').closest('th');
+    expect(rowHeader).not.toBeNull();
+    expect(rowHeader).toHaveAttribute('scope', 'row');
+    expect(screen.getByText('Admin').closest('th')).toBeNull();
+  });
+
+  it('gives the empty state a status role so a filter-to-empty is announced', () => {
+    render(<DataTable columns={columns} data={[]} emptyTitle="No courses yet" />);
+
+    // The empty-state wrapper is its own live region, so narrowing a filter to zero rows
+    // is announced rather than leaving the table silently blank.
+    const status = screen.getByText('No courses yet').closest('[role="status"]');
+    expect(status).not.toBeNull();
+  });
+
   it('renders an empty-state action when one is provided', () => {
     render(
       <DataTable
