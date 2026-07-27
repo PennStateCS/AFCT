@@ -336,19 +336,17 @@ print_completion() {
 
 do_install() {
   DIAG_ON_EXIT="false"
-  # Decide the service-account mode BEFORE creating any account, preserving a legacy
-  # install's mode (dedicated/custom/current-user) rather than silently converting it. No
-  # relocation/re-exec: the bootstrap already installed under /opt/afct.
+  # Decide the service-account mode BEFORE creating any account. No relocation/re-exec: the
+  # bootstrap already installed under /opt/afct.
   preserve_or_setup_service_account
-  # Bring a legacy flat install's config into the shared directory and pin the project
-  # name from the running container / existing data volumes so nothing is orphaned.
-  migrate_legacy_install
   acquire_lock
   preflight
+  # Pin the project name from the running container / existing data volumes so a redeploy
+  # reuses the same data instead of orphaning the volumes.
   resolve_and_persist_project_name
 
   if existing_data_without_config; then
-    die "existing AFCT data volumes were detected, but ${ENV_FILE} is missing or incomplete. Restore a protected configuration backup with 'afctctl recover', or set AFCT_LEGACY_DIR to your previous deploy directory, instead of generating new database credentials."
+    die "existing AFCT data volumes were detected, but ${ENV_FILE} is missing or incomplete. Restore a protected configuration backup with 'afctctl recover' instead of generating new database credentials."
   fi
 
   RECONFIGURING="false"

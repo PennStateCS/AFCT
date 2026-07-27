@@ -100,7 +100,6 @@ EOF
   [[ "$output" == *"macOS"* ]]
   [[ "$output" == *"uninstall"* ]]
   [[ "$output" != *"--service-user"* ]]
-  [[ "$output" != *"migrate-legacy"* ]]
 }
 
 @test "afctctl version works on macOS" {
@@ -119,12 +118,6 @@ EOF
   run env AFCT_OS=Darwin AFCT_PREFIX="$P" sh "$CTL" --no-service-user install
   [ "$status" -eq 2 ]
   [[ "$output" == *"not supported on macOS"* ]]
-}
-
-@test "afctctl rejects migrate-legacy on macOS" {
-  run env AFCT_OS=Darwin AFCT_PREFIX="$P" sh "$CTL" migrate-legacy
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"Linux-only"* ]]
 }
 
 @test "afctctl still rejects an unknown command on macOS" {
