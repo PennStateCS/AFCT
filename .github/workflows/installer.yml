@@ -177,8 +177,8 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$null, [ref]$errors) | Out-Null
             if ($errors.Count -gt 0) {
               $bad = $true
-              $errors | ForEach-Object { Write-Host "PARSE ERROR in $f: $($_.Message) (line $($_.Extent.StartLineNumber))" }
-            } else { Write-Host "OK $f" }
+              $errors | ForEach-Object { Write-Host "PARSE ERROR in ${f}: $($_.Message) (line $($_.Extent.StartLineNumber))" }
+            } else { Write-Host "OK ${f}" }
           }
           if ($bad) { exit 1 }
 
