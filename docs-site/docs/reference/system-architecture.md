@@ -53,7 +53,7 @@ graph TD
 The running system is a set of containers split across two private Docker networks. nginx
 and the application share a `frontend` network; the application, PostgreSQL, the backup
 service, and the evaluator **worker** share a `backend` network. The `backend` network is
-`internal` — it has no gateway, so no internet egress in either direction. The application
+`internal`: it has no gateway, so no internet egress in either direction. The application
 bridges the two networks; the worker sits on `backend` **only**, so the process that runs
 untrusted student submissions through the Java/cfganalyzer evaluator can reach the database
 to record grades but cannot reach the internet. Only nginx is exposed to the public internet.

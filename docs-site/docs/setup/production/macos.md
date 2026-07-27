@@ -4,7 +4,7 @@ These instructions explain how to install AFCT on a Mac for testing, evaluation,
 
 macOS is not the recommended platform for a long-running production deployment. For production, use the [Linux installer](./linux.md) on a Linux server.
 
-AFCT runs on macOS through Docker Desktop. It runs under your current user account, so normal AFCT commands do not require `sudo`.
+AFCT runs on macOS through Docker Desktop. It runs under your current user account, so normal AFCT commands do not require sudo.
 
 Apple Silicon and Intel Macs are supported.
 
@@ -185,7 +185,7 @@ Run:
 sh install-macos.sh
 ```
 
-Do not use `sudo`.
+Do not use sudo.
 
 The installer will:
 
@@ -339,7 +339,7 @@ Confirm that you entered the correct address, continue to the site, and sign in 
 
 ## Common AFCT commands
 
-Run these commands from Terminal. Do not use `sudo`.
+Run these commands from Terminal. Do not use sudo.
 
 Check the application:
 

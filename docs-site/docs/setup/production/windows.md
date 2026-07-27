@@ -56,9 +56,9 @@ After installation, an administrator can upload a trusted certificate or request
 
 Download and run [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/). During setup:
 
-- **Use WSL 2 instead of Hyper-V** — keep **checked** (the recommended backend). Let the installer add the required WSL 2 components if it offers.
+- **Use WSL 2 instead of Hyper-V**: keep **checked** (the recommended backend). Let the installer add the required WSL 2 components if it offers.
 - If asked who to install for, choose **All users** so the engine and the `docker` CLI are available system-wide.
-- Leave **Windows containers** **unchecked** — AFCT runs only Linux containers.
+- Leave **Windows containers** **unchecked**. AFCT runs only Linux containers.
 
 After it finishes, start Docker Desktop, accept the service agreement, skip the optional sign-in, and leave it on the default **Linux containers** mode. Wait until the whale icon reports the engine is running, and leave Docker Desktop running while you use AFCT.
 

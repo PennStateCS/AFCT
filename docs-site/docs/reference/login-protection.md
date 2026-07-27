@@ -31,8 +31,8 @@ override the built-in account defaults (the IP limits below stay fixed):
 
 | Setting | Env fallback | Default | Range |
 | --- | --- | --- | --- |
-| Failed logins before lockout | `LOGIN_MAX_ATTEMPTS` | 10 | 3–50 |
-| Account lockout duration (minutes) | `LOGIN_LOCKOUT_MINUTES` | 10 | 1–1440 |
+| Failed logins before lockout | `LOGIN_MAX_ATTEMPTS` | 10 | 3-50 |
+| Account lockout duration (minutes) | `LOGIN_LOCKOUT_MINUTES` | 10 | 1-1440 |
 
 The value is resolved from the `SystemSettings` row, then the environment variable, then
 the default, and is clamped to the range above so the policy can't be set loose enough to

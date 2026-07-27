@@ -12,7 +12,9 @@ The filters build on one another:
 
 Use **Select All** to select the available courses, assignments, and problems. Use **Clear Filters** to start over.
 
-Status filters let you focus on the timing and evaluation results you need. The table shows the student, course, assignment, problem, submission date, grade, and status. Course, assignment, and problem names link back to the related review pages.
+Status filters let you focus on the timing and evaluation results you need.
+
+The table shows the student, course, assignment, problem, submission date, grade, and status. Course, assignment, and problem names link back to the related review pages.
 
 ## Inspect a submission
 

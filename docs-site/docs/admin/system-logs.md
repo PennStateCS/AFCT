@@ -21,7 +21,11 @@ Select **Full Log** on a row to inspect its complete JSON record. This can inclu
 3. Set an optional start and end time.
 4. Select **Download Logs** to create a CSV file.
 
-Leave the date fields empty to include the full retained range. The exported records are useful for an investigation, but they can contain personal and security-related information. Store and share the CSV accordingly.
+Leave the date fields empty to include the full retained range.
+
+:::warning
+Exported records are useful for an investigation, but they can contain personal and security-related information. Store and share the CSV accordingly.
+:::
 
 ## Retention and interpretation
 

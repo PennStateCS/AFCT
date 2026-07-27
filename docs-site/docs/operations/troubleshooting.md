@@ -16,7 +16,9 @@ On Linux or macOS, the installer runs a read-only system and configuration check
 sh install.sh doctor
 ```
 
-It reports on the Compose file, `.env.production` completeness and permissions, disk space, clock sync, Docker reachability, Compose validity, container health, and the local HTTP health endpoint. `sh install.sh status` and `sh install.sh logs` give a quick health snapshot and a live log tail.
+It reports on the Compose file, `.env.production` completeness and permissions, disk space, clock sync, Docker reachability, Compose validity, container health, and the local HTTP health endpoint.
+
+For a lighter check, `sh install.sh status` gives a quick health snapshot and `sh install.sh logs` gives a live log tail.
 
 ## Check service status
 

@@ -16,6 +16,8 @@ The **Admin Menu** contains the platform-wide tools:
 | [System Status](../admin/system-status.md)         | Check the server, database, Docker, network, sessions, and uploaded files.       |
 | [User Accounts](../admin/user-accounts.md)         | Create, import, edit, disable, and delete accounts.                              |
 
+:::warning
 Administrator actions affect the entire AFCT installation. Review the target and confirmation message carefully before deleting a course, deleting an account, removing an abandoned file, or restoring an older application version.
+:::
 
 See [Roles and permissions](../reference/roles-and-permissions.md) for the authorization model. Deployment and command-line maintenance remain under **Operations**.

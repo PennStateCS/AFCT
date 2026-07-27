@@ -25,7 +25,14 @@ The default and simplest AWS deployment keeps PostgreSQL in the Docker Compose s
 
 Use Amazon RDS for PostgreSQL only if you are comfortable maintaining a custom deployment. The standard Compose file starts a bundled PostgreSQL service, waits for it during application startup, and points the backup service at it. Setting `DATABASE_URL` alone does not replace that architecture.
 
-An RDS deployment needs Compose changes for service dependencies and database environment values, private network access from EC2, a migration plan, and an RDS-native backup and restore process. Keep RDS private and allow database traffic only from the AFCT host. This path is not covered by the guided installer.
+An RDS deployment requires:
+
+- Compose changes for service dependencies and database environment values
+- Private network access from EC2
+- A migration plan
+- An RDS-native backup and restore process
+
+Keep RDS private and allow database traffic only from the AFCT host. This path is not covered by the guided installer.
 
 ## Prerequisites
 
