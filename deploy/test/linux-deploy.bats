@@ -10,9 +10,22 @@
 setup() {
   DEPLOY_DIR="$BATS_TEST_DIRNAME/.."
   LINUX_DIR="$DEPLOY_DIR/linux"
+  UNIX_DIR="$DEPLOY_DIR/unix"
   TESTROOT="$(mktemp -d)"
   DIST="$TESTROOT/dist"
-  export DEPLOY_DIR LINUX_DIR TESTROOT DIST
+
+  # A co-located controller for the dispatch tests below. afctctl sources its modules
+  # from its own sibling lib/, and a real bundle flattens the shared (unix) and
+  # Linux-only (linux) libraries into that single directory. Running straight from
+  # unix/bin would miss platform.sh/service-user.sh, so assemble the same flat layout.
+  CTL="$TESTROOT/ctl/bin/afctctl"
+  mkdir -p "$TESTROOT/ctl/bin" "$TESTROOT/ctl/lib"
+  cp "$UNIX_DIR/bin/afctctl" "$CTL"
+  cp "$UNIX_DIR"/lib/*.sh "$TESTROOT/ctl/lib/"
+  cp "$LINUX_DIR"/lib/*.sh "$TESTROOT/ctl/lib/"
+  chmod +x "$CTL"
+
+  export DEPLOY_DIR LINUX_DIR UNIX_DIR TESTROOT DIST CTL
 }
 
 teardown() {
@@ -33,7 +46,8 @@ install_switch_only() {
 
 @test "every Linux shell file passes sh -n" {
   for f in "$LINUX_DIR/install.sh" "$LINUX_DIR/build-bundle.sh" \
-           "$LINUX_DIR/bin/afctctl" "$LINUX_DIR"/lib/*.sh "$DEPLOY_DIR/install.sh"; do
+           "$UNIX_DIR/bin/afctctl" "$UNIX_DIR"/lib/*.sh "$LINUX_DIR"/lib/*.sh \
+           "$DEPLOY_DIR/install.sh"; do
     run sh -n "$f"
     [ "$status" -eq 0 ] || { echo "syntax error in $f"; return 1; }
   done
@@ -42,26 +56,26 @@ install_switch_only() {
 # --- afctctl dispatch (no Docker) ----------------------------------------------
 
 @test "afctctl help prints usage and exits 0" {
-  run sh "$LINUX_DIR/bin/afctctl" help
+  run sh "$CTL" help
   [ "$status" -eq 0 ]
   [[ "$output" == *"afctctl: AFCT deployment control"* ]]
   [[ "$output" == *"self-update"* ]]
 }
 
 @test "afctctl version reports the deployment-tool version" {
-  run env AFCT_PREFIX="$TESTROOT/p" sh "$LINUX_DIR/bin/afctctl" version
+  run env AFCT_PREFIX="$TESTROOT/p" sh "$CTL" version
   [ "$status" -eq 0 ]
   [[ "$output" == *"deployment tool version"* ]]
 }
 
 @test "afctctl rejects an unknown command with exit 2" {
-  run sh "$LINUX_DIR/bin/afctctl" frobnicate
+  run sh "$CTL" frobnicate
   [ "$status" -eq 2 ]
   [[ "$output" == *"unknown option or command"* ]]
 }
 
 @test "afctctl rejects two commands with exit 2" {
-  run sh "$LINUX_DIR/bin/afctctl" status update
+  run sh "$CTL" status update
   [ "$status" -eq 2 ]
   [[ "$output" == *"only one command"* ]]
 }
@@ -156,7 +170,7 @@ install_switch_only() {
   # migration reattaches to the same volumes rather than creating an empty set.
   run sh -c '
     info() { :; }
-    . "'"$LINUX_DIR"'/lib/migration.sh"
+    . "'"$UNIX_DIR"'/lib/migration.sh"
     docker_normalize_name "AFCT-Deploy"
   '
   [ "$status" -eq 0 ]
@@ -168,7 +182,7 @@ install_switch_only() {
 @test "redact_env_file masks secret-bearing keys" {
   run sh -c '
     warn() { :; }
-    . "'"$LINUX_DIR"'/lib/diagnostics.sh"
+    . "'"$UNIX_DIR"'/lib/diagnostics.sh"
     printf "POSTGRES_PASSWORD=s3cr3t\nNEXTAUTH_URL=https://x\n" > "'"$TESTROOT"'/e"
     redact_env_file "'"$TESTROOT"'/e" "'"$TESTROOT"'/e.red"
     cat "'"$TESTROOT"'/e.red"

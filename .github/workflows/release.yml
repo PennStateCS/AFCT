@@ -253,3 +253,58 @@ jobs:
           # The bootstrap is served as `install.sh` so
           # releases/latest/download/install.sh resolves for new installs and self-update.
           gh release upload "$TAG" deploy/linux/install.sh --clobber
+
+      # Build the macOS deployment bundle (shared deploy/unix/* plus the macOS platform
+      # library and bootstrap), verify it the same way, then attach the bundle, its
+      # checksum, the macOS deployment manifest, and the macOS bootstrap. macOS is a
+      # testing/evaluation target; Linux remains the recommended production platform.
+      - name: Build, verify, and attach the macOS deployment bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          sh deploy/macos/build-bundle.sh deploy/dist
+
+          TARBALL=$(ls deploy/dist/afct-macos-deploy-*.tar.gz)
+          MANIFEST=deploy/dist/deployment-manifest-macos.json
+          BASENAME=$(basename "$TARBALL")
+
+          # 1) The checksum file matches the bytes.
+          ( cd deploy/dist && sha256sum -c "${BASENAME}.sha256" )
+
+          # 2) Extract and run sh -n + shellcheck over every bundled shell file.
+          WORK=$(mktemp -d)
+          tar -xzf "$TARBALL" -C "$WORK"
+          ROOT=$(dirname "$(find "$WORK" -name afctctl -path '*/bin/*' | head -n1)")/..
+          sh -n "$ROOT/install.sh"
+          sh -n "$ROOT/bin/afctctl"
+          for f in "$ROOT"/lib/*.sh; do sh -n "$f"; done
+          ( cd "$ROOT" && shellcheck -s sh install.sh bin/afctctl lib/*.sh )
+
+          # 3) Every version identifier must agree: the manifest schema, its
+          #    deploymentToolVersion, its exact macOS bundle filename and sha256, the
+          #    bundle's DEPLOY_VERSION, and the bundle's afctctl INSTALLER_VERSION.
+          MSCHEMA=$(jq -r '.schema // ""' "$MANIFEST")
+          MVER=$(jq -r .deploymentToolVersion "$MANIFEST")
+          MBUNDLE=$(jq -r .bundle "$MANIFEST")
+          MSHA=$(jq -r .sha256 "$MANIFEST")
+          MBOOT=$(jq -r .bootstrap "$MANIFEST")
+          AVER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$ROOT/bin/afctctl" | head -n1)
+          DVER=$(sed -n '1p' "$ROOT/DEPLOY_VERSION" | tr -dc '0-9A-Za-z._-')
+          ASHA=$(awk '{print $1; exit}' "${TARBALL}.sha256")
+          [ "$MSCHEMA" = "afct-deployment-manifest/v1" ] || { echo "manifest schema ($MSCHEMA) is not afct-deployment-manifest/v1"; exit 1; }
+          [ "$MBUNDLE" = "$BASENAME" ] || { echo "manifest bundle ($MBUNDLE) != $BASENAME"; exit 1; }
+          [ "$MBUNDLE" = "afct-macos-deploy-${MVER}.tar.gz" ] || { echo "manifest bundle name does not match version $MVER"; exit 1; }
+          [ "$MBOOT" = "install-macos.sh" ] || { echo "manifest bootstrap ($MBOOT) != install-macos.sh"; exit 1; }
+          [ "$MSHA" = "$ASHA" ] || { echo "manifest sha256 mismatch"; exit 1; }
+          [ "$MVER" = "$AVER" ] || { echo "manifest version ($MVER) != afctctl INSTALLER_VERSION ($AVER)"; exit 1; }
+          [ "$MVER" = "$DVER" ] || { echo "manifest version ($MVER) != bundle DEPLOY_VERSION ($DVER)"; exit 1; }
+
+          # All checks passed: publish the macOS assets. The bootstrap is served as
+          # `install-macos.sh` so releases/latest/download/install-macos.sh resolves.
+          gh release upload "$TAG" \
+            "$TARBALL" "${TARBALL}.sha256" "$MANIFEST" \
+            --clobber
+          cp deploy/macos/install.sh deploy/dist/install-macos.sh
+          gh release upload "$TAG" deploy/dist/install-macos.sh --clobber

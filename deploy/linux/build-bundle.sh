@@ -1,10 +1,14 @@
 #!/bin/sh
 # Assemble the versioned AFCT Linux deployment bundle.
 #
-# The bundle is built from a single source of truth: the Linux tooling in deploy/linux/
-# plus the SHARED Compose file and env template in deploy/ (the same files the Windows
-# installer uses). There are therefore no duplicated compose/env files to keep in sync;
-# this script (and the CI check that runs it) is the generation + verification mechanism.
+# The bundle is built from a single source of truth: the SHARED Unix modules in
+# deploy/unix/ (afctctl and the platform-neutral libraries), the Linux-only libraries in
+# deploy/linux/lib/ (service-user.sh, platform.sh), the Linux bootstrap in deploy/linux/,
+# and the SHARED Compose file and env template in deploy/ (the same files the Windows and
+# macOS installers use). There are therefore no duplicated modules to keep in sync; this
+# script (and the CI check that runs it) is the generation + verification mechanism. The
+# macOS bundle is assembled the same way by deploy/macos/build-bundle.sh, sharing
+# deploy/unix and swapping in the macOS platform library.
 #
 # Usage:
 #   sh deploy/linux/build-bundle.sh [output-dir]
@@ -17,16 +21,19 @@ set -eu
 
 LINUX_DIR=$(unset CDPATH; cd -- "$(dirname -- "$0")" && pwd)
 DEPLOY_DIR=$(unset CDPATH; cd -- "${LINUX_DIR}/.." && pwd)
+UNIX_DIR="${DEPLOY_DIR}/unix"
 OUT_DIR=${1:-${DEPLOY_DIR}/dist}
 
-VERSION=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "${LINUX_DIR}/bin/afctctl" | head -n 1)
-[ -n "$VERSION" ] || { printf 'ERROR: could not read INSTALLER_VERSION from bin/afctctl\n' >&2; exit 1; }
+VERSION=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "${UNIX_DIR}/bin/afctctl" | head -n 1)
+[ -n "$VERSION" ] || { printf 'ERROR: could not read INSTALLER_VERSION from unix/bin/afctctl\n' >&2; exit 1; }
 
 NAME="afct-linux-deploy-${VERSION}"
 
 # Required shared sources.
-for _f in "${DEPLOY_DIR}/docker-compose.yml" "${DEPLOY_DIR}/.env.production.example"; do
-  [ -f "$_f" ] || { printf 'ERROR: missing shared source file: %s\n' "$_f" >&2; exit 1; }
+for _f in "${DEPLOY_DIR}/docker-compose.yml" "${DEPLOY_DIR}/.env.production.example" \
+          "${UNIX_DIR}/bin/afctctl" "${LINUX_DIR}/install.sh" \
+          "${LINUX_DIR}/lib/service-user.sh" "${LINUX_DIR}/lib/platform.sh"; do
+  [ -f "$_f" ] || { printf 'ERROR: missing source file: %s\n' "$_f" >&2; exit 1; }
 done
 
 _stage=$(mktemp -d "${TMPDIR:-/tmp}/afct-bundle.XXXXXX") || { printf 'ERROR: mktemp failed\n' >&2; exit 1; }
@@ -36,9 +43,13 @@ _root="${_stage}/${NAME}"
 mkdir -p "${_root}/bin" "${_root}/lib"
 
 cp "${LINUX_DIR}/install.sh" "${_root}/install.sh"
-cp "${LINUX_DIR}/bin/afctctl" "${_root}/bin/afctctl"
+cp "${UNIX_DIR}/bin/afctctl" "${_root}/bin/afctctl"
+# Shared Unix libraries plus the Linux-only libraries, flattened into one lib/ directory
+# (the runtime afctctl sources them from its own release's flat lib/, so the source split
+# is invisible after packaging).
+cp "${UNIX_DIR}"/lib/*.sh "${_root}/lib/"
 cp "${LINUX_DIR}"/lib/*.sh "${_root}/lib/"
-[ -f "${LINUX_DIR}/.shellcheckrc" ] && cp "${LINUX_DIR}/.shellcheckrc" "${_root}/.shellcheckrc"
+[ -f "${DEPLOY_DIR}/.shellcheckrc" ] && cp "${DEPLOY_DIR}/.shellcheckrc" "${_root}/.shellcheckrc"
 cp "${DEPLOY_DIR}/docker-compose.yml" "${_root}/docker-compose.yml"
 cp "${DEPLOY_DIR}/.env.production.example" "${_root}/.env.production.example"
 printf '%s\n' "$VERSION" > "${_root}/DEPLOY_VERSION"

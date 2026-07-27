@@ -19,13 +19,16 @@
 setup() {
   DEPLOY_DIR="$BATS_TEST_DIRNAME/.."
   LINUX_DIR="$DEPLOY_DIR/linux"
+  UNIX_DIR="$DEPLOY_DIR/unix"
   TESTDIR="$(mktemp -d)"
 
   # An installed release the shim can forward to: bin/afctctl + the library modules,
-  # with current -> releases/dev. PREFIX is TESTDIR/opt; shared/ holds state.
+  # with current -> releases/dev. PREFIX is TESTDIR/opt; shared/ holds state. The bundle
+  # lib/ is flat, so it carries the shared unix modules plus the Linux-only ones.
   REL="$TESTDIR/opt/releases/dev"
   mkdir -p "$REL/bin" "$REL/lib" "$TESTDIR/opt/shared"
-  cp "$LINUX_DIR/bin/afctctl" "$REL/bin/afctctl"
+  cp "$UNIX_DIR/bin/afctctl" "$REL/bin/afctctl"
+  cp "$UNIX_DIR"/lib/*.sh "$REL/lib/"
   cp "$LINUX_DIR"/lib/*.sh "$REL/lib/"
   ln -s releases/dev "$TESTDIR/opt/current"
   # The shim resolves and exec's the release afctctl, so it must be executable regardless

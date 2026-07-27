@@ -14,9 +14,10 @@
 setup() {
   DEPLOY_DIR="$BATS_TEST_DIRNAME/.."
   LINUX_DIR="$DEPLOY_DIR/linux"
+  UNIX_DIR="$DEPLOY_DIR/unix"
   TESTROOT="$(mktemp -d)"
   DIST="$TESTROOT/dist"
-  export DEPLOY_DIR LINUX_DIR TESTROOT DIST
+  export DEPLOY_DIR LINUX_DIR UNIX_DIR TESTROOT DIST
 }
 
 teardown() {
@@ -171,7 +172,8 @@ EOF
   run sh -c '
     info() { :; }; warn() { :; }; own_deploy_path() { :; }
     SHARED_DIR="'"$TESTROOT"'"; REPO="x/y"
-    . "'"$LINUX_DIR"'/lib/manifest.sh"
+    . "'"$LINUX_DIR"'/lib/platform.sh"
+    . "'"$UNIX_DIR"'/lib/manifest.sh"
     good="'"$TESTROOT"'/good.json"
     printf "%s" "{\"schema\":\"afct-deployment-manifest/v1\",\"deploymentToolVersion\":\"2.2.0\",\"bundle\":\"afct-linux-deploy-2.2.0.tar.gz\",\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"bootstrap\":\"install.sh\"}" > "$good"
     manifest_valid "$good" && echo GOOD_OK || echo GOOD_FAIL
@@ -193,7 +195,7 @@ EOF
   run sh -c '
     MODE=install; ASSUME_YES=true; NON_INTERACTIVE=true; FORCE_RECONFIGURE=false
     WITH_UPDATER=true; COLOR_FORCED_OFF=true; SERVICE_USER_CHOICE="--service-user=custom-afct"
-    . "'"$LINUX_DIR"'/lib/update.sh"
+    . "'"$UNIX_DIR"'/lib/update.sh"
     reexec_argv | tr "\n" "|"
   '
   [ "$output" = "install|--yes|--non-interactive|--with-updater|--no-color|--service-user=custom-afct|" ]
@@ -203,7 +205,7 @@ EOF
   run sh -c '
     MODE=update; ASSUME_YES=false; NON_INTERACTIVE=true; FORCE_RECONFIGURE=false
     WITH_UPDATER=false; COLOR_FORCED_OFF=false; SERVICE_USER_CHOICE="--no-service-user"
-    . "'"$LINUX_DIR"'/lib/update.sh"
+    . "'"$UNIX_DIR"'/lib/update.sh"
     reexec_argv | tr "\n" "|"
   '
   [ "$output" = "update|--non-interactive|--no-service-user|" ]
@@ -228,7 +230,7 @@ EOF
         *) : ;;
       esac
     }
-    . "'"$LINUX_DIR"'/lib/migration.sh"
+    . "'"$UNIX_DIR"'/lib/migration.sh"
     detect_project_name_from_volumes
   '
   [ "$output" = "afct" ]   # NOT "decoy" (which matched only postgres_data)
@@ -236,7 +238,7 @@ EOF
 
 @test "valid_compose_project_name accepts valid names and rejects invalid ones" {
   run sh -c '
-    . "'"$LINUX_DIR"'/lib/migration.sh"
+    . "'"$UNIX_DIR"'/lib/migration.sh"
     for n in afct afct-deploy afct_1 ""; do valid_compose_project_name "$n" && echo "OK:$n" || echo "NO:$n"; done
     valid_compose_project_name "-lead" && echo "OK:-lead" || echo "NO:-lead"
     valid_compose_project_name "Bad Name" && echo "OK:bad" || echo "NO:bad"
@@ -264,7 +266,7 @@ run_preserve() {
     SERVICE_MODE="false"; ENV_FILE="'"$TESTROOT"'/nope-shared/.env.production"
     SERVICE_MARKER_NAME=".afct-service-user"; PREFIX="'"$TESTROOT"'/nope-prefix"
     SERVICE_USER="afct"; SERVICE_USER_CHOICE="$_CHOICE"
-    . "'"$LINUX_DIR"'/lib/migration.sh"
+    . "'"$UNIX_DIR"'/lib/migration.sh"
     . "'"$LINUX_DIR"'/lib/service-user.sh"
     # Stub AFTER sourcing so it overrides the real function (the point under test is only
     # WHETHER account creation is invoked, not what it does).

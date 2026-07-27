@@ -29,10 +29,14 @@ jobs:
       - name: Syntax check
         run: |
           sh -n deploy/install.sh
+          sh -n deploy/unix/bin/afctctl
+          for f in deploy/unix/lib/*.sh; do sh -n "$f"; done
           sh -n deploy/linux/install.sh
           sh -n deploy/linux/build-bundle.sh
-          sh -n deploy/linux/bin/afctctl
           for f in deploy/linux/lib/*.sh; do sh -n "$f"; done
+          sh -n deploy/macos/install.sh
+          sh -n deploy/macos/build-bundle.sh
+          for f in deploy/macos/lib/*.sh; do sh -n "$f"; done
           sh -n deploy/test/compose-config.sh
           sh -n docker/updater/updater.sh
           sh -n docker/backup/backup.sh
@@ -52,10 +56,15 @@ jobs:
 
       # The new Linux tooling (deploy/linux/) is written clean, so gate on it. The
       # .shellcheckrc in that directory documents the two shared-globals suppressions.
-      - name: Shellcheck the Linux deployment tooling
+      - name: Shellcheck the deployment tooling
         run: |
-          cd deploy/linux
-          shellcheck -s sh install.sh build-bundle.sh bin/afctctl lib/*.sh
+          # Run from deploy/ so the shared .shellcheckrc (globals suppressions) applies to
+          # the unix/, linux/, and macos/ trees alike.
+          cd deploy
+          shellcheck -s sh \
+            unix/bin/afctctl unix/lib/*.sh \
+            linux/install.sh linux/build-bundle.sh linux/lib/*.sh \
+            macos/install.sh macos/build-bundle.sh macos/lib/*.sh
 
       # The legacy compat shim still ships; keep it advisory alongside the sidecars.
       - name: Shellcheck (advisory)
@@ -89,20 +98,53 @@ jobs:
           git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
           BASE=$(git merge-base FETCH_HEAD HEAD 2>/dev/null || echo FETCH_HEAD)
           CHANGED=$(git diff --name-only "$BASE"...HEAD -- \
-            deploy/linux deploy/docker-compose.yml deploy/.env.production.example || true)
+            deploy/unix deploy/linux deploy/macos \
+            deploy/docker-compose.yml deploy/.env.production.example || true)
           if [ -z "$CHANGED" ]; then
             echo "No bundle-source changes; nothing to enforce."
             exit 0
           fi
-          BASE_VER=$(git show "$BASE:deploy/linux/bin/afctctl" 2>/dev/null \
+          BASE_VER=$(git show "$BASE:deploy/unix/bin/afctctl" 2>/dev/null \
             | sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' | head -n1 || true)
-          HEAD_VER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' deploy/linux/bin/afctctl | head -n1)
+          HEAD_VER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' deploy/unix/bin/afctctl | head -n1)
           if [ -z "$BASE_VER" ]; then
             echo "Base has no deployment bundle yet; skipping the bump check."
             exit 0
           fi
           if [ "$BASE_VER" = "$HEAD_VER" ]; then
-            echo "::error::Bundle sources changed but the deployment-tool version is still ${HEAD_VER}. Bump INSTALLER_VERSION in deploy/linux/bin/afctctl."
+            echo "::error::Bundle sources changed but the deployment-tool version is still ${HEAD_VER}. Bump INSTALLER_VERSION in deploy/unix/bin/afctctl."
             exit 1
           fi
           echo "OK: deployment-tool version ${BASE_VER} -> ${HEAD_VER}"
+
+  # The macOS installer runs on a real macOS runner: BSD tools, no sha256sum, Darwin
+  # uname. Docker is NOT available on GitHub-hosted macOS runners, so the tests use a
+  # mocked/absent Docker and exercise the bundle build, manifest, version consistency,
+  # command dispatch, and the Docker Desktop state messages, but no real containers.
+  macos-tests:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install bats + shellcheck + jq (Homebrew)
+        run: brew install bats-core shellcheck jq
+
+      - name: Syntax check (shared + macOS)
+        run: |
+          sh -n deploy/unix/bin/afctctl
+          for f in deploy/unix/lib/*.sh; do sh -n "$f"; done
+          sh -n deploy/macos/install.sh
+          sh -n deploy/macos/build-bundle.sh
+          for f in deploy/macos/lib/*.sh; do sh -n "$f"; done
+
+      - name: Shellcheck the shared + macOS tooling
+        run: |
+          cd deploy
+          shellcheck -s sh \
+            unix/bin/afctctl unix/lib/*.sh \
+            macos/install.sh macos/build-bundle.sh macos/lib/*.sh
+
+      - name: Run the macOS deployment tests (Docker mocked/absent)
+        run: bats deploy/test/macos-deploy.bats

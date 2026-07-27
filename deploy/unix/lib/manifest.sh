@@ -15,7 +15,7 @@
 # shellcheck disable=SC2154  # globals are provided by afctctl
 
 deployment_manifest_url() {
-  printf '%s' "${AFCT_DEPLOY_MANIFEST_URL:-https://github.com/${REPO}/releases/latest/download/deployment-manifest.json}"
+  printf '%s' "${AFCT_DEPLOY_MANIFEST_URL:-https://github.com/${REPO}/releases/latest/download/$(platform_manifest_asset)}"
 }
 
 # Base URL the manifest's bundle/checksum assets are downloaded from (the latest release's
@@ -51,9 +51,11 @@ manifest_field() {
 }
 
 # The bundle filename a manifest MUST name for a given deployment-tool version. The bundle
-# is never an arbitrary .tar.gz; it is exactly this name, so a mismatch is rejected.
+# is never an arbitrary .tar.gz; it is exactly this name, so a mismatch is rejected. The
+# platform picks the family prefix (afct-linux-deploy- / afct-macos-deploy-) so a Linux
+# host never accepts a macOS bundle or vice versa.
 manifest_expected_bundle() {
-  printf 'afct-linux-deploy-%s.tar.gz' "$1"
+  printf '%s%s.tar.gz' "$(platform_bundle_prefix)" "$1"
 }
 
 # Validate the manifest before anything privileged trusts it. This drives self-update, so

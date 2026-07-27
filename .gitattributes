@@ -7,6 +7,10 @@
 deploy/test/mocks/* text eol=lf
 *.bats text eol=lf
 
+# The deployment controller has no extension, so `*.sh` does not cover it; pin it to
+# LF too, or a Windows checkout would give it CRLF and break its shebang on Linux.
+deploy/unix/bin/afctctl text eol=lf
+
 # `npm run docs` (and the pre-commit hook) regenerate this file with LF. Pin it so a
 # Windows checkout doesn't flip it to CRLF and produce an endless EOL-only diff that
 # CI's docs-check then fails on.
