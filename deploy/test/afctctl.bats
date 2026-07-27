@@ -28,6 +28,9 @@ setup() {
   cp "$LINUX_DIR/bin/afctctl" "$REL/bin/afctctl"
   cp "$LINUX_DIR"/lib/*.sh "$REL/lib/"
   ln -s releases/dev "$TESTDIR/opt/current"
+  # The shim resolves and exec's the release afctctl, so it must be executable regardless
+  # of the checkout's file mode (a plain `cp` would otherwise inherit a non-exec bit).
+  chmod +x "$REL/bin/afctctl"
 
   # The shim (deploy/install.sh) forwards to $AFCT_PREFIX/current/bin/afctctl.
   cp "$DEPLOY_DIR/install.sh" "$TESTDIR/install.sh"
