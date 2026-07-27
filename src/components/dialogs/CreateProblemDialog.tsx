@@ -292,6 +292,10 @@ export function CreateProblemDialog({
           {`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]?.title ?? ''}`}
         </div>
 
+        {/* The form owns an onKeyDown that scopes Enter to single-line text inputs so it
+            advances the wizard instead of submitting early. That is deliberate keyboard
+            management on the form element, not an interactive-role gap. */}
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
         <form
           onSubmit={step === LAST_STEP ? handleSubmit(onSubmit) : (e) => e.preventDefault()}
           className="space-y-4"

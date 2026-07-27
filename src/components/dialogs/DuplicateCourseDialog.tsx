@@ -315,6 +315,10 @@ export default function DuplicateCourseDialog({
           className="mb-2"
         />
 
+        {/* The onKeyDown below scopes Enter to single-line text inputs so it advances
+            the wizard instead of submitting early: deliberate keyboard management on the
+            form element, not an interactive-role gap. */}
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
         <form
           // Only the Review step may submit; earlier steps swallow any submit that
           // slips through (backstop for the button-swap hazard handled below).
