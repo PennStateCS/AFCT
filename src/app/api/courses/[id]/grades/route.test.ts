@@ -79,7 +79,14 @@ describe('GET /api/courses/[id]/grades', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.students).toEqual([
-      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
+      {
+        id: 's1',
+        firstName: 'A',
+        lastName: 'B',
+        email: 's1@example.com',
+        avatar: null,
+        enrollmentStatus: 'ENROLLED',
+      },
     ]);
     expect(body.assignments).toEqual([
       { id: 'a1', title: 'A1', maxPoints: 10, dueDate: '2025-01-01' },

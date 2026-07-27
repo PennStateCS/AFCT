@@ -21,7 +21,7 @@ import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { useReviewData, type ReviewDataResponse } from './useReviewData';
 
-type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
+type Person = Pick<User, 'firstName' | 'lastName' | 'id'> & { enrollmentStatus?: string | null };
 
 type Problem = {
   id: string;
@@ -109,11 +109,13 @@ export default function AssignmentSubmissions({
     submission: Submission | ProblemSubmission | null;
   }>({ open: false, submission: null });
 
-  // Students: cached read shared with GroupsCard via the same query key.
+  // Students for review: includes DROPPED students (labeled), since staff still review
+  // their submitted work. Its own query key ('students', 'all') so it doesn't collide
+  // with the active-only list GroupsCard/audience pickers share.
   const studentsQuery = useQuery({
-    queryKey: ['course', courseId, 'students'],
+    queryKey: ['course', courseId, 'students', 'all'],
     queryFn: async () => {
-      const res = await fetch(apiPaths.courseStudents(courseId));
+      const res = await fetch(apiPaths.courseStudents(courseId, { includeDropped: true }));
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
       return (await res.json()) as Person[];
     },

@@ -25,6 +25,7 @@ type StudentRow = {
   cropX?: number;
   cropY?: number;
   zoom?: number;
+  enrollmentStatus?: string;
   [key: string]: unknown;
 };
 
@@ -44,6 +45,7 @@ type ApiStudent = {
   cropX?: number;
   cropY?: number;
   zoom?: number;
+  enrollmentStatus?: string;
 };
 
 // Per-row key holding the student's assignment-assigned flags, so the cell renderer can
@@ -105,6 +107,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           cropX: stu.cropX,
           cropY: stu.cropY,
           zoom: stu.zoom,
+          enrollmentStatus: stu.enrollmentStatus,
         };
         const assignedFlags: Record<string, boolean> = {};
         for (const asg of body.assignments) {
@@ -282,7 +285,16 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       {
         accessorKey: 'lastName',
         header: 'Last Name',
-        cell: ({ row }) => <div>{String(row.original.lastName ?? '')}</div>,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <span>{String(row.original.lastName ?? '')}</span>
+            {row.original.enrollmentStatus === 'DROPPED' ? (
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                Dropped
+              </span>
+            ) : null}
+          </div>
+        ),
         // Row header for the matrix: screen readers announce this name with each grade
         // cell in the row, so a grade is never read as a bare number.
         meta: { priority: 1, rowHeader: true },

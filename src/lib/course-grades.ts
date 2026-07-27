@@ -11,6 +11,9 @@ export type GradeMatrixStudent = {
   cropX: number | null;
   cropY: number | null;
   zoom: number | null;
+  // Enrollment standing, so the gradebook can badge a dropped student. Dropped students
+  // stay in the matrix (their grades are retained and still editable by staff).
+  enrollmentStatus: string;
 };
 
 export type GradeMatrixAssignment = {
@@ -46,12 +49,15 @@ export type CourseGradeMatrix = CourseGradeStructure & CourseGradeValues;
  * UI can paint the columns while `getCourseGradeValues` is still in flight.
  */
 export async function getCourseGradeStructure(courseId: string): Promise<CourseGradeStructure> {
+  // Every student, dropped included: the gradebook keeps dropped students (labeled) so
+  // their retained grades stay visible and editable.
   const roster = await prisma.roster.findMany({
     where: { courseId, role: 'STUDENT' },
-    select: { userId: true },
+    select: { userId: true, status: true },
     orderBy: { createdAt: 'asc' },
   });
   const rosterUserIds = roster.map((r) => r.userId);
+  const statusByUser = new Map(roster.map((r) => [r.userId, r.status]));
 
   const users = rosterUserIds.length
     ? await prisma.user.findMany({
@@ -82,6 +88,7 @@ export async function getCourseGradeStructure(courseId: string): Promise<CourseG
       cropX: u.cropX,
       cropY: u.cropY,
       zoom: u.zoom,
+      enrollmentStatus: statusByUser.get(u.id) ?? 'ENROLLED',
     }));
 
   const assignmentRows = await prisma.assignment.findMany({

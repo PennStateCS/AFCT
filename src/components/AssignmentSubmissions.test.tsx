@@ -193,7 +193,8 @@ describe('AssignmentSubmissions', () => {
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/students');
+      // The submissions view requests dropped students too (they show, labeled).
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/students?includeDropped=1');
     });
 
     await waitFor(() => {

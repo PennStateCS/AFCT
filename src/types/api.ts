@@ -2003,7 +2003,7 @@ export interface paths {
         };
         /**
          * List a course's students
-         * @description Returns just the STUDENT members of a course (user profiles). Course staff  (faculty or TAs) or a system admin.
+         * @description Returns the STUDENT members of a course (user profiles, each tagged with its  `enrollmentStatus`). Course staff (faculty or TAs) or a system admin.   By default only ACTIVE (ENROLLED) students are returned, since the main caller is the  assignment-audience picker, where a dropped student must not be offered as a new  target. Pass `?includeDropped=1` to also return dropped students (for staff review  surfaces like the submissions view, which show them labeled).
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/students/route.ts)
          */
@@ -9339,7 +9339,10 @@ export interface operations {
     };
     getCoursesByIdStudents: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description "1"/"true" also returns dropped students (default: enrolled only). */
+                includeDropped?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -9348,7 +9351,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The course's students. */
+            /** @description The course's students, each with an enrollmentStatus. */
             200: {
                 headers: {
                     [name: string]: unknown;
