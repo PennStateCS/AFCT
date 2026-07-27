@@ -287,18 +287,6 @@ afctctl install -Reconfigure
 
 Existing database data and authentication secrets are preserved during reconfiguration.
 
-## Migrate an existing flat-directory installation
-
-Earlier Windows installs kept everything in one folder (`install.ps1`, `docker-compose.yml`, `.env.production`, `install.log`, and `.env.production.backup.*`). To move that installation into the new layout under `%LOCALAPPDATA%\AFCT`, point the installer at the old folder:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -ImportExisting "C:\path\to\old\afct"
-```
-
-The import copies your existing `.env.production` and its backups exactly, preserves the Compose project name so your existing database and uploaded-file volumes reattach, and never generates new database credentials. It reads the old folder but does not modify it. After the new deployment comes up healthy and you have confirmed it works, you can archive or delete the old folder by hand.
-
-If the old folder does not look like an AFCT deployment, its configuration is incomplete, or the Compose project name cannot be determined safely, the import stops and explains what to do instead of guessing.
-
 ## Recover a lost configuration
 
 If the Docker volumes still hold your data but `.env.production` is missing, do not reinstall (that would generate new database credentials and orphan the database). Restore the newest protected configuration backup instead:

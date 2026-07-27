@@ -7,10 +7,10 @@
 #
 #   * If afctctl is already installed, it forwards the command to it.
 #       sh install.sh status   ->   afctctl status
-#   * Otherwise it downloads and runs the new bootstrap, which installs the bundle under
-#     /opt/afct and migrates this directory's existing configuration and data in place.
+#   * Otherwise it downloads and runs the bootstrap, which installs the versioned bundle
+#     under /opt/afct, then runs the command you asked for.
 #
-# New installs should prefer the bootstrap directly:
+# New installs can use the bootstrap directly:
 #   curl -fsSLO https://github.com/PennStateCS/AFCT/releases/latest/download/install.sh
 #   sudo sh install.sh
 
@@ -31,18 +31,11 @@ if [ -n "$_ctl" ] && [ -x "$_ctl" ]; then
   exec "$_ctl" "$@"
 fi
 
-# Not installed yet (or a legacy flat install): fetch the new bootstrap, install ONLY the
-# tooling (no forced `install`), migrate this directory's existing configuration and state
-# into the shared directory, then run the ORIGINAL command unchanged. This is what keeps
-# `sh install.sh status` (or logs/doctor/diagnostics/...) working on the very first run
-# after the move to afctctl, instead of being rewritten into `afctctl install status`.
+# Not installed yet: fetch the bootstrap, install ONLY the tooling (no forced `install`),
+# then run the ORIGINAL command unchanged. This keeps `sh install.sh status` (or
+# logs/doctor/diagnostics/...) working on the very first run, instead of being rewritten
+# into `afctctl install status`.
 printf '[afct] The AFCT Linux installer now uses afctctl; bootstrapping the versioned deployment bundle...\n'
-
-_dir=$(unset CDPATH; cd -- "$(dirname -- "$0")" && pwd)
-if [ -f "${_dir}/.env.production" ] && [ -z "${AFCT_LEGACY_DIR:-}" ]; then
-  AFCT_LEGACY_DIR=$_dir
-  export AFCT_LEGACY_DIR
-fi
 
 _url=${AFCT_BOOTSTRAP_URL:-https://github.com/PennStateCS/AFCT/releases/latest/download/install.sh}
 _boot=$(mktemp "${TMPDIR:-/tmp}/afct-install.XXXXXX") || { printf '[afct] ERROR: could not create a temporary file.\n' >&2; exit 1; }
@@ -72,32 +65,6 @@ if [ -z "$_ctl" ] || [ ! -x "$_ctl" ]; then
   exit 1
 fi
 
-# Step 2: migrate a legacy flat install (config, backups, log, service-account marker) into
-# the shared directory and pin the Compose project name, preserving secrets and volumes.
-#
-# The migration must honour an explicit service-account choice from the ORIGINAL command,
-# so --no-service-user / --service-user NAME on the very first shim invocation take effect
-# during migration (not only in the final command). Extract just that choice, POSIX and
-# eval-free; the final command below still receives the complete, unchanged argument list.
-_svc_flag=""
-_svc_val=""
-_svc_next=""
-for _a in "$@"; do
-  if [ "$_svc_next" = "1" ]; then _svc_val=$_a; _svc_next=""; continue; fi
-  case "$_a" in
-    --no-service-user)   _svc_flag="--no-service-user"; _svc_val="" ;;
-    --service-user=*)    _svc_flag="--service-user"; _svc_val=${_a#--service-user=} ;;
-    --service-user)      _svc_flag="--service-user"; _svc_next="1" ;;
-  esac
-done
-
-if [ "$_svc_flag" = "--no-service-user" ]; then
-  "$_ctl" migrate-legacy --no-service-user || exit $?
-elif [ "$_svc_flag" = "--service-user" ] && [ -n "$_svc_val" ]; then
-  "$_ctl" migrate-legacy --service-user "$_svc_val" || exit $?
-else
-  "$_ctl" migrate-legacy || exit $?
-fi
-
-# Step 3: run the command the user actually asked for, unchanged (full original argv).
+# Step 2: run the command the user actually asked for, unchanged (full original argv). Any
+# --service-user / --no-service-user flags ride along and are handled by that command.
 exec "$_ctl" "$@"

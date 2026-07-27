@@ -20,7 +20,6 @@ param(
     [switch]$WithUpdater,
     [switch]$NoColor,
     [switch]$PurgeData,
-    [string]$ImportExisting,
     [switch]$Help,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Rest
@@ -29,7 +28,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$InstallerVersion = '2.2.4'
+$InstallerVersion = '2.3.0'
 
 # --- resolve this controller's release, lib, and install-root layout ---------------------
 $BinDir     = $PSScriptRoot
@@ -73,7 +72,7 @@ $InstallerBaseUrl = Get-AfctEnvOr 'AFCT_INSTALLER_BASE_URL' 'https://raw.githubu
 
 # --- load library modules (functions only) -----------------------------------------------
 foreach ($mod in @('Output', 'Platform', 'Docker', 'Validation', 'Environment', 'Config',
-                   'Compose', 'Migrate', 'Update', 'Deploy', 'Doctor', 'Diagnostics',
+                   'Compose', 'Update', 'Deploy', 'Doctor', 'Diagnostics',
                    'Recover', 'Uninstall')) {
     . (Join-Path $LibDir "$mod.ps1")
 }
@@ -107,7 +106,6 @@ Usage:
 
 Commands:
   install          Configure and deploy AFCT (run by the installer).
-                   Add -ImportExisting <dir> to migrate an old flat-directory install.
   status           Show container and application health status.
   logs             Follow application logs. Press Ctrl+C to stop.
   update           Pull the latest application images, recreate the stack, verify health.
@@ -148,7 +146,7 @@ try {
     switch ($Command) {
         'help'            { Show-AfctUsage; break }
         'version'         { Show-AfctVersion; break }
-        'install'         { Invoke-AfctInstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -Reconfigure:([bool]$Reconfigure) -WithUpdater:([bool]$WithUpdater) -ImportExisting $ImportExisting; break }
+        'install'         { Invoke-AfctInstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -Reconfigure:([bool]$Reconfigure) -WithUpdater:([bool]$WithUpdater); break }
         'status'          { Show-AfctStatus; break }
         'logs'            { Show-AfctLogs; break }
         'restart'         { Invoke-AfctRestart; break }

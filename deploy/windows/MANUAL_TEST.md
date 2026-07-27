@@ -35,7 +35,6 @@ Last updated: 2026-07-27. Everything below is **NT** until run on real hardware.
 | 13 | Non-interactive install (`-NonInteractive` + env vars/password file) | NT | |
 | 14 | `Set-ExecutionPolicy`-restricted machine: `-ExecutionPolicy Bypass` path works | NT | |
 | 15 | WSL 2 unavailable: Docker Desktop guidance is clear | NT | |
-| 16 | Legacy flat-install import (`-ImportExisting`): data/volumes reattach, old dir untouched | NT | |
 
 ## Command availability
 

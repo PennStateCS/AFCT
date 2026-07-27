@@ -58,7 +58,7 @@ STATE_DIR="$SHARED_DIR"
 # --------------------------------------------------------------------------- #
 # Configuration (deployment-tool version is distinct from the app image version)
 # --------------------------------------------------------------------------- #
-INSTALLER_VERSION="2.2.4"
+INSTALLER_VERSION="2.3.0"
 REPO=${AFCT_REPO:-PennStateCS/AFCT}
 
 # The stack is defined by a MUTABLE runtime Compose file under the shared directory, not
@@ -215,9 +215,6 @@ Commands:
   disable-updater Stop and remove the updater sidecar.
   doctor          Run a comprehensive, read-only system check.
   recover         Restore the newest protected .env.production backup.
-  migrate-legacy  Migrate a legacy flat install (config, backups, service account, and
-                  Compose project name) into the shared directory. Run by the compatibility
-                  shim; idempotent and safe to re-run. Does not deploy or rotate secrets.
   diagnostics     Create a support archive with known secrets redacted.
   version         Show deployment-tool and deployed application version information.
   help            Show this help.
@@ -295,14 +292,6 @@ while [ "$#" -gt 0 ]; do
     disable-updater|--disable-updater) set_mode "disable-updater" ;;
     doctor|--doctor) set_mode "doctor" ;;
     recover|--recover) set_mode "recover" ;;
-    migrate-legacy|--migrate-legacy)
-      # Legacy migration is entirely about prior Linux flat installs and service
-      # accounts; it has no meaning on macOS.
-      if ! platform_supports_service_user; then
-        printf '[afct] ERROR: migrate-legacy is a Linux-only operation.\n' >&2
-        exit 2
-      fi
-      set_mode "migrate-legacy" ;;
     uninstall|--uninstall)
       # macOS-only convenience. On Linux, keep the original "unknown command" behavior.
       if platform_supports_service_user; then
@@ -380,7 +369,7 @@ _persisted_project=$(state_get PROJECT_NAME 2>/dev/null || true)
 # Seed (or refresh) the mutable runtime Compose file from the active release before any
 # command that reads or drives Compose. Read-only/among-tooling commands skip it.
 case "$MODE" in
-  install|status|logs|update|restart|stop|enable-updater|disable-updater|doctor|recover|migrate-legacy|uninstall)
+  install|status|logs|update|restart|stop|enable-updater|disable-updater|doctor|recover|uninstall)
     ensure_runtime_compose
     ;;
 esac
@@ -390,7 +379,6 @@ case "$MODE" in
   version) show_deployed_versions ;;
   doctor) do_doctor ;;
   recover) init_log; do_recover ;;
-  migrate-legacy) init_log; do_migrate_legacy ;;
   uninstall) init_log; do_uninstall ;;
   diagnostics) LOG_ENABLED="false"; collect_diagnostics "manual" ;;
   status) show_status ;;

@@ -253,63 +253,6 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Item 8: legacy service-account preservation (inspect marker before creating one)
-# ---------------------------------------------------------------------------
-
-# Drive preserve_or_setup_service_account with stubs and a controlled legacy directory.
-run_preserve() {
-  # $1 = SERVICE_USER_CHOICE, $2 = marker contents ("" for none), $3 = existing user id ok?
-  _legacy="$TESTROOT/legacy.$$"; rm -rf "$_legacy"; mkdir -p "$_legacy"
-  printf 'NEXTAUTH_URL=https://x\n' > "$_legacy/.env.production"
-  [ -n "$2" ] && printf '%s\n' "$2" > "$_legacy/.afct-service-user"
-  AFCT_LEGACY_DIR="$_legacy" _CHOICE="$1" _IDOK="$3" sh -c '
-    info() { echo "INFO:$*"; }; warn() { echo "WARN:$*"; }
-    id() { [ "$_IDOK" = "yes" ] && return 0 || return 1; }
-    SERVICE_MODE="false"; ENV_FILE="'"$TESTROOT"'/nope-shared/.env.production"
-    SERVICE_MARKER_NAME=".afct-service-user"; PREFIX="'"$TESTROOT"'/nope-prefix"
-    SERVICE_USER="afct"; SERVICE_USER_CHOICE="$_CHOICE"
-    . "'"$UNIX_DIR"'/lib/migration.sh"
-    . "'"$LINUX_DIR"'/lib/service-user.sh"
-    # Stub AFTER sourcing so it overrides the real function (the point under test is only
-    # WHETHER account creation is invoked, not what it does).
-    maybe_setup_service_user() { echo "SETUP_CALLED"; }
-    preserve_or_setup_service_account
-    echo "MODE=$SERVICE_MODE USER=$SERVICE_USER"
-  '
-}
-
-@test "migration preserves a custom legacy service account" {
-  run run_preserve "" "custom-afct" "yes"
-  [[ "$output" == *"preserving the existing 'custom-afct'"* ]]
-  [[ "$output" == *"MODE=true USER=custom-afct"* ]]
-  [[ "$output" != *"SETUP_CALLED"* ]]
-}
-
-@test "migration keeps current-user mode when the legacy install had no marker" {
-  run run_preserve "" "" "yes"
-  [[ "$output" == *"no dedicated service account"* ]]
-  [[ "$output" == *"USER="* ]]
-  [[ "$output" != *"SETUP_CALLED"* ]]
-}
-
-@test "migration falls back to current-user when the marked account is missing" {
-  run run_preserve "" "gone-afct" "no"
-  [[ "$output" == *"no longer exists"* ]]
-  [[ "$output" != *"SETUP_CALLED"* ]]
-}
-
-@test "an explicit --no-service-user overrides an inferred legacy account" {
-  run run_preserve "--no-service-user" "custom-afct" "yes"
-  [[ "$output" != *"SETUP_CALLED"* ]]
-  [[ "$output" != *"preserving"* ]]
-}
-
-@test "an explicit --service-user converts even a legacy current-user install" {
-  run run_preserve "--service-user=new-afct" "" "yes"
-  [[ "$output" == *"SETUP_CALLED"* ]]
-}
-
-# ---------------------------------------------------------------------------
 # Item 7: compatibility shim forwards the original command verbatim
 # ---------------------------------------------------------------------------
 

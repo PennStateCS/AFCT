@@ -147,12 +147,10 @@ verify_service_access() {
 }
 
 # Re-enter service mode on a later run when this deployment is service-account managed.
-# The marker lives in the shared directory; a legacy flat install may still have it at the
-# deploy root, so check both. Root only: a non-root run can't act as the account.
+# The marker lives in the shared directory. Root only: a non-root run can't act as the account.
 activate_service_mode_from_marker() {
   [ "$(id -u 2>/dev/null || echo 1)" = "0" ] || return 0
   _marker="${SHARED_DIR}/${SERVICE_MARKER_NAME}"
-  [ -f "$_marker" ] || _marker="${PREFIX}/${SERVICE_MARKER_NAME}"
   [ -f "$_marker" ] || return 0
   _u=$(sed -n '1p' "$_marker" 2>/dev/null | tr -d ' \011')
   [ -n "$_u" ] || return 0
@@ -164,15 +162,12 @@ activate_service_mode_from_marker() {
   SERVICE_MODE="true"
 }
 
-# Decide the service-account mode for an install/migration, preserving what a legacy
-# installation used instead of silently converting it. Order of precedence:
+# Decide the service-account mode for an install. Order of precedence:
 #   1. An explicit command-line choice (--service-user NAME / --no-service-user) always wins.
-#   2. A legacy install WITH a service-account marker: preserve that exact account (and warn
-#      if the named account no longer exists, falling back to current-user mode).
-#   3. A legacy install with NO marker: it ran as the invoking user, so keep current-user mode.
-#   4. A genuinely fresh install: offer/create the default dedicated account as before.
-# This runs BEFORE any account is created, so a legacy custom or current-user install is
-# never quietly turned into the default 'afct' account.
+#   2. An already service-managed deployment (marker activated at startup): reapply ownership.
+#   3. A completed install with no marker: keep current-user mode.
+#   4. A genuinely fresh install: offer/create the default dedicated account.
+# This runs BEFORE any account is created.
 preserve_or_setup_service_account() {
   # 1) An explicit command-line choice always wins, even over an active marker.
   case "${SERVICE_USER_CHOICE:-}" in
@@ -202,37 +197,7 @@ preserve_or_setup_service_account() {
   # A completed install with no explicit choice and no active marker: current-user mode.
   [ -f "$ENV_FILE" ] && return 0
 
-  # 2 and 3) A legacy installation: preserve its recorded mode rather than converting it.
-  _legacy=$(legacy_source_dir)
-  if [ -n "$_legacy" ]; then
-    _marker="${_legacy}/${SERVICE_MARKER_NAME}"
-    if [ -f "$_marker" ]; then
-      _u=$(sed -n '1p' "$_marker" 2>/dev/null | tr -d ' \011')
-      if [ -n "$_u" ]; then
-        if id "$_u" >/dev/null 2>&1; then
-          SERVICE_USER=$_u
-          SERVICE_MODE="true"
-          info "preserving the existing '${_u}' service account from the legacy installation."
-          write_service_marker "$_u"
-          own_service_tree
-          verify_service_access || warn "the preserved '${_u}' service account cannot fully access ${PREFIX} yet; check the account, its docker group membership, and permissions under ${PREFIX}."
-        else
-          # Missing account: do NOT write a marker, do NOT leave service mode on, and do
-          # NOT create the account (only an explicit --service-user may do that). Warn with
-          # enough detail to repair the setup later.
-          warn "the '${_u}' service account named in the legacy marker (${_marker}) no longer exists. Operating as the current user. To restore the dedicated account, recreate the '${_u}' system user and reinstall with --service-user ${_u}, or continue with --no-service-user."
-          SERVICE_USER=""
-          SERVICE_MODE="false"
-        fi
-        return 0
-      fi
-    fi
-    info "the legacy installation used no dedicated service account; keeping current-user mode."
-    SERVICE_USER=""
-    return 0
-  fi
-
-  # 4) Genuinely fresh: the normal dedicated-account offer.
+  # A genuinely fresh install: the normal dedicated-account offer.
   maybe_setup_service_user
 }
 

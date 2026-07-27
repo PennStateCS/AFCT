@@ -162,21 +162,6 @@ install_switch_only() {
   [ -d "$P/releases/0.0.1" ] || true           # retention default keeps a couple
 }
 
-# --- project-name normalization (migration safety) -----------------------------
-
-@test "docker_normalize_name matches Docker's project-name rules" {
-  # Docker derives the Compose project name from the basename of the compose dir,
-  # lowercased with anything outside [a-z0-9_-] stripped. Verify that mapping so a
-  # migration reattaches to the same volumes rather than creating an empty set.
-  run sh -c '
-    info() { :; }
-    . "'"$UNIX_DIR"'/lib/migration.sh"
-    docker_normalize_name "AFCT-Deploy"
-  '
-  [ "$status" -eq 0 ]
-  [ "$output" = "afct-deploy" ]
-}
-
 # --- no secrets in the redacted env --------------------------------------------
 
 @test "redact_env_file masks secret-bearing keys" {
