@@ -106,7 +106,9 @@ COLOR_FORCED_OFF="false"
 LOG_ENABLED="false"
 DOCKER_SUDO=""
 COMPOSE_KIND=""
-OS=$(uname -s 2>/dev/null || printf 'unknown')
+# AFCT_OS lets the test harness exercise the Darwin code paths on a Linux runner; real
+# installs never set it, so this is `uname -s` in practice.
+OS=${AFCT_OS:-$(uname -s 2>/dev/null || printf 'unknown')}
 
 DIAG_ON_EXIT="false"
 DIAG_IN_PROGRESS="false"
@@ -126,16 +128,68 @@ DIAG_WORK=""
 # --------------------------------------------------------------------------- #
 # Load the library modules (functions only; no side effects on source).
 # --------------------------------------------------------------------------- #
-for _mod in output common validation prompts environment docker compose \
+for _mod in output common validation prompts environment platform docker compose \
             service-user migration manifest deployment update diagnostics doctor; do
   # shellcheck source=/dev/null
   . "${LIB_DIR}/${_mod}.sh"
 done
 
+# Platforms without a dedicated service-account model (macOS) always run as the invoking
+# user. Make that explicit so every service-mode code path stays inert rather than
+# relying on incidental root/marker checks.
+if ! platform_supports_service_user; then
+  SERVICE_USER=""
+  SERVICE_MODE="false"
+fi
+
 # --------------------------------------------------------------------------- #
 # Usage and argument parsing
 # --------------------------------------------------------------------------- #
+usage_macos() {
+  cat <<EOF
+afctctl: AFCT deployment control (macOS)
+
+macOS is intended for testing, evaluation, and development. For a long-running
+production deployment, use the Linux installer on a Linux server.
+
+Usage:
+  afctctl <command> [options]
+
+Commands:
+  install         Configure and deploy AFCT (run by the installer).
+  status          Show container and application health status.
+  logs            Follow application logs. Press Ctrl+C to stop.
+  update          Pull the latest application images, recreate the stack, verify health.
+  self-update     Update the deployment tooling to the newest verified bundle. Does not
+                  touch .env.production, data, or the application image.
+  restart         Recreate the stack without pulling new images.
+  stop            Stop the stack without deleting its data volumes.
+  enable-updater  Enable the in-app updater sidecar (in-app upgrades/downgrades).
+  disable-updater Stop and remove the updater sidecar.
+  doctor          Run a comprehensive, read-only system check.
+  recover         Restore the newest protected .env.production backup.
+  uninstall       Remove AFCT. Preserves data volumes unless you opt in explicitly.
+  diagnostics     Create a support archive with known secrets redacted.
+  version         Show deployment-tool and deployed application version information.
+  help            Show this help.
+
+Options:
+  -y, --yes                 Accept confirmation prompts using their default answers.
+  --non-interactive         Never prompt; required values come from env vars / files.
+  --reconfigure             Rebuild .env.production even when a complete config exists.
+  --with-updater            Also enable the in-app updater during install.
+  --no-color                Disable colored terminal output.
+
+AFCT runs as the current user; no sudo is required. Configuration and data live in
+${SHARED_DIR} and in Docker Desktop volumes, never inside a versioned release directory.
+EOF
+}
+
 usage() {
+  if ! platform_supports_service_user; then
+    usage_macos
+    return 0
+  fi
   cat <<'EOF'
 afctctl: AFCT deployment control
 
@@ -220,7 +274,22 @@ while [ "$#" -gt 0 ]; do
     disable-updater|--disable-updater) set_mode "disable-updater" ;;
     doctor|--doctor) set_mode "doctor" ;;
     recover|--recover) set_mode "recover" ;;
-    migrate-legacy|--migrate-legacy) set_mode "migrate-legacy" ;;
+    migrate-legacy|--migrate-legacy)
+      # Legacy migration is entirely about prior Linux flat installs and service
+      # accounts; it has no meaning on macOS.
+      if ! platform_supports_service_user; then
+        printf '[afct] ERROR: migrate-legacy is a Linux-only operation.\n' >&2
+        exit 2
+      fi
+      set_mode "migrate-legacy" ;;
+    uninstall|--uninstall)
+      # macOS-only convenience. On Linux, keep the original "unknown command" behavior.
+      if platform_supports_service_user; then
+        printf '[afct] ERROR: unknown option or command: %s\n' "$1" >&2
+        printf '[afct] Run: afctctl --help\n' >&2
+        exit 2
+      fi
+      set_mode "uninstall" ;;
     diagnostics|--diagnostics) set_mode "diagnostics" ;;
     version|--version) set_mode "version" ;;
     help|-h|--help) set_mode "help" ;;
@@ -228,13 +297,24 @@ while [ "$#" -gt 0 ]; do
     --non-interactive|--noninteractive) NON_INTERACTIVE="true" ;;
     --reconfigure) FORCE_RECONFIGURE="true" ;;
     --with-updater) WITH_UPDATER="true" ;;
-    --no-service-user) SERVICE_USER=""; SERVICE_USER_CHOICE="--no-service-user" ;;
-    --service-user)
-      shift
-      [ "$#" -gt 0 ] || { printf '[afct] ERROR: --service-user needs a username.\n' >&2; exit 2; }
-      SERVICE_USER="$1"; SERVICE_USER_CHOICE="--service-user=$1"
+    --no-service-user|--service-user|--service-user=*)
+      # The dedicated service-account model is Linux-only; reject (never silently ignore)
+      # these on platforms without it (macOS), where AFCT runs as the current user.
+      if ! platform_supports_service_user; then
+        printf '[afct] ERROR: %s is not supported on %s; AFCT runs as the current user here.\n' \
+          "${1%%=*}" "$(platform_name)" >&2
+        exit 2
+      fi
+      case "$1" in
+        --no-service-user) SERVICE_USER=""; SERVICE_USER_CHOICE="--no-service-user" ;;
+        --service-user)
+          shift
+          [ "$#" -gt 0 ] || { printf '[afct] ERROR: --service-user needs a username.\n' >&2; exit 2; }
+          SERVICE_USER="$1"; SERVICE_USER_CHOICE="--service-user=$1"
+          ;;
+        --service-user=*) SERVICE_USER="${1#--service-user=}"; SERVICE_USER_CHOICE="--service-user=${1#--service-user=}" ;;
+      esac
       ;;
-    --service-user=*) SERVICE_USER="${1#--service-user=}"; SERVICE_USER_CHOICE="--service-user=${1#--service-user=}" ;;
     --no-color) COLOR_FORCED_OFF="true" ;;
     --)
       shift
@@ -279,7 +359,7 @@ _persisted_project=$(state_get PROJECT_NAME 2>/dev/null || true)
 # Seed (or refresh) the mutable runtime Compose file from the active release before any
 # command that reads or drives Compose. Read-only/among-tooling commands skip it.
 case "$MODE" in
-  install|status|logs|update|restart|stop|enable-updater|disable-updater|doctor|recover|migrate-legacy)
+  install|status|logs|update|restart|stop|enable-updater|disable-updater|doctor|recover|migrate-legacy|uninstall)
     ensure_runtime_compose
     ;;
 esac
@@ -290,6 +370,7 @@ case "$MODE" in
   doctor) do_doctor ;;
   recover) init_log; do_recover ;;
   migrate-legacy) init_log; do_migrate_legacy ;;
+  uninstall) init_log; do_uninstall ;;
   diagnostics) LOG_ENABLED="false"; collect_diagnostics "manual" ;;
   status) show_status ;;
   logs) show_logs ;;

@@ -10,9 +10,10 @@
 setup() {
   DEPLOY_DIR="$BATS_TEST_DIRNAME/.."
   LINUX_DIR="$DEPLOY_DIR/linux"
+  UNIX_DIR="$DEPLOY_DIR/unix"
   TESTROOT="$(mktemp -d)"
   DIST="$TESTROOT/dist"
-  export DEPLOY_DIR LINUX_DIR TESTROOT DIST
+  export DEPLOY_DIR LINUX_DIR UNIX_DIR TESTROOT DIST
 }
 
 teardown() { [ -n "${TESTROOT:-}" ] && rm -rf "$TESTROOT"; }
@@ -47,7 +48,8 @@ manifest_check() {
   printf '%s' "$1" > "$TESTROOT/m.json"
   sh -c '
     warn() { :; }; own_deploy_path() { :; }; SHARED_DIR="'"$TESTROOT"'"; REPO="x/y"
-    . "'"$LINUX_DIR"'/lib/manifest.sh"
+    . "'"$LINUX_DIR"'/lib/platform.sh"
+    . "'"$UNIX_DIR"'/lib/manifest.sh"
     manifest_valid "'"$TESTROOT"'/m.json" && echo VALID || echo INVALID
   '
 }
@@ -256,9 +258,9 @@ compose_env() {
     SHARED_DIR="'"$S"'"
     RELEASE_COMPOSE_FILE="'"$TESTROOT"'/opt/releases/r/docker-compose.yml"
     COMPOSE_FILE="'"$S"'/runtime/docker-compose.yml"
-    . "'"$LINUX_DIR"'/lib/common.sh"
-    . "'"$LINUX_DIR"'/lib/migration.sh"
-    . "'"$LINUX_DIR"'/lib/compose.sh"
+    . "'"$UNIX_DIR"'/lib/common.sh"
+    . "'"$UNIX_DIR"'/lib/migration.sh"
+    . "'"$UNIX_DIR"'/lib/compose.sh"
     '"$1"'
   '
 }

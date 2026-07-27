@@ -43,6 +43,15 @@ detect_compose() {
 }
 
 resolve_docker_access() {
+  # macOS runs Docker through Docker Desktop: no sudo, no daemon socket to escalate to.
+  # Delegate to the platform resolver, which checks that Docker Desktop is installed,
+  # running, and provides Compose v2. On Linux this branch is never taken and the
+  # original resolution below runs unchanged.
+  if [ "$OS" = "Darwin" ]; then
+    platform_resolve_docker_access
+    return $?
+  fi
+
   command -v docker >/dev/null 2>&1 || die "Docker is not installed. Run the installer."
 
   # Service mode routes every docker call through the service account (docker_cmd), so
@@ -107,7 +116,8 @@ maybe_install_docker() {
     error "Docker is not installed."
     if [ "$OS" = "Darwin" ]; then
       info "Install Docker Desktop, start it, and rerun this installer:"
-      info "https://www.docker.com/products/docker-desktop/"
+      info "  - Homebrew:  brew install --cask docker"
+      info "  - Or download it from https://www.docker.com/products/docker-desktop/"
     fi
     die "Docker is required."
   fi

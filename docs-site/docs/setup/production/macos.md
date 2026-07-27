@@ -1,195 +1,140 @@
 # AFCT on macOS
 
-These instructions work on Apple Silicon and Intel Macs. A continuously available Linux server is usually a better choice for a long-running public deployment, but macOS is supported through Docker Desktop.
+This macOS installer is intended for **testing, evaluation, and development**. For a
+long-running production deployment, use the [Linux installer](./linux.md) on a Linux
+server. Linux is the recommended production platform.
+
+macOS runs AFCT through Docker Desktop, as your own user account. No `sudo` is required.
+Apple Silicon and Intel Macs are both supported.
 
 ## Requirements
 
-Review the [system requirements](../requirements.md) before starting. On macOS you also need [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/); Git is only needed for the manual method.
+1. A current version of macOS on Apple Silicon or an Intel Mac.
+2. [Docker Desktop](https://www.docker.com/products/docker-desktop/), installed and
+   running. Install it with Homebrew:
 
-## Configure DNS and the network
+   ```bash
+   brew install --cask docker
+   ```
 
-Set the DNS record before installation. `NEXTAUTH_URL` must exactly match the address users will visit:
+   or download it from the Docker website. Then open Docker Desktop and wait until it
+   reports that Docker is running.
+3. Give Docker Desktop enough resources for the AFCT images (Docker Desktop settings,
+   Resources): several GB of memory and disk. `afctctl doctor` warns if free disk looks
+   low.
 
-```text
-https://afct.example.edu
-```
-
-Do not use HTTP, an IP address, the wrong subdomain, an extra path, or an unnecessary port.
-
-Allow inbound traffic on ports 80 and 443.
-
-## Install Docker
-
-Install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) for the Mac's processor.
-
-Open Docker Desktop and enable **Start Docker Desktop when you log in**. AFCT can restart after a reboot only after Docker Desktop starts.
-
-Verify the installation:
+Verify Docker before you start:
 
 ```bash
-docker --version
 docker compose version
 docker info
 ```
 
-Do not continue until all three commands succeed.
+Both must succeed. If `docker info` fails, Docker Desktop is not running yet.
 
-## Guided installation (recommended)
+## Install
 
-:::warning Use the deployment Compose file
-Download the bundle into a fresh directory as shown below. If you already cloned the repository, run the guided installer from its `deploy/` directory, not the repository root. The root Compose file is for the source-based manual method, while `deploy/docker-compose.yml` pulls the published images used by the installer.
-:::
-
-Create a deployment directory and download the installer bundle:
+Download and run the macOS installer:
 
 ```bash
-mkdir afct
-cd afct
-
-BASE=https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy
-
-curl -fLO "$BASE/install.sh"
-curl -fLO "$BASE/docker-compose.yml"
-curl -fLO "$BASE/.env.production.example"
+curl -fsSLO https://github.com/PennStateCS/AFCT/releases/latest/download/install-macos.sh
+sh install-macos.sh
 ```
 
-Run the installer:
+The installer verifies the downloaded bundle's checksum, installs the tooling under
+`$HOME/.afct`, adds an `afctctl` command to `$HOME/.local/bin`, then guides you through
+configuration and starts AFCT.
 
-```bash
-sh install.sh
-```
+If `$HOME/.local/bin` is not on your `PATH`, the installer prints how to add it. You can
+always run the command directly at `$HOME/.afct/current/bin/afctctl`.
 
 ### What the installer asks for
 
-The installer prompts for:
+- **The public URL.** For local testing use the default `https://localhost`. It works
+  only from a browser on this same Mac. To reach AFCT from another device, use this Mac's
+  LAN hostname or IP address instead (for example `https://192.168.1.20`).
+- **The initial administrator email.**
+- **The initial administrator password**, or let it generate a strong one. A generated
+  password is printed once at the end and never written to the log, so save it.
 
-- The public AFCT URL, used as `NEXTAUTH_URL`
-- The initial administrator email address
-- The initial administrator password, or it can generate a strong one for you
+### About the certificate
 
-It then verifies Docker, generates the PostgreSQL password and authentication secret, writes `.env.production` with restricted permissions, shows a short review, downloads the images, and starts AFCT. A generated administrator password is printed once at the end and is never written to the log, so save it before closing the terminal.
+AFCT starts with a self-signed certificate. The connection is still encrypted; the
+browser warning appears only because the certificate's identity is not signed by a
+trusted authority. For a local test, accept the warning and continue.
 
-Re-running `sh install.sh` on a configured host detects the existing installation and offers a menu: start or repair it, update it, reconfigure the public URL or bootstrap settings, run system checks, or create a diagnostics archive. Existing database and authentication secrets are preserved during reconfiguration.
-
-For unattended installs, supply the values as environment variables and pass `--non-interactive`. Docker and the Compose plugin must already be installed:
-
-```bash
-ADMIN_EMAIL=admin@example.edu \
-ADMIN_PASSWORD_FILE=/run/secrets/afct-admin-password \
-APP_URL=https://afct.example.edu \
-  sh install.sh --non-interactive
-```
-
-### Installer diagnostics
-
-A failed installation creates a redacted archive in the installation directory:
-
-```text
-afct-diagnostics-<timestamp>.zip
-```
-
-Create one manually with:
-
-```bash
-sh install.sh diagnostics
-```
-
-Review the archive before sharing it.
-
-## Manual installation
-
-Most deployments should use the guided installer above. Use the manual method only when you need to customize the Compose configuration, automate provisioning, or manage the repository directly with Git.
-
-Clone the repository and create the environment file:
-
-```bash
-git clone https://github.com/PennStateCS/AFCT.git
-cd AFCT
-cp .env.production.example .env.production
-nano .env.production
-```
-
-You can also use TextEdit:
-
-```bash
-open -e .env.production
-```
-
-Configure these required values:
-
-- `POSTGRES_PASSWORD`: Use a long random password. The same password must appear in `DATABASE_URL`.
-- `ADMIN_EMAIL` and `ADMIN_PASSWORD`: These seed the first administrator only when the database is empty.
-- `NEXTAUTH_SECRET`: Generate it once with `openssl rand -base64 64`. Changing it later signs every user out.
-- `NEXTAUTH_URL`: Use the exact public HTTPS address.
-
-hCaptcha is optional. You can set `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY` now, or configure it later in **Admin Menu > System Settings > Captcha**. Do not use hCaptcha test credentials in production.
-
-Protect the environment file:
-
-```bash
-chmod 600 .env.production
-```
-
-Start AFCT:
-
-```bash
-docker compose up -d
-```
-
-## Verify the installation
-
-Check the services:
-
-```bash
-docker compose ps
-```
-
-All four services should be `Up`. The application should eventually report `healthy`.
-
-Review the application log:
-
-```bash
-docker compose logs -f app
-```
-
-Press `Control+C` to stop following the log. AFCT will continue running.
-
-Open the public URL and confirm that the login page loads over HTTPS, the administrator can sign in, and the administration pages open.
-
-A certificate warning is expected until you replace the default self-signed certificate.
+Let's Encrypt generally requires a publicly reachable domain, so it is not usually
+appropriate for a `localhost`-only test. A domain is optional for local testing.
 
 ## Manage a running deployment
 
-The installer also serves as an operations helper. Run these from the directory that contains `docker-compose.yml`:
+Run these from anywhere (no `sudo`):
 
 ```bash
-sh install.sh status      # container and application health
-sh install.sh logs        # follow the application log (Control+C to stop)
-sh install.sh doctor      # read-only system and configuration checks
-sh install.sh update      # pull the latest images, recreate, and verify health
-sh install.sh restart     # recreate the stack without pulling images
-sh install.sh stop        # stop the stack without deleting data volumes
-sh install.sh diagnostics # create a redacted support archive
+afctctl status      # container and application health
+afctctl logs        # follow the application log (Control+C to stop)
+afctctl doctor      # read-only system and configuration checks
+afctctl update      # pull the latest images, recreate, and verify health
+afctctl restart     # recreate the stack without pulling images
+afctctl stop        # stop the stack without deleting data volumes
+afctctl diagnostics # create a redacted support archive
+afctctl self-update # update the deployment tooling itself
 ```
 
-`sh install.sh update` records the running image versions before pulling and automatically rolls back if the new version fails its health check.
+`afctctl update` records the running image versions before pulling and rolls back
+automatically if the new version fails its health check.
 
-### In-app upgrades (optional)
+### In-app updates (optional)
 
-To run upgrades and downgrades from **Admin Menu > System Settings > Updates** instead of the command line, enable the updater sidecar:
+To run upgrades from **Admin Menu > System Settings > Updates** instead of the command
+line, enable the updater sidecar:
 
 ```bash
-sh install.sh enable-updater    # sh install.sh disable-updater to turn it off
+afctctl enable-updater     # afctctl disable-updater to turn it off
 ```
 
-A fresh interactive install also offers to enable it at the end; to opt in
-non-interactively, pass `--with-updater` (equivalent to running `enable-updater`
-afterward):
+It is off by default because the updater holds Docker Desktop's Docker socket, which is
+powerful access to your Docker environment. Treat a downgrade as recovery, not a casual
+undo.
+
+## Where AFCT stores its files
+
+```text
+$HOME/.afct/
+  current -> releases/<version>-<digest>   # the active deployment tooling
+  releases/                                # immutable tooling releases (for rollback)
+  shared/
+    .env.production                        # configuration and secrets (mode 0600)
+    deploy.state                           # Compose project name, runtime state
+    install.log
+    runtime/docker-compose.yml
+```
+
+The database and uploaded files live in Docker Desktop **named volumes**, not in this
+directory.
+
+## Update
 
 ```bash
-sh install.sh --with-updater
+afctctl update
 ```
 
-This is **off by default** because the updater holds the Docker socket, which is effectively root access on the host. Once enabled, `update`, `restart`, and `status` include it automatically. A downgrade restores a pre-upgrade database backup and permanently discards database records created since it. Uploaded files are left in place and can become unreferenced. Treat downgrade as recovery, not a casual undo.
+## Uninstall
 
-Continue with [TLS certificates](../../admin/system-settings.md#tls-certificate), then review [updates](../../operations/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
+The uninstall command preserves your data by default:
+
+```bash
+afctctl uninstall
+```
+
+It stops and removes the AFCT containers, removes the `afctctl` command and the
+`$HOME/.afct` directory, and leaves the database and uploaded files (Docker volumes) in
+place. It asks before deleting anything irreversible; answer yes to the volume prompt
+only if you want to delete the database and uploads permanently.
+
+Application images stay in Docker Desktop. Remove them yourself if you want the space
+back:
+
+```bash
+docker image ls | grep afct
+```

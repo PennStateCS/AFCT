@@ -106,7 +106,7 @@ collect_diagnostics() {
     printf 'Collected: %s\n\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'unknown')"
     uname -a 2>/dev/null || true
     printf '\n'
-    cat /etc/os-release 2>/dev/null || true
+    platform_os_identity
   } > "$_bundle_dir/system.txt" 2>&1
 
   if resolve_docker_access_soft; then
