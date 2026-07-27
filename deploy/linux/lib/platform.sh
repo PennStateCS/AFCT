@@ -33,6 +33,13 @@ platform_supports_service_user() { return 0; }
 # The in-app updater sidecar is supported on Linux.
 platform_supports_updater() { return 0; }
 
+# The Linux updater is a shipped, tested feature (not experimental).
+platform_updater_experimental() { return 1; }
+
+# Docker on Linux bind-mounts host paths directly (no Docker Desktop file-sharing gate),
+# so there is nothing to preflight.
+platform_check_bind_mounts() { return 0; }
+
 # macOS-only Docker Desktop resolver. On Linux the inline logic in
 # resolve_docker_access (docker.sh) is used instead and this stub is never reached; it
 # exists so the shared Darwin branch always resolves to a defined function.

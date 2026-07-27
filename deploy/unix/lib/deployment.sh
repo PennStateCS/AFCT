@@ -22,6 +22,12 @@ preflight() {
   ensure_compose
   ensure_docker_boot
 
+  # On Docker Desktop (macOS), confirm the daemon can bind-mount our install directories
+  # before starting the stack, so a prefix outside Docker's file-sharing list fails here
+  # with a clear message instead of a confusing mount error at `up`. No-op on Linux, and
+  # skipped when Docker is mocked for tests (AFCT_SKIP_BIND_MOUNT_CHECK=1).
+  platform_check_bind_mounts
+
   _docker_version=$(docker_cmd version --format '{{.Server.Version}}' 2>/dev/null || printf 'unknown')
   _compose_version=$(compose_raw version --short 2>/dev/null || compose_raw version 2>/dev/null | head -n 1 || printf 'unknown')
   success "Docker ${_docker_version} is available."

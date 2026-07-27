@@ -130,6 +130,9 @@ do_enable_updater() {
   prepare_existing_stack
 
   heading "Enabling the in-app updater"
+  if platform_updater_experimental; then
+    warn "on macOS the in-app updater is EXPERIMENTAL: it has not yet been validated end to end on real Docker Desktop hardware. Prefer 'afctctl update' and 'afctctl self-update' from the command line, and treat in-app upgrades as unproven for now."
+  fi
   warn "the updater container holds the Docker socket, which is root-equivalent on this host. Enable it only if you want to run upgrades and downgrades from Admin -> System Settings."
   if ! confirm "Enable the in-app updater now?" "y"; then
     die "left the updater disabled."
@@ -152,6 +155,9 @@ maybe_enable_updater_at_install() {
   if [ "$WITH_UPDATER" != "true" ]; then
     can_prompt || return 0
     heading "Optional: in-app updater"
+    if platform_updater_experimental; then
+      warn "On macOS this is EXPERIMENTAL and not yet validated on real Docker Desktop."
+    fi
     info "The updater sidecar lets admins upgrade and downgrade AFCT from"
     info "System Settings. It holds the Docker socket (root-equivalent on this host),"
     info "so it is off unless you turn it on."

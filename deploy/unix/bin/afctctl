@@ -1,12 +1,18 @@
 #!/bin/sh
 # afctctl: the AFCT deployment control command.
 #
-# Installed at /opt/afct/current/bin/afctctl (with a /usr/local/bin/afctctl wrapper). It
-# sources the library modules next to it and dispatches the operational commands. All
-# persistent configuration and data live under /opt/afct/shared and in Docker volumes,
-# never inside a versioned release directory.
+# Installed at:
+#   Linux:  /opt/afct/current/bin/afctctl    (with a /usr/local/bin/afctctl wrapper)
+#   macOS:  $HOME/.afct/current/bin/afctctl   (with a $HOME/.local/bin/afctctl wrapper)
 #
-#   sudo afctctl status | logs | update | restart | stop | doctor | diagnostics ...
+# It sources the library modules next to it and dispatches the operational commands. All
+# persistent configuration and data live under the install prefix's shared/ directory and
+# in Docker volumes, never inside a versioned release directory.
+#
+# Linux runs may use sudo or a dedicated service account; macOS runs as the current user
+# with no sudo. The runtime `help` output is platform-specific.
+#
+#   afctctl status | logs | update | restart | stop | doctor | diagnostics ...
 
 set -eu
 umask 077
@@ -52,7 +58,7 @@ STATE_DIR="$SHARED_DIR"
 # --------------------------------------------------------------------------- #
 # Configuration (deployment-tool version is distinct from the app image version)
 # --------------------------------------------------------------------------- #
-INSTALLER_VERSION="2.2.0"
+INSTALLER_VERSION="2.2.1"
 REPO=${AFCT_REPO:-PennStateCS/AFCT}
 
 # The stack is defined by a MUTABLE runtime Compose file under the shared directory, not
@@ -164,7 +170,7 @@ Commands:
                   touch .env.production, data, or the application image.
   restart         Recreate the stack without pulling new images.
   stop            Stop the stack without deleting its data volumes.
-  enable-updater  Enable the in-app updater sidecar (in-app upgrades/downgrades).
+  enable-updater  Enable the in-app updater sidecar (EXPERIMENTAL on macOS).
   disable-updater Stop and remove the updater sidecar.
   doctor          Run a comprehensive, read-only system check.
   recover         Restore the newest protected .env.production backup.

@@ -243,6 +243,16 @@ jobs:
           [ "$MVER" = "$AVER" ] || { echo "manifest version ($MVER) != afctctl INSTALLER_VERSION ($AVER)"; exit 1; }
           [ "$MVER" = "$DVER" ] || { echo "manifest version ($MVER) != bundle DEPLOY_VERSION ($DVER)"; exit 1; }
 
+          # 3b) Every required library module is present in the bundle.
+          for m in output common validation prompts environment platform docker compose \
+                   service-user migration manifest deployment update diagnostics doctor; do
+            [ -f "$ROOT/lib/${m}.sh" ] || { echo "bundle missing lib/${m}.sh"; exit 1; }
+          done
+
+          # 3c) Archive safety: no absolute or traversal paths, and no symlinks/special files.
+          if tar -tzf "$TARBALL" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then echo "unsafe path in archive"; exit 1; fi
+          if tar -tvzf "$TARBALL" | awk '{print substr($1,1,1)}' | grep -q '[^d-]'; then echo "special file in archive"; exit 1; fi
+
           # 4) A real docker compose config against the split release/shared layout.
           sh deploy/test/compose-config.sh
 
@@ -300,6 +310,16 @@ jobs:
           [ "$MSHA" = "$ASHA" ] || { echo "manifest sha256 mismatch"; exit 1; }
           [ "$MVER" = "$AVER" ] || { echo "manifest version ($MVER) != afctctl INSTALLER_VERSION ($AVER)"; exit 1; }
           [ "$MVER" = "$DVER" ] || { echo "manifest version ($MVER) != bundle DEPLOY_VERSION ($DVER)"; exit 1; }
+
+          # Every required library module is present in the bundle.
+          for m in output common validation prompts environment platform docker compose \
+                   service-user migration manifest deployment update diagnostics doctor; do
+            [ -f "$ROOT/lib/${m}.sh" ] || { echo "bundle missing lib/${m}.sh"; exit 1; }
+          done
+
+          # Archive safety: no absolute or traversal paths, and no symlinks/special files.
+          if tar -tzf "$TARBALL" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then echo "unsafe path in archive"; exit 1; fi
+          if tar -tvzf "$TARBALL" | awk '{print substr($1,1,1)}' | grep -q '[^d-]'; then echo "special file in archive"; exit 1; fi
 
           # All checks passed: publish the macOS assets. The bootstrap is served as
           # `install-macos.sh` so releases/latest/download/install-macos.sh resolves.

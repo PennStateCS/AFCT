@@ -245,7 +245,7 @@ if [ -n "$BUNDLE_FILE" ]; then
   elif [ "${AFCT_ALLOW_UNVERIFIED_LOCAL_BUNDLE:-}" = "1" ]; then
     _unverified_local=1
     err "WARNING: installing a LOCAL bundle WITHOUT checksum verification (AFCT_ALLOW_UNVERIFIED_LOCAL_BUNDLE=1)."
-    err "WARNING: this bypasses corruption AND authenticity checks. The bundle is NOT verified; only its archive safety and internal version consistency are still checked."
+    err "WARNING: this bypasses the SHA-256 checksum verification, which detects corruption and a mismatched or wrong asset. The bundle is NOT verified; only its archive safety and internal version consistency are still checked."
     _checksum=""
   else
     die "no ${BUNDLE_FILE}.sha256 alongside the local bundle. Provide the checksum file, set AFCT_BUNDLE_SHA256=<sha256>, or set AFCT_ALLOW_UNVERIFIED_LOCAL_BUNDLE=1 to install without verification."
@@ -514,17 +514,30 @@ prune_old_releases() {
   _keep=${AFCT_KEEP_RELEASES:-2}
   case "$_keep" in ''|*[!0-9]*) _keep=2 ;; esac
   _cur=$(readlink "$_current" 2>/dev/null || true)
-  _i=0
-  # release dir names are version strings (no spaces); ls -t gives newest-first ordering.
-  # shellcheck disable=SC2012,SC2045
-  for _d in $(ls -1dt "${_releases}"/*/ 2>/dev/null); do
+
+  # Whitespace-safe: iterate the glob (which never word-splits on spaces in the prefix)
+  # and record "<mtime><TAB><path>" per release, then sort newest-first. No `ls` parsing
+  # and no GNU-only flags: stat has a BSD form (-f) and a GNU/busybox form (-c).
+  _tab=$(printf '\t')
+  _plist=$(mktemp "${TMPDIR:-/tmp}/afct-prune.XXXXXX" 2>/dev/null || printf '')
+  [ -n "$_plist" ] || return 0
+  for _d in "${_releases}"/*/; do
+    [ -d "$_d" ] || continue
     _d=${_d%/}
+    _mt=$(stat -c '%Y' "$_d" 2>/dev/null || stat -f '%m' "$_d" 2>/dev/null || printf '0')
+    printf '%s%s%s\n' "$_mt" "$_tab" "$_d" >> "$_plist"
+  done
+
+  _i=0
+  sort -rn "$_plist" | while IFS="$_tab" read -r _mt _d; do
+    [ -n "$_d" ] || continue
     _i=$((_i + 1))
     [ "$_i" -le "$_keep" ] && continue
     [ "$_d" = "$_cur" ] && continue
     [ "$_d" = "$_prev_target" ] && continue
     rm -rf "$_d" 2>/dev/null || true
   done
+  rm -f "$_plist" 2>/dev/null || true
 }
 
 log "installed the AFCT deployment tooling ${_ver} at ${_target}."
