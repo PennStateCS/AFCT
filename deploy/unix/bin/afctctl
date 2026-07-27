@@ -58,7 +58,7 @@ STATE_DIR="$SHARED_DIR"
 # --------------------------------------------------------------------------- #
 # Configuration (deployment-tool version is distinct from the app image version)
 # --------------------------------------------------------------------------- #
-INSTALLER_VERSION="2.2.1"
+INSTALLER_VERSION="2.2.2"
 REPO=${AFCT_REPO:-PennStateCS/AFCT}
 
 # The stack is defined by a MUTABLE runtime Compose file under the shared directory, not
@@ -266,6 +266,21 @@ set_mode() {
   MODE=$_new_mode
   MODE_SET="true"
 }
+
+# Test-only dispatch recorder (never used in production). When AFCT_TEST_RECORD_DISPATCH
+# names a file, record the raw argv this controller received (in order, spaces preserved)
+# plus the resolved controller path, install prefix, and detected OS, then exit BEFORE any
+# argument parsing, Docker access, or deployment. It only writes a file; it never executes
+# or evaluates any input. Used to prove the bootstrap-to-controller handoff in tests.
+if [ -n "${AFCT_TEST_RECORD_DISPATCH:-}" ]; then
+  {
+    printf 'self=%s\n' "$_self"
+    printf 'prefix=%s\n' "$PREFIX"
+    printf 'os=%s\n' "$OS"
+    for _a in "$@"; do printf 'arg=%s\n' "$_a"; done
+  } > "$AFCT_TEST_RECORD_DISPATCH"
+  exit 0
+fi
 
 while [ "$#" -gt 0 ]; do
   case "$1" in

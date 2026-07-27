@@ -424,7 +424,15 @@ Admin Menu > System Settings > Updates
 ```
 
 :::warning Experimental on macOS
-The in-app updater is experimental on macOS. It has not yet been validated end to end on real Docker Desktop hardware. For now, prefer `afctctl update` and `afctctl self-update` from Terminal, and treat in-app upgrades as unproven. On Linux the updater is a supported, tested feature.
+The in-app updater is experimental on macOS. It has not yet been validated on real Docker Desktop hardware, so the recommended way to update on a Mac for now is the command line:
+
+```bash
+afctctl update
+```
+
+The updater is the most platform-sensitive part of the deployment. It relies on Docker Desktop's Docker socket, host bind mounts, atomic replacement of the runtime Compose file, and the updater container recreating itself. Those paths behave differently under Docker Desktop than on a Linux server and have not been exercised end to end on a Mac.
+
+This does not mean the updater is broken. It means it is unproven on macOS. On Linux the updater is a supported, tested feature.
 :::
 
 Enable the updater service with:

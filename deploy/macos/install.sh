@@ -366,19 +366,24 @@ _target="${_releases}/${_release_id}"
 mkdir -p "$_releases" "${PREFIX}/bin" "${PREFIX}/shared"
 
 # Record the canonical install prefix so `afctctl uninstall` can safely recognize and
-# remove a custom prefix (not just the default $HOME/.afct). Written atomically, private
-# (0600). PREFIX was already canonicalized by validate_prefix above.
+# remove a custom prefix (not just the default $HOME/.afct). The marker is REQUIRED for a
+# safe automatic uninstall, so a failure here is fatal: we stop before publishing the
+# `current` pointer or deploying anything, and clean up the temp file. Written atomically
+# and private (0600). PREFIX was already canonicalized by validate_prefix above.
 _marker="${PREFIX}/shared/install-prefix"
-_marker_tmp=$(mktemp "${PREFIX}/shared/.install-prefix.XXXXXX" 2>/dev/null || printf '')
-if [ -n "$_marker_tmp" ]; then
-  if printf '%s\n' "$PREFIX" > "$_marker_tmp" 2>/dev/null &&
-     chmod 0600 "$_marker_tmp" 2>/dev/null &&
-     mv "$_marker_tmp" "$_marker" 2>/dev/null; then
-    :
-  else
-    rm -f "$_marker_tmp" 2>/dev/null || true
-    log "could not record the install-prefix marker at ${_marker}."
-  fi
+_marker_tmp=$(mktemp "${PREFIX}/shared/.install-prefix.XXXXXX") || \
+  die "could not create the install-prefix marker in ${PREFIX}/shared."
+if ! printf '%s\n' "$PREFIX" > "$_marker_tmp"; then
+  rm -f "$_marker_tmp" 2>/dev/null || true
+  die "could not write the install-prefix marker."
+fi
+if ! chmod 0600 "$_marker_tmp"; then
+  rm -f "$_marker_tmp" 2>/dev/null || true
+  die "could not protect the install-prefix marker."
+fi
+if ! mv "$_marker_tmp" "$_marker"; then
+  rm -f "$_marker_tmp" 2>/dev/null || true
+  die "could not publish the install-prefix marker."
 fi
 
 _current="${PREFIX}/current"
