@@ -2051,7 +2051,7 @@ export interface paths {
          * Join a course by registration code
          * @description Enrolls the signed-in user in a course via its registration code,  as a STUDENT. Users never learn that an unpublished/archived course exists  (masked as 404). Global admins can't self-enroll, and the registration window  must be open.
          *
-         *     **Auth:** required
+         *     **Auth:** requires STUDENT
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/join/route.ts)
          */
@@ -9473,6 +9473,15 @@ export interface operations {
             };
             /** @description Not signed in. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Enrollment was dropped; re-enrollment is a staff action. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
