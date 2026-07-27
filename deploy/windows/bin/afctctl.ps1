@@ -50,11 +50,14 @@ if ([string]::IsNullOrEmpty($Prefix)) {
         $Prefix = $ReleaseDir
     }
 }
-$SharedDir = Join-Path $Prefix 'shared'
-$LogFile   = Join-Path $SharedDir 'install.log'
+$SharedDir      = Join-Path $Prefix 'shared'
+$LogFile        = Join-Path $SharedDir 'install.log'
+$EnvFile        = Join-Path $SharedDir '.env.production'
+$RuntimeDir     = Join-Path $SharedDir 'runtime'
+$RuntimeCompose = Join-Path $RuntimeDir 'docker-compose.yml'
 
 # --- load library modules (functions only) -----------------------------------------------
-foreach ($mod in @('Output', 'Platform')) {
+foreach ($mod in @('Output', 'Platform', 'Docker', 'Uninstall')) {
     . (Join-Path $LibDir "$mod.ps1")
 }
 
@@ -119,10 +122,11 @@ function Show-AfctVersion {
 if ($Help) { $Command = 'help' }
 
 switch ($Command) {
-    'help'    { Show-AfctUsage; break }
-    'version' { Show-AfctVersion; break }
+    'help'      { Show-AfctUsage; break }
+    'version'   { Show-AfctVersion; break }
+    'uninstall' { Invoke-AfctUninstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -PurgeData:([bool]$PurgeData); break }
     { $_ -in @('install','status','logs','update','self-update','restart','stop',
-               'enable-updater','disable-updater','doctor','recover','uninstall','diagnostics') } {
+               'enable-updater','disable-updater','doctor','recover','diagnostics') } {
         Write-AfctInfo "the '$Command' command is ported from the existing installer in the next AFCT Windows build."
         break
     }
