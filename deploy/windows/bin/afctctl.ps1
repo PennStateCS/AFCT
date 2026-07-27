@@ -20,6 +20,7 @@ param(
     [switch]$WithUpdater,
     [switch]$NoColor,
     [switch]$PurgeData,
+    [string]$ImportExisting,
     [switch]$Help,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Rest
@@ -72,8 +73,8 @@ $InstallerBaseUrl = Get-AfctEnvOr 'AFCT_INSTALLER_BASE_URL' 'https://raw.githubu
 
 # --- load library modules (functions only) -----------------------------------------------
 foreach ($mod in @('Output', 'Platform', 'Docker', 'Validation', 'Environment', 'Config',
-                   'Compose', 'Update', 'Deploy', 'Doctor', 'Diagnostics', 'Recover',
-                   'Uninstall')) {
+                   'Compose', 'Migrate', 'Update', 'Deploy', 'Doctor', 'Diagnostics',
+                   'Recover', 'Uninstall')) {
     . (Join-Path $LibDir "$mod.ps1")
 }
 
@@ -144,7 +145,7 @@ try {
     switch ($Command) {
         'help'            { Show-AfctUsage; break }
         'version'         { Show-AfctVersion; break }
-        'install'         { Invoke-AfctInstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -Reconfigure:([bool]$Reconfigure) -WithUpdater:([bool]$WithUpdater); break }
+        'install'         { Invoke-AfctInstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -Reconfigure:([bool]$Reconfigure) -WithUpdater:([bool]$WithUpdater) -ImportExisting $ImportExisting; break }
         'status'          { Show-AfctStatus; break }
         'logs'            { Show-AfctLogs; break }
         'restart'         { Invoke-AfctRestart; break }

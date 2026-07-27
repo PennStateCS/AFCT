@@ -56,14 +56,27 @@ function Show-AfctCompletion {
 }
 
 function Invoke-AfctInstall {
-    param([bool]$Yes, [bool]$NonInteractive, [bool]$Reconfigure, [bool]$WithUpdater)
+    param([bool]$Yes, [bool]$NonInteractive, [bool]$Reconfigure, [bool]$WithUpdater, [string]$ImportExisting)
 
     Assert-AfctDockerReady
     Sync-AfctRuntimeCompose
+
+    # Import a legacy flat-directory installation before anything else, so the checks and
+    # deploy below operate on the imported configuration. Seeds shared\.env.production (and
+    # its backups, project name, release pin, and updater flag) from the legacy directory,
+    # which is left untouched.
+    if (-not [string]::IsNullOrEmpty($ImportExisting)) {
+        Import-AfctLegacyInstall -LegacyDir $ImportExisting
+    }
+
     Test-AfctInstallDiskSpace
     if (-not (Test-AfctClockSync)) {
         Write-AfctWarn 'the Windows Time service is not running. Incorrect time can break TLS and authentication.'
     }
+
+    # Docker Desktop must be able to bind-mount the install directories, or `up` fails later
+    # with a confusing error. Catch it now, before the stack starts.
+    Assert-AfctBindMounts @($SharedDir, $RuntimeDir)
 
     if (Test-AfctDataWithoutConfig) {
         throw "afct-fatal: existing AFCT data volumes were detected, but $EnvFile is missing or incomplete. Restore a protected configuration backup with 'afctctl recover' instead of generating new database credentials."
