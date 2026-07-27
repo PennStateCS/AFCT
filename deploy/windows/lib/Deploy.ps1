@@ -56,18 +56,10 @@ function Show-AfctCompletion {
 }
 
 function Invoke-AfctInstall {
-    param([bool]$Yes, [bool]$NonInteractive, [bool]$Reconfigure, [bool]$WithUpdater, [string]$ImportExisting)
+    param([bool]$Yes, [bool]$NonInteractive, [bool]$Reconfigure, [bool]$WithUpdater)
 
     Assert-AfctDockerReady
     Sync-AfctRuntimeCompose
-
-    # Import a legacy flat-directory installation before anything else, so the checks and
-    # deploy below operate on the imported configuration. Seeds shared\.env.production (and
-    # its backups, project name, release pin, and updater flag) from the legacy directory,
-    # which is left untouched.
-    if (-not [string]::IsNullOrEmpty($ImportExisting)) {
-        Import-AfctLegacyInstall -LegacyDir $ImportExisting
-    }
 
     Test-AfctInstallDiskSpace
     if (-not (Test-AfctClockSync)) {
