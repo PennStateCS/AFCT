@@ -411,6 +411,9 @@ jobs:
       - name: Download all verified bundle assets
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
+          # Only the staged bundle artifacts, not the .dockerbuild build-record artifacts
+          # that docker/build-push-action uploads to the run.
+          pattern: bundle-*
           path: dist
           merge-multiple: true
       - name: Upload all release assets
