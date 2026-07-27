@@ -74,3 +74,26 @@ Describe 'Protect-AfctFile and the critical/best-effort wrappers' {
         { Protect-AfctFile $f } | Should -Throw -ExpectedMessage '*icacls is not available*'
     }
 }
+
+Describe 'ci-windows-version.ps1' {
+    BeforeAll { $script:Helper = Join-Path $RepoRoot 'deploy\ci-windows-version.ps1' }
+    It 'prints the version parsed from a controller' {
+        $fix = Join-Path $Work 'ctl.ps1'
+        Set-Content -LiteralPath $fix -Value "Set-StrictMode -Version Latest`n`$InstallerVersion = '9.9.9'`n"
+        $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Helper -ControllerPath $fix 2>$null | Out-String).Trim()
+        $LASTEXITCODE | Should -Be 0
+        $out | Should -Be '9.9.9'
+    }
+    It 'exits nonzero when the version cannot be parsed' {
+        $fix = Join-Path $Work 'noversion.ps1'
+        Set-Content -LiteralPath $fix -Value "# nothing to parse here`n"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Helper -ControllerPath $fix 2>$null | Out-Null
+        $LASTEXITCODE | Should -Be 1
+    }
+    It 'reads the real Windows controller version' {
+        $real = Join-Path $RepoRoot 'deploy\windows\bin\afctctl.ps1'
+        $out = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Helper -ControllerPath $real 2>$null | Out-String).Trim()
+        $LASTEXITCODE | Should -Be 0
+        $out | Should -Match '^[0-9]+\.[0-9]+\.[0-9]+$'
+    }
+}
