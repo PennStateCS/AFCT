@@ -57,7 +57,8 @@ $RuntimeDir     = Join-Path $SharedDir 'runtime'
 $RuntimeCompose = Join-Path $RuntimeDir 'docker-compose.yml'
 
 # --- load library modules (functions only) -----------------------------------------------
-foreach ($mod in @('Output', 'Platform', 'Docker', 'Uninstall')) {
+foreach ($mod in @('Output', 'Platform', 'Docker', 'Validation', 'Environment', 'Config',
+                   'Diagnostics', 'Recover', 'Uninstall')) {
     . (Join-Path $LibDir "$mod.ps1")
 }
 
@@ -121,20 +122,34 @@ function Show-AfctVersion {
 
 if ($Help) { $Command = 'help' }
 
-switch ($Command) {
-    'help'      { Show-AfctUsage; break }
-    'version'   { Show-AfctVersion; break }
-    'uninstall' { Invoke-AfctUninstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -PurgeData:([bool]$PurgeData); break }
-    { $_ -in @('install','status','logs','update','self-update','restart','stop',
-               'enable-updater','disable-updater','doctor','recover','diagnostics') } {
-        Write-AfctInfo "the '$Command' command is ported from the existing installer in the next AFCT Windows build."
-        break
+# Fatal helpers signal with a `throw "afct-fatal: <message>"`; catch it here so the user
+# sees a clean one-line error and the process exits nonzero, rather than a PowerShell stack
+# trace. Any other exception is unexpected and re-thrown.
+try {
+    switch ($Command) {
+        'help'        { Show-AfctUsage; break }
+        'version'     { Show-AfctVersion; break }
+        'recover'     { Invoke-AfctRecover -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive); break }
+        'diagnostics' { Invoke-AfctDiagnostics 'manual' | Out-Null; break }
+        'uninstall'   { Invoke-AfctUninstall -Yes:([bool]$Yes) -NonInteractive:([bool]$NonInteractive) -PurgeData:([bool]$PurgeData); break }
+        { $_ -in @('install','status','logs','update','self-update','restart','stop',
+                   'enable-updater','disable-updater','doctor') } {
+            Write-AfctInfo "the '$Command' command is ported from the existing installer in the next AFCT Windows build."
+            break
+        }
+        default {
+            Write-AfctError "unknown option or command: $Command"
+            Write-AfctInfo  "Run: afctctl help"
+            exit 2
+        }
     }
-    default {
-        Write-AfctError "unknown option or command: $Command"
-        Write-AfctInfo  "Run: afctctl help"
-        exit 2
+} catch {
+    $msg = "$($_.Exception.Message)"
+    if ($msg -like 'afct-fatal:*') {
+        Write-AfctError ($msg -replace '^afct-fatal:\s*', '')
+        exit 1
     }
+    throw
 }
 
 # Explicit success exit so callers (the bootstrap's post-switch validation, the wrapper
