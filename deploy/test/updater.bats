@@ -433,3 +433,138 @@ serve_restore() {
   # Rollback reverted the stack file to the pre-upgrade one (no worker service).
   run grep -q 'worker:' docker-compose.yml; [ "$status" -ne 0 ]
 }
+
+# --- durable transaction, interrupted-upgrade recovery, local-image rollback --------- #
+# These seed a transaction.json (the durable state a crash would leave) and run the
+# updater fresh, so its startup recovery has to decide from the recorded state plus the
+# actual (mocked) docker state, not from the env file's tag alone.
+
+txn() { printf '%s' "$1" > "$TESTDIR/triggers/transaction.json"; }
+
+@test "an upgrade records a durable transaction and clears it on success without a write error" {
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"txn1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  # The transaction is removed once the upgrade commits, and it serialized cleanly.
+  [ ! -f "$TESTDIR/triggers/transaction.json" ]
+  [[ "$output" != *"could not write the transaction file"* ]]
+}
+
+@test "recovery commits an interrupted upgrade that actually came up healthy" {
+  # env already flipped to the new tag and the container is on the new image + healthy:
+  # a crash right after the swap must be committed, not rolled back over a good version.
+  printf 'NODE_ENV=production\nAFCT_APP_TAG=v1.1.0\nNEXTAUTH_SECRET=keepme\n' > .env.production
+  txn '{"schema":"afct-update-txn/v1","action":"upgrade","phase":"verifying","fromTag":"v1.0.0","toTag":"v1.1.0","project":"afct","requestId":"rec1","images":{"app":"sha256:img-v1.0.0"},"envChanged":true,"composeReplaced":false,"composeBackup":"","committed":false}'
+  export MOCK_DEPLOYED_TAG=v1.1.0
+  export MOCK_HEALTH=healthy
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v1.1.0" ]
+  [ ! -f "$TESTDIR/triggers/transaction.json" ]
+}
+
+@test "recovery rolls back an interrupted upgrade whose new version never came up (env tag and running image disagree)" {
+  # env pins v1.1.0 but the running container is still on v1.0.0's image: the upgrade did
+  # not finish, so recovery must return the env to the known-good version.
+  printf 'NODE_ENV=production\nAFCT_APP_TAG=v1.1.0\nNEXTAUTH_SECRET=keepme\n' > .env.production
+  txn '{"schema":"afct-update-txn/v1","action":"upgrade","phase":"recreating","fromTag":"v1.0.0","toTag":"v1.1.0","project":"afct","requestId":"rec2","images":{"app":"sha256:img-v1.0.0"},"envChanged":true,"composeReplaced":false,"composeBackup":"","committed":false}'
+  export MOCK_DEPLOYED_TAG=v1.0.0    # still on the old image
+  export MOCK_HEALTH=healthy         # the old version is healthy, so rollback is clean
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ "$(phase)" = "rolled_back" ]
+  [ "$(tag_now)" = "v1.0.0" ]
+  [ ! -f "$TESTDIR/triggers/transaction.json" ]
+}
+
+@test "recovery restores the previous compose file when the interrupted upgrade replaced it" {
+  printf 'services:\n  app: {}\n  worker: {}\n' > docker-compose.yml     # the new (failed) stack
+  printf 'services: {}\n' > docker-compose.yml.bak.rec3                   # the pre-upgrade file
+  printf 'NODE_ENV=production\nAFCT_APP_TAG=v1.1.0\nNEXTAUTH_SECRET=keepme\n' > .env.production
+  txn "{\"schema\":\"afct-update-txn/v1\",\"action\":\"upgrade\",\"phase\":\"verifying\",\"fromTag\":\"v1.0.0\",\"toTag\":\"v1.1.0\",\"project\":\"afct\",\"requestId\":\"rec3\",\"images\":{\"app\":\"sha256:img-v1.0.0\"},\"envChanged\":true,\"composeReplaced\":true,\"composeBackup\":\"$TESTDIR/docker-compose.yml.bak.rec3\",\"committed\":false}"
+  export MOCK_DEPLOYED_TAG=v1.0.0
+  export MOCK_HEALTH=healthy
+  run sh updater.sh
+  [ "$(phase)" = "rolled_back" ]
+  [ "$(tag_now)" = "v1.0.0" ]
+  # The compose file was reverted to the pre-upgrade one (no worker service).
+  run grep -q 'worker:' docker-compose.yml; [ "$status" -ne 0 ]
+}
+
+@test "rollback uses local images and never pulls from the registry" {
+  export MOCK_PULL_RC=1                     # registry pull unavailable
+  export MOCK_ARGS_LOG="$TESTDIR/args.log"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"reg1","backupFirst":false}'
+  run sh updater.sh
+  # The forward pull failed, but rollback recreated from local images and succeeded.
+  [ "$(phase)" = "rolled_back" ]
+  [ "$(tag_now)" = "v1.0.0" ]
+  # Exactly one `compose pull` was attempted (the forward one); rollback did NOT pull.
+  run sh -c "grep -c ' pull ' \"$MOCK_ARGS_LOG\""
+  [ "$output" -eq 1 ]
+}
+
+@test "rollback retags the previous image from the local cache when its tag was removed" {
+  export MOCK_PULL_RC=1                      # forward pull fails -> rollback
+  export MOCK_DEPLOYED_TAG=v1.0.0
+  export MOCK_MISSING_TAGS="v1.0.0"          # the previous tag is gone locally
+  export MOCK_HEALTH=healthy
+  export MOCK_ARGS_LOG="$TESTDIR/args.log"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"retag1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "rolled_back" ]
+  [ "$(tag_now)" = "v1.0.0" ]
+  # It re-pointed the previous tag at the captured local image id before recreating.
+  run grep -Eq '^tag +sha256:img-v1.0.0' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+}
+
+@test "an unreadable transaction file is discarded and a queued request still runs" {
+  txn '{ this is not valid json'
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"badtxn","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v1.1.0" ]
+  [ ! -f "$TESTDIR/triggers/transaction.json" ]
+}
+
+@test "an unfinished transaction is resolved before a newer queued request is processed" {
+  printf 'NODE_ENV=production\nAFCT_APP_TAG=v1.1.0\nNEXTAUTH_SECRET=keepme\n' > .env.production
+  txn '{"schema":"afct-update-txn/v1","action":"upgrade","phase":"recreating","fromTag":"v1.0.0","toTag":"v1.1.0","project":"afct","requestId":"old","images":{"app":"sha256:img-v1.0.0"},"envChanged":true,"composeReplaced":false,"composeBackup":"","committed":false}'
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"new","backupFirst":false}'
+  export MOCK_DEPLOYED_TAG=v1.0.0
+  export MOCK_HEALTH=healthy
+  run sh updater.sh
+  # Recovery ran first (its log line survives even though the later upgrade resets the
+  # progress file), then the queued request re-applied v1.1.0 cleanly.
+  [[ "$output" == *"recovering an interrupted upgrade"* ]]
+  [ "$(tag_now)" = "v1.1.0" ]
+  [ "$(phase)" = "healthy" ]
+}
+
+@test "a claimed request with no transaction is re-queued and processed after a restart" {
+  # Crash before a transaction was opened: only the claim exists, nothing changed yet.
+  printf '%s' '{"action":"upgrade","tag":"v1.1.0","requestId":"claim1","backupFirst":false}' > triggers/.processing.json
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v1.1.0" ]
+}
+
+@test "a stale claim is superseded by a newer queued request" {
+  printf '%s' '{"action":"upgrade","tag":"v9.9.9","requestId":"stale","backupFirst":false}' > triggers/.processing.json
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"fresh","backupFirst":false}'
+  run sh updater.sh
+  # The fresh request wins; the stale claim (to a bogus tag) is discarded, never run.
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v1.1.0" ]
+}
+
+@test "recovery of an interrupted downgrade is surfaced for manual recovery" {
+  printf 'NODE_ENV=production\nAFCT_APP_TAG=v0.9.0\nNEXTAUTH_SECRET=keepme\n' > .env.production
+  txn '{"schema":"afct-update-txn/v1","action":"downgrade","phase":"restoring","fromTag":"v1.0.0","toTag":"v0.9.0","project":"afct","requestId":"dgr1","images":{},"envChanged":true,"composeReplaced":false,"composeBackup":"","committed":false}'
+  export MOCK_HEALTH=healthy
+  run sh updater.sh
+  [ "$(phase)" = "failed" ]
+  [[ "$(jq -r '.message' triggers/status.json)" == *"manual recovery"* ]]
+  [ ! -f "$TESTDIR/triggers/transaction.json" ]
+}

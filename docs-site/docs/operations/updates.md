@@ -101,3 +101,16 @@ Some releases change more than the application image: they add a service, a heal
 - **The updater itself.** Because the updater cannot recreate its own container, it tracks the application version separately. When it falls behind, the Updates tab shows an **Update the update service** action that brings it up to the running version. The update service restarts itself as part of this, so the tab reports progress and confirms once it comes back on the new version; a brief unavailability during the swap is expected and is not an error.
 
 This means the console is normally not needed to keep a deployment current. The host-side `sh install.sh self-update` remains available as a manual path and as the way to update the installer script, but routine upgrades, including ones that change the stack layout, can be done entirely from the Updates tab.
+
+### Recovery after an interruption
+
+An upgrade can be interrupted partway through: the server reboots, Docker restarts, or the updater container is recreated while it is working. The updater is built to recover from this on its own, so an interrupted upgrade does not leave the deployment in an unknown state.
+
+While an upgrade runs, the updater keeps a small transaction record in its shared volume: the previous version, the exact local images the stack was running, whether it has changed the environment or compose files yet, and how far it has got. When it starts, it looks for an unfinished transaction and reconciles it against what Docker is actually running:
+
+- **The new version is up and healthy.** The upgrade effectively finished before the interruption, so it is committed. The updater does not roll a healthy new version back just because it was interrupted late.
+- **The new version is not confirmed healthy.** The updater returns the deployment to the previous version. It compares the running container's actual image against the requested one rather than trusting the version pinned in the environment file, so an upgrade that was interrupted right after the version was written is not mistaken for a finished one.
+
+Rollback does not depend on the registry, the network, or the old tag still existing remotely. The previous version's images are kept on disk (superseded images are pruned only after a new version is confirmed healthy), and rollback reuses those exact local images. If the previous tag is missing, the updater re-points it at the image it recorded before the upgrade. This is why a rollback still succeeds when the machine is offline or the old release has been removed from the registry.
+
+If both the upgrade and the rollback fail, the updater stops and reports that manual recovery is required rather than guessing. The status message and the System Logs entry name the versions involved so an administrator can restore from a restore point (see [Backups](./backups.md)). An interrupted **downgrade** is never resumed automatically, because it restores the database and re-running it could apply that restore twice; it is reported for manual recovery instead.

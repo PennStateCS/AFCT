@@ -126,6 +126,191 @@ write_status() {
 }
 
 # --------------------------------------------------------------------------- #
+# Update transaction: durable, recoverable state for an in-flight upgrade.
+#
+# status.json tells the UI the coarse phase; it is not enough to RECOVER from. If this
+# container (or the host) restarts mid-upgrade, the next start must know how far the
+# previous run got and what the prior-good state was, or it can wrongly trust the env
+# file and report a half-applied version as healthy. This file records that: the
+# previous tag, the LOCAL image ids to roll back to (so rollback never needs the
+# registry), whether the env or compose files were changed, and the current phase.
+# Written atomically. Lives in the shared trigger volume so it survives a container swap.
+#
+# These transaction phases are INTERNAL and finer-grained than the status.json phases
+# the UI consumes; the two are deliberately separate so the UI contract does not change.
+# Phases: requested, backing_up, validating, pulling, compose_updated, recreating,
+# verifying, committed, rolling_back, rolled_back, failed.
+# --------------------------------------------------------------------------- #
+TXN_FILE="${TRIGGER_DIR}/transaction.json"
+TXN_SCHEMA="afct-update-txn/v1"
+
+# In-memory mirror of the transaction, re-serialized in full on each change so every
+# write is atomic and the file is never observed as a partial object.
+_TXN_ACTIVE=0
+_TXN_ACTION=""
+_TXN_PHASE=""
+_TXN_START_PHASE=""
+_TXN_FROM=""
+_TXN_TO=""
+_TXN_PROJECT=""
+_TXN_RID=""
+_TXN_IMAGES='{}'          # {service: local-image-id} captured before any change
+_TXN_ENV_CHANGED=false
+_TXN_COMPOSE_REPLACED=false
+_TXN_COMPOSE_BACKUP=""
+_TXN_BACKUP_TS=""
+_TXN_RESTORE_POINT=""
+_TXN_STARTED_AT=""
+_TXN_ROLLBACK_REQUIRED=false
+_TXN_COMMITTED=false
+
+_now_iso() { date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || printf 'unknown'; }
+
+txn_save() {
+  [ "$_TXN_ACTIVE" = "1" ] || return 0
+  _txn_tmp="${TXN_FILE}.tmp.$$"
+  if jq -n \
+    --arg schema "$TXN_SCHEMA" \
+    --arg requestId "$_TXN_RID" \
+    --arg action "$_TXN_ACTION" \
+    --arg phase "$_TXN_PHASE" \
+    --arg startPhase "$_TXN_START_PHASE" \
+    --arg fromTag "$_TXN_FROM" \
+    --arg toTag "$_TXN_TO" \
+    --arg project "$_TXN_PROJECT" \
+    --argjson images "$_TXN_IMAGES" \
+    --argjson envChanged "$_TXN_ENV_CHANGED" \
+    --argjson composeReplaced "$_TXN_COMPOSE_REPLACED" \
+    --arg composeBackup "$_TXN_COMPOSE_BACKUP" \
+    --arg backupTimestamp "$_TXN_BACKUP_TS" \
+    --arg restorePoint "$_TXN_RESTORE_POINT" \
+    --arg startedAt "$_TXN_STARTED_AT" \
+    --arg updatedAt "$(_now_iso)" \
+    --argjson rollbackRequired "$_TXN_ROLLBACK_REQUIRED" \
+    --argjson committed "$_TXN_COMMITTED" \
+    '{schema:$schema, requestId:$requestId, action:$action, phase:$phase,
+      startPhase:$startPhase, fromTag:$fromTag, toTag:$toTag, project:$project,
+      images:$images, envChanged:$envChanged, composeReplaced:$composeReplaced,
+      composeBackup:$composeBackup, backupTimestamp:$backupTimestamp,
+      restorePoint:$restorePoint, startedAt:$startedAt, updatedAt:$updatedAt,
+      rollbackRequired:$rollbackRequired, committed:$committed}' \
+    > "$_txn_tmp" 2>/dev/null && mv "$_txn_tmp" "$TXN_FILE" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$_txn_tmp" 2>/dev/null || true
+  log "could not write the transaction file"
+}
+
+txn_begin() {
+  _TXN_ACTIVE=1
+  _TXN_ACTION=$1
+  _TXN_FROM=$2
+  _TXN_TO=$3
+  _TXN_PROJECT=$4
+  _TXN_RID=$5
+  _TXN_PHASE="requested"
+  _TXN_START_PHASE="requested"
+  _TXN_IMAGES='{}'
+  _TXN_ENV_CHANGED=false
+  _TXN_COMPOSE_REPLACED=false
+  _TXN_COMPOSE_BACKUP=""
+  _TXN_BACKUP_TS=""
+  _TXN_RESTORE_POINT=""
+  _TXN_STARTED_AT=$(_now_iso)
+  _TXN_ROLLBACK_REQUIRED=false
+  _TXN_COMMITTED=false
+  txn_save
+}
+
+txn_phase() { _TXN_PHASE=$1; txn_save; }
+
+# Remove the transaction file and mark the in-memory transaction inactive. Called once
+# a run has reached a terminal outcome (committed, rolled_back, or a failed recovery),
+# so a later start does not re-run it.
+txn_clear() {
+  _TXN_ACTIVE=0
+  rm -f "$TXN_FILE" 2>/dev/null || true
+}
+
+# --------------------------------------------------------------------------- #
+# Image identity: capture the LOCAL image each service runs before anything changes,
+# so a rollback can reuse those exact images without contacting the registry.
+# --------------------------------------------------------------------------- #
+
+# Echo a JSON object {service: imageId} for the stack services currently running, by
+# inspecting each service's container. "{}" if none could be inspected. The image id is
+# a local content digest (sha256:...), stable across a tag being moved or deleted.
+capture_stack_images() {
+  _proj=$1
+  _obj='{}'
+  # shellcheck disable=SC2086
+  for _svc in $STACK_SERVICES; do
+    _cid=$(dc "$_proj" ps -q "$_svc" 2>/dev/null | head -n 1)
+    [ -n "$_cid" ] || continue
+    _iid=$(docker inspect -f '{{.Image}}' "$_cid" 2>/dev/null || true)
+    [ -n "$_iid" ] || continue
+    _obj=$(printf '%s' "$_obj" | jq -c --arg s "$_svc" --arg i "$_iid" '. + {($s): $i}' 2>/dev/null || printf '%s' "$_obj")
+  done
+  printf '%s' "$_obj"
+}
+
+# The local image id a repo:tag currently resolves to, or empty when the tag is not
+# present locally.
+tag_image_id() {
+  docker image inspect -f '{{.Id}}' "${IMAGE_REPO}:$1" 2>/dev/null
+}
+
+# The image id the running app container is on, or empty.
+running_app_image_id() {
+  _proj=$1
+  _cid=$(dc "$_proj" ps -q "$APP_SERVICE" 2>/dev/null | head -n 1)
+  [ -n "$_cid" ] || return 1
+  docker inspect -f '{{.Image}}' "$_cid" 2>/dev/null
+}
+
+# A single health read (not the polling loop). running+healthy or running+none pass;
+# anything else (starting, unhealthy, exited) is treated as not-yet-good.
+health_ok_once() {
+  _proj=$1
+  _id=$(dc "$_proj" ps -q "$APP_SERVICE" 2>/dev/null | head -n 1)
+  [ -n "$_id" ] || return 1
+  _state=$(docker inspect \
+    -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+    "$_id" 2>/dev/null || printf 'missing|none')
+  case "$_state" in
+    running\|healthy) return 0 ;;
+    running\|none) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# True only when the app container is actually running the given tag's image (compared
+# by local image id, never the registry) AND reports healthy right now. This is how a
+# request for the version already pinned in .env is CONFIRMED rather than trusted: the
+# env file records what was requested, not what is deployed and healthy.
+deployed_and_healthy() {
+  _tag=$1
+  _proj=$2
+  _run=$(running_app_image_id "$_proj") || return 1
+  _want=$(tag_image_id "$_tag") || return 1
+  [ -n "$_run" ] && [ -n "$_want" ] && [ "$_run" = "$_want" ] || return 1
+  health_ok_once "$_proj"
+}
+
+# If the previous tag's image is missing locally (pruned, or its tag was removed), point
+# the tag back at the exact image id captured before the upgrade, so a local-only
+# recreate can still resolve it. No-op when the tag already resolves locally.
+restore_rollback_image() {
+  _from=$1
+  tag_image_id "$_from" >/dev/null 2>&1 && return 0
+  _iid=$(printf '%s' "$_TXN_IMAGES" | jq -r --arg s "$APP_SERVICE" '.[$s] // ""' 2>/dev/null || printf '')
+  [ -n "$_iid" ] || return 1
+  docker tag "$_iid" "${IMAGE_REPO}:${_from}" >/dev/null 2>&1 || return 1
+  progress_note "restored the ${_from} image from the local cache"
+  return 0
+}
+
+# --------------------------------------------------------------------------- #
 # Live progress log. Raw command output (docker pull / compose up) and periodic
 # heartbeat notes are appended here so the UI can stream what's happening; the
 # coarse phase still lives in status.json. Trimmed to the last PROGRESS_MAX_LINES
@@ -340,36 +525,49 @@ prune_old_images() {
   [ -n "$_free" ] && log "image cleanup done (${_free}MB free, keeping ${_keep_a} and ${_keep_b})"
 }
 
-recreate_app() {
+# Pull the selected tag and recreate the app plus its lockstep sidecars (forward path).
+recreate_app() { _recreate_stack "$1" pull; }
+
+# Recreate from LOCAL images only, skipping the registry pull. Used on the rollback
+# path: the previous version's images are still on disk (prune runs only after a
+# successful upgrade), so a rollback must not depend on the registry, DNS, or the old
+# tag still existing remotely.
+recreate_app_local() { _recreate_stack "$1" nopull; }
+
+_recreate_stack() {
   _proj=$1
-  # Pull + recreate the app and its lockstep sidecars (nginx, backup) at the selected
-  # tag. Word-splitting of STACK_SERVICES is intentional (a list of service names).
-  # Run the pull in the background and keep the heartbeat alive while it runs: a large
-  # image over a slow link can take longer than the healthcheck's staleness window,
-  # which would mark this sidecar unhealthy and flip the app's "updater available"
-  # flag to false in the middle of an upgrade.
-  # `docker compose pull` both downloads and then EXTRACTS the layers. On the ~4.7GB
-  # app image the extract alone can take a few minutes, and with --quiet (below) it is
-  # silent, so say up front that this whole step can take a while -- otherwise it looks
-  # stalled between heartbeats.
-  progress_note "downloading and extracting images (this can take a few minutes)"
-  # --quiet: docker redraws per-layer progress bars in place on a TTY, but with output
-  # redirected to this file (no TTY) every redraw becomes a NEW line, so the streamed
-  # log fills with hundreds of "Downloading [==>]" lines. Suppress that firehose; the
-  # elapsed heartbeats below carry liveness, and errors still print to stderr (2>&1).
-  # shellcheck disable=SC2086
-  dc "$_proj" pull --quiet $STACK_SERVICES >> "$PROGRESS_LOG" 2>&1 &
-  _pull_pid=$!
-  _elapsed=0
-  while kill -0 "$_pull_pid" 2>/dev/null; do
-    beat
-    sleep "$HEALTH_INTERVAL"
-    _elapsed=$((_elapsed + HEALTH_INTERVAL))
-    progress_note "still downloading/extracting images (${_elapsed}s elapsed)"
-    progress_trim
-  done
-  wait "$_pull_pid" || { progress_note "image pull failed"; return 1; }
-  progress_note "images ready; recreating containers"
+  _mode=$2
+  # Word-splitting of STACK_SERVICES is intentional (a list of service names).
+  if [ "$_mode" = "pull" ]; then
+    # Run the pull in the background and keep the heartbeat alive while it runs: a large
+    # image over a slow link can take longer than the healthcheck's staleness window,
+    # which would mark this sidecar unhealthy and flip the app's "updater available"
+    # flag to false in the middle of an upgrade.
+    # `docker compose pull` both downloads and then EXTRACTS the layers. On the ~4.7GB
+    # app image the extract alone can take a few minutes, and with --quiet (below) it is
+    # silent, so say up front that this whole step can take a while -- otherwise it looks
+    # stalled between heartbeats.
+    progress_note "downloading and extracting images (this can take a few minutes)"
+    # --quiet: docker redraws per-layer progress bars in place on a TTY, but with output
+    # redirected to this file (no TTY) every redraw becomes a NEW line, so the streamed
+    # log fills with hundreds of "Downloading [==>]" lines. Suppress that firehose; the
+    # elapsed heartbeats below carry liveness, and errors still print to stderr (2>&1).
+    # shellcheck disable=SC2086
+    dc "$_proj" pull --quiet $STACK_SERVICES >> "$PROGRESS_LOG" 2>&1 &
+    _pull_pid=$!
+    _elapsed=0
+    while kill -0 "$_pull_pid" 2>/dev/null; do
+      beat
+      sleep "$HEALTH_INTERVAL"
+      _elapsed=$((_elapsed + HEALTH_INTERVAL))
+      progress_note "still downloading/extracting images (${_elapsed}s elapsed)"
+      progress_trim
+    done
+    wait "$_pull_pid" || { progress_note "image pull failed"; return 1; }
+    progress_note "images ready; recreating containers"
+  else
+    progress_note "restoring the previous version from the local image cache"
+  fi
   # shellcheck disable=SC2086
   dc "$_proj" up -d $STACK_SERVICES >> "$PROGRESS_LOG" 2>&1 || { progress_note "recreate failed"; return 1; }
   progress_trim
@@ -550,6 +748,38 @@ tag_allowed() {
   return 0
 }
 
+# Roll the stack back to the transaction's previous version, using the LOCAL images
+# captured before the upgrade so it never depends on the registry, DNS, or the old tag
+# still existing remotely. Restores a swapped compose file too. Reads _TXN_* state, so
+# the same path serves both a same-run failure and a recovery after a restart.
+rollback_upgrade() {
+  write_status "rolling_back" "the upgrade failed; restoring ${_TXN_FROM}" "$_TXN_FROM" "$_TXN_TO" "$_TXN_RID"
+  log "rolling back to ${_TXN_FROM}"
+  _TXN_ROLLBACK_REQUIRED=true
+  txn_phase "rolling_back"
+
+  # If neither the env nor the compose file was changed yet, the running stack was never
+  # touched; confirm it is still healthy on the previous version instead of recreating.
+  if [ "$_TXN_ENV_CHANGED" != "true" ] && [ "$_TXN_COMPOSE_REPLACED" != "true" ]; then
+    if deployed_and_healthy "$_TXN_FROM" "$_TXN_PROJECT"; then
+      txn_phase "rolled_back"
+      write_status "rolled_back" "restored ${_TXN_FROM} after a failed upgrade to ${_TXN_TO}" "$_TXN_FROM" "$_TXN_TO" "$_TXN_RID"
+      return 0
+    fi
+  fi
+
+  restore_release_compose
+  restore_rollback_image "$_TXN_FROM" || log "could not restore the ${_TXN_FROM} image from cache; relying on the tag"
+  if set_app_tag "$_TXN_FROM" && recreate_app_local "$_TXN_PROJECT" && wait_for_health "$_TXN_PROJECT"; then
+    txn_phase "rolled_back"
+    write_status "rolled_back" "restored ${_TXN_FROM} after a failed upgrade to ${_TXN_TO}" "$_TXN_FROM" "$_TXN_TO" "$_TXN_RID"
+  else
+    txn_phase "failed"
+    write_status "failed" "the upgrade and the rollback both failed; manual recovery is required" "$_TXN_FROM" "$_TXN_TO" "$_TXN_RID"
+  fi
+  return 0
+}
+
 # --------------------------------------------------------------------------- #
 # Request processing
 # --------------------------------------------------------------------------- #
@@ -625,25 +855,38 @@ process_request() {
     return 0
   fi
 
+  # Already on this tag: CONFIRM it is actually deployed and healthy before reporting
+  # success. The env file records what was REQUESTED, not what is deployed; trusting it
+  # alone is how an upgrade interrupted just after the tag was written looks "done".
   if [ "$_tag" = "$_from" ]; then
-    write_status "healthy" "already running ${_tag}" "$_from" "$_tag" "$_rid"
-    rm -f "$CLAIM_FILE"
-    return 0
+    if deployed_and_healthy "$_tag" "$_proj"; then
+      write_status "healthy" "already running ${_tag}" "$_from" "$_tag" "$_rid"
+      rm -f "$CLAIM_FILE"
+      return 0
+    fi
+    log "env pins ${_tag} but it is not confirmed healthy; reconciling by redeploying it"
   fi
 
   log "upgrade requested: ${_from} -> ${_tag} (project ${_proj}, request ${_rid})"
+  # Open a durable transaction so an interruption after this point is recovered on the
+  # next start from recorded state, not by trusting the env file (see recover_transaction).
+  txn_begin "upgrade" "$_from" "$_tag" "$_proj" "$_rid"
   # Fresh live log for this upgrade; the UI streams it from the first phase on.
   progress_reset
   progress_note "starting upgrade ${_from} -> ${_tag}"
 
   if [ "$_backup" = "true" ]; then
+    txn_phase "backing_up"
     write_status "backing_up" "creating a pre-upgrade backup" "$_from" "$_tag" "$_rid"
     _bts=$(backup_and_wait) || _bts=""
     if [ -n "$_bts" ]; then
+      _TXN_BACKUP_TS=$_bts
+      txn_save
       # Remember this backup as the restore point for the version we're leaving.
       record_restore_point "$_from" "$_bts"
     elif [ "$REQUIRE_BACKUP" = "true" ]; then
       write_status "failed" "a pre-upgrade backup could not be confirmed" "$_from" "$_tag" "$_rid"
+      txn_clear
       rm -f "$CLAIM_FILE"
       return 0
     else
@@ -651,6 +894,7 @@ process_request() {
     fi
   fi
 
+  txn_phase "validating"
   # Refuse to start when there clearly isn't room, instead of failing mid-download
   # and rolling back. Nothing has changed yet at this point, so the running version
   # is untouched and the admin gets an actionable message.
@@ -660,25 +904,44 @@ process_request() {
     write_status "failed" \
       "Not enough disk space: ${_free}MB free, ${DISK_MIN_MB}MB required. Free space on the server (docker image prune -af) and try again." \
       "$_from" "$_tag" "$_rid"
+    txn_clear
     rm -f "$CLAIM_FILE"
     return 0
   fi
 
+  # Record the exact local images the stack runs now, before anything changes, so the
+  # rollback path can reuse them without the registry.
+  _TXN_IMAGES=$(capture_stack_images "$_proj")
+  txn_save
+
+  txn_phase "pulling"
   write_status "pulling" "downloading ${IMAGE_REPO}:${_tag}" "$_from" "$_tag" "$_rid"
   if ! set_app_tag "$_tag"; then
     write_status "failed" "could not update the version in the environment file" "$_from" "$_tag" "$_rid"
+    txn_clear
     rm -f "$CLAIM_FILE"
     return 0
   fi
+  _TXN_ENV_CHANGED=true
+  txn_save
 
   # If this release changed the stack layout, pull its compose in before recreating,
   # so a new service or healthcheck is applied as part of the same upgrade. Best
   # effort and self-reverting: the rollback path below restores the old file.
   apply_release_compose "$_tag" "$_proj"
+  if [ -n "$_COMPOSE_BACKUP" ]; then
+    _TXN_COMPOSE_REPLACED=true
+    _TXN_COMPOSE_BACKUP=$_COMPOSE_BACKUP
+    txn_phase "compose_updated"
+  fi
 
+  txn_phase "recreating"
   if recreate_app "$_proj"; then
+    txn_phase "verifying"
     write_status "migrating" "waiting for ${_tag} to become healthy" "$_from" "$_tag" "$_rid"
     if wait_for_health "$_proj"; then
+      _TXN_COMMITTED=true
+      txn_phase "committed"
       write_status "healthy" "upgraded to ${_tag}" "$_from" "$_tag" "$_rid"
       log "upgrade to ${_tag} complete"
       # Only once the new version is up and healthy: keep it and the rollback
@@ -686,22 +949,16 @@ process_request() {
       prune_old_images "$_tag" "$_from"
       # The new compose is proven good; drop its backup so they don't pile up.
       [ -n "$_COMPOSE_BACKUP" ] && rm -f "$_COMPOSE_BACKUP"
+      txn_clear
       rm -f "$CLAIM_FILE"
       return 0
     fi
   fi
 
-  # Roll back to the previous tag.
-  write_status "rolling_back" "the upgrade failed; restoring ${_from}" "$_from" "$_tag" "$_rid"
+  # The upgrade failed; roll back to the previous version using local images.
   log "upgrade to ${_tag} failed; rolling back to ${_from}"
-  # Revert the compose file too if this upgrade swapped it, so the rollback recreates
-  # the old stack shape and not the new one that just failed.
-  restore_release_compose
-  if set_app_tag "$_from" && recreate_app "$_proj" && wait_for_health "$_proj"; then
-    write_status "rolled_back" "restored ${_from} after a failed upgrade to ${_tag}" "$_from" "$_tag" "$_rid"
-  else
-    write_status "failed" "the upgrade and the rollback both failed; manual recovery is required" "$_from" "$_tag" "$_rid"
-  fi
+  rollback_upgrade
+  txn_clear
   rm -f "$CLAIM_FILE"
   return 0
 }
@@ -888,15 +1145,108 @@ process_self_update() {
 }
 
 # --------------------------------------------------------------------------- #
+# Startup recovery of an interrupted update
+#
+# On start, resolve a transaction a crash or restart left unfinished, using the durable
+# state plus the ACTUAL docker state rather than the env file's tag: commit an upgrade
+# that in fact came up healthy, or roll back to the previous known-good version. This is
+# authoritative, so it runs before the claim fallback and before the main loop.
+# --------------------------------------------------------------------------- #
+recover_transaction() {
+  [ -f "$TXN_FILE" ] || return 0
+  if ! jq -e . "$TXN_FILE" >/dev/null 2>&1; then
+    log "discarding an unreadable transaction file"
+    rm -f "$TXN_FILE"
+    return 0
+  fi
+  _schema=$(jq -r '.schema // ""' "$TXN_FILE" 2>/dev/null || printf '')
+  if [ "$_schema" != "$TXN_SCHEMA" ]; then
+    log "discarding a transaction file with an unrecognized schema (${_schema})"
+    rm -f "$TXN_FILE"
+    return 0
+  fi
+  if [ "$(jq -r '.committed // false' "$TXN_FILE" 2>/dev/null || printf false)" = "true" ]; then
+    rm -f "$TXN_FILE"
+    return 0
+  fi
+
+  # Load the durable state into the in-memory mirror so the shared helpers can act on it.
+  _TXN_ACTIVE=1
+  _TXN_ACTION=$(jq -r '.action // ""' "$TXN_FILE")
+  _TXN_PHASE=$(jq -r '.phase // ""' "$TXN_FILE")
+  _TXN_START_PHASE=$(jq -r '.startPhase // ""' "$TXN_FILE")
+  _TXN_FROM=$(jq -r '.fromTag // ""' "$TXN_FILE")
+  _TXN_TO=$(jq -r '.toTag // ""' "$TXN_FILE")
+  _TXN_PROJECT=$(jq -r '.project // ""' "$TXN_FILE")
+  _TXN_RID=$(jq -r '.requestId // ""' "$TXN_FILE")
+  _TXN_IMAGES=$(jq -c '.images // {}' "$TXN_FILE" 2>/dev/null || printf '{}')
+  _TXN_ENV_CHANGED=$(jq -r '.envChanged // false' "$TXN_FILE")
+  _TXN_COMPOSE_REPLACED=$(jq -r '.composeReplaced // false' "$TXN_FILE")
+  _TXN_COMPOSE_BACKUP=$(jq -r '.composeBackup // ""' "$TXN_FILE")
+  _COMPOSE_BACKUP=$_TXN_COMPOSE_BACKUP
+  _TXN_BACKUP_TS=$(jq -r '.backupTimestamp // ""' "$TXN_FILE")
+  _TXN_RESTORE_POINT=$(jq -r '.restorePoint // ""' "$TXN_FILE")
+  _TXN_STARTED_AT=$(jq -r '.startedAt // ""' "$TXN_FILE")
+  _TXN_COMMITTED=false
+
+  # A stale claim for this same request must not be replayed after we resolve it here.
+  rm -f "$CLAIM_FILE" 2>/dev/null || true
+
+  # Docker may not be ready this early at boot; if the project can't be resolved, leave
+  # the transaction file untouched for the next start rather than acting on a guess.
+  _rproj=$(compose_project)
+  if [ -z "$_rproj" ]; then
+    log "recovery: cannot resolve the app container yet; will retry the interrupted ${_TXN_ACTION} on the next start"
+    _TXN_ACTIVE=0
+    return 0
+  fi
+  _TXN_PROJECT=$_rproj
+
+  log "recovering an interrupted ${_TXN_ACTION}: ${_TXN_FROM} -> ${_TXN_TO} (was at phase ${_TXN_PHASE}, request ${_TXN_RID})"
+  progress_note "recovering an interrupted update (was at: ${_TXN_PHASE})"
+
+  # A downgrade restores the database; auto-resuming it could double-apply a destructive
+  # restore, so surface it for manual recovery with the state we recorded instead.
+  if [ "$_TXN_ACTION" != "upgrade" ]; then
+    write_status "failed" "an interrupted ${_TXN_ACTION} needs manual recovery; check the database and version state" "$_TXN_FROM" "$_TXN_TO" "$_TXN_RID"
+    txn_clear
+    return 0
+  fi
+
+  # The new version actually came up healthy: the upgrade effectively finished, so commit
+  # it rather than rolling a good version back over a late crash.
+  if deployed_and_healthy "$_TXN_TO" "$_TXN_PROJECT"; then
+    log "recovery: ${_TXN_TO} is deployed and healthy; committing the interrupted upgrade"
+    _TXN_COMMITTED=true
+    txn_phase "committed"
+    write_status "healthy" "upgraded to ${_TXN_TO}" "$_TXN_FROM" "$_TXN_TO" "$_TXN_RID"
+    prune_old_images "$_TXN_TO" "$_TXN_FROM"
+    [ -n "$_COMPOSE_BACKUP" ] && rm -f "$_COMPOSE_BACKUP"
+    txn_clear
+    return 0
+  fi
+
+  # Otherwise return to the previous known-good version using local images.
+  log "recovery: ${_TXN_TO} is not confirmed healthy; rolling back to ${_TXN_FROM}"
+  rollback_upgrade
+  txn_clear
+  return 0
+}
+
+# --------------------------------------------------------------------------- #
 # Main loop
 # --------------------------------------------------------------------------- #
 log "AFCT updater started (watching ${TRIGGER_DIR})"
 stamp_updater_version
 beat
 
-# Recover a claim left behind by a crash mid-upgrade: retry it once. But if a newer
-# request already arrived, it supersedes the interrupted one — discard the stale claim
-# rather than clobbering the pending request.
+# Resolve any durable transaction left unfinished by a crash or restart first: it is
+# authoritative over the env file, and it also clears the matching stale claim.
+recover_transaction
+
+# Fallback for a request that was claimed but crashed BEFORE a transaction was opened
+# (nothing had changed yet): re-queue it, unless a newer request already superseded it,
+# in which case discard the stale claim rather than clobbering the pending request.
 if [ -f "$CLAIM_FILE" ]; then
   if [ -f "$REQUEST_FILE" ]; then
     rm -f "$CLAIM_FILE" 2>/dev/null || true
