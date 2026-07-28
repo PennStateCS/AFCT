@@ -27,7 +27,7 @@ const typeBadgeMap: Record<string, { label: string; className: string }> = {
   CFG: {
     label: 'Context-Free Grammar',
     className:
-      'bg-transparent text-emerald-700 border-emerald-300 dark:text-emerald-300 dark:border-emerald-300',
+      'bg-transparent text-green-700 border-green-300 dark:text-green-300 dark:border-green-300',
   },
   FA: {
     label: 'Finite Automaton',
