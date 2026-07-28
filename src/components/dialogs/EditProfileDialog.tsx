@@ -270,7 +270,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex flex-1 items-center justify-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
+                  className="flex flex-1 items-center justify-center gap-2 border-destructive text-destructive hover:bg-destructive/10"
                   onClick={handleDeleteAvatar}
                 >
                   <Trash2 className="h-4 w-4" />

@@ -167,7 +167,7 @@ export default function DiscussionPanel({
                             type="button"
                             aria-label="Delete comment"
                             onClick={() => setCommentToDelete(comment.id)}
-                            className="text-muted-foreground absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full text-xs opacity-70 transition-colors hover:bg-red-100 hover:text-red-600 hover:opacity-100"
+                            className="text-muted-foreground absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full text-xs opacity-70 transition-colors hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
                             title="Delete comment"
                             disabled={deletingComments[comment.id]}
                             hidden={

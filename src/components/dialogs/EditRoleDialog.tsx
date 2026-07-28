@@ -258,7 +258,7 @@ export function EditRoleDialog({
                     viewerDefaultRole === 'ADMIN') && (
                     <Button
                       variant="outline"
-                      className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
+                      className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive/10"
                       onClick={() => setPhotoConfirmOpen(true)}
                       disabled={!roster.user?.avatar}
                       title={!roster.user?.avatar ? 'No profile photo to delete' : undefined}
