@@ -33,6 +33,13 @@ setup() {
   export UPDATER_HEALTH_TIMEOUT=6
   export UPDATER_HEALTH_INTERVAL=1
   export UPDATER_BACKUP_TIMEOUT=2
+  # Stage 2 knobs: no stability wait and single-attempt pulls/fetches by default, so the
+  # existing tests stay fast; the Stage 2 tests below opt into non-zero values.
+  export UPDATER_STABILITY_SECONDS=0
+  export UPDATER_PULL_RETRIES=1
+  export UPDATER_PULL_RETRY_DELAY=0
+  export UPDATER_FETCH_RETRIES=1
+  export UPDATER_FETCH_RETRY_DELAY=0
   export MOCK_HEALTH="healthy"
 
   cd "$TESTDIR"
@@ -78,12 +85,16 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   run grep -q 'updater' "$TESTDIR/up.log"; [ "$status" -ne 0 ]
 }
 
-@test "self-update pulls the updater image and hands off to a detached helper" {
+@test "self-update pulls the updater image, hands off, and awaits confirmation (not premature success)" {
   export MOCK_ARGS_LOG="$TESTDIR/docker-args.log"
   request '{"action":"self-update","tag":"v1.1.0","requestId":"su1"}'
   run sh updater.sh
-  [ "$(phase)" = "healthy" ]
-  [[ "$(jq -r '.message' triggers/status.json)" == *"update service updated to v1.1.0"* ]]
+  # It does NOT report healthy up front; it stays in the in-flight self_updating phase and
+  # drops a pending marker for the replacement updater to confirm.
+  [ "$(phase)" = "self_updating" ]
+  [[ "$(jq -r '.message' triggers/status.json)" == *"restarting the update service"* ]]
+  [ -f "$TESTDIR/triggers/.self-update-pending.json" ]
+  run jq -e '.tag == "v1.1.0"' "$TESTDIR/triggers/.self-update-pending.json"; [ "$status" -eq 0 ]
   # It pulled the updater service...
   run grep -Eq 'pull +updater' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
   # ...and spawned a detached helper (docker run) to recreate it.
@@ -567,4 +578,116 @@ txn() { printf '%s' "$1" > "$TESTDIR/triggers/transaction.json"; }
   [ "$(phase)" = "failed" ]
   [[ "$(jq -r '.message' triggers/status.json)" == *"manual recovery"* ]]
   [ ! -f "$TESTDIR/triggers/transaction.json" ]
+}
+
+# --- Stage 2: stack-wide health, stability window, retries, self-update handshake ------ #
+
+@test "a service with no healthcheck passes on running by default" {
+  export MOCK_HEALTH=none
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"h1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v1.1.0" ]
+}
+
+@test "with REQUIRE_HEALTHCHECKS a service missing a healthcheck fails verification and rolls back" {
+  export MOCK_HEALTH=none
+  export UPDATER_REQUIRE_HEALTHCHECKS=true
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"h2","backupFirst":false}'
+  run sh updater.sh
+  [ "$(tag_now)" = "v1.0.0" ]
+  [[ "$(phase)" == "rolled_back" || "$(phase)" == "failed" ]]
+}
+
+@test "a crashed container fails the upgrade fast and rolls back" {
+  export MOCK_STATE=exited
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"h3","backupFirst":false}'
+  run sh updater.sh
+  [ "$(tag_now)" = "v1.0.0" ]
+  [[ "$(phase)" == "rolled_back" || "$(phase)" == "failed" ]]
+}
+
+@test "an upgrade that stays healthy through the stability window commits" {
+  export UPDATER_STABILITY_SECONDS=2
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"s1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v1.1.0" ]
+  run grep -q 'stack stable' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "an upgrade that degrades during the stability window is rolled back" {
+  # Healthy through the initial stack verify (four service inspects), then unhealthy, so
+  # the stability watch catches the degradation and rolls back.
+  export UPDATER_STABILITY_SECONDS=4
+  export MOCK_UNHEALTHY_AFTER=4
+  export MOCK_HEALTH_COUNT_FILE="$TESTDIR/hc-stab"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"s2","backupFirst":false}'
+  run sh updater.sh
+  [ "$(tag_now)" = "v1.0.0" ]
+  [[ "$(phase)" == "rolled_back" || "$(phase)" == "failed" ]]
+  run grep -q 'degraded during the stability window' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "a transient image-pull failure is retried and then succeeds" {
+  export MOCK_PULL_FAIL_TIMES=2
+  export MOCK_PULL_COUNT_FILE="$TESTDIR/pc"
+  export UPDATER_PULL_RETRIES=3
+  export UPDATER_PULL_RETRY_DELAY=0
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"pr1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v1.1.0" ]
+  run grep -q 'retrying' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "exhausted image-pull retries roll back" {
+  export MOCK_PULL_RC=1
+  export UPDATER_PULL_RETRIES=2
+  export UPDATER_PULL_RETRY_DELAY=0
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"pr2","backupFirst":false}'
+  run sh updater.sh
+  [ "$(tag_now)" = "v1.0.0" ]
+  [[ "$(phase)" == "rolled_back" || "$(phase)" == "failed" ]]
+  run grep -q 'image pull failed after' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "a transient release-compose fetch failure is retried and then applied" {
+  export UPDATER_COMPOSE_BASE_URL="https://raw.githubusercontent.com/PennStateCS/AFCT"
+  export MOCK_COMPOSE_BODY='services:\n  app: {}\n  worker: {}\n'
+  export MOCK_CURL_FAIL_TIMES=1
+  export MOCK_CURL_COUNT_FILE="$TESTDIR/cc"
+  export UPDATER_FETCH_RETRIES=3
+  export UPDATER_FETCH_RETRY_DELAY=0
+  printf 'services: {}\n' > docker-compose.yml
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"fr1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  run grep -q 'worker:' docker-compose.yml; [ "$status" -eq 0 ]
+  # The fetch was attempted twice: it failed once, was retried, then succeeded, and the
+  # retry is logged to the streamed progress log.
+  [ "$(cat "$TESTDIR/cc")" -ge 2 ]
+  run grep -q 'network fetch failed' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+# self-update confirmation handshake
+supending() { printf '%s' "$1" > "$TESTDIR/triggers/.self-update-pending.json"; }
+
+@test "self-update stays in-flight until the replacement updater confirms the version" {
+  supending '{"tag":"v1.1.0","requestId":"su2","fromTag":"v1.0.0"}'
+  export MOCK_SELF_IMAGE_TAG=v1.1.0
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ "$(phase)" = "healthy" ]
+  [[ "$(jq -r '.message' triggers/status.json)" == *"update service updated to v1.1.0"* ]]
+  [ ! -f "$TESTDIR/triggers/.self-update-pending.json" ]
+}
+
+@test "self-update reports failure when the replacement came back on the wrong version" {
+  supending '{"tag":"v1.1.0","requestId":"su3","fromTag":"v1.0.0"}'
+  export MOCK_SELF_IMAGE_TAG=v0.9.0
+  run sh updater.sh
+  [ "$(phase)" = "failed" ]
+  [[ "$(jq -r '.message' triggers/status.json)" == *"did not come back on v1.1.0"* ]]
+  [ ! -f "$TESTDIR/triggers/.self-update-pending.json" ]
 }

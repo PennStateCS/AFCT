@@ -35,9 +35,10 @@ MANIFEST_FILE="${UPDATER_MANIFEST_FILE:-/afct/versions.json}"
 # The curated release manifest, fetched over HTTPS so a deployed host learns about
 # new releases without redeploying versions.json. This is the authoritative allow
 # list (independent of the app, which only requests a tag). MANIFEST_FILE above is
-# the fallback when the remote is unreachable. Set empty to disable the remote fetch
-# (the test harness does this to stay offline and deterministic).
-MANIFEST_URL="${UPDATER_MANIFEST_URL:-https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy/versions.json}"
+# the fallback when the remote is unreachable. Uses `-` (not `:-`) so an explicitly-empty
+# value disables the remote fetch (the test harness does this to stay offline and
+# deterministic); an unset value still gets the default.
+MANIFEST_URL="${UPDATER_MANIFEST_URL-https://raw.githubusercontent.com/PennStateCS/AFCT/main/deploy/versions.json}"
 # Base for fetching a release's compose file, so an upgrade whose release changed the
 # stack layout (a new service, a healthcheck) can apply it without a host-side
 # `install.sh self-update`. The file is fetched from the immutable RELEASE TAG ref
@@ -75,6 +76,13 @@ BACKUP_DIR="${UPDATER_BACKUP_DIR:-/backups}"
 # The version<->backup map, so a downgrade knows which backup to restore. Written
 # here (the app reads it to offer downgrade options).
 RESTORE_POINTS_FILE="${TRIGGER_DIR}/restore-points.json"
+# Records an in-flight self-update (target tag + request id) written by the OLD updater
+# just before it hands off the container swap. The NEW updater reads it on startup and
+# only THEN writes the final "healthy" status, once it confirms it is actually running
+# the target version. Without this handshake a self-update reports success before the
+# swap is verified.
+SELF_UPDATE_PENDING_FILE="${TRIGGER_DIR}/.self-update-pending.json"
+UPDATER_VERSION_FILE="${TRIGGER_DIR}/updater.version"
 
 HEALTH_TIMEOUT="${UPDATER_HEALTH_TIMEOUT:-300}"
 HEALTH_INTERVAL="${UPDATER_HEALTH_INTERVAL:-5}"
@@ -83,6 +91,24 @@ RESTORE_TIMEOUT="${UPDATER_RESTORE_TIMEOUT:-600}"
 POLL_INTERVAL="${UPDATER_POLL_INTERVAL:-5}"
 REQUIRE_BACKUP="${UPDATER_REQUIRE_BACKUP:-false}"
 ONCE="${UPDATER_ONCE:-false}"
+
+# After the stack is recreated and every required service is healthy, watch it for this
+# long before committing the upgrade, to catch a service that comes up and then
+# crash-loops. Set to 0 to skip the stability window (the test harness does).
+STABILITY_SECONDS="${UPDATER_STABILITY_SECONDS:-45}"
+# Bounded retries with backoff for the operations that are SAFE to retry: image pulls
+# and remote GETs (release manifest, release compose). Never applied to database
+# restores, migrations, container recreation, or the env-file rewrite. 1 = a single
+# attempt (no retry); the test harness sets 1 so it doesn't wait out backoffs.
+PULL_RETRIES="${UPDATER_PULL_RETRIES:-3}"
+PULL_RETRY_DELAY="${UPDATER_PULL_RETRY_DELAY:-10}"
+FETCH_RETRIES="${UPDATER_FETCH_RETRIES:-3}"
+FETCH_RETRY_DELAY="${UPDATER_FETCH_RETRY_DELAY:-5}"
+# When true, a recreated service that defines NO container healthcheck fails
+# verification instead of passing on "running". Off by default because the worker is a
+# background process with no healthcheck by design; a deployment that healthchecks every
+# service can turn this on for a stricter gate.
+REQUIRE_HEALTHCHECKS="${UPDATER_REQUIRE_HEALTHCHECKS:-false}"
 
 # Liveness heartbeat for the container healthcheck. Each poll (and each wait
 # iteration during a long upgrade) stamps the current epoch here, so the healthcheck
@@ -394,6 +420,21 @@ set_app_tag() {
 # file if it has to roll back. Empty means the compose was not changed this run.
 _COMPOSE_BACKUP=""
 
+# curl with bounded retries + backoff, for idempotent GETs only (the release manifest and
+# the release compose file). Passes its args straight through to curl and returns curl's
+# exit status from the last attempt. Never use for anything that mutates state.
+curl_retry() {
+  _cr_attempt=0
+  while :; do
+    _cr_attempt=$((_cr_attempt + 1))
+    if curl "$@"; then return 0; fi
+    _cr_rc=$?
+    if [ "$_cr_attempt" -ge "$FETCH_RETRIES" ]; then return "$_cr_rc"; fi
+    progress_note "network fetch failed (attempt ${_cr_attempt}/${FETCH_RETRIES}); retrying in ${FETCH_RETRY_DELAY}s"
+    sleep "$FETCH_RETRY_DELAY"
+  done
+}
+
 # When a release changes the stack layout (adds a service, a healthcheck, a volume),
 # the running compose file on the host is stale and recreating from it would miss the
 # change. This fetches the target release's compose from its IMMUTABLE TAG ref, and if
@@ -418,7 +459,7 @@ apply_release_compose() {
 
   _url="${COMPOSE_BASE_URL}/${_tag}/${COMPOSE_PATH_IN_REPO}"
   _new="${COMPOSE_FILE}.rel.$$"
-  if ! curl -fsS --max-time 20 "$_url" -o "$_new" 2>/dev/null || [ ! -s "$_new" ]; then
+  if ! curl_retry -fsS --max-time 20 "$_url" -o "$_new" || [ ! -s "$_new" ]; then
     rm -f "$_new"
     progress_note "using the current stack configuration (release compose not fetched)"
     return 0
@@ -548,22 +589,36 @@ _recreate_stack() {
     # silent, so say up front that this whole step can take a while -- otherwise it looks
     # stalled between heartbeats.
     progress_note "downloading and extracting images (this can take a few minutes)"
-    # --quiet: docker redraws per-layer progress bars in place on a TTY, but with output
-    # redirected to this file (no TTY) every redraw becomes a NEW line, so the streamed
-    # log fills with hundreds of "Downloading [==>]" lines. Suppress that firehose; the
-    # elapsed heartbeats below carry liveness, and errors still print to stderr (2>&1).
-    # shellcheck disable=SC2086
-    dc "$_proj" pull --quiet $STACK_SERVICES >> "$PROGRESS_LOG" 2>&1 &
-    _pull_pid=$!
-    _elapsed=0
-    while kill -0 "$_pull_pid" 2>/dev/null; do
-      beat
-      sleep "$HEALTH_INTERVAL"
-      _elapsed=$((_elapsed + HEALTH_INTERVAL))
-      progress_note "still downloading/extracting images (${_elapsed}s elapsed)"
-      progress_trim
+    # A pull is idempotent and a common transient failure (network blip, registry
+    # hiccup), so retry it with backoff, up to PULL_RETRIES attempts. Recreation below is
+    # NOT retried here: a partial recreate is handled by the transaction rollback, not a
+    # blind re-run.
+    _pull_attempt=0
+    while :; do
+      _pull_attempt=$((_pull_attempt + 1))
+      # --quiet: docker redraws per-layer progress bars in place on a TTY, but with output
+      # redirected to this file (no TTY) every redraw becomes a NEW line, so the streamed
+      # log fills with hundreds of "Downloading [==>]" lines. Suppress that firehose; the
+      # elapsed heartbeats below carry liveness, and errors still print to stderr (2>&1).
+      # shellcheck disable=SC2086
+      dc "$_proj" pull --quiet $STACK_SERVICES >> "$PROGRESS_LOG" 2>&1 &
+      _pull_pid=$!
+      _elapsed=0
+      while kill -0 "$_pull_pid" 2>/dev/null; do
+        beat
+        sleep "$HEALTH_INTERVAL"
+        _elapsed=$((_elapsed + HEALTH_INTERVAL))
+        progress_note "still downloading/extracting images (${_elapsed}s elapsed)"
+        progress_trim
+      done
+      if wait "$_pull_pid"; then break; fi
+      if [ "$_pull_attempt" -ge "$PULL_RETRIES" ]; then
+        progress_note "image pull failed after ${_pull_attempt} attempt(s)"
+        return 1
+      fi
+      progress_note "image pull failed (attempt ${_pull_attempt}/${PULL_RETRIES}); retrying in ${PULL_RETRY_DELAY}s"
+      sleep "$PULL_RETRY_DELAY"
     done
-    wait "$_pull_pid" || { progress_note "image pull failed"; return 1; }
     progress_note "images ready; recreating containers"
   else
     progress_note "restoring the previous version from the local image cache"
@@ -575,38 +630,79 @@ _recreate_stack() {
   return 0
 }
 
+# One pass over EVERY recreated stack service. Returns 0 only when all are good; sets
+# _STACK_FATAL=true when any container has crashed (exited/dead/gone), which cannot
+# recover and should fail the upgrade fast. A service passes on running+healthy, or on
+# running+none (no healthcheck defined) unless REQUIRE_HEALTHCHECKS is on. running with
+# starting/unhealthy (and restarting/created) is transient: not-ok, but keep polling.
+#
+# This is stack-wide, not app-only: nginx (whose healthcheck also proves it can reach the
+# app), the worker, and the backup sidecar are now verified too, so a crashed sidecar
+# fails the upgrade instead of being missed. The worker has no healthcheck by design, so
+# it passes on "running".
+_STACK_FATAL=false
+stack_state_ok() {
+  _proj=$1
+  _STACK_FATAL=false
+  _ss_ok=true
+  # shellcheck disable=SC2086
+  for _svc in $STACK_SERVICES; do
+    _sid=$(dc "$_proj" ps -q "$_svc" 2>/dev/null | head -n 1)
+    if [ -z "$_sid" ]; then _ss_ok=false; continue; fi
+    _st=$(docker inspect \
+      -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+      "$_sid" 2>/dev/null || printf 'missing|none')
+    case "$_st" in
+      running\|healthy) : ;;
+      running\|none) [ "$REQUIRE_HEALTHCHECKS" = "true" ] && _ss_ok=false ;;
+      exited\|* | dead\|* | missing\|* | removing\|*) _STACK_FATAL=true; _ss_ok=false ;;
+      *) _ss_ok=false ;;   # starting, unhealthy, restarting, created: keep polling
+    esac
+  done
+  [ "$_ss_ok" = "true" ]
+}
+
+# Wait until the whole stack is up and healthy, or HEALTH_TIMEOUT elapses. Fails fast
+# when a container crashes.
 wait_for_health() {
   _proj=$1
   _elapsed=0
   while [ "$_elapsed" -lt "$HEALTH_TIMEOUT" ]; do
     beat
-    _id=$(dc "$_proj" ps -q "$APP_SERVICE" 2>/dev/null || true)
-    if [ -n "$_id" ]; then
-      _state=$(docker inspect \
-        -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
-        "$_id" 2>/dev/null || printf 'missing|none')
-      case "$_state" in
-        running\|healthy) return 0 ;;
-        # `unhealthy` (and `starting`, which matches no case and falls through) are both
-        # transient during a cold first boot: a heavy app running DB migrations can fail
-        # its early healthchecks and briefly flip to `unhealthy` before it finishes, then
-        # recover. Keep polling within the HEALTH_TIMEOUT budget instead of rolling back
-        # on the first bad read -- that first-read rollback caused spurious rollbacks on
-        # slow or disk-pressured hosts (a still-unhealthy app is still rolled back once the
-        # budget runs out below). A crashed container (exited/dead) cannot recover, so it
-        # still fails fast.
-        running\|unhealthy) ;;
-        # No healthcheck on the image: "running" is the only signal we have, so accept
-        # it rather than looping to a timeout (which would roll back every upgrade). A
-        # stack that wants rollback-on-boot-failure must define a container healthcheck.
-        running\|none) return 0 ;;
-        exited\|*|dead\|*) return 1 ;;
-      esac
-    fi
+    if stack_state_ok "$_proj"; then return 0; fi
+    [ "$_STACK_FATAL" = "true" ] && return 1
     sleep "$HEALTH_INTERVAL"
     _elapsed=$((_elapsed + HEALTH_INTERVAL))
   done
   return 1
+}
+
+# After the stack is healthy, watch it for STABILITY_SECONDS before committing: a service
+# can report healthy and then crash-loop, or the app could restart onto a different image.
+# Re-check the whole stack and confirm the app is still on the deployed tag. Returns 0 if
+# it stays good for the whole window, 1 if it degrades. Skipped when STABILITY_SECONDS=0.
+stabilize_stack() {
+  _proj=$1
+  _tag=$2
+  [ "${STABILITY_SECONDS:-0}" -gt 0 ] 2>/dev/null || return 0
+  progress_note "watching for stability for ${STABILITY_SECONDS}s"
+  _elapsed=0
+  while [ "$_elapsed" -lt "$STABILITY_SECONDS" ]; do
+    beat
+    if ! stack_state_ok "$_proj"; then
+      progress_note "a service degraded during the stability window"
+      return 1
+    fi
+    if ! deployed_and_healthy "$_tag" "$_proj"; then
+      progress_note "the app is no longer confirmed on ${_tag} during the stability window"
+      return 1
+    fi
+    sleep "$HEALTH_INTERVAL"
+    _elapsed=$((_elapsed + HEALTH_INTERVAL))
+    progress_note "stable for ${_elapsed}/${STABILITY_SECONDS}s"
+  done
+  progress_note "stack stable for ${STABILITY_SECONDS}s"
+  return 0
 }
 
 # Newest completed backup the sidecar has produced, or nothing. Matches the current
@@ -736,7 +832,7 @@ tag_allowed() {
   # published after this host was deployed are still allowed), fall back to a local
   # file, and only if neither is reachable fall back to the character allowlist alone.
   if [ -n "$MANIFEST_URL" ]; then
-    _remote=$(curl -fsS --max-time 10 "$MANIFEST_URL" 2>/dev/null || true)
+    _remote=$(curl_retry -fsS --max-time 10 "$MANIFEST_URL" 2>/dev/null || true)
     if [ -n "$_remote" ]; then
       printf '%s' "$_remote" | jq -e --arg t "$_tag" '(.versions // []) | any(.tag == $t)' >/dev/null 2>&1 || return 1
       return 0
@@ -939,19 +1035,26 @@ process_request() {
   if recreate_app "$_proj"; then
     txn_phase "verifying"
     write_status "migrating" "waiting for ${_tag} to become healthy" "$_from" "$_tag" "$_rid"
+    # The whole stack must be healthy (wait_for_health), and then stay healthy for the
+    # stability window (stabilize_stack) before we commit. A version that comes up and
+    # then crash-loops is caught here and rolled back instead of committed.
     if wait_for_health "$_proj"; then
-      _TXN_COMMITTED=true
-      txn_phase "committed"
-      write_status "healthy" "upgraded to ${_tag}" "$_from" "$_tag" "$_rid"
-      log "upgrade to ${_tag} complete"
-      # Only once the new version is up and healthy: keep it and the rollback
-      # target, drop everything older.
-      prune_old_images "$_tag" "$_from"
-      # The new compose is proven good; drop its backup so they don't pile up.
-      [ -n "$_COMPOSE_BACKUP" ] && rm -f "$_COMPOSE_BACKUP"
-      txn_clear
-      rm -f "$CLAIM_FILE"
-      return 0
+      txn_phase "stabilizing"
+      write_status "migrating" "confirming ${_tag} is stable" "$_from" "$_tag" "$_rid"
+      if stabilize_stack "$_proj" "$_tag"; then
+        _TXN_COMMITTED=true
+        txn_phase "committed"
+        write_status "healthy" "upgraded to ${_tag}" "$_from" "$_tag" "$_rid"
+        log "upgrade to ${_tag} complete"
+        # Only once the new version is up, healthy, and stable: keep it and the rollback
+        # target, drop everything older.
+        prune_old_images "$_tag" "$_from"
+        # The new compose is proven good; drop its backup so they don't pile up.
+        [ -n "$_COMPOSE_BACKUP" ] && rm -f "$_COMPOSE_BACKUP"
+        txn_clear
+        rm -f "$CLAIM_FILE"
+        return 0
+      fi
     fi
   fi
 
@@ -1060,7 +1163,23 @@ stamp_updater_version() {
       *:*) _ver=${_img##*:} ;; # strip repo, keep the tag after the last colon
     esac
   fi
-  [ -n "$_ver" ] && printf '%s\n' "$_ver" > "${TRIGGER_DIR}/updater.version" 2>/dev/null || true
+  [ -n "$_ver" ] && printf '%s\n' "$_ver" > "$UPDATER_VERSION_FILE" 2>/dev/null || true
+}
+
+# This updater's own running version, recomputed live (same logic as stamp_updater_version
+# but returned, not written), for the self-update confirmation handshake.
+current_updater_version() {
+  _self=$(this_container_id)
+  [ -n "$_self" ] || return 0
+  _ver=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$_self" 2>/dev/null || printf '')
+  if [ -z "$_ver" ]; then
+    _img=$(docker inspect --format '{{.Config.Image}}' "$_self" 2>/dev/null || printf '')
+    case "$_img" in
+      *@*) : ;;
+      *:*) _ver=${_img##*:} ;;
+    esac
+  fi
+  printf '%s' "$_ver"
 }
 
 recreate_updater() {
@@ -1133,15 +1252,49 @@ process_self_update() {
     return 0
   fi
 
-  # Report success up front: once the helper replaces this container we can no longer
-  # write status, and a failed swap is non-fatal (the old updater keeps running).
+  # Hand off the container swap, then record a PENDING marker and leave the status at an
+  # in-flight phase. We do NOT report success here: the swap replaces this container, and
+  # only the replacement updater, once it confirms it is actually running ${_tag}, writes
+  # the final "healthy" status (confirm_self_update on its startup). If the swap never
+  # completes, the app's self-update timeout surfaces it; we never claim a false success.
   if recreate_updater "$_proj"; then
-    progress_note "update service ${_tag} downloaded; swapping in the background"
-    write_status "healthy" "update service updated to ${_tag}" "$_from" "$_tag" "$_rid"
+    _sup_tmp="${SELF_UPDATE_PENDING_FILE}.tmp.$$"
+    if jq -n --arg tag "$_tag" --arg requestId "$_rid" --arg fromTag "$_from" \
+         --arg at "$(_now_iso)" \
+         '{tag:$tag, requestId:$requestId, fromTag:$fromTag, at:$at}' \
+         > "$_sup_tmp" 2>/dev/null; then
+      mv "$_sup_tmp" "$SELF_UPDATE_PENDING_FILE" 2>/dev/null || rm -f "$_sup_tmp"
+    fi
+    progress_note "update service ${_tag} downloaded; restarting and confirming the new version"
+    write_status "self_updating" "restarting the update service to confirm ${_tag}" "$_from" "$_tag" "$_rid"
   else
     write_status "failed" "could not restart the update service" "$_from" "$_tag" "$_rid"
   fi
   return 0
+}
+
+# On startup, finalize a self-update the previous updater handed off: if this (the
+# replacement) updater is actually running the requested version, write the final healthy
+# status; if it came back on the wrong version, report that instead of a false success.
+# Either way the pending marker is cleared so it is resolved exactly once.
+confirm_self_update() {
+  [ -f "$SELF_UPDATE_PENDING_FILE" ] || return 0
+  if ! jq -e . "$SELF_UPDATE_PENDING_FILE" >/dev/null 2>&1; then
+    rm -f "$SELF_UPDATE_PENDING_FILE"
+    return 0
+  fi
+  _sup_tag=$(jq -r '.tag // ""' "$SELF_UPDATE_PENDING_FILE" 2>/dev/null || printf '')
+  _sup_rid=$(jq -r '.requestId // ""' "$SELF_UPDATE_PENDING_FILE" 2>/dev/null || printf '')
+  _sup_from=$(jq -r '.fromTag // ""' "$SELF_UPDATE_PENDING_FILE" 2>/dev/null || printf '')
+  _now_ver=$(current_updater_version)
+  if [ -n "$_sup_tag" ] && [ "$_now_ver" = "$_sup_tag" ]; then
+    log "self-update confirmed: update service is running ${_sup_tag}"
+    write_status "healthy" "update service updated to ${_sup_tag}" "$_sup_from" "$_sup_tag" "$_sup_rid"
+  else
+    log "self-update NOT confirmed: expected ${_sup_tag}, running ${_now_ver:-unknown}"
+    write_status "failed" "the update service was downloaded but did not come back on ${_sup_tag} (it is on ${_now_ver:-unknown}); try again" "$_sup_from" "$_sup_tag" "$_sup_rid"
+  fi
+  rm -f "$SELF_UPDATE_PENDING_FILE"
 }
 
 # --------------------------------------------------------------------------- #
@@ -1239,6 +1392,10 @@ recover_transaction() {
 log "AFCT updater started (watching ${TRIGGER_DIR})"
 stamp_updater_version
 beat
+
+# If the previous updater handed off a self-update, this replacement confirms it is now
+# running the requested version and writes the final status (or reports a mismatch).
+confirm_self_update
 
 # Resolve any durable transaction left unfinished by a crash or restart first: it is
 # authoritative over the env file, and it also clears the matching stale claim.

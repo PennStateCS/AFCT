@@ -59,8 +59,20 @@ case "$cmd" in
     case "$_tmpl" in
       *State.Status*)
         # MOCK_HEALTH_FLIP_AT lets a test model a slow boot: report `unhealthy` until the
-        # Nth health poll, then `healthy` from then on (counter kept in MOCK_HEALTH_COUNT_FILE).
-        if [ -n "${MOCK_HEALTH_FLIP_AT:-}" ]; then
+        # Nth health inspect, then `healthy` from then on. MOCK_UNHEALTHY_AFTER is the
+        # mirror: `healthy` for the first N inspects, then `unhealthy` (a service that comes
+        # up and later degrades, for the stability-window test). Both count inspects in
+        # MOCK_HEALTH_COUNT_FILE.
+        if [ -n "${MOCK_UNHEALTHY_AFTER:-}" ]; then
+          _hcf="${MOCK_HEALTH_COUNT_FILE:-$TMPDIR/mock_health_count}"
+          _n=$(( $(cat "$_hcf" 2>/dev/null || echo 0) + 1 ))
+          printf '%s' "$_n" > "$_hcf"
+          if [ "$_n" -gt "$MOCK_UNHEALTHY_AFTER" ]; then
+            printf '%s|unhealthy\n' "${MOCK_STATE:-running}"
+          else
+            printf '%s|healthy\n' "${MOCK_STATE:-running}"
+          fi
+        elif [ -n "${MOCK_HEALTH_FLIP_AT:-}" ]; then
           _hcf="${MOCK_HEALTH_COUNT_FILE:-$TMPDIR/mock_health_count}"
           _n=$(( $(cat "$_hcf" 2>/dev/null || echo 0) + 1 ))
           printf '%s' "$_n" > "$_hcf"
@@ -74,9 +86,13 @@ case "$cmd" in
         fi
         ;;
       *State.Health*) printf '%s\n' "${MOCK_HEALTH:-healthy}" ;;
+      # The updater's own version label (org.opencontainers.image.version): empty by
+      # default so the updater falls back to the image tag, which the self-update tests
+      # control via MOCK_SELF_IMAGE_TAG.
+      *image.version*) printf '%s\n' "${MOCK_IMAGE_VERSION:-}" ;;
       # Compose project discovery (updater): empty when MOCK_NO_PROJECT is set.
       *Labels*) [ -n "${MOCK_NO_PROJECT:-}" ] && printf '\n' || printf '%s\n' "${MOCK_PROJECT:-afct}" ;;
-      *Config.Image*) printf 'ghcr.io/example/afct:latest\n' ;;
+      *Config.Image*) printf 'ghcr.io/example/afct:%s\n' "${MOCK_SELF_IMAGE_TAG:-latest}" ;;
       # The updater resolves its own /afct host mount to spawn the self-update helper.
       *Mounts*) printf '%s\n' "${MOCK_AFCT_MOUNT:-/host/afct}" ;;
       *.Image*)
@@ -167,7 +183,18 @@ case "$cmd" in
           *) exit "${MOCK_CONFIG_RC:-0}" ;;
         esac
         ;;
-      pull) exit "${MOCK_PULL_RC:-0}" ;;
+      pull)
+        # MOCK_PULL_FAIL_TIMES: fail the first N pulls, then succeed (transient failure,
+        # for the retry test). MOCK_PULL_RC: a fixed exit code (always).
+        if [ -n "${MOCK_PULL_FAIL_TIMES:-}" ]; then
+          _pcf="${MOCK_PULL_COUNT_FILE:-$TMPDIR/mock_pull_count}"
+          _pn=$(( $(cat "$_pcf" 2>/dev/null || echo 0) + 1 ))
+          printf '%s' "$_pn" > "$_pcf"
+          [ "$_pn" -le "$MOCK_PULL_FAIL_TIMES" ] && exit 1
+          exit 0
+        fi
+        exit "${MOCK_PULL_RC:-0}"
+        ;;
       up)
         # Record the recreated services (e.g. "-d app nginx db-backup") so a test can
         # assert what an upgrade touches.
