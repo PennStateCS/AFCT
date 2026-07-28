@@ -108,7 +108,7 @@ export const columns = (
       return (
         <Link
           href={`/dashboard/courses/${course.id}`}
-          className="text-blue-600 hover:underline"
+          className="text-primary hover:underline"
           title={course.name}
           aria-label={course.name}
         >
@@ -350,7 +350,7 @@ function CourseActionsCell({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setConfirmOpen(true)}
-                className="hover:bg-secondary flex items-center gap-2 text-red-600 focus:text-red-600"
+                className="hover:bg-secondary flex items-center gap-2 text-destructive focus:text-destructive"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Course

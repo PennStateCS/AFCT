@@ -121,7 +121,7 @@ export function CreateGroupSetDialog({
           </div>
 
           {error && (
-            <p id={errorId} role="alert" className="text-xs text-red-600">
+            <p id={errorId} role="alert" className="text-xs text-destructive">
               {error}
             </p>
           )}

@@ -10,7 +10,7 @@ export function StepList({ steps, ariaLabel }: { steps: UpgradeStep[]; ariaLabel
       {steps.map((step) => (
         <li key={step.label} className="flex items-center gap-2 text-sm">
           {step.state === 'done' ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" aria-hidden="true" />
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" aria-hidden="true" />
           ) : step.state === 'current' ? (
             <Loader2 className="text-secondary h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
           ) : (

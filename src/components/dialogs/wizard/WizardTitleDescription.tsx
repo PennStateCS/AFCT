@@ -54,7 +54,7 @@ export function WizardTitleDescription({
           placeholder={titlePlaceholder}
         />
         {titleError && (
-          <p id={titleErrorId} className="mt-1 text-xs text-red-600" role="alert">
+          <p id={titleErrorId} className="mt-1 text-xs text-destructive" role="alert">
             {titleError}
           </p>
         )}

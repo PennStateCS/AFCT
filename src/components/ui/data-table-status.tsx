@@ -22,7 +22,7 @@ export function DataTableLoading({
 }) {
   return (
     <div
-      className={cn('flex flex-col items-center justify-center gap-2 text-gray-500', className)}
+      className={cn('flex flex-col items-center justify-center gap-2 text-muted-foreground', className)}
       role="status"
     >
       <span aria-hidden="true" className="text-brand-teal">
@@ -55,7 +55,7 @@ export function DataTableEmptyState({
       className={cn('text-muted-foreground flex flex-col items-center', className)}
       role="status"
     >
-      <Icon className="mb-2 h-10 w-10 text-gray-400" aria-hidden={true} />
+      <Icon className="mb-2 h-10 w-10 text-muted-foreground" aria-hidden={true} />
       <p className="font-medium">{title}</p>
       <p className="text-sm">{description}</p>
       {action ? <div className="mt-3">{action}</div> : null}

@@ -574,7 +574,7 @@ export default function SubmissionsClient() {
                   <TableCell colSpan={8} className="py-10 text-center">
                     {loadingCourses || loadingAssignments || loadingSubmissions ? (
                       <div
-                        className="flex flex-col items-center justify-center gap-2 text-gray-500"
+                        className="flex flex-col items-center justify-center gap-2 text-muted-foreground"
                         role="status"
                         aria-live="polite"
                       >
@@ -593,7 +593,7 @@ export default function SubmissionsClient() {
                          hide everything" -- the fix for the second is a filter change,
                          not doing more work. */
                       <div className="text-muted-foreground flex flex-col items-center whitespace-normal">
-                        <FileCode2 className="mb-2 h-10 w-10 text-gray-400" aria-hidden={true} />
+                        <FileCode2 className="mb-2 h-10 w-10 text-muted-foreground" aria-hidden={true} />
                         <p className="font-medium">
                           {submissions.length === 0
                             ? 'No submissions yet'

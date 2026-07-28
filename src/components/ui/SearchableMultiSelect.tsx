@@ -103,7 +103,7 @@ export function SearchableMultiSelect({
             className={cn(
               'border-input text-foreground focus-visible:border-ring focus-visible:ring-ring/40 flex h-11 w-full items-center justify-between rounded-md border bg-transparent px-3 text-sm shadow-xs transition-all duration-150 focus-visible:ring-[3px] focus-visible:outline-none',
               disabled && 'cursor-not-allowed opacity-60',
-              error && 'border-red-500',
+              error && 'border-destructive',
             )}
           >
             <span
@@ -163,7 +163,7 @@ export function SearchableMultiSelect({
         </PopoverContent>
       </Popover>
       {error ? (
-        <p id={describedBy} role="alert" className="mt-1 text-xs text-red-600">
+        <p id={describedBy} role="alert" className="mt-1 text-xs text-destructive">
           {error}
         </p>
       ) : null}

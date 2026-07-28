@@ -304,7 +304,7 @@ export function EditUserDialog({
                         Upload Avatar
                       </Button>
                       {avatarFileErrorMessage && (
-                        <p id={avatarErrorId} role="alert" className="mt-1 text-xs text-red-600">
+                        <p id={avatarErrorId} role="alert" className="mt-1 text-xs text-destructive">
                           {avatarFileErrorMessage}
                         </p>
                       )}
@@ -316,7 +316,7 @@ export function EditUserDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
+                    className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive/10"
                     onClick={onDeleteAvatar}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -404,7 +404,7 @@ export function EditUserDialog({
               value={user.email}
               readOnly
               aria-readonly="true"
-              className="w-full cursor-not-allowed rounded border bg-gray-200 p-2 text-sm opacity-70"
+              className="w-full cursor-not-allowed rounded border bg-muted p-2 text-sm opacity-70"
             />
           </div>
 

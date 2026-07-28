@@ -19,17 +19,18 @@ import {
 import { UpgradeProgress } from './UpgradeProgress';
 import { UpgradeLiveLog } from './UpgradeLiveLog';
 
-// Colour the self-update banner by outcome: green on success, red on a real failure,
-// amber while working / timed out / when the updater is simply behind.
+// Colour the self-update banner by outcome via the semantic status tokens: success on a
+// completed update, danger on a real failure, warning while working / timed out / when the
+// updater is simply behind. The tokens carry their own dark-mode values (see globals.css).
 function selfUpdateBannerClass(phase: SelfUpdateState['phase']): string {
   const base = 'max-w-xl space-y-2 rounded-md border p-3 text-sm';
   switch (phase) {
     case 'done':
-      return `${base} border-green-500/40 bg-green-50 text-green-900 dark:bg-green-950/40 dark:text-green-200`;
+      return `${base} border-status-success-border bg-status-success-bg text-status-success`;
     case 'failed':
-      return `${base} border-red-500/40 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200`;
+      return `${base} border-status-danger-border bg-status-danger-bg text-status-danger`;
     default:
-      return `${base} border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200`;
+      return `${base} border-status-warning-border bg-status-warning-bg text-status-warning`;
   }
 }
 
@@ -134,7 +135,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         ) : row.original.encrypted ? (
           <span className="whitespace-nowrap">Yes</span>
         ) : (
-          <span className="whitespace-nowrap text-amber-600">No</span>
+          <span className="whitespace-nowrap text-status-warning">No</span>
         ),
       meta: { priority: 2 },
     },
@@ -161,7 +162,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
           <Button
             type="button"
             size="sm"
-            className="bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600/30"
+            variant="success"
             aria-label={`Restore version ${row.original.version}`}
             disabled={disabled || downgradeBusy || upgradeInProgress}
             onClick={() =>
@@ -384,7 +385,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                       (upgradeInfo.updaterVersion === upgradeInfo.current ? (
                         <span className="text-muted-foreground"> · up to date</span>
                       ) : (
-                        <span className="text-amber-700 dark:text-amber-300">
+                        <span className="text-status-warning">
                           {' '}
                           · behind the app
                         </span>
@@ -395,7 +396,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                     {updaterAvailable ? (
                       <span className="text-green-700 dark:text-green-400">Running</span>
                     ) : (
-                      <span className="text-amber-700 dark:text-amber-300">Not running</span>
+                      <span className="text-status-warning">Not running</span>
                     )}
                   </dd>
                 </dl>
@@ -407,7 +408,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         {!updaterAvailable ? (
           <div
             role="note"
-            className="max-w-xl space-y-2 rounded-md border border-amber-500/40 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+            className="border-status-warning-border bg-status-warning-bg text-status-warning max-w-xl space-y-2 rounded-md border p-4 text-sm"
           >
             <p className="font-medium">The update service isn’t installed.</p>
             <p>
@@ -451,7 +452,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                 value: v.tag,
                 label: v.label && v.label !== v.tag ? `${v.label} (${v.tag})` : v.tag,
               }))}
-              triggerClassName="border-black"
+              triggerClassName="border-input"
             />
             {selectedVersionInfo?.notes && (
               <p className="text-muted-foreground text-sm">{selectedVersionInfo.notes}</p>
@@ -459,7 +460,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             {selectedVersionInfo?.upgradeNote && (
               <div
                 role="note"
-                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm whitespace-pre-line text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border p-3 text-sm whitespace-pre-line"
               >
                 {selectedVersionInfo.upgradeNote}
               </div>
@@ -486,7 +487,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             downloads the new version, and restarts. This may take a few minutes, during which the
             site may be briefly unavailable. A failed upgrade is rolled back automatically.
             {selectedVersionInfo?.upgradeNote && (
-              <span className="mt-2 block font-medium whitespace-pre-line text-amber-700 dark:text-amber-300">
+              <span className="mt-2 block font-medium whitespace-pre-line text-status-warning">
                 {selectedVersionInfo.upgradeNote}
               </span>
             )}

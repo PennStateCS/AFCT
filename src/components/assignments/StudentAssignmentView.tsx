@@ -304,7 +304,7 @@ export default function StudentAssignmentPage({
             {assignment.course || assignment.courseName ? (
               <Link
                 href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                className="max-w-full break-all text-blue-700 hover:underline"
+                className="text-primary max-w-full break-all hover:underline"
               >
                 {assignment.course?.name || assignment.courseName || assignment.courseId}
                 {assignment.course?.code
@@ -336,32 +336,32 @@ export default function StudentAssignmentPage({
             </CardTitle>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:justify-between">
               <div className="flex flex-1 flex-wrap gap-2">
-                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-3 py-2 text-sm leading-none text-foreground">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Due
                   </span>
                   <span className="leading-none font-semibold">{dueDisplay}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-3 py-2 text-sm leading-none text-foreground">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Points
                   </span>
                   <span className="leading-none font-semibold">{assignment.maxPoints}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-3 py-2 text-sm leading-none text-foreground">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Problems
                   </span>
                   <span className="leading-none font-semibold">{assignment.problems.length}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-3 py-2 text-sm leading-none text-foreground">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Late Policy
                   </span>
                   <span className="leading-none font-semibold">{latePolicyDisplay}</span>
                 </div>
               </div>
-              <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-4 py-2 text-right text-slate-700 lg:self-start dark:border-slate-200 dark:text-slate-200">
+              <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-4 py-2 text-right text-foreground lg:self-start">
                 <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                   Grade
                 </span>

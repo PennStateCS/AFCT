@@ -77,15 +77,15 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                   passHref
                   aria-label={`View course ${course.name}`}
                 >
-                  <div className="group border-border bg-card hover:bg-accent flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md">
+                  <div className="group border-border bg-card hover:border-primary hover:bg-primary/5 flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md">
                     {/* Vertical colored bar */}
                     <div
                       className={`w-[15px] ${
                         !course.isPublished
-                          ? 'bg-yellow-500'
+                          ? 'bg-status-warning-solid'
                           : isUpcoming
                             ? 'bg-primary'
-                            : 'bg-gray-400'
+                            : 'bg-status-neutral-solid'
                       }`}
                     />
 

@@ -301,7 +301,7 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
     <div className="flex min-w-0 flex-col gap-0.5">
       <Link
         href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
-        className="block max-w-[8rem] truncate text-blue-600 hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
+        className="text-primary block max-w-[8rem] truncate hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
         title={assignment.title}
       >
         {assignment.title}
@@ -311,7 +311,7 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
           <button
             type="button"
             onClick={() => setDescOpen(true)}
-            className="self-start text-xs text-blue-600 underline hover:text-blue-800"
+            className="text-primary self-start text-xs underline hover:text-primary/80"
             title="View description"
           >
             View description
@@ -523,7 +523,7 @@ export function useAssignmentColumns(
                   }}
                   hidden={courseIsArchived}
                   title={title}
-                  className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-gray-500 opacity-50' : 'text-red-600 focus:text-red-600'}`}
+                  className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-muted-foreground opacity-50' : 'text-destructive focus:text-destructive'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Assignment

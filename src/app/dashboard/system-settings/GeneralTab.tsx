@@ -66,7 +66,7 @@ export function GeneralTab({
           disabled={disabled}
           description="Default timezone for the server. Users can override this in their profile."
           options={timezoneOptions}
-          triggerClassName="border-black"
+          triggerClassName="border-input"
         />
         <InputGroup
           label="Max upload size (MB)"
@@ -142,7 +142,7 @@ export function GeneralTab({
           disabled={disabled}
           descriptionPlacement="inline"
           description="When enabled, the Sign up option appears on the login page."
-          boxClassName="border-black"
+          boxClassName="border-input"
         />
         <InputGroup
           label="Allowed signup email domains"
@@ -162,7 +162,7 @@ export function GeneralTab({
           disabled={disabled}
           descriptionPlacement="inline"
           description="Display times on a 24-hour clock (e.g. 23:59) instead of 12-hour AM/PM, app-wide."
-          boxClassName="border-black"
+          boxClassName="border-input"
         />
       </div>
     </>

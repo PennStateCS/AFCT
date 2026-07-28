@@ -331,7 +331,7 @@ export const userColumns = (
               cropY={user.cropY ?? 0.5}
               zoom={user.zoom ?? 1}
             />
-            <AvatarFallback className="bg-secondary text-secondary-foreground">
+            <AvatarFallback className="bg-brand-teal text-white">
               {getInitials(user.firstName, user.lastName, user.email)}
             </AvatarFallback>
           </Avatar>
@@ -355,7 +355,7 @@ export const userColumns = (
       cell: ({ row }) => {
         const email = row.original.email;
         return (
-          <a href={`mailto:${email}`} className="text-blue-600 hover:underline">
+          <a href={`mailto:${email}`} className="text-primary hover:underline">
             {email}
           </a>
         );
@@ -403,7 +403,7 @@ export const userColumns = (
         // Status only applies to students; staff show a dash.
         if (r.role !== 'STUDENT') return <span className="text-muted-foreground">—</span>;
         return r.enrollmentStatus === 'DROPPED' ? (
-          <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+          <span className="inline-flex items-center rounded-full bg-status-warning-bg px-2 py-0.5 text-xs font-medium text-status-warning">
             Dropped
           </span>
         ) : (

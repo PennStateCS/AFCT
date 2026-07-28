@@ -184,7 +184,7 @@ export default function ProblemWorkspace({
             {isLate ? (
               <Badge
                 variant="secondary"
-                className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900 shadow-sm"
+                className="mt-1 inline-flex items-center rounded-full bg-status-warning-bg px-2 py-1 text-xs font-semibold text-status-warning shadow-sm"
               >
                 Late
               </Badge>
@@ -276,7 +276,7 @@ export default function ProblemWorkspace({
             <button
               type="button"
               onClick={() => onViewSubmission(submission)}
-              className="break-all text-blue-600 hover:underline"
+              className="text-primary break-all hover:underline"
               title={`Preview ${submission.originalFileName || 'submission'}`}
             >
               {submission.originalFileName || submission.fileName}
@@ -340,7 +340,7 @@ export default function ProblemWorkspace({
               onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined}
             />
           ) : !isPrivilegedUser ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-xs whitespace-nowrap text-slate-700 dark:border-slate-200 dark:text-slate-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-transparent px-3 py-2 text-xs whitespace-nowrap text-foreground">
               <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
               <span>
                 {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}

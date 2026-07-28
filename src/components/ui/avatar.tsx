@@ -14,7 +14,7 @@ function Avatar({
       data-slot="avatar"
       className={cn(
         // A thin light-gray ring frames every profile photo consistently across the app.
-        "relative flex size-8 shrink-0 overflow-hidden rounded-full border border-gray-300",
+        "relative flex size-8 shrink-0 overflow-hidden rounded-full border border-border",
         className
       )}
       {...props}

@@ -72,7 +72,7 @@ export const Meter = ({ pct, label }: { pct?: number; label: string }) => {
       aria-valuenow={v}
       aria-valuetext={`${v}%`}
     >
-      <div className="h-full bg-emerald-500" style={{ width: `${v}%` }} />
+      <div className="bg-brand-teal h-full" style={{ width: `${v}%` }} />
     </div>
   );
 };
@@ -162,7 +162,12 @@ export const Sparkline = ({
     .map((n, i) => `${i === 0 ? 'M' : 'L'} ${i * step} ${height - n * height}`)
     .join(' ');
   const trend = (points[points.length - 1] ?? 0) - (points[0] ?? 0);
-  const trendColor = trend > 0 ? '#ef4444' : trend < 0 ? '#22c55e' : '#94a3b8';
+  const trendColor =
+    trend > 0
+      ? 'var(--color-status-danger-solid)'
+      : trend < 0
+        ? 'var(--color-status-success-solid)'
+        : 'var(--color-status-neutral-solid)';
   const trendDir = trend > 0 ? 'increasing' : trend < 0 ? 'decreasing' : 'flat';
 
   return (
@@ -172,7 +177,7 @@ export const Sparkline = ({
         height={height}
         role="img"
         aria-label={`${label ? `${label}: ` : ''}trend ${trendDir}`}
-        className="stroke-current text-blue-500"
+        className="stroke-current text-brand-teal"
         strokeWidth={1.5}
         fill="none"
       >
@@ -181,7 +186,7 @@ export const Sparkline = ({
           cx={width}
           cy={height - (normalized[normalized.length - 1] ?? 0) * height}
           r={2}
-          fill={trendColor}
+          style={{ fill: trendColor }}
         />
       </svg>
       {label && <span className="text-muted-foreground text-xs">{label}</span>}

@@ -85,7 +85,7 @@ export function getUserColumns(
               cropY={user.cropY ?? 0.5}
               zoom={user.zoom ?? 1}
             />
-            <AvatarFallback className="bg-secondary text-secondary-foreground">
+            <AvatarFallback className="bg-brand-teal text-white">
               {getInitials(user.firstName, user.lastName, user.email)}
             </AvatarFallback>
           </Avatar>
@@ -109,7 +109,7 @@ export function getUserColumns(
       cell: ({ row }) => {
         const email = row.getValue<string>('email');
         return (
-          <a href={`mailto:${email}`} className="text-blue-600 hover:underline">
+          <a href={`mailto:${email}`} className="text-primary hover:underline">
             {email}
           </a>
         );
@@ -493,7 +493,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
           <DropdownMenuItem
             onClick={() => setConfirmDeleteOpen(true)}
             disabled={!user.inactive}
-            className="hover:bg-secondary flex items-center gap-2 text-red-600 focus:text-red-600"
+            className="hover:bg-secondary flex items-center gap-2 text-destructive focus:text-destructive"
           >
             <Trash2 className="h-4 w-4" />
             Delete Inactive User

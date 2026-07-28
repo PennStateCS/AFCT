@@ -267,7 +267,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
             cropY={activity.user?.cropY ?? 0.5}
             zoom={activity.user?.zoom ?? 1}
           />
-          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+          <AvatarFallback className="bg-brand-teal text-xs text-white">
             {getInitials(activity.user?.firstName, activity.user?.lastName, activity.user?.email)}
           </AvatarFallback>
         </Avatar>
@@ -336,7 +336,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <div className="text-sm">
           {assignmentTitle ? (
-            <span className="font-medium text-purple-700">{assignmentTitle}</span>
+            <span className="font-medium text-purple-700 dark:text-purple-300">{assignmentTitle}</span>
           ) : (
             <span className="text-muted-foreground italic">N/A</span>
           )}
@@ -367,7 +367,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <div className="text-sm">
           {problemTitle ? (
-            <span className="font-medium text-green-700">{problemTitle}</span>
+            <span className="font-medium text-green-700 dark:text-green-400">{problemTitle}</span>
           ) : (
             <span className="text-muted-foreground italic">N/A</span>
           )}

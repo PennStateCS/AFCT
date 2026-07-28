@@ -27,7 +27,7 @@ const typeBadgeMap: Record<string, { label: string; className: string }> = {
   CFG: {
     label: 'Context-Free Grammar',
     className:
-      'bg-transparent text-emerald-700 border-emerald-300 dark:text-emerald-300 dark:border-emerald-300',
+      'bg-transparent text-green-700 border-green-300 dark:text-green-300 dark:border-green-300',
   },
   FA: {
     label: 'Finite Automaton',
@@ -39,7 +39,10 @@ const typeBadgeMap: Record<string, { label: string; className: string }> = {
 const getTypeBadge = (type?: string) => {
   if (!type) return null;
   return (
-    typeBadgeMap[type] || { label: type, className: 'bg-gray-100 text-gray-800 border-gray-200' }
+    typeBadgeMap[type] || {
+      label: type,
+      className: 'bg-transparent text-muted-foreground border-border',
+    }
   );
 };
 
@@ -57,12 +60,12 @@ export default function ProblemHeader({
   const submissionsLabel =
     typeof maxSubmissions === 'number' ? (maxSubmissions < 0 ? 'Unlimited' : maxSubmissions) : null;
   const metaPillClass =
-    'inline-flex min-h-8 items-center rounded-full border border-slate-200 bg-transparent px-3 py-1 text-xs font-medium leading-none dark:border-slate-200';
+    'inline-flex min-h-8 items-center rounded-full border border-border bg-transparent px-3 py-1 text-xs font-medium leading-none';
 
   return (
     <div className={className}>
       <CardTitle className="text-lg">{title}</CardTitle>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-foreground">
         {badge ? (
           <Badge
             variant="outline"

@@ -243,7 +243,7 @@ export function ImportAssignmentDialog({
                   {groupNote && (
                     <span
                       role="note"
-                      className="mt-2 block rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-800"
+                      className="mt-2 block rounded-md border border-status-warning-border bg-status-warning-bg p-2 text-status-warning"
                     >
                       {groupNote}
                     </span>
@@ -321,7 +321,7 @@ export function ImportAssignmentDialog({
               {groupNote && (
                 <p
                   role="note"
-                  className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800"
+                  className="rounded-md border border-status-warning-border bg-status-warning-bg p-2 text-xs text-status-warning"
                 >
                   {groupNote}
                 </p>

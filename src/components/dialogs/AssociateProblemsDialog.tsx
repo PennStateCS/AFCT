@@ -327,7 +327,7 @@ export function AssociateProblemsDialog({
             </div>
           </div>
           {configError ? (
-            <p role="alert" className="text-xs text-red-600">
+            <p role="alert" className="text-xs text-destructive">
               {configError}
             </p>
           ) : null}

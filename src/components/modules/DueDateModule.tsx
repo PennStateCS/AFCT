@@ -95,7 +95,7 @@ export function DueDateModule({ assignments }: Props) {
                     )}
                     <span
                       className={cn(
-                        dueSoon && 'font-medium text-amber-700 dark:text-amber-400',
+                        dueSoon && 'text-status-warning font-medium',
                       )}
                     >
                       {formatDateTimeInTimeZone(assignment.dueDate, timezone)}

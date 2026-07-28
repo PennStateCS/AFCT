@@ -289,7 +289,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           <div className="flex items-center gap-2">
             <span>{String(row.original.lastName ?? '')}</span>
             {row.original.enrollmentStatus === 'DROPPED' ? (
-              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              <span className="inline-flex items-center rounded-full bg-status-warning-bg px-2 py-0.5 text-xs font-medium text-status-warning">
                 Dropped
               </span>
             ) : null}
@@ -357,7 +357,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           return (
             <button
               type="button"
-              className="flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1 hover:bg-neutral-300"
+              className="flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1 hover:bg-accent"
               title="View grade breakdown"
               onClick={handleClick}
               aria-label={`View breakdown for ${user.firstName} ${user.lastName} on ${a.title}`}
@@ -408,7 +408,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               Grades
             </h2>
             <div className="text-muted-foreground flex items-center gap-1 text-sm">
-              <div aria-hidden="true" className="h-2 w-2 rounded-full bg-blue-500"></div>
+              <div aria-hidden="true" className="bg-primary h-2 w-2 rounded-full"></div>
               Click a grade to view/edit details
             </div>
           </div>
@@ -438,7 +438,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
                 variant="secondary"
                 onClick={() => void refreshGrades()}
                 disabled={loading}
-                className="flex items-center gap-2 bg-green-600 text-white hover:bg-green-700"
+                className="flex items-center gap-2"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh

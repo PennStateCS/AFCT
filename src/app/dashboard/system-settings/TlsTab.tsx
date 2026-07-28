@@ -207,7 +207,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             <div className="space-y-5">
               <div
                 role="note"
-                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                className="rounded-md border border-status-warning-border bg-status-warning-bg p-3 text-xs text-status-warning"
               >
                 Before you start: this domain must point at this server in public DNS, and port 80
                 must be reachable from the internet (that is how Let’s Encrypt verifies you control
@@ -244,7 +244,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 disabled={tlsBusy}
                 descriptionPlacement="inline"
                 description="Issues an untrusted test certificate from the staging environment. Use this first to confirm setup without spending the weekly rate limit."
-                boxClassName="border-black"
+                boxClassName="border-input"
               />
               <SwitchField
                 id="le-tos"
@@ -255,7 +255,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 disabled={tlsBusy}
                 descriptionPlacement="inline"
                 description="Required to request a certificate."
-                boxClassName="border-black"
+                boxClassName="border-input"
               />
               {leProgress && (
                 <div role="status" className="bg-muted/10 space-y-2 rounded-md border p-3 text-sm">

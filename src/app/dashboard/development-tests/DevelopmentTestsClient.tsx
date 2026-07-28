@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { showToast } from '@/lib/toast';
 import { FontSamples } from './font-samples';
+import { DesignTokens } from './design-tokens';
 
 export default function DevelopmentTestsClient() {
   return (
@@ -20,9 +21,7 @@ export default function DevelopmentTestsClient() {
             >
               Development Tests
             </CardTitle>
-            <Badge variant="outline" className="bg-blue-50 text-blue-700">
-              Dev Only
-            </Badge>
+            <Badge variant="info">Dev Only</Badge>
           </div>
           <div className="text-muted-foreground text-sm">
             Trigger each toast style used across the app.
@@ -108,6 +107,21 @@ export default function DevelopmentTestsClient() {
               Dismiss All Toasts
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card aria-labelledby="design-tokens-title">
+        <CardHeader>
+          <CardTitle id="design-tokens-title" role="heading" aria-level={2} className="text-lg">
+            Design Tokens
+          </CardTitle>
+          <div className="text-muted-foreground text-sm">
+            Live reference for the semantic colour tokens. Toggle the theme to compare
+            light and dark.
+          </div>
+        </CardHeader>
+        <CardContent>
+          <DesignTokens />
         </CardContent>
       </Card>
 

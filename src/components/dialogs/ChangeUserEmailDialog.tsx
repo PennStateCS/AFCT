@@ -140,7 +140,7 @@ export function ChangeUserEmailDialog({
             placeholder="name@example.edu"
           />
           {error ? (
-            <p id="change-email-error" className="text-xs text-red-600" role="alert">
+            <p id="change-email-error" className="text-xs text-destructive" role="alert">
               {error}
             </p>
           ) : availability === 'available' ? (

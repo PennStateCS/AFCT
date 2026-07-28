@@ -419,8 +419,8 @@ export default function CalendarClient({
         <Card className="flex h-full w-full flex-col">
           <CardContent className="relative flex min-h-0 flex-1 flex-col pt-6">
             {isError ? (
-              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 px-3 py-2">
-                <p role="alert" className="text-sm text-red-700">
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2">
+                <p role="alert" className="text-sm text-status-danger">
                   Failed to load calendar assignments. Please try again.
                 </p>
                 <Button variant="outline" size="sm" onClick={refresh}>
@@ -431,7 +431,7 @@ export default function CalendarClient({
             {loading ? (
               <div
                 role="status"
-                className="pointer-events-none absolute top-3 right-3 z-10 rounded-md border border-slate-200 bg-white/90 px-2 py-1 shadow-sm backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/90"
+                className="border-border bg-card pointer-events-none absolute top-3 right-3 z-10 rounded-md border px-2 py-1 shadow-sm"
               >
                 <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
               </div>
@@ -496,7 +496,7 @@ export default function CalendarClient({
                       dropdowns: 'hidden',
                       weekday:
                         'text-muted-foreground rounded-md flex-1 font-semibold text-[0.8rem] select-none text-center',
-                      day: 'relative box-border -m-px w-full h-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day aspect-square select-none border border-gray-300/60 dark:border-neutral-700',
+                      day: 'relative box-border -m-px w-full h-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day aspect-square select-none border border-border/60',
                       today: 'rounded-none bg-transparent text-inherit',
                     }}
                     components={CALENDAR_DAY_COMPONENTS}

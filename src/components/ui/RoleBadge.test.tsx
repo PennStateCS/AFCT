@@ -36,7 +36,7 @@ describe('RoleBadge', () => {
 
     const badge = screen.getByTestId('badge');
 
-    expect(badge).toHaveClass('border-gray-300', 'text-gray-700');
+    expect(badge).toHaveClass('border-border', 'text-foreground');
     expect(badge.textContent?.trim()).toBe('');
   });
 

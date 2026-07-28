@@ -295,13 +295,13 @@ export function AssignmentSettingsCard({
           Loading the assignment&apos;s audience…
         </p>
       ) : assigneesQuery.isError || overridesQuery.isError ? (
-        <div role="alert" className="text-sm text-red-600">
+        <div role="alert" className="text-sm text-destructive">
           The assignment&apos;s audience could not be loaded. It is hidden so an accidental save
           cannot clear it.{' '}
           <Button
             type="button"
             variant="link"
-            className="h-auto p-0 text-red-600 underline"
+            className="h-auto p-0 text-destructive underline"
             onClick={() => {
               void assigneesQuery.refetch();
               void overridesQuery.refetch();

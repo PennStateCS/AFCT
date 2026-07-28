@@ -287,7 +287,7 @@ export function CreateAssignmentWizardDialog({
                         className="min-h-[120px]"
                       />
                       {errors.description && (
-                        <p className="mt-1 text-xs text-red-600" role="alert">
+                        <p className="mt-1 text-xs text-destructive" role="alert">
                           {errors.description.message}
                         </p>
                       )}
@@ -385,7 +385,7 @@ export function CreateAssignmentWizardDialog({
                           description="Students submit and are graded as their group in the chosen set."
                           value={field.value ?? undefined}
                           onValueChange={(v) => field.onChange(v)}
-                          triggerClassName="bg-card border-black"
+                          triggerClassName="bg-card border-input"
                           options={groupSets.map((gs) => ({
                             value: gs.id,
                             label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,
@@ -393,7 +393,7 @@ export function CreateAssignmentWizardDialog({
                         />
                       )}
                       {errors.groupSetId && (
-                        <p className="text-xs text-red-600" role="alert">
+                        <p className="text-xs text-destructive" role="alert">
                           {errors.groupSetId.message}
                         </p>
                       )}
