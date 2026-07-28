@@ -156,8 +156,8 @@
      on a filled swatch (e.g. a toast's icon strip). Unlike the status foregrounds above,
      these must stay a mid, white-legible shade in BOTH themes, so they are not derived
      from --status-*. neutral covers the untyped/loading case. */
-  --status-success-solid: #22c55e;
-  --status-warning-solid: #f59e0b;
+  --status-success-solid: #16a34a;   /* green-600, chosen so the white glyph clears 3:1 */
+  --status-warning-solid: #d97706;   /* amber-600, same */
   --status-danger-solid: #ef4444;
   --status-info-solid: #3b82f6;
   --status-neutral-solid: #6b7280;
@@ -320,9 +320,8 @@
   --status-info: #93b4e8;
   --status-info-bg: rgba(25, 59, 127, 0.3);
   --status-info-border: rgba(147, 180, 232, 0.4);
-  /* Solid fills: only the two that need a brighter shade on dark are overridden;
-     success/danger/info stay white-legible as-is. */
-  --status-warning-solid: #fbbf24;
+  /* Solid fills carry a white glyph, so they keep the same mid shade in dark (a lighter
+     fill would drop below 3:1 against white); only the grey neutral is lightened here. */
   --status-neutral-solid: #94a3b8;
   --tab-active: #2dd4bf;                    /* teal-400 */
   --tab-active-bg: rgba(19, 78, 74, 0.4);   /* teal-900 / 40% */
