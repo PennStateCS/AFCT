@@ -7,6 +7,7 @@ import {
   isNewerThan,
   parseBackupTs,
   formatBackupTsLocal,
+  downgradeRefusedForSafetyBackup,
 } from './system-settings-shared';
 
 describe('parseBackupTs', () => {
@@ -16,6 +17,21 @@ describe('parseBackupTs', () => {
   it('returns null for a string that is not a timestamp', () => {
     expect(parseBackupTs('nope')).toBeNull();
     expect(parseBackupTs('2026-01-15')).toBeNull();
+  });
+});
+
+describe('downgradeRefusedForSafetyBackup', () => {
+  it('matches the updater refusal message', () => {
+    expect(
+      downgradeRefusedForSafetyBackup(
+        'Could not confirm a backup of the current state before downgrading, so the downgrade was refused to avoid unrecoverable data loss. Try again, or force it if you accept discarding the current state.',
+      ),
+    ).toBe(true);
+  });
+  it('does not match other failures or empty messages', () => {
+    expect(downgradeRefusedForSafetyBackup('the database restore did not complete')).toBe(false);
+    expect(downgradeRefusedForSafetyBackup(undefined)).toBe(false);
+    expect(downgradeRefusedForSafetyBackup('')).toBe(false);
   });
 });
 

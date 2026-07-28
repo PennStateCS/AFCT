@@ -14,6 +14,7 @@ import {
   formatBackupTsLocal,
   formatBytes,
   isNewerThan,
+  downgradeRefusedForSafetyBackup,
 } from './system-settings-shared';
 import { UpgradeProgress } from './UpgradeProgress';
 import { UpgradeLiveLog } from './UpgradeLiveLog';
@@ -66,8 +67,25 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
   // Which flow the admin last kicked off, so the progress checklist labels its steps
   // correctly (upgrade and downgrade share some early phases).
   const [lastAction, setLastAction] = useState<'upgrade' | 'downgrade' | null>(null);
+  // The last downgrade target this session, kept so a forced retry can re-issue the same
+  // (version, restorePoint) if the updater refused for lack of a confirmed safety backup.
+  const [lastDowngrade, setLastDowngrade] = useState<{ version: string; backup: string } | null>(
+    null,
+  );
+  const [confirmForceOpen, setConfirmForceOpen] = useState(false);
 
   const upgradeInProgress = isUpgradeInProgress(upgradeInfo?.status);
+  // The updater refuses a downgrade when it can't confirm a pre-downgrade safety backup,
+  // BEFORE it stops the app or restores anything, so it's a safe state to offer a forced
+  // retry from. Only surface it for a downgrade this session refused for exactly that
+  // reason, and only while nothing new is running.
+  const downgradeNeedsForce =
+    lastAction === 'downgrade' &&
+    !!lastDowngrade &&
+    upgradeInfo?.status?.phase === 'failed' &&
+    !upgradeInProgress &&
+    !downgradeBusy &&
+    downgradeRefusedForSafetyBackup(upgradeInfo?.status?.message);
   // Only offer versions newer than what's running: you can't "upgrade" to an older
   // release (that's the restore-points flow below). When the current tag isn't a
   // comparable version (e.g. `main` in dev), fall back to everything but the current.
@@ -314,6 +332,25 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               {upgradeInfo.status.message && (
                 <p className="text-muted-foreground">{upgradeInfo.status.message}</p>
               )}
+              {/* The downgrade was refused because no safety backup could be confirmed.
+                  Nothing was changed, so offer to proceed anyway (an explicit choice to
+                  discard the current state), behind its own type-to-confirm dialog. */}
+              {downgradeNeedsForce && (
+                <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={disabled || downgradeBusy}
+                    onClick={() => setConfirmForceOpen(true)}
+                  >
+                    Downgrade without a safety backup
+                  </Button>
+                  <span className="text-muted-foreground text-xs">
+                    The current state will not be recoverable.
+                  </span>
+                </div>
+              )}
               {/* Only show the step checklist for a run that is actually happening (or one
                   this session started). A completed run leaves the status at `healthy`, and
                   on a later page load that would otherwise render every step as a green
@@ -520,6 +557,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         onConfirm={() => {
           if (restoreTarget) {
             setLastAction('downgrade');
+            setLastDowngrade({ version: restoreTarget.version, backup: restoreTarget.backup });
             startDowngrade({
               tag: restoreTarget.version,
               restorePoint: restoreTarget.backup,
@@ -531,6 +569,47 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         onCloseAutoFocus={(e) => {
           // The row's Restore button is disabled once the downgrade starts, so send focus
           // to the status panel instead of letting it drop to <body>.
+          if ((downgradeBusy || upgradeInProgress) && upgradeStatusRef.current) {
+            e.preventDefault();
+            upgradeStatusRef.current.focus();
+          }
+        }}
+      />
+
+      {/* Forced downgrade: the updater refused because it couldn't confirm a safety
+          backup. Re-issue the same restore with force, so it proceeds without one. */}
+      <ConfirmDialog
+        open={confirmForceOpen}
+        variant="destructive"
+        busy={downgradeBusy}
+        title="Downgrade without a safety backup?"
+        description={
+          <>
+            A backup of the current state could not be confirmed, so this downgrade to{' '}
+            <span className="font-mono">{lastDowngrade?.version}</span> was refused. Proceeding
+            anyway restores the older backup and{' '}
+            <span className="text-destructive font-medium">
+              permanently discards the current state with no way to recover it
+            </span>
+            . Only do this if you accept that loss.
+          </>
+        }
+        requireTypedConfirmation={lastDowngrade?.version}
+        typedConfirmationLabel={`Type ${lastDowngrade?.version ?? ''} to enable the downgrade button.`}
+        confirmText="Downgrade anyway"
+        onConfirm={() => {
+          if (lastDowngrade) {
+            setLastAction('downgrade');
+            startDowngrade({
+              tag: lastDowngrade.version,
+              restorePoint: lastDowngrade.backup,
+              force: true,
+            });
+          }
+          setConfirmForceOpen(false);
+        }}
+        onCancel={() => setConfirmForceOpen(false)}
+        onCloseAutoFocus={(e) => {
           if ((downgradeBusy || upgradeInProgress) && upgradeStatusRef.current) {
             e.preventDefault();
             upgradeStatusRef.current.focus();

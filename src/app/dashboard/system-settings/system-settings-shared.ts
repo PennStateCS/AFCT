@@ -169,6 +169,16 @@ const UPGRADE_PHASE_LABELS: Record<string, string> = {
 export const upgradePhaseLabel = (phase: string) =>
   UPGRADE_PHASE_LABELS[phase] ?? phase.replace(/_/g, ' ');
 
+// Whether a failed downgrade failed specifically because the updater could not confirm a
+// pre-downgrade safety backup (a refusal it makes BEFORE touching anything, so it is a
+// safe state to offer a forced retry from). Keyed off the updater's refusal message in
+// docker/updater/updater.sh (process_downgrade), which starts "Could not confirm a
+// backup...". If that wording changes, the forced-retry affordance simply stops
+// appearing (the admin can still recover from the server), so this degrades gracefully.
+export function downgradeRefusedForSafetyBackup(message: string | undefined | null): boolean {
+  return !!message && /could not confirm a backup/i.test(message);
+}
+
 // A single step in the visual upgrade/downgrade progress checklist.
 export type UpgradeStepState = 'done' | 'current' | 'pending';
 export type UpgradeStep = { label: string; state: UpgradeStepState };
