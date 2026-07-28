@@ -47,7 +47,7 @@
   /* The navbar's green/teal (--secondary in light mode), pinned as a literal so it
      stays the same in both themes: --secondary itself flips to a dark neutral in
      dark mode, which would make anything drawn in it vanish on a dark background. */
-  --color-brand-teal: #43a9b2;
+  --color-brand-teal: oklch(0.6794 0.0938 203.328);
   --color-badge-success: var(--badge-success);
   --color-badge-success-bg: var(--badge-success-bg);
   --color-badge-success-border: var(--badge-success-border);
@@ -93,80 +93,80 @@
 }
 :root {
   --radius: 0.65rem;
-  --background: #ebebeb;
-  --foreground: #000000;
-  --card: #ffffff;
-  --card-foreground: oklch(0% 0 0);
+  --background: oklch(0.9401 0 0);
+  --foreground: oklch(0 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: #193b7f;
-  --primary-foreground: oklch(100% 0.00011 271.152);
-  --secondary: #43a9b2;
-  --secondary-foreground: oklch(100% 0.00011 271.152);
-  --tertiary: #ae501b;
-  --tertiary-foreground: #ffffff;
-  --muted: oklch(56.241% 0.00006 271.152);
-  --muted-foreground: #353535;
-  --accent: #e2e2e2;
+  --primary: oklch(0.37 0.1221 262.228);
+  --primary-foreground: oklch(1 0.0001 271.152);
+  --secondary: oklch(0.6794 0.0938 203.328);
+  --secondary-foreground: oklch(1 0.0001 271.152);
+  --tertiary: oklch(0.5424 0.1381 45.828);
+  --tertiary-foreground: oklch(1 0 0);
+  --muted: oklch(0.5624 0.0001 271.152);
+  --muted-foreground: oklch(0.329 0 0);
+  --accent: oklch(0.9128 0 0);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.92 0.004 286.32);
-  --input: oklch(75.402% 0.00009 271.152);
-  --ring: #2096f7;
+  --input: oklch(0.754 0.0001 271.152);
+  --ring: oklch(0.6604 0.1739 249.672);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: #464545;
-  --sidebar-foreground: oklch(100% 0.00011 271.152);
-  --sidebar-primary: oklch(94.148% 0.0081 254.087);
+  --sidebar: oklch(0.3914 0.0013 17.215);
+  --sidebar-foreground: oklch(1 0.0001 271.152);
+  --sidebar-primary: oklch(0.9415 0.0081 254.087);
   --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
   --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: #ffffff;
+  --sidebar-accent-foreground: oklch(1 0 0);
   --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(94.845% 0.00467 258.626);
-  --table-header: #e0e0e0;
-  --table-header-foreground: #000000;
-  --table-highlight: #ececec;
-  --table-background: #ffffff;
-  --node-color: #fff59d;
-  --grid-color: #edeff2;
-  --success: #2d6a1e;
+  --sidebar-ring: oklch(0.9485 0.0047 258.626);
+  --table-header: oklch(0.9067 0 0);
+  --table-header-foreground: oklch(0 0 0);
+  --table-highlight: oklch(0.9431 0 0);
+  --table-background: oklch(1 0 0);
+  --node-color: oklch(0.9588 0.1093 102.632);
+  --grid-color: oklch(0.9515 0.0046 258.325);
+  --success: oklch(0.4669 0.1258 140.003);
   /* Semantic status/feedback colors: the single source of truth for the four states
      (success, warning, danger, info) used by badges, inline status text, alert callouts,
      and toasts. Each is a triad -- a foreground that reads on the page and as a solid
      label, a soft -bg surface, and a matching -border -- so a state can be recolored in
      one place for a UI refresh or a high-contrast theme. `neutral` stays badge-scoped
      below because a general neutral is already covered by --muted / --accent. */
-  --status-success: #2d5a1b;       /* tint of --success */
-  --status-success-bg: #e8f0e0;
-  --status-success-border: #b8d49a;
-  --status-warning: #ae501b;       /* = --tertiary */
-  --status-warning-bg: #f5ece5;
-  --status-warning-border: #ddb08a;
-  --status-danger: #991b1b;        /* tint of --destructive */
-  --status-danger-bg: #fde8e8;
-  --status-danger-border: #f5b8b8;
-  --status-info: #193b7f;          /* = --primary */
-  --status-info-bg: #e8eef8;
-  --status-info-border: #b5c8ef;
+  --status-success: oklch(0.4204 0.1055 138.019);       /* tint of --success */
+  --status-success-bg: oklch(0.9447 0.0228 128.733);
+  --status-success-border: oklch(0.8347 0.0835 129.018);
+  --status-warning: oklch(0.5424 0.1381 45.828);       /* = --tertiary */
+  --status-warning-bg: oklch(0.9482 0.0135 60.567);
+  --status-warning-border: oklch(0.7886 0.0733 61.632);
+  --status-danger: oklch(0.4437 0.1613 26.899);        /* tint of --destructive */
+  --status-danger-bg: oklch(0.9478 0.023 17.565);
+  --status-danger-border: oklch(0.8383 0.071 18.674);
+  --status-info: oklch(0.37 0.1221 262.228);          /* = --primary */
+  --status-info-bg: oklch(0.9475 0.0149 260.73);
+  --status-info-border: oklch(0.8314 0.0587 264.656);
 
   /* Solid, saturated fills for the same four states, for elements that put WHITE content
      on a filled swatch (e.g. a toast's icon strip). Unlike the status foregrounds above,
      these must stay a mid, white-legible shade in BOTH themes, so they are not derived
      from --status-*. neutral covers the untyped/loading case. */
-  --status-success-solid: #16a34a;   /* green-600, chosen so the white glyph clears 3:1 */
-  --status-warning-solid: #d97706;   /* amber-600, same */
-  --status-danger-solid: #ef4444;
-  --status-info-solid: #3b82f6;
-  --status-neutral-solid: #6b7280;
+  --status-success-solid: oklch(0.6271 0.1699 149.214);   /* green-600, chosen so the white glyph clears 3:1 */
+  --status-warning-solid: oklch(0.6658 0.1574 58.318);   /* amber-600, same */
+  --status-danger-solid: oklch(0.6368 0.2078 25.331);
+  --status-info-solid: oklch(0.6231 0.188 259.815);
+  --status-neutral-solid: oklch(0.551 0.0234 264.364);
 
   /* Active-tab accent (brand teal). A darker teal in light so 14px active-tab labels
      clear WCAG AA 4.5:1 on the card; a lighter teal in dark. -bg is the soft fill behind
      a tab's count pill. Interim brand accent until the visual redesign. */
-  --tab-active: #0f766e;           /* teal-700 */
-  --tab-active-bg: #ccfbf1;        /* teal-100 */
+  --tab-active: oklch(0.5109 0.0861 186.391);           /* teal-700 */
+  --tab-active-bg: oklch(0.9527 0.0498 180.801);        /* teal-100 */
 
   /* Badge tokens derive from the status family (values unchanged), so badges and the
      other status surfaces can never drift apart. Dark mode overrides only --status-*
@@ -183,9 +183,9 @@
   --badge-info: var(--status-info);
   --badge-info-bg: var(--status-info-bg);
   --badge-info-border: var(--status-info-border);
-  --badge-neutral: #444444;        /* tint of --muted-foreground */
-  --badge-neutral-bg: #f0f0f0;
-  --badge-neutral-border: #d4d4d4;
+  --badge-neutral: oklch(0.3867 0 0);        /* tint of --muted-foreground */
+  --badge-neutral-bg: oklch(0.9551 0 0);
+  --badge-neutral-border: oklch(0.8699 0 0);
 }
 
 /* Cytoscape + ELK JFLAP viewer: tooltip styles (tippy.js) */
@@ -266,7 +266,7 @@
 
 .dark {
   --background: oklch(0.141 0.005 285.823);
-  --foreground: #fafafa;
+  --foreground: oklch(0.9851 0 0);
   --card: oklch(0.21 0.006 285.885);
   --card-foreground: oklch(0.985 0 0);
   /* Dark surfaces climb an elevation ladder so layered states read apart:
@@ -278,8 +278,8 @@
   --primary-foreground: oklch(0.379 0.146 265.522);
   --secondary: oklch(0.35 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
-  --tertiary: #003439;
-  --tertiary-foreground: #ffffff;
+  --tertiary: oklch(0.2966 0.0507 205.135);
+  --tertiary-foreground: oklch(1 0 0);
   --muted: oklch(0.274 0.006 286.033);
   --muted-foreground: oklch(0.705 0.015 286.067);
   --accent: oklch(0.31 0.006 286.033);
@@ -301,37 +301,37 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.488 0.243 264.376);
-  --table-header: #111827;
-  --table-header-foreground: #f8fafc;
-  --table-highlight: #1e293b;
-  --table-background: #0f172a;
-  --node-color: #caa22b;
-  --grid-color: #1a1814;
-  --success: #86c95a;
+  --table-header: oklch(0.2101 0.0318 264.665);
+  --table-header-foreground: oklch(0.9842 0.0034 247.858);
+  --table-highlight: oklch(0.2795 0.0368 260.031);
+  --table-background: oklch(0.2077 0.0398 265.755);
+  --node-color: oklch(0.7293 0.1363 88.887);
+  --grid-color: oklch(0.2098 0.0083 84.585);
+  --success: oklch(0.7669 0.1597 134.58);
   /* Status dark values (explicit tints; can't reuse brand vars, since --tertiary flips to
      teal in dark). Badges/alerts/toasts inherit these through the aliases defined in
      :root, so only the status family is overridden here. */
-  --status-success: #86c95a;
-  --status-success-bg: rgba(45, 90, 27, 0.25);
-  --status-success-border: rgba(134, 201, 90, 0.35);
-  --status-warning: #d4895a;
-  --status-warning-bg: rgba(174, 80, 27, 0.25);
-  --status-warning-border: rgba(212, 137, 90, 0.35);
-  --status-danger: #f87171;
-  --status-danger-bg: rgba(153, 27, 27, 0.3);
-  --status-danger-border: rgba(248, 113, 113, 0.35);
-  --status-info: #93b4e8;
-  --status-info-bg: rgba(25, 59, 127, 0.3);
-  --status-info-border: rgba(147, 180, 232, 0.4);
+  --status-success: oklch(0.7669 0.1597 134.58);
+  --status-success-bg: oklch(0.4204 0.1055 138.019 / 25%);
+  --status-success-border: oklch(0.7669 0.1597 134.58 / 35%);
+  --status-warning: oklch(0.6974 0.1112 52.078);
+  --status-warning-bg: oklch(0.5424 0.1381 45.828 / 25%);
+  --status-warning-border: oklch(0.6974 0.1112 52.078 / 35%);
+  --status-danger: oklch(0.7106 0.1661 22.216);
+  --status-danger-bg: oklch(0.4437 0.1613 26.899 / 30%);
+  --status-danger-border: oklch(0.7106 0.1661 22.216 / 35%);
+  --status-info: oklch(0.7646 0.0834 259.348);
+  --status-info-bg: oklch(0.37 0.1221 262.228 / 30%);
+  --status-info-border: oklch(0.7646 0.0834 259.348 / 40%);
   /* Solid fills carry a white glyph, so they keep the same mid shade in dark (a lighter
      fill would drop below 3:1 against white); only the grey neutral is lightened here. */
-  --status-neutral-solid: #94a3b8;
-  --tab-active: #2dd4bf;                    /* teal-400 */
-  --tab-active-bg: rgba(19, 78, 74, 0.4);   /* teal-900 / 40% */
+  --status-neutral-solid: oklch(0.7107 0.0351 256.788);
+  --tab-active: oklch(0.7845 0.1325 181.912);                    /* teal-400 */
+  --tab-active-bg: oklch(0.3861 0.059 188.416 / 40%);   /* teal-900 / 40% */
   /* Neutral badge stays badge-scoped. */
-  --badge-neutral: #9e9e9e;
-  --badge-neutral-bg: rgba(53, 53, 53, 0.35);
-  --badge-neutral-border: rgba(158, 158, 158, 0.3);
+  --badge-neutral: oklch(0.6993 0 0);
+  --badge-neutral-bg: oklch(0.329 0 0 / 35%);
+  --badge-neutral-border: oklch(0.6993 0 0 / 30%);
 }
 
 @layer base {
