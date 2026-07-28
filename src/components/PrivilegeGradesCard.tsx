@@ -438,7 +438,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
                 variant="secondary"
                 onClick={() => void refreshGrades()}
                 disabled={loading}
-                className="flex items-center gap-2 bg-green-600 text-white hover:bg-green-700"
+                className="flex items-center gap-2"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh

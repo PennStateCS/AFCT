@@ -162,7 +162,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
           <Button
             type="button"
             size="sm"
-            className="bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600/30"
+            variant="success"
             aria-label={`Restore version ${row.original.version}`}
             disabled={disabled || downgradeBusy || upgradeInProgress}
             onClick={() =>
