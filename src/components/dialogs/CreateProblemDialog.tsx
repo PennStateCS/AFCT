@@ -348,7 +348,7 @@ export function CreateProblemDialog({
                         <p
                           id="problem-description-error"
                           role="alert"
-                          className="mt-1 text-xs text-red-600"
+                          className="mt-1 text-xs text-destructive"
                         >
                           {errors.description.message}
                         </p>

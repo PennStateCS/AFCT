@@ -213,7 +213,7 @@ export function RandomAssignDialog({
             </label>
 
             {error && (
-              <p role="alert" className="text-xs text-red-600">
+              <p role="alert" className="text-xs text-destructive">
                 {error}
               </p>
             )}
@@ -257,7 +257,7 @@ export function RandomAssignDialog({
             </div>
 
             {error && (
-              <p role="alert" className="text-xs text-red-600">
+              <p role="alert" className="text-xs text-destructive">
                 {error}
               </p>
             )}

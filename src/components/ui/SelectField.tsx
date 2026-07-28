@@ -140,7 +140,7 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
         )}
 
         {error && (
-          <p id={`${triggerId}-error`} role="alert" className="mt-1 text-xs text-red-600">
+          <p id={`${triggerId}-error`} role="alert" className="mt-1 text-xs text-destructive">
             {error}
           </p>
         )}

@@ -287,7 +287,7 @@ export function CreateAssignmentWizardDialog({
                         className="min-h-[120px]"
                       />
                       {errors.description && (
-                        <p className="mt-1 text-xs text-red-600" role="alert">
+                        <p className="mt-1 text-xs text-destructive" role="alert">
                           {errors.description.message}
                         </p>
                       )}
@@ -393,7 +393,7 @@ export function CreateAssignmentWizardDialog({
                         />
                       )}
                       {errors.groupSetId && (
-                        <p className="text-xs text-red-600" role="alert">
+                        <p className="text-xs text-destructive" role="alert">
                           {errors.groupSetId.message}
                         </p>
                       )}

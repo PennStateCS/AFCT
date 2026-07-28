@@ -190,7 +190,7 @@ export function AudienceSelect({
       </div>
 
       {error ? (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-red-600">
+        <p id={errorId} role="alert" className="mt-1 text-xs text-destructive">
           {error}
         </p>
       ) : null}

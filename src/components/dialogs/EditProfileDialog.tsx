@@ -279,7 +279,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
               )}
             </div>
             {errors.avatarFile?.message && (
-              <p id={avatarErrorId} role="alert" className="text-xs text-red-600">
+              <p id={avatarErrorId} role="alert" className="text-xs text-destructive">
                 {typeof errors.avatarFile?.message === 'string'
                   ? errors.avatarFile.message
                   : String(errors.avatarFile?.message)}

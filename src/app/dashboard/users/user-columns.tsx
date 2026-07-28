@@ -493,7 +493,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
           <DropdownMenuItem
             onClick={() => setConfirmDeleteOpen(true)}
             disabled={!user.inactive}
-            className="hover:bg-secondary flex items-center gap-2 text-red-600 focus:text-red-600"
+            className="hover:bg-secondary flex items-center gap-2 text-destructive focus:text-destructive"
           >
             <Trash2 className="h-4 w-4" />
             Delete Inactive User

@@ -139,7 +139,7 @@ export function ForcedPasswordChangeForm() {
             <PasswordRulesHelper id={helperId} rules={passwordRuleStatuses} />
 
             {submitError ? (
-              <p role="alert" className="text-sm text-red-600">
+              <p role="alert" className="text-sm text-destructive">
                 {submitError}
               </p>
             ) : null}

@@ -52,7 +52,7 @@ export function ProblemBasicFields({ control, errors }: ProblemBasicFieldsProps)
               aria-describedby={errors.description ? 'problem-description-error' : undefined}
             />
             {errors.description && (
-              <p id="problem-description-error" role="alert" className="mt-1 text-xs text-red-600">
+              <p id="problem-description-error" role="alert" className="mt-1 text-xs text-destructive">
                 {errors.description.message}
               </p>
             )}

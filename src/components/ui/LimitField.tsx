@@ -86,7 +86,7 @@ export function LimitField({
             className={cn('bg-card h-11 border-black', error && 'border-red-500')}
           />
           {error && (
-            <p id={errorId} role="alert" className="mt-1 text-xs text-red-600">
+            <p id={errorId} role="alert" className="mt-1 text-xs text-destructive">
               {error}
             </p>
           )}

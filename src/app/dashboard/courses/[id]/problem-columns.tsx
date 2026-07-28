@@ -228,7 +228,7 @@ export const useProblemColumns = ({
                 title={
                   disabled ? 'Problem is used by an assignment and cannot be deleted' : undefined
                 }
-                className={`flex items-center gap-2 text-red-600 focus:text-red-600 ${
+                className={`flex items-center gap-2 text-destructive focus:text-destructive ${
                   disabled ? 'cursor-not-allowed opacity-50' : ''
                 }`}
               >

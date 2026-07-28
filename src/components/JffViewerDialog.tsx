@@ -222,7 +222,7 @@ export function JffCytoscapeViewer({
         aria-label={title ? `Diagram of ${title}` : 'Automaton diagram'}
         aria-describedby={description ? summaryId : undefined}
       >
-        {error ? <div className="p-4 text-sm text-red-600">{error}</div> : null}
+        {error ? <div className="p-4 text-sm text-destructive">{error}</div> : null}
       </div>
 
       {description ? (

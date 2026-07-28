@@ -304,7 +304,7 @@ export function EditUserDialog({
                         Upload Avatar
                       </Button>
                       {avatarFileErrorMessage && (
-                        <p id={avatarErrorId} role="alert" className="mt-1 text-xs text-red-600">
+                        <p id={avatarErrorId} role="alert" className="mt-1 text-xs text-destructive">
                           {avatarFileErrorMessage}
                         </p>
                       )}

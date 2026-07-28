@@ -163,7 +163,7 @@ export function SearchableMultiSelect({
         </PopoverContent>
       </Popover>
       {error ? (
-        <p id={describedBy} role="alert" className="mt-1 text-xs text-red-600">
+        <p id={describedBy} role="alert" className="mt-1 text-xs text-destructive">
           {error}
         </p>
       ) : null}

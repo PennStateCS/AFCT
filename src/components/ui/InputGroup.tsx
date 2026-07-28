@@ -243,7 +243,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
       )}
 
       {error && (
-        <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-red-600">
+        <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-destructive">
           {error}
         </p>
       )}

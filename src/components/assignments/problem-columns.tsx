@@ -266,7 +266,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onRemoveProblem(row.original)}
-              className="flex items-center gap-2 text-red-600 focus:text-red-600"
+              className="flex items-center gap-2 text-destructive focus:text-destructive"
               hidden={courseIsArchived}
             >
               <Trash2 className="mr-2 h-4 w-4" /> Remove Problem

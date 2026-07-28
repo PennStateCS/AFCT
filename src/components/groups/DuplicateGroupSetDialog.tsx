@@ -142,7 +142,7 @@ export function DuplicateGroupSetDialog({
           </fieldset>
 
           {error && (
-            <p id={errorId} role="alert" className="text-xs text-red-600">
+            <p id={errorId} role="alert" className="text-xs text-destructive">
               {error}
             </p>
           )}
