@@ -523,7 +523,7 @@ export function useAssignmentColumns(
                   }}
                   hidden={courseIsArchived}
                   title={title}
-                  className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-gray-500 opacity-50' : 'text-red-600 focus:text-red-600'}`}
+                  className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-muted-foreground opacity-50' : 'text-red-600 focus:text-red-600'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Assignment

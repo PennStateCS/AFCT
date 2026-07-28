@@ -33,7 +33,7 @@ export function FeedbackDialog({
             {description}
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-auto px-6 py-5 text-base leading-relaxed text-slate-900">
+        <div className="max-h-[60vh] overflow-auto px-6 py-5 text-base leading-relaxed text-foreground">
           {feedbackText ? feedbackText : 'No feedback available.'}
         </div>
         <DialogFooter className="px-6 pb-6 pt-2">

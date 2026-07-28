@@ -147,7 +147,7 @@ export function DataTableToolbar<TData>({
                 </DropdownMenuCheckboxItem>
               ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onResetColumns} className="text-red-600 hover:text-red-700">
+            <DropdownMenuItem onClick={onResetColumns} className="text-destructive">
               Reset Columns
             </DropdownMenuItem>
           </DropdownMenuContent>

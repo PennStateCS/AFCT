@@ -404,7 +404,7 @@ export function EditUserDialog({
               value={user.email}
               readOnly
               aria-readonly="true"
-              className="w-full cursor-not-allowed rounded border bg-gray-200 p-2 text-sm opacity-70"
+              className="w-full cursor-not-allowed rounded border bg-muted p-2 text-sm opacity-70"
             />
           </div>
 

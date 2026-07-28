@@ -357,7 +357,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           return (
             <button
               type="button"
-              className="flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1 hover:bg-neutral-300"
+              className="flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1 hover:bg-accent"
               title="View grade breakdown"
               onClick={handleClick}
               aria-label={`View breakdown for ${user.firstName} ${user.lastName} on ${a.title}`}

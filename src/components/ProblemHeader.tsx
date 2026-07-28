@@ -57,12 +57,12 @@ export default function ProblemHeader({
   const submissionsLabel =
     typeof maxSubmissions === 'number' ? (maxSubmissions < 0 ? 'Unlimited' : maxSubmissions) : null;
   const metaPillClass =
-    'inline-flex min-h-8 items-center rounded-full border border-slate-200 bg-transparent px-3 py-1 text-xs font-medium leading-none dark:border-slate-200';
+    'inline-flex min-h-8 items-center rounded-full border border-border bg-transparent px-3 py-1 text-xs font-medium leading-none';
 
   return (
     <div className={className}>
       <CardTitle className="text-lg">{title}</CardTitle>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-foreground">
         {badge ? (
           <Badge
             variant="outline"

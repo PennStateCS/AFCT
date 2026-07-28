@@ -118,7 +118,7 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center pr-4 text-slate-400">
+                    <div className="flex items-center pr-4 text-muted-foreground">
                       <ChevronRight className="h-4 w-4" aria-hidden="true" />
                     </div>
                   </Link>

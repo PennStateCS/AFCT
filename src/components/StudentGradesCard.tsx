@@ -220,13 +220,13 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="border-border rounded-full border px-2 py-1 text-xs font-semibold text-slate-700">
+                            <span className="border-border rounded-full border px-2 py-1 text-xs font-semibold text-foreground">
                               {problem.grade === null
                                 ? `-/${problem.maxPoints}`
                                 : `${problem.grade}/${problem.maxPoints}`}{' '}
                               pts
                             </span>
-                            <ChevronRight className="h-4 w-4 text-slate-400" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </div>
                         </button>
                       ))}

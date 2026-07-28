@@ -19,17 +19,18 @@ import {
 import { UpgradeProgress } from './UpgradeProgress';
 import { UpgradeLiveLog } from './UpgradeLiveLog';
 
-// Colour the self-update banner by outcome: green on success, red on a real failure,
-// amber while working / timed out / when the updater is simply behind.
+// Colour the self-update banner by outcome via the semantic status tokens: success on a
+// completed update, danger on a real failure, warning while working / timed out / when the
+// updater is simply behind. The tokens carry their own dark-mode values (see globals.css).
 function selfUpdateBannerClass(phase: SelfUpdateState['phase']): string {
   const base = 'max-w-xl space-y-2 rounded-md border p-3 text-sm';
   switch (phase) {
     case 'done':
-      return `${base} border-green-500/40 bg-green-50 text-green-900 dark:bg-green-950/40 dark:text-green-200`;
+      return `${base} border-status-success-border bg-status-success-bg text-status-success`;
     case 'failed':
-      return `${base} border-red-500/40 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200`;
+      return `${base} border-status-danger-border bg-status-danger-bg text-status-danger`;
     default:
-      return `${base} border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200`;
+      return `${base} border-status-warning-border bg-status-warning-bg text-status-warning`;
   }
 }
 
@@ -407,7 +408,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         {!updaterAvailable ? (
           <div
             role="note"
-            className="max-w-xl space-y-2 rounded-md border border-amber-500/40 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+            className="border-status-warning-border bg-status-warning-bg text-status-warning max-w-xl space-y-2 rounded-md border p-4 text-sm"
           >
             <p className="font-medium">The update service isn’t installed.</p>
             <p>
@@ -459,7 +460,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             {selectedVersionInfo?.upgradeNote && (
               <div
                 role="note"
-                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm whitespace-pre-line text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border p-3 text-sm whitespace-pre-line"
               >
                 {selectedVersionInfo.upgradeNote}
               </div>

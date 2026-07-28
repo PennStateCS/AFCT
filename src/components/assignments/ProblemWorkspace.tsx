@@ -340,7 +340,7 @@ export default function ProblemWorkspace({
               onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined}
             />
           ) : !isPrivilegedUser ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-xs whitespace-nowrap text-slate-700 dark:border-slate-200 dark:text-slate-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-transparent px-3 py-2 text-xs whitespace-nowrap text-foreground">
               <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
               <span>
                 {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}

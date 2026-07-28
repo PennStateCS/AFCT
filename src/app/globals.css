@@ -63,6 +63,21 @@
   --color-badge-neutral: var(--badge-neutral);
   --color-badge-neutral-bg: var(--badge-neutral-bg);
   --color-badge-neutral-border: var(--badge-neutral-border);
+  /* Semantic status/feedback family (foreground / soft -bg / -border) for inline status
+     text, alert callouts, and toasts. Badges consume the same values via --badge-* above.
+     Usage: text-status-warning, bg-status-warning-bg, border-status-warning-border. */
+  --color-status-success: var(--status-success);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-border: var(--status-warning-border);
+  --color-status-danger: var(--status-danger);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-border: var(--status-danger-border);
+  --color-status-info: var(--status-info);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-border: var(--status-info-border);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -110,19 +125,40 @@
   --node-color: #fff59d;
   --grid-color: #edeff2;
   --success: #2d6a1e;
-  /* Badge colors: derived from brand palette (--primary, --tertiary, --destructive, --success) */
-  --badge-success: #2d5a1b;        /* tint of --success */
-  --badge-success-bg: #e8f0e0;
-  --badge-success-border: #b8d49a;
-  --badge-warning: #ae501b;        /* = --tertiary */
-  --badge-warning-bg: #f5ece5;
-  --badge-warning-border: #ddb08a;
-  --badge-danger: #991b1b;         /* tint of --destructive */
-  --badge-danger-bg: #fde8e8;
-  --badge-danger-border: #f5b8b8;
-  --badge-info: #193b7f;           /* = --primary */
-  --badge-info-bg: #e8eef8;
-  --badge-info-border: #b5c8ef;
+  /* Semantic status/feedback colors: the single source of truth for the four states
+     (success, warning, danger, info) used by badges, inline status text, alert callouts,
+     and toasts. Each is a triad -- a foreground that reads on the page and as a solid
+     label, a soft -bg surface, and a matching -border -- so a state can be recolored in
+     one place for a UI refresh or a high-contrast theme. `neutral` stays badge-scoped
+     below because a general neutral is already covered by --muted / --accent. */
+  --status-success: #2d5a1b;       /* tint of --success */
+  --status-success-bg: #e8f0e0;
+  --status-success-border: #b8d49a;
+  --status-warning: #ae501b;       /* = --tertiary */
+  --status-warning-bg: #f5ece5;
+  --status-warning-border: #ddb08a;
+  --status-danger: #991b1b;        /* tint of --destructive */
+  --status-danger-bg: #fde8e8;
+  --status-danger-border: #f5b8b8;
+  --status-info: #193b7f;          /* = --primary */
+  --status-info-bg: #e8eef8;
+  --status-info-border: #b5c8ef;
+
+  /* Badge tokens derive from the status family (values unchanged), so badges and the
+     other status surfaces can never drift apart. Dark mode overrides only --status-*
+     (see .dark); these aliases resolve to the dark values automatically. */
+  --badge-success: var(--status-success);
+  --badge-success-bg: var(--status-success-bg);
+  --badge-success-border: var(--status-success-border);
+  --badge-warning: var(--status-warning);
+  --badge-warning-bg: var(--status-warning-bg);
+  --badge-warning-border: var(--status-warning-border);
+  --badge-danger: var(--status-danger);
+  --badge-danger-bg: var(--status-danger-bg);
+  --badge-danger-border: var(--status-danger-border);
+  --badge-info: var(--status-info);
+  --badge-info-bg: var(--status-info-bg);
+  --badge-info-border: var(--status-info-border);
   --badge-neutral: #444444;        /* tint of --muted-foreground */
   --badge-neutral-bg: #f0f0f0;
   --badge-neutral-border: #d4d4d4;
@@ -245,19 +281,22 @@
   --node-color: #caa22b;
   --grid-color: #1a1814;
   --success: #86c95a;
-  /* Badge dark mode overrides: explicit tints (cannot use brand vars; --tertiary changes to teal in dark) */
-  --badge-success: #86c95a;
-  --badge-success-bg: rgba(45, 90, 27, 0.25);
-  --badge-success-border: rgba(134, 201, 90, 0.35);
-  --badge-warning: #d4895a;
-  --badge-warning-bg: rgba(174, 80, 27, 0.25);
-  --badge-warning-border: rgba(212, 137, 90, 0.35);
-  --badge-danger: #f87171;
-  --badge-danger-bg: rgba(153, 27, 27, 0.3);
-  --badge-danger-border: rgba(248, 113, 113, 0.35);
-  --badge-info: #93b4e8;
-  --badge-info-bg: rgba(25, 59, 127, 0.3);
-  --badge-info-border: rgba(147, 180, 232, 0.4);
+  /* Status dark values (explicit tints; can't reuse brand vars, since --tertiary flips to
+     teal in dark). Badges/alerts/toasts inherit these through the aliases defined in
+     :root, so only the status family is overridden here. */
+  --status-success: #86c95a;
+  --status-success-bg: rgba(45, 90, 27, 0.25);
+  --status-success-border: rgba(134, 201, 90, 0.35);
+  --status-warning: #d4895a;
+  --status-warning-bg: rgba(174, 80, 27, 0.25);
+  --status-warning-border: rgba(212, 137, 90, 0.35);
+  --status-danger: #f87171;
+  --status-danger-bg: rgba(153, 27, 27, 0.3);
+  --status-danger-border: rgba(248, 113, 113, 0.35);
+  --status-info: #93b4e8;
+  --status-info-bg: rgba(25, 59, 127, 0.3);
+  --status-info-border: rgba(147, 180, 232, 0.4);
+  /* Neutral badge stays badge-scoped. */
   --badge-neutral: #9e9e9e;
   --badge-neutral-bg: rgba(53, 53, 53, 0.35);
   --badge-neutral-border: rgba(158, 158, 158, 0.3);
