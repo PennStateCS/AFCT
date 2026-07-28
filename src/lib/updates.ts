@@ -148,6 +148,21 @@ export function readProgress(since = 0): ProgressSlice {
   }
 }
 
+// Empty the live progress log at the moment a new run is requested. The updater
+// truncates it too, but only once it claims the request; the UI opens the progress
+// stream the instant the request POST returns, so without this the stream replays the
+// PREVIOUS run's lines (e.g. a just-finished self-update) until the updater catches up.
+// Called by the request writers below so every streamed action starts from a clean log.
+// Best-effort: if it fails, the updater's own reset still clears the log for its run.
+export function resetProgress(): void {
+  try {
+    fs.mkdirSync(UPDATE_TRIGGER_DIR, { recursive: true });
+    fs.writeFileSync(UPDATE_PROGRESS_FILE, '');
+  } catch {
+    // best-effort; the updater resets the log again when it starts the run
+  }
+}
+
 // Drop a validated upgrade request for the sidecar. Written to a temp file and
 // renamed so the sidecar never reads a half-written request. Throws if the
 // trigger volume isn't mounted (surfaced by the caller as "service unavailable").
@@ -158,6 +173,7 @@ export function writeUpdateRequest(request: {
   backupFirst?: boolean;
 }): void {
   fs.mkdirSync(UPDATE_TRIGGER_DIR, { recursive: true });
+  resetProgress();
   const payload = {
     action: 'upgrade',
     tag: request.tag,
@@ -224,6 +240,7 @@ export function writeSelfUpdateRequest(request: {
   requestId: string;
 }): void {
   fs.mkdirSync(UPDATE_TRIGGER_DIR, { recursive: true });
+  resetProgress();
   const payload = {
     action: 'self-update',
     tag: request.tag,
@@ -293,6 +310,7 @@ export function writeDowngradeRequest(request: {
   requestId: string;
 }): void {
   fs.mkdirSync(UPDATE_TRIGGER_DIR, { recursive: true });
+  resetProgress();
   const payload = {
     action: 'downgrade',
     tag: request.tag,
