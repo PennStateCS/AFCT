@@ -419,8 +419,8 @@ export default function CalendarClient({
         <Card className="flex h-full w-full flex-col">
           <CardContent className="relative flex min-h-0 flex-1 flex-col pt-6">
             {isError ? (
-              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 px-3 py-2">
-                <p role="alert" className="text-sm text-red-700">
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2">
+                <p role="alert" className="text-sm text-status-danger">
                   Failed to load calendar assignments. Please try again.
                 </p>
                 <Button variant="outline" size="sm" onClick={refresh}>

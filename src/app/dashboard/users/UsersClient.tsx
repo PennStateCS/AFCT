@@ -166,8 +166,8 @@ export default function UsersClient() {
 
       <CardContent>
         {isError ? (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 px-3 py-2">
-            <p role="alert" className="text-sm text-red-700">
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2">
+            <p role="alert" className="text-sm text-status-danger">
               Failed to load users. Please try again.
             </p>
             <Button variant="outline" size="sm" onClick={refresh}>

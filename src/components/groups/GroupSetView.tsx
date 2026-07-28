@@ -441,7 +441,7 @@ export function GroupSetView({
   }
   if (detailQuery.isError || !detail) {
     return (
-      <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-md border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger">
         Could not load this group set.{' '}
         <button
           type="button"
@@ -508,7 +508,7 @@ export function GroupSetView({
       {detail.locked && (
         <div
           role="status"
-          className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+          className="rounded-md border border-status-warning-border bg-status-warning-bg p-3 text-sm text-status-warning"
         >
           This group set has associated submissions or grades. Its groups and memberships can
           no longer be changed because doing so could affect academic records. Duplicate the

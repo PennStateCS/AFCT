@@ -258,7 +258,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
           {parseError ? (
             <p
               role="alert"
-              className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700"
+              className="rounded border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm text-status-danger"
             >
               {parseError}
             </p>

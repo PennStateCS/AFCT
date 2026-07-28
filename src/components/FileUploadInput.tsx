@@ -123,7 +123,7 @@ export default function FileUploadInput({
             : isDragging
               ? 'border-primary bg-primary/5'
               : value
-                ? 'border-green-300 bg-green-50'
+                ? 'border-status-success-border bg-status-success-bg'
                 : hasError
                   ? 'border-destructive bg-destructive/5'
                   : 'border-border bg-muted/15 hover:border-primary/50'
