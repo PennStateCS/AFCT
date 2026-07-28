@@ -184,7 +184,7 @@ export default function ProblemWorkspace({
             {isLate ? (
               <Badge
                 variant="secondary"
-                className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900 shadow-sm"
+                className="mt-1 inline-flex items-center rounded-full bg-status-warning-bg px-2 py-1 text-xs font-semibold text-status-warning shadow-sm"
               >
                 Late
               </Badge>

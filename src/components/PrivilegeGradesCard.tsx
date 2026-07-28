@@ -289,7 +289,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           <div className="flex items-center gap-2">
             <span>{String(row.original.lastName ?? '')}</span>
             {row.original.enrollmentStatus === 'DROPPED' ? (
-              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              <span className="inline-flex items-center rounded-full bg-status-warning-bg px-2 py-0.5 text-xs font-medium text-status-warning">
                 Dropped
               </span>
             ) : null}

@@ -89,9 +89,9 @@ export function OverrideLatePolicyField({
         <SelectTrigger
           id={fieldId}
           aria-describedby={descriptionId}
-          // bg-card + border-black so it reads like the InputGroup date fields beside it
+          // bg-card + border-input so it reads like the InputGroup date fields beside it
           // (the default border-input gray made the whole control look gray).
-          className="bg-card h-11 w-full border-black"
+          className="bg-card h-11 w-full border-input"
         >
           <SelectValue />
         </SelectTrigger>

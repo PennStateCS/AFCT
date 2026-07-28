@@ -36,7 +36,7 @@ export function SegmentedControl({
       role="radiogroup"
       aria-label={ariaLabel}
       className={cn(
-        'bg-card inline-flex rounded-md border border-black p-0.5',
+        'bg-card inline-flex rounded-md border border-input p-0.5',
         disabled && 'opacity-50',
         className,
       )}

@@ -111,7 +111,7 @@ function DraggableStudentRow({
           <span className="min-w-0 flex-1 truncate">{studentName(student)}</span>
         </label>
         {inactive && (
-          <Badge variant="outline" className="shrink-0 text-amber-700">
+          <Badge variant="outline" className="shrink-0 text-status-warning">
             Inactive
           </Badge>
         )}

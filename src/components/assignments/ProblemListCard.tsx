@@ -69,7 +69,7 @@ export function ProblemListCard({
     ...gradeLabels.map((s) => s.length),
     ...(showTotal ? [totalLabel.length] : []),
   );
-  const badgeClass = 'justify-center border border-border bg-white text-xs font-medium tabular-nums text-foreground';
+  const badgeClass = 'justify-center border border-border bg-background text-xs font-medium tabular-nums text-foreground';
   const badgeStyle = badgeChars > 0 ? { minWidth: `${badgeChars}ch` } : undefined;
 
   return (
@@ -111,7 +111,7 @@ export function ProblemListCard({
                     key="usage"
                     variant="secondary"
                     title="Submissions Used / Submissions Allowed"
-                    className="border border-border bg-white text-xs font-medium text-foreground"
+                    className="border border-border bg-background text-xs font-medium text-foreground"
                   >
                     {submissionLabel}
                   </Badge>

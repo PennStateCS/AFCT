@@ -269,7 +269,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
           ) : null}
 
           {rows.length > 0 && invalidRowCount > 0 ? (
-            <p className="text-sm text-amber-700">
+            <p className="text-sm text-status-warning">
               {invalidRowCount} row(s) look invalid (missing fields, invalid email, or weak
               password) and will be skipped.
             </p>

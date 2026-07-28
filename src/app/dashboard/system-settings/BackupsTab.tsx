@@ -98,7 +98,7 @@ export function BackupsTab({
           disabled={disabled}
           descriptionPlacement="inline"
           description="When off, no scheduled dumps are taken."
-          boxClassName="border-black"
+          boxClassName="border-input"
         />
         <InputGroup
           label="Daily backup time (hour)"

@@ -39,7 +39,10 @@ const typeBadgeMap: Record<string, { label: string; className: string }> = {
 const getTypeBadge = (type?: string) => {
   if (!type) return null;
   return (
-    typeBadgeMap[type] || { label: type, className: 'bg-gray-100 text-gray-800 border-gray-200' }
+    typeBadgeMap[type] || {
+      label: type,
+      className: 'bg-transparent text-muted-foreground border-border',
+    }
   );
 };
 

@@ -91,7 +91,7 @@ export function AudienceSelect({
       <div
         className={cn(
           'flex flex-wrap items-center gap-1.5 rounded-md border p-2',
-          error ? 'border-red-500' : 'border-black',
+          error ? 'border-red-500' : 'border-input',
         )}
       >
         {isAll ? (

@@ -29,7 +29,7 @@ export type StudentNavigatorStudent = {
 /** Small "Dropped" badge for a student who is no longer enrolled. */
 function DroppedBadge() {
   return (
-    <span className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+    <span className="inline-flex shrink-0 items-center rounded-full bg-status-warning-bg px-2 py-0.5 text-xs font-medium text-status-warning">
       Dropped
     </span>
   );

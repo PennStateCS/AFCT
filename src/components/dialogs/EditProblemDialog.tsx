@@ -306,7 +306,7 @@ export function EditProblemDialog({
                       </Label>
                       <select
                         id="edit-problem-type"
-                        className="bg-card w-full rounded border border-black p-2"
+                        className="bg-card w-full rounded border border-input p-2"
                         value={field.value ?? ''}
                         onChange={(e) => field.onChange(e.target.value as FormValues['type'])}
                       >

@@ -91,12 +91,12 @@ export function JffCytoscapeViewer({
             : 'Unknown';
     const cls =
       t === 'fa'
-        ? 'bg-orange-100 text-orange-800'
+        ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200'
         : t === 'pda'
-          ? 'bg-purple-100 text-purple-800'
+          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
           : t === 'tm'
-            ? 'bg-sky-100 text-sky-800'
-            : 'bg-gray-100 text-gray-800';
+            ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'
+            : 'bg-muted text-muted-foreground';
     return (
       <Badge variant="outline" className={cls}>
         {label}
