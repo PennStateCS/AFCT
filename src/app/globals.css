@@ -78,6 +78,9 @@
   --color-status-info: var(--status-info);
   --color-status-info-bg: var(--status-info-bg);
   --color-status-info-border: var(--status-info-border);
+  /* Active-tab brand accent. Usage: text-tab-active, border-tab-active, bg-tab-active-bg. */
+  --color-tab-active: var(--tab-active);
+  --color-tab-active-bg: var(--tab-active-bg);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -143,6 +146,12 @@
   --status-info: #193b7f;          /* = --primary */
   --status-info-bg: #e8eef8;
   --status-info-border: #b5c8ef;
+
+  /* Active-tab accent (brand teal). A darker teal in light so 14px active-tab labels
+     clear WCAG AA 4.5:1 on the card; a lighter teal in dark. -bg is the soft fill behind
+     a tab's count pill. Interim brand accent until the visual redesign. */
+  --tab-active: #0f766e;           /* teal-700 */
+  --tab-active-bg: #ccfbf1;        /* teal-100 */
 
   /* Badge tokens derive from the status family (values unchanged), so badges and the
      other status surfaces can never drift apart. Dark mode overrides only --status-*
@@ -296,6 +305,8 @@
   --status-info: #93b4e8;
   --status-info-bg: rgba(25, 59, 127, 0.3);
   --status-info-border: rgba(147, 180, 232, 0.4);
+  --tab-active: #2dd4bf;                    /* teal-400 */
+  --tab-active-bg: rgba(19, 78, 74, 0.4);   /* teal-900 / 40% */
   /* Neutral badge stays badge-scoped. */
   --badge-neutral: #9e9e9e;
   --badge-neutral-bg: rgba(53, 53, 53, 0.35);
