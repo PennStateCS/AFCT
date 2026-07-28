@@ -83,7 +83,7 @@ export function LimitField({
             aria-label={label}
             aria-invalid={!!error || undefined}
             aria-describedby={error ? errorId : undefined}
-            className={cn('bg-card h-11 border-input', error && 'border-red-500')}
+            className={cn('bg-card h-11 border-input', error && 'border-destructive')}
           />
           {error && (
             <p id={errorId} role="alert" className="mt-1 text-xs text-destructive">

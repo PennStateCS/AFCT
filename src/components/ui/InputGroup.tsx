@@ -172,7 +172,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
             // Explicit white surface: the base Input is bg-transparent, which reads
             // gray when a field sits on a tinted panel (e.g. the override rows).
             'bg-card border-input',
-            error && 'border-red-500',
+            error && 'border-destructive',
             type === 'number' && 'appearance-auto',
             inputPaddingRight,
             labelClassName,
@@ -272,12 +272,12 @@ function StatusAdornment({
   // Pair the color/shape-only status icon with a text equivalent for AT.
   return isValid ? (
     <>
-      <CheckCircle size={18} className="text-green-500" aria-hidden="true" />
+      <CheckCircle size={18} className="text-status-success" aria-hidden="true" />
       <span className="sr-only">valid</span>
     </>
   ) : (
     <>
-      <XCircle size={18} className="text-red-500" aria-hidden="true" />
+      <XCircle size={18} className="text-destructive" aria-hidden="true" />
       <span className="sr-only">invalid</span>
     </>
   );

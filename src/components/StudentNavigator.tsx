@@ -236,7 +236,7 @@ export default function StudentNavigator({
               <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                 {selectedStudent ? (
                   <span
-                    className={`h-2.5 w-2.5 rounded-full ${selectedStatus ? 'bg-green-500' : 'bg-red-500'}`}
+                    className={`h-2.5 w-2.5 rounded-full ${selectedStatus ? 'bg-status-success-solid' : 'bg-status-danger-solid'}`}
                     aria-hidden="true"
                   />
                 ) : null}
@@ -295,7 +295,7 @@ export default function StudentNavigator({
                   >
                     <span className="flex items-center gap-2 truncate">
                       <span
-                        className={`h-2.5 w-2.5 rounded-full ${gradeStatuses?.[s.id] ? 'bg-green-500' : 'bg-red-500'}`}
+                        className={`h-2.5 w-2.5 rounded-full ${gradeStatuses?.[s.id] ? 'bg-status-success-solid' : 'bg-status-danger-solid'}`}
                         aria-hidden="true"
                       />
                       <span className="truncate">

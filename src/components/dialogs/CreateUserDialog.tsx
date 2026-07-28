@@ -213,7 +213,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
                 return (
                   <li
                     key={rule.label}
-                    className={ok ? 'text-xs text-green-600' : 'text-xs text-red-500'}
+                    className={ok ? 'text-status-success text-xs' : 'text-destructive text-xs'}
                   >
                     {rule.label}
                   </li>

@@ -357,7 +357,7 @@ export default function AssignmentDashboardPage({
   }
 
   if (loading) return <LoadingSpinner label="Loading" />;
-  if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
+  if (!assignment) return <div className="text-destructive p-6">Assignment not found.</div>;
 
   const assignmentProblemForDialog = problemToEdit
     ? ((assignment.problems ?? []).find((ap) => ap.problem.id === problemToEdit.id) ?? null)
