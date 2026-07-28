@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import type { SubmissionStatus } from '@prisma/client';
+import type { FileStatusReturn } from './simulatiry_report/types';
 
 import fs from 'fs';
 import path from 'path';
@@ -79,6 +80,8 @@ interface SubmissionEvaluationResult {
   correct?: boolean;
   evaluationRaw: unknown | null;
   status: SubmissionEvaluationStatus;
+  contentHash?: string;
+  fileStatus?: FileStatusReturn;
 }
 
 async function logSubmissionActivity(
@@ -675,10 +678,9 @@ async function evaluateWithJar(
       const similarityData = await jflapSimilarityParser(uploadedFilePath);
       const fileUserId = similarityData?.fileUserId ?? undefined;
       const fileHash = similarityData?.fileHash ?? undefined;
-      const calcHash = similarityData?.calcHash ?? undefined;
+      const contentHash = similarityData?.calcHash ?? undefined;
 
-      const fileStatus = await check_file_status(fileHash, calcHash, fileUserId, submission.studentId);
-      console.log(fileStatus);
+      const fileStatus = await check_file_status(fileHash, contentHash, fileUserId, submission.studentId);
 
       const correct = typeof evaluation.correct === 'boolean' ? evaluation.correct : undefined;
       let feedback: string;
@@ -696,7 +698,7 @@ async function evaluateWithJar(
         evaluation,
       });
 
-      return { feedback, correct, evaluationRaw: evaluation, status: 'COMPLETED' };
+      return { feedback, correct, evaluationRaw: evaluation, status: 'COMPLETED', contentHash, fileStatus };
     } catch (parseErr) {
       const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
       await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
