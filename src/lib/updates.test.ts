@@ -20,8 +20,19 @@ import {
   withBackupDetails,
   writeUpdateRequest,
   writeDowngradeRequest,
+  writeSelfUpdateRequest,
   UPDATE_REQUEST_FILE,
+  UPDATE_PROGRESS_FILE,
 } from '@/lib/updates';
+
+// The request writers also clear the live progress log so the UI streams only the new
+// run's output; that reset is a writeFileSync to the progress file. Pick out the actual
+// request payload write (the temp file that gets renamed) rather than assuming an index.
+function requestPayload() {
+  const call = fsMock.writeFileSync.mock.calls.find((c) => c[0] !== UPDATE_PROGRESS_FILE);
+  if (!call) throw new Error('no request payload was written');
+  return JSON.parse(call[1] as string);
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -134,8 +145,7 @@ describe('writeUpdateRequest', () => {
   it('writes an upgrade payload atomically (temp then rename)', () => {
     writeUpdateRequest({ tag: 'v1.1.0', requestedBy: 'admin1', requestId: 'r1' });
     expect(fsMock.mkdirSync).toHaveBeenCalled();
-    const written = JSON.parse(fsMock.writeFileSync.mock.calls[0][1] as string);
-    expect(written).toMatchObject({
+    expect(requestPayload()).toMatchObject({
       action: 'upgrade',
       tag: 'v1.1.0',
       requestedBy: 'admin1',
@@ -143,13 +153,15 @@ describe('writeUpdateRequest', () => {
       backupFirst: true,
     });
     // The temp file is renamed into the real request path the sidecar watches.
-    expect(fsMock.writeFileSync.mock.calls[0][0]).not.toBe(UPDATE_REQUEST_FILE);
     expect(fsMock.renameSync).toHaveBeenCalledWith(expect.any(String), UPDATE_REQUEST_FILE);
   });
   it('honors backupFirst:false', () => {
     writeUpdateRequest({ tag: 'v1.1.0', requestedBy: 'a', requestId: 'r', backupFirst: false });
-    const written = JSON.parse(fsMock.writeFileSync.mock.calls[0][1] as string);
-    expect(written.backupFirst).toBe(false);
+    expect(requestPayload().backupFirst).toBe(false);
+  });
+  it('clears the live progress log so the stream starts on this run, not the last one', () => {
+    writeUpdateRequest({ tag: 'v1.1.0', requestedBy: 'admin1', requestId: 'r1' });
+    expect(fsMock.writeFileSync).toHaveBeenCalledWith(UPDATE_PROGRESS_FILE, '');
   });
 });
 
@@ -191,14 +203,36 @@ describe('writeDowngradeRequest', () => {
       requestedBy: 'admin1',
       requestId: 'd1',
     });
-    const written = JSON.parse(fsMock.writeFileSync.mock.calls[0][1] as string);
-    expect(written).toMatchObject({
+    expect(requestPayload()).toMatchObject({
       action: 'downgrade',
       tag: 'v0.9.0',
       restorePoint: '20260101-000000',
       requestedBy: 'admin1',
       requestId: 'd1',
     });
+    expect(fsMock.renameSync).toHaveBeenCalledWith(expect.any(String), UPDATE_REQUEST_FILE);
+  });
+  it('clears the live progress log', () => {
+    writeDowngradeRequest({
+      tag: 'v0.9.0',
+      restorePoint: '20260101-000000',
+      requestedBy: 'admin1',
+      requestId: 'd1',
+    });
+    expect(fsMock.writeFileSync).toHaveBeenCalledWith(UPDATE_PROGRESS_FILE, '');
+  });
+});
+
+describe('writeSelfUpdateRequest', () => {
+  it('writes a self-update payload and clears the live progress log', () => {
+    writeSelfUpdateRequest({ tag: 'v1.1.0', requestedBy: 'admin1', requestId: 's1' });
+    expect(requestPayload()).toMatchObject({
+      action: 'self-update',
+      tag: 'v1.1.0',
+      requestedBy: 'admin1',
+      requestId: 's1',
+    });
+    expect(fsMock.writeFileSync).toHaveBeenCalledWith(UPDATE_PROGRESS_FILE, '');
     expect(fsMock.renameSync).toHaveBeenCalledWith(expect.any(String), UPDATE_REQUEST_FILE);
   });
 });
