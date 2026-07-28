@@ -113,6 +113,9 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
             {problems.map((p, i) => {
               const cy = i * ROW_H + ROW_H / 2;
               const b = p.boxplot;
+              // Each problem takes a stable color from the categorical chart palette so
+              // its row is easy to pick out; the five colors cycle for longer lists.
+              const color = `var(--color-chart-${(i % 5) + 1})`;
               if (!b) {
                 return (
                   <text
@@ -135,7 +138,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                     x2={xOf(b.whiskerHigh)}
                     y1={cy}
                     y2={cy}
-                    className="stroke-brand-teal"
+                    style={{ stroke: color }}
                     strokeWidth={1.5}
                   />
                   <line
@@ -143,7 +146,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                     x2={xOf(b.whiskerLow)}
                     y1={cy - 6}
                     y2={cy + 6}
-                    className="stroke-brand-teal"
+                    style={{ stroke: color }}
                     strokeWidth={1.5}
                   />
                   <line
@@ -151,7 +154,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                     x2={xOf(b.whiskerHigh)}
                     y1={cy - 6}
                     y2={cy + 6}
-                    className="stroke-brand-teal"
+                    style={{ stroke: color }}
                     strokeWidth={1.5}
                   />
                   {/* interquartile box */}
@@ -161,7 +164,8 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                     width={Math.max(1, xOf(b.q3) - xOf(b.q1))}
                     height={BOX_H}
                     rx={2}
-                    className="fill-brand-teal/25 stroke-brand-teal"
+                    style={{ fill: color, stroke: color }}
+                    fillOpacity={0.25}
                     strokeWidth={1.5}
                   />
                   {/* median */}
@@ -170,7 +174,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                     x2={xOf(b.median)}
                     y1={cy - BOX_H / 2}
                     y2={cy + BOX_H / 2}
-                    className="stroke-brand-teal"
+                    style={{ stroke: color }}
                     strokeWidth={2.5}
                   />
                   {/* mean: a distinct diamond */}
@@ -231,7 +235,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
       {/* legend */}
       <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         <span className="flex items-center gap-1.5">
-          <span className="border-brand-teal bg-brand-teal/25 inline-block h-3 w-4 rounded-sm border" />
+          <span className="border-muted-foreground bg-muted-foreground/20 inline-block h-3 w-4 rounded-sm border" />
           Middle 50%
         </span>
         <span className="flex items-center gap-1.5">
