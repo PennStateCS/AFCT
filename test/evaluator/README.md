@@ -69,3 +69,16 @@ docker exec afct-dev-worker sh -c 'cd /app && npm run test:evaluator'
   weaker assertion than a real wrong-answer pair, but it is the assertion that catches
   a broken parser, a broken cfganalyzer, or a mis-swapped jar for the types the `Hw-*`
   cases never touch.
+- Environment: the runner sets `CFGANALYZER_BINARY`, `CFGANALYZER_LIMIT`,
+  `TIMEOUT_SECONDS`, and `UPGRADED_FEEDBACK`, the same four the production worker sets in
+  `src/lib/submission-worker.ts`, so the smoke test grades identically to production.
+  Without `TIMEOUT_SECONDS`/`UPGRADED_FEEDBACK` the jar prints "not set" warnings and
+  disables early stopping.
+- The `gs-*` fixtures add per-type coverage for a small, well-understood language:
+  RE (strings ending in b) and CFG (`a^n b^n`, `n >= 1`) each have a correct, an
+  incorrect, and an edge submission. PDA (`a^n b^n`) has only equivalence (correct)
+  cases, because the current jar (v1.3.9) does not reliably reject a non-equivalent PDA:
+  grading the repo's own `ex5.1.jff` (`a^n b^m`, `m >= n+1`) against `pdaexample.jff`
+  (`a^n b^n`) returns "Correct!" even though they are different languages (this holds at
+  analyzer bounds 15/30/100, with the production env vars set). Add a PDA wrong-answer
+  case if a later evaluator improves PDA equivalence.

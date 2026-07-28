@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- Created with JFLAP 4.0b10. -->
+<!-- Edge case, far too permissive: accepts every string over {a,b}. -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0">
+		<x>100.0</x>
+		<y>150.0</y>
+		<initial />
+		<final />
+	</state>
+	<transition>
+		<from>0</from>
+		<to>0</to>
+		<read>a</read>
+		<pop>Z</pop>
+		<push>Z</push>
+	</transition>
+	<transition>
+		<from>0</from>
+		<to>0</to>
+		<read>b</read>
+		<pop>Z</pop>
+		<push>Z</push>
+	</transition>
+</structure>

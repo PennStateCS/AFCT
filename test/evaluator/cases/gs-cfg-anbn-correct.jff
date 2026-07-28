@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- Created with JFLAP 4.0b10. -->
+<!-- Equivalent grammar for { a^n b^n : n >= 1 }: the base case ab is produced via X -> epsilon. -->
+<structure>
+	<type>grammar</type>
+	<production>
+		<left>S</left>
+		<right>aSb</right>
+	</production>
+	<production>
+		<left>S</left>
+		<right>aXb</right>
+	</production>
+	<production>
+		<left>X</left>
+		<right></right>
+	</production>
+</structure>

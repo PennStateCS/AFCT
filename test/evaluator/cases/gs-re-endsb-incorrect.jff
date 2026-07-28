@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!--Created with JFLAP 6.1.--><structure>
+	<type>re</type>
+	<!--Wrong: strings ending in a, not b.-->
+	<expression>(a+b)*a</expression>
+</structure>

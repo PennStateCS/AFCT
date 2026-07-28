@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!--Created with JFLAP 6.1.--><structure>
+	<type>re</type>
+	<!--Near miss: strings of length >= 2 that end in b. Differs from (a+b)*b only on the single string "b".-->
+	<expression>(a+b)(a+b)*b</expression>
+</structure>
