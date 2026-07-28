@@ -225,6 +225,38 @@
       "expectCorrect": true
     },
     {
+      "name": "PDA (equal a and b): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-eq-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (equal a and b): a different construction is accepted",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-eq-correct.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (equal a and b): the one-more-a language (#a = #b + 1) is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-eq-incorrect.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (equal a and b): the a^n b^n subset language is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-anbn-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
       "name": "RE: (a+b)* and (a*b*)* both accept every string",
       "type": "RE",
       "answer": "gs-re-sigma-solution.jff",
