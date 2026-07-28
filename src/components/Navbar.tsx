@@ -139,7 +139,7 @@ const Navbar: React.FC = () => {
                     ) : (
                       <BreadcrumbLink
                         href={crumb.href}
-                        className="text-secondary-foreground hover:text-secondary-foreground block max-w-[8rem] truncate hover:underline sm:max-w-[14rem]"
+                        className="block max-w-[8rem] truncate text-white hover:underline sm:max-w-[14rem]"
                       >
                         {crumb.label}
                       </BreadcrumbLink>
@@ -147,7 +147,7 @@ const Navbar: React.FC = () => {
                   </BreadcrumbItem>
                   {!isLast && (
                     <BreadcrumbSeparator
-                      className={`text-secondary-foreground ${mobileVisibility}`}
+                      className={`text-white ${mobileVisibility}`}
                     />
                   )}
                 </React.Fragment>
