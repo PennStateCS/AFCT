@@ -82,10 +82,10 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                     <div
                       className={`w-[15px] ${
                         !course.isPublished
-                          ? 'bg-yellow-500'
+                          ? 'bg-status-warning-solid'
                           : isUpcoming
                             ? 'bg-primary'
-                            : 'bg-gray-400'
+                            : 'bg-status-neutral-solid'
                       }`}
                     />
 

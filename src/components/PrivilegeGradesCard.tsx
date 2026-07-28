@@ -408,7 +408,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               Grades
             </h2>
             <div className="text-muted-foreground flex items-center gap-1 text-sm">
-              <div aria-hidden="true" className="h-2 w-2 rounded-full bg-blue-500"></div>
+              <div aria-hidden="true" className="bg-primary h-2 w-2 rounded-full"></div>
               Click a grade to view/edit details
             </div>
           </div>

@@ -336,7 +336,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <div className="text-sm">
           {assignmentTitle ? (
-            <span className="font-medium text-purple-700">{assignmentTitle}</span>
+            <span className="font-medium text-purple-700 dark:text-purple-300">{assignmentTitle}</span>
           ) : (
             <span className="text-muted-foreground italic">N/A</span>
           )}
