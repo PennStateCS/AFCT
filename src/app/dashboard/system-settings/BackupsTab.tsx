@@ -58,7 +58,7 @@ export function BackupsTab({
         enableSorting: false,
         cell: ({ row }) => (
           <a
-            className="text-sky-600 underline"
+            className="text-primary underline"
             href={apiPaths.admin.backupDownload({ file: row.original.file })}
           >
             Download ({formatBytes(row.original.size)})
@@ -74,7 +74,7 @@ export function BackupsTab({
           row.original.encrypted ? (
             <span className="whitespace-nowrap">Encrypted</span>
           ) : (
-            <span className="whitespace-nowrap text-amber-600">Not encrypted</span>
+            <span className="whitespace-nowrap text-amber-700 dark:text-amber-300">Not encrypted</span>
           ),
         meta: { priority: 2 },
       },

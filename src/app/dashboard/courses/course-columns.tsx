@@ -108,7 +108,7 @@ export const columns = (
       return (
         <Link
           href={`/dashboard/courses/${course.id}`}
-          className="text-blue-600 hover:underline"
+          className="text-primary hover:underline"
           title={course.name}
           aria-label={course.name}
         >

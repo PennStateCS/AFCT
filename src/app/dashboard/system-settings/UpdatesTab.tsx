@@ -135,7 +135,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         ) : row.original.encrypted ? (
           <span className="whitespace-nowrap">Yes</span>
         ) : (
-          <span className="whitespace-nowrap text-amber-600">No</span>
+          <span className="whitespace-nowrap text-amber-700 dark:text-amber-300">No</span>
         ),
       meta: { priority: 2 },
     },

@@ -355,7 +355,7 @@ export const userColumns = (
       cell: ({ row }) => {
         const email = row.original.email;
         return (
-          <a href={`mailto:${email}`} className="text-blue-600 hover:underline">
+          <a href={`mailto:${email}`} className="text-primary hover:underline">
             {email}
           </a>
         );

@@ -304,7 +304,7 @@ export default function StudentAssignmentPage({
             {assignment.course || assignment.courseName ? (
               <Link
                 href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                className="max-w-full break-all text-blue-700 hover:underline"
+                className="text-primary max-w-full break-all hover:underline"
               >
                 {assignment.course?.name || assignment.courseName || assignment.courseId}
                 {assignment.course?.code
