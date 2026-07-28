@@ -81,7 +81,7 @@ sh install.sh enable-updater
 sh install.sh disable-updater
 ```
 
-Once enabled, the Updates tab lists the available versions from the project's release manifest. Pick a newer version to **upgrade**: the updater takes a database backup first, swaps to the new image, waits for the health check, and rolls back automatically if the new version does not come up healthy. Each successful upgrade records a restore point for the version you left, so you can **downgrade** back to it later.
+Once enabled, the Updates tab lists the available versions from the project's release manifest. Pick a newer version to **upgrade**: the updater takes a database backup first, swaps to the new images, waits for the whole stack to become healthy, watches it briefly to be sure it stays healthy, and rolls back automatically if it does not. Each successful upgrade records a restore point for the version you left, so you can **downgrade** back to it later.
 
 :::warning
 Downgrading restores the database from the backup taken at that restore point, which discards database records created since. Uploaded files are not rolled back and may become unreferenced. Only downgrade when you accept that result. The Updates tab requires explicit confirmation.
@@ -93,12 +93,20 @@ Only versions listed in the curated release manifest can be selected; the update
 
 Every upgrade, downgrade, and update-service change is recorded in **Admin Menu > System Settings > System Logs**: one entry when it is requested and one for the outcome (completed, rolled back, or failed), so you can review what happened after the fact even once the live progress has cleared.
 
+### What counts as a healthy upgrade
+
+An upgrade is only committed once the whole stack is confirmed good, not just the application container:
+
+- **Every recreated service must be up**, and any service that defines a health check (the app, the web front, the backup sidecar) must report healthy. The web front's health check also proves it can reach the app. The evaluator worker is a background process with no health check, so "running" is enough for it; a deployment that health-checks every service can require them all with `UPDATER_REQUIRE_HEALTHCHECKS=true`.
+- **A stability window** (default 45 seconds, `UPDATER_STABILITY_SECONDS`) follows: the updater keeps watching after everything is healthy, so a version that comes up and then crash-loops is caught and rolled back rather than committed. A service that exits, or the app drifting off the new version, ends the window early and rolls back.
+- **Transient network failures are retried.** Downloading the images and fetching a release's manifest or compose file are retried a few times with a short backoff (`UPDATER_PULL_RETRIES`, `UPDATER_FETCH_RETRIES`), so a momentary blip does not fail an upgrade. Destructive steps (database restores, the version swap, recreating containers) are never blindly retried; those roll back instead.
+
 ### Stack changes are applied for you
 
 Some releases change more than the application image: they add a service, a health check, or a setting in `docker-compose.yml`, or they update the updater component itself. The Updates tab handles these without a shell session:
 
 - **Compose changes.** During an upgrade, the updater fetches that release's `docker-compose.yml` from the release's own tag, validates it, and installs it (keeping a backup) before recreating the stack. If the upgrade has to roll back, the previous compose file is restored with it. A release whose compose needs a setting your host does not provide is left in place and the upgrade proceeds on the current configuration, so a bad file can never take the stack down.
-- **The updater itself.** Because the updater cannot recreate its own container, it tracks the application version separately. When it falls behind, the Updates tab shows an **Update the update service** action that brings it up to the running version. The update service restarts itself as part of this, so the tab reports progress and confirms once it comes back on the new version; a brief unavailability during the swap is expected and is not an error.
+- **The updater itself.** Because the updater cannot recreate its own container, it tracks the application version separately. When it falls behind, the Updates tab shows an **Update the update service** action that brings it up to the running version. The update service restarts itself as part of this: it downloads the new version, hands off the swap, and stays in an in-flight state until the replacement update service comes back up and confirms it is actually running the new version. Only then is it reported updated. If the replacement does not come back on the expected version, that is reported rather than a false success, so a failed swap is visible instead of silently "done". A brief unavailability during the swap is expected and is not an error.
 
 This means the console is normally not needed to keep a deployment current. The host-side `sh install.sh self-update` remains available as a manual path and as the way to update the installer script, but routine upgrades, including ones that change the stack layout, can be done entirely from the Updates tab.
 

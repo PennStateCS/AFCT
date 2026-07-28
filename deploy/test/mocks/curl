@@ -18,6 +18,14 @@ while [ "$#" -gt 0 ]; do
     *) shift ;;
   esac
 done
+# MOCK_CURL_FAIL_TIMES: fail the first N calls (transient network error), then succeed,
+# writing nothing on the failing attempts. Exercises the updater's fetch-retry path.
+if [ -n "${MOCK_CURL_FAIL_TIMES:-}" ]; then
+  _ccf="${MOCK_CURL_COUNT_FILE:-$TMPDIR/mock_curl_count}"
+  _cn=$(( $(cat "$_ccf" 2>/dev/null || echo 0) + 1 ))
+  printf '%s' "$_cn" > "$_ccf"
+  [ "$_cn" -le "$MOCK_CURL_FAIL_TIMES" ] && exit 22
+fi
 if [ -n "$_out" ]; then
   # Defaults live in single-quoted vars first: embedding JSON braces directly inside a
   # ${VAR-default} expansion truncates the default at the first '}'.
