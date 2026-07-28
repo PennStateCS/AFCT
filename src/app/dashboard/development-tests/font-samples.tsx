@@ -4,7 +4,7 @@
 import {
   Geist,
   Inter,
-  Atkinson_Hyperlegible_Next,
+  Atkinson_Hyperlegible,
   Source_Sans_3,
   Roboto,
   IBM_Plex_Sans,
@@ -15,7 +15,10 @@ import { geistSans } from '@/app/fonts';
 
 const geist = Geist({ subsets: ['latin'], preload: false });
 const inter = Inter({ subsets: ['latin'], preload: false });
-const atkinson = Atkinson_Hyperlegible_Next({ subsets: ['latin'], preload: false });
+// The established "Atkinson Hyperlegible" (not the newer "…Next" variant): next/font has
+// fallback-metrics for it, so it doesn't log "Failed to find font override values". It is
+// not a variable font, so its two shipped weights are requested explicitly.
+const atkinson = Atkinson_Hyperlegible({ subsets: ['latin'], weight: ['400', '700'], preload: false });
 const sourceSans = Source_Sans_3({ subsets: ['latin'], preload: false });
 const roboto = Roboto({ subsets: ['latin'], preload: false });
 const plexSans = IBM_Plex_Sans({ subsets: ['latin'], preload: false });
@@ -25,7 +28,7 @@ const FONTS = [
   { name: 'Open Sans (current)', className: geistSans.className },
   { name: 'Geist', className: geist.className },
   { name: 'Inter', className: inter.className },
-  { name: 'Atkinson Hyperlegible Next', className: atkinson.className },
+  { name: 'Atkinson Hyperlegible', className: atkinson.className },
   { name: 'Source Sans 3', className: sourceSans.className },
   { name: 'Roboto', className: roboto.className },
   { name: 'IBM Plex Sans', className: plexSans.className },
