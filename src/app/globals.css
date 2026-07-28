@@ -78,6 +78,11 @@
   --color-status-info: var(--status-info);
   --color-status-info-bg: var(--status-info-bg);
   --color-status-info-border: var(--status-info-border);
+  --color-status-success-solid: var(--status-success-solid);
+  --color-status-warning-solid: var(--status-warning-solid);
+  --color-status-danger-solid: var(--status-danger-solid);
+  --color-status-info-solid: var(--status-info-solid);
+  --color-status-neutral-solid: var(--status-neutral-solid);
   /* Active-tab brand accent. Usage: text-tab-active, border-tab-active, bg-tab-active-bg. */
   --color-tab-active: var(--tab-active);
   --color-tab-active-bg: var(--tab-active-bg);
@@ -146,6 +151,16 @@
   --status-info: #193b7f;          /* = --primary */
   --status-info-bg: #e8eef8;
   --status-info-border: #b5c8ef;
+
+  /* Solid, saturated fills for the same four states, for elements that put WHITE content
+     on a filled swatch (e.g. a toast's icon strip). Unlike the status foregrounds above,
+     these must stay a mid, white-legible shade in BOTH themes, so they are not derived
+     from --status-*. neutral covers the untyped/loading case. */
+  --status-success-solid: #22c55e;
+  --status-warning-solid: #f59e0b;
+  --status-danger-solid: #ef4444;
+  --status-info-solid: #3b82f6;
+  --status-neutral-solid: #6b7280;
 
   /* Active-tab accent (brand teal). A darker teal in light so 14px active-tab labels
      clear WCAG AA 4.5:1 on the card; a lighter teal in dark. -bg is the soft fill behind
@@ -305,6 +320,10 @@
   --status-info: #93b4e8;
   --status-info-bg: rgba(25, 59, 127, 0.3);
   --status-info-border: rgba(147, 180, 232, 0.4);
+  /* Solid fills: only the two that need a brighter shade on dark are overridden;
+     success/danger/info stay white-legible as-is. */
+  --status-warning-solid: #fbbf24;
+  --status-neutral-solid: #94a3b8;
   --tab-active: #2dd4bf;                    /* teal-400 */
   --tab-active-bg: rgba(19, 78, 74, 0.4);   /* teal-900 / 40% */
   /* Neutral badge stays badge-scoped. */
@@ -377,70 +396,8 @@ html {
 
 /* Custom Toast Styles */
 @layer components {
-  .toast-custom {
-    @apply transform transition-all duration-300 ease-out;
-  }
-
-  .toast-custom[data-type='success'] {
-    @apply border-green-200 bg-green-50 text-green-900;
-  }
-
-  .toast-custom[data-type='error'] {
-    @apply border-red-200 bg-red-50 text-red-900;
-  }
-
-  .toast-custom[data-type='warning'] {
-    @apply border-yellow-200 bg-yellow-50 text-yellow-900;
-  }
-
-  .toast-custom[data-type='info'] {
-    @apply border-blue-200 bg-blue-50 text-blue-900;
-  }
-
-  .toast-custom[data-type='loading'] {
-    @apply border-gray-200 bg-gray-50 text-gray-900;
-  }
-
-  /* Dark mode variants */
-  .dark .toast-custom[data-type='success'] {
-    @apply border-green-800 bg-green-900/20 text-green-100;
-  }
-
-  .dark .toast-custom[data-type='error'] {
-    @apply border-red-800 bg-red-900/20 text-red-100;
-  }
-
-  .dark .toast-custom[data-type='warning'] {
-    @apply border-yellow-800 bg-yellow-900/20 text-yellow-100;
-  }
-
-  .dark .toast-custom[data-type='info'] {
-    @apply border-blue-800 bg-blue-900/20 text-blue-100;
-  }
-
-  .dark .toast-custom[data-type='loading'] {
-    @apply border-gray-700 bg-gray-800/20 text-gray-100;
-  }
-
-  /* Toast description styling */
-  .toast-custom [data-description] {
-    @apply mt-1 text-sm leading-relaxed opacity-80;
-  }
-
-  /* Toast title styling */
-  .toast-custom [data-title] {
-    @apply text-base leading-tight font-semibold;
-  }
-
-  /* Toast icon styling */
-  .toast-custom [data-icon] {
-    @apply mr-2 flex-shrink-0 text-lg;
-  }
-
-  /* Action button hover effects */
-  .toast-custom button[data-button] {
-    @apply hover:opacity-80 focus:ring-2 focus:ring-offset-1 focus:outline-none active:scale-95;
-  }
+  /* The live toasts are styled by .custom-toast below; the old .toast-custom variant set
+     was unused and has been removed. */
 
   /* Entrance animation */
   .custom-toast[data-mounted] {
@@ -468,7 +425,7 @@ html {
   .custom-toast[data-type='error'] [data-description],
   .custom-toast[data-type='warning'] [data-description],
   .custom-toast[data-type='info'] [data-description] {
-    color: #4b5563 !important;
+    color: var(--muted-foreground) !important;
     opacity: 0.9 !important;
     letter-spacing: 0 !important;
     text-rendering: geometricPrecision;
@@ -519,12 +476,13 @@ html {
 
   /* Toast visual refresh */
   .custom-toast {
-    --toast-border: #e5e7eb;
-    --toast-accent: #f4f8f7;
-    --toast-icon-fill: #6b7280;
-    --toast-text: #1f2937;
-    --toast-muted: #4b5563;
-    background: #ffffff !important;
+    /* Colour comes from three tokens, overridden per type below. The icon strip is a
+       filled swatch with a white glyph, so it uses a -solid fill; the frame uses the soft
+       status border and the text uses the status foreground. */
+    --toast-border: var(--border);
+    --toast-icon-fill: var(--status-neutral-solid);
+    --toast-text: var(--foreground);
+    background: var(--card) !important;
     border: 1px solid var(--toast-border) !important;
     border-left-color: var(--toast-icon-fill) !important;
     border-top-color: var(--toast-icon-fill) !important;
@@ -544,93 +502,34 @@ html {
   }
 
   .custom-toast[data-type='success'] {
-    --toast-border: #c7f4dd;
-    --toast-accent: #e9f9f0;
-    --toast-icon-fill: #22c55e;
-    --toast-text: #0f5132;
-    --toast-muted: #1b7a4b;
+    --toast-border: var(--status-success-border);
+    --toast-icon-fill: var(--status-success-solid);
+    --toast-text: var(--status-success);
   }
 
   .custom-toast[data-type='warning'] {
-    --toast-border: #ffe7c2;
-    --toast-accent: #fff7ec;
-    --toast-icon-fill: #f59e0b;
-    --toast-text: #7c2d12;
-    --toast-muted: #b45309;
+    --toast-border: var(--status-warning-border);
+    --toast-icon-fill: var(--status-warning-solid);
+    --toast-text: var(--status-warning);
   }
 
   .custom-toast[data-type='error'] {
-    --toast-border: #ffd1d7;
-    --toast-accent: #fff1f1;
-    --toast-icon-fill: #ef4444;
-    --toast-text: #7f1d1d;
-    --toast-muted: #b91c1c;
+    --toast-border: var(--status-danger-border);
+    --toast-icon-fill: var(--status-danger-solid);
+    --toast-text: var(--status-danger);
   }
 
   .custom-toast[data-type='info'] {
-    --toast-border: #e2e8f0;
-    --toast-accent: #f6f7fb;
-    --toast-icon-fill: #3b82f6;
-    --toast-text: #1e293b;
-    --toast-muted: #475569;
+    --toast-border: var(--status-info-border);
+    --toast-icon-fill: var(--status-info-solid);
+    --toast-text: var(--status-info);
   }
 
+  /* Loading is untyped/neutral: a plain frame and grey icon strip. */
   .custom-toast[data-type='loading'] {
-    --toast-border: #e0e7ff;
-    --toast-accent: #eef2ff;
-    --toast-icon-fill: #4f46e5;
-    --toast-text: #1e1b4b;
-    --toast-muted: #4338ca;
-  }
-
-  .dark .custom-toast {
-    --toast-border: rgba(255, 255, 255, 0.08);
-    --toast-accent: rgba(255, 255, 255, 0.04);
-    --toast-icon-fill: #94a3b8;
-    --toast-text: #f8fafc;
-    --toast-muted: #cbd5f5;
-    background: #0f172a !important;
-    box-shadow: 0 20px 45px rgba(2, 6, 23, 0.65) !important;
-  }
-
-  .dark .custom-toast[data-type='success'] {
-    --toast-border: rgba(34, 197, 94, 0.55);
-    --toast-accent: rgba(16, 185, 129, 0.12);
-    --toast-icon-fill: #22c55e;
-    --toast-text: #d1fae5;
-    --toast-muted: #6ee7b7;
-  }
-
-  .dark .custom-toast[data-type='warning'] {
-    --toast-border: rgba(245, 158, 11, 0.5);
-    --toast-accent: rgba(251, 191, 36, 0.12);
-    --toast-icon-fill: #fbbf24;
-    --toast-text: #fde68a;
-    --toast-muted: #fcd34d;
-  }
-
-  .dark .custom-toast[data-type='error'] {
-    --toast-border: rgba(248, 113, 113, 0.55);
-    --toast-accent: rgba(239, 68, 68, 0.12);
-    --toast-icon-fill: #ef4444;
-    --toast-text: #fecaca;
-    --toast-muted: #f87171;
-  }
-
-  .dark .custom-toast[data-type='info'] {
-    --toast-border: rgba(59, 130, 246, 0.45);
-    --toast-accent: rgba(59, 130, 246, 0.12);
-    --toast-icon-fill: #3b82f6;
-    --toast-text: #bfdbfe;
-    --toast-muted: #93c5fd;
-  }
-
-  .dark .custom-toast[data-type='loading'] {
-    --toast-border: rgba(79, 70, 229, 0.45);
-    --toast-accent: rgba(79, 70, 229, 0.12);
-    --toast-icon-fill: #8b5cf6;
-    --toast-text: #ddd6fe;
-    --toast-muted: #c4b5fd;
+    --toast-border: var(--border);
+    --toast-icon-fill: var(--status-neutral-solid);
+    --toast-text: var(--foreground);
   }
 
   .custom-toast [data-icon] {
