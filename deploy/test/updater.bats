@@ -40,6 +40,10 @@ setup() {
   export UPDATER_PULL_RETRY_DELAY=0
   export UPDATER_FETCH_RETRIES=1
   export UPDATER_FETCH_RETRY_DELAY=0
+  # Stage 3: these tests run offline (no manifest URL, usually no local versions.json), so
+  # allow character-safe tags by default. The fail-closed behaviour is exercised explicitly
+  # by the P4 tests, which set this false.
+  export UPDATER_ALLOW_UNVERIFIED_TAGS=true
   export MOCK_HEALTH="healthy"
 
   cd "$TESTDIR"
@@ -305,16 +309,24 @@ serve_restore() {
   [ "$status" -eq 0 ]
 }
 
-@test "downgrade restores the database and switches to the old version" {
+@test "downgrade takes a safety backup, restores the database, and switches version" {
   printf '[{"version":"v0.9.0","backup":"20260101-000000","createdAt":"x"}]\n' > triggers/restore-points.json
   : > backups/afct-20260101-000000.dump
-  export UPDATER_BACKUP_TIMEOUT=2 UPDATER_RESTORE_TIMEOUT=20
+  # Backdate the existing restore-point backup so the new safety snapshot (written during
+  # the run) is unambiguously newer; otherwise same-second mtimes make it undetectable.
+  touch -t 202601010000 backups/afct-20260101-000000.dump
+  export UPDATER_BACKUP_TIMEOUT=20 UPDATER_RESTORE_TIMEOUT=20
   request '{"action":"downgrade","tag":"v0.9.0","requestId":"d1","restorePoint":"20260101-000000"}'
-  serve_restore "ok 20260101-000000"; watcher=$!
+  # A downgrade first snapshots the current state (so it is reversible), then restores.
+  serve_backup "20260115-120000"; b=$!
+  serve_restore "ok 20260101-000000"; r=$!
   run sh updater.sh
-  kill "$watcher" 2>/dev/null || true
+  kill "$b" "$r" 2>/dev/null || true
   [ "$(phase)" = "healthy" ]
   [ "$(tag_now)" = "v0.9.0" ]
+  # The pre-downgrade safety snapshot is recorded as a restore point for the version left.
+  run jq -e '.[] | select(.version=="v1.0.0" and .backup=="20260115-120000")' triggers/restore-points.json
+  [ "$status" -eq 0 ]
 }
 
 @test "the updater stamps its version from the image tag when there's no version label" {
@@ -357,11 +369,14 @@ serve_restore() {
 @test "downgrade fails cleanly if the restore does not succeed" {
   printf '[{"version":"v0.9.0","backup":"20260101-000000","createdAt":"x"}]\n' > triggers/restore-points.json
   : > backups/afct-20260101-000000.dump
-  export UPDATER_BACKUP_TIMEOUT=2 UPDATER_RESTORE_TIMEOUT=20
+  touch -t 202601010000 backups/afct-20260101-000000.dump
+  export UPDATER_BACKUP_TIMEOUT=20 UPDATER_RESTORE_TIMEOUT=20
   request '{"action":"downgrade","tag":"v0.9.0","requestId":"d3","restorePoint":"20260101-000000"}'
-  serve_restore "failed restore-error"; watcher=$!
+  # The safety backup succeeds; the restore itself is what fails here.
+  serve_backup "20260116-120000"; b=$!
+  serve_restore "failed restore-error"; r=$!
   run sh updater.sh
-  kill "$watcher" 2>/dev/null || true
+  kill "$b" "$r" 2>/dev/null || true
   [ "$(phase)" = "failed" ]
   [ "$(tag_now)" = "v1.0.0" ]     # tag not switched when the restore fails
 }
@@ -690,4 +705,104 @@ supending() { printf '%s' "$1" > "$TESTDIR/triggers/.self-update-pending.json"; 
   [ "$(phase)" = "failed" ]
   [[ "$(jq -r '.message' triggers/status.json)" == *"did not come back on v1.1.0"* ]]
   [ ! -f "$TESTDIR/triggers/.self-update-pending.json" ]
+}
+
+# --- Stage 3: fail-closed manifest, compose checksum, downgrade backup, file hardening -- #
+
+@test "an unlisted tag is refused when no manifest can be consulted (fail closed)" {
+  # No remote manifest URL, no local versions.json, and the override off: the character
+  # allowlist alone must not be enough to allow a tag.
+  export UPDATER_ALLOW_UNVERIFIED_TAGS=false
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"fc1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "failed" ]
+  [[ "$(jq -r '.message' triggers/status.json)" == *"not an allowed release"* ]]
+  [ "$(tag_now)" = "v1.0.0" ]
+}
+
+@test "an offline deployment can allow unverified tags with the override" {
+  # Same conditions, but the explicit opt-in restores the permissive behaviour.
+  export UPDATER_ALLOW_UNVERIFIED_TAGS=true
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"fc2","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v1.1.0" ]
+}
+
+@test "a release compose that matches its manifest checksum is applied" {
+  export UPDATER_COMPOSE_BASE_URL="https://raw.githubusercontent.com/PennStateCS/AFCT"
+  _body='services: {app: {}, worker: {}}'
+  export MOCK_COMPOSE_BODY="$_body"
+  printf 'services: {}\n' > docker-compose.yml
+  _sha=$(printf '%s' "$_body" | sha256sum | awk '{print $1}')
+  printf '{"versions":[{"tag":"v1.1.0","composeSha256":"%s"}]}\n' "$_sha" > versions.json
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"cs1","backupFirst":false}'
+  run sh updater.sh
+  [ "$(phase)" = "healthy" ]
+  # The checksum matched, so the release compose was swapped in.
+  run grep -q 'worker:' docker-compose.yml; [ "$status" -eq 0 ]
+}
+
+@test "a release compose that fails its manifest checksum is rejected" {
+  export UPDATER_COMPOSE_BASE_URL="https://raw.githubusercontent.com/PennStateCS/AFCT"
+  export MOCK_COMPOSE_BODY='services: {app: {}, worker: {}}'
+  printf 'services: {}\n' > docker-compose.yml
+  # A checksum the fetched file will not match.
+  printf '{"versions":[{"tag":"v1.1.0","composeSha256":"0000000000000000000000000000000000000000000000000000000000000000"}]}\n' > versions.json
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"cs2","backupFirst":false}'
+  run sh updater.sh
+  # The upgrade still proceeds (best-effort compose), but on the CURRENT stack config: the
+  # mismatched release compose was not installed.
+  [ "$(phase)" = "healthy" ]
+  run grep -q 'worker:' docker-compose.yml; [ "$status" -ne 0 ]
+  run grep -q 'checksum' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "a downgrade is refused when the safety backup cannot be confirmed" {
+  printf '[{"version":"v0.9.0","backup":"20260101-000000","createdAt":"x"}]\n' > triggers/restore-points.json
+  : > backups/afct-20260101-000000.dump
+  export UPDATER_BACKUP_TIMEOUT=2   # no backup sidecar served, so the snapshot times out
+  request '{"action":"downgrade","tag":"v0.9.0","requestId":"nf1","restorePoint":"20260101-000000"}'
+  run sh updater.sh
+  [ "$(phase)" = "failed" ]
+  [[ "$(jq -r '.message' triggers/status.json)" == *"Could not confirm a backup"* ]]
+  # It refused before touching anything: the app was never stopped or restored.
+  [ "$(tag_now)" = "v1.0.0" ]
+  [ ! -f backup-triggers/restore-now ]
+}
+
+@test "a forced downgrade proceeds even without a confirmed safety backup" {
+  printf '[{"version":"v0.9.0","backup":"20260101-000000","createdAt":"x"}]\n' > triggers/restore-points.json
+  : > backups/afct-20260101-000000.dump
+  export UPDATER_BACKUP_TIMEOUT=2 UPDATER_RESTORE_TIMEOUT=20
+  request '{"action":"downgrade","tag":"v0.9.0","requestId":"nf2","restorePoint":"20260101-000000","force":true}'
+  serve_restore "ok 20260101-000000"; watcher=$!
+  run sh updater.sh
+  kill "$watcher" 2>/dev/null || true
+  [ "$(phase)" = "healthy" ]
+  [ "$(tag_now)" = "v0.9.0" ]
+  run grep -q 'forced' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "a symlinked request file is refused and never followed" {
+  ln -s "$TESTDIR/.env.production" triggers/request.json
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  # The link is deleted, not followed; no request is claimed from it.
+  [ ! -L triggers/request.json ]
+  [ ! -f triggers/.processing.json ]
+  [ "$(tag_now)" = "v1.0.0" ]
+}
+
+@test "an oversized request file is refused before it is parsed" {
+  export UPDATER_REQUEST_MAX_BYTES=100
+  { printf '{"action":"upgrade","tag":"v1.1.0","requestId":"big","pad":"'
+    _i=0; while [ "$_i" -lt 300 ]; do printf 'x'; _i=$((_i + 1)); done
+    printf '"}\n'; } > triggers/request.json
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  # Rejected and removed before jq saw it; nothing was claimed and the version is untouched.
+  [ ! -f triggers/request.json ]
+  [ ! -f triggers/.processing.json ]
+  [ "$(tag_now)" = "v1.0.0" ]
 }
