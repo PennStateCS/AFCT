@@ -81,7 +81,7 @@ interface SubmissionEvaluationResult {
   evaluationRaw: unknown | null;
   status: SubmissionEvaluationStatus;
   contentHash?: string;
-  fileStatus?: FileStatusReturn;
+  similarityReportJson?: FileStatusReturn;
 }
 
 async function logSubmissionActivity(
@@ -382,6 +382,8 @@ async function evaluateSubmission(id: string) {
           ? Prisma.JsonNull
           : (evaluation.evaluationRaw as Prisma.InputJsonValue),
       status: evaluation.status,
+      contentHash: evaluation.contentHash,
+      similarityReportJson: evaluation.similarityReportJson,
     });
 
     if (!written) {
@@ -680,7 +682,7 @@ async function evaluateWithJar(
       const fileHash = similarityData?.fileHash ?? undefined;
       const contentHash = similarityData?.calcHash ?? undefined;
 
-      const fileStatus = await check_file_status(fileHash, contentHash, fileUserId, submission.studentId);
+      const similarityReportJson = await check_file_status(fileHash, contentHash, fileUserId, submission.studentId);
 
       const correct = typeof evaluation.correct === 'boolean' ? evaluation.correct : undefined;
       let feedback: string;
@@ -698,7 +700,7 @@ async function evaluateWithJar(
         evaluation,
       });
 
-      return { feedback, correct, evaluationRaw: evaluation, status: 'COMPLETED', contentHash, fileStatus };
+      return { feedback, correct, evaluationRaw: evaluation, status: 'COMPLETED', contentHash, similarityReportJson };
     } catch (parseErr) {
       const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
       await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
