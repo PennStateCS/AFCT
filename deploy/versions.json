@@ -1,6 +1,12 @@
 {
   "versions": [
     {
+      "tag": "v0.1.30",
+      "label": "v0.1.30",
+      "notes": "Release v0.1.30.",
+      "requiresHostUpdate": false
+    },
+    {
       "tag": "v0.1.29",
       "label": "v0.1.29",
       "notes": "Release v0.1.29.",
