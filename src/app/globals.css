@@ -476,17 +476,14 @@ html {
 
   /* Toast visual refresh */
   .custom-toast {
-    /* Colour comes from three tokens, overridden per type below. The icon strip is a
-       filled swatch with a white glyph, so it uses a -solid fill; the frame uses the soft
-       status border and the text uses the status foreground. */
-    --toast-border: var(--border);
+    /* Colour comes from two tokens, overridden per type below. The icon strip is a filled
+       swatch with a white glyph, so it uses the -solid fill; the same fill frames all four
+       sides evenly (the previous rule left the right edge on a paler colour, so it read as
+       a thinner border), and the text uses the status foreground. */
     --toast-icon-fill: var(--status-neutral-solid);
     --toast-text: var(--foreground);
     background: var(--card) !important;
-    border: 1px solid var(--toast-border) !important;
-    border-left-color: var(--toast-icon-fill) !important;
-    border-top-color: var(--toast-icon-fill) !important;
-    border-bottom-color: var(--toast-icon-fill) !important;
+    border: 1px solid var(--toast-icon-fill) !important;
     border-radius: 3px !important;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22) !important;
     color: var(--toast-text) !important;
@@ -502,32 +499,27 @@ html {
   }
 
   .custom-toast[data-type='success'] {
-    --toast-border: var(--status-success-border);
     --toast-icon-fill: var(--status-success-solid);
     --toast-text: var(--status-success);
   }
 
   .custom-toast[data-type='warning'] {
-    --toast-border: var(--status-warning-border);
     --toast-icon-fill: var(--status-warning-solid);
     --toast-text: var(--status-warning);
   }
 
   .custom-toast[data-type='error'] {
-    --toast-border: var(--status-danger-border);
     --toast-icon-fill: var(--status-danger-solid);
     --toast-text: var(--status-danger);
   }
 
   .custom-toast[data-type='info'] {
-    --toast-border: var(--status-info-border);
     --toast-icon-fill: var(--status-info-solid);
     --toast-text: var(--status-info);
   }
 
   /* Loading is untyped/neutral: a plain frame and grey icon strip. */
   .custom-toast[data-type='loading'] {
-    --toast-border: var(--border);
     --toast-icon-fill: var(--status-neutral-solid);
     --toast-text: var(--foreground);
   }
