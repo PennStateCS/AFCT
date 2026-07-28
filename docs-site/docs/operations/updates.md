@@ -87,9 +87,11 @@ Once enabled, the Updates tab lists the available versions from the project's re
 Downgrading restores the database from the backup taken at that restore point, which discards database records created since. Uploaded files are not rolled back and may become unreferenced. Only downgrade when you accept that result. The Updates tab requires explicit confirmation.
 :::
 
+Before it restores, the updater takes a fresh backup of the current state so the downgrade is itself reversible. If that safety backup cannot be confirmed, the downgrade is refused rather than run: a downgrade discards the current database, so losing the snapshot would make the current state unrecoverable. A downgrade only proceeds without a confirmed safety backup when it is explicitly forced.
+
 Each restore point also has a **Delete** button. Removing one deletes its backup file to reclaim disk and drops it from the list, so you can no longer downgrade to that version. It does not affect the running application.
 
-Only versions listed in the curated release manifest can be selected; the updater validates every request against it, so the app can never be pointed at an arbitrary image.
+Only versions listed in the curated release manifest can be selected; the updater validates every request against it, so the app can never be pointed at an arbitrary image. Verification fails closed: if the manifest cannot be consulted at all (the server is offline and there is no local copy), the upgrade is refused rather than run unverified, unless the deployment has explicitly opted into allowing unlisted tags. When a release also changes the stack configuration, the compose file the updater downloads is checked against a checksum recorded in the manifest before it is applied, so a corrupted or tampered download is rejected and the current configuration is kept.
 
 Every upgrade, downgrade, and update-service change is recorded in **Admin Menu > System Settings > System Logs**: one entry when it is requested and one for the outcome (completed, rolled back, or failed), so you can review what happened after the fact even once the live progress has cleared.
 

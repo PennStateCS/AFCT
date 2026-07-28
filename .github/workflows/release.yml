@@ -163,6 +163,15 @@ jobs:
           fi
           [ -n "$NOTE" ] && echo "release note attached (${#NOTE} chars)" || echo "no release note"
 
+          # Checksum of the compose file AS IT EXISTS AT THIS TAG, which is exactly what the
+          # updater fetches from the tag ref (<base>/<tag>/deploy/docker-compose.yml) during
+          # an in-app upgrade. Recording it lets the updater verify the downloaded compose is
+          # byte-for-byte the file this release shipped, not merely that it parses. Read the
+          # blob at the tag directly so it doesn't depend on the working tree (the loop below
+          # checks out main). Empty (no file / older layout) simply omits the field.
+          COMPOSE_SHA=$(git show "${TAG}:deploy/docker-compose.yml" 2>/dev/null | sha256sum | awk '{print $1}')
+          [ -n "$COMPOSE_SHA" ] && echo "compose sha256 at ${TAG}: ${COMPOSE_SHA}" || echo "no compose file at ${TAG}"
+
           attempt=0
           while [ "$attempt" -lt 5 ]; do
             attempt=$((attempt + 1))
@@ -174,10 +183,11 @@ jobs:
             fi
             # Newest first; keep the moving "main" entry wherever it already sits.
             tmp=$(mktemp)
-            jq --arg t "$TAG" --argjson rhu "$RHU" --arg note "$NOTE" \
+            jq --arg t "$TAG" --argjson rhu "$RHU" --arg note "$NOTE" --arg csha "$COMPOSE_SHA" \
                '.versions = ([
                   {tag:$t, label:$t, notes:("Release " + $t + "."), requiresHostUpdate:$rhu}
                   + (if $note == "" then {} else {upgradeNote:$note} end)
+                  + (if $csha == "" then {} else {composeSha256:$csha} end)
                 ] + (.versions // []))' \
                deploy/versions.json > "$tmp"
             mv "$tmp" deploy/versions.json

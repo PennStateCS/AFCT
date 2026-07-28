@@ -172,7 +172,8 @@ The `release.yml` workflow then:
 1. Builds and pushes the four `:vX.Y.Z` images to GHCR.
 2. Runs an informational Trivy scan (non-blocking).
 3. Adds the version to `deploy/versions.json` on `main`, including the admin note from
-   the tag body if one was given.
+   the tag body if one was given and a checksum of the release's `docker-compose.yml` so
+   the in-app updater can verify the stack configuration it downloads for this release.
 4. Opens a GitHub Release with generated notes.
 
 ## Verify it triggered

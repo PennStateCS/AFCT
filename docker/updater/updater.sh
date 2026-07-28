@@ -110,6 +110,16 @@ FETCH_RETRY_DELAY="${UPDATER_FETCH_RETRY_DELAY:-5}"
 # service can turn this on for a stricter gate.
 REQUIRE_HEALTHCHECKS="${UPDATER_REQUIRE_HEALTHCHECKS:-false}"
 
+# Fail closed on the release allowlist: when NO manifest can be consulted (the remote is
+# unreachable AND there is no readable local versions.json), refuse the tag instead of
+# trusting the character allowlist alone. A dev or deliberately-offline deployment that
+# accepts any character-safe tag can opt back into the old behaviour by setting this true.
+ALLOW_UNVERIFIED_TAGS="${UPDATER_ALLOW_UNVERIFIED_TAGS:-false}"
+# Upper bound on the request file the app drops in the shared volume. A real request is a
+# few hundred bytes; anything larger is rejected before jq sees it, so a truncated, garbage,
+# or hostile file can't be parsed or blow up memory.
+REQUEST_MAX_BYTES="${UPDATER_REQUEST_MAX_BYTES:-65536}"
+
 # Liveness heartbeat for the container healthcheck. Each poll (and each wait
 # iteration during a long upgrade) stamps the current epoch here, so the healthcheck
 # can tell a live-but-idle watcher from a hung one — a bare "Up" cannot.
@@ -435,6 +445,35 @@ curl_retry() {
   done
 }
 
+# SHA-256 of a file, first field only, or empty if it can't be computed.
+file_sha256() {
+  sha256sum "$1" 2>/dev/null | awk '{print $1}'
+}
+
+# The expected SHA-256 of a release's compose file, read from the curated manifest
+# (remote preferred, local fallback) for the given tag. Empty when the manifest records
+# none for that tag (older manifests predate the field), in which case the fetched compose
+# is trusted on `docker compose config` validation alone, as before.
+release_compose_sha() {
+  _rt=$1
+  # $t is a jq variable (bound with --arg below), not a shell variable, so it must stay
+  # single-quoted and unexpanded.
+  # shellcheck disable=SC2016
+  _q='((.versions // []) | map(select(.tag == $t)) | .[0].composeSha256) // ""'
+  if [ -n "$MANIFEST_URL" ]; then
+    _rm=$(curl_retry -fsS --max-time 10 "$MANIFEST_URL" 2>/dev/null || true)
+    if [ -n "$_rm" ]; then
+      printf '%s' "$_rm" | jq -r --arg t "$_rt" "$_q" 2>/dev/null
+      return 0
+    fi
+  fi
+  if [ -f "$MANIFEST_FILE" ] && jq -e . "$MANIFEST_FILE" >/dev/null 2>&1; then
+    jq -r --arg t "$_rt" "$_q" "$MANIFEST_FILE" 2>/dev/null
+    return 0
+  fi
+  printf ''
+}
+
 # When a release changes the stack layout (adds a service, a healthcheck, a volume),
 # the running compose file on the host is stale and recreating from it would miss the
 # change. This fetches the target release's compose from its IMMUTABLE TAG ref, and if
@@ -469,6 +508,23 @@ apply_release_compose() {
   if cmp -s "$_new" "$COMPOSE_FILE"; then
     rm -f "$_new"
     return 0
+  fi
+
+  # If the manifest records a checksum for this release's compose, the fetched file must
+  # match it before we trust it. This closes the gap where the file is fetched over the
+  # network but only self-validated: `docker compose config` proves it PARSES, not that it
+  # is the file the release shipped. A mismatch keeps the current stack configuration (a
+  # genuinely required layout change then surfaces as a failed health check and a normal
+  # rollback). Manifests without the field skip this and fall back to config validation.
+  _want_sha=$(release_compose_sha "$_tag")
+  if [ -n "$_want_sha" ]; then
+    _got_sha=$(file_sha256 "$_new")
+    if [ "$_got_sha" != "$_want_sha" ]; then
+      rm -f "$_new"
+      log "release ${_tag} compose checksum mismatch (expected ${_want_sha}, got ${_got_sha:-none}); keeping the current stack configuration"
+      progress_note "release stack configuration failed its checksum; keeping the current one"
+      return 0
+    fi
   fi
 
   # Validate the candidate before trusting it. `config -q` resolves ${VAR}
@@ -830,7 +886,7 @@ tag_allowed() {
   printf '%s' "$_tag" | grep -Eq "$TAG_REGEX" || return 1
   # The curated manifest is authoritative: prefer the remote copy (so releases
   # published after this host was deployed are still allowed), fall back to a local
-  # file, and only if neither is reachable fall back to the character allowlist alone.
+  # file. Whichever is consulted decides, allow or deny.
   if [ -n "$MANIFEST_URL" ]; then
     _remote=$(curl_retry -fsS --max-time 10 "$MANIFEST_URL" 2>/dev/null || true)
     if [ -n "$_remote" ]; then
@@ -838,10 +894,20 @@ tag_allowed() {
       return 0
     fi
   fi
-  if [ -f "$MANIFEST_FILE" ]; then
+  if [ -f "$MANIFEST_FILE" ] && jq -e . "$MANIFEST_FILE" >/dev/null 2>&1; then
     jq -e --arg t "$_tag" '(.versions // []) | any(.tag == $t)' "$MANIFEST_FILE" >/dev/null 2>&1 || return 1
+    return 0
   fi
-  return 0
+  # No manifest could be consulted: the remote is unreachable and there is no readable
+  # local versions.json. Fail closed rather than trusting the character allowlist alone,
+  # so a compromised or confused app can't push an unlisted tag. A dev/offline deployment
+  # opts back into permissive behaviour with UPDATER_ALLOW_UNVERIFIED_TAGS=true.
+  if [ "$ALLOW_UNVERIFIED_TAGS" = "true" ]; then
+    log "no release manifest available; allowing ${_tag} (UPDATER_ALLOW_UNVERIFIED_TAGS=true)"
+    return 0
+  fi
+  log "refusing ${_tag}: no release manifest available to verify it against"
+  return 1
 }
 
 # Roll the stack back to the transaction's previous version, using the LOCAL images
@@ -880,6 +946,27 @@ rollback_upgrade() {
 # Request processing
 # --------------------------------------------------------------------------- #
 process_request() {
+  # The trigger directory is writable by the less-privileged app (it holds no Docker
+  # socket); this updater does. Treat the request file as untrusted input and harden the
+  # handoff before parsing it.
+  #
+  # Symlink safety: a symlinked request must never be followed. Reading through it would
+  # let a link planted in the volume redirect the updater's reads at a file outside it. mv
+  # renames the link rather than its target, but reject and delete it outright instead.
+  if [ -L "$REQUEST_FILE" ]; then
+    log "refusing a symlinked request file"
+    rm -f "$REQUEST_FILE" 2>/dev/null || true
+    return 0
+  fi
+  # Size bound: a real request is a few hundred bytes. Refuse anything absurd before jq
+  # sees it, so a truncated, garbage, or hostile file can't be parsed or exhaust memory.
+  _reqsize=$(wc -c < "$REQUEST_FILE" 2>/dev/null || printf '0')
+  if [ "${_reqsize:-0}" -gt "$REQUEST_MAX_BYTES" ] 2>/dev/null; then
+    log "refusing an oversized request file (${_reqsize} bytes > ${REQUEST_MAX_BYTES})"
+    rm -f "$REQUEST_FILE" 2>/dev/null || true
+    return 0
+  fi
+
   # Atomically claim the request so a rewrite mid-read can't be half-processed.
   mv "$REQUEST_FILE" "$CLAIM_FILE" 2>/dev/null || return 0
 
@@ -894,6 +981,9 @@ process_request() {
   _rid=$(jq -r '.requestId // ""' "$CLAIM_FILE" 2>/dev/null || printf '')
   _backup=$(jq -r 'if .backupFirst == false then "false" else "true" end' "$CLAIM_FILE" 2>/dev/null || printf 'true')
   _restore_point=$(jq -r '.restorePoint // ""' "$CLAIM_FILE" 2>/dev/null || printf '')
+  # Explicit override to proceed with a downgrade even if a pre-downgrade safety backup
+  # could not be confirmed. Absent/false means refuse (a downgrade is destructive).
+  _force=$(jq -r 'if .force == true then "true" else "false" end' "$CLAIM_FILE" 2>/dev/null || printf 'false')
   printf '%s' "$_rid" | grep -Eq "$ID_REGEX" || _rid="unknown"
 
   case "$_action" in
@@ -929,7 +1019,7 @@ process_request() {
   fi
 
   if [ "$_action" = "downgrade" ]; then
-    process_downgrade "$_tag" "$_rid" "$_from" "$_proj" "$_restore_point"
+    process_downgrade "$_tag" "$_rid" "$_from" "$_proj" "$_restore_point" "$_force"
     rm -f "$CLAIM_FILE"
     return 0
   fi
@@ -1075,6 +1165,7 @@ process_downgrade() {
   _from=$3
   _proj=$4
   _rp=$5
+  _force=${6:-false}
 
   # The restore point is a backup timestamp; it must be a recorded restore point
   # for exactly this version (the app never gets to name an arbitrary backup).
@@ -1092,13 +1183,23 @@ process_downgrade() {
 
   log "downgrade requested: ${_from} -> ${_tag} via restore ${_rp} (request ${_rid})"
 
-  # 1) Snapshot the CURRENT state first, so this downgrade is itself reversible.
+  # 1) Snapshot the CURRENT state first, so this downgrade is itself reversible. A
+  # downgrade restores an older database and discards everything created since, so losing
+  # this snapshot means the current state is unrecoverable. Refuse when it can't be
+  # confirmed, unless the request explicitly forced it (an admin accepting that loss).
   write_status "backing_up" "backing up the current state before downgrading" "$_from" "$_tag" "$_rid"
   _sbts=$(backup_and_wait) || _sbts=""
   if [ -n "$_sbts" ]; then
     record_restore_point "$_from" "$_sbts"
+  elif [ "$_force" = "true" ]; then
+    log "safety backup before downgrade not confirmed; continuing because the request forced it"
+    progress_note "no safety backup confirmed; continuing (forced)"
   else
-    log "safety backup before downgrade not confirmed; continuing"
+    log "safety backup before downgrade not confirmed; refusing (not forced)"
+    write_status "failed" \
+      "Could not confirm a backup of the current state before downgrading, so the downgrade was refused to avoid unrecoverable data loss. Try again, or force it if you accept discarding the current state." \
+      "$_from" "$_tag" "$_rid"
+    return 0
   fi
 
   # 2) Stop the app so pg_restore --clean has no live database connections.
