@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<!-- Created with JFLAP 4.0b10. -->
-<!-- PDA for { a^n b^n : n >= 1 }, accept by final state. Push an 'a' per input a, pop one per input b, accept when the bottom marker Z is exposed again. -->
+<!-- PDA for { a^n b^n : n >= 1 }, accept by final state, modern convention: the PDA
+     explicitly pushes the bottom marker "$" first and pops it to accept (no auto-marking). -->
 <structure>
 	<type>pda</type>
 	<state id="0" name="q0">
@@ -9,47 +9,51 @@
 		<initial />
 	</state>
 	<state id="1" name="q1">
-		<x>300.0</x>
+		<x>250.0</x>
 		<y>150.0</y>
 	</state>
 	<state id="2" name="q2">
-		<x>500.0</x>
+		<x>400.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="3" name="q3">
+		<x>550.0</x>
 		<y>150.0</y>
 		<final />
 	</state>
 	<transition>
 		<from>0</from>
-		<to>0</to>
-		<read>a</read>
-		<pop>Z</pop>
-		<push>aZ</push>
-	</transition>
-	<transition>
-		<from>0</from>
-		<to>0</to>
-		<read>a</read>
-		<pop>a</pop>
-		<push>aa</push>
-	</transition>
-	<transition>
-		<from>0</from>
 		<to>1</to>
-		<read>b</read>
-		<pop>a</pop>
-		<push></push>
+		<read></read>
+		<pop></pop>
+		<push>$</push>
 	</transition>
 	<transition>
 		<from>1</from>
 		<to>1</to>
-		<read>b</read>
-		<pop>a</pop>
-		<push></push>
+		<read>a</read>
+		<pop></pop>
+		<push>a</push>
 	</transition>
 	<transition>
 		<from>1</from>
 		<to>2</to>
+		<read>b</read>
+		<pop>a</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>2</to>
+		<read>b</read>
+		<pop>a</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>3</to>
 		<read></read>
-		<pop>Z</pop>
-		<push>Z</push>
+		<pop>$</pop>
+		<push></push>
 	</transition>
 </structure>

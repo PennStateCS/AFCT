@@ -88,22 +88,6 @@
       "expectCorrect": true
     },
     {
-      "name": "PDA: pushdown automaton is equivalent to itself",
-      "type": "PDA",
-      "answer": "ex5.1.jff",
-      "submission": "ex5.1.jff",
-      "maxStates": -1,
-      "expectCorrect": true
-    },
-    {
-      "name": "PDA: second pushdown automaton is equivalent to itself",
-      "type": "PDA",
-      "answer": "pdaexample.jff",
-      "submission": "pdaexample.jff",
-      "maxStates": -1,
-      "expectCorrect": true
-    },
-    {
       "name": "FA (nondeterministic): third automaton is equivalent to itself",
       "type": "FA",
       "answer": "ex1.3a.jff",
@@ -241,6 +225,86 @@
       "expectCorrect": true
     },
     {
+      "name": "PDA (equal a and b): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-eq-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (equal a and b): a different construction is accepted",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-eq-correct.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (equal a and b): the one-more-a language (#a = #b + 1) is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-eq-incorrect.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (equal a and b): the a^n b^n subset language is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-anbn-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (balanced parentheses): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-dyck-solution.jff",
+      "submission": "gs-pda-dyck-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (balanced parentheses): a different construction is accepted",
+      "type": "PDA",
+      "answer": "gs-pda-dyck-solution.jff",
+      "submission": "gs-pda-dyck-correct.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (balanced parentheses): the equal-count language (accepts \"ba\") is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-dyck-solution.jff",
+      "submission": "gs-pda-eq-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (marked palindromes w c w^R): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-pal-solution.jff",
+      "submission": "gs-pda-pal-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (marked palindromes): the equal-length-halves near-miss is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-pal-solution.jff",
+      "submission": "gs-pda-pal-incorrect.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (marked palindromes): the balanced-parentheses language is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-pal-solution.jff",
+      "submission": "gs-pda-dyck-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
       "name": "RE: (a+b)* and (a*b*)* both accept every string",
       "type": "RE",
       "answer": "gs-re-sigma-solution.jff",
@@ -277,7 +341,7 @@
       "submission": "gs-pda-anbn-solution.jff",
       "maxStates": 2,
       "expectCorrect": false,
-      "expectErrorContains": "too many states"
+      "expectErrorContains": "the maximum allowed is"
     }
   ]
 }

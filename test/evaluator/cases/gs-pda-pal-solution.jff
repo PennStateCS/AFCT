@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+<!-- PDA for marked even-length palindromes { w c w^R | w in {a,b}* }: a string, a center
+     marker 'c', then the reverse of the first half. Accept by final state, modern "$"
+     convention. Push each first-half symbol; at 'c' switch to matching mode; pop the matching
+     symbol for each second-half symbol; accept when the stack is back to "$". -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0">
+		<x>80.0</x>
+		<y>150.0</y>
+		<initial />
+	</state>
+	<state id="1" name="q1">
+		<x>240.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="2" name="q2">
+		<x>420.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="3" name="q3">
+		<x>600.0</x>
+		<y>150.0</y>
+		<final />
+	</state>
+	<transition>
+		<from>0</from>
+		<to>1</to>
+		<read></read>
+		<pop></pop>
+		<push>$</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>a</read>
+		<pop></pop>
+		<push>a</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>b</read>
+		<pop></pop>
+		<push>b</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>2</to>
+		<read>c</read>
+		<pop></pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>2</to>
+		<read>a</read>
+		<pop>a</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>2</to>
+		<read>b</read>
+		<pop>b</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>3</to>
+		<read></read>
+		<pop>$</pop>
+		<push></push>
+	</transition>
+</structure>
