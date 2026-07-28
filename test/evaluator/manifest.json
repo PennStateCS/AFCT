@@ -257,6 +257,54 @@
       "expectCorrect": false
     },
     {
+      "name": "PDA (balanced parentheses): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-dyck-solution.jff",
+      "submission": "gs-pda-dyck-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (balanced parentheses): a different construction is accepted",
+      "type": "PDA",
+      "answer": "gs-pda-dyck-solution.jff",
+      "submission": "gs-pda-dyck-correct.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (balanced parentheses): the equal-count language (accepts \"ba\") is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-dyck-solution.jff",
+      "submission": "gs-pda-eq-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (marked palindromes w c w^R): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-pal-solution.jff",
+      "submission": "gs-pda-pal-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (marked palindromes): the equal-length-halves near-miss is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-pal-solution.jff",
+      "submission": "gs-pda-pal-incorrect.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (marked palindromes): the balanced-parentheses language is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-pal-solution.jff",
+      "submission": "gs-pda-dyck-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
       "name": "RE: (a+b)* and (a*b*)* both accept every string",
       "type": "RE",
       "answer": "gs-re-sigma-solution.jff",

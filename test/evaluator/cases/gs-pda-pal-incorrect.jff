@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+<!-- Near-miss for the marked-palindrome problem: { w1 c w2 | w1,w2 in {a,b}*, |w1| = |w2| }.
+     It only checks that the two halves have equal LENGTH (it pushes/pops a generic marker 'X'
+     regardless of symbol), so it accepts non-palindromes like "abcab". Must be rejected against
+     gs-pda-pal-solution, which requires w2 = reverse(w1). Modern "$" convention. -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0">
+		<x>80.0</x>
+		<y>150.0</y>
+		<initial />
+	</state>
+	<state id="1" name="q1">
+		<x>240.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="2" name="q2">
+		<x>420.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="3" name="q3">
+		<x>600.0</x>
+		<y>150.0</y>
+		<final />
+	</state>
+	<transition>
+		<from>0</from>
+		<to>1</to>
+		<read></read>
+		<pop></pop>
+		<push>$</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>a</read>
+		<pop></pop>
+		<push>X</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>b</read>
+		<pop></pop>
+		<push>X</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>2</to>
+		<read>c</read>
+		<pop></pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>2</to>
+		<read>a</read>
+		<pop>X</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>2</to>
+		<read>b</read>
+		<pop>X</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>3</to>
+		<read></read>
+		<pop>$</pop>
+		<push></push>
+	</transition>
+</structure>

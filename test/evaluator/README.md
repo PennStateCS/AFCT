@@ -74,14 +74,15 @@ docker exec afct-dev-worker sh -c 'cd /app && npm run test:evaluator'
   `src/lib/submission-worker.ts`, so the smoke test grades identically to production.
   Without `TIMEOUT_SECONDS`/`UPGRADED_FEEDBACK` the jar prints "not set" warnings and
   disables early stopping.
-- The `gs-*` fixtures add per-type coverage for small, well-understood languages:
-  RE (strings ending in b), CFG (`a^n b^n`, `n >= 1`), and PDA each have a correct, an
-  incorrect, and an edge submission, so a non-equivalent submission must be rejected, not
-  just an identical one accepted. PDA covers two languages: `a^n b^n` (`n >= 1`) and
-  equal numbers of `a` and `b` (`#a = #b`). The equal-count set also grades a second,
-  structurally different construction as equivalent and rejects both a near-miss
-  (`#a = #b + 1`) and the `a^n b^n` subset, so it exercises real equivalence, not just
-  self-comparison.
+- The `gs-*` fixtures add per-type coverage for small, well-understood languages, with a
+  correct, an incorrect, and an edge submission each, so a non-equivalent submission must
+  be rejected, not just an identical one accepted. RE covers strings ending in b; CFG
+  covers `a^n b^n` (`n >= 1`). PDA covers four languages that span the different ways a
+  stack gets used: `a^n b^n` (`n >= 1`), equal counts (`#a = #b`), balanced parentheses
+  (the Dyck language over `a`/`b`), and marked palindromes (`{ w c w^R }`). Several of
+  these also grade a second, structurally different construction as equivalent and reject a
+  related but distinct language (e.g. balanced-parentheses vs equal-count, which disagree
+  on `ba`), so they exercise real equivalence, not just self-comparison.
 - The PDA fixtures use the **modern `$` convention**: the PDA explicitly pushes the
   bottom-of-stack marker `$` at the start and pops it to accept, matching JFLAP's active
   `PDA_STACK_BOTTOM_MARKER` (`gui.environment.Profile`). This is the standard the current
