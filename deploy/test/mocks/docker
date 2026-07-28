@@ -17,6 +17,12 @@
 #   MOCK_ARGS_LOG         if set, append every invocation's args to this file
 #   MOCK_IMAGES           lines `docker images --format` prints (default: none)
 #   MOCK_RMI_LOG          if set, append each `docker rmi` target to this file
+#   MOCK_DEPLOYED_TAG     when set, the running container's image id becomes
+#                         sha256:img-<tag> and `docker image inspect` returns
+#                         sha256:img-<ref-tag>, so a test can make the running image
+#                         agree or disagree with a tag (transaction-recovery tests).
+#   MOCK_MISSING_TAGS     space-separated tags whose `docker image inspect` fails (image
+#                         not present locally), to exercise the rollback retag fallback
 
 [ -n "${MOCK_ARGS_LOG:-}" ] && printf '%s\n' "$*" >> "$MOCK_ARGS_LOG" 2>/dev/null
 
@@ -73,7 +79,15 @@ case "$cmd" in
       *Config.Image*) printf 'ghcr.io/example/afct:latest\n' ;;
       # The updater resolves its own /afct host mount to spawn the self-update helper.
       *Mounts*) printf '%s\n' "${MOCK_AFCT_MOUNT:-/host/afct}" ;;
-      *.Image*) printf 'sha256:mockimageid\n' ;;
+      *.Image*)
+        # The running container's image id. With MOCK_DEPLOYED_TAG a test pins which
+        # tag the container is actually on, so recovery can compare it against a target.
+        if [ -n "${MOCK_DEPLOYED_TAG:-}" ]; then
+          printf 'sha256:img-%s\n' "$MOCK_DEPLOYED_TAG"
+        else
+          printf 'sha256:mockimageid\n'
+        fi
+        ;;
       *) printf '\n' ;;
     esac
     exit 0
@@ -106,7 +120,21 @@ case "$cmd" in
     _sub=${1:-}
     [ "$#" -gt 0 ] && shift
     case "$_sub" in
-      inspect) printf 'sha256:mockimageid\n'; exit 0 ;;
+      inspect)
+        # The local image id a repo:tag resolves to. The ref is the last argument.
+        _ref=""
+        for _a in "$@"; do _ref=$_a; done
+        _t=${_ref##*:}
+        case " ${MOCK_MISSING_TAGS:-} " in
+          *" $_t "*) exit 1 ;;   # image not present locally
+        esac
+        if [ -n "${MOCK_DEPLOYED_TAG:-}" ]; then
+          printf 'sha256:img-%s\n' "$_t"
+        else
+          printf 'sha256:mockimageid\n'
+        fi
+        exit 0
+        ;;
       *) exit 0 ;;
     esac
     ;;
