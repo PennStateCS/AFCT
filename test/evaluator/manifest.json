@@ -88,22 +88,6 @@
       "expectCorrect": true
     },
     {
-      "name": "PDA: pushdown automaton is equivalent to itself",
-      "type": "PDA",
-      "answer": "ex5.1.jff",
-      "submission": "ex5.1.jff",
-      "maxStates": -1,
-      "expectCorrect": true
-    },
-    {
-      "name": "PDA: second pushdown automaton is equivalent to itself",
-      "type": "PDA",
-      "answer": "pdaexample.jff",
-      "submission": "pdaexample.jff",
-      "maxStates": -1,
-      "expectCorrect": true
-    },
-    {
       "name": "FA (nondeterministic): third automaton is equivalent to itself",
       "type": "FA",
       "answer": "ex1.3a.jff",
@@ -277,7 +261,7 @@
       "submission": "gs-pda-anbn-solution.jff",
       "maxStates": 2,
       "expectCorrect": false,
-      "expectErrorContains": "too many states"
+      "expectErrorContains": "the maximum allowed is"
     }
   ]
 }

@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<!-- Created with JFLAP 4.0b10. -->
-<!-- Wrong: { a^n b^2n : n >= 1 }. Pushes two markers per a, so it needs twice as many b's as a's. -->
+<!-- Wrong language: { a^n b^2n : n >= 1 } (two b's per a). Pushes two 'a' markers per input
+     'a' and pops one per 'b'. Must be rejected against gs-pda-anbn-solution. Modern "$". -->
 <structure>
 	<type>pda</type>
 	<state id="0" name="q0">
@@ -9,47 +9,51 @@
 		<initial />
 	</state>
 	<state id="1" name="q1">
-		<x>300.0</x>
+		<x>250.0</x>
 		<y>150.0</y>
 	</state>
 	<state id="2" name="q2">
-		<x>500.0</x>
+		<x>400.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="3" name="q3">
+		<x>550.0</x>
 		<y>150.0</y>
 		<final />
 	</state>
 	<transition>
 		<from>0</from>
-		<to>0</to>
-		<read>a</read>
-		<pop>Z</pop>
-		<push>AAZ</push>
-	</transition>
-	<transition>
-		<from>0</from>
-		<to>0</to>
-		<read>a</read>
-		<pop>A</pop>
-		<push>AAA</push>
-	</transition>
-	<transition>
-		<from>0</from>
 		<to>1</to>
-		<read>b</read>
-		<pop>A</pop>
-		<push></push>
+		<read></read>
+		<pop></pop>
+		<push>$</push>
 	</transition>
 	<transition>
 		<from>1</from>
 		<to>1</to>
-		<read>b</read>
-		<pop>A</pop>
-		<push></push>
+		<read>a</read>
+		<pop></pop>
+		<push>aa</push>
 	</transition>
 	<transition>
 		<from>1</from>
 		<to>2</to>
+		<read>b</read>
+		<pop>a</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>2</to>
+		<read>b</read>
+		<pop>a</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>3</to>
 		<read></read>
-		<pop>Z</pop>
-		<push>Z</push>
+		<pop>$</pop>
+		<push></push>
 	</transition>
 </structure>

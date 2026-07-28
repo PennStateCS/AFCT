@@ -75,10 +75,14 @@ docker exec afct-dev-worker sh -c 'cd /app && npm run test:evaluator'
   Without `TIMEOUT_SECONDS`/`UPGRADED_FEEDBACK` the jar prints "not set" warnings and
   disables early stopping.
 - The `gs-*` fixtures add per-type coverage for a small, well-understood language:
-  RE (strings ending in b) and CFG (`a^n b^n`, `n >= 1`) each have a correct, an
-  incorrect, and an edge submission. PDA (`a^n b^n`) has only equivalence (correct)
-  cases, because the current jar (v1.3.9) does not reliably reject a non-equivalent PDA:
-  grading the repo's own `ex5.1.jff` (`a^n b^m`, `m >= n+1`) against `pdaexample.jff`
-  (`a^n b^n`) returns "Correct!" even though they are different languages (this holds at
-  analyzer bounds 15/30/100, with the production env vars set). Add a PDA wrong-answer
-  case if a later evaluator improves PDA equivalence.
+  RE (strings ending in b), CFG (`a^n b^n`, `n >= 1`), and PDA (`a^n b^n`, `n >= 1`)
+  each have a correct, an incorrect, and an edge submission, so a non-equivalent
+  submission must be rejected, not just an identical one accepted.
+- The PDA fixtures use the **modern `$` convention**: the PDA explicitly pushes the
+  bottom-of-stack marker `$` at the start and pops it to accept, matching JFLAP's active
+  `PDA_STACK_BOTTOM_MARKER` (`gui.environment.Profile`). This is the standard the current
+  client authors PDAs in; the older auto-marked `Z` convention is legacy. Two `Z`-marked
+  example PDAs were removed: under the `$`-based evaluator they convert to an empty
+  grammar, so they only ever compared equal to themselves, which hid a regression rather
+  than catching one. If the evaluator jar is ever swapped, the marker it expects must
+  match the marker the deployed client produces, or every PDA will grade the same way.

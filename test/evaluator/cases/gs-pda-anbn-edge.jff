@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
-<!-- Created with JFLAP 4.0b10. -->
-<!-- Edge case, far too permissive: accepts every string over {a,b}. -->
+<!-- Edge case: accepts EVERY string over {a,b} (the start state is also final and loops on
+     each symbol without using the stack). Must be rejected against gs-pda-anbn-solution. -->
 <structure>
 	<type>pda</type>
 	<state id="0" name="q0">
-		<x>100.0</x>
+		<x>200.0</x>
 		<y>150.0</y>
 		<initial />
 		<final />
@@ -13,14 +13,14 @@
 		<from>0</from>
 		<to>0</to>
 		<read>a</read>
-		<pop>Z</pop>
-		<push>Z</push>
+		<pop></pop>
+		<push></push>
 	</transition>
 	<transition>
 		<from>0</from>
 		<to>0</to>
 		<read>b</read>
-		<pop>Z</pop>
-		<push>Z</push>
+		<pop></pop>
+		<push></push>
 	</transition>
 </structure>
