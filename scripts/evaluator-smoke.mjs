@@ -45,9 +45,18 @@ function parseFeedback(stdout) {
 
 const manifest = JSON.parse(await readFile(path.join(EVAL_DIR, 'manifest.json'), 'utf8'));
 const runner = new JavaRunner(JAR);
+
+// The jar reads four env vars. Production sets all of them in src/lib/submission-worker.ts,
+// so set them here too or this test would not grade exactly as production does. Without
+// TIMEOUT_SECONDS the jar disables early stopping and logs a warning; without
+// UPGRADED_FEEDBACK it warns and defaults it on. TIMEOUT_SECONDS is derived from the eval
+// timeout in whole seconds, the same way production derives it.
+const EVAL_TIMEOUT_MS = 60_000;
 const evalEnv = {
   CFGANALYZER_BINARY: CFGANALYZER,
   CFGANALYZER_LIMIT: String(manifest.analyzerLimit ?? 15),
+  TIMEOUT_SECONDS: String(Math.max(1, Math.floor(EVAL_TIMEOUT_MS / 1000))),
+  UPGRADED_FEEDBACK: 'true',
 };
 
 console.log(`Evaluating ${manifest.cases.length} golden case(s) against ${path.relative(ROOT, JAR)}\n`);
@@ -60,7 +69,7 @@ for (const c of manifest.cases) {
 
   try {
     const { stdout } = await runner.execute(args, {
-      timeout: 60_000,
+      timeout: EVAL_TIMEOUT_MS,
       maxMemoryMb: 512,
       env: evalEnv,
     });

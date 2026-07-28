@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- a^n b^n (n>=1), but this one EMPTIES the stack (pops Z) to accept, instead of keeping Z. Same language as the standard solution; stresses the seeded-marker fix. -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0"><x>100</x><y>150</y><initial /></state>
+	<state id="1" name="q1"><x>300</x><y>150</y></state>
+	<state id="2" name="q2"><x>500</x><y>150</y><final /></state>
+	<transition><from>0</from><to>0</to><read>a</read><pop>Z</pop><push>AZ</push></transition>
+	<transition><from>0</from><to>0</to><read>a</read><pop>A</pop><push>AA</push></transition>
+	<transition><from>0</from><to>1</to><read>b</read><pop>A</pop><push></push></transition>
+	<transition><from>1</from><to>1</to><read>b</read><pop>A</pop><push></push></transition>
+	<transition><from>1</from><to>2</to><read></read><pop>Z</pop><push></push></transition>
+</structure>
