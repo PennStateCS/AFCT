@@ -221,6 +221,25 @@ describe('writeDowngradeRequest', () => {
     });
     expect(fsMock.writeFileSync).toHaveBeenCalledWith(UPDATE_PROGRESS_FILE, '');
   });
+  it('omits force by default', () => {
+    writeDowngradeRequest({
+      tag: 'v0.9.0',
+      restorePoint: '20260101-000000',
+      requestedBy: 'admin1',
+      requestId: 'd1',
+    });
+    expect(requestPayload()).not.toHaveProperty('force');
+  });
+  it('includes force only when set true', () => {
+    writeDowngradeRequest({
+      tag: 'v0.9.0',
+      restorePoint: '20260101-000000',
+      requestedBy: 'admin1',
+      requestId: 'd1',
+      force: true,
+    });
+    expect(requestPayload()).toMatchObject({ action: 'downgrade', force: true });
+  });
 });
 
 describe('writeSelfUpdateRequest', () => {

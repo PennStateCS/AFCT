@@ -3271,6 +3271,8 @@ export interface operations {
                     action?: "upgrade" | "downgrade" | "self-update" | "delete-restore-point";
                     tag?: string;
                     restorePoint?: string;
+                    /** @description Downgrade only: proceed without a confirmed pre-downgrade safety backup. */
+                    force?: boolean;
                 };
             };
         };

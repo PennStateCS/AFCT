@@ -80,6 +80,10 @@ const UpgradeBody = z.object({
   // restorePoint; validated per-action below.
   tag: z.string().min(1).optional(),
   restorePoint: z.string().optional(),
+  // Downgrade only: proceed even if the updater can't confirm a pre-downgrade safety
+  // backup. The admin opts into this after the updater has already refused for that
+  // reason, accepting that the current state cannot be restored afterward.
+  force: z.boolean().optional(),
 });
 
 /**
@@ -100,6 +104,7 @@ const UpgradeBody = z.object({
  *           action: { type: string, enum: [upgrade, downgrade, self-update, delete-restore-point] }
  *           tag: { type: string }
  *           restorePoint: { type: string }
+ *           force: { type: boolean, description: "Downgrade only: proceed without a confirmed pre-downgrade safety backup." }
  * responses:
  *   202:
  *     description: Requested; it will run asynchronously.
@@ -116,7 +121,7 @@ export const POST = withAdminAuth(
   async (req, _ctx, { user }) => {
     const parsed = await readJson(req, UpgradeBody);
     if (!parsed.ok) return parsed.response;
-    const { action = 'upgrade', tag, restorePoint } = parsed.data;
+    const { action = 'upgrade', tag, restorePoint, force = false } = parsed.data;
     const requestId = crypto.randomUUID();
 
     // ---- Delete a restore point: remove an old backup the admin no longer wants to
@@ -193,7 +198,7 @@ export const POST = withAdminAuth(
         return apiError(400, `AFCT is already running ${tag}`);
       }
       try {
-        writeDowngradeRequest({ tag, restorePoint, requestedBy: user.id, requestId });
+        writeDowngradeRequest({ tag, restorePoint, requestedBy: user.id, requestId, force });
       } catch {
         return apiError(503, 'The updater service is not available');
       }
@@ -203,7 +208,9 @@ export const POST = withAdminAuth(
           action: 'SYSTEM_DOWNGRADE_REQUESTED',
           severity: 'WARNING',
           category: 'SYSTEM',
-          metadata: { tag, restorePoint, requestId, fromTag: currentVersion() },
+          // `forced` records that the admin proceeded without a confirmed safety backup,
+          // which is the more consequential path and worth having in the audit trail.
+          metadata: { tag, restorePoint, requestId, fromTag: currentVersion(), forced: force },
         });
       } catch (err) {
         console.error('[updates] audit log failed:', err);

@@ -145,17 +145,24 @@ export function useUpgrade(enabled: boolean) {
   });
 
   const { mutate: startDowngrade, isPending: downgradeBusy } = useMutation({
-    mutationFn: (v: { tag: string; restorePoint: string }) =>
+    // `force` proceeds without a confirmed pre-downgrade safety backup; only set when the
+    // admin retries after the updater refused for that reason.
+    mutationFn: (v: { tag: string; restorePoint: string; force?: boolean }) =>
       fetchJson(apiPaths.admin.upgrade(), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'downgrade', tag: v.tag, restorePoint: v.restorePoint }),
+        body: JSON.stringify({
+          action: 'downgrade',
+          tag: v.tag,
+          restorePoint: v.restorePoint,
+          ...(v.force ? { force: true } : {}),
+        }),
       }),
     onSuccess: (_data, v) => {
       const current = queryClient.getQueryData<UpgradeInfo>(UPGRADE_QUERY_KEY)?.current;
       markInProgress({
         phase: 'backing_up',
-        message: 'Starting the restore…',
+        message: v.force ? 'Starting the restore (without a safety backup)…' : 'Starting the restore…',
         fromTag: current,
         toTag: v.tag,
       });

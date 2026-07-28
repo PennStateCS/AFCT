@@ -308,6 +308,10 @@ export function writeDowngradeRequest(request: {
   restorePoint: string;
   requestedBy: string;
   requestId: string;
+  // When true, the updater proceeds even if it can't confirm a pre-downgrade safety
+  // backup of the current state (it otherwise refuses, to avoid unrecoverable loss).
+  // An explicit admin override, only sent after the updater has refused for that reason.
+  force?: boolean;
 }): void {
   fs.mkdirSync(UPDATE_TRIGGER_DIR, { recursive: true });
   resetProgress();
@@ -317,6 +321,9 @@ export function writeDowngradeRequest(request: {
     restorePoint: request.restorePoint,
     requestedBy: request.requestedBy,
     requestId: request.requestId,
+    // Only include the flag when set, so an ordinary downgrade keeps the smaller payload
+    // and the updater applies its safe default (force=false).
+    ...(request.force ? { force: true } : {}),
   };
   const tmp = path.join(UPDATE_TRIGGER_DIR, `.request.${process.pid}.tmp`);
   fs.writeFileSync(tmp, JSON.stringify(payload));

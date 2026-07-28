@@ -87,7 +87,7 @@ Once enabled, the Updates tab lists the available versions from the project's re
 Downgrading restores the database from the backup taken at that restore point, which discards database records created since. Uploaded files are not rolled back and may become unreferenced. Only downgrade when you accept that result. The Updates tab requires explicit confirmation.
 :::
 
-Before it restores, the updater takes a fresh backup of the current state so the downgrade is itself reversible. If that safety backup cannot be confirmed, the downgrade is refused rather than run: a downgrade discards the current database, so losing the snapshot would make the current state unrecoverable. A downgrade only proceeds without a confirmed safety backup when it is explicitly forced.
+Before it restores, the updater takes a fresh backup of the current state so the downgrade is itself reversible. If that safety backup cannot be confirmed, the downgrade is refused rather than run: a downgrade discards the current database, so losing the snapshot would make the current state unrecoverable. Nothing is changed when it is refused, so the app stays up. The Updates tab then offers a **Downgrade without a safety backup** action that proceeds anyway; use it only if you accept that the current state cannot be recovered afterward.
 
 Each restore point also has a **Delete** button. Removing one deletes its backup file to reclaim disk and drops it from the list, so you can no longer downgrade to that version. It does not affect the running application.
 

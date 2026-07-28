@@ -191,7 +191,12 @@ describe('POST downgrade', () => {
     const res = await downgrade({ tag: 'v0.9.0', restorePoint: '20260101-000000' });
     expect(res.status).toBe(202);
     expect(updatesMock.writeDowngradeRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ tag: 'v0.9.0', restorePoint: '20260101-000000', requestedBy: 'a1' }),
+      expect.objectContaining({
+        tag: 'v0.9.0',
+        restorePoint: '20260101-000000',
+        requestedBy: 'a1',
+        force: false,
+      }),
     );
     // A downgrade does NOT go through the release manifest.
     expect(updatesMock.fetchManifest).not.toHaveBeenCalled();
@@ -199,6 +204,27 @@ describe('POST downgrade', () => {
       {},
       expect.anything(),
       expect.objectContaining({ action: 'SYSTEM_DOWNGRADE_REQUESTED', severity: 'WARNING' }),
+    );
+    expect(activityLogMock).toHaveBeenCalledWith(
+      {},
+      expect.anything(),
+      expect.objectContaining({ metadata: expect.objectContaining({ forced: false }) }),
+    );
+  });
+
+  it('passes force through and records it in the audit log when the downgrade is forced', async () => {
+    updatesMock.readRestorePoints.mockReturnValue([
+      { version: 'v0.9.0', backup: '20260101-000000' },
+    ]);
+    const res = await downgrade({ tag: 'v0.9.0', restorePoint: '20260101-000000', force: true });
+    expect(res.status).toBe(202);
+    expect(updatesMock.writeDowngradeRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ tag: 'v0.9.0', force: true }),
+    );
+    expect(activityLogMock).toHaveBeenCalledWith(
+      {},
+      expect.anything(),
+      expect.objectContaining({ metadata: expect.objectContaining({ forced: true }) }),
     );
   });
 
