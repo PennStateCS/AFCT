@@ -61,7 +61,7 @@ import {
 import { getInitials } from '@/app/utils/initials';
 
 const menuButtonStyles =
-  'text-sidebar-foreground hover:bg-secondary focus-visible:bg-secondary active:bg-secondary data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground';
+  'text-sidebar-foreground hover:bg-brand-teal focus-visible:bg-brand-teal active:bg-brand-teal data-[active=true]:bg-brand-teal data-[active=true]:text-white';
 
 type Course = {
   id: string;
@@ -195,7 +195,7 @@ function CollapsibleSidebarGroup({
             onClick={onToggle}
             aria-expanded={open}
             aria-controls={contentId}
-            className="hover:bg-secondary flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap"
+            className="hover:bg-brand-teal flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap"
           >
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
             <ChevronDown
@@ -555,7 +555,7 @@ export default function DashboardSidebarMenu() {
                   // plus the visible span) and never said what activating it does.
                   aria-label={`Open account menu for ${user.name}`}
                   className={cn(
-                    'hover:bg-secondary data-[state=open]:bg-secondary/70 data-[state=open]:text-secondary-foreground h-14 bg-[#525252] px-3 py-3 transition-colors',
+                    'hover:bg-brand-teal data-[state=open]:bg-brand-teal/70 data-[state=open]:text-white bg-sidebar-foreground/10 h-14 px-3 py-3 transition-colors',
                     // In the icon rail the button shrinks to 32px; drop the padding and
                     // center so the 32px avatar fills the tile as a clean circle instead
                     // of overflowing an 8px-padded 16px box behind the (hidden) name.

@@ -109,7 +109,7 @@ const Navbar: React.FC = () => {
 
   if (status === 'loading') {
     return (
-      <header className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm" />
+      <header className="bg-brand-teal mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm" />
     );
   }
 
@@ -119,7 +119,7 @@ const Navbar: React.FC = () => {
 
   return (
     <div>
-      <header className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-3 text-white shadow-sm sm:p-4">
+      <header className="bg-brand-teal mb-4 flex h-16 items-center justify-between rounded-lg p-3 text-white shadow-sm sm:p-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
         <EnhancedSidebarTrigger />
         <Breadcrumb aria-label="Breadcrumb">
