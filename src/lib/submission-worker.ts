@@ -15,6 +15,8 @@ import {
   DEFAULT_SUBMISSION_MAX_CONCURRENT,
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
 } from './system-settings';
+import { check_file_status } from './simulatiry_report/check_file_status';
+import { jflapSimilarityParser } from './simulatiry_report/jflap_simulatiry_parser';
 
 // The activity logger expects a Request (for IP/user-agent). The worker has no
 // real request, so hand it a stand-in; IP and UA simply come back empty.
@@ -652,6 +654,7 @@ async function evaluateWithJar(
     }
 
     try {
+      // Parse evaluation
       const evaluation = JSON.parse(stdoutTrimmed);
 
       if (!evaluation || typeof evaluation !== 'object') {
@@ -667,6 +670,15 @@ async function evaluateWithJar(
           status: 'FAILED',
         };
       }
+
+      // Run simularity report
+      const similarityData = await jflapSimilarityParser(uploadedFilePath);
+      const fileUserId = similarityData?.fileUserId ?? undefined;
+      const fileHash = similarityData?.fileHash ?? undefined;
+      const calcHash = similarityData?.calcHash ?? undefined;
+
+      const fileStatus = await check_file_status(fileHash, calcHash, fileUserId, submission.studentId);
+      console.log(fileStatus);
 
       const correct = typeof evaluation.correct === 'boolean' ? evaluation.correct : undefined;
       let feedback: string;

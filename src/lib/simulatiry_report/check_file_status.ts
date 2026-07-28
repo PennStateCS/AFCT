@@ -20,7 +20,11 @@ Checks the plagiarism status of a file based on the given file hash and the calc
         file_hash_submission_ids: string[] (list of submission IDs that submitted the file with the same hash)
         calc_hash_submission_ids: string[] (list of submission IDs that submitted the file with the same calculated hash)
 */
-async function check_file_status(oldHash: string | undefined, newHash: string, fileUserId: string | undefined, user_id: string): Promise<FileStatusReturn> {
+export async function check_file_status(oldHash: string | undefined, newHash: string | undefined, fileUserId: string | undefined, user_id: string): Promise<FileStatusReturn> {
+    if (newHash === undefined) {
+        throw new Error('Calculated hash is undefined. Cannot check file status without a calculated hash.');
+    }
+    
     const file_hash_user_code: CodeAndUsers = await get_info_from_hash(oldHash, user_id);
     const calc_hash_user_code: CodeAndUsers = await get_info_from_hash(newHash, user_id);
 

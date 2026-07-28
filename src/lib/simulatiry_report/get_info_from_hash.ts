@@ -21,12 +21,12 @@ export async function get_info_from_hash(hash: string | undefined, user_id: stri
             fileHash: hash,
         },
         select: {
-            userId: true,
+            studentId: true,
             id: true,
         }
     });
 
-    codeAndUsers.ids.user_ids = response.map(r => r.userId);
+    codeAndUsers.ids.user_ids = response.map(r => r.studentId);
     codeAndUsers.ids.submission_ids = response.map(r => r.id);
 
     if (codeAndUsers.ids.user_ids.length === 0) {
