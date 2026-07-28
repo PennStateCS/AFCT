@@ -365,7 +365,7 @@ jobs:
             $sr = New-Object System.IO.StreamReader($dvEntry.Open())
             try { $deployVer = $sr.ReadToEnd().Trim() } finally { $sr.Dispose() }
             foreach ($mod in 'Output','Platform','Docker','Validation','Environment','Config',
-                             'Compose','Migrate','Update','Deploy','Doctor','Diagnostics','Recover','Uninstall') {
+                             'Compose','Update','Deploy','Doctor','Diagnostics','Recover','Uninstall') {
               if (-not ($names | Where-Object { $_ -match "/lib/$mod\.ps1$" })) { throw "bundle missing lib/$mod.ps1" }
             }
             # Every bundled PowerShell file must parse under the Windows PowerShell 5.1 parser.
