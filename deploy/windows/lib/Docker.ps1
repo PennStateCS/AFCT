@@ -160,7 +160,15 @@ function Get-AfctBindCheckImage {
 # True when the image is already present locally (no pull needed).
 function Test-AfctDockerImagePresent {
     param([string]$Image)
-    & docker image inspect $Image *> $null
+    # `docker image inspect` exits non-zero and writes to stderr when the image is
+    # absent -- the routine "not present, pull it" case. Under the caller's
+    # ErrorActionPreference='Stop', PowerShell 5.1 turns that native stderr into a
+    # terminating NativeCommandError, which would crash the check instead of returning
+    # false. Soften it locally, exactly as the compose wrappers above do, and read the
+    # child exit code afterward.
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & docker image inspect $Image *> $null } finally { $ErrorActionPreference = $eap }
     return ($LASTEXITCODE -eq 0)
 }
 
@@ -169,11 +177,17 @@ function Test-AfctDockerImagePresent {
 # child exit code.
 function Invoke-AfctDockerPull {
     param([string]$Image)
-    if (-not [string]::IsNullOrEmpty($LogFile)) {
-        & docker pull $Image *>> $LogFile
-    } else {
-        & docker pull $Image *> $null
-    }
+    # A failed pull writes to stderr and exits non-zero; soften ErrorActionPreference so
+    # that surfaces as a return code the caller can report, not a terminating error.
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        if (-not [string]::IsNullOrEmpty($LogFile)) {
+            & docker pull $Image *>> $LogFile
+        } else {
+            & docker pull $Image *> $null
+        }
+    } finally { $ErrorActionPreference = $eap }
     return $LASTEXITCODE
 }
 
@@ -181,7 +195,12 @@ function Invoke-AfctDockerPull {
 # is visible inside the container.
 function Test-AfctDockerBindMount {
     param([string]$Image, [string]$Dir)
-    & docker run --rm -v "${Dir}:/afct-bind-check:ro" $Image test -d /afct-bind-check *> $null
+    # A blocked mount makes `docker run` exit non-zero with stderr; soften
+    # ErrorActionPreference so the check returns false instead of throwing.
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & docker run --rm -v "${Dir}:/afct-bind-check:ro" $Image test -d /afct-bind-check *> $null }
+    finally { $ErrorActionPreference = $eap }
     return ($LASTEXITCODE -eq 0)
 }
 

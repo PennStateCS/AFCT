@@ -255,7 +255,10 @@ try {
     if ($dv -ne $cv) { Fail "bundle version metadata disagrees: DEPLOY_VERSION=$dv but controller=$cv." }
     if (-not [string]::IsNullOrEmpty($DeployVersion) -and $DeployVersion -ne $dv) { Fail "requested version $DeployVersion, but the bundle contains $dv." }
     if (-not [string]::IsNullOrEmpty($manifestBundle) -and $manifestBundle -ne "$AssetPrefix$dv.zip") { Fail "manifest bundle name does not match the bundle version $dv." }
-    $bundleName = Split-Path -Leaf $BundleFile
+    # The bundle filename is the leaf of the local -BundleFile, or the manifest's bundle
+    # name on the download path (where $BundleFile is empty). Using $BundleFile alone
+    # threw "empty path" on every downloaded install.
+    $bundleName = if ([string]::IsNullOrEmpty($BundleFile)) { $manifestBundle } else { Split-Path -Leaf $BundleFile }
     if (-not [string]::IsNullOrEmpty($bundleName) -and $bundleName -like "$AssetPrefix*.zip") {
         $fver = $bundleName.Substring($AssetPrefix.Length); $fver = $fver.Substring(0, $fver.Length - 4)
         if ($fver -ne $dv) { Fail "bundle filename $bundleName does not match its DEPLOY_VERSION $dv." }
