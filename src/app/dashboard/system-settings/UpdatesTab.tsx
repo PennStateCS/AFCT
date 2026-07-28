@@ -135,7 +135,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         ) : row.original.encrypted ? (
           <span className="whitespace-nowrap">Yes</span>
         ) : (
-          <span className="whitespace-nowrap text-amber-700 dark:text-amber-300">No</span>
+          <span className="whitespace-nowrap text-status-warning">No</span>
         ),
       meta: { priority: 2 },
     },
@@ -385,7 +385,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                       (upgradeInfo.updaterVersion === upgradeInfo.current ? (
                         <span className="text-muted-foreground"> · up to date</span>
                       ) : (
-                        <span className="text-amber-700 dark:text-amber-300">
+                        <span className="text-status-warning">
                           {' '}
                           · behind the app
                         </span>
@@ -396,7 +396,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                     {updaterAvailable ? (
                       <span className="text-green-700 dark:text-green-400">Running</span>
                     ) : (
-                      <span className="text-amber-700 dark:text-amber-300">Not running</span>
+                      <span className="text-status-warning">Not running</span>
                     )}
                   </dd>
                 </dl>
@@ -487,7 +487,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             downloads the new version, and restarts. This may take a few minutes, during which the
             site may be briefly unavailable. A failed upgrade is rolled back automatically.
             {selectedVersionInfo?.upgradeNote && (
-              <span className="mt-2 block font-medium whitespace-pre-line text-amber-700 dark:text-amber-300">
+              <span className="mt-2 block font-medium whitespace-pre-line text-status-warning">
                 {selectedVersionInfo.upgradeNote}
               </span>
             )}
