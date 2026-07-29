@@ -25,23 +25,23 @@ export async function check_file_status(oldHash: string | undefined, newHash: st
         throw new Error('Calculated hash is undefined. Cannot check file status without a calculated hash.');
     }
     
-    const file_hash_user_code: CodeAndUsers = await get_info_from_hash(oldHash, user_id);
-    const calc_hash_user_code: CodeAndUsers = await get_info_from_hash(newHash, user_id);
+    const file_hash_user: CodeAndUsers = await get_info_from_hash(oldHash, user_id);
+    const calc_hash_user: CodeAndUsers = await get_info_from_hash(newHash, user_id);
 
     return {
-        file_hash_user_code: file_hash_user_code.code,
-        calc_hash_user_code: calc_hash_user_code.code,
+        file_hash_user_code: file_hash_user.code,
+        calc_hash_user_code: calc_hash_user.code,
 
         has_file_hash_code: oldHash !== undefined,
         has_file_id_code: fileUserId !== undefined,
 
-        hash_match_code: oldHash !== undefined ? oldHash === newHash : undefined,
-        id_match_code: fileUserId !== undefined ? fileUserId === user_id : undefined,
+        hash_match_code: oldHash !== undefined ? oldHash === newHash : null,
+        id_match_code: fileUserId !== undefined ? fileUserId === user_id : null,
 
-        file_hash_user_ids: file_hash_user_code.ids.user_ids,
-        calc_hash_user_ids: calc_hash_user_code.ids.user_ids,
+        file_hash_user_ids: file_hash_user.ids.user_ids,
+        calc_hash_user_ids: calc_hash_user.ids.user_ids,
 
-        file_hash_submission_ids: file_hash_user_code.ids.submission_ids,
-        calc_hash_submission_ids: calc_hash_user_code.ids.submission_ids,
+        file_hash_submission_ids: file_hash_user.ids.submission_ids,
+        calc_hash_submission_ids: calc_hash_user.ids.submission_ids,
     }
 }

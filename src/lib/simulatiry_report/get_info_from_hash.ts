@@ -3,7 +3,7 @@ import type { CodeAndUsers } from "./types";
 
 export async function get_info_from_hash(hash: string | undefined, user_id: string): Promise<CodeAndUsers> {
     const codeAndUsers: CodeAndUsers = {
-        code: undefined,
+        code: null,
         ids: {
             user_ids: [],
             submission_ids: [],
