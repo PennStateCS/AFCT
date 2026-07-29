@@ -148,6 +148,12 @@ compose_project() {
     AFCT_RUNTIME_SHARED_DIR=$(dirname "$ENV_FILE")
     export AFCT_RUNTIME_ENV_FILE AFCT_RUNTIME_COMPOSE_DIR AFCT_RUNTIME_SHARED_DIR
 
+    # docker compose stats its working directory even with -f/--env-file absolute paths.
+    # Under the service account that blows up when afctctl was launched from a directory
+    # the account cannot read (e.g. root's home): "stat .: permission denied". Run from
+    # the runtime compose dir instead; this subshell keeps the cd from leaking.
+    cd "$AFCT_RUNTIME_COMPOSE_DIR" 2>/dev/null || true
+
     # Unquoted on purpose: expands to `--profile updater` or to nothing.
     _profile=$(updater_profile_args)
     # shellcheck disable=SC2086  # word-splitting $_profile is the intended behavior here

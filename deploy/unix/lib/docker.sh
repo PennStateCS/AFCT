@@ -11,11 +11,23 @@
 
 # Run a command as the dedicated service account. As root this is passwordless; runuser
 # is preferred because it needs no sudoers config and re-initializes the group list.
+# Both runuser and sudo RESET the environment, so the AFCT_RUNTIME_* interpolation
+# variables compose_project exports must be forwarded explicitly. Without them the
+# Compose file's env_file and updater mounts fall back to paths relative to the compose
+# working directory and `docker compose config` fails.
 run_as_service() {
   if command -v runuser >/dev/null 2>&1; then
-    runuser -u "$SERVICE_USER" -- "$@"
+    runuser -u "$SERVICE_USER" -- env \
+      AFCT_RUNTIME_ENV_FILE="${AFCT_RUNTIME_ENV_FILE:-}" \
+      AFCT_RUNTIME_COMPOSE_DIR="${AFCT_RUNTIME_COMPOSE_DIR:-}" \
+      AFCT_RUNTIME_SHARED_DIR="${AFCT_RUNTIME_SHARED_DIR:-}" \
+      "$@"
   else
-    sudo -u "$SERVICE_USER" -- "$@"
+    sudo -u "$SERVICE_USER" -- env \
+      AFCT_RUNTIME_ENV_FILE="${AFCT_RUNTIME_ENV_FILE:-}" \
+      AFCT_RUNTIME_COMPOSE_DIR="${AFCT_RUNTIME_COMPOSE_DIR:-}" \
+      AFCT_RUNTIME_SHARED_DIR="${AFCT_RUNTIME_SHARED_DIR:-}" \
+      "$@"
   fi
 }
 
