@@ -139,6 +139,10 @@ export default function AssignmentDashboardPage({
       ...assignment,
       groupSetId: assignment.groupSetId ?? null,
       description: assignment.description ?? null,
+      // Settings card edits dates/audience only; the rich-description fields are unused here
+      // but required by the Assignment type, so default them (the API doesn't send them yet).
+      descriptionFormat: 'PLAIN_TEXT' as const,
+      descriptionJson: null,
       createdAt: assignment.createdAt ?? new Date(),
       updatedAt: assignment.updatedAt ?? new Date(),
       dueDate: toDate(assignment.dueDate) ?? new Date(),
