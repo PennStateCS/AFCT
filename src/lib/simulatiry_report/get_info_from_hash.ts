@@ -18,7 +18,7 @@ export async function get_info_from_hash(hash: string | undefined, user_id: stri
     // Make API request to get the list of users and submission IDs that submitted the file with the same hash
     const response = await prisma.submission.findMany({
         where: {
-            fileHash: hash,
+            contentHash: hash,
         },
         select: {
             studentId: true,
@@ -26,8 +26,8 @@ export async function get_info_from_hash(hash: string | undefined, user_id: stri
         }
     });
 
-    codeAndUsers.ids.user_ids = response.map(r => r.studentId);
-    codeAndUsers.ids.submission_ids = response.map(r => r.id);
+    codeAndUsers.ids.user_ids = Array.from(new Set(response.map(r => r.studentId)));
+    codeAndUsers.ids.submission_ids = Array.from(new Set(response.map(r => r.id)));
 
     if (codeAndUsers.ids.user_ids.length === 0) {
         codeAndUsers.code = 0; // No user submitted file
