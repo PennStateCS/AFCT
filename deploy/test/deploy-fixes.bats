@@ -272,6 +272,17 @@ EOF
   [ "$output" = "BLOCK" ]
 }
 
+@test "validate_compose surfaces the actual compose error in its message" {
+  run sh -c '
+    die() { echo "DIE:$*"; exit 1; }
+    . "'"$UNIX_DIR"'/lib/compose.sh"
+    compose_project() { echo "env file /x/.env.production not found" >&2; return 1; }
+    validate_compose
+  '
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"env file /x/.env.production not found"* ]]
+}
+
 @test "valid_compose_project_name accepts valid names and rejects invalid ones" {
   run sh -c '
     . "'"$UNIX_DIR"'/lib/migration.sh"

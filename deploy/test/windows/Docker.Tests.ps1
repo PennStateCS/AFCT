@@ -60,3 +60,17 @@ Describe 'Docker seams under ErrorActionPreference=Stop' {
         $ErrorActionPreference | Should -Be 'Stop'
     }
 }
+
+Describe 'Set-AfctRuntimeComposeEnv exports the runtime interpolation vars' {
+    # The runtime Compose file interpolates these; without them the per-service env_file
+    # falls back to .env.production next to the compose file (shared\runtime\) instead of the
+    # real one in shared\, and `docker compose config` fails with "env file ... not found".
+    It 'points the runtime vars at the shared locations, with forward slashes' {
+        $script:EnvFile        = 'C:\Users\me\AppData\Local\AFCT\shared\.env.production'
+        $script:RuntimeCompose = 'C:\Users\me\AppData\Local\AFCT\shared\runtime\docker-compose.yml'
+        Set-AfctRuntimeComposeEnv
+        $env:AFCT_RUNTIME_ENV_FILE    | Should -Be 'C:/Users/me/AppData/Local/AFCT/shared/.env.production'
+        $env:AFCT_RUNTIME_SHARED_DIR  | Should -Be 'C:/Users/me/AppData/Local/AFCT/shared'
+        $env:AFCT_RUNTIME_COMPOSE_DIR | Should -Be 'C:/Users/me/AppData/Local/AFCT/shared/runtime'
+    }
+}

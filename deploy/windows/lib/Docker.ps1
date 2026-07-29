@@ -41,10 +41,23 @@ function Get-AfctComposeBaseArgs {
     return $base
 }
 
+# The runtime Compose file interpolates these three so each service's env_file and the
+# updater's bind mounts resolve to the shared install locations, not to paths relative to the
+# runtime compose directory. The Unix controller sets the same three in compose_project();
+# Windows must too, or the app/nginx/backup env_file falls back to `.env.production` next to
+# the compose file (shared\runtime\) instead of the real one in shared\, and compose config
+# fails with "env file ... not found". Forward slashes so Docker Desktop reads the paths cleanly.
+function Set-AfctRuntimeComposeEnv {
+    $env:AFCT_RUNTIME_ENV_FILE = ($EnvFile -replace '\\', '/')
+    $env:AFCT_RUNTIME_COMPOSE_DIR = ((Split-Path -Parent $RuntimeCompose) -replace '\\', '/')
+    $env:AFCT_RUNTIME_SHARED_DIR = ((Split-Path -Parent $EnvFile) -replace '\\', '/')
+}
+
 # Invoke `docker compose` and return its combined output as strings. $LASTEXITCODE holds the
 # child exit code afterward. Never throws on a nonzero compose exit.
 function Invoke-AfctCompose {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    Set-AfctRuntimeComposeEnv
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try { & docker @(Get-AfctComposeBaseArgs) @Args 2>&1 | ForEach-Object { "$_" } }
@@ -55,6 +68,7 @@ function Invoke-AfctCompose {
 # the child exit code.
 function Invoke-AfctComposeConsole {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    Set-AfctRuntimeComposeEnv
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try { & docker @(Get-AfctComposeBaseArgs) @Args | Out-Host } finally { $ErrorActionPreference = $eap }

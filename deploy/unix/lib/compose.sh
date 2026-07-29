@@ -164,15 +164,18 @@ compose_volume_names() {
 }
 
 validate_compose() {
-  if [ "${LOG_ENABLED:-false}" = "true" ]; then
-    if ! compose_project config >/dev/null 2>> "$LOG_FILE"; then
-      die "the Docker Compose configuration is invalid. Review ${LOG_FILE}."
+  # Capture stderr so a failure reports the actual reason (e.g. a missing env file) rather
+  # than a bare "invalid configuration" the operator cannot act on.
+  _compose_err=$(compose_project config 2>&1 >/dev/null) || {
+    if [ "${LOG_ENABLED:-false}" = "true" ]; then
+      printf '%s\n' "$_compose_err" >> "$LOG_FILE"
     fi
-  else
-    if ! compose_project config >/dev/null; then
-      die "the Docker Compose configuration is invalid."
+    _compose_detail=$(printf '%s' "$_compose_err" | tail -n3 | tr '\n' ' ')
+    if [ -n "$_compose_detail" ]; then
+      die "the Docker Compose configuration is invalid: ${_compose_detail}"
     fi
-  fi
+    die "the Docker Compose configuration is invalid."
+  }
 }
 
 capture_running_images() {
