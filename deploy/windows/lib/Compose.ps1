@@ -33,8 +33,14 @@ function Sync-AfctRuntimeCompose {
 }
 
 function Test-AfctComposeConfig {
-    Invoke-AfctCompose config | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'afct-fatal: the Docker Compose configuration is invalid.' }
+    # Capture the output so a failure reports the actual reason (e.g. a missing env file)
+    # instead of a bare "invalid configuration" the operator cannot act on.
+    $out = Invoke-AfctCompose config
+    if ($LASTEXITCODE -ne 0) {
+        $detail = (@($out) | Where-Object { $_ } | Select-Object -Last 3) -join ' '
+        if ($detail) { throw "afct-fatal: the Docker Compose configuration is invalid: $detail" }
+        throw 'afct-fatal: the Docker Compose configuration is invalid.'
+    }
 }
 
 function Get-AfctImages {
