@@ -16,9 +16,11 @@ import {
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
 } from './system-settings';
 
-// The activity logger expects a Request (for IP/user-agent). The worker has no
-// real request, so hand it a stand-in; IP and UA simply come back empty.
-const WORKER_REQUEST = new Request('http://submission-worker.local');
+// The activity logger accepts either a Request or an explicit {ipAddress, userAgent}
+// context. The worker has no HTTP request behind it, so it logs a "system" origin
+// rather than letting the IP fall through to the literal "unknown" (which reads like a
+// failed capture). These are server-originated autograder events, not client actions.
+const WORKER_CONTEXT = { ipAddress: 'system', userAgent: 'submission-worker' } as const;
 
 // The submission shape the evaluator works with: the scalar row plus the
 // assignment problem's metadata. Declared once so the worker functions share
@@ -92,7 +94,7 @@ async function logSubmissionActivity(
   // to go back out over HTTP. Only scalar ids are pulled off the submission;
   // never the full student record.
   try {
-    await createEnhancedActivityLog(prisma, WORKER_REQUEST, {
+    await createEnhancedActivityLog(prisma, WORKER_CONTEXT, {
       userId: submission.studentId ?? null,
       action,
       severity,
@@ -119,7 +121,7 @@ async function logQueueEvent(
   metadata: Record<string, string | number | boolean | null>,
 ) {
   try {
-    await createEnhancedActivityLog(prisma, WORKER_REQUEST, {
+    await createEnhancedActivityLog(prisma, WORKER_CONTEXT, {
       userId: null,
       action,
       severity,
