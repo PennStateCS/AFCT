@@ -14,6 +14,7 @@ import { safeSignOut } from '@/lib/safe-signout';
 
 import { ChangePasswordDialog } from '@/components/dialogs/ChangePasswordDialog';
 import { EditProfileDialog } from '@/components/dialogs/EditProfileDialog';
+import { useChangePassword } from '@/hooks/use-change-password';
 
 // UI Components
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -48,6 +49,7 @@ const Navbar: React.FC = () => {
   const { courseLabel, assignmentLabel } = useNavbarBreadcrumbs();
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const changePassword = useChangePassword();
 
   const crumbs = useMemo(() => {
     const toTitleCase = (value: string) =>
@@ -247,7 +249,7 @@ const Navbar: React.FC = () => {
         </DropdownMenu>
       </div>
     </header>
-    <ChangePasswordDialog open={changePasswordOpen} setOpen={setChangePasswordOpen} onChangePassword={() => Promise.resolve()} />
+    <ChangePasswordDialog open={changePasswordOpen} setOpen={setChangePasswordOpen} onChangePassword={changePassword} />
     <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
   </div>
   );

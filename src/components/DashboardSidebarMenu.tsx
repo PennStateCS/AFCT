@@ -6,9 +6,9 @@ import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { useChangePassword } from '@/hooks/use-change-password';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { safeSignOut } from '@/lib/safe-signout';
@@ -282,7 +282,8 @@ function SidebarNavItem({
 
 export default function DashboardSidebarMenu() {
   const pathname = usePathname();
-  const { data: session, update } = useSession();
+  const { data: session } = useSession();
+  const changePassword = useChangePassword();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
@@ -632,23 +633,7 @@ export default function DashboardSidebarMenu() {
       <ChangePasswordDialog
         open={changePasswordOpen}
         setOpen={setChangePasswordOpen}
-        onChangePassword={async (oldPassword, newPassword) => {
-          const res = await fetch(apiPaths.myPassword(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ oldPassword, newPassword }),
-          });
-          if (!res.ok) {
-            const { error } = await res.json();
-            toast.error(error || 'Failed to change password');
-            throw new Error(error || 'Failed to change password');
-          }
-          // Re-sync the JWT to the new password instant. Otherwise the token still
-          // snapshots the old one and the session callback revokes it on the next
-          // request, signing the user out moments after they change their password.
-          await update({ refreshCredentials: true });
-          toast.success('Password changed!');
-        }}
+        onChangePassword={changePassword}
       />
 
       <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />

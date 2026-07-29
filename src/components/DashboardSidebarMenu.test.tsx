@@ -152,6 +152,29 @@ describe('DashboardSidebarMenu', () => {
     vi.unstubAllEnvs();
   });
 
+  it('routes the password dialog through the shared hook (calls the API and refreshes the session)', async () => {
+    const updateSpy = vi.fn();
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'user-1', email: 'user@example.com', role: 'ADMIN', isAdmin: true } },
+      update: updateSpy,
+    });
+    setNavCourses([]); // any password fetch resolves ok; the hook ignores the body on success
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    const props = ChangePasswordDialogMock.mock.calls.at(-1)?.[0] as {
+      onChangePassword: (oldP: string, newP: string) => Promise<void>;
+    };
+    expect(props.onChangePassword).toBeTypeOf('function');
+    await props.onChangePassword('OldPass1!', 'NewPass1!');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/me/password',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(updateSpy).toHaveBeenCalledWith({ refreshCredentials: true });
+  });
+
   it('renders admin navigation links for privileged users', () => {
     renderWithClient(<DashboardSidebarMenu />);
 
