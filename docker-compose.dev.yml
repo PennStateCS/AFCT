@@ -22,6 +22,11 @@ services:
 
     environment:
       NODE_ENV: development
+      # Give the dev server a larger V8 heap so Next 16's memory watchdog recycles the
+      # worker far less often. Each recycle ("approaching the used memory threshold,
+      # restarting") stalls in-flight requests for tens of seconds over the bind mount.
+      # Docker has ~16 GB here, so 6 GB leaves plenty of headroom.
+      NODE_OPTIONS: '--max-old-space-size=6144'
       # Grading runs in the dedicated `worker` service below; the app never starts one.
       # (Under `next dev --webpack` instrumentation is skipped anyway, but set it
       # explicitly so a Turbopack/native run wouldn't spawn an in-app worker either.)
