@@ -3,7 +3,8 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus, BookOpen, Download } from 'lucide-react';
+import { Plus, Download } from 'lucide-react';
+import { AssignmentIcon } from '@/lib/icons';
 import type { AssignmentWithProblemCount } from '@/types/course';
 
 interface AssignmentsCardProps {
@@ -28,7 +29,7 @@ export function AssignmentsCard({
     <div className="space-y-4">
       <div className="flex flex-row items-center justify-between">
         <h2 className="flex items-center gap-2 text-2xl font-semibold">
-          <BookOpen className="h-6 w-6" />
+          <AssignmentIcon className="h-6 w-6" />
           Assignments
         </h2>
         <div className="flex items-center gap-2">
@@ -62,7 +63,7 @@ export function AssignmentsCard({
               ? 'This course was archived without any assignments.'
               : 'Create an assignment to give students something to submit.'
           }
-          emptyIcon={BookOpen}
+          emptyIcon={AssignmentIcon}
           loadingMessage="Loading assignments, please wait..."
         />
       </div>

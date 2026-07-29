@@ -78,7 +78,7 @@ describe('CourseEditUserDialog', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Faculty' }));
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -109,7 +109,7 @@ describe('CourseEditUserDialog', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Faculty' }));
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(showToastError).toHaveBeenCalledWith('nope'));
     expect(setOpen).not.toHaveBeenCalledWith(false);

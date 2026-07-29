@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Trash2, BookOpen, ChevronDown, Copy, Archive, ArchiveRestore, Settings } from 'lucide-react';
+import { Trash2, ChevronDown, Copy, Archive, ArchiveRestore, Settings } from 'lucide-react';
+import { CourseIcon } from '@/lib/icons';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
@@ -303,13 +304,13 @@ function CourseActionsCell({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4" />
+            <CourseIcon className="h-4 w-4" />
             {course.name}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild className="hover:bg-secondary flex items-center gap-2">
             <Link href={`/dashboard/courses/${course.id}`}>
-              <BookOpen className="mr-2 h-4 w-4" />
+              <CourseIcon className="mr-2 h-4 w-4" />
               View Course
             </Link>
           </DropdownMenuItem>

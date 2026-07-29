@@ -4,7 +4,8 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
 import { useState, type JSX } from 'react';
-import { ChevronDown, Copy, Pencil, Trash2, FileText, Eye, Download } from 'lucide-react';
+import { ChevronDown, Copy, Pencil, Trash2, Eye, Download } from 'lucide-react';
+import { ProblemIcon } from '@/lib/icons';
 import type { DuplicateSourceProblem } from '@/components/dialogs/DuplicateProblemDialog';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -179,7 +180,7 @@ export const useProblemColumns = ({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
+                <ProblemIcon className="h-4 w-4" />
                 {row.original.title}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />

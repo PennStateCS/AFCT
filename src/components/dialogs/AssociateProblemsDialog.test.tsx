@@ -73,7 +73,7 @@ describe('AssociateProblemsDialog', () => {
     await user.click(screen.getByRole('switch', { name: 'Unlimited Submissions' }));
     await user.clear(screen.getByLabelText(/max submissions/i));
     await user.type(screen.getByLabelText(/max submissions/i), '4');
-    await user.click(screen.getByRole('button', { name: 'Add Problem' }));
+    await user.click(screen.getByRole('button', { name: 'Add Existing Problem' }));
 
     expect(onAddProblems).toHaveBeenCalledWith(['p1'], [
       {
@@ -99,6 +99,6 @@ describe('AssociateProblemsDialog', () => {
       />,
     );
 
-    expect(await screen.findByRole('button', { name: 'Add Problem' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Add Existing Problem' })).toBeDisabled();
   });
 });

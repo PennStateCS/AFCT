@@ -349,7 +349,7 @@ export function CourseSettingsForm({
                 : 'Save changes'
           }
         >
-          {isSubmitting ? 'Saving...' : 'Save Changes'}
+          {isSubmitting ? 'Saving…' : 'Save Changes'}
         </Button>
       </div>
     </form>

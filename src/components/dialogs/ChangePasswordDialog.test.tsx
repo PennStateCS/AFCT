@@ -43,7 +43,7 @@ describe('ChangePasswordDialog', () => {
     await user.type(screen.getByLabelText('New Password'), 'NewPass1!');
     await user.type(screen.getByLabelText('Confirm New Password'), 'NewPass1!');
 
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Change Password' }));
 
     await waitFor(() => expect(onChangePassword).toHaveBeenCalledWith('OldPass1!', 'NewPass1!'));
     expect(setOpen).toHaveBeenCalledWith(false);
@@ -61,7 +61,7 @@ describe('ChangePasswordDialog', () => {
     await user.type(screen.getByLabelText('New Password'), 'NewPass1!');
     await user.type(screen.getByLabelText('Confirm New Password'), 'NewPass1!');
 
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Change Password' }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Nope'));
     expect(setOpen).not.toHaveBeenCalledWith(false);

@@ -1,7 +1,8 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { Download, FileText, MessageSquare, RotateCcw } from 'lucide-react';
+import { Download, MessageSquare, RotateCcw } from 'lucide-react';
+import { SubmissionIcon } from '@/lib/icons';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
@@ -352,7 +353,7 @@ export default function ProblemWorkspace({
       <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <WorkspacePanel
             title="Submissions"
-            icon={<FileText className="h-4 w-4" />}
+            icon={<SubmissionIcon className="h-4 w-4" />}
             className="h-full"
             contentClassName="p-2"
           >
@@ -377,7 +378,7 @@ export default function ProblemWorkspace({
                 defaultSorting={[{ id: 'submitted', desc: true }]}
                 emptyTitle="No submissions match the filters"
                 emptyDescription="Adjust the filters to see more."
-                emptyIcon={FileText}
+                emptyIcon={SubmissionIcon}
               />
             ) : (
               <div className="text-muted-foreground space-y-2 rounded-md border border-dashed p-4 text-center text-sm">

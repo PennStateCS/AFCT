@@ -110,7 +110,7 @@ const ClearCell = ({
         disabled={disabled}
         aria-label={`Clear the restriction on ${entry.ip}`}
       >
-        Clear
+        Clear Rate Limit
       </Button>
       <ConfirmDialog
         open={confirming}

@@ -130,7 +130,7 @@ describe('AssignmentProblemSettingsDialog', () => {
     fireEvent.change(screen.getByLabelText('Max Points'), { target: { value: '15' } });
     fireEvent.change(screen.getByLabelText('Accepted Submissions'), { target: { value: '5' } });
 
-    const save = screen.getByRole('button', { name: 'Save' });
+    const save = screen.getByRole('button', { name: 'Save Changes' });
     await waitFor(() => expect(save).toBeEnabled());
     await user.click(save);
 
@@ -159,7 +159,7 @@ describe('AssignmentProblemSettingsDialog', () => {
     renderDialog();
 
     await user.click(screen.getByRole('radio', { name: 'Unlimited' }));
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);

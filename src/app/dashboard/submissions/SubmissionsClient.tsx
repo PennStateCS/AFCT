@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Eye, File, FileCode2, RotateCcw } from 'lucide-react';
+import { SubmissionIcon } from '@/lib/icons';
 import { PulseLoader } from 'react-spinners';
 import type { Course } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
@@ -418,7 +419,8 @@ export default function SubmissionsClient() {
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <CardTitle role="heading" aria-level={1} className="text-2xl">
+            <CardTitle role="heading" aria-level={1} className="flex items-center gap-2 text-2xl">
+              <SubmissionIcon className="h-6 w-6" aria-hidden="true" />
               System Submission Logs
             </CardTitle>
           </div>

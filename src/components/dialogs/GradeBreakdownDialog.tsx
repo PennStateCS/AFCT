@@ -276,7 +276,7 @@ export function GradeBreakdownDialog({
           </Button>
           <Button onClick={handleSave} disabled={!isDirty || saving || rows.length === 0}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save
+            {saving ? 'Saving…' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

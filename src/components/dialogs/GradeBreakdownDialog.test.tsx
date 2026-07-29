@@ -220,7 +220,7 @@ describe('GradeBreakdownDialog', () => {
     const p1Input = screen.getByTestId('gradecell-p1').querySelector('input') as HTMLInputElement;
     fireEvent.change(p1Input, { target: { value: '9' } });
 
-    const saveButton = screen.getByRole('button', { name: 'Save' });
+    const saveButton = screen.getByRole('button', { name: 'Save Changes' });
     await waitFor(() => expect(saveButton).not.toBeDisabled());
     fireEvent.click(saveButton);
 
@@ -277,7 +277,7 @@ describe('GradeBreakdownDialog', () => {
     const p1Input = screen.getByTestId('gradecell-p1').querySelector('input') as HTMLInputElement;
     fireEvent.change(p1Input, { target: { value: '999' } });
 
-    const saveButton = screen.getByRole('button', { name: 'Save' });
+    const saveButton = screen.getByRole('button', { name: 'Save Changes' });
     await waitFor(() => expect(saveButton).not.toBeDisabled());
     fireEvent.click(saveButton);
 

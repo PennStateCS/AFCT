@@ -1,4 +1,4 @@
-import { Settings } from 'lucide-react';
+import { SettingsIcon } from '@/lib/icons';
 
 import { Tabs } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -195,7 +195,7 @@ export function AdminCourseView({
           <CourseTabPanel value="settings" active={tab === 'settings'}>
             <div className="space-y-4">
               <h2 className="flex items-center gap-2 text-2xl font-semibold">
-                <Settings className="h-5 w-5" />
+                <SettingsIcon className="h-5 w-5" />
                 Course Settings
               </h2>
               <p className="text-muted-foreground text-sm">

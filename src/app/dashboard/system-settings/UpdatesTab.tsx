@@ -181,7 +181,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               setDeleteTarget({ version: row.original.version, backup: row.original.backup })
             }
           >
-            Delete
+            Delete Backup
           </Button>
         </div>
       ),

@@ -457,7 +457,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={handleDelete}
         variant="destructive"
-        title="Delete user?"
+        title="Delete inactive user?"
         description={`This permanently deletes ${fullName}'s account and cannot be undone. Activity log entries are kept without the link to this user.`}
         confirmText="Delete user"
       />

@@ -4,7 +4,8 @@ import type { Problem } from '@prisma/client';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus, FileText, Download } from 'lucide-react';
+import { Plus, Download } from 'lucide-react';
+import { ProblemIcon } from '@/lib/icons';
 
 interface ProblemsCardProps {
   courseId: string;
@@ -28,7 +29,7 @@ export function ProblemsCard({
     <div className="space-y-4">
       <div className="flex flex-row items-center justify-between">
         <h2 className="flex items-center gap-2 text-2xl font-semibold">
-          <FileText className="h-5 w-5" />
+          <ProblemIcon className="h-5 w-5" />
           Problems
         </h2>
         <div className="flex items-center gap-2">
@@ -57,7 +58,7 @@ export function ProblemsCard({
               ? 'This course was archived without any problems.'
               : 'Create a problem to add to an assignment.'
           }
-          emptyIcon={FileText}
+          emptyIcon={ProblemIcon}
           loadingMessage="Loading problems, please wait..."
         />
       </div>

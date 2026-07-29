@@ -8,7 +8,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
-import { Table, Download, RefreshCw, GraduationCap } from 'lucide-react';
+import { Download, RefreshCw, GraduationCap } from 'lucide-react';
+import { GradesIcon } from '@/lib/icons';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { GradeBreakdownDialog } from '@/components/dialogs/GradeBreakdownDialog';
 import { formatTimeInTimeZone } from '@/lib/date-format';
@@ -404,7 +405,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         <div className="flex flex-wrap items-center justify-between gap-y-1">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <h2 className="flex items-center gap-2 text-2xl font-semibold">
-              <Table className="h-5 w-5" />
+              <GradesIcon className="h-5 w-5" />
               Grades
             </h2>
             <div className="text-muted-foreground flex items-center gap-1 text-sm">

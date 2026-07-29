@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StudentGradesCard } from '@/components/StudentGradesCard';
 import { StudentAssignmentCard } from '@/components/StudentAssignmentCard';
 import type { FullCourse, TabType } from '@/types/course';
-import { BookOpen, Table } from 'lucide-react';
+import { AssignmentIcon, GradesIcon } from '@/lib/icons';
 
 interface StudentCourseViewProps {
   course: FullCourse;
@@ -27,7 +27,7 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
           value="assignments"
         >
           <div className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4" />
+            <AssignmentIcon className="h-4 w-4" />
             Assignments
           </div>
         </TabsTrigger>
@@ -39,7 +39,7 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
           value="grades"
         >
           <div className="flex items-center gap-2">
-            <Table className="h-4 w-4" />
+            <GradesIcon className="h-4 w-4" />
             Grades
           </div>
         </TabsTrigger>

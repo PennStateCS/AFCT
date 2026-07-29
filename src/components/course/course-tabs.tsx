@@ -3,14 +3,14 @@
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Activity,
-  BookOpen,
-  FileText,
-  GraduationCap,
-  Settings,
-  Table,
-  Users,
-} from 'lucide-react';
+  ActivityIcon,
+  AssignmentIcon,
+  GradesIcon,
+  GroupsIcon,
+  ProblemIcon,
+  RosterIcon,
+  SettingsIcon,
+} from '@/lib/icons';
 
 import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { TabType } from '@/types/course';
@@ -23,18 +23,19 @@ type CourseTabDef = {
 };
 
 /**
- * Single source of truth for the course tabs. The icons here intentionally match
- * the heading icon of each tab's panel (e.g. Assignments → BookOpen), so the tab
- * bar and the content below it always agree.
+ * Single source of truth for the course tabs. The icons here come from
+ * `@/lib/icons` and intentionally match the heading icon of each tab's panel
+ * (e.g. Assignments → AssignmentIcon), so the tab bar and the content below it
+ * always agree.
  */
 export const COURSE_TABS: readonly CourseTabDef[] = [
-  { value: 'assignments', label: 'Assignments', Icon: BookOpen },
-  { value: 'problems', label: 'Problems', Icon: FileText },
-  { value: 'roster', label: 'Roster', Icon: GraduationCap },
-  { value: 'grades', label: 'Grades', Icon: Table },
-  { value: 'groups', label: 'Groups', Icon: Users },
-  { value: 'activity', label: 'Activity', Icon: Activity },
-  { value: 'settings', label: 'Settings', Icon: Settings },
+  { value: 'assignments', label: 'Assignments', Icon: AssignmentIcon },
+  { value: 'problems', label: 'Problems', Icon: ProblemIcon },
+  { value: 'roster', label: 'Roster', Icon: RosterIcon },
+  { value: 'grades', label: 'Grades', Icon: GradesIcon },
+  { value: 'groups', label: 'Groups', Icon: GroupsIcon },
+  { value: 'activity', label: 'Activity', Icon: ActivityIcon },
+  { value: 'settings', label: 'Settings', Icon: SettingsIcon },
 ] as const;
 
 // Underline navigation: a light bar on the card's own (white) background with a

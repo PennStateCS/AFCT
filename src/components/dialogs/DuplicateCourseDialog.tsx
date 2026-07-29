@@ -689,7 +689,7 @@ export default function DuplicateCourseDialog({
               </Button>
             ) : (
               <Button key="wizard-submit" type="submit" disabled={isSubmitting || !confirmChecked}>
-                {isSubmitting ? 'Copying…' : 'Duplicate Course'}
+                {isSubmitting ? 'Duplicating…' : 'Duplicate Course'}
               </Button>
             )}
           </DialogFooter>

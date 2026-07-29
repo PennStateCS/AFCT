@@ -58,7 +58,7 @@ describe('DuplicateProblemDialog', () => {
     const { onDuplicated, setOpen } = renderDialog();
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Pipelining Lab v2' } });
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Edited' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create Duplicate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate Problem' }));
 
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith('/api/courses/c1/problems/p1/duplicate', {
@@ -74,7 +74,7 @@ describe('DuplicateProblemDialog', () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'ab' } });
     expect(screen.getByRole('alert')).toHaveTextContent(/at least 3 characters/i);
-    expect(screen.getByRole('button', { name: 'Create Duplicate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Duplicate Problem' })).toBeDisabled();
     expect(postMock).not.toHaveBeenCalled();
   });
 });

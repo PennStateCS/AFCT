@@ -110,7 +110,7 @@ export default function FilesTab({
                         onClick={() => onDelete(f.category, f.fileName)}
                         aria-label={`Delete abandoned file ${f.fileName}`}
                       >
-                        {deleting ? 'Deleting…' : 'Delete'}
+                        {deleting ? 'Deleting…' : 'Delete File'}
                       </Button>
                     </li>
                   );

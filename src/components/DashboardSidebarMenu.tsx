@@ -44,20 +44,23 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Calendar,
   Library,
-  Book,
-  Users,
   UserRound,
-  Layers,
   LogOut,
-  Logs,
   LockKeyhole,
   UserPen,
   ChevronUp,
   ChevronDown,
-  Activity,
-  Settings,
   Wrench,
 } from 'lucide-react';
+import {
+  AdminIcon,
+  CourseIcon,
+  SettingsIcon,
+  SubmissionIcon,
+  SystemLogsIcon,
+  SystemStatusIcon,
+  UserAccountsIcon,
+} from '@/lib/icons';
 import { getInitials } from '@/app/utils/initials';
 
 const menuButtonStyles =
@@ -85,12 +88,12 @@ const COURSE_SECTIONS = [
 
 // Static admin menu items (kept alphabetical by title)
 const adminMenu = [
-  { title: 'Courses', url: '/dashboard/courses', icon: Book },
-  { title: 'Submission Logs', url: '/dashboard/submissions', icon: Layers },
-  { title: 'System Logs', url: '/dashboard/system-logs', icon: Logs },
-  { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
-  { title: 'System Status', url: '/dashboard/system-status', icon: Activity },
-  { title: 'User Accounts', url: '/dashboard/users', icon: Users },
+  { title: 'Courses', url: '/dashboard/courses', icon: CourseIcon },
+  { title: 'Submission Logs', url: '/dashboard/submissions', icon: SubmissionIcon },
+  { title: 'System Logs', url: '/dashboard/system-logs', icon: SystemLogsIcon },
+  { title: 'System Settings', url: '/dashboard/system-settings', icon: SettingsIcon },
+  { title: 'System Status', url: '/dashboard/system-status', icon: SystemStatusIcon },
+  { title: 'User Accounts', url: '/dashboard/users', icon: UserAccountsIcon },
 ];
 
 // Persisted per-section expand/collapse state. One localStorage entry holds a
@@ -155,6 +158,7 @@ function useSidebarSections() {
 function CollapsibleSidebarGroup({
   sectionId,
   label,
+  icon: Icon,
   collapsed,
   open,
   onToggle,
@@ -162,6 +166,8 @@ function CollapsibleSidebarGroup({
 }: {
   sectionId: string;
   label: string;
+  /** Optional leading icon, e.g. to mark the Administration section. */
+  icon?: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
   collapsed: boolean;
   open: boolean;
   onToggle: () => void;
@@ -197,6 +203,7 @@ function CollapsibleSidebarGroup({
             aria-controls={contentId}
             className="hover:bg-brand-teal flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap"
           >
+            {Icon ? <Icon aria-hidden className="h-4 w-4 shrink-0" /> : null}
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
             <ChevronDown
               aria-hidden="true"
@@ -411,6 +418,7 @@ export default function DashboardSidebarMenu() {
           <CollapsibleSidebarGroup
             sectionId="admin"
             label="Administration"
+            icon={AdminIcon}
             collapsed={collapsed}
             open={isOpen('admin')}
             onToggle={() => toggle('admin')}
@@ -479,7 +487,7 @@ export default function DashboardSidebarMenu() {
                         {/* Plain text, not a button: aria-disabled on a generic div is
                             invalid and this is not an interactive control. */}
                         <div className="text-sidebar-foreground/60 flex w-full items-center gap-2 px-2 py-1.5 text-sm">
-                          <Book aria-hidden="true" className="h-4 w-4 shrink-0" />
+                          <CourseIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
                           <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                             No courses
                           </span>
@@ -506,7 +514,7 @@ export default function DashboardSidebarMenu() {
                       href={`/dashboard/courses/${course.id}`}
                       label={course.code}
                       ariaLabel={`${course.code}: ${course.name}`}
-                      icon={Book}
+                      icon={CourseIcon}
                       active={pathname.startsWith(`/dashboard/courses/${course.id}`)}
                       collapsed={collapsed}
                     />

@@ -113,7 +113,7 @@ export function DuplicateProblemDialog({
             onClick={handleCreate}
             disabled={submitting || courseIsArchived || !!titleError}
           >
-            {submitting ? 'Duplicating…' : 'Create Duplicate'}
+            {submitting ? 'Duplicating…' : 'Duplicate Problem'}
           </Button>
         </DialogFooter>
       </DialogContent>

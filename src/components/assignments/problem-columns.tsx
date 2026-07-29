@@ -9,7 +9,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, Pencil, Trash2, NotebookText, Eye, Download } from 'lucide-react';
+import { ChevronDown, Pencil, Trash2, Eye, Download } from 'lucide-react';
+import { ProblemIcon } from '@/lib/icons';
 import { apiPaths } from '@/lib/api-paths';
 
 export const problemTypeLabels: Record<string, string> = {
@@ -233,7 +234,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel className="flex items-center gap-2">
-              <NotebookText className="h-4 w-4" />
+              <ProblemIcon className="h-4 w-4" />
               {row.original.title}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

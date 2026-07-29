@@ -349,7 +349,7 @@ export function AssociateProblemsDialog({
               disabled={courseIsArchived || selectableProblems.length === 0}
               onClick={handleAdd}
             >
-              Add Problem
+              Add Existing Problem
             </Button>
           </DialogFooter>
         </form>

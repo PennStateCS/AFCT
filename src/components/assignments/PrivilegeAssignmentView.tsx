@@ -2,16 +2,8 @@
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import {
-  AlignLeft,
-  BarChart3,
-  FileText,
-  Fingerprint,
-  Package,
-  Plus,
-  Shapes,
-  Users,
-} from 'lucide-react';
+import { AlignLeft, BarChart3, Fingerprint, Plus, Shapes, Users } from 'lucide-react';
+import { ProblemIcon, SubmissionIcon } from '@/lib/icons';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -377,8 +369,8 @@ export default function AssignmentDashboardPage({
     { value: 'description', label: 'Details', Icon: AlignLeft },
     { value: 'type', label: 'Type', Icon: Shapes },
     { value: 'settings', label: 'Assign To', Icon: Users },
-    { value: 'problems', label: 'Problems', Icon: FileText },
-    { value: 'submissions', label: 'Submissions', Icon: Package },
+    { value: 'problems', label: 'Problems', Icon: ProblemIcon },
+    { value: 'submissions', label: 'Submissions', Icon: SubmissionIcon },
     { value: 'statistics', label: 'Statistics', Icon: BarChart3 },
     { value: 'similarity', label: 'Similarity', Icon: Fingerprint },
   ] as const;
@@ -484,7 +476,7 @@ export default function AssignmentDashboardPage({
               <div className="space-y-4">
                 <div className="flex w-full items-center justify-between">
                   <h2 className="flex items-center gap-2 text-2xl font-semibold">
-                    <FileText className="h-6 w-6" />
+                    <ProblemIcon className="h-6 w-6" />
                     Problems
                   </h2>
                   <div className="flex items-center gap-2">
@@ -529,7 +521,7 @@ export default function AssignmentDashboardPage({
                   defaultColumnVisibility={{ maxStates: false, isDeterministic: false }}
                   emptyTitle="No problems on this assignment"
                   emptyDescription="Add problems so students have something to solve."
-                  emptyIcon={FileText}
+                  emptyIcon={ProblemIcon}
                 />
               </div>
             </TabsContent>

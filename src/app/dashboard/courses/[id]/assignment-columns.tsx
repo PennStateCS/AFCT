@@ -7,16 +7,15 @@ import type { AssignmentWithProblemCount } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
-  NotebookText,
   Trash2,
   ChevronDown,
-  BookOpen,
   CalendarClock,
   Copy,
   Package,
   BarChart3,
   Fingerprint,
 } from 'lucide-react';
+import { AssignmentIcon } from '@/lib/icons';
 import type { DuplicateSourceAssignment } from '@/components/dialogs/DuplicateAssignmentDialog';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -462,13 +461,13 @@ export function useAssignmentColumns(
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel className="flex items-center gap-2">
-                  <NotebookText className="h-4 w-4" />
+                  <AssignmentIcon className="h-4 w-4" />
                   {row.original.title}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild className="flex items-center gap-2">
                   <Link href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}>
-                    <BookOpen className="mr-2 h-4 w-4" />
+                    <AssignmentIcon className="mr-2 h-4 w-4" />
                     View Assignment
                   </Link>
                 </DropdownMenuItem>

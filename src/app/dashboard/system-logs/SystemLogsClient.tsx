@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { CategoryBadge } from '@/components/ui/category-badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
-import { ScrollText } from 'lucide-react';
+import { SystemLogsIcon } from '@/lib/icons';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 import { DownloadLogsDialog } from '@/components/dialogs/DownloadLogsDialog';
 import { apiPaths } from '@/lib/api-paths';
@@ -243,7 +243,8 @@ export default function SystemLogsClient() {
   return (
     <Card className="p-4">
       <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle role="heading" aria-level={1} className="text-2xl">
+        <CardTitle role="heading" aria-level={1} className="flex items-center gap-2 text-2xl">
+          <SystemLogsIcon className="h-6 w-6" aria-hidden="true" />
           System Logs
         </CardTitle>
         <Button onClick={() => setDownloadOpen(true)}>Download Logs</Button>
@@ -269,7 +270,7 @@ export default function SystemLogsClient() {
           showExportButton={false}
           emptyTitle="No log entries"
           emptyDescription="No activity matches the current search and filters."
-          emptyIcon={ScrollText}
+          emptyIcon={SystemLogsIcon}
           loadingMessage="Loading log entries, please wait..."
           actionButtons={
             <DataTableFilterMenu

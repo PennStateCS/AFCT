@@ -66,8 +66,9 @@ export default function ArchivedCoursesClient({
           id="archived-courses-title"
           role="heading"
           aria-level={1}
-          className="text-2xl"
+          className="flex items-center gap-2 text-2xl"
         >
+          <Archive className="h-6 w-6" aria-hidden="true" />
           Archived Courses
         </CardTitle>
       </CardHeader>

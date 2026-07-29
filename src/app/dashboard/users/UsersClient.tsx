@@ -13,6 +13,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateUserDialog } from '@/components/dialogs/CreateUserDialog';
 import { ImportUsersDialog } from '@/components/dialogs/ImportUsersDialog';
 import { UserRoundPlus, Users } from 'lucide-react';
+import { UserAccountsIcon } from '@/lib/icons';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import type { UserListItem } from '@/lib/users-list';
@@ -149,7 +150,8 @@ export default function UsersClient() {
   return (
     <Card className="p-4">
       <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle role="heading" aria-level={1} className="text-2xl">
+        <CardTitle role="heading" aria-level={1} className="flex items-center gap-2 text-2xl">
+          <UserAccountsIcon className="h-6 w-6" aria-hidden="true" />
           User Accounts
         </CardTitle>
         <div className="flex flex-wrap items-center gap-2">

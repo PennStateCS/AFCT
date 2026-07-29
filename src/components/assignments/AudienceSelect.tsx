@@ -14,7 +14,7 @@ export type AudienceItem = { id: string; label: string };
  * A chips-style multiselect for an assignment's audience (the default-schedule
  * students or groups). When every item is selected it collapses to a single
  * "All …" pill; unselect any and it lists the selected members as removable chips.
- * An "Add" popover (search + checkboxes, with Select all / Clear) toggles membership.
+ * An "Edit" popover (search + checkboxes, with Select all / Clear) toggles membership.
  */
 export function AudienceSelect({
   label,

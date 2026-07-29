@@ -154,7 +154,7 @@ export function DuplicateGroupSetDialog({
               </Button>
             </DialogClose>
             <Button type="submit" disabled={busy}>
-              {busy ? 'Duplicating…' : 'Duplicate'}
+              {busy ? 'Duplicating…' : 'Duplicate Group Set'}
             </Button>
           </DialogFooter>
         </form>

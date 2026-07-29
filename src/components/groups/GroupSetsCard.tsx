@@ -7,7 +7,8 @@ import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Layers, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { GroupsIcon } from '@/lib/icons';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { CreateGroupSetDialog } from './CreateGroupSetDialog';
 import { GroupSetView } from './GroupSetView';
@@ -85,7 +86,7 @@ export function GroupSetsCard({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-2xl font-semibold">
-          <Layers className="h-5 w-5" />
+          <GroupsIcon className="h-5 w-5" />
           Groups
         </h2>
         <Button onClick={() => setCreateOpen(true)} disabled={courseIsArchived}>
@@ -97,7 +98,7 @@ export function GroupSetsCard({
         <LoadingSpinner label="Loading group sets" fullScreen={false} className="min-h-40" />
       ) : sets.length === 0 ? (
         <div className="text-muted-foreground rounded-md border border-dashed p-8 text-center">
-          <Layers className="mx-auto mb-2 h-8 w-8 text-muted-foreground" aria-hidden="true" />
+          <GroupsIcon className="mx-auto mb-2 h-8 w-8 text-muted-foreground" aria-hidden="true" />
           <p className="font-medium">No group sets yet</p>
           <p className="text-sm">
             A group set is one arrangement of students, such as Project 1 or Lab Partners.

@@ -151,7 +151,7 @@ export function AssignmentProblemSettingsDialog({
             </Button>
           </DialogClose>
           <Button type="button" onClick={handleSave} disabled={!canSave}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? 'Saving…' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

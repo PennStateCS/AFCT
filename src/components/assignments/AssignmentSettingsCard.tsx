@@ -340,7 +340,7 @@ export function AssignmentSettingsCard({
             Cancel
           </Button>
           <Button type="submit" disabled={!isDirty || !isValid || saving || courseIsArchived}>
-            {saving ? 'Saving…' : 'Save changes'}
+            {saving ? 'Saving…' : 'Save Changes'}
           </Button>
         </div>
       </form>

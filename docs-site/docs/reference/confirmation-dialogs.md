@@ -2,7 +2,8 @@
 
 AFCT uses one shared component for every "are you sure?" prompt:
 `ConfirmDialog` in `src/components/dialogs/ConfirmDialog.tsx`. This page covers when an
-action should ask for confirmation and how to wire the component up.
+action should ask for confirmation and how to wire the component up. For how to word the
+trigger and `confirmText` themselves, see [Button labels](./button-labels.md).
 
 ## When to require confirmation
 

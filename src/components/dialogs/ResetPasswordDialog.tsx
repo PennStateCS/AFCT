@@ -141,7 +141,7 @@ export function ResetPasswordDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Saving...' : 'Reset Password'}
+              {loading ? 'Resetting…' : 'Reset Password'}
             </Button>
           </DialogFooter>
         </form>

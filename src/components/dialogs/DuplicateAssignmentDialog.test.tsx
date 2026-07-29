@@ -73,7 +73,7 @@ describe('DuplicateAssignmentDialog', () => {
     // Step 3: review notes the unpublished behaviour.
     expect(screen.getByText(/created/i)).toHaveTextContent(/unpublished/i);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create Duplicate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate Assignment' }));
 
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith('/api/courses/c1/assignments/a1/duplicate', {
@@ -90,7 +90,7 @@ describe('DuplicateAssignmentDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByText(/no problems, so there is nothing to copy/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Create Duplicate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate Assignment' }));
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith(
         '/api/courses/c1/assignments/a1/duplicate',

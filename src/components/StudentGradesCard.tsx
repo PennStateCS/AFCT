@@ -7,7 +7,8 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, Loader2, Table } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { GradesIcon } from '@/lib/icons';
 import { formatDateInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
@@ -90,7 +91,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
     <Card>
       <CardHeader className="pb-0">
         <CardTitle className="flex items-center gap-2 text-2xl">
-          <Table className="h-5 w-5" />
+          <GradesIcon className="h-5 w-5" />
           Grades
         </CardTitle>
       </CardHeader>

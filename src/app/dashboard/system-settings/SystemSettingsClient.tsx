@@ -26,6 +26,7 @@ import {
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import { SlidersHorizontal, Cpu, DatabaseBackup, ShieldCheck, Lock, RefreshCw } from 'lucide-react';
+import { SettingsIcon } from '@/lib/icons';
 import {
   buildSettingsSnapshot,
   formReducer,
@@ -360,7 +361,8 @@ export default function SystemSettingsClient() {
 
       <Card className="p-4">
         <CardHeader className="pb-2">
-          <CardTitle role="heading" aria-level={1} className="text-2xl">
+          <CardTitle role="heading" aria-level={1} className="flex items-center gap-2 text-2xl">
+            <SettingsIcon className="h-6 w-6" aria-hidden="true" />
             System Settings
           </CardTitle>
           <p className="text-muted-foreground text-sm">
@@ -432,7 +434,7 @@ export default function SystemSettingsClient() {
                 aria-label="Save system settings"
                 disabled={disabled}
               >
-                {saving ? 'Saving…' : 'Save changes'}
+                {saving ? 'Saving…' : 'Save Changes'}
               </Button>
               {isDirty && (
                 <Button

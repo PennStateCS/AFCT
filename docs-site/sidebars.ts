@@ -96,9 +96,11 @@ const sidebars: SidebarsConfig = {
           label: 'Developer',
           items: [
             'reference/client-api',
+            'reference/button-labels',
             'reference/code-and-documentation-style',
             'reference/confirmation-dialogs',
             'reference/content-security-policy',
+            'reference/icons',
             'reference/contributing',
             'reference/creating-a-release',
             'reference/development-setup',

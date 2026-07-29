@@ -5,7 +5,8 @@ import { sortRoster, type EnrolledUser } from '@/lib/course-roster';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus, Users, GraduationCap } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
+import { RosterIcon } from '@/lib/icons';
 
 interface RosterCardProps {
   courseIsArchived: boolean;
@@ -35,7 +36,7 @@ export function RosterCard({
     <div className="space-y-4">
       <div className="flex flex-row items-center justify-between">
         <h2 className="flex items-center gap-2 text-2xl font-semibold">
-          <GraduationCap className="h-5 w-5" />
+          <RosterIcon className="h-5 w-5" />
           Roster
         </h2>
         <div className="flex items-center gap-2">
@@ -61,7 +62,7 @@ export function RosterCard({
             ? 'This course was archived with an empty roster.'
             : 'Use Enroll User or Bulk Enroll to add students and staff.'
         }
-        emptyIcon={GraduationCap}
+        emptyIcon={RosterIcon}
         loadingMessage="Loading roster, please wait..."
       />
     </div>

@@ -9,7 +9,8 @@ import {
   getActivityColumns,
   type ActivityLog,
 } from '@/app/dashboard/courses/[id]/activity-columns';
-import { Loader2, RefreshCw, Activity } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { ActivityIcon } from '@/lib/icons';
 import { toast } from 'sonner';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
@@ -94,7 +95,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
     <div className="space-y-4">
       <div className="flex flex-row items-center justify-between">
         <h2 className="flex items-center gap-2 text-2xl font-semibold">
-          <Activity className="h-5 w-5" />
+          <ActivityIcon className="h-5 w-5" />
           Activity
           {totalCount > 0 && (
             <Badge variant="secondary" className="ml-2">
@@ -122,7 +123,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
           loadingMessage="Loading activity, please wait..."
           emptyTitle="No activity yet"
           emptyDescription="Course actions like enrollments, submissions and grade changes will appear here."
-          emptyIcon={Activity}
+          emptyIcon={ActivityIcon}
         />
 
         {hasMore && (

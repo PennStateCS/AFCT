@@ -109,7 +109,7 @@ export function AssignmentBasicsForm({
 
       <div className="flex justify-end">
         <Button type="submit" disabled={busy || !dirty || courseIsArchived}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? 'Saving…' : 'Save Changes'}
         </Button>
       </div>
     </form>

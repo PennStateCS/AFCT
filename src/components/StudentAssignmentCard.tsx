@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, ChevronRight, BookOpen } from 'lucide-react';
+import { Clock, ChevronRight } from 'lucide-react';
+import { AssignmentIcon } from '@/lib/icons';
 import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { FullCourse } from '@/types/course';
@@ -23,7 +24,7 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
       <CardHeader>
         <CardTitle className="text-2xl">
           <div className="flex items-center gap-2">
-            <BookOpen className="h-6 w-6" />
+            <AssignmentIcon className="h-6 w-6" />
             Assignments
           </div>
         </CardTitle>

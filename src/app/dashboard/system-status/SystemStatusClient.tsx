@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar } from '@/components/course/course-tabs';
 import { Server, Database, Container, Network, Users, HardDrive, ShieldAlert } from 'lucide-react';
+import { SystemStatusIcon } from '@/lib/icons';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -116,7 +117,8 @@ export default function SystemStatusClient() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle role="heading" aria-level={1} className="text-2xl">
+            <CardTitle role="heading" aria-level={1} className="flex items-center gap-2 text-2xl">
+              <SystemStatusIcon className="h-6 w-6" aria-hidden="true" />
               System Status
             </CardTitle>
             <Badge variant={dbOk ? 'success' : 'danger'} title={summary?.db.message || ''}>

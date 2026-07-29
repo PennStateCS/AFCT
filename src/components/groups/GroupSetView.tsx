@@ -486,10 +486,10 @@ export function GroupSetView({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setRenameSetOpen(true)}>
-                <Pencil className="mr-2 h-4 w-4" /> Rename set
+                <Pencil className="mr-2 h-4 w-4" /> Rename Group Set
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setDuplicateOpen(true)}>
-                <Copy className="mr-2 h-4 w-4" /> Duplicate set
+                <Copy className="mr-2 h-4 w-4" /> Duplicate Group Set
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -497,7 +497,7 @@ export function GroupSetView({
                 disabled={disabled}
                 onClick={() => setDeleteSetOpen(true)}
               >
-                <Trash2 className="mr-2 h-4 w-4" /> Delete set
+                <Trash2 className="mr-2 h-4 w-4" /> Delete Group Set
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

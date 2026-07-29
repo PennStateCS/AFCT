@@ -216,7 +216,7 @@ export function EditRoleDialog({
     >
       <DialogContent className="bg-card max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Edit User</DialogTitle>
+          <DialogTitle>Edit Role</DialogTitle>
           <DialogDescription>Modify course-specific settings for this user.</DialogDescription>
         </DialogHeader>
 
@@ -316,7 +316,7 @@ export function EditRoleDialog({
             disabled={!isDirty || isSaving || loading}
             title={!isDirty ? 'No changes to save' : undefined}
           >
-            {isSaving ? 'Saving…' : 'Save'}
+            {isSaving ? 'Saving…' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

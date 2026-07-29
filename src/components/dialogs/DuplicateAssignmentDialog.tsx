@@ -249,7 +249,7 @@ export function DuplicateAssignmentDialog({
               onClick={handleCreate}
               disabled={submitting || courseIsArchived || !!titleError}
             >
-              {submitting ? 'Duplicating…' : 'Create Duplicate'}
+              {submitting ? 'Duplicating…' : 'Duplicate Assignment'}
             </Button>
           )}
         </DialogFooter>

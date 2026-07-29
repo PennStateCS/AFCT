@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FileText } from 'lucide-react';
+import { SubmissionIcon } from '@/lib/icons';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -635,7 +635,7 @@ export default function AssignmentSubmissions({
         <div className="space-y-4">
           <div>
             <h2 className="flex items-center gap-2 text-2xl font-semibold">
-              <FileText className="h-6 w-6" /> Submissions
+              <SubmissionIcon className="h-6 w-6" /> Submissions
             </h2>
 
             <div className="mt-4 flex flex-col items-start gap-2 border-b pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

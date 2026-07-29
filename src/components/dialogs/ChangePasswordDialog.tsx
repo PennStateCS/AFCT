@@ -163,7 +163,7 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
               </Button>
             </DialogClose>
             <Button type="submit" disabled={isSubmitting || !isDirty}>
-              {isSubmitting ? 'Saving...' : 'Save'}
+              {isSubmitting ? 'Changing…' : 'Change Password'}
             </Button>
           </DialogFooter>
         </form>
