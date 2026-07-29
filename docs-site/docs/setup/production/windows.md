@@ -291,6 +291,8 @@ Existing database data and authentication secrets are preserved during reconfigu
 
 If the Docker volumes still hold your data but `.env.production` is missing, do not reinstall (that would generate new database credentials and orphan the database). Restore the newest protected configuration backup instead:
 
+This safeguard only looks at the Docker volumes this installation would actually reuse. Leftover volumes from an AFCT install under a different Docker Compose project name are ignored, so they will not block a fresh install.
+
 ```powershell
 afctctl recover
 afctctl doctor

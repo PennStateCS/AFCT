@@ -223,8 +223,15 @@ existing_data_without_config() {
   [ -n "$COMPOSE_KIND" ] || return 1
   _volumes=$(compose_volume_names)
   [ -n "$_volumes" ] || return 1
+  # Match only the volumes THIS project would reuse. Compose names them
+  # "<project>_<volume>", so an exact name match ignores AFCT volumes left behind by an
+  # install under a different project name (harmless leftovers that must not block a fresh,
+  # non-colliding install). Matching by suffix across every project was the old bug. Without
+  # a resolved project name, do not block.
+  [ -n "$COMPOSE_PROJECT_NAME" ] || return 1
+  _existing=$(docker_cmd volume ls --format '{{.Name}}' 2>/dev/null || true)
   for _volume in $_volumes; do
-    docker_cmd volume ls --format '{{.Name}}' 2>/dev/null | grep -Eq "(^|_)${_volume}$" && return 0
+    printf '%s\n' "$_existing" | grep -Fxq "${COMPOSE_PROJECT_NAME}_${_volume}" && return 0
   done
   return 1
 }
