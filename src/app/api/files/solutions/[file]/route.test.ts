@@ -216,12 +216,13 @@ describe('GET /api/files/solutions/[file]', () => {
     });
 
     expect(res.status).toBe(200);
-    // Every successful solution serve is now audited, including inline views.
+    // Every successful solution serve is audited; an inline view logs a distinct action
+    // from a download so viewing is not recorded as downloading.
     expect(activityLogMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
       expect.objectContaining({
-        action: 'DOWNLOAD_SOLUTION_FILE',
+        action: 'VIEW_SOLUTION_FILE',
         metadata: expect.objectContaining({ mode: 'inline' }),
       }),
     );

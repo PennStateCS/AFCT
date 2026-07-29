@@ -303,7 +303,7 @@ describe('PUT /api/system-settings', () => {
       maxUploadSizeMb: 25,
       allowSignup: true,
       sessionTimeoutMinutes: 60,
-      submissionEvalTimeoutMs: 600000,
+      submissionEvalTimeoutMs: 900000,
       submissionEvalMaxMemoryMb: 64,
       submissionResubmitCooldownMs: 10000,
       submissionMaxConcurrent: 20,
@@ -315,7 +315,7 @@ describe('PUT /api/system-settings', () => {
       body: JSON.stringify({
         timezone: 'UTC',
         maxUploadSizeMb: 25,
-        submissionEvalTimeoutMs: 99_999_999, // above the 10m ceiling
+        submissionEvalTimeoutMs: 99_999_999, // above the 15m ceiling
         submissionEvalMaxMemoryMb: 1, // below the 64MB floor
         submissionMaxConcurrent: 999, // above the cap
       }),
@@ -326,7 +326,7 @@ describe('PUT /api/system-settings', () => {
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
     expect(call.update).toMatchObject({
-      submissionEvalTimeoutMs: 600000,
+      submissionEvalTimeoutMs: 900000,
       submissionEvalMaxMemoryMb: 64,
       submissionMaxConcurrent: 20,
     });
