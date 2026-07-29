@@ -28,11 +28,16 @@ function Test-AfctDataWithoutConfig {
     if (-not (Test-Path -LiteralPath $RuntimeCompose)) { return $false }
     $volumes = Invoke-AfctCompose config --volumes
     if ($LASTEXITCODE -ne 0 -or -not $volumes) { return $false }
+    # Match only the volumes THIS project would reuse. Compose names them "<project>_<volume>",
+    # so an exact name match ignores AFCT volumes left behind by an install under a different
+    # project name (harmless leftovers that must not block a fresh, non-colliding install).
+    # Matching by suffix across every project was the old bug.
+    $project = Get-AfctComposeProject
+    if (-not $project) { return $false }
     $existing = & docker volume ls --format '{{.Name}}' 2>&1 | ForEach-Object { "$_" }
     foreach ($volume in $volumes) {
         if (-not $volume) { continue }
-        $match = $existing | Where-Object { $_ -match "(^|_)$([regex]::Escape($volume))$" } | Select-Object -First 1
-        if ($match) { return $true }
+        if (@($existing) -contains "${project}_$volume") { return $true }
     }
     return $false
 }

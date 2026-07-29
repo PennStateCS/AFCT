@@ -238,6 +238,40 @@ EOF
   [ "$output" = "afct" ]   # NOT "decoy" (which matched only postgres_data)
 }
 
+@test "existing_data_without_config ignores volumes left by a different project name" {
+  run sh -c '
+    resolve_docker_access_soft() { return 0; }
+    COMPOSE_KIND=v2; COMPOSE_PROJECT_NAME=afct; ENV_FILE="'"$TESTROOT"'/absent.env"
+    . "'"$UNIX_DIR"'/lib/compose.sh"
+    compose_volume_names() { printf "postgres_data\nuploads_data\n"; }
+    docker_cmd() {
+      case "$*" in
+        *"volume ls"*) printf "otherproj_postgres_data\notherproj_uploads_data\nunrelated\n" ;;
+        *) : ;;
+      esac
+    }
+    if existing_data_without_config; then echo BLOCK; else echo PROCEED; fi
+  '
+  [ "$output" = "PROCEED" ]
+}
+
+@test "existing_data_without_config blocks when this project owns an existing data volume" {
+  run sh -c '
+    resolve_docker_access_soft() { return 0; }
+    COMPOSE_KIND=v2; COMPOSE_PROJECT_NAME=afct; ENV_FILE="'"$TESTROOT"'/absent.env"
+    . "'"$UNIX_DIR"'/lib/compose.sh"
+    compose_volume_names() { printf "postgres_data\nuploads_data\n"; }
+    docker_cmd() {
+      case "$*" in
+        *"volume ls"*) printf "afct_postgres_data\nunrelated\n" ;;
+        *) : ;;
+      esac
+    }
+    if existing_data_without_config; then echo BLOCK; else echo PROCEED; fi
+  '
+  [ "$output" = "BLOCK" ]
+}
+
 @test "valid_compose_project_name accepts valid names and rejects invalid ones" {
   run sh -c '
     . "'"$UNIX_DIR"'/lib/migration.sh"

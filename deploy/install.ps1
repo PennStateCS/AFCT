@@ -44,7 +44,7 @@ $ErrorActionPreference = 'Stop'
 # --------------------------------------------------------------------------- #
 # Installer configuration (mirrors install.sh)
 # --------------------------------------------------------------------------- #
-$InstallerVersion = '2.1.1'
+$InstallerVersion = '2.1.2'
 
 $InvocationDir = (Get-Location).Path
 Set-Location -LiteralPath $PSScriptRoot
@@ -1022,11 +1022,18 @@ function Test-DataWithoutConfig {
   if (-not $script:ComposeKind) { return $false }
   $volumes = Invoke-Compose config --volumes
   if ($LASTEXITCODE -ne 0 -or -not $volumes) { return $false }
+  # This installer runs compose without an explicit -p, so Docker Compose derives the project
+  # name from the working directory (lowercased, characters outside [a-z0-9_-] stripped, leading
+  # separators removed). Match only the volumes THIS project would reuse ("<project>_<volume>"),
+  # ignoring AFCT volumes left by an install in another directory, which must not block a fresh,
+  # non-colliding install. Matching by suffix across every project was the old bug.
+  $project = (Split-Path -Leaf (Get-Location).Path).ToLowerInvariant() -replace '[^a-z0-9_-]', ''
+  $project = $project -replace '^[_-]+', ''
+  if (-not $project) { return $false }
   $existing = Invoke-NativeCapture { docker volume ls --format '{{.Name}}' }
   foreach ($volume in $volumes) {
     if (-not $volume) { continue }
-    $match = $existing | Where-Object { $_ -match "(^|_)$([regex]::Escape($volume))$" } | Select-Object -First 1
-    if ($match) { return $true }
+    if (@($existing) -contains "${project}_$volume") { return $true }
   }
   return $false
 }
