@@ -7,6 +7,10 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@/components/ui/select', () => import('@/test/mocks/ui').then((mod) => mod.selectMock));
 vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
+// The dialog mock renders its children whether or not the dialog is open, so the editor's other
+// dialog would put a second "Cancel" button on screen. Real Radix keeps a closed dialog out of
+// the DOM entirely; stubbing it here keeps this file about links.
+vi.mock('./EquationDialog', () => ({ EquationDialog: () => null }));
 
 import { RichDescriptionEditor, type RichDescriptionEditorHandle } from './RichDescriptionEditor';
 import { validateRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';

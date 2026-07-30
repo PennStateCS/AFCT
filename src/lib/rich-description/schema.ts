@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isAllowedLinkHref } from './link-url';
+import { isAllowedLatex } from './latex';
 
 /**
  * Rich-description storage format. This validates the versioned envelope we keep in
@@ -93,8 +94,13 @@ const nodeSchema: z.ZodType<TiptapNode> = z.lazy(() =>
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'text node requires text' });
       }
       if (node.type === INLINE_MATH_NODE || node.type === BLOCK_MATH_NODE) {
-        if (typeof node.attrs?.[MATH_LATEX_ATTR] !== 'string') {
+        const latex = node.attrs?.[MATH_LATEX_ATTR];
+        if (typeof latex !== 'string') {
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'math node requires a latex attribute' });
+        } else if (!isAllowedLatex(latex)) {
+          // Same bound the dialog enforces, applied to stored documents so an oversized or
+          // empty equation cannot arrive by any other path.
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'math node latex is empty or too long' });
         }
       }
       if (node.type === 'heading') {

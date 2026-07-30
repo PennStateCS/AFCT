@@ -9,9 +9,10 @@ import {
   validateRichDescription,
   type RichDescriptionEnvelope,
 } from '@/lib/rich-description';
-import { richDescriptionExtensions } from './extensions';
+import { createRichDescriptionExtensions, type MathClickTarget } from './extensions';
 import { RichDescriptionToolbar } from './RichDescriptionToolbar';
 import { LinkDialog } from './LinkDialog';
+import { EquationDialog } from './EquationDialog';
 
 /**
  * A minimal handle onto the live editor. Deliberately narrow: callers drive the document
@@ -112,8 +113,16 @@ export function RichDescriptionEditor({
   // user typed), so the first update is swallowed and only real edits are emitted.
   const readyRef = React.useRef(false);
 
+  // Clicking an equation opens the edit dialog. The extension list is built once (rebuilding it
+  // would recreate the editor), so the handler goes through a ref that the state setter below
+  // fills in.
+  const openMathRef = React.useRef<(target: MathClickTarget) => void>(() => {});
+  const [extensions] = React.useState(() =>
+    createRichDescriptionExtensions({ onMathClick: (target) => openMathRef.current(target) }),
+  );
+
   const editor = useEditor({
-    extensions: richDescriptionExtensions,
+    extensions,
     content: initialContent,
     editable,
     // Server-render nothing and mount on the client: Tiptap needs the DOM, and rendering the
@@ -168,6 +177,20 @@ export function RichDescriptionEditor({
   // editor-affecting UI, and the dialog is reachable even with the toolbar hidden.
   const [linkDialogOpen, setLinkDialogOpen] = React.useState(false);
 
+  // Equation dialog. `mathTarget` null means "insert a new equation"; a target means the author
+  // clicked an existing one and is editing it in place.
+  const [equationDialogOpen, setEquationDialogOpen] = React.useState(false);
+  const [mathTarget, setMathTarget] = React.useState<MathClickTarget | null>(null);
+  openMathRef.current = (target) => {
+    if (!editable) return;
+    setMathTarget(target);
+    setEquationDialogOpen(true);
+  };
+  const openEquationDialog = () => {
+    setMathTarget(null);
+    setEquationDialogOpen(true);
+  };
+
   // Ctrl/Cmd+K opens the link dialog, matching the tooltip and the usual convention.
   React.useEffect(() => {
     if (!editor || !editable) return;
@@ -213,9 +236,16 @@ export function RichDescriptionEditor({
           editor={editor}
           label={toolbarLabel}
           onOpenLinkDialog={() => setLinkDialogOpen(true)}
+          onOpenEquationDialog={openEquationDialog}
         />
       )}
       <LinkDialog editor={editor} open={linkDialogOpen} onOpenChange={setLinkDialogOpen} />
+      <EquationDialog
+        editor={editor}
+        open={equationDialogOpen}
+        onOpenChange={setEquationDialogOpen}
+        target={mathTarget}
+      />
       {/* The document area is its own positioning context so the placeholder overlays the text
           and never the toolbar above it. */}
       <div className="relative">

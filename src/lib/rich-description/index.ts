@@ -20,6 +20,7 @@ export {
   isAllowedLinkHref,
   type LinkUrlResult,
 } from './link-url';
+export { MAX_LATEX_LENGTH, validateLatex, isAllowedLatex, type LatexResult } from './latex';
 export { plainTextToRichDescription, richDescriptionToPlainText } from './plain-text';
 export { resolveDescription, type DescriptionRecord, type ResolvedDescription } from './resolve';
 export {

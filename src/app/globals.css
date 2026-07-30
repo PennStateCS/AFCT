@@ -696,3 +696,31 @@ input[type='week'] {
   outline: 2px solid var(--color-ring);
   outline-offset: 2px;
 }
+
+/* Equations. KaTeX brings its own typography; these rules only place the nodes. Display
+   equations are always centred: the upstream block-math node is an atom carrying just the
+   LaTeX source, so there is nowhere to store a per-equation alignment. */
+.afct-rich-text :where([data-type='block-math']) {
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  text-align: center;
+}
+.afct-rich-text :where([data-type='inline-math']) {
+  /* A long inline expression must not push the column sideways. */
+  max-width: 100%;
+}
+/* While editing, equations read as clickable, because clicking one opens the edit dialog. */
+.afct-rich-text :where(.tiptap-mathematics-render--editable) {
+  border-radius: 0.25rem;
+  cursor: pointer;
+  padding: 0 0.125rem;
+}
+.afct-rich-text :where(.tiptap-mathematics-render--editable):hover {
+  background: var(--color-muted);
+}
+/* KaTeX renders a malformed expression in its own error colour; make that legible on both
+   themes and keep the source visible so the author can see what they typed. */
+.afct-rich-text :where(.katex-error) {
+  color: var(--color-destructive);
+  font-family: var(--font-mono, monospace);
+}

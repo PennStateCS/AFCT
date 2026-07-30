@@ -16,6 +16,7 @@ import {
   Minus,
   Quote,
   Redo2,
+  Sigma,
   SquareCode,
   Underline as UnderlineIcon,
   Undo2,
@@ -71,6 +72,8 @@ export type RichDescriptionToolbarProps = {
   label?: string;
   /** Asked to open the link dialog (the editor owns the dialog state). */
   onOpenLinkDialog?: () => void;
+  /** Asked to open the equation dialog for a new equation. */
+  onOpenEquationDialog?: () => void;
   className?: string;
 };
 
@@ -85,6 +88,7 @@ export function RichDescriptionToolbar({
   editor,
   label = 'Formatting',
   onOpenLinkDialog,
+  onOpenEquationDialog,
   className,
 }: RichDescriptionToolbarProps) {
   // Subscribe to exactly the editor state the toolbar renders. useEditorState re-runs this
@@ -263,6 +267,22 @@ export function RichDescriptionToolbar({
         >
           <Link2 />
         </Toggle>
+      </ToolbarTooltip>
+
+      {/* Equations: one button that opens the dialog for a new equation. Editing an existing one
+          happens by clicking it in the document, which opens the same dialog. */}
+      <ToolbarTooltip label="Insert equation">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          aria-label="Insert equation"
+          disabled={disabledAll}
+          onClick={() => onOpenEquationDialog?.()}
+        >
+          <Sigma />
+        </Button>
       </ToolbarTooltip>
 
       <Separator orientation="vertical" className="mx-1 !h-6" />
