@@ -1,6 +1,8 @@
+'use client';
+
 import * as React from 'react';
 
-import { renderDescriptionMath } from './render-math';
+import { isMathRendererReady, loadMathRenderer, renderDescriptionMath } from './render-math';
 
 export type DescriptionMathProps = {
   /** Already checked against the shared latex policy by the caller. */
@@ -13,16 +15,38 @@ export type DescriptionMathProps = {
  *
  * Split out of the walker so KaTeX has a single import site in the read path. That is what makes
  * the bundle question tractable: everything KaTeX-shaped lives behind this module boundary, so
- * moving it server-side or behind a lazy import is a change to one file rather than to the
- * document walker.
+ * loading it on demand is a change to two files rather than to the document walker.
  *
- * Deliberately synchronous and free of browser APIs, so a description containing maths still
- * renders on the server (see RichDescription.server.test.tsx).
+ * The only client component in the read path, and only because of that on-demand load. KaTeX is
+ * ~700 KB, most descriptions have no equations, and a static import put it on every route that
+ * renders a description. So the first equation to reach the screen asks for the renderer, and
+ * until it arrives the LaTeX source stands in for it. Server-side that stand-in is what gets
+ * rendered, unless the caller awaited `loadMathRenderer()` first: see RichDescription.server.test.
+ *
+ * The source is also the failure fallback, so an equation that can never render and one that has
+ * not rendered YET look the same. That is deliberate: both say "here is the equation, unrendered"
+ * rather than showing a spinner or a gap where the maths should be.
  */
 export function DescriptionMath({ latex, displayMode }: DescriptionMathProps) {
-  const html = renderDescriptionMath(latex, displayMode);
+  // Seeded from the module, not from `false`: once the renderer is loaded, every later equation on
+  // the page renders on its first pass with no placeholder at all.
+  const [ready, setReady] = React.useState(isMathRendererReady);
 
-  // Even the error path failed. Showing the source beats showing nothing.
+  React.useEffect(() => {
+    if (ready) return;
+    let active = true;
+    void loadMathRenderer().then(() => {
+      // A failed load leaves the renderer unavailable; re-rendering into the same fallback would
+      // just be churn, so only wake up when there is something new to draw.
+      if (active && isMathRendererReady()) setReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [ready]);
+
+  const html = ready ? renderDescriptionMath(latex, displayMode) : null;
+
   if (html === null) return <code>{latex}</code>;
 
   const Tag = displayMode ? 'div' : 'span';

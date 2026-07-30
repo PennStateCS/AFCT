@@ -1,10 +1,41 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 
+import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
-import { RichDescriptionEditor } from './RichDescriptionEditor';
 import type { RichDescriptionEnvelope } from '@/lib/rich-description';
+
+/**
+ * The editor is fetched when a form that uses it is actually shown, not with the page.
+ *
+ * It is the heaviest thing in the app's client bundle by a wide margin: ProseMirror, Tiptap, and
+ * KaTeX (the Tiptap maths extension imports KaTeX outright, so there is no separating them).
+ * Statically imported, all of that landed on the course and assignment routes, which is where
+ * STUDENTS spend their time, to serve a form only staff ever open.
+ *
+ * `ssr: false` because there is nothing useful to render server-side: it is a contenteditable
+ * that only exists once ProseMirror runs. This is the one place in the app that loads a component
+ * this way; every description form goes through this field, so it is the only place that needs to.
+ */
+const RichDescriptionEditor = dynamic(
+  () => import('./RichDescriptionEditor').then((module) => module.RichDescriptionEditor),
+  {
+    ssr: false,
+    // An empty box in the editor's own colours, stretched by the wrapper below to the height the
+    // caller asked for, so the form does not collapse and then jump. Not announced: the field's
+    // label already says what is coming, and "loading" on a control that is about to become
+    // editable is noise. It is still a little shorter than the real editor, which adds a toolbar
+    // row on top of that height.
+    loading: () => (
+      <div
+        aria-hidden="true"
+        className="border-input dark:bg-input/30 size-full rounded-md border bg-transparent shadow-xs"
+      />
+    ),
+  },
+);
 
 export type RichDescriptionFieldProps = {
   /** Visible label. Also the editor's accessible name. */
@@ -57,20 +88,24 @@ export function RichDescriptionField({
       <Label id={labelId} className="mb-2 block">
         {label}
       </Label>
-      <RichDescriptionEditor
-        showToolbar
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        invalid={Boolean(error)}
-        placeholder={placeholder}
-        ariaLabelledBy={labelId}
-        ariaDescribedBy={error ? errorId : help ? helpId : undefined}
-        minHeightClassName={minHeightClassName}
-        // The field's own label names the expanded view too, so an author who expands from a
-        // problem dialog can still see which description they are editing.
-        expandedTitle={label}
-      />
+      {/* Reserves the requested height for the placeholder, which cannot see these props. Inert
+          once the editor arrives, since the editor is taller than its own minimum. */}
+      <div className={cn('grid', minHeightClassName)}>
+        <RichDescriptionEditor
+          showToolbar
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+          invalid={Boolean(error)}
+          placeholder={placeholder}
+          ariaLabelledBy={labelId}
+          ariaDescribedBy={error ? errorId : help ? helpId : undefined}
+          minHeightClassName={minHeightClassName}
+          // The field's own label names the expanded view too, so an author who expands from a
+          // problem dialog can still see which description they are editing.
+          expandedTitle={label}
+        />
+      </div>
       {help && !error && (
         <p id={helpId} className="text-muted-foreground mt-1 text-xs">
           {help}

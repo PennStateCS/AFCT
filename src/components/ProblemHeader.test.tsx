@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import ProblemHeader from './ProblemHeader';
@@ -67,7 +67,7 @@ describe('ProblemHeader', () => {
       },
     };
 
-    it('renders formatting and maths when the problem has a stored document', () => {
+    it('renders formatting and maths when the problem has a stored document', async () => {
       const { container } = render(
         <ProblemHeader
           title="Problem 1"
@@ -77,7 +77,10 @@ describe('ProblemHeader', () => {
       );
 
       expect(container.querySelector('strong')?.textContent).toBe('minimal');
-      expect(container.querySelector('[data-type="inline-math"] math')).not.toBeNull();
+      // KaTeX is fetched on demand, so an equation shows its source for a moment first.
+      await waitFor(() => {
+        expect(container.querySelector('[data-type="inline-math"] math')).not.toBeNull();
+      });
       // A problem header is a tight surface, so it asks for the compact density.
       expect(container.querySelector('.afct-rich-text--compact')).not.toBeNull();
     });

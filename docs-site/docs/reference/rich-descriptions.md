@@ -138,8 +138,9 @@ KaTeX's stylesheet and fonts are served by the app itself, never from a CDN. See
 `RichDescription` (`src/components/rich-description/RichDescription.tsx`) renders a stored
 document on read surfaces. It is a plain React walker over the validated JSON, not a second
 editor: read pages get no ProseMirror, the output is server-renderable, and it reuses the same
-`.afct-rich-text` styles the editor uses so authored and published content match. Pass both
-fields and let it decide:
+`.afct-rich-text` styles the editor uses so authored and published content match. The one client
+component in it is `DescriptionMath`, which is what fetches KaTeX on demand; see
+[KaTeX in the client bundle](#katex-in-the-client-bundle). Pass both fields and let it decide:
 
 ```tsx
 <RichDescription description={item.description} descriptionJson={item.descriptionJson} />
@@ -265,7 +266,8 @@ If you change one of those surrounding headings, change the base with it.
 One cache, on the only operation expensive enough to warrant it: `renderDescriptionMath`
 memoizes KaTeX output by `(latex, displayMode)`. Rendering is pure, and the walker re-runs it for
 every equation on every render. The map is bounded and cleared wholesale when full, because the
-module is also loaded server-side where an unbounded map would leak slowly.
+module is also loaded server-side where an unbounded map would leak slowly. It is only consulted
+once KaTeX itself has loaded; before that the renderer declines outright.
 
 Parsing is deliberately NOT cached. It was memoized in a `WeakMap` keyed on the `descriptionJson`
 object for a while; that was removed. The saving was not measurable against a document of a few
@@ -311,17 +313,43 @@ the script twice produces byte-identical output.
 
 ### KaTeX in the client bundle
 
-KaTeX's JavaScript (about 265 KB minified) still reaches any route that renders a description,
-because the read surfaces are client components and `DescriptionMath` imports the renderer
-statically. A production build puts KaTeX's code in three shared chunks; none of them is a root
-entry chunk, so it loads per route rather than app-wide, but a description containing no maths
-still pays for it.
+**Nothing loads KaTeX until an equation needs it.** It is about 265 KB of JavaScript, most
+descriptions contain no maths, and the read surfaces are client components, so a static import
+put a typesetter on every route that shows a description. Three things keep it off them:
 
-`DescriptionMath` (`src/components/rich-description/DescriptionMath.tsx`) exists to make that
-fixable in one place: it is the single import site for KaTeX on the read path, and it is
-synchronous and free of browser APIs so maths still server-renders. Moving KaTeX behind a
-server-only boundary or a lazy import is a change to that file and its importer, not to the
-document walker. That work is NOT done; see the follow-up note in the branch summary.
+- `renderDescriptionMath` (`src/components/rich-description/render-math.ts`) fetches KaTeX through
+  `loadMathRenderer()` instead of importing it. Until that resolves it declines to render, and the
+  caller shows the LaTeX source.
+- `DescriptionMath` asks for the renderer when the first equation mounts, and shows the source in
+  a `<code>` until it arrives. It seeds its state from the module, so once loaded, later equations
+  render on their first pass with no placeholder.
+- `@/lib/rich-description` (the barrel) does not re-export `latex-parse` or `write`. Both reach
+  KaTeX, and barrel re-exports are not tree-shaken here, so one import of any name pulled the
+  whole typesetter into a client bundle. The two callers that genuinely parse LaTeX import from
+  those modules directly.
+
+**The editor is loaded on demand too**, for the same reason but a bigger one. The Tiptap maths
+extension imports KaTeX outright, so the editor can never be KaTeX-free; on top of that it carries
+ProseMirror and Tiptap. `RichDescriptionField` pulls it in with `next/dynamic` (`ssr: false`) when
+a form that uses it is shown. Every description form goes through that field, so it is the only
+place that needs to do this.
+
+Together those took `/dashboard/courses/[id]` from about 1940 KB of client JavaScript to 1244 KB,
+and `/dashboard/courses/[id]/[aid]`, the page students read, from 1841 KB to 1145 KB.
+
+Two consequences worth knowing:
+
+- **Server-rendered maths needs one line.** `renderDescriptionMath` is still synchronous and free
+  of browser APIs, so a server surface can render equations, but it must `await loadMathRenderer()`
+  once before rendering. Without that the HTML contains the LaTeX source.
+  `RichDescription.server.test.tsx` shows both halves.
+- **Tests that mount a description form should warm the module first**, with
+  `warmRichDescriptionEditor()` from `src/test/rich-editor.ts`. The first load of the editor tree
+  through the test transformer regularly outruns a default `waitFor` timeout, which otherwise fails
+  whichever test happens to be first.
+
+The dev-only `/dashboard/development-tests` page still bundles KaTeX eagerly: it imports the
+editor directly, on purpose, since demonstrating the editor is the point of the page.
 
 ## Introducing a new JSON version
 

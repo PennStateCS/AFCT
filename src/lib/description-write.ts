@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client';
-import { buildDescriptionWrite, type DescriptionWriteInput } from '@/lib/rich-description';
+// Straight from the module, not the barrel: the write path reaches KaTeX through its equation
+// validation, and the barrel is imported by client components. See the note in that file.
+import { buildDescriptionWrite, type DescriptionWriteInput } from '@/lib/rich-description/write';
 
 /**
  * Prisma-ready mapping of the rich-description write helpers. Keeps `Prisma.DbNull` out of the

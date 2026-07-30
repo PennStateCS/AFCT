@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildDescriptionWrite,
-  InvalidRichDescriptionError,
-  parseLatexSource,
-  isParsableLatex,
   MAX_LATEX_LENGTH,
   KATEX_SHARED_OPTIONS,
   KATEX_PUBLISHED_OPTIONS,
   KATEX_VALIDATION_OPTIONS,
 } from './index';
+// From the modules, not the barrel: both reach KaTeX, which is why the barrel does not carry
+// them. See the note in index.ts.
+import { buildDescriptionWrite, InvalidRichDescriptionError } from './write';
+import { parseLatexSource, isParsableLatex } from './latex-parse';
 
 // Shaped the way the editor actually writes it: inline maths sits inside a paragraph, display
 // maths stands on its own as a sibling block.

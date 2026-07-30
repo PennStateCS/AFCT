@@ -17,11 +17,11 @@ import {
 import { Label } from '@/components/ui/label';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  KATEX_VALIDATION_OPTIONS,
-  MAX_LATEX_LENGTH,
-  parseLatexSource,
-} from '@/lib/rich-description';
+import { KATEX_VALIDATION_OPTIONS, MAX_LATEX_LENGTH } from '@/lib/rich-description';
+// Straight from the module, not the barrel: it pulls KaTeX in, which is fine HERE (this dialog
+// already renders a live preview with it) but must not travel through the barrel to read-only
+// surfaces. See the note in '@/lib/rich-description'.
+import { parseLatexSource } from '@/lib/rich-description/latex-parse';
 import type { MathClickTarget, MathMode } from './extensions';
 
 export type EquationDialogProps = {

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const putMock = vi.hoisted(() => vi.fn());
 const toastSuccess = vi.hoisted(() => vi.fn());
@@ -20,6 +20,7 @@ vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => 
 
 import { AssignmentBasicsForm } from './AssignmentBasicsForm';
 import { RICH_DESCRIPTION_VERSION, type RichDescriptionEnvelope } from '@/lib/rich-description';
+import { warmRichDescriptionEditor } from '@/test/rich-editor';
 
 const richDescription: RichDescriptionEnvelope = {
   version: RICH_DESCRIPTION_VERSION,
@@ -61,6 +62,8 @@ function typeInEditor(text: string) {
 }
 
 describe('AssignmentBasicsForm', () => {
+  beforeAll(warmRichDescriptionEditor);
+
   beforeEach(() => {
     vi.clearAllMocks();
     putMock.mockResolvedValue({ id: 'a1' });

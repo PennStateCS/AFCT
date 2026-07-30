@@ -2,9 +2,10 @@
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 
 import { RichDescription } from './RichDescription';
+import { loadMathRenderer } from './render-math';
 import { MAX_NODE_COUNT, type TiptapNode } from '@/lib/rich-description';
 
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
@@ -197,6 +198,13 @@ describe('RichDescription: links', () => {
 });
 
 describe('RichDescription: math', () => {
+  // KaTeX is fetched on demand so it stays off the routes students read, which means an equation
+  // shows its LaTeX source until the renderer arrives. Load it once up front: these tests are
+  // about what a rendered equation looks like, and the waiting is covered in render-math.test.
+  beforeAll(async () => {
+    await loadMathRenderer();
+  });
+
   it('renders inline math with MathML and the source represented', () => {
     const container = renderDoc(doc(para({ type: 'inlineMath', attrs: { latex: 'n^2' } })));
     const host = container.querySelector('[data-type="inline-math"]')!;

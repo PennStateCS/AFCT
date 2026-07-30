@@ -36,15 +36,20 @@ export {
   type ResolvedDescription,
 } from './resolve';
 export {
-  buildDescriptionWrite,
-  InvalidRichDescriptionError,
-  type DescriptionWriteInput,
-  type DescriptionWriteFields,
-} from './write';
-
-export {
   KATEX_SHARED_OPTIONS,
   KATEX_PUBLISHED_OPTIONS,
   KATEX_VALIDATION_OPTIONS,
 } from './katex-options';
-export { parseLatexSource, isParsableLatex } from './latex-parse';
+
+/**
+ * `./latex-parse` and `./write` are deliberately NOT re-exported here.
+ *
+ * Both reach KaTeX (write.ts validates every equation through latex-parse), and this barrel is
+ * imported by client components, so re-exporting them put a ~700 KB maths typesetter in the chunk
+ * graph of every route that renders a description. Barrel re-exports are not tree-shaken here:
+ * importing one name pulls the module.
+ *
+ * The two places that genuinely parse LaTeX import from '@/lib/rich-description/latex-parse' and
+ * '@/lib/rich-description/write' directly. Everything in this file is free of KaTeX; keep it that
+ * way, and check the built chunks rather than assuming when adding an export.
+ */
