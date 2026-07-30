@@ -18,6 +18,7 @@
 
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { sumProblemPoints } from '@/lib/course-format';
+import { projectDescription } from './rich-description/projection';
 
 /**
  * Both override selects the route issues land here: the staff one carries `user` for the
@@ -101,11 +102,10 @@ export function serializeAssignment(assignment: AssignmentRow, ctx: SerializeAss
   return {
     id: assignment.id,
     title: assignment.title,
-    description: locked ? null : assignment.description,
-    // Masked on exactly the same condition as `description`. Sending one without the other
-    // would either leak a locked prompt or leave a staff surface unable to render the rich
-    // form, which is the bug this pairing exists to prevent.
-    descriptionJson: locked ? null : (assignment.descriptionJson ?? null),
+    // All three description columns, masked together by the one `locked` decision. Going
+    // through the shared helper is what stops a future edit from reintroducing the bug where
+    // this serializer sent `description` and quietly dropped `descriptionJson`.
+    ...projectDescription(assignment, { locked }),
     locked,
     dueDate: assignment.dueDate,
     unlockAt: assignment.unlockAt ?? null,
