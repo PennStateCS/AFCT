@@ -12,6 +12,7 @@ import {
   type RichDescriptionEnvelope,
 } from '@/lib/rich-description';
 import { createRichDescriptionExtensions, type MathClickTarget } from './extensions';
+import { sanitizePastedHTML } from './paste';
 import { RichDescriptionToolbar } from './RichDescriptionToolbar';
 import { LinkDialog } from './LinkDialog';
 import { EquationDialog } from './EquationDialog';
@@ -143,6 +144,10 @@ export function RichDescriptionEditor({
     // (ProseMirror already puts role="textbox" there); duplicating role on a wrapper would
     // expose two textboxes to assistive tech.
     editorProps: {
+      // Pasted HTML is stripped of presentation before Tiptap parses it, so a paste from Word or
+      // Google Docs contributes structure (paragraphs, lists, emphasis) but not fonts, colours,
+      // or sizes. The schema is still the backstop for node and mark types.
+      transformPastedHTML: sanitizePastedHTML,
       attributes: {
         role: 'textbox',
         'aria-multiline': 'true',

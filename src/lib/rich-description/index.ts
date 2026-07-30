@@ -6,6 +6,7 @@ export {
   ALLOWED_MARK_TYPES,
   ALLOWED_CONTENT_NODE_TYPES,
   ALLOWED_TEXT_ALIGN,
+  ALLOWED_HEADING_LEVELS,
   richDescriptionEnvelopeSchema,
   validateRichDescription,
   type TiptapMark,

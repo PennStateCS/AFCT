@@ -44,6 +44,13 @@ export const ALLOWED_CONTENT_NODE_TYPES = [
 // Supported alignments. 'justify' is intentionally absent.
 export const ALLOWED_TEXT_ALIGN = ['left', 'center', 'right'] as const;
 
+/**
+ * Heading levels a description may contain. H1 belongs to the page, so a description that
+ * carried one would compete with it in the heading outline; H5/H6 are not offered either. This
+ * matches the editor's `heading: { levels: [2, 3, 4] }` exactly, so the two cannot drift.
+ */
+export const ALLOWED_HEADING_LEVELS = [2, 3, 4] as const;
+
 export type TiptapMark = { type: (typeof ALLOWED_MARK_TYPES)[number]; attrs?: Record<string, unknown> };
 
 export type TiptapNode = {
@@ -105,11 +112,11 @@ const nodeSchema: z.ZodType<TiptapNode> = z.lazy(() =>
       }
       if (node.type === 'heading') {
         const level = node.attrs?.level;
-        if (
-          level !== undefined &&
-          (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 6)
-        ) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'heading level must be 1-6' });
+        if (level !== undefined && !ALLOWED_HEADING_LEVELS.includes(level as never)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `heading level must be one of ${ALLOWED_HEADING_LEVELS.join(', ')}`,
+          });
         }
       }
       const align = node.attrs?.textAlign;
