@@ -17,7 +17,11 @@ import {
 import { Label } from '@/components/ui/label';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Textarea } from '@/components/ui/textarea';
-import { MAX_LATEX_LENGTH, validateLatex } from '@/lib/rich-description';
+import {
+  KATEX_VALIDATION_OPTIONS,
+  MAX_LATEX_LENGTH,
+  parseLatexSource,
+} from '@/lib/rich-description';
 import type { MathClickTarget, MathMode } from './extensions';
 
 export type EquationDialogProps = {
@@ -50,7 +54,19 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
   const previewRef = React.useRef<HTMLDivElement>(null);
   const fieldId = React.useId();
   const errorId = `${fieldId}-error`;
+  const previewLabelId = `${fieldId}-preview-label`;
   const isEditing = target !== null;
+
+  /**
+   * What assistive tech actually hears, kept separate from what the eye sees.
+   *
+   * Half-typed LaTeX is invalid LaTeX, so validating on every keystroke means the error text
+   * changes constantly while someone types `rac{`. Announcing each of those interrupts a
+   * screen-reader user on nearly every key. The visible message still updates immediately; this
+   * copy lags behind it and is what the live region reads.
+   */
+  const [announced, setAnnounced] = React.useState('');
+  const lastAnnouncedRef = React.useRef('');
 
   // Seed from the clicked equation (or reset for a new one) each time the dialog opens.
   React.useEffect(() => {
@@ -73,12 +89,7 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
     }
     try {
       katex.render(source, container, {
-        throwOnError: true,
-        output: 'htmlAndMathml',
-        trust: false,
-        strict: 'ignore',
-        maxSize: 20,
-        maxExpand: 200,
+        ...KATEX_VALIDATION_OPTIONS,
         displayMode: mode === 'block',
       });
       setError(null);
@@ -88,16 +99,55 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
     }
   }, [open, latex, mode]);
 
+  // Politely announce the settled error, not every intermediate one. The delay is long enough
+  // to cover normal typing and short enough that a user who stops to read is not left waiting.
+  React.useEffect(() => {
+    if (!open) return;
+    const message = error?.message ?? '';
+    const timer = setTimeout(() => {
+      // Re-announcing an unchanged string is noise: the live region would speak the same
+      // sentence again every time the user typed another character that kept it invalid.
+      if (message === lastAnnouncedRef.current) return;
+      lastAnnouncedRef.current = message;
+      setAnnounced(message);
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [error, open]);
+
+  // Reset between openings so a stale message cannot be read out for a different equation.
+  React.useEffect(() => {
+    if (open) return;
+    lastAnnouncedRef.current = '';
+    setAnnounced('');
+  }, [open]);
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!editor) return;
     // An expression KaTeX cannot parse would render as red error text for every student, so it
     // is not saveable. The button is disabled in that state; this guard covers a form submit
     // that arrives another way (Enter in the field).
-    if (error) return;
-    const result = validateLatex(latex);
+    // Validate the CURRENT value synchronously. The `error` state is produced by the preview
+    // effect, which runs after render, so between changing the source and that effect firing
+    // there is a window where `error` still describes the PREVIOUS expression. Trusting it here
+    // let a newly invalid equation through: it was non-empty and short enough, so the old
+    // length-only check passed and the bad source was written to the document.
+    //
+    // parseLatexSource re-parses through KaTeX with the same options the published renderer
+    // uses, so anything it accepts is something the reader will actually see rendered.
+    const result = parseLatexSource(latex);
     if (!result.ok) {
-      setError({ message: result.error });
+      // Policy messages ("Enter a LaTeX expression.") are already written for the author. Only
+      // KaTeX's own wording needs translating.
+      const friendly =
+        result.kind === 'parse'
+          ? describeLatexError(new Error(result.error))
+          : { message: result.error };
+      setError(friendly);
+      // A submission is a deliberate act, so it is announced immediately rather than waiting on
+      // the typing debounce.
+      lastAnnouncedRef.current = friendly.message;
+      setAnnounced(friendly.message);
       return;
     }
 
@@ -175,26 +225,42 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? errorId : undefined}
               />
-              {/* One live region, holding the plain sentence and (when it adds something)
-                  KaTeX's own wording underneath. Both sit inside the same element so a screen
-                  reader announces the guidance and the detail as one update rather than two. */}
+              {/* Visible immediately. This element is NOT the live region: it is referenced by
+                  aria-describedby, so the text is available on demand when focus is in the
+                  field, without being spoken on every keystroke. */}
               {error && (
-                <div id={errorId} role="alert" className="mt-1 text-xs">
+                <div id={errorId} className="mt-1 text-xs">
                   <p className="text-destructive">{error.message}</p>
                   {error.detail && (
                     <p className="text-muted-foreground mt-0.5">KaTeX reported: {error.detail}</p>
                   )}
                 </div>
               )}
+              {/* The announcement channel, polite and debounced. Always in the DOM so the region
+                  exists before it has content, which is what makes an update get spoken at all.
+                  Only the plain sentence is announced; the raw KaTeX detail is for reading. */}
+              <div aria-live="polite" className="sr-only">
+                {announced}
+              </div>
             </div>
 
             <div>
-              <span className="text-muted-foreground mb-2 block text-sm font-medium">Preview</span>
-              {/* KaTeX emits MathML alongside the visual output, so the preview is readable by a
-                  screen reader. A long expression scrolls inside this box rather than widening
-                  the dialog. */}
+              <span
+                id={previewLabelId}
+                className="text-muted-foreground mb-2 block text-sm font-medium"
+              >
+                Preview
+              </span>
+              {/* A named region, so the rendered maths is findable and its purpose is announced
+                  rather than being an anonymous box of symbols. KaTeX emits MathML alongside the
+                  visual output, so the equation itself stays readable by a screen reader, and
+                  this is deliberately NOT a live region: the preview changes on every keystroke,
+                  and speaking each intermediate expression would be unusable. A long expression
+                  scrolls inside the box rather than widening the dialog. */}
               <div
                 ref={previewRef}
+                role="region"
+                aria-labelledby={previewLabelId}
                 className="afct-rich-text bg-muted/30 border-input min-h-14 overflow-x-auto rounded-md border px-3 py-2"
               />
             </div>
@@ -209,7 +275,11 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={Boolean(error)}>
+            {/* Disabled whenever the current source is known to be unsaveable: an empty or
+                whitespace-only field, or one the preview has already rejected. An untouched
+                empty field shows no error (nothing has gone wrong yet), but the action is not
+                offered either, so the button never invites a click that cannot succeed. */}
+            <Button type="submit" disabled={Boolean(error) || latex.trim().length === 0}>
               {isEditing ? 'Update equation' : 'Save equation'}
             </Button>
           </DialogFooter>

@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { selectedMathTarget } from './extensions';
 import { ALLOWED_TEXT_ALIGN } from '@/lib/rich-description';
 import {
   Select,
@@ -39,6 +40,22 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 /** The paragraph/heading choices. H1 is reserved for the page itself. */
+/**
+ * The modifier key name to show in a shortcut hint.
+ *
+ * macOS uses Command where Windows and Linux use Ctrl, and Tiptap's own bindings follow that, so
+ * a hard-coded "Ctrl" is simply wrong on a Mac. Resolved once at module load rather than per
+ * render, and guarded for the server, where there is no navigator.
+ *
+ * The action name still comes first in every label ("Bold (Command+B)"), so the accessible name
+ * leads with what the control does rather than with keyboard trivia.
+ */
+const MOD_KEY = (() => {
+  if (typeof navigator === 'undefined') return 'Ctrl';
+  const platform = `${navigator.platform ?? ''} ${navigator.userAgent ?? ''}`;
+  return /Mac|iPhone|iPad|iPod/i.test(platform) ? 'Command' : 'Ctrl';
+})();
+
 const BLOCK_OPTIONS = [
   { value: 'paragraph', label: 'Paragraph' },
   { value: 'heading-2', label: 'Heading 2' },
@@ -144,6 +161,9 @@ export function RichDescriptionToolbar({
         canBulletList: instance.can().chain().toggleBulletList().run(),
         canOrderedList: instance.can().chain().toggleOrderedList().run(),
         canHorizontalRule: instance.can().chain().setHorizontalRule().run(),
+        // Drives the equation button's label. Selecting an atom is a selection change, so this
+        // selector already re-runs at the right moment.
+        mathSelected: selectedMathTarget(instance) !== null,
       };
     },
   });
@@ -163,9 +183,22 @@ export function RichDescriptionToolbar({
 
   return (
     <div
-      role="toolbar"
+      // A labelled GROUP, not role="toolbar", and that is a deliberate downgrade.
+      //
+      // role="toolbar" promises a composite widget: one tab stop, arrow keys moving between
+      // controls, Home/End to the ends. This toolbar contains a Radix Select and a Radix
+      // ToggleGroup, and ToggleGroup already implements its own roving tabindex and arrow-key
+      // handling internally. A toolbar-level arrow handler would fight it, with two owners
+      // managing the same tabindex, and arrow keys inside the alignment group would mean two
+      // different things depending on which owner won.
+      //
+      // Announcing "toolbar" while arrow keys do not work is worse than not announcing it: a
+      // screen-reader user is told to expect a keyboard model that is not there. Every control
+      // is a normal tab stop, which is a correct and predictable pattern. If this is ever
+      // revisited, the composite must treat the Select and the ToggleGroup as single stops and
+      // delegate arrows into them.
+      role="group"
       aria-label={label}
-      aria-orientation="horizontal"
       // Wraps rather than hiding controls behind an overflow menu on narrow screens, so every
       // formatting command stays reachable.
       className={cn(
@@ -174,7 +207,7 @@ export function RichDescriptionToolbar({
       )}
     >
       {/* History: plain actions, not toggles. */}
-      <ToolbarTooltip label="Undo (Ctrl+Z)">
+      <ToolbarTooltip label={`Undo (${MOD_KEY}+Z)`}>
         <Button
           type="button"
           variant="ghost"
@@ -187,7 +220,7 @@ export function RichDescriptionToolbar({
           <Undo2 />
         </Button>
       </ToolbarTooltip>
-      <ToolbarTooltip label="Redo (Ctrl+Shift+Z)">
+      <ToolbarTooltip label={`Redo (${MOD_KEY}+Shift+Z)`}>
         <Button
           type="button"
           variant="ghost"
@@ -204,7 +237,11 @@ export function RichDescriptionToolbar({
       <Separator orientation="vertical" className="mx-1 !h-6" />
 
       {/* Block type: a single-select, since a block is exactly one of these. */}
-      <Select value={state.block} onValueChange={(v) => setBlock(v as BlockValue)} disabled={disabledAll}>
+      <Select
+        value={state.block}
+        onValueChange={(v) => setBlock(v as BlockValue)}
+        disabled={disabledAll}
+      >
         <SelectTrigger size="sm" className="w-[9.5rem]" aria-label="Text style">
           <SelectValue />
         </SelectTrigger>
@@ -220,7 +257,7 @@ export function RichDescriptionToolbar({
       <Separator orientation="vertical" className="mx-1 !h-6" />
 
       {/* Inline marks: stateful toggles reporting pressed state. */}
-      <ToolbarTooltip label="Bold (Ctrl+B)">
+      <ToolbarTooltip label={`Bold (${MOD_KEY}+B)`}>
         <Toggle
           size="sm"
           aria-label="Bold"
@@ -231,7 +268,7 @@ export function RichDescriptionToolbar({
           <Bold />
         </Toggle>
       </ToolbarTooltip>
-      <ToolbarTooltip label="Italic (Ctrl+I)">
+      <ToolbarTooltip label={`Italic (${MOD_KEY}+I)`}>
         <Toggle
           size="sm"
           aria-label="Italic"
@@ -242,7 +279,7 @@ export function RichDescriptionToolbar({
           <Italic />
         </Toggle>
       </ToolbarTooltip>
-      <ToolbarTooltip label="Underline (Ctrl+U)">
+      <ToolbarTooltip label={`Underline (${MOD_KEY}+U)`}>
         <Toggle
           size="sm"
           aria-label="Underline"
@@ -253,7 +290,7 @@ export function RichDescriptionToolbar({
           <UnderlineIcon />
         </Toggle>
       </ToolbarTooltip>
-      <ToolbarTooltip label="Inline code (Ctrl+E)">
+      <ToolbarTooltip label={`Inline code (${MOD_KEY}+E)`}>
         <Toggle
           size="sm"
           aria-label="Inline code"
@@ -268,7 +305,7 @@ export function RichDescriptionToolbar({
       {/* Link: opens the dialog (URL entry needs validation, so it is not a bare toggle).
           Pressed state shows when the caret sits inside an existing link, which is also how a
           keyboard user reaches "edit this link". */}
-      <ToolbarTooltip label={state.link ? 'Edit link (Ctrl+K)' : 'Add link (Ctrl+K)'}>
+      <ToolbarTooltip label={state.link ? `Edit link (${MOD_KEY}+K)` : `Add link (${MOD_KEY}+K)`}>
         <Toggle
           size="sm"
           aria-label={state.link ? 'Edit link' : 'Add link'}
@@ -280,15 +317,17 @@ export function RichDescriptionToolbar({
         </Toggle>
       </ToolbarTooltip>
 
-      {/* Equations: one button that opens the dialog for a new equation. Editing an existing one
-          happens by clicking it in the document, which opens the same dialog. */}
-      <ToolbarTooltip label="Insert equation">
+      {/* Equations: one button, two actions. With an equation selected (by clicking it or by
+          arrow-keying onto it, since both math nodes are atoms) this edits that equation;
+          otherwise it inserts a new one. The visible tooltip and the accessible name are the
+          same string, so voice control can say what it reads. */}
+      <ToolbarTooltip label={state.mathSelected ? 'Edit equation' : 'Insert equation'}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="size-8"
-          aria-label="Insert equation"
+          aria-label={state.mathSelected ? 'Edit equation' : 'Insert equation'}
           disabled={disabledAll}
           onClick={() => onOpenEquationDialog?.()}
         >

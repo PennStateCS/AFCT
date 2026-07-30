@@ -11,7 +11,11 @@ import {
   validateRichDescription,
   type RichDescriptionEnvelope,
 } from '@/lib/rich-description';
-import { createRichDescriptionExtensions, type MathClickTarget } from './extensions';
+import {
+  createRichDescriptionExtensions,
+  selectedMathTarget,
+  type MathClickTarget,
+} from './extensions';
 import { sanitizePastedHTML } from './paste';
 import { RichDescriptionToolbar } from './RichDescriptionToolbar';
 import { LinkDialog } from './LinkDialog';
@@ -160,9 +164,18 @@ export function RichDescriptionEditor({
         ...(!ariaLabelledBy && ariaLabel ? { 'aria-label': ariaLabel } : {}),
         ...(ariaDescribedBy ? { 'aria-describedby': ariaDescribedBy } : {}),
         ...(invalid ? { 'aria-invalid': 'true' } : {}),
+        // State has to be on the contenteditable itself, not the wrapper: that element owns the
+        // textbox role, so it is the only thing a screen reader reads state from. Read-only and
+        // disabled are announced differently and are not interchangeable.
+        //
+        // A read-only editor stays focusable so the content can still be navigated, selected,
+        // and copied, which is the whole point of showing it. A disabled one is removed from the
+        // tab sequence, matching how AFCT's other disabled form controls behave.
+        ...(readOnly && !disabled ? { 'aria-readonly': 'true' } : {}),
+        ...(disabled ? { 'aria-disabled': 'true', tabindex: '-1' } : {}),
       },
     }),
-    [ariaLabel, ariaLabelledBy, ariaDescribedBy, invalid],
+    [ariaLabel, ariaLabelledBy, ariaDescribedBy, invalid, readOnly, disabled],
   );
 
   const editor = useEditor({
@@ -219,8 +232,24 @@ export function RichDescriptionEditor({
     setEquationDialogOpen(true);
   };
   const openEquationDialog = () => {
-    setMathTarget(null);
+    // If an equation is selected, the toolbar button says "Edit equation", so it must actually
+    // edit that one. Passing null here would silently insert a second equation over the
+    // selection, which is the sort of mismatch a keyboard user cannot see coming.
+    setMathTarget(selectedMathTarget(editor));
     setEquationDialogOpen(true);
+  };
+
+  /**
+   * Closing the equation dialog puts focus back in the document.
+   *
+   * Save and Remove already refocus through the command chain. This covers Cancel and Escape,
+   * where Radix would otherwise restore focus to whatever it considered the trigger: for a
+   * dialog opened by a keypress inside the contenteditable there is no button to go back to, so
+   * focus could land on the body and lose the caret entirely.
+   */
+  const closeEquationDialog = (next: boolean) => {
+    setEquationDialogOpen(next);
+    if (!next) editor?.chain().focus().run();
   };
 
   // Ctrl/Cmd+K opens the link dialog, matching the tooltip and the usual convention.
@@ -231,6 +260,19 @@ export function RichDescriptionEditor({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setLinkDialogOpen(true);
+        return;
+      }
+      // Equations are atoms, so arrow keys select the whole node rather than entering it. Enter
+      // and Space on a selected equation open the edit dialog, which is the keyboard equivalent
+      // of clicking it. Without this an author could insert an equation from the toolbar but
+      // never edit one again without a mouse.
+      if (event.key === 'Enter' || event.key === ' ') {
+        const target = selectedMathTarget(editor);
+        if (!target) return;
+        // Both keys would otherwise act on the atom: Enter splits the block, Space replaces the
+        // selected node with a space, silently deleting the equation.
+        event.preventDefault();
+        openMathRef.current(target);
       }
     };
     dom.addEventListener('keydown', onKeyDown);
@@ -286,7 +328,12 @@ export function RichDescriptionEditor({
         'border-input dark:bg-input/30 relative w-full rounded-md border bg-transparent text-base shadow-xs transition-[color,box-shadow] md:text-sm',
         'focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]',
         invalid && 'border-destructive ring-destructive/20 dark:ring-destructive/40',
-        disabled && 'cursor-not-allowed opacity-50',
+        // Disabled and read-only are told apart by more than opacity. Opacity alone disappears
+        // in forced-colors mode (Windows High Contrast overrides colours but not alpha) and is
+        // invisible to anyone who cannot compare it against an enabled control. A muted fill
+        // plus a dashed border survives both, and the two states look different from each other.
+        disabled && 'bg-muted cursor-not-allowed border-dashed opacity-70',
+        readOnly && !disabled && 'bg-muted/40 cursor-default',
         // Expanded: fill the overlay, no rounded card chrome, and let the document scroll
         // rather than the whole overlay, which keeps the toolbar in view.
         expanded && 'flex min-h-0 flex-1 flex-col rounded-none border-0 shadow-none ring-0',
@@ -311,7 +358,7 @@ export function RichDescriptionEditor({
       <EquationDialog
         editor={editor}
         open={equationDialogOpen}
-        onOpenChange={setEquationDialogOpen}
+        onOpenChange={closeEquationDialog}
         target={mathTarget}
       />
       {/* The document area is its own positioning context so the placeholder overlays the text

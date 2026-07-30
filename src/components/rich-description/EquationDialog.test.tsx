@@ -64,11 +64,7 @@ function nodesOfType(onChange: ReturnType<typeof vi.fn>, type: string) {
  * Type LaTeX into a field. userEvent reads `{` and `[` as key descriptors, so they are doubled
  * to be typed literally; the field still receives the original text.
  */
-function typeLatex(
-  user: ReturnType<typeof userEvent.setup>,
-  field: HTMLElement,
-  latex: string,
-) {
+function typeLatex(user: ReturnType<typeof userEvent.setup>, field: HTMLElement, latex: string) {
   return user.type(field, latex.replace(/[{[]/g, '$&$&'));
 }
 
@@ -130,8 +126,14 @@ describe('equation dialog', () => {
     const field = await openInsertDialog(user);
     await typeLatex(user, field, '\\frac{');
 
-    const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toBeTruthy();
+    // The message is visible immediately and is wired to the field through aria-describedby,
+    // rather than being fired at a screen reader on every keystroke. See the a11y tests for the
+    // polite, debounced announcement channel.
+    const described = field.getAttribute('aria-describedby');
+    expect(described).toBeTruthy();
+    const errorText = document.getElementById(described!);
+    expect(errorText?.textContent).toBeTruthy();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
 
     // An expression students would see as red error text cannot be saved.
     const save = screen.getByRole('button', { name: 'Save equation' });
@@ -147,9 +149,17 @@ describe('equation dialog', () => {
     const callsBefore = onChange.mock.calls.length;
 
     await openInsertDialog(user);
-    await user.click(screen.getByRole('button', { name: 'Save equation' }));
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(/enter a latex expression/i);
+    // An empty equation cannot be saved, and the action does not pretend otherwise: the button
+    // is disabled rather than inviting a click that would fail. Clicking it changes nothing.
+    const save = screen.getByRole('button', { name: 'Save equation' });
+    expect(save).toBeDisabled();
+    await user.click(save);
+    expect(onChange.mock.calls.length).toBe(callsBefore);
+
+    // Whitespace counts as empty.
+    await user.type(screen.getByLabelText('LaTeX'), '   ');
+    expect(save).toBeDisabled();
     expect(onChange.mock.calls.length).toBe(callsBefore);
   });
 
@@ -186,9 +196,7 @@ describe('equation dialog', () => {
     await user.clear(screen.getByLabelText('LaTeX'));
     await user.type(screen.getByLabelText('LaTeX'), 'c-d');
     await user.click(screen.getByRole('button', { name: 'Update equation' }));
-    await waitFor(() =>
-      expect(nodesOfType(onChange, 'inlineMath')[0]?.attrs?.latex).toBe('c-d'),
-    );
+    await waitFor(() => expect(nodesOfType(onChange, 'inlineMath')[0]?.attrs?.latex).toBe('c-d'));
 
     await user.click(document.querySelector('.tiptap [data-type="inline-math"]') as Element);
     await user.click(await screen.findByRole('button', { name: 'Remove equation' }));

@@ -47,8 +47,12 @@ describe('RichDescriptionToolbar', () => {
   it('renders a labelled toolbar with accessible names on every icon-only control', async () => {
     await setup();
 
-    const toolbar = screen.getByRole('toolbar', { name: 'Formatting' });
+    // A labelled group rather than role="toolbar": see the note in RichDescriptionToolbar.tsx.
+    // Radix's ToggleGroup owns its own roving tabindex, so claiming toolbar semantics would
+    // promise arrow-key navigation the composite cannot honour.
+    const toolbar = screen.getByRole('group', { name: 'Formatting' });
     expect(toolbar).toBeInTheDocument();
+    expect(screen.queryByRole('toolbar')).toBeNull();
 
     for (const name of [
       'Undo',
