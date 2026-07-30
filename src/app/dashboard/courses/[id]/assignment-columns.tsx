@@ -504,6 +504,7 @@ export function useAssignmentColumns(
                         id: row.original.id,
                         title: row.original.title,
                         description: row.original.description,
+                        descriptionJson: row.original.descriptionJson,
                         isGroup: row.original.isGroup,
                         problemCount: row.original.problemCount,
                       })

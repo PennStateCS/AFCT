@@ -20,6 +20,7 @@ import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useManageableCourses, courseLabel } from '@/hooks/use-manageable-courses';
 import type { Assignment } from '@prisma/client';
 import type { AssignmentImportProblemMode } from '@/schemas/assignment';
+import { asRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';
 
 const STEP_TITLES = ['Source', 'Details', 'Problems', 'Review'] as const;
 const LAST_STEP = STEP_TITLES.length - 1;
@@ -28,6 +29,8 @@ type SourceAssignment = {
   id: string;
   title: string;
   description?: string | null;
+  /** The source's stored rich description, so the import keeps it. */
+  descriptionJson?: unknown;
   problemCount?: number;
   isGroup?: boolean;
 };
@@ -65,6 +68,9 @@ export function ImportAssignmentDialog({
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  // The import's rich description: the source's document, replaced by whatever is edited here.
+  // Null means the source was plain text and untouched, so the import stays plain text.
+  const [descriptionJson, setDescriptionJson] = useState<RichDescriptionEnvelope | null>(null);
   const [problemMode, setProblemMode] = useState<AssignmentImportProblemMode>('copy');
   const [submitting, setSubmitting] = useState(false);
 
@@ -77,6 +83,7 @@ export function ImportAssignmentDialog({
     setSourceAssignmentId('');
     setTitle('');
     setDescription('');
+    setDescriptionJson(null);
     setProblemMode('copy');
     setSubmitting(false);
   }, [open]);
@@ -113,6 +120,7 @@ export function ImportAssignmentDialog({
     if (selected) {
       setTitle(selected.title);
       setDescription(selected.description ?? '');
+      setDescriptionJson(asRichDescription(selected.descriptionJson));
     }
   }, [selected]);
 
@@ -142,7 +150,11 @@ export function ImportAssignmentDialog({
         sourceCourseId,
         sourceAssignmentId,
         title: title.trim(),
-        description: description.trim() ? description.trim() : null,
+        // Rich JSON wins and the server derives the plain text from it, so a rich source stays
+        // rich in the import. Falls back to the plain text for a legacy source.
+        ...(descriptionJson
+          ? { descriptionJson }
+          : { description: description.trim() ? description.trim() : null }),
         // With no problems there is nothing to copy, so the mode is moot; send 'none'.
         problemMode: hasProblems ? problemMode : 'none',
       });
@@ -227,6 +239,8 @@ export function ImportAssignmentDialog({
 
           {step === 1 && (
             <WizardTitleDescription
+              // Remount per source so the editor reloads its initial content.
+              key={sourceAssignmentId || 'none'}
               idPrefix="import-assignment"
               title={title}
               onTitleChange={setTitle}
@@ -235,6 +249,12 @@ export function ImportAssignmentDialog({
               titleError={titleError}
               titlePlaceholder="Assignment title"
               descriptionPlaceholder="Enter assignment description"
+              // Seeded straight from the source rather than from state: the editor takes its
+              // value as initial content only, and the prefill effect runs after it mounts.
+              rich={{
+                value: asRichDescription(selected?.descriptionJson) ?? selected?.description ?? '',
+                onChange: setDescriptionJson,
+              }}
               note={
                 <>
                   The title and description start as the source assignment&apos;s. The imported copy

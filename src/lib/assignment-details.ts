@@ -28,6 +28,15 @@ export type AssignmentWithDetails = {
   id: string;
   title: string;
   description?: string | null;
+  /**
+   * The stored rich description, when the assignment has one. Unvalidated here on purpose: the
+   * editor and every renderer run it through `validateRichDescription` and fall back to the
+   * plain-text `description`, so a document written by an older or newer version cannot break a
+   * page. Withheld (null) from a student while the assignment's content is locked, exactly like
+   * `description`.
+   */
+  descriptionJson?: unknown;
+  descriptionFormat?: 'PLAIN_TEXT' | 'TIPTAP_JSON';
   courseId: string;
   courseName?: string;
   courseCode?: string;

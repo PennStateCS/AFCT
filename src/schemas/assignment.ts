@@ -73,6 +73,9 @@ const BaseAssignmentFormSchemaObject = z
       .min(3, 'Title must be at least 3 characters.')
       .max(200, 'Title is too long.'),
     description: z.string().trim().max(20000, 'Description is too long.').optional(),
+    // The rich description as edited in the form. Present only once the author actually edits
+    // the editor, which is what keeps a legacy plain-text record from converting on view.
+    descriptionJson: descriptionJsonField,
     dueDate: DateTimeLocalForm,
     unlockAt: DateTimeLocalFormOptional,
     assignedToEveryone: z.boolean().default(true),

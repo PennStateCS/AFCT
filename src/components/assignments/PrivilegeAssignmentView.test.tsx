@@ -357,22 +357,32 @@ describe('PrivilegeAssignmentView — header', () => {
     expect(link).toHaveAttribute('href', '/dashboard/courses/c1');
   });
 
-  it('renders the description in the editable form', () => {
+  it('renders the description in the editable form', async () => {
     renderView();
-    // The Assignment tab now shows a title + description form defaulting to the values.
-    expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
+    // The Assignment tab shows a title input plus the rich-description editor, seeded with the
+    // current values. The editor is a contenteditable that mounts on the client, not a textarea.
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Description' }).textContent).toContain(
+        'Do the thing.',
+      ),
+    );
   });
 
-  it('shows an empty description field when the assignment has none', () => {
+  it('shows an empty description field when the assignment has none', async () => {
     renderView({ initialAssignment: makeAssignment({ description: null }) });
-    expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('');
+    const editor = await waitFor(() => screen.getByRole('textbox', { name: 'Description' }));
+    expect(editor.textContent).toBe('');
   });
 });
 
 describe('PrivilegeAssignmentView — tabs', () => {
-  it('defaults to the Assignment tab and shows the description form', () => {
+  it('defaults to the Assignment tab and shows the description form', async () => {
     renderView();
-    expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Description' }).textContent).toContain(
+        'Do the thing.',
+      ),
+    );
   });
 
   it('orders the tabs Details, Type, Assign To, Problems, Submissions, Statistics, Similarity', () => {

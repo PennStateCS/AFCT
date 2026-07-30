@@ -41,13 +41,14 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar } from '@/components/course/course-tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
-import type { Problem } from '@prisma/client';
+import type { Prisma, Problem } from '@prisma/client';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { AssignmentWithDetails } from '@/lib/assignment-details';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { queryKeys } from '@/lib/query-keys';
+import { asRichDescription } from '@/lib/rich-description';
 import { buildProblemColumns } from './problem-columns';
 
 type ProblemLinkSettings = {
@@ -139,10 +140,10 @@ export default function AssignmentDashboardPage({
       ...assignment,
       groupSetId: assignment.groupSetId ?? null,
       description: assignment.description ?? null,
-      // Settings card edits dates/audience only; the rich-description fields are unused here
-      // but required by the Assignment type, so default them (the API doesn't send them yet).
-      descriptionFormat: 'PLAIN_TEXT' as const,
-      descriptionJson: null,
+      // Settings card edits dates/audience only, so the description fields are just carried
+      // through to satisfy the Assignment type.
+      descriptionFormat: assignment.descriptionFormat ?? ('PLAIN_TEXT' as const),
+      descriptionJson: (assignment.descriptionJson ?? null) as Prisma.JsonValue,
       createdAt: assignment.createdAt ?? new Date(),
       updatedAt: assignment.updatedAt ?? new Date(),
       dueDate: toDate(assignment.dueDate) ?? new Date(),
@@ -467,6 +468,7 @@ export default function AssignmentDashboardPage({
                   assignmentId={assignment.id}
                   initialTitle={assignment.title}
                   initialDescription={assignment.description ?? ''}
+                  initialDescriptionJson={asRichDescription(assignment.descriptionJson)}
                   courseIsArchived={courseIsArchived}
                   onSaved={() => void invalidateAssignment()}
                 />

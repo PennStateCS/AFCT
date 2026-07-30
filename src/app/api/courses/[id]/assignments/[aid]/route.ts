@@ -254,6 +254,7 @@ export const GET = withCourseAuth(
       // opens, but not its description or problems (Canvas-style content lock).
       const av = assignment as unknown as {
         description: string | null;
+        descriptionJson: unknown;
         unlockAt: Date | null;
         dueDate: Date;
         allowLateSubmissions: boolean;
@@ -310,6 +311,10 @@ export const GET = withCourseAuth(
       return NextResponse.json({
         ...assignmentData,
         description: locked ? null : av.description,
+        // The rich document carries the same content as the plain text, so it has to be
+        // withheld under the same lock. Spreading the row would otherwise hand a student the
+        // description of an assignment that has not opened yet.
+        descriptionJson: locked ? null : av.descriptionJson,
         locked,
         maxPoints: totalProblemPoints,
         problems: locked ? [] : problemsWithRelation,

@@ -11,11 +11,11 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Stepper } from '@/components/ui/stepper';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
-import { Textarea } from '@/components/ui/textarea';
+import { RichDescriptionField } from '@/components/rich-description/RichDescriptionField';
+import type { RichDescriptionEnvelope } from '@/lib/rich-description';
 import { AssignToFields } from '@/components/assignments/AssignToFields';
 import { toast } from 'sonner';
 
@@ -34,7 +34,7 @@ import { formatDateTimeLocal } from '@/lib/date-convert';
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 
 const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> = [
-  { title: 'Details', fields: ['title', 'description'] },
+  { title: 'Details', fields: ['title', 'descriptionJson'] },
   { title: 'Type', fields: ['isGroup', 'groupSetId'] },
   {
     title: 'Assign To',
@@ -102,6 +102,7 @@ export function CreateAssignmentWizardDialog({
     () => ({
       title: '',
       description: '',
+      descriptionJson: null,
       unlockAt: undefined,
       dueDate: defaultDueLocalString(timeZone),
       assignedToEveryone: true,
@@ -168,7 +169,12 @@ export function CreateAssignmentWizardDialog({
 
     const basePayload = {
       title: raw.title,
-      description: raw.description || undefined,
+      // The rich document is authoritative when the author wrote one: the server derives the
+      // plain-text description from it. An untouched editor sends neither field, so the new
+      // assignment stays PLAIN_TEXT with an empty description, exactly as before.
+      ...(raw.descriptionJson
+        ? { descriptionJson: raw.descriptionJson }
+        : { description: raw.description || undefined }),
       dueDate: raw.dueDate,
       unlockAt: raw.unlockAt || undefined,
       assignedToEveryone: raw.assignedToEveryone,
@@ -273,25 +279,17 @@ export function CreateAssignmentWizardDialog({
                 />
                 <Controller
                   control={control}
-                  name="description"
+                  name="descriptionJson"
                   render={({ field }) => (
-                    <div>
-                      <Label htmlFor="assignment-description" className="mb-2 block">
-                        Description
-                      </Label>
-                      <Textarea
-                        {...field}
-                        id="assignment-description"
-                        value={field.value ?? ''}
-                        placeholder="Enter assignment description"
-                        className="min-h-[120px]"
-                      />
-                      {errors.description && (
-                        <p className="mt-1 text-xs text-destructive" role="alert">
-                          {errors.description.message}
-                        </p>
-                      )}
-                    </div>
+                    <RichDescriptionField
+                      // The schema's input type is structurally looser than the envelope type
+                      // (Zod widens the recursive node), so narrow it at this boundary.
+                      value={(field.value as RichDescriptionEnvelope | null | undefined) ?? null}
+                      onChange={field.onChange}
+                      error={errors.descriptionJson?.message}
+                      placeholder="Enter assignment description"
+                      minHeightClassName="min-h-32"
+                    />
                   )}
                 />
               </>
