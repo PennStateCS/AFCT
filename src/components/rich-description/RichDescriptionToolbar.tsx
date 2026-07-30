@@ -41,20 +41,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 /** The paragraph/heading choices. H1 is reserved for the page itself. */
 /**
- * The modifier key name to show in a shortcut hint.
+ * Shortcut hints name both modifiers rather than detecting the platform.
  *
- * macOS uses Command where Windows and Linux use Ctrl, and Tiptap's own bindings follow that, so
- * a hard-coded "Ctrl" is simply wrong on a Mac. Resolved once at module load rather than per
- * render, and guarded for the server, where there is no navigator.
+ * This used to read `navigator` at module load. That is wrong in a Next app: the module is
+ * evaluated on the server too, where there is no navigator, so the server rendered "Ctrl" while a
+ * Mac client hydrated to "Command" and React saw a mismatch. Naming both is deterministic
+ * everywhere and still tells a Mac user what to press.
  *
- * The action name still comes first in every label ("Bold (Command+B)"), so the accessible name
- * leads with what the control does rather than with keyboard trivia.
+ * Only the TOOLTIP carries the shortcut. The accessible name stays the bare action ("Bold"), so
+ * a screen reader and voice control get the verb rather than keyboard trivia.
  */
-const MOD_KEY = (() => {
-  if (typeof navigator === 'undefined') return 'Ctrl';
-  const platform = `${navigator.platform ?? ''} ${navigator.userAgent ?? ''}`;
-  return /Mac|iPhone|iPad|iPod/i.test(platform) ? 'Command' : 'Ctrl';
-})();
+const MOD_KEY = 'Ctrl/Command';
 
 const BLOCK_OPTIONS = [
   { value: 'paragraph', label: 'Paragraph' },
@@ -67,6 +64,22 @@ type BlockValue = (typeof BLOCK_OPTIONS)[number]['value'];
 
 /** Supported alignments, in toolbar order. No justify. */
 type AlignValue = (typeof ALLOWED_TEXT_ALIGN)[number];
+
+/**
+ * Alignment across the whole selection. `mixed` is a real answer, not an absence: it means the
+ * selection genuinely contains more than one alignment, and no button should look pressed.
+ */
+type AlignmentState = AlignValue | 'mixed';
+
+/** Block style across the whole selection, with the same explicit mixed case. */
+type BlockState = BlockValue | 'mixed';
+
+/**
+ * The Select's value when the selection spans several styles. Empty string rather than a real
+ * option, so Radix shows the placeholder and "Multiple styles" can never be CHOSEN: it describes
+ * the document, it is not a style to apply.
+ */
+const MIXED_BLOCK_VALUE = '';
 
 const ALIGN_OPTIONS: { value: AlignValue; label: string; Icon: typeof AlignLeft }[] = [
   { value: 'left', label: 'Align left', Icon: AlignLeft },
@@ -89,9 +102,15 @@ export type RichDescriptionToolbarProps = {
   /** Accessible name for the toolbar container. */
   label?: string;
   /** Asked to open the link dialog (the editor owns the dialog state). */
-  onOpenLinkDialog?: () => void;
+  /** Required: an enabled control that does nothing is worse than a missing one. */
+  onOpenLinkDialog: () => void;
   /** Asked to open the equation dialog for a new equation. */
-  onOpenEquationDialog?: () => void;
+  /**
+   * Opens the equation dialog. With an equation selected this EDITS that equation; otherwise it
+   * inserts a new one. The button's label and accessible name follow the same state, so the two
+   * cannot disagree.
+   */
+  onOpenEquationDialog: () => void;
   /**
    * Asked to enter expanded editing. Omit to hide the control, which is also what the editor
    * does WHILE expanded: the overlay has its own clearly labelled exit button, and a second
@@ -110,6 +129,70 @@ export type RichDescriptionToolbarProps = {
  * React state, so the controls always agree with the document and update as the cursor moves.
  * Commands are chained through `.focus()` so the caret returns to the document after a click.
  */
+/**
+ * What the block picker and the alignment group should report for the CURRENT selection.
+ *
+ * `isActive` cannot answer this. For a selection spanning two blocks it reports whether the
+ * selection is "within" a match, so a centred paragraph next to a right-aligned one matched
+ * neither alignment and the old code fell back to `left`, showing Left as pressed for a
+ * selection that contains no left-aligned text at all. The block picker had the same shape of
+ * bug and fell back to Paragraph across a paragraph plus a heading.
+ *
+ * So walk the blocks the selection actually touches and collect what is there. Only paragraphs
+ * and headings are considered, because those are the only types TextAlign is configured for and
+ * the only ones the picker offers: a code block or an equation in the selection is ignored
+ * rather than being counted as an extra style.
+ */
+function inspectSelectedBlocks(instance: Editor): {
+  align: AlignmentState;
+  block: BlockState;
+  canSetBlock: boolean;
+} {
+  const { from, to } = instance.state.selection;
+  const aligns = new Set<string>();
+  const blocks = new Set<string>();
+
+  instance.state.doc.nodesBetween(from, to, (node) => {
+    if (node.type.name === 'paragraph') blocks.add('paragraph');
+    else if (node.type.name === 'heading') blocks.add(`heading-${node.attrs.level}`);
+    else return true;
+
+    // Left is stored as the absence of an attribute, so anything unrecognised reads as left.
+    const raw = node.attrs.textAlign;
+    const align =
+      typeof raw === 'string' && (ALLOWED_TEXT_ALIGN as readonly string[]).includes(raw)
+        ? raw
+        : 'left';
+    aligns.add(align);
+    return true;
+  });
+
+  return {
+    align: aligns.size > 1 ? 'mixed' : ((aligns.values().next().value ?? 'left') as AlignmentState),
+    block:
+      blocks.size > 1 ? 'mixed' : ((blocks.values().next().value ?? 'paragraph') as BlockState),
+    // Nothing the picker can act on (a code block, say). Offering a style would be a lie.
+    canSetBlock: blocks.size > 0,
+  };
+}
+
+/**
+ * A group of related controls that wraps as a unit.
+ *
+ * `flex-none` is the point: without it every control is an independent flex child, so a narrow
+ * toolbar breaks wherever it runs out of room and strands one or two buttons (and sometimes a
+ * separator) alone on the next row. Grouping keeps Undo with Redo, Bold with Italic, Link with
+ * Equation, and the three alignment buttons intact.
+ */
+const Group = ({ children }: { children: React.ReactNode }) => (
+  <div className="flex flex-none items-center gap-0.5">{children}</div>
+);
+
+/** Separators live BETWEEN groups, never inside one, so a wrap cannot strand one. */
+const GroupDivider = () => (
+  <Separator orientation="vertical" className="mx-1 !h-6 flex-none" aria-hidden="true" />
+);
+
 export function RichDescriptionToolbar({
   editor,
   label = 'Formatting',
@@ -137,18 +220,7 @@ export function RichDescriptionToolbar({
         link: instance.isActive('link'),
         bulletList: instance.isActive('bulletList'),
         orderedList: instance.isActive('orderedList'),
-        block: (instance.isActive('heading', { level: 2 })
-          ? 'heading-2'
-          : instance.isActive('heading', { level: 3 })
-            ? 'heading-3'
-            : instance.isActive('heading', { level: 4 })
-              ? 'heading-4'
-              : 'paragraph') as BlockValue,
-        // Alignment follows the cursor. Left is the default and is stored as no attribute, so
-        // "nothing active" means left rather than an undefined state. A selection spanning
-        // mixed alignments matches none of the three, which shows as no pressed button.
-        align: (ALLOWED_TEXT_ALIGN.find((a) => instance.isActive({ textAlign: a })) ??
-          'left') as AlignValue,
+        ...inspectSelectedBlocks(instance),
         canAlign: instance.can().chain().setTextAlign('center').run(),
         canUndo: instance.can().undo(),
         canRedo: instance.can().redo(),
@@ -181,6 +253,158 @@ export function RichDescriptionToolbar({
     chain.setHeading({ level }).run();
   };
 
+  /**
+   * One command, described once.
+   *
+   * A command has a single definition: its label, its disabled rule, its pressed state, and what
+   * it does. When these controls start moving into a "More" menu at narrow widths, the menu item
+   * and the toolbar button will render from the same object, so they cannot drift into
+   * disagreeing about whether something is disabled or already applied.
+   *
+   * `pressed` present means a toggle; absent means a plain action.
+   */
+  type ToolbarCommand = {
+    id: string;
+    /** The accessible name. Also the menu-item text when this moves into More. */
+    label: string;
+    /** Visible tooltip. Carries the shortcut, which the accessible name deliberately does not. */
+    tooltip: string;
+    Icon: typeof Bold;
+    disabled: boolean;
+    pressed?: boolean;
+    run: (pressed: boolean) => void;
+  };
+
+  const chain = () => editor.chain().focus();
+
+  const markCommands: ToolbarCommand[] = [
+    {
+      id: 'bold',
+      label: 'Bold',
+      tooltip: `Bold (${MOD_KEY}+B)`,
+      Icon: Bold,
+      pressed: state.bold,
+      disabled: disabledAll || !state.canBold,
+      run: (pressed) => (pressed ? chain().setBold().run() : chain().unsetBold().run()),
+    },
+    {
+      id: 'italic',
+      label: 'Italic',
+      tooltip: `Italic (${MOD_KEY}+I)`,
+      Icon: Italic,
+      pressed: state.italic,
+      disabled: disabledAll || !state.canItalic,
+      run: (pressed) => (pressed ? chain().setItalic().run() : chain().unsetItalic().run()),
+    },
+    {
+      id: 'underline',
+      label: 'Underline',
+      tooltip: `Underline (${MOD_KEY}+U)`,
+      Icon: UnderlineIcon,
+      pressed: state.underline,
+      disabled: disabledAll || !state.canUnderline,
+      run: (pressed) => (pressed ? chain().setUnderline().run() : chain().unsetUnderline().run()),
+    },
+    {
+      id: 'code',
+      label: 'Inline code',
+      tooltip: `Inline code (${MOD_KEY}+E)`,
+      Icon: Code,
+      pressed: state.code,
+      disabled: disabledAll || !state.canCode,
+      run: (pressed) => (pressed ? chain().setCode().run() : chain().unsetCode().run()),
+    },
+  ];
+
+  const structureCommands: ToolbarCommand[] = [
+    {
+      id: 'bulletList',
+      label: 'Bullet list',
+      tooltip: 'Bullet list',
+      Icon: List,
+      pressed: state.bulletList,
+      disabled: disabledAll || !state.canBulletList,
+      run: (pressed) => {
+        // Tiptap has no setList/unsetList pair, so guard on the live editor state: a repeated
+        // request for the state we are already in does nothing rather than toggling back out.
+        if (pressed === state.bulletList) return;
+        chain().toggleBulletList().run();
+      },
+    },
+    {
+      id: 'orderedList',
+      label: 'Numbered list',
+      tooltip: 'Numbered list',
+      Icon: ListOrdered,
+      pressed: state.orderedList,
+      disabled: disabledAll || !state.canOrderedList,
+      run: (pressed) => {
+        if (pressed === state.orderedList) return;
+        chain().toggleOrderedList().run();
+      },
+    },
+    {
+      id: 'blockquote',
+      label: 'Quote',
+      tooltip: 'Quote',
+      Icon: Quote,
+      pressed: state.blockquote,
+      disabled: disabledAll || !state.canBlockquote,
+      run: (pressed) => (pressed ? chain().setBlockquote().run() : chain().unsetBlockquote().run()),
+    },
+    {
+      id: 'codeBlock',
+      label: 'Code block',
+      tooltip: 'Code block',
+      Icon: SquareCode,
+      pressed: state.codeBlock,
+      disabled: disabledAll || !state.canCodeBlock,
+      // No unsetCodeBlock exists; leaving one means turning it back into a paragraph.
+      run: (pressed) => (pressed ? chain().setCodeBlock().run() : chain().setParagraph().run()),
+    },
+    {
+      id: 'horizontalRule',
+      label: 'Horizontal rule',
+      tooltip: 'Horizontal rule',
+      Icon: Minus,
+      // No pressed state: inserting a rule is an action, not something the caret can be "in".
+      disabled: disabledAll || !state.canHorizontalRule,
+      run: () => chain().setHorizontalRule().run(),
+    },
+  ];
+
+  /** Render a command as a toolbar control, picking a toggle or a button from its shape. */
+  const renderCommand = (command: ToolbarCommand) => {
+    const { id, label: name, tooltip, Icon, disabled, pressed, run } = command;
+    return (
+      <ToolbarTooltip key={id} label={tooltip}>
+        {pressed === undefined ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={name}
+            disabled={disabled}
+            onClick={() => run(true)}
+          >
+            <Icon />
+          </Button>
+        ) : (
+          <Toggle
+            size="sm"
+            aria-label={name}
+            pressed={pressed}
+            disabled={disabled}
+            onPressedChange={run}
+          >
+            <Icon />
+          </Toggle>
+        )}
+      </ToolbarTooltip>
+    );
+  };
+
   return (
     <div
       // A labelled GROUP, not role="toolbar", and that is a deliberate downgrade.
@@ -202,247 +426,168 @@ export function RichDescriptionToolbar({
       // Wraps rather than hiding controls behind an overflow menu on narrow screens, so every
       // formatting command stays reachable.
       className={cn(
-        'border-input flex flex-wrap items-center gap-1 border-b px-2 py-1.5',
+        'border-input flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b px-2 py-1.5',
         className,
       )}
     >
-      {/* History: plain actions, not toggles. */}
-      <ToolbarTooltip label={`Undo (${MOD_KEY}+Z)`}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          aria-label="Undo"
-          disabled={disabledAll || !state.canUndo}
-          onClick={() => editor.chain().focus().undo().run()}
-        >
-          <Undo2 />
-        </Button>
-      </ToolbarTooltip>
-      <ToolbarTooltip label={`Redo (${MOD_KEY}+Shift+Z)`}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          aria-label="Redo"
-          disabled={disabledAll || !state.canRedo}
-          onClick={() => editor.chain().focus().redo().run()}
-        >
-          <Redo2 />
-        </Button>
-      </ToolbarTooltip>
+      {/* History */}
+      <Group>
+        <ToolbarTooltip label={`Undo (${MOD_KEY}+Z)`}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label="Undo"
+            disabled={disabledAll || !state.canUndo}
+            onClick={() => editor.chain().focus().undo().run()}
+          >
+            <Undo2 />
+          </Button>
+        </ToolbarTooltip>
+        <ToolbarTooltip label={`Redo (${MOD_KEY}+Shift+Z)`}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label="Redo"
+            disabled={disabledAll || !state.canRedo}
+            onClick={() => editor.chain().focus().redo().run()}
+          >
+            <Redo2 />
+          </Button>
+        </ToolbarTooltip>
+      </Group>
 
-      <Separator orientation="vertical" className="mx-1 !h-6" />
+      <GroupDivider />
 
-      {/* Block type: a single-select, since a block is exactly one of these. */}
-      <Select
-        value={state.block}
-        onValueChange={(v) => setBlock(v as BlockValue)}
-        disabled={disabledAll}
-      >
-        <SelectTrigger size="sm" className="w-[9.5rem]" aria-label="Text style">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {BLOCK_OPTIONS.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Block style: a single-select, since a block is exactly one of these. */}
+      <Group>
+        <Select
+          // A mixed selection falls back to the placeholder rather than naming one of the styles
+          // it contains, which would be wrong for the rest of the selection.
+          value={state.block === 'mixed' ? MIXED_BLOCK_VALUE : state.block}
+          onValueChange={(v) => setBlock(v as BlockValue)}
+          disabled={disabledAll || !state.canSetBlock}
+        >
+          <SelectTrigger size="sm" className="w-[8.5rem]" aria-label="Text style">
+            <SelectValue placeholder="Multiple styles" />
+          </SelectTrigger>
+          <SelectContent>
+            {BLOCK_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Group>
 
-      <Separator orientation="vertical" className="mx-1 !h-6" />
+      <GroupDivider />
 
-      {/* Inline marks: stateful toggles reporting pressed state. */}
-      <ToolbarTooltip label={`Bold (${MOD_KEY}+B)`}>
-        <Toggle
-          size="sm"
-          aria-label="Bold"
-          pressed={state.bold}
-          disabled={disabledAll || !state.canBold}
-          onPressedChange={() => editor.chain().focus().toggleBold().run()}
-        >
-          <Bold />
-        </Toggle>
-      </ToolbarTooltip>
-      <ToolbarTooltip label={`Italic (${MOD_KEY}+I)`}>
-        <Toggle
-          size="sm"
-          aria-label="Italic"
-          pressed={state.italic}
-          disabled={disabledAll || !state.canItalic}
-          onPressedChange={() => editor.chain().focus().toggleItalic().run()}
-        >
-          <Italic />
-        </Toggle>
-      </ToolbarTooltip>
-      <ToolbarTooltip label={`Underline (${MOD_KEY}+U)`}>
-        <Toggle
-          size="sm"
-          aria-label="Underline"
-          pressed={state.underline}
-          disabled={disabledAll || !state.canUnderline}
-          onPressedChange={() => editor.chain().focus().toggleUnderline().run()}
-        >
-          <UnderlineIcon />
-        </Toggle>
-      </ToolbarTooltip>
-      <ToolbarTooltip label={`Inline code (${MOD_KEY}+E)`}>
-        <Toggle
-          size="sm"
-          aria-label="Inline code"
-          pressed={state.code}
-          disabled={disabledAll || !state.canCode}
-          onPressedChange={() => editor.chain().focus().toggleCode().run()}
-        >
-          <Code />
-        </Toggle>
-      </ToolbarTooltip>
+      {/* Inline formatting */}
+      <Group>{markCommands.map(renderCommand)}</Group>
 
-      {/* Link: opens the dialog (URL entry needs validation, so it is not a bare toggle).
+      <GroupDivider />
+
+      {/* Insert and edit. Link and Equation belong together: both open a dialog, and both are
+          contextual (add versus edit) on the same selection. */}
+      <Group>
+        {/* Inline marks: stateful toggles reporting pressed state. */}
+
+        {/* Link: opens the dialog (URL entry needs validation, so it is not a bare toggle).
           Pressed state shows when the caret sits inside an existing link, which is also how a
           keyboard user reaches "edit this link". */}
-      <ToolbarTooltip label={state.link ? `Edit link (${MOD_KEY}+K)` : `Add link (${MOD_KEY}+K)`}>
-        <Toggle
-          size="sm"
-          aria-label={state.link ? 'Edit link' : 'Add link'}
-          pressed={state.link}
-          disabled={disabledAll}
-          onPressedChange={() => onOpenLinkDialog?.()}
-        >
-          <Link2 />
-        </Toggle>
-      </ToolbarTooltip>
+        <ToolbarTooltip label={state.link ? `Edit link (${MOD_KEY}+K)` : `Add link (${MOD_KEY}+K)`}>
+          <Toggle
+            size="sm"
+            aria-label={state.link ? 'Edit link' : 'Add link'}
+            pressed={state.link}
+            disabled={disabledAll}
+            onPressedChange={() => onOpenLinkDialog()}
+          >
+            <Link2 />
+          </Toggle>
+        </ToolbarTooltip>
 
-      {/* Equations: one button, two actions. With an equation selected (by clicking it or by
+        {/* Equations: one button, two actions. With an equation selected (by clicking it or by
           arrow-keying onto it, since both math nodes are atoms) this edits that equation;
           otherwise it inserts a new one. The visible tooltip and the accessible name are the
           same string, so voice control can say what it reads. */}
-      <ToolbarTooltip label={state.mathSelected ? 'Edit equation' : 'Insert equation'}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          aria-label={state.mathSelected ? 'Edit equation' : 'Insert equation'}
-          disabled={disabledAll}
-          onClick={() => onOpenEquationDialog?.()}
-        >
-          <Sigma />
-        </Button>
-      </ToolbarTooltip>
+        <ToolbarTooltip label={state.mathSelected ? 'Edit equation' : 'Insert equation'}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={state.mathSelected ? 'Edit equation' : 'Insert equation'}
+            disabled={disabledAll}
+            onClick={onOpenEquationDialog}
+          >
+            <Sigma />
+          </Button>
+        </ToolbarTooltip>
+      </Group>
 
-      <Separator orientation="vertical" className="mx-1 !h-6" />
+      <GroupDivider />
 
       {/* Alignment: a single-select group, since a block has exactly one alignment. Radix's
           single type ignores a press on the already-selected item, so the user cannot toggle
           alignment off into an undefined state. */}
-      <ToggleGroup
-        type="single"
-        size="sm"
-        value={state.align}
-        aria-label="Text alignment"
-        disabled={disabledAll || !state.canAlign}
-        onValueChange={(value) => {
-          if (!value) return; // deselect attempt: keep the current alignment
-          // Left is the absence of an alignment, so choosing it clears the attribute rather
-          // than writing 'left'. Keeps plain paragraphs free of redundant attributes.
-          const chain = editor.chain().focus();
-          if (value === 'left') chain.unsetTextAlign().run();
-          else chain.setTextAlign(value).run();
-        }}
-      >
-        {ALIGN_OPTIONS.map(({ value, label, Icon }) => (
-          <ToolbarTooltip key={value} label={label}>
-            <ToggleGroupItem value={value} aria-label={label}>
-              <Icon />
-            </ToggleGroupItem>
-          </ToolbarTooltip>
-        ))}
-      </ToggleGroup>
+      <Group>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          // 'mixed' maps to no value, so nothing reads as pressed for a selection that contains
+          // more than one alignment. Showing Left pressed there would be a lie about the document.
+          value={state.align === 'mixed' ? '' : state.align}
+          aria-label="Text alignment"
+          disabled={disabledAll || !state.canAlign}
+          onValueChange={(value) => {
+            if (!value) return; // deselect attempt: keep the current alignment
+            // Left is the absence of an alignment, so choosing it clears the attribute rather
+            // than writing 'left'. Keeps plain paragraphs free of redundant attributes.
+            const chain = editor.chain().focus();
+            if (value === 'left') chain.unsetTextAlign().run();
+            else chain.setTextAlign(value).run();
+          }}
+        >
+          {ALIGN_OPTIONS.map(({ value, label, Icon }) => (
+            <ToolbarTooltip key={value} label={label}>
+              <ToggleGroupItem value={value} aria-label={label}>
+                <Icon />
+              </ToggleGroupItem>
+            </ToolbarTooltip>
+          ))}
+        </ToggleGroup>
+      </Group>
 
-      <Separator orientation="vertical" className="mx-1 !h-6" />
+      <GroupDivider />
 
-      {/* Lists and blocks. */}
-      <ToolbarTooltip label="Bullet list">
-        <Toggle
-          size="sm"
-          aria-label="Bullet list"
-          pressed={state.bulletList}
-          disabled={disabledAll || !state.canBulletList}
-          onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
-        >
-          <List />
-        </Toggle>
-      </ToolbarTooltip>
-      <ToolbarTooltip label="Numbered list">
-        <Toggle
-          size="sm"
-          aria-label="Numbered list"
-          pressed={state.orderedList}
-          disabled={disabledAll || !state.canOrderedList}
-          onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
-        >
-          <ListOrdered />
-        </Toggle>
-      </ToolbarTooltip>
-      <ToolbarTooltip label="Quote">
-        <Toggle
-          size="sm"
-          aria-label="Quote"
-          pressed={state.blockquote}
-          disabled={disabledAll || !state.canBlockquote}
-          onPressedChange={() => editor.chain().focus().toggleBlockquote().run()}
-        >
-          <Quote />
-        </Toggle>
-      </ToolbarTooltip>
-      <ToolbarTooltip label="Code block">
-        <Toggle
-          size="sm"
-          aria-label="Code block"
-          pressed={state.codeBlock}
-          disabled={disabledAll || !state.canCodeBlock}
-          onPressedChange={() => editor.chain().focus().toggleCodeBlock().run()}
-        >
-          <SquareCode />
-        </Toggle>
-      </ToolbarTooltip>
-      <ToolbarTooltip label="Horizontal rule">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          aria-label="Horizontal rule"
-          disabled={disabledAll || !state.canHorizontalRule}
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
-        >
-          <Minus />
-        </Button>
-      </ToolbarTooltip>
+      {/* Structure */}
+      <Group>{structureCommands.map(renderCommand)}</Group>
 
       {/* Expanded editing. Pushed to the far end (ml-auto) because it changes the whole
           editing surface rather than the document, so it does not belong among the
           formatting controls. Stays enabled while the editor is read-only: expanding to read
           a long description is useful even when it cannot be edited. */}
       {onExpand && (
-        <ToolbarTooltip label="Expand editor">
-          <Button
-            ref={expandButtonRef}
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="ml-auto size-8"
-            aria-label="Expand editor"
-            onClick={onExpand}
-          >
-            <Maximize2 />
-          </Button>
-        </ToolbarTooltip>
+        <Group>
+          <ToolbarTooltip label="Expand editor">
+            <Button
+              ref={expandButtonRef}
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="ml-auto size-8"
+              aria-label="Expand editor"
+              onClick={onExpand}
+            >
+              <Maximize2 />
+            </Button>
+          </ToolbarTooltip>
+        </Group>
       )}
     </div>
   );
