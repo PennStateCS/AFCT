@@ -38,7 +38,7 @@ describe('RichDescription on the server', () => {
     expect(html).toContain('<h2');
     expect(html).toContain('<strong>bold</strong>');
     expect(html).toContain('href="https://example.edu/"');
-    expect(html).toContain('rel="noopener noreferrer nofollow"');
+    expect(html).toContain('rel="noopener noreferrer"');
     expect(html).toContain('<math');
   });
 

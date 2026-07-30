@@ -9,15 +9,19 @@ import {
   MATH_LATEX_ATTR,
   describeLink,
   isAllowedLatex,
-  validateRichDescription,
+  parseRichDescriptionForRender,
   type TiptapMark,
   type TiptapNode,
 } from '@/lib/rich-description';
-import { renderDescriptionMath } from './render-math';
+import { DescriptionMath } from './DescriptionMath';
 import { RichDescriptionBoundary } from './RichDescriptionBoundary';
 // KaTeX's stylesheet is served from public/katex and linked in the root layout, not imported
 // here: a bundler import pulls its 60 font files into the chunk graph of every route that
 // renders a description. See scripts/vendor-katex.mjs.
+
+/** Smallest and largest heading a description may emit. H1 always belongs to the page. */
+export const MIN_HEADING_LEVEL = 2;
+export const MAX_HEADING_LEVEL = 6;
 
 export type RichDescriptionProps = {
   /** The stored plain text. Used as-is when there is no usable rich document. */
@@ -26,61 +30,65 @@ export type RichDescriptionProps = {
   descriptionJson?: unknown;
   /** Tightens vertical rhythm for cards, list rows, and problem headers. */
   compact?: boolean;
+  /**
+   * The heading level the description's TOP-most heading should render as.
+   *
+   * Authored headings are H2 to H4, written as if the description owned the page. Real surfaces
+   * do not all sit at the same depth: a description inside a dialog that already has an H2 title
+   * needs to start at H3 or the outline reads as two peers. This shifts the whole range while
+   * keeping the relative hierarchy the author wrote, and clamps to H2..H6 so a description can
+   * never emit an H1 or an invalid tag.
+   *
+   * Defaults to 2, which is the pre-existing behaviour for every call site that does not set it.
+   */
+  headingBaseLevel?: number;
   className?: string;
 };
+
+/** Everything the walker needs that is not the node itself. */
+type RenderOptions = { headingBaseLevel: number };
 
 /**
  * Read-only renderer for a stored rich description.
  *
- * A plain React walker over the validated Tiptap JSON rather than a second editor: read pages
- * get no ProseMirror, the output is server-renderable, and it reuses the same `.afct-rich-text`
+ * A plain React walker over the parsed Tiptap JSON rather than a second editor: read pages get
+ * no ProseMirror, the output is server-renderable, and it reuses the same `.afct-rich-text`
  * styles the editor uses so authored and published content match.
  *
- * Fallback behaviour, and what it actually is:
+ * Failure is graded, because losing a whole assignment prompt to one unrecognised node is a much
+ * worse outcome than losing the node:
  *
- * `validateRichDescription` accepts or rejects a document as a whole, so in practice there is
- * ONE observable fallback: a missing, malformed, unsupported-version, or otherwise invalid
- * document renders the plain-text `description` instead. Because the plain text is derived from
- * the rich document when it is saved, that loses the formatting but not the words.
+ *  1. The document is rejected outright only when there is nothing safe to show at all: a
+ *     missing or malformed envelope, an unsupported `version`, a root that is not a `doc`, or a
+ *     document past the depth, node-count, or text-size limits. Then the plain-text
+ *     `description` renders instead, which still carries every word because it is derived from
+ *     the rich document on save.
+ *  2. A node this build does not recognise keeps its children, dropping only the wrapper. If it
+ *     has no renderable children but does carry text, that text is rendered.
+ *  3. A mark or attribute that fails the shared safety policy (an href outside the protocol
+ *     allowlist, an out-of-range heading level, an unsupported alignment) is dropped while the
+ *     content it wrapped survives.
+ *  4. An equation whose source fails the latex policy shows its source as inline code rather
+ *     than disappearing.
  *
- * The per-node guards below (unsupported node type, unusable latex, rejected href) are defense
- * in depth, not a second behaviour: the validator already rejects every one of those cases using
- * the same predicates, so a document that reaches the walker cannot contain them. They stay
- * because this walker is the last thing between stored data and the DOM, and because they would
- * become load-bearing if the schema were ever loosened. Do not document them as user-facing
- * behaviour, and do not assume a test that exercises them proves anything about real documents.
+ * The safety rules did not move out of the way to make this possible. `parseRichDescriptionForRender`
+ * checks structure and the size limits; every content decision below re-checks the same shared
+ * predicates the write-time validator uses (`isAllowedLinkHref` via `describeLink`,
+ * `isAllowedLatex`, `ALLOWED_HEADING_LEVELS`, `ALLOWED_TEXT_ALIGN`). Nothing unrecognised is
+ * ever emitted as an element or an attribute, so an unknown node cannot introduce markup.
  */
-/**
- * Validation results, keyed by the document object itself.
- *
- * Validation is a full Zod parse plus a structural walk, and it runs on every render. The
- * obvious `useMemo` is not available: this component is deliberately usable from a Server
- * Component (see RichDescription.server.test.tsx), and hooks are not. A WeakMap keyed on the
- * DTO's own object gives the same saving in both environments and holds nothing alive: when the
- * fetched data is replaced, its cache entry becomes collectable with it.
- *
- * Sound because the input is parsed JSON that nobody mutates in place. A refetch produces a new
- * object and therefore a fresh validation.
- */
-const VALIDATION_CACHE = new WeakMap<object, ReturnType<typeof validateRichDescription>>();
-
-function validateOnce(value: unknown): ReturnType<typeof validateRichDescription> {
-  // WeakMap keys must be objects; anything else is cheap to reject anyway.
-  if (typeof value !== 'object' || value === null) return validateRichDescription(value);
-  const cached = VALIDATION_CACHE.get(value);
-  if (cached) return cached;
-  const result = validateRichDescription(value);
-  VALIDATION_CACHE.set(value, result);
-  return result;
-}
-
 export function RichDescription({
   description,
   descriptionJson,
   compact = false,
+  headingBaseLevel = MIN_HEADING_LEVEL,
   className,
 }: RichDescriptionProps) {
-  const result = descriptionJson == null ? null : validateOnce(descriptionJson);
+  // Parsing is a Zod pass plus a bounded walk over a document that is at most a few hundred
+  // nodes. It was memoized on object identity for a while; that was removed because the saving
+  // was not measurable and an identity cache quietly assumes nobody ever mutates the parsed
+  // JSON in place, which is an invariant no type in this codebase enforces.
+  const result = descriptionJson == null ? null : parseRichDescriptionForRender(descriptionJson);
   const plain = <PlainDescription text={description} compact={compact} className={className} />;
 
   if (!result?.ok) {
@@ -93,20 +101,55 @@ export function RichDescription({
   const content = result.envelope.document.content ?? [];
   if (content.length === 0) return plain;
 
-  // The boundary lives here rather than at each call site: the read surfaces are easy to add and
-  // easy to forget (one was already shipped without rich rendering at all), so putting it in the
-  // shared component is what makes the guarantee hold everywhere. It does not force the walker
-  // onto the client: the children are rendered by whoever renders this, and only the boundary
-  // itself is a client component.
+  const options: RenderOptions = {
+    headingBaseLevel: clampHeadingLevel(headingBaseLevel),
+  };
+
+  // Every node degraded to nothing (for example a document of nothing but unknown empty
+  // wrappers). Showing an empty box would look like the description had been lost, so fall back
+  // to the plain text, which still holds the words.
+  if (content.every((node) => isEmptyNode(node))) return plain;
+
+  const rendered = content.map((node, index) => (
+    <React.Fragment key={index}>{renderNode(node, index, options)}</React.Fragment>
+  ));
+
   return (
     <RichDescriptionBoundary fallback={plain}>
       <div className={cn('afct-rich-text', compact && 'afct-rich-text--compact', className)}>
-        {content.map((node, index) => (
-          <React.Fragment key={index}>{renderNode(node, index)}</React.Fragment>
-        ))}
+        {rendered}
       </div>
     </RichDescriptionBoundary>
   );
+}
+
+/** Would this node contribute nothing at all, whatever it is? */
+function isEmptyNode(node: TiptapNode): boolean {
+  if (KNOWN_NODE_TYPES.has(node.type)) return false;
+  if (typeof node.text === 'string' && node.text.length > 0) return false;
+  return (node.content ?? []).every(isEmptyNode);
+}
+
+/** Node types this build renders as an element. Anything else is unwrapped. */
+const KNOWN_NODE_TYPES = new Set<string>([
+  'text',
+  'paragraph',
+  'heading',
+  'bulletList',
+  'orderedList',
+  'listItem',
+  'blockquote',
+  'codeBlock',
+  'horizontalRule',
+  'hardBreak',
+  INLINE_MATH_NODE,
+  BLOCK_MATH_NODE,
+]);
+
+/** Keep a heading inside H2..H6, so a description never competes with the page's H1. */
+function clampHeadingLevel(level: number): number {
+  if (!Number.isFinite(level)) return MIN_HEADING_LEVEL;
+  return Math.min(Math.max(Math.round(level), MIN_HEADING_LEVEL), MAX_HEADING_LEVEL);
 }
 
 /** The pre-rich rendering: plain text with newlines preserved. */
@@ -134,15 +177,16 @@ function PlainDescription({
 }
 
 /**
- * Everything a subtree contributes as text, used by both fallback levels. Math keeps the same
- * delimiters the plain-text projection uses ($ inline, $$ display) so a fallback reads the same
- * way the Java client sees it.
+ * Everything a subtree contributes as text. Math keeps the same delimiters the plain-text
+ * projection uses ($ inline, $$ display) so a degraded subtree reads the way the Java client
+ * sees it.
  */
 function textOf(node: TiptapNode): string {
   if (node.type === 'text') return node.text ?? '';
   if (node.type === INLINE_MATH_NODE) return `$${String(node.attrs?.[MATH_LATEX_ATTR] ?? '')}$`;
   if (node.type === BLOCK_MATH_NODE) return `$$${String(node.attrs?.[MATH_LATEX_ATTR] ?? '')}$$`;
-  return (node.content ?? []).map(textOf).join('');
+  const own = typeof node.text === 'string' ? node.text : '';
+  return own + (node.content ?? []).map(textOf).join('');
 }
 
 /** Alignment, but only a value the shared allowlist recognises. Left is the absence of one. */
@@ -157,13 +201,13 @@ function alignOf(node: TiptapNode): string | undefined {
  * itself, but a text node carrying marks is wrapped by applyMark, whose outermost element
  * renderNode never sees and so cannot key. Wrapping here covers all node types uniformly.
  */
-function renderChildren(node: TiptapNode): React.ReactNode[] {
+function renderChildren(node: TiptapNode, options: RenderOptions): React.ReactNode[] {
   return (node.content ?? []).map((child, index) => (
-    <React.Fragment key={index}>{renderNode(child, index)}</React.Fragment>
+    <React.Fragment key={index}>{renderNode(child, index, options)}</React.Fragment>
   ));
 }
 
-function renderNode(node: TiptapNode, key: React.Key): React.ReactNode {
+function renderNode(node: TiptapNode, key: React.Key, options: RenderOptions): React.ReactNode {
   switch (node.type) {
     case 'text':
       return renderText(node, key);
@@ -171,34 +215,37 @@ function renderNode(node: TiptapNode, key: React.Key): React.ReactNode {
     case 'paragraph':
       return (
         <p key={key} data-align={alignOf(node)}>
-          {renderChildren(node)}
+          {renderChildren(node, options)}
         </p>
       );
 
     case 'heading': {
-      // Clamped to the shared policy so a description can never introduce a competing page
-      // heading, whatever an older or hand-crafted document claims.
-      const raw =
-        typeof node.attrs?.level === 'number' ? node.attrs.level : ALLOWED_HEADING_LEVELS[0];
-      const level = (ALLOWED_HEADING_LEVELS as readonly number[]).includes(raw)
-        ? raw
-        : Math.min(Math.max(raw, ALLOWED_HEADING_LEVELS[0]), ALLOWED_HEADING_LEVELS.at(-1)!);
-      const Tag = `h${level}` as 'h2' | 'h3' | 'h4';
+      // Authored levels are H2..H4 and are written as if the description owned the page. Shift
+      // them by the surface's base level so the outline nests correctly wherever it is used,
+      // then clamp so the result is always a real heading tag and never an H1.
+      const authored =
+        typeof node.attrs?.level === 'number' &&
+        (ALLOWED_HEADING_LEVELS as readonly number[]).includes(node.attrs.level)
+          ? node.attrs.level
+          : ALLOWED_HEADING_LEVELS[0];
+      const offset = authored - ALLOWED_HEADING_LEVELS[0];
+      const level = clampHeadingLevel(options.headingBaseLevel + offset);
+      const Tag = `h${level}` as 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
       return (
         <Tag key={key} data-align={alignOf(node)}>
-          {renderChildren(node)}
+          {renderChildren(node, options)}
         </Tag>
       );
     }
 
     case 'bulletList':
-      return <ul key={key}>{renderChildren(node)}</ul>;
+      return <ul key={key}>{renderChildren(node, options)}</ul>;
     case 'orderedList':
-      return <ol key={key}>{renderChildren(node)}</ol>;
+      return <ol key={key}>{renderChildren(node, options)}</ol>;
     case 'listItem':
-      return <li key={key}>{renderChildren(node)}</li>;
+      return <li key={key}>{renderChildren(node, options)}</li>;
     case 'blockquote':
-      return <blockquote key={key}>{renderChildren(node)}</blockquote>;
+      return <blockquote key={key}>{renderChildren(node, options)}</blockquote>;
     case 'codeBlock':
       return (
         <pre key={key}>
@@ -214,12 +261,20 @@ function renderNode(node: TiptapNode, key: React.Key): React.ReactNode {
     case BLOCK_MATH_NODE:
       return renderMath(node, key);
 
-    default:
-      // Unreachable for a validated document (the schema's node allowlist rejects the type
-      // outright, so the whole document has already fallen back). Kept as a last resort so an
-      // unknown wrapper degrades to its own text rather than disappearing.
-      warnFallback(`rich description contains unsupported node "${node.type}"; rendering its text`);
-      return <React.Fragment key={key}>{renderChildren(node)}</React.Fragment>;
+    default: {
+      // A node this build does not know, most likely written by a newer AFCT. Keep what it
+      // wrapped and drop only the wrapper, so one unrecognised node costs its own formatting
+      // rather than the whole description. No element and no attribute is emitted for it, so an
+      // unknown type cannot introduce markup.
+      warnFallback(
+        `rich description contains unsupported node "${node.type}"; keeping its content`,
+      );
+      const children = renderChildren(node, options);
+      if (children.length > 0) return <React.Fragment key={key}>{children}</React.Fragment>;
+      // No children to keep. If it carries text of its own, that is still worth showing.
+      const text = textOf(node);
+      return text ? <React.Fragment key={key}>{text}</React.Fragment> : null;
+    }
   }
 }
 
@@ -245,13 +300,10 @@ function applyMark(mark: TiptapMark, children: React.ReactNode): React.ReactNode
     case 'code':
       return <code>{children}</code>;
     case 'link': {
-      // Unreachable for a validated document: the schema runs isAllowedLinkHref, which shares
-      // validateLinkUrl with describeLink, so the two cannot disagree. Kept as a last resort.
+      // An href the shared policy rejects loses its link, never its text.
       const link = describeLink(mark.attrs?.href);
       if (!link) {
-        warnFallback(
-          'rich description contains a link with an unsupported href; rendering its text',
-        );
+        warnFallback('rich description contains a link with an unsupported href; keeping its text');
         return <>{children}</>;
       }
       return (
@@ -261,6 +313,8 @@ function applyMark(mark: TiptapMark, children: React.ReactNode): React.ReactNode
       );
     }
     default:
+      // Unknown mark: keep the text, drop the styling. Emitting anything based on an
+      // unrecognised mark type is what a sanitizer bypass would look like.
       return <>{children}</>;
   }
 }
@@ -269,29 +323,14 @@ function renderMath(node: TiptapNode, key: React.Key): React.ReactNode {
   const latex = node.attrs?.[MATH_LATEX_ATTR];
   const displayMode = node.type === BLOCK_MATH_NODE;
 
-  // Unreachable for a validated document: the schema applies this same isAllowedLatex check.
-  // Kept as a last resort so a bad equation shows its source instead of breaking the render.
+  // A math node whose source fails the shared policy shows its source as text rather than
+  // vanishing, so the author can see what needs fixing.
   if (!isAllowedLatex(latex)) {
-    warnFallback('rich description contains an unusable equation; rendering its source');
+    warnFallback('rich description contains an unusable equation; showing its source');
     return <code key={key}>{String(latex ?? '')}</code>;
   }
 
-  const html = renderDescriptionMath(latex as string, displayMode);
-  if (html === null) return <code key={key}>{latex as string}</code>;
-
-  const Tag = displayMode ? 'div' : 'span';
-  return (
-    <Tag
-      key={key}
-      data-type={displayMode ? 'block-math' : 'inline-math'}
-      // The one dangerouslySetInnerHTML in this feature, and it is narrow: the input is a
-      // schema-validated latex string bounded to MAX_LATEX_LENGTH, and KaTeX renders it with
-      // trust: false, which refuses the commands that can emit markup or fetch resources
-      // (\href, \url, \includegraphics, \html*). Nothing user-supplied reaches the DOM as HTML;
-      // only KaTeX's own output does.
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <DescriptionMath key={key} latex={latex as string} displayMode={displayMode} />;
 }
 
 /**

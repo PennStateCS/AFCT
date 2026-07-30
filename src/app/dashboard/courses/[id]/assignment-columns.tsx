@@ -333,6 +333,8 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
               </DialogHeader>
               <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm">
                 <RichDescription
+                  // Heading base: dialog title is an h2, so the description starts one level below it.
+                  headingBaseLevel={3}
                   description={assignment.description}
                   descriptionJson={assignment.descriptionJson}
                   compact

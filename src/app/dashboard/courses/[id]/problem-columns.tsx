@@ -83,7 +83,7 @@ export const useProblemColumns = ({
               <button
                 type="button"
                 onClick={() => setDescDialog({ open: true, problem: row.original })}
-                className="text-primary self-start text-xs underline hover:text-primary/80"
+                className="text-primary hover:text-primary/80 self-start text-xs underline"
                 title="View description"
               >
                 View description
@@ -232,7 +232,7 @@ export const useProblemColumns = ({
                 title={
                   disabled ? 'Problem is used by an assignment and cannot be deleted' : undefined
                 }
-                className={`flex items-center gap-2 text-destructive focus:text-destructive ${
+                className={`text-destructive focus:text-destructive flex items-center gap-2 ${
                   disabled ? 'cursor-not-allowed opacity-50' : ''
                 }`}
               >
@@ -306,6 +306,8 @@ export const useProblemColumns = ({
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm">
           <RichDescription
+            // Heading base: dialog title is an h2, so the description starts one level below it.
+            headingBaseLevel={3}
             description={descDialog.problem.description}
             descriptionJson={(descDialog.problem as { descriptionJson?: unknown }).descriptionJson}
           />

@@ -12,6 +12,7 @@ export {
   MAX_TEXT_NODE_LENGTH,
   richDescriptionEnvelopeSchema,
   validateRichDescription,
+  parseRichDescriptionForRender,
   type TiptapMark,
   type TiptapNode,
   type TiptapDocument,

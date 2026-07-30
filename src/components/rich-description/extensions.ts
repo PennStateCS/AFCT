@@ -92,7 +92,7 @@ export function createRichDescriptionExtensions({
       HTMLAttributes: {
         // Rendered links are safe by construction: no window.opener handle, and no referrer
         // leakage to the destination.
-        rel: 'noopener noreferrer nofollow',
+        rel: 'noopener noreferrer',
         target: '_blank',
       },
     }),

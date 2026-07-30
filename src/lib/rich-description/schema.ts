@@ -194,6 +194,69 @@ export type ValidateResult =
   { ok: true; envelope: RichDescriptionEnvelope } | { ok: false; error: string };
 
 /**
+ * The RENDER-TIME schema, deliberately more permissive than the write-time one above.
+ *
+ * Writes stay strict: `nodeSchema` rejects a document outright if it carries an unknown node,
+ * an unsafe href, or unusable latex, so nothing of that shape can be stored through AFCT.
+ *
+ * Reads cannot afford the same answer. A document written by a NEWER AFCT will contain node
+ * types this build has never heard of, and failing the whole envelope would drop an entire
+ * assignment prompt to plain text over one unrecognised wrapper. So rendering parses for
+ * STRUCTURE only (shape, primitive attributes, text size) and leaves every safety decision to
+ * the walker, which drops the offending node or mark and keeps its siblings.
+ *
+ * The safety rules do not weaken, they move. `RichDescription` re-checks each href through
+ * `isAllowedLinkHref`, each equation through `isAllowedLatex`, each heading level and alignment
+ * against the shared allowlists, and renders nothing it does not recognise as an element. What
+ * changes is the blast radius of a single bad node, not what is allowed to reach the DOM.
+ */
+const structuralMarkSchema: z.ZodType<TiptapMark> = z.lazy(
+  () =>
+    z.object({
+      // Any string: an unknown mark is unwrapped by the walker rather than failing the document.
+      type: z.string().min(1),
+      attrs: z.record(z.string(), z.unknown()).optional(),
+    }) as unknown as z.ZodType<TiptapMark>,
+);
+
+const structuralNodeSchema: z.ZodType<TiptapNode> = z.lazy(() =>
+  z
+    .object({
+      type: z.string().min(1),
+      text: z.string().optional(),
+      attrs: z.record(z.string(), z.unknown()).optional(),
+      marks: z.array(structuralMarkSchema).optional(),
+      content: z.array(structuralNodeSchema).optional(),
+    })
+    .superRefine((node, ctx) => {
+      // Kept even in the lenient parse: these bound how much work a render can be made to do,
+      // which is a property of the renderer rather than of any one node's meaning.
+      if (typeof node.text === 'string' && node.text.length > MAX_TEXT_NODE_LENGTH) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `text node exceeds ${MAX_TEXT_NODE_LENGTH} characters`,
+        });
+      }
+      if (!attrsArePrimitive(node.attrs)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'node attributes must be primitives',
+        });
+      }
+    }),
+);
+
+const structuralDocumentSchema = z.object({
+  type: z.literal('doc'),
+  content: z.array(structuralNodeSchema).optional(),
+});
+
+const structuralEnvelopeSchema = z.object({
+  version: z.literal(RICH_DESCRIPTION_VERSION),
+  document: structuralDocumentSchema,
+});
+
+/**
  * Walk the parsed document to enforce the bounds Zod cannot express: how deep it nests and how
  * many nodes it holds. Returns an error message, or null when the document is within bounds.
  */
@@ -256,12 +319,36 @@ function rawShapeExceedsLimits(value: unknown): string | null {
  * during render, where a throw would blank the page instead of falling back to plain text.
  */
 export function validateRichDescription(value: unknown): ValidateResult {
+  return parseEnvelope(value, richDescriptionEnvelopeSchema);
+}
+
+/**
+ * Parse a stored document for RENDERING, tolerating anything the walker can degrade safely.
+ *
+ * Whole-document rejection is reserved for the cases where there is genuinely nothing to show:
+ * a missing or malformed envelope, an unsupported `version`, a root that is not a `doc`, or a
+ * document past the depth, node-count, or text-size limits. Everything else, including node and
+ * mark types this build does not know, is handed to the walker, which renders what it
+ * recognises and degrades the rest.
+ *
+ * Use `validateRichDescription` for writes. Using this one there would let an unknown node be
+ * stored, which is exactly what the strict schema exists to prevent.
+ */
+export function parseRichDescriptionForRender(value: unknown): ValidateResult {
+  return parseEnvelope(value, structuralEnvelopeSchema);
+}
+
+/** Shared body of both parsers: raw bounds, then the given schema, then the parsed bounds. */
+function parseEnvelope(
+  value: unknown,
+  schema: typeof richDescriptionEnvelopeSchema | typeof structuralEnvelopeSchema,
+): ValidateResult {
   const oversized = rawShapeExceedsLimits(value);
   if (oversized) return { ok: false, error: oversized };
 
-  let parsed: ReturnType<typeof richDescriptionEnvelopeSchema.safeParse>;
+  let parsed: ReturnType<typeof schema.safeParse>;
   try {
-    parsed = richDescriptionEnvelopeSchema.safeParse(value);
+    parsed = schema.safeParse(value);
   } catch {
     // The depth guard above is the known way to get here. Anything else that makes the parser
     // itself fail is still a bad document, not an operational error, so it takes the same path.

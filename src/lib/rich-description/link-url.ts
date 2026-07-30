@@ -51,6 +51,16 @@ export function validateLinkUrl(raw: string): LinkUrlResult {
     return { ok: false, error: `Links cannot use ${parsed.protocol} addresses.` };
   }
 
+  // Userinfo is rejected outright. `https://example.edu@evil.test` reads as a link to
+  // example.edu and navigates to evil.test, which is the classic disguised-host shape, and a
+  // credential embedded in a course description would be a leak in its own right.
+  if (parsed.username || parsed.password) {
+    return {
+      ok: false,
+      error: 'A web address cannot contain a username or password.',
+    };
+  }
+
   // A mailto: with no recipient is a dead link.
   if (parsed.protocol === 'mailto:' && !parsed.pathname.includes('@')) {
     return { ok: false, error: 'Enter an email address, for example mailto:name@example.edu.' };
@@ -87,9 +97,11 @@ export type LinkPresentation = {
  * `mailto:`, so a relative or same-app path cannot be stored in the first place and would fail
  * validation if one were hand-crafted. That leaves two real shapes:
  *
- *  - https: leaves AFCT, so it opens in a new tab with `rel` set. `noopener`/`noreferrer` deny
- *    the destination a handle on our window and a referrer; `nofollow` keeps faculty-authored
- *    links from passing ranking signal to arbitrary sites.
+ *  - https: leaves AFCT, so it opens in a new tab with `rel` set. `noopener` denies the
+ *    destination a handle on our window (the actual security control here) and `noreferrer`
+ *    withholds the referrer. `nofollow` is deliberately NOT set: it is an SEO hint rather than a
+ *    security control, and AFCT already sends `X-Robots-Tag: noindex, nofollow` for the whole
+ *    app (see src/app/robots.ts), so per-link markup would add nothing.
  *  - mailto: hands off to a mail client. `target="_blank"` there leaves a stranded blank tab in
  *    several browsers, so it is deliberately omitted.
  */
@@ -98,5 +110,5 @@ export function describeLink(href: unknown): LinkPresentation | null {
   const result = validateLinkUrl(href);
   if (!result.ok) return null;
   if (result.href.startsWith('mailto:')) return { href: result.href };
-  return { href: result.href, target: '_blank', rel: 'noopener noreferrer nofollow' };
+  return { href: result.href, target: '_blank', rel: 'noopener noreferrer' };
 }

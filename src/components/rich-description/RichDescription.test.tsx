@@ -123,9 +123,13 @@ describe('RichDescription: alignment', () => {
     const container = renderDoc(
       doc({ type: 'paragraph', attrs: { textAlign: 'justify' }, content: [text('j')] }),
     );
-    // 'justify' never validates, so the whole document falls back to plain text.
-    expect(container.querySelector('p')).toBeNull();
-    expect(container.textContent).toContain('plain fallback');
+    // 'justify' is not in the allowlist, so the ATTRIBUTE is dropped and the paragraph still
+    // renders. The security property is unchanged: no alignment reaches the DOM, and no inline
+    // style is ever emitted.
+    const paragraph = container.querySelector('p');
+    expect(paragraph?.textContent).toBe('j');
+    expect(paragraph?.getAttribute('data-align')).toBeNull();
+    expect(paragraph?.getAttribute('style')).toBeNull();
   });
 
   it('never emits an inline style', () => {
@@ -147,12 +151,14 @@ describe('RichDescription: headings', () => {
     expect(container.querySelector('h2')).not.toBeNull();
   });
 
-  it('rejects a document containing an h1 outright', () => {
+  it('clamps an h1 to the base level instead of discarding the document', () => {
     const container = renderDoc(
       doc({ type: 'heading', attrs: { level: 1 }, content: [text('h')] }),
     );
+    // The page owns h1, so the renderer never emits one. It clamps to the base level and keeps
+    // the heading's text rather than losing the whole description over an out-of-range level.
     expect(container.querySelector('h1')).toBeNull();
-    expect(container.textContent).toContain('plain fallback');
+    expect(container.querySelector('h2')?.textContent).toBe('h');
   });
 });
 
@@ -164,7 +170,9 @@ describe('RichDescription: links', () => {
     const anchor = container.querySelector('a')!;
     expect(anchor.getAttribute('href')).toBe('https://example.edu/x');
     expect(anchor.getAttribute('target')).toBe('_blank');
-    expect(anchor.getAttribute('rel')).toBe('noopener noreferrer nofollow');
+    // noopener is the security control here. nofollow was removed: it is an SEO hint, not a
+    // security control, and AFCT already sends X-Robots-Tag: noindex, nofollow app-wide.
+    expect(anchor.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
   it('leaves a mailto link in the same tab', () => {
@@ -176,12 +184,15 @@ describe('RichDescription: links', () => {
     expect(anchor.getAttribute('target')).toBeNull();
   });
 
-  it('rejects an unsafe href at the document level', () => {
+  it('drops an unsafe href but keeps the text it wrapped', () => {
     const container = renderDoc(
       doc(para(text('click', [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }]))),
     );
+    // The link is refused (no anchor reaches the DOM at all) while the words survive, instead
+    // of one bad href costing the entire description its formatting.
     expect(container.querySelector('a')).toBeNull();
-    expect(container.textContent).toContain('plain fallback');
+    expect(container.innerHTML).not.toContain('javascript:');
+    expect(container.textContent).toContain('click');
   });
 });
 
@@ -262,7 +273,7 @@ describe('RichDescription: graded fallback', () => {
   // description down to plain text. This is the real behaviour; the walker's own per-node
   // guards are unreachable defense in depth and are deliberately not asserted here, because a
   // test that reaches them would prove nothing about a stored document.
-  it('falls back to plain text for a document containing an unknown node type', () => {
+  it('keeps the content around and inside an unknown node type', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { container } = render(
       <RichDescription
@@ -277,11 +288,13 @@ describe('RichDescription: graded fallback', () => {
       />,
     );
 
-    expect(container.textContent).toContain('plain fallback');
-    // Not a partial render: the valid sibling goes too, and the plain-text column carries the words.
-    expect(container.textContent).not.toContain('formatted');
-    expect(container.querySelector('p')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('failed validation'));
+    // The valid sibling renders, and the unknown wrapper contributes its children rather than
+    // an element. Full coverage of this behaviour lives in subtree-fallback.test.tsx.
+    expect(container.textContent).toContain('formatted');
+    expect(container.textContent).toContain('inside');
+    expect(container.textContent).not.toContain('plain fallback');
+    expect(container.querySelector('callout')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('unsupported node'));
     warn.mockRestore();
   });
 

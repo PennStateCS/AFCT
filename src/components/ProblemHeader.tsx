@@ -69,7 +69,7 @@ export default function ProblemHeader({
   return (
     <div className={className}>
       <CardTitle className="text-lg">{title}</CardTitle>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-foreground">
+      <div className="text-foreground mt-2 flex flex-wrap items-center gap-2 text-xs">
         {badge ? (
           <Badge
             variant="outline"
@@ -97,6 +97,8 @@ export default function ProblemHeader({
       </div>
       {description || descriptionJson ? (
         <RichDescription
+          // Heading base: the CardTitle above is aria-level 3, so the description starts one level below it.
+          headingBaseLevel={4}
           compact
           description={description}
           descriptionJson={descriptionJson}

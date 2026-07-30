@@ -608,6 +608,8 @@ export default function AssignmentDashboardPage({
             <div>
               {descTarget.description || descTarget.descriptionJson ? (
                 <RichDescription
+                  // Heading base: dialog title is an h2, so the description starts one level below it.
+                  headingBaseLevel={3}
                   description={descTarget.description}
                   descriptionJson={descTarget.descriptionJson}
                 />
