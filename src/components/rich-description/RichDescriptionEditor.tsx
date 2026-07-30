@@ -133,21 +133,26 @@ export function RichDescriptionEditor({
     createRichDescriptionExtensions({ onMathClick: (target) => openMathRef.current(target) }),
   );
 
-  const editor = useEditor({
-    extensions,
-    content: initialContent,
-    editable,
-    // Server-render nothing and mount on the client: Tiptap needs the DOM, and rendering the
-    // document during SSR then hydrating produces a mismatch.
-    immediatelyRender: false,
-    // The accessible name/description/invalid state must live on the contenteditable itself
-    // (ProseMirror already puts role="textbox" there); duplicating role on a wrapper would
-    // expose two textboxes to assistive tech.
-    editorProps: {
+  /**
+   * Memoized because Tiptap compares options by reference.
+   *
+   * `useEditor` re-checks its options on every render and, when they differ, calls
+   * `editor.setOptions`, which runs `view.setProps` AND `view.updateState` (a full ProseMirror
+   * view update). Its comparison is `a[key] !== b[key]` for `editorProps`, so a fresh object
+   * literal here means every React render forces that update: once per keystroke via onChange,
+   * plus every unrelated re-render of the parent form. Keeping the reference stable while the
+   * values are unchanged reduces that to the renders that genuinely change the aria state.
+   */
+  const editorProps = React.useMemo(
+    () => ({
       // Pasted HTML is stripped of presentation before Tiptap parses it, so a paste from Word or
       // Google Docs contributes structure (paragraphs, lists, emphasis) but not fonts, colours,
       // or sizes. The schema is still the backstop for node and mark types.
       transformPastedHTML: sanitizePastedHTML,
+      // The accessible name/description/invalid state must live on the contenteditable itself
+      // (ProseMirror already puts role="textbox" there); duplicating role on a wrapper would
+      // expose two textboxes to assistive tech. These still update after creation, because a
+      // real change here does flow through setOptions.
       attributes: {
         role: 'textbox',
         'aria-multiline': 'true',
@@ -156,7 +161,18 @@ export function RichDescriptionEditor({
         ...(ariaDescribedBy ? { 'aria-describedby': ariaDescribedBy } : {}),
         ...(invalid ? { 'aria-invalid': 'true' } : {}),
       },
-    },
+    }),
+    [ariaLabel, ariaLabelledBy, ariaDescribedBy, invalid],
+  );
+
+  const editor = useEditor({
+    extensions,
+    content: initialContent,
+    editable,
+    // Server-render nothing and mount on the client: Tiptap needs the DOM, and rendering the
+    // document during SSR then hydrating produces a mismatch.
+    immediatelyRender: false,
+    editorProps,
     onCreate: () => {
       readyRef.current = true;
     },

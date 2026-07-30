@@ -3,6 +3,7 @@
 import * as React from 'react';
 import type { Editor } from '@tiptap/react';
 import katex from 'katex';
+import { describeLatexError, type LatexErrorText } from './latex-error';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -45,7 +46,7 @@ const MODE_OPTIONS = [
 export function EquationDialog({ editor, open, onOpenChange, target }: EquationDialogProps) {
   const [latex, setLatex] = React.useState('');
   const [mode, setMode] = React.useState<MathMode>('inline');
-  const [error, setError] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<LatexErrorText | null>(null);
   const previewRef = React.useRef<HTMLDivElement>(null);
   const fieldId = React.useId();
   const errorId = `${fieldId}-error`;
@@ -83,7 +84,7 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
       setError(null);
     } catch (cause) {
       container.textContent = '';
-      setError(cause instanceof Error ? cause.message : 'This is not valid LaTeX.');
+      setError(describeLatexError(cause));
     }
   }, [open, latex, mode]);
 
@@ -96,7 +97,7 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
     if (error) return;
     const result = validateLatex(latex);
     if (!result.ok) {
-      setError(result.error);
+      setError({ message: result.error });
       return;
     }
 
@@ -137,8 +138,8 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Edit equation' : 'Insert equation'}</DialogTitle>
             <DialogDescription>
-              Write the equation in LaTeX. Inline equations sit inside a sentence; display
-              equations stand on their own centered line.
+              Write the equation in LaTeX. Inline equations sit inside a sentence; display equations
+              stand on their own centered line.
             </DialogDescription>
           </DialogHeader>
 
@@ -174,10 +175,16 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? errorId : undefined}
               />
+              {/* One live region, holding the plain sentence and (when it adds something)
+                  KaTeX's own wording underneath. Both sit inside the same element so a screen
+                  reader announces the guidance and the detail as one update rather than two. */}
               {error && (
-                <p id={errorId} role="alert" className="text-destructive mt-1 text-xs">
-                  {error}
-                </p>
+                <div id={errorId} role="alert" className="mt-1 text-xs">
+                  <p className="text-destructive">{error.message}</p>
+                  {error.detail && (
+                    <p className="text-muted-foreground mt-0.5">KaTeX reported: {error.detail}</p>
+                  )}
+                </div>
               )}
             </div>
 

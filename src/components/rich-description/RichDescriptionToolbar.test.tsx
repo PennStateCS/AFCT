@@ -155,11 +155,10 @@ describe('RichDescriptionToolbar', () => {
 
   it('is keyboard reachable and operable', async () => {
     const user = userEvent.setup();
-    const { api, onChange } = await setup();
-    api().insertText('typed');
-    // Let the edit settle before taking focus: the insert triggers an editor update and a
-    // toolbar re-render, and focusing mid-render can drop the focus we just set.
-    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    // No insertText on purpose. Bold applies to an empty selection as a stored mark, and seeding
+    // text first triggers an editor update, which re-renders the toolbar through useEditorState
+    // and can steal the focus this test just placed on the button.
+    await setup();
 
     const bold = screen.getByRole('button', { name: 'Bold' });
     bold.focus();
