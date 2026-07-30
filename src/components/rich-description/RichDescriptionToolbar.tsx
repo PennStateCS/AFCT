@@ -15,6 +15,7 @@ import {
   ListOrdered,
   Maximize2,
   Minus,
+  MoreHorizontal,
   Quote,
   Redo2,
   Sigma,
@@ -38,6 +39,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 /** The paragraph/heading choices. H1 is reserved for the page itself. */
 /**
@@ -86,6 +94,27 @@ const ALIGN_OPTIONS: { value: AlignValue; label: string; Icon: typeof AlignLeft 
   { value: 'center', label: 'Align center', Icon: AlignCenter },
   { value: 'right', label: 'Align right', Icon: AlignRight },
 ];
+
+/**
+ * One command, described once.
+ *
+ * A command has a single definition: its label, its disabled rule, its pressed state, and what it
+ * does. The toolbar button and the "More" menu item both render from this object, so they cannot
+ * drift into disagreeing about whether something is disabled or already applied.
+ *
+ * `pressed` present means a toggle; absent means a plain action.
+ */
+export type ToolbarCommand = {
+  id: string;
+  /** The accessible name. Also the menu-item text in More. */
+  label: string;
+  /** Visible tooltip. Carries the shortcut, which the accessible name deliberately does not. */
+  tooltip: string;
+  Icon: typeof Bold;
+  disabled: boolean;
+  pressed?: boolean;
+  run: (pressed: boolean) => void;
+};
 
 /** Icon-only control: tooltip text doubles as the accessible name. */
 function ToolbarTooltip({ label, children }: { label: string; children: React.ReactElement }) {
@@ -184,14 +213,98 @@ function inspectSelectedBlocks(instance: Editor): {
  * separator) alone on the next row. Grouping keeps Undo with Redo, Bold with Italic, Link with
  * Equation, and the three alignment buttons intact.
  */
-const Group = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex flex-none items-center gap-0.5">{children}</div>
+const Group = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={cn('flex flex-none items-center gap-0.5', className)}>{children}</div>
 );
 
 /** Separators live BETWEEN groups, never inside one, so a wrap cannot strand one. */
 const GroupDivider = () => (
   <Separator orientation="vertical" className="mx-1 !h-6 flex-none" aria-hidden="true" />
 );
+
+/**
+ * The overflow menu: the same commands, as a menu, for toolbars too narrow to show them all.
+ *
+ * Rendered from the same `ToolbarCommand` array as the buttons it replaces. Which commands are in
+ * here is the caller's decision; this component only knows how to draw them.
+ *
+ * Module scope, like `Group`: see the note there.
+ */
+export function ToolbarOverflowMenu({
+  commands,
+  label = 'More formatting',
+}: {
+  commands: ToolbarCommand[];
+  label?: string;
+}) {
+  /**
+   * Radix returns focus to the trigger when the menu closes, which is right for Escape or a click
+   * away but wrong after running a command: the command already put the caret back in the
+   * document, and pulling focus to a button would leave the user typing nowhere. So suppress the
+   * restore only on the path where a command ran.
+   */
+  const commandRan = React.useRef(false);
+  const markRan = () => {
+    commandRan.current = true;
+  };
+
+  return (
+    <DropdownMenu>
+      <ToolbarTooltip label={label}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={label}
+            // Opening the menu blurs the editor, but Tiptap keeps the selection in its own state
+            // and every command chains through `.focus()`, so the caret comes back where it was.
+          >
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+      </ToolbarTooltip>
+      <DropdownMenuContent
+        align="start"
+        onCloseAutoFocus={(event) => {
+          if (!commandRan.current) return;
+          commandRan.current = false;
+          event.preventDefault();
+        }}
+      >
+        {commands.map(({ id, label: name, Icon, disabled, pressed, run }) =>
+          pressed === undefined ? (
+            <DropdownMenuItem
+              key={id}
+              disabled={disabled}
+              onSelect={() => {
+                markRan();
+                run(true);
+              }}
+            >
+              <Icon />
+              {name}
+            </DropdownMenuItem>
+          ) : (
+            // A checkbox item, not a plain one: these commands have an on/off state, and the tick
+            // is how the menu says the same thing the pressed toggle says in the toolbar.
+            <DropdownMenuCheckboxItem
+              key={id}
+              checked={pressed}
+              disabled={disabled}
+              onSelect={markRan}
+              onCheckedChange={run}
+            >
+              <Icon />
+              {name}
+            </DropdownMenuCheckboxItem>
+          ),
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function RichDescriptionToolbar({
   editor,
@@ -251,28 +364,6 @@ export function RichDescriptionToolbar({
     }
     const level = Number(value.split('-')[1]) as 2 | 3 | 4;
     chain.setHeading({ level }).run();
-  };
-
-  /**
-   * One command, described once.
-   *
-   * A command has a single definition: its label, its disabled rule, its pressed state, and what
-   * it does. When these controls start moving into a "More" menu at narrow widths, the menu item
-   * and the toolbar button will render from the same object, so they cannot drift into
-   * disagreeing about whether something is disabled or already applied.
-   *
-   * `pressed` present means a toggle; absent means a plain action.
-   */
-  type ToolbarCommand = {
-    id: string;
-    /** The accessible name. Also the menu-item text when this moves into More. */
-    label: string;
-    /** Visible tooltip. Carries the shortcut, which the accessible name deliberately does not. */
-    tooltip: string;
-    Icon: typeof Bold;
-    disabled: boolean;
-    pressed?: boolean;
-    run: (pressed: boolean) => void;
   };
 
   const chain = () => editor.chain().focus();
@@ -423,10 +514,12 @@ export function RichDescriptionToolbar({
       // delegate arrows into them.
       role="group"
       aria-label={label}
-      // Wraps rather than hiding controls behind an overflow menu on narrow screens, so every
-      // formatting command stays reachable.
+      // A container, so the controls respond to the width of the EDITOR rather than the window.
+      // The same editor appears in a full-width form and in a narrow dialog column, and only the
+      // container knows the difference. Still wraps below the overflow tier, so nothing is ever
+      // cut off.
       className={cn(
-        'border-input flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b px-2 py-1.5',
+        '@container/toolbar border-input flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b px-2 py-1.5',
         className,
       )}
     >
@@ -565,8 +658,17 @@ export function RichDescriptionToolbar({
 
       <GroupDivider />
 
-      {/* Structure */}
-      <Group>{structureCommands.map(renderCommand)}</Group>
+      {/* Structure. Below the tier these five collapse into the More menu, which is the whole
+          reason the commands are described as data: the buttons and the menu items come from the
+          same array, so they cannot disagree.
+
+          52rem is roughly where the full row stops fitting, so the swap happens instead of the
+          first wrap rather than after it. Exactly one of the two is displayed at any width, so no
+          command is ever reachable twice. */}
+      <Group className="@max-[52rem]/toolbar:hidden">{structureCommands.map(renderCommand)}</Group>
+      <Group className="hidden @max-[52rem]/toolbar:flex">
+        <ToolbarOverflowMenu commands={structureCommands} />
+      </Group>
 
       {/* Expanded editing. Pushed to the far end (ml-auto) because it changes the whole
           editing surface rather than the document, so it does not belong among the
