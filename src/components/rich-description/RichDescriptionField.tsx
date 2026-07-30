@@ -67,6 +67,9 @@ export function RichDescriptionField({
         ariaLabelledBy={labelId}
         ariaDescribedBy={error ? errorId : help ? helpId : undefined}
         minHeightClassName={minHeightClassName}
+        // The field's own label names the expanded view too, so an author who expands from a
+        // problem dialog can still see which description they are editing.
+        expandedTitle={label}
       />
       {help && !error && (
         <p id={helpId} className="text-muted-foreground mt-1 text-xs">

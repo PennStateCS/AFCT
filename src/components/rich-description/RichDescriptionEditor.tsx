@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   RICH_DESCRIPTION_VERSION,
   plainTextToRichDescription,
@@ -54,6 +56,13 @@ export type RichDescriptionEditorProps = {
   ariaDescribedBy?: string;
   /** Marks the editor invalid for assistive tech and turns on the destructive ring. */
   invalid?: boolean;
+  /**
+   * Offer the expanded (full-viewport) editing mode. On by default when the toolbar is shown;
+   * pass false for a surface where an overlay would be wrong.
+   */
+  allowExpand?: boolean;
+  /** Shown as the expanded view's heading, so the author knows what they are editing. */
+  expandedTitle?: string;
   className?: string;
   /** Tailwind min-height class for the editable area. */
   minHeightClassName?: string;
@@ -89,6 +98,8 @@ export function RichDescriptionEditor({
   ariaLabelledBy,
   ariaDescribedBy,
   invalid = false,
+  allowExpand,
+  expandedTitle = 'Description',
   className,
   minHeightClassName = 'min-h-40',
 }: RichDescriptionEditorProps) {
@@ -205,6 +216,25 @@ export function RichDescriptionEditor({
     return () => dom.removeEventListener('keydown', onKeyDown);
   }, [editor, editable]);
 
+  // Expanded (full-viewport) editing. One flag; the SAME editor is rendered either inline or
+  // inside the overlay, never two of them.
+  const canExpand = allowExpand ?? showToolbar;
+  const [expanded, setExpanded] = React.useState(false);
+  const expandButtonRef = React.useRef<HTMLButtonElement>(null);
+  // Set while collapsing so focus returns to the (re-rendered) Expand button afterwards.
+  const restoreFocusRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (expanded || !restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    expandButtonRef.current?.focus();
+  }, [expanded]);
+
+  const collapse = React.useCallback(() => {
+    restoreFocusRef.current = true;
+    setExpanded(false);
+  }, []);
+
   // `editor.isEmpty` is mutable editor state, not React state, so track it explicitly:
   // reading it during render alone would never re-run when the document changes and the
   // placeholder would stick around after the first character.
@@ -219,15 +249,26 @@ export function RichDescriptionEditor({
     };
   }, [editor]);
 
-  return (
+  /**
+   * The editor body: toolbar plus document. Rendered in exactly one place at a time, either
+   * inline in the form or inside the expanded overlay. Moving it re-parents the SAME
+   * ProseMirror view (Tiptap's EditorContent re-attaches `editor.view.dom` on mount and does
+   * not destroy it on unmount), so the document, selection, and undo history all survive the
+   * switch and there is never a second editor.
+   */
+  const body = (
     <div
       data-slot="rich-description-editor"
+      data-expanded={expanded ? 'true' : undefined}
       className={cn(
         // Mirrors the Textarea's chrome so the editor sits in a form as a peer control.
         'border-input dark:bg-input/30 relative w-full rounded-md border bg-transparent text-base shadow-xs transition-[color,box-shadow] md:text-sm',
         'focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]',
         invalid && 'border-destructive ring-destructive/20 dark:ring-destructive/40',
         disabled && 'cursor-not-allowed opacity-50',
+        // Expanded: fill the overlay, no rounded card chrome, and let the document scroll
+        // rather than the whole overlay, which keeps the toolbar in view.
+        expanded && 'flex min-h-0 flex-1 flex-col rounded-none border-0 shadow-none ring-0',
         className,
       )}
     >
@@ -237,6 +278,12 @@ export function RichDescriptionEditor({
           label={toolbarLabel}
           onOpenLinkDialog={() => setLinkDialogOpen(true)}
           onOpenEquationDialog={openEquationDialog}
+          // Enter-only, and absent while expanded: the overlay header owns the exit control, so
+          // there is exactly one "Exit expanded view" button on screen.
+          onExpand={canExpand && !expanded ? () => setExpanded(true) : undefined}
+          expandButtonRef={expandButtonRef}
+          // Sticky while expanded so it stays reachable through a long document.
+          className={expanded ? 'bg-background sticky top-0 z-10' : undefined}
         />
       )}
       <LinkDialog editor={editor} open={linkDialogOpen} onOpenChange={setLinkDialogOpen} />
@@ -248,14 +295,17 @@ export function RichDescriptionEditor({
       />
       {/* The document area is its own positioning context so the placeholder overlays the text
           and never the toolbar above it. */}
-      <div className="relative">
+      <div className={cn('relative', expanded && 'min-h-0 flex-1 overflow-y-auto')}>
         {/* Placeholder is rendered here (not via the Placeholder extension) so it needs no extra
             dependency and stays out of the document. aria-hidden: the accessible name comes from
             the field label, and screen readers announce the empty textbox already. */}
         {isEmpty && (
           <div
             aria-hidden="true"
-            className="text-muted-foreground pointer-events-none absolute px-3 py-2 select-none"
+            className={cn(
+              'text-muted-foreground pointer-events-none absolute px-3 py-2 select-none',
+              expanded && 'inset-x-0 mx-auto max-w-3xl',
+            )}
           >
             {placeholder}
           </div>
@@ -267,13 +317,54 @@ export function RichDescriptionEditor({
           // Long words and code must wrap rather than scroll the page sideways. The min-height
           // goes on this wrapper (a runtime-built Tailwind class would not be generated), and
           // `.tiptap` stretches to fill it so clicking the blank area focuses the document.
+          //
+          // Expanded caps the measure at max-w-3xl: the overlay is as wide as the viewport, but
+          // prose set to a 2000px line length is unreadable.
           className={cn(
             'afct-rich-text px-3 py-2 break-words [&_.tiptap]:h-full [&_.tiptap]:outline-none',
-            minHeightClassName,
+            expanded ? 'mx-auto min-h-full w-full max-w-3xl py-6' : minHeightClassName,
           )}
         />
       </div>
     </div>
+  );
+
+  if (!expanded) return body;
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) collapse();
+      }}
+    >
+      {/* Radix gives the overlay its focus trap, background scroll lock, and inert background
+          for free, and it nests correctly: when the link or equation dialog is open, Escape
+          closes THAT dialog and leaves this one open, which is exactly the required behaviour.
+          The class overrides turn the centred card into a full-viewport surface (h-dvh, not
+          h-screen, so a mobile browser's dynamic toolbar does not clip the bottom). */}
+      <DialogContent
+        showCloseButton={false}
+        className="flex h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none"
+        aria-describedby={undefined}
+      >
+        <DialogHeader className="border-input flex-row items-center justify-between gap-4 border-b px-4 py-3 text-left">
+          <div className="min-w-0">
+            <DialogTitle className="truncate text-base">{expandedTitle}</DialogTitle>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              {/* States plainly that this view does not save. Expanded mode deliberately has no
+                  Save button: a second save path is worse than making the author close first. */}
+              Close this view to return to the form, then save your changes.
+            </p>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={collapse}>
+            Exit expanded view
+          </Button>
+        </DialogHeader>
+        {/* pb keeps the last line clear of a phone's home indicator. */}
+        <div className="flex min-h-0 flex-1 flex-col pb-[env(safe-area-inset-bottom)]">{body}</div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

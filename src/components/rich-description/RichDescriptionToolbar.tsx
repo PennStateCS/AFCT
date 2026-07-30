@@ -13,6 +13,7 @@ import {
   Link2,
   List,
   ListOrdered,
+  Maximize2,
   Minus,
   Quote,
   Redo2,
@@ -74,6 +75,14 @@ export type RichDescriptionToolbarProps = {
   onOpenLinkDialog?: () => void;
   /** Asked to open the equation dialog for a new equation. */
   onOpenEquationDialog?: () => void;
+  /**
+   * Asked to enter expanded editing. Omit to hide the control, which is also what the editor
+   * does WHILE expanded: the overlay has its own clearly labelled exit button, and a second
+   * control with the same accessible name would be ambiguous for voice and screen-reader users.
+   */
+  onExpand?: () => void;
+  /** Receives the expand button so the editor can restore focus to it after exiting. */
+  expandButtonRef?: React.Ref<HTMLButtonElement>;
   className?: string;
 };
 
@@ -89,6 +98,8 @@ export function RichDescriptionToolbar({
   label = 'Formatting',
   onOpenLinkDialog,
   onOpenEquationDialog,
+  onExpand,
+  expandButtonRef,
   className,
 }: RichDescriptionToolbarProps) {
   // Subscribe to exactly the editor state the toolbar renders. useEditorState re-runs this
@@ -374,6 +385,26 @@ export function RichDescriptionToolbar({
           <Minus />
         </Button>
       </ToolbarTooltip>
+
+      {/* Expanded editing. Pushed to the far end (ml-auto) because it changes the whole
+          editing surface rather than the document, so it does not belong among the
+          formatting controls. Stays enabled while the editor is read-only: expanding to read
+          a long description is useful even when it cannot be edited. */}
+      {onExpand && (
+        <ToolbarTooltip label="Expand editor">
+          <Button
+            ref={expandButtonRef}
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="ml-auto size-8"
+            aria-label="Expand editor"
+            onClick={onExpand}
+          >
+            <Maximize2 />
+          </Button>
+        </ToolbarTooltip>
+      )}
     </div>
   );
 }
