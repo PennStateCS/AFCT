@@ -4,6 +4,9 @@ import * as React from 'react';
 import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   Bold,
   Code,
   Italic,
@@ -21,6 +24,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Toggle } from '@/components/ui/toggle';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { ALLOWED_TEXT_ALIGN } from '@/lib/rich-description';
 import {
   Select,
   SelectContent,
@@ -39,6 +44,15 @@ const BLOCK_OPTIONS = [
 ] as const;
 
 type BlockValue = (typeof BLOCK_OPTIONS)[number]['value'];
+
+/** Supported alignments, in toolbar order. No justify. */
+type AlignValue = (typeof ALLOWED_TEXT_ALIGN)[number];
+
+const ALIGN_OPTIONS: { value: AlignValue; label: string; Icon: typeof AlignLeft }[] = [
+  { value: 'left', label: 'Align left', Icon: AlignLeft },
+  { value: 'center', label: 'Align center', Icon: AlignCenter },
+  { value: 'right', label: 'Align right', Icon: AlignRight },
+];
 
 /** Icon-only control: tooltip text doubles as the accessible name. */
 function ToolbarTooltip({ label, children }: { label: string; children: React.ReactElement }) {
@@ -93,6 +107,12 @@ export function RichDescriptionToolbar({
             : instance.isActive('heading', { level: 4 })
               ? 'heading-4'
               : 'paragraph') as BlockValue,
+        // Alignment follows the cursor. Left is the default and is stored as no attribute, so
+        // "nothing active" means left rather than an undefined state. A selection spanning
+        // mixed alignments matches none of the three, which shows as no pressed button.
+        align: (ALLOWED_TEXT_ALIGN.find((a) => instance.isActive({ textAlign: a })) ??
+          'left') as AlignValue,
+        canAlign: instance.can().chain().setTextAlign('center').run(),
         canUndo: instance.can().undo(),
         canRedo: instance.can().redo(),
         canBold: instance.can().chain().toggleBold().run(),
@@ -224,6 +244,35 @@ export function RichDescriptionToolbar({
           <Code />
         </Toggle>
       </ToolbarTooltip>
+
+      <Separator orientation="vertical" className="mx-1 !h-6" />
+
+      {/* Alignment: a single-select group, since a block has exactly one alignment. Radix's
+          single type ignores a press on the already-selected item, so the user cannot toggle
+          alignment off into an undefined state. */}
+      <ToggleGroup
+        type="single"
+        size="sm"
+        value={state.align}
+        aria-label="Text alignment"
+        disabled={disabledAll || !state.canAlign}
+        onValueChange={(value) => {
+          if (!value) return; // deselect attempt: keep the current alignment
+          // Left is the absence of an alignment, so choosing it clears the attribute rather
+          // than writing 'left'. Keeps plain paragraphs free of redundant attributes.
+          const chain = editor.chain().focus();
+          if (value === 'left') chain.unsetTextAlign().run();
+          else chain.setTextAlign(value).run();
+        }}
+      >
+        {ALIGN_OPTIONS.map(({ value, label, Icon }) => (
+          <ToolbarTooltip key={value} label={label}>
+            <ToggleGroupItem value={value} aria-label={label}>
+              <Icon />
+            </ToggleGroupItem>
+          </ToolbarTooltip>
+        ))}
+      </ToggleGroup>
 
       <Separator orientation="vertical" className="mx-1 !h-6" />
 

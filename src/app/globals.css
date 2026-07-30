@@ -670,3 +670,13 @@ input[type='week'] {
   border-top: 1px solid var(--color-border);
   margin: 1rem 0;
 }
+
+/* Alignment. The editor stores left/center/right in the Tiptap JSON and renders it as
+   data-align (never an inline style), so only these three values can ever take effect;
+   anything else simply does not match. Left is the default and carries no attribute. */
+.afct-rich-text :where([data-align='center']) {
+  text-align: center;
+}
+.afct-rich-text :where([data-align='right']) {
+  text-align: right;
+}
