@@ -18,6 +18,7 @@ import { formatDeadlineDual } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
+import { RichDescription } from '@/components/rich-description/RichDescription';
 import type {
   AssignmentWithDetails,
   StudentAssignmentContext,
@@ -317,12 +318,17 @@ export default function StudentAssignmentPage({
           </div>
         </CardHeader>
         <CardContent>
-          {assignment.description && (
+          {Boolean(assignment.description || assignment.descriptionJson) && (
             <div>
               <h2 className="mb-2 font-semibold">Description</h2>
-              <p className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
-                {assignment.description}
-              </p>
+              {/* A div, not a p: a rich description can contain headings, lists, and rules,
+                  which are invalid inside a paragraph. */}
+              <div className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3">
+                <RichDescription
+                  description={assignment.description}
+                  descriptionJson={assignment.descriptionJson}
+                />
+              </div>
             </div>
           )}
         </CardContent>

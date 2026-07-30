@@ -7,6 +7,9 @@ export {
   ALLOWED_CONTENT_NODE_TYPES,
   ALLOWED_TEXT_ALIGN,
   ALLOWED_HEADING_LEVELS,
+  MAX_DOCUMENT_DEPTH,
+  MAX_NODE_COUNT,
+  MAX_TEXT_NODE_LENGTH,
   richDescriptionEnvelopeSchema,
   validateRichDescription,
   type TiptapMark,
@@ -19,7 +22,9 @@ export {
   ALLOWED_LINK_PROTOCOLS,
   validateLinkUrl,
   isAllowedLinkHref,
+  describeLink,
   type LinkUrlResult,
+  type LinkPresentation,
 } from './link-url';
 export { MAX_LATEX_LENGTH, validateLatex, isAllowedLatex, type LatexResult } from './latex';
 export { plainTextToRichDescription, richDescriptionToPlainText } from './plain-text';

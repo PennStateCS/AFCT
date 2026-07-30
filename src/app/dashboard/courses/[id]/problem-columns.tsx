@@ -21,6 +21,7 @@ import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { formatDateInTimeZone } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
+import { RichDescription } from '@/components/rich-description/RichDescription';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -76,7 +77,9 @@ export const useProblemColumns = ({
                 <StatusBadge variant="warning">Used</StatusBadge>
               ) : null}
             </div>
-            {row.original.description ? (
+            {/* Either form counts: a rich-only problem still has text to show. */}
+            {row.original.description ||
+            (row.original as { descriptionJson?: unknown }).descriptionJson ? (
               <button
                 type="button"
                 onClick={() => setDescDialog({ open: true, problem: row.original })}
@@ -301,8 +304,11 @@ export const useProblemColumns = ({
             {descDialog.problem.title}
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm break-words whitespace-pre-wrap">
-          {descDialog.problem.description}
+        <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm">
+          <RichDescription
+            description={descDialog.problem.description}
+            descriptionJson={(descDialog.problem as { descriptionJson?: unknown }).descriptionJson}
+          />
         </div>
       </DialogContent>
     </Dialog>

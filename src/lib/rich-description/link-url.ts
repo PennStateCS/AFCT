@@ -71,3 +71,32 @@ export function validateLinkUrl(raw: string): LinkUrlResult {
 export function isAllowedLinkHref(href: unknown): boolean {
   return typeof href === 'string' && validateLinkUrl(href).ok;
 }
+
+/** How a stored link should be rendered, or null when it is not a link AFCT will follow. */
+export type LinkPresentation = {
+  href: string;
+  /** Present only for links that leave AFCT. */
+  target?: '_blank';
+  rel?: string;
+};
+
+/**
+ * Decide how to render a stored link.
+ *
+ * There is no internal-link case to handle: the protocol allowlist accepts only `https:` and
+ * `mailto:`, so a relative or same-app path cannot be stored in the first place and would fail
+ * validation if one were hand-crafted. That leaves two real shapes:
+ *
+ *  - https: leaves AFCT, so it opens in a new tab with `rel` set. `noopener`/`noreferrer` deny
+ *    the destination a handle on our window and a referrer; `nofollow` keeps faculty-authored
+ *    links from passing ranking signal to arbitrary sites.
+ *  - mailto: hands off to a mail client. `target="_blank"` there leaves a stranded blank tab in
+ *    several browsers, so it is deliberately omitted.
+ */
+export function describeLink(href: unknown): LinkPresentation | null {
+  if (typeof href !== 'string') return null;
+  const result = validateLinkUrl(href);
+  if (!result.ok) return null;
+  if (result.href.startsWith('mailto:')) return { href: result.href };
+  return { href: result.href, target: '_blank', rel: 'noopener noreferrer nofollow' };
+}

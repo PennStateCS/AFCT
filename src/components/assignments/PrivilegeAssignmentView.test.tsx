@@ -56,7 +56,7 @@ vi.mock('@/components/ui/data-table', () => ({
         return (
           <div key={id} data-testid={`row-${id}`}>
             <span>{String(row.title)}</span>
-            <button type="button" onClick={() => p?.openDescription(row.description)}>
+            <button type="button" onClick={() => p?.openDescription(row)}>
               desc-{id}
             </button>
             <button type="button" onClick={() => p?.openRenderViewer(row)}>

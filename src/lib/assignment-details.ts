@@ -1,7 +1,9 @@
 import type { Problem, CourseRole } from '@prisma/client';
 
 export type AssignmentProblemLink = {
-  problem: Problem;
+  // The API projects a subset of Problem plus the rich description, which Prisma's Problem type
+  // already includes; the intersection keeps that explicit for read surfaces.
+  problem: Problem & { descriptionJson?: unknown };
   maxPoints: number;
   maxSubmissions: number;
   autograderEnabled: boolean;

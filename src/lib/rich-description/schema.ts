@@ -51,7 +51,33 @@ export const ALLOWED_TEXT_ALIGN = ['left', 'center', 'right'] as const;
  */
 export const ALLOWED_HEADING_LEVELS = [2, 3, 4] as const;
 
-export type TiptapMark = { type: (typeof ALLOWED_MARK_TYPES)[number]; attrs?: Record<string, unknown> };
+/**
+ * Structural bounds, checked after the shape parse. Zod validates what a node looks like; these
+ * bound how much of it there can be, which is what stops a hand-crafted payload from turning a
+ * render into a denial of service. Generous enough that no real description approaches them.
+ */
+export const MAX_DOCUMENT_DEPTH = 20;
+export const MAX_NODE_COUNT = 5000;
+/** Matches the 20000-character cap the plain-text `description` column already enforces. */
+export const MAX_TEXT_NODE_LENGTH = 20000;
+
+/** Attributes may only carry primitives; nested objects are never something the editor writes. */
+function attrsArePrimitive(attrs: Record<string, unknown> | undefined): boolean {
+  if (!attrs) return true;
+  return Object.values(attrs).every(
+    (value) =>
+      value === null ||
+      value === undefined ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean',
+  );
+}
+
+export type TiptapMark = {
+  type: (typeof ALLOWED_MARK_TYPES)[number];
+  attrs?: Record<string, unknown>;
+};
 
 export type TiptapNode = {
   type: string;
@@ -77,11 +103,17 @@ const markSchema = z
     if (mark.type === 'link') {
       const href = mark.attrs?.href;
       if (typeof href !== 'string' || href.length === 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'link mark requires a non-empty href' });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'link mark requires a non-empty href',
+        });
       } else if (!isAllowedLinkHref(href)) {
         // Same allowlist the dialog enforces, applied to stored documents: a payload that
         // never went through the UI still cannot carry a javascript:/data:/http: href.
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'link href uses an unsupported protocol' });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'link href uses an unsupported protocol',
+        });
       }
     }
   });
@@ -97,17 +129,36 @@ const nodeSchema: z.ZodType<TiptapNode> = z.lazy(() =>
       content: z.array(nodeSchema).optional(),
     })
     .superRefine((node, ctx) => {
-      if (node.type === 'text' && typeof node.text !== 'string') {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'text node requires text' });
+      if (node.type === 'text') {
+        if (typeof node.text !== 'string') {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'text node requires text' });
+        } else if (node.text.length > MAX_TEXT_NODE_LENGTH) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `text node exceeds ${MAX_TEXT_NODE_LENGTH} characters`,
+          });
+        }
+      }
+      if (!attrsArePrimitive(node.attrs)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'node attributes must be primitives',
+        });
       }
       if (node.type === INLINE_MATH_NODE || node.type === BLOCK_MATH_NODE) {
         const latex = node.attrs?.[MATH_LATEX_ATTR];
         if (typeof latex !== 'string') {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'math node requires a latex attribute' });
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'math node requires a latex attribute',
+          });
         } else if (!isAllowedLatex(latex)) {
           // Same bound the dialog enforces, applied to stored documents so an oversized or
           // empty equation cannot arrive by any other path.
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'math node latex is empty or too long' });
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'math node latex is empty or too long',
+          });
         }
       }
       if (node.type === 'heading') {
@@ -121,7 +172,10 @@ const nodeSchema: z.ZodType<TiptapNode> = z.lazy(() =>
       }
       const align = node.attrs?.textAlign;
       if (align !== undefined && align !== null && !ALLOWED_TEXT_ALIGN.includes(align as never)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `unsupported text alignment: ${String(align)}` });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `unsupported text alignment: ${String(align)}`,
+        });
       }
     }),
 );
@@ -137,14 +191,88 @@ export const richDescriptionEnvelopeSchema = z.object({
 });
 
 export type ValidateResult =
-  | { ok: true; envelope: RichDescriptionEnvelope }
-  | { ok: false; error: string };
+  { ok: true; envelope: RichDescriptionEnvelope } | { ok: false; error: string };
 
-/** Validate an unknown value as a supported versioned rich-description envelope. */
-export function validateRichDescription(value: unknown): ValidateResult {
-  const parsed = richDescriptionEnvelopeSchema.safeParse(value);
-  if (parsed.success) {
-    return { ok: true, envelope: parsed.data as RichDescriptionEnvelope };
+/**
+ * Walk the parsed document to enforce the bounds Zod cannot express: how deep it nests and how
+ * many nodes it holds. Returns an error message, or null when the document is within bounds.
+ */
+function checkStructuralLimits(document: TiptapDocument): string | null {
+  let count = 0;
+  const visit = (nodes: TiptapNode[], depth: number): string | null => {
+    if (depth > MAX_DOCUMENT_DEPTH)
+      return `document nests deeper than ${MAX_DOCUMENT_DEPTH} levels`;
+    for (const node of nodes) {
+      if (++count > MAX_NODE_COUNT) return `document holds more than ${MAX_NODE_COUNT} nodes`;
+      const failure = visit(node.content ?? [], depth + 1);
+      if (failure) return failure;
+    }
+    return null;
+  };
+  return visit(document.content ?? [], 1);
+}
+
+/**
+ * Bound the RAW value before Zod ever sees it.
+ *
+ * `checkStructuralLimits` runs on the parsed document, which is too late: `nodeSchema` is
+ * recursive (`z.lazy`), so a deeply nested payload exhausts the JavaScript stack inside
+ * `safeParse`. The resulting RangeError is not a ZodError, so `safeParse` does not turn it into
+ * a failure, it propagates: a 500 on the write path, and a thrown render on a read surface.
+ * Measuring depth here, iteratively and with an explicit stack, keeps an over-deep document an
+ * ordinary validation failure.
+ *
+ * The node budget is applied in the same pass. That bounds the walk itself (so a cyclic object,
+ * which JSON from the database cannot be but an in-memory caller could pass, cannot spin here)
+ * and short-circuits an oversized payload before the expensive parse.
+ */
+function rawShapeExceedsLimits(value: unknown): string | null {
+  const document = (value as { document?: unknown } | null | undefined)?.document;
+  const stack: Array<[unknown, number]> = [];
+  let count = 0;
+
+  const pushChildren = (container: unknown, depth: number): void => {
+    const content = (container as { content?: unknown } | null | undefined)?.content;
+    if (Array.isArray(content)) for (const child of content) stack.push([child, depth]);
+  };
+
+  // Mirrors checkStructuralLimits: top-level nodes sit at depth 1, their children at depth 2.
+  pushChildren(document, 1);
+  while (stack.length > 0) {
+    const [node, depth] = stack.pop()!;
+    if (depth > MAX_DOCUMENT_DEPTH)
+      return `document nests deeper than ${MAX_DOCUMENT_DEPTH} levels`;
+    if (++count > MAX_NODE_COUNT) return `document holds more than ${MAX_NODE_COUNT} nodes`;
+    if (node && typeof node === 'object') pushChildren(node, depth + 1);
   }
-  return { ok: false, error: parsed.error.issues[0]?.message ?? 'invalid rich description' };
+  return null;
+}
+
+/**
+ * Validate an unknown value as a supported versioned rich-description envelope.
+ *
+ * Total: this returns a result for any input and never throws, because both callers need that.
+ * The write path must reject junk with a 400 rather than a 500, and the read surfaces call it
+ * during render, where a throw would blank the page instead of falling back to plain text.
+ */
+export function validateRichDescription(value: unknown): ValidateResult {
+  const oversized = rawShapeExceedsLimits(value);
+  if (oversized) return { ok: false, error: oversized };
+
+  let parsed: ReturnType<typeof richDescriptionEnvelopeSchema.safeParse>;
+  try {
+    parsed = richDescriptionEnvelopeSchema.safeParse(value);
+  } catch {
+    // The depth guard above is the known way to get here. Anything else that makes the parser
+    // itself fail is still a bad document, not an operational error, so it takes the same path.
+    return { ok: false, error: 'invalid rich description' };
+  }
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'invalid rich description' };
+  }
+
+  const envelope = parsed.data as RichDescriptionEnvelope;
+  const structural = checkStructuralLimits(envelope.document);
+  if (structural) return { ok: false, error: structural };
+  return { ok: true, envelope };
 }

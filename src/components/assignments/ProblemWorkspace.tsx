@@ -316,6 +316,7 @@ export default function ProblemWorkspace({
             className="min-w-0 lg:flex-1"
             title={problem.title}
             description={problem.description ?? undefined}
+            descriptionJson={(problem as { descriptionJson?: unknown }).descriptionJson}
             type={problem.type ?? undefined}
             maxStates={problem.maxStates ?? undefined}
             isDeterministic={problem.isDeterministic ?? undefined}

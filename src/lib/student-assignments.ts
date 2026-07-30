@@ -8,6 +8,8 @@ export type StudentAssignmentProblem = {
   id: string;
   title: string | null;
   description: string | null;
+  /** The stored rich description; validated at render time and never trusted as-is. */
+  descriptionJson: unknown;
   type: ProblemType | null;
   /** FA/PDA state cap, or null when the problem sets no cap. */
   maxStates: number | null;
@@ -28,6 +30,8 @@ export type StudentAssignment = {
   /** The assignment's group set, or null for an individual assignment. */
   groupSetId: string | null;
   description: string | null;
+  /** The stored rich description; null while locked, exactly like `description`. */
+  descriptionJson: unknown;
   /** "Available from" resolved for this student; null means available immediately. */
   unlockAt: Date | null;
   dueDate: Date | null;
@@ -75,6 +79,7 @@ export async function getStudentCourseAssignments(
       title: true,
       groupSetId: true,
       description: true,
+      descriptionJson: true,
       unlockAt: true,
       dueDate: true,
       allowLateSubmissions: true,
@@ -114,6 +119,7 @@ export async function getStudentCourseAssignments(
             id: true,
             title: true,
             description: true,
+            descriptionJson: true,
             type: true,
             maxStates: true,
             isDeterministic: true,
@@ -153,6 +159,7 @@ export async function getStudentCourseAssignments(
       id: p.problem.id,
       title: p.problem.title,
       description: p.problem.description,
+      descriptionJson: p.problem.descriptionJson,
       type: p.problem.type,
       maxStates: p.problem.maxStates,
       isDeterministic: p.problem.isDeterministic,
@@ -185,6 +192,10 @@ export async function getStudentCourseAssignments(
       title: a.title,
       groupSetId: a.groupSetId,
       description: locked ? null : a.description,
+      // Masked with the plain text, not instead of it: the rich document carries the same
+      // content, so leaving it through would hand a student the description of an assignment
+      // that has not opened yet.
+      descriptionJson: locked ? null : a.descriptionJson,
       unlockAt: eff.unlockAt,
       dueDate: eff.dueDate,
       allowLateSubmissions: eff.allowLateSubmissions,

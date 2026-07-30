@@ -25,6 +25,7 @@ interface AssignmentWithProblemsAndCourse {
       id: string;
       title: string;
       description: string | null;
+      descriptionJson: unknown;
       type: z.infer<typeof ProblemTypeEnum> | null;
       maxStates: number | null;
       isDeterministic: boolean | null;
@@ -191,6 +192,7 @@ export const GET = withCourseAuth(
                   id: true,
                   title: true,
                   description: true,
+                  descriptionJson: true,
                   type: true,
                   maxStates: true,
                   isDeterministic: true,
@@ -284,6 +286,10 @@ export const GET = withCourseAuth(
             id: ap.problem.id,
             title: ap.problem.title,
             description: ap.problem.description,
+            // The rich form of the same text. Whole problems are withheld while locked (see
+            // below), so this needs no separate mask, but it must travel with `description` or
+            // the read surfaces silently drop back to plain text.
+            descriptionJson: ap.problem.descriptionJson,
             type: ap.problem.type,
             maxStates: ap.problem.maxStates,
             isDeterministic: ap.problem.isDeterministic,

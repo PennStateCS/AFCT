@@ -49,6 +49,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { queryKeys } from '@/lib/query-keys';
 import { asRichDescription } from '@/lib/rich-description';
+import { RichDescription } from '@/components/rich-description/RichDescription';
 import { buildProblemColumns } from './problem-columns';
 
 type ProblemLinkSettings = {
@@ -155,7 +156,12 @@ export default function AssignmentDashboardPage({
   }, [assignment]);
 
   const [descOpen, setDescOpen] = useState(false);
-  const [descText, setDescText] = useState<string | null>(null);
+  // Both forms of the problem's description, so the dialog can render the rich one and fall
+  // back to the plain text exactly like every other read surface.
+  const [descTarget, setDescTarget] = useState<{
+    description: string | null;
+    descriptionJson: unknown;
+  }>({ description: null, descriptionJson: null });
   // This privileged view is only rendered for course staff (admin or the course's
   // FACULTY/TA), so problem-management actions are gated only on the archived state.
   const courseIsArchived = assignment?.course?.isArchived ?? false;
@@ -185,8 +191,11 @@ export default function AssignmentDashboardPage({
     setJffType(problem.type);
   }, []);
 
-  const openDescription = useCallback((text: string | null) => {
-    setDescText(text);
+  const openDescription = useCallback((problem: Problem) => {
+    setDescTarget({
+      description: problem.description ?? null,
+      descriptionJson: (problem as { descriptionJson?: unknown }).descriptionJson ?? null,
+    });
     setDescOpen(true);
   }, []);
 
@@ -591,7 +600,22 @@ export default function AssignmentDashboardPage({
           <DialogHeader>
             <DialogTitle>Problem Description</DialogTitle>
           </DialogHeader>
-          <DialogDescription>{descText ?? 'No description.'}</DialogDescription>
+          {/* asChild swaps the default <p> for a div, because a rich description can contain
+              headings, lists, and rules, which are invalid inside a paragraph. Radix keeps the
+              generated id and the dialog's aria-describedby pointing at this element either
+              way, so the dialog stays described. */}
+          <DialogDescription asChild>
+            <div>
+              {descTarget.description || descTarget.descriptionJson ? (
+                <RichDescription
+                  description={descTarget.description}
+                  descriptionJson={descTarget.descriptionJson}
+                />
+              ) : (
+                'No description.'
+              )}
+            </div>
+          </DialogDescription>
           <DialogClose asChild>
             <Button variant="secondary">Close</Button>
           </DialogClose>

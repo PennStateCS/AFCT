@@ -47,4 +47,49 @@ describe('ProblemHeader', () => {
     expect(screen.getByText('Max Submissions: Unlimited')).toBeInTheDocument();
     expect(screen.getByText('Autograder: Off')).toBeInTheDocument();
   });
+
+  describe('rich descriptions', () => {
+    const richDoc = {
+      version: 1,
+      document: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Build a ' },
+              { type: 'text', text: 'minimal', marks: [{ type: 'bold' }] },
+              { type: 'text', text: ' DFA for ' },
+              { type: 'inlineMath', attrs: { latex: 'a^n b^n' } },
+            ],
+          },
+        ],
+      },
+    };
+
+    it('renders formatting and maths when the problem has a stored document', () => {
+      const { container } = render(
+        <ProblemHeader
+          title="Problem 1"
+          description="Build a minimal DFA for $a^n b^n$"
+          descriptionJson={richDoc}
+        />,
+      );
+
+      expect(container.querySelector('strong')?.textContent).toBe('minimal');
+      expect(container.querySelector('[data-type="inline-math"] math')).not.toBeNull();
+      // A problem header is a tight surface, so it asks for the compact density.
+      expect(container.querySelector('.afct-rich-text--compact')).not.toBeNull();
+    });
+
+    it('falls back to the plain text for a legacy problem', () => {
+      render(<ProblemHeader title="Problem 1" description={'line one\nline two'} />);
+      expect(screen.getByText(/line one/)).toBeInTheDocument();
+    });
+
+    it('renders no description block when the problem has neither form', () => {
+      const { container } = render(<ProblemHeader title="Problem 1" />);
+      expect(container.querySelector('.afct-rich-text')).toBeNull();
+    });
+  });
 });

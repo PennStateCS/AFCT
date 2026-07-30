@@ -23,7 +23,7 @@ export const problemTypeLabels: Record<string, string> = {
 export type ProblemColumnsParams = {
   /** Archived courses are read-only: Edit/Remove items are hidden. */
   courseIsArchived: boolean;
-  openDescription: (desc: string) => void;
+  openDescription: (problem: Problem) => void;
   openRenderViewer: (problem: Problem) => void;
   handleEditProblem: (problem: Problem) => void;
   onRemoveProblem: (problem: Problem) => void;
@@ -58,14 +58,18 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       // The title with a "View description" link underneath. The link opens the
       // description modal; it's omitted when the problem has no description.
       cell: ({ row }: { row: { original: Problem } }) => {
-        const desc = row.original.description;
+        const problem = row.original;
+        // Either form counts as having a description: a rich-only problem still has text to show.
+        const hasDescription =
+          Boolean(problem.description) ||
+          Boolean((problem as { descriptionJson?: unknown }).descriptionJson);
         return (
           <div className="flex flex-col gap-0.5">
-            <span>{row.original.title}</span>
-            {desc ? (
+            <span>{problem.title}</span>
+            {hasDescription ? (
               <button
                 type="button"
-                onClick={() => openDescription(desc)}
+                onClick={() => openDescription(problem)}
                 className="text-primary self-start text-xs underline hover:text-primary/80"
                 title="View description"
               >

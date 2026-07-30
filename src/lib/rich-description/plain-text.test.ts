@@ -89,6 +89,65 @@ describe('richDescriptionToPlainText', () => {
     ))).toBe('click');
   });
 
+  // The Java client and the compact dashboard preview read only this projection, so a realistic
+  // document has to come out readable rather than merely non-empty.
+  it('keeps a whole rich description readable for a plain-text client', () => {
+    const plain = richDescriptionToPlainText(
+      doc(
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Task' }] },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Build a DFA over ' },
+            { type: 'inlineMath', attrs: { latex: '\\Sigma = \\{a, b\\}' } },
+            { type: 'text', text: ' with ' },
+            { type: 'text', text: 'at most', marks: [{ type: 'bold' }] },
+            { type: 'text', text: ' five states.' },
+          ],
+        },
+        {
+          type: 'bulletList',
+          content: [
+            {
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'accept even a' }] }],
+            },
+            {
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'reject odd b' }] }],
+            },
+          ],
+        },
+        { type: 'blockMath', attrs: { latex: 'L = \\{w : |w| \\bmod 2 = 0\\}' } },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'see the syllabus',
+              marks: [{ type: 'link', attrs: { href: 'https://example.edu/syllabus' } }],
+            },
+          ],
+        },
+      ),
+    );
+
+    expect(plain).toBe(
+      [
+        'Task',
+        'Build a DFA over $\\Sigma = \\{a, b\\}$ with at most five states.',
+        '- accept even a',
+        '- reject odd b',
+        '$$L = \\{w : |w| \\bmod 2 = 0\\}$$',
+        'see the syllabus',
+      ].join('\n'),
+    );
+    // Maths stays recognisable rather than silently disappearing, which is the property the
+    // student client depends on.
+    expect(plain).toContain('$\\Sigma = \\{a, b\\}$');
+    expect(plain).toContain('$$L = \\{w : |w| \\bmod 2 = 0\\}$$');
+  });
+
   it('round-trips plain multi-line text', () => {
     for (const text of ['one line', 'a\nb\nc', 'a\n\nb', '']) {
       expect(richDescriptionToPlainText(plainTextToRichDescription(text))).toBe(text);

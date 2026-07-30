@@ -111,7 +111,10 @@ describe('buildProblemColumns', () => {
     // The title always renders; the link only when there's a description.
     expect(screen.getByText('Prob')).toBeInTheDocument();
     fireEvent.click(screen.getByText('View description'));
-    expect(openDescription).toHaveBeenCalledWith('Hello there');
+    // The whole problem is handed over now, so the dialog can render either description form.
+    expect(openDescription).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Prob', description: 'Hello there' }),
+    );
 
     rerender(<>{title.cell(arg(problem({ title: 'Prob', description: null })))}</>);
     expect(screen.queryByText('View description')).not.toBeInTheDocument();
