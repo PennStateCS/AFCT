@@ -21,6 +21,7 @@ import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { formatDateInTimeZone } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
+import { RichDescription } from '@/components/rich-description/RichDescription';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -76,11 +77,13 @@ export const useProblemColumns = ({
                 <StatusBadge variant="warning">Used</StatusBadge>
               ) : null}
             </div>
-            {row.original.description ? (
+            {/* Either form counts: a rich-only problem still has text to show. */}
+            {row.original.description ||
+            (row.original as { descriptionJson?: unknown }).descriptionJson ? (
               <button
                 type="button"
                 onClick={() => setDescDialog({ open: true, problem: row.original })}
-                className="text-primary self-start text-xs underline hover:text-primary/80"
+                className="text-primary hover:text-primary/80 self-start text-xs underline"
                 title="View description"
               >
                 View description
@@ -209,6 +212,7 @@ export const useProblemColumns = ({
                       id: row.original.id,
                       title: row.original.title,
                       description: row.original.description,
+                      descriptionJson: row.original.descriptionJson,
                     })
                   }
                   className="flex items-center gap-2"
@@ -228,7 +232,7 @@ export const useProblemColumns = ({
                 title={
                   disabled ? 'Problem is used by an assignment and cannot be deleted' : undefined
                 }
-                className={`flex items-center gap-2 text-destructive focus:text-destructive ${
+                className={`text-destructive focus:text-destructive flex items-center gap-2 ${
                   disabled ? 'cursor-not-allowed opacity-50' : ''
                 }`}
               >
@@ -300,8 +304,13 @@ export const useProblemColumns = ({
             {descDialog.problem.title}
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm break-words whitespace-pre-wrap">
-          {descDialog.problem.description}
+        <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm">
+          <RichDescription
+            // Heading base: dialog title is an h2, so the description starts one level below it.
+            headingBaseLevel={3}
+            description={descDialog.problem.description}
+            descriptionJson={(descDialog.problem as { descriptionJson?: unknown }).descriptionJson}
+          />
         </div>
       </DialogContent>
     </Dialog>

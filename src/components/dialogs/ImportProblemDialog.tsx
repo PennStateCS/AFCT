@@ -19,6 +19,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useManageableCourses, courseLabel } from '@/hooks/use-manageable-courses';
 import type { Problem } from '@prisma/client';
+import { asRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';
 
 const STEP_TITLES = ['Source', 'Details', 'Review'] as const;
 const LAST_STEP = STEP_TITLES.length - 1;
@@ -27,6 +28,8 @@ type SourceProblem = {
   id: string;
   title: string;
   description?: string | null;
+  /** The source's stored rich description, so the import keeps it. */
+  descriptionJson?: unknown;
   type?: string | null;
 };
 
@@ -62,6 +65,9 @@ export function ImportProblemDialog({
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  // The import's rich description: the source's document, replaced by whatever is edited here.
+  // Null means the source was plain text and untouched, so the import stays plain text.
+  const [descriptionJson, setDescriptionJson] = useState<RichDescriptionEnvelope | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Reset the wizard's own state each time it opens (the course list is loaded by the hook).
@@ -73,6 +79,7 @@ export function ImportProblemDialog({
     setSourceProblemId('');
     setTitle('');
     setDescription('');
+    setDescriptionJson(null);
     setSubmitting(false);
   }, [open]);
 
@@ -105,6 +112,7 @@ export function ImportProblemDialog({
     if (selected) {
       setTitle(selected.title);
       setDescription(selected.description ?? '');
+      setDescriptionJson(asRichDescription(selected.descriptionJson));
     }
   }, [selected]);
 
@@ -126,7 +134,11 @@ export function ImportProblemDialog({
         sourceCourseId,
         sourceProblemId,
         title: title.trim(),
-        description: description.trim() ? description.trim() : null,
+        // Rich JSON wins and the server derives the plain text from it, so a rich source stays
+        // rich in the import. Falls back to the plain text for a legacy source.
+        ...(descriptionJson
+          ? { descriptionJson }
+          : { description: description.trim() ? description.trim() : null }),
       });
       showToast.success('Problem imported');
       onImported?.(created);
@@ -204,6 +216,8 @@ export function ImportProblemDialog({
 
           {step === 1 && (
             <WizardTitleDescription
+              // Remount per source so the editor reloads its initial content.
+              key={sourceProblemId || 'none'}
               idPrefix="import-problem"
               title={title}
               onTitleChange={setTitle}
@@ -212,6 +226,12 @@ export function ImportProblemDialog({
               titleError={titleError}
               titlePlaceholder="Problem title"
               descriptionPlaceholder="Enter problem description"
+              // Seeded straight from the source rather than from state: the editor takes its
+              // value as initial content only, and the prefill effect runs after it mounts.
+              rich={{
+                value: asRichDescription(selected?.descriptionJson) ?? selected?.description ?? '',
+                onChange: setDescriptionJson,
+              }}
               note="The title and description start as the source problem's. The type, state limit, determinism, and the solution file are copied from the source; you can edit the remaining details after the copy is created."
             />
           )}

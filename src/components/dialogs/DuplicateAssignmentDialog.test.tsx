@@ -85,6 +85,30 @@ describe('DuplicateAssignmentDialog', () => {
     expect(onDuplicated).toHaveBeenCalledWith({ id: 'a2' });
   });
 
+  it('keeps a rich original rich in the copy without the author touching the editor', async () => {
+    const descriptionJson = {
+      version: 1,
+      document: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Rich original' }] }],
+      },
+    };
+    renderDialog({ assignment: { ...baseAssignment, descriptionJson } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Duplicate' }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        '/api/courses/c1/assignments/a1/duplicate',
+        expect.objectContaining({ descriptionJson }),
+      ),
+    );
+    // The plain text is derived server-side from the document, so it is not sent.
+    expect(postMock.mock.calls[0][1].description).toBeUndefined();
+  });
+
   it('sends problemMode none and shows an empty-state when there are no problems', async () => {
     renderDialog({ assignment: { ...baseAssignment, problemCount: 0 } });
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));

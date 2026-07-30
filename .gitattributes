@@ -15,3 +15,8 @@ deploy/unix/bin/afctctl text eol=lf
 # Windows checkout doesn't flip it to CRLF and produce an endless EOL-only diff that
 # CI's docs-check then fails on.
 src/types/api.ts text eol=lf
+
+# Vendored KaTeX (see scripts/vendor-katex.mjs). The point of that script is a copy that
+# matches the installed package byte for byte, so nothing here may be line-ending normalized.
+# The fonts are binary; the stylesheet ships with LF.
+public/katex/** -text

@@ -105,6 +105,7 @@ const sidebars: SidebarsConfig = {
             'reference/development-troubleshooting',
             'reference/conventions',
             'reference/login-protection',
+            'reference/rich-descriptions',
             'reference/roles-and-permissions',
             'reference/system-architecture',
             'reference/evaluator-tests',

@@ -8,6 +8,7 @@ import { readJson } from '@/lib/api/request';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-convert';
 import { resolveUnlockAt } from '@/lib/assignment-late-window';
+import { descriptionWriteData } from '@/lib/description-write';
 import { AssignmentCreateApiSchema } from '@/schemas/assignment';
 
 /**
@@ -252,11 +253,12 @@ export const POST = withCourseAuth(
         }
       }
 
+      const descFields = descriptionWriteData(data);
       const created = await prisma.$transaction(async (tx) => {
         const assignment = await tx.assignment.create({
           data: {
             title: data.title,
-            description: data.description,
+            ...descFields,
             dueDate,
             unlockAt: unlockState.unlockAt,
             assignedToEveryone,

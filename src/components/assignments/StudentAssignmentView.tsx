@@ -18,6 +18,7 @@ import { formatDeadlineDual } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
+import { RichDescription } from '@/components/rich-description/RichDescription';
 import type {
   AssignmentWithDetails,
   StudentAssignmentContext,
@@ -317,12 +318,19 @@ export default function StudentAssignmentPage({
           </div>
         </CardHeader>
         <CardContent>
-          {assignment.description && (
+          {Boolean(assignment.description || assignment.descriptionJson) && (
             <div>
               <h2 className="mb-2 font-semibold">Description</h2>
-              <p className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
-                {assignment.description}
-              </p>
+              {/* A div, not a p: a rich description can contain headings, lists, and rules,
+                  which are invalid inside a paragraph. */}
+              <div className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3">
+                <RichDescription
+                  // Heading base: sits under the h2 "Description", so the description starts one level below it.
+                  headingBaseLevel={3}
+                  description={assignment.description}
+                  descriptionJson={assignment.descriptionJson}
+                />
+              </div>
             </div>
           )}
         </CardContent>
@@ -336,32 +344,32 @@ export default function StudentAssignmentPage({
             </CardTitle>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:justify-between">
               <div className="flex flex-1 flex-wrap gap-2">
-                <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-3 py-2 text-sm leading-none text-foreground">
+                <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Due
                   </span>
                   <span className="leading-none font-semibold">{dueDisplay}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-3 py-2 text-sm leading-none text-foreground">
+                <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Points
                   </span>
                   <span className="leading-none font-semibold">{assignment.maxPoints}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-3 py-2 text-sm leading-none text-foreground">
+                <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Problems
                   </span>
                   <span className="leading-none font-semibold">{assignment.problems.length}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-3 py-2 text-sm leading-none text-foreground">
+                <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Late Policy
                   </span>
                   <span className="leading-none font-semibold">{latePolicyDisplay}</span>
                 </div>
               </div>
-              <div className="inline-flex min-h-10 items-center rounded-full border border-border bg-transparent px-4 py-2 text-right text-foreground lg:self-start">
+              <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-4 py-2 text-right lg:self-start">
                 <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                   Grade
                 </span>

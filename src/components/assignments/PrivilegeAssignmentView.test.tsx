@@ -3,10 +3,11 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import PrivilegeAssignmentView from './PrivilegeAssignmentView';
+import { warmRichDescriptionEditor } from '@/test/rich-editor';
 
 /* ─────────────────────────────── hoisted spies ──────────────────────────── */
 
@@ -56,7 +57,7 @@ vi.mock('@/components/ui/data-table', () => ({
         return (
           <div key={id} data-testid={`row-${id}`}>
             <span>{String(row.title)}</span>
-            <button type="button" onClick={() => p?.openDescription(row.description)}>
+            <button type="button" onClick={() => p?.openDescription(row)}>
               desc-{id}
             </button>
             <button type="button" onClick={() => p?.openRenderViewer(row)}>
@@ -324,6 +325,8 @@ const renderView = (props: Record<string, unknown> = {}) => {
   );
 };
 
+beforeAll(warmRichDescriptionEditor);
+
 beforeEach(() => {
   vi.clearAllMocks();
   searchState.value = '';
@@ -357,22 +360,32 @@ describe('PrivilegeAssignmentView — header', () => {
     expect(link).toHaveAttribute('href', '/dashboard/courses/c1');
   });
 
-  it('renders the description in the editable form', () => {
+  it('renders the description in the editable form', async () => {
     renderView();
-    // The Assignment tab now shows a title + description form defaulting to the values.
-    expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
+    // The Assignment tab shows a title input plus the rich-description editor, seeded with the
+    // current values. The editor is a contenteditable that mounts on the client, not a textarea.
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Description' }).textContent).toContain(
+        'Do the thing.',
+      ),
+    );
   });
 
-  it('shows an empty description field when the assignment has none', () => {
+  it('shows an empty description field when the assignment has none', async () => {
     renderView({ initialAssignment: makeAssignment({ description: null }) });
-    expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('');
+    const editor = await waitFor(() => screen.getByRole('textbox', { name: 'Description' }));
+    expect(editor.textContent).toBe('');
   });
 });
 
 describe('PrivilegeAssignmentView — tabs', () => {
-  it('defaults to the Assignment tab and shows the description form', () => {
+  it('defaults to the Assignment tab and shows the description form', async () => {
     renderView();
-    expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Description' }).textContent).toContain(
+        'Do the thing.',
+      ),
+    );
   });
 
   it('orders the tabs Details, Type, Assign To, Problems, Submissions, Statistics, Similarity', () => {

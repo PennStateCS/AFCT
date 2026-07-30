@@ -6,6 +6,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { descriptionWriteData } from '@/lib/description-write';
 import { readJson } from '@/lib/api/request';
 import { ProblemDuplicateApiSchema } from '@/schemas/problem';
 
@@ -53,7 +54,7 @@ export const POST = withCourseAuth(
 
       const parsed = await readJson(req, ProblemDuplicateApiSchema);
       if (!parsed.ok) return parsed.response;
-      const { title, description } = parsed.data;
+      const { title, description, descriptionJson } = parsed.data;
 
       // Copy the answer-key file to a new name, if the source has one and it's on disk.
       let newFileName: string | null = null;
@@ -72,7 +73,9 @@ export const POST = withCourseAuth(
         created = await prisma.problem.create({
           data: {
             title,
-            description: description ?? null,
+            // The dialog can edit the description, so the body wins; rich JSON (when sent)
+            // is authoritative and the plain text is derived from it.
+            ...descriptionWriteData({ description, descriptionJson }),
             type: source.type,
             maxStates: source.maxStates,
             isDeterministic: source.isDeterministic,

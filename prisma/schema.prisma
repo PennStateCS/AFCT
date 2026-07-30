@@ -58,6 +58,14 @@ enum OverrideTargetType {
   GROUP // groupId set, userId null (reserved)
 }
 
+// How an assignment/problem description is stored. PLAIN_TEXT keeps the legacy `description`
+// string as the source of truth; TIPTAP_JSON means the rich source lives in `descriptionJson`
+// and `description` holds derived plain text for legacy clients.
+enum DescriptionFormat {
+  PLAIN_TEXT
+  TIPTAP_JSON
+}
+
 model User {
   id                String  @id @default(cuid())
   email             String  @unique
@@ -217,7 +225,11 @@ model Roster {
 model Assignment {
   id                 String    @id @default(cuid())
   title              String
+  // Legacy plain-text description. Stays the source of truth for PLAIN_TEXT rows and holds
+  // derived plain text for TIPTAP_JSON rows, so legacy clients keep getting plain text.
   description        String?
+  descriptionFormat  DescriptionFormat @default(PLAIN_TEXT)
+  descriptionJson    Json?
   dueDate            DateTime
   // "Available from" for the whole class. Null means available immediately. Per-student
   // extensions can override this via AssignmentOverride; the effective value is resolved
@@ -338,7 +350,11 @@ model AssignmentOverride {
 model Problem {
   id                String       @id @default(cuid())
   title             String
+  // Legacy plain-text description. Stays the source of truth for PLAIN_TEXT rows and holds
+  // derived plain text for TIPTAP_JSON rows, so legacy clients keep getting plain text.
   description       String?
+  descriptionFormat DescriptionFormat @default(PLAIN_TEXT)
+  descriptionJson   Json?
   fileName          String?
   originalFileName  String?
   type              ProblemType?

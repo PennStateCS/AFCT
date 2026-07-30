@@ -18,6 +18,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import type { Assignment } from '@prisma/client';
 import type { AssignmentProblemDuplicateMode } from '@/schemas/assignment';
+import { asRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';
 
 const STEP_TITLES = ['Details', 'Problems', 'Review'] as const;
 const LAST_STEP = STEP_TITLES.length - 1;
@@ -26,6 +27,8 @@ export type DuplicateSourceAssignment = {
   id: string;
   title: string;
   description?: string | null;
+  /** The source's stored rich description, so the copy keeps it. */
+  descriptionJson?: unknown;
   isGroup?: boolean;
   problemCount?: number;
 };
@@ -77,6 +80,10 @@ export function DuplicateAssignmentDialog({
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  // The copy's rich description: the source's document when it has one, replaced by whatever
+  // the author edits here. Null means the source was plain text and was left alone, so the copy
+  // stays plain text too.
+  const [descriptionJson, setDescriptionJson] = useState<RichDescriptionEnvelope | null>(null);
   const [problemMode, setProblemMode] = useState<AssignmentProblemDuplicateMode>('duplicate');
   const [submitting, setSubmitting] = useState(false);
 
@@ -86,6 +93,7 @@ export function DuplicateAssignmentDialog({
       setStep(0);
       setTitle(assignment.title);
       setDescription(assignment.description ?? '');
+      setDescriptionJson(asRichDescription(assignment.descriptionJson));
       setProblemMode('duplicate');
       setSubmitting(false);
     }
@@ -108,7 +116,11 @@ export function DuplicateAssignmentDialog({
         apiPaths.assignmentDuplicate(courseId, assignment.id),
         {
           title: title.trim(),
-          description: description.trim() ? description.trim() : null,
+          // Rich JSON wins and the server derives the plain text from it, so a rich original
+          // stays rich in the copy. Falls back to the plain text for a legacy original.
+          ...(descriptionJson
+            ? { descriptionJson }
+            : { description: description.trim() ? description.trim() : null }),
           // With no problems there's nothing to copy, so the mode is moot; send 'none'.
           problemMode: hasProblems ? problemMode : 'none',
         },
@@ -152,6 +164,8 @@ export function DuplicateAssignmentDialog({
         <div className="min-h-[320px] space-y-4">
           {step === 0 && (
             <WizardTitleDescription
+              // Remount per source so the editor reloads its initial content.
+              key={assignment?.id ?? 'none'}
               idPrefix="dup"
               title={title}
               onTitleChange={setTitle}
@@ -160,6 +174,12 @@ export function DuplicateAssignmentDialog({
               titleError={titleError}
               titlePlaceholder="Assignment title"
               descriptionPlaceholder="Enter assignment description"
+              // Seeded straight from the source rather than from state: the editor takes its
+              // value as initial content only, and the prefill effect runs after it mounts.
+              rich={{
+                value: asRichDescription(assignment?.descriptionJson) ?? assignment?.description ?? '',
+                onChange: setDescriptionJson,
+              }}
               note="The title and description start as the original's. Edit them here or leave them unchanged. The assignment type and the Assign To settings (audience, dates, and any exceptions) are copied from the original and can be changed after the copy is created."
             />
           )}

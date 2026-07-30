@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { dateTimeLocalString } from './fields';
+import { richDescriptionEnvelopeSchema } from '@/lib/rich-description';
+
+// Optional versioned rich-description envelope accepted by the write APIs. When present it is
+// authoritative and the server derives the plain-text `description` from it.
+const descriptionJsonField = richDescriptionEnvelopeSchema.nullish();
 
 /** Datetime-local form field (shared with the course form). */
 const DateTimeLocalForm = dateTimeLocalString;
@@ -68,6 +73,9 @@ const BaseAssignmentFormSchemaObject = z
       .min(3, 'Title must be at least 3 characters.')
       .max(200, 'Title is too long.'),
     description: z.string().trim().max(20000, 'Description is too long.').optional(),
+    // The rich description as edited in the form. Present only once the author actually edits
+    // the editor, which is what keeps a legacy plain-text record from converting on view.
+    descriptionJson: descriptionJsonField,
     dueDate: DateTimeLocalForm,
     unlockAt: DateTimeLocalFormOptional,
     assignedToEveryone: z.boolean().default(true),
@@ -216,6 +224,7 @@ const AssigneeApiItem = z
 export const AssignmentCreateApiSchema = z.object({
   title: z.string().min(1, 'Missing required fields').max(200, 'Title is too long.'),
   description: z.string().max(20000, 'Description is too long.').optional(),
+  descriptionJson: descriptionJsonField,
   dueDate: z.string().min(1, 'A due date is required.'),
   // Nullable so callers can send null to mean "no value" (the create UI sends
   // lateCutoff: null when late is off); the handler treats null and absent the same.
@@ -244,6 +253,7 @@ export type AssignmentProblemDuplicateMode = z.infer<typeof AssignmentProblemDup
 export const AssignmentDuplicateApiSchema = z.object({
   title: z.string().min(1, 'A title is required.').max(200, 'Title is too long.'),
   description: z.string().max(20000, 'Description is too long.').nullable().optional(),
+  descriptionJson: descriptionJsonField,
   problemMode: AssignmentProblemDuplicateMode,
 });
 
@@ -264,12 +274,14 @@ export const AssignmentImportApiSchema = z.object({
   sourceAssignmentId: z.string().min(1, 'Select an assignment to import.'),
   title: z.string().min(1, 'A title is required.').max(200, 'Title is too long.'),
   description: z.string().max(20000, 'Description is too long.').nullable().optional(),
+  descriptionJson: descriptionJsonField,
   problemMode: AssignmentImportProblemMode,
 });
 
 export const AssignmentUpdateApiSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
+  descriptionJson: descriptionJsonField,
   dueDate: z.string().optional(),
   unlockAt: z.string().nullable().optional(),
   // NOTE: assignedToEveryone and groupSetId are intentionally NOT here. The audience

@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichDescriptionField } from '@/components/rich-description/RichDescriptionField';
+import { asRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { LimitField } from '@/components/ui/LimitField';
@@ -52,7 +53,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> = [
-  { title: 'Details', fields: ['title', 'description'] },
+  { title: 'Details', fields: ['title', 'descriptionJson'] },
   { title: 'Type', fields: ['type', 'maxStates', 'isUnlimitedStates', 'isDeterministic'] },
   { title: 'Answer File', fields: ['file'] },
   { title: 'Review', fields: [] },
@@ -75,6 +76,11 @@ export function EditProblemDialog({
     () => ({
       title: problem.title ?? '',
       description: problem.description ?? '',
+      // The stored document when the problem has one; null for a legacy plain-text problem,
+      // which then converts only if the author edits the description.
+      descriptionJson: asRichDescription(
+        (problem as { descriptionJson?: unknown }).descriptionJson,
+      ),
       type: (problem.type ?? 'FA') as FormValues['type'],
       isUnlimitedStates: problem.maxStates == null || problem.maxStates < 0,
       maxStates: problem.maxStates ?? undefined,
@@ -143,7 +149,13 @@ export function EditProblemDialog({
 
       const formData = new FormData();
       formData.append('title', payload.title ?? '');
-      formData.append('description', payload.description ?? '');
+      // Rich JSON wins and the server derives the plain text from it. Without a document this
+      // stays a plain-text write of the existing description.
+      if (payload.descriptionJson) {
+        formData.append('descriptionJson', JSON.stringify(payload.descriptionJson));
+      } else {
+        formData.append('description', payload.description ?? '');
+      }
       formData.append('type', payload.type ?? '');
       formData.append('courseId', payload.courseId ?? '');
 
@@ -262,33 +274,21 @@ export function EditProblemDialog({
                 />
                 <Controller
                   control={control}
-                  name="description"
+                  name="descriptionJson"
                   render={({ field }) => (
-                    <div>
-                      <Label htmlFor="edit-problem-description" className="mb-2 block">
-                        Description
-                      </Label>
-                      <Textarea
-                        {...field}
-                        id="edit-problem-description"
-                        value={field.value ?? ''}
-                        rows={4}
-                        placeholder="Optional description"
-                        aria-invalid={errors.description ? true : undefined}
-                        aria-describedby={
-                          errors.description ? 'edit-problem-description-error' : undefined
-                        }
-                      />
-                      {errors.description && (
-                        <p
-                          id="edit-problem-description-error"
-                          role="alert"
-                          className="mt-1 text-xs text-destructive"
-                        >
-                          {errors.description.message}
-                        </p>
-                      )}
-                    </div>
+                    <RichDescriptionField
+                      // Remounted per problem so the editor reloads its initial content.
+                      key={problem.id}
+                      value={
+                        (field.value as RichDescriptionEnvelope | null | undefined) ??
+                        defaults.description ??
+                        ''
+                      }
+                      onChange={field.onChange}
+                      error={errors.descriptionJson?.message}
+                      placeholder="Optional description"
+                      minHeightClassName="min-h-32"
+                    />
                   )}
                 />
               </>

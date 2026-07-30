@@ -8,6 +8,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { canManageCourse } from '@/lib/permissions';
 import { readJson } from '@/lib/api/request';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { descriptionWriteData, descriptionCopyData } from '@/lib/description-write';
 import { AssignmentImportApiSchema } from '@/schemas/assignment';
 
 // Solution files live here (same as the problem upload / duplicate paths).
@@ -62,7 +63,8 @@ export const POST = withCourseAuth(
     try {
       const parsed = await readJson(req, AssignmentImportApiSchema);
       if (!parsed.ok) return parsed.response;
-      const { sourceCourseId, sourceAssignmentId, title, description, problemMode } = parsed.data;
+      const { sourceCourseId, sourceAssignmentId, title, description, descriptionJson, problemMode } =
+        parsed.data;
 
       // Importing from the same course is what Duplicate is for; reject it here so the
       // two flows stay distinct (audience would otherwise be silently reset).
@@ -103,6 +105,8 @@ export const POST = withCourseAuth(
                   id: true,
                   title: true,
                   description: true,
+                  descriptionFormat: true,
+                  descriptionJson: true,
                   type: true,
                   maxStates: true,
                   isDeterministic: true,
@@ -150,7 +154,9 @@ export const POST = withCourseAuth(
         const imported = await tx.assignment.create({
           data: {
             title,
-            description: description ?? null,
+            // Title/description are editable in the import dialog, so the body wins; rich
+            // JSON (when sent) is authoritative and the plain text is derived from it.
+            ...descriptionWriteData({ description, descriptionJson }),
             // Schedule copied from the source as a starting point (may be from another
             // term); the importer reviews it before publishing.
             dueDate: source.dueDate,
@@ -176,7 +182,8 @@ export const POST = withCourseAuth(
             const newProblem = await tx.problem.create({
               data: {
                 title: p.title,
-                description: p.description,
+                // Carry the rich description verbatim so a copy is not silently downgraded.
+                ...descriptionCopyData(p),
                 type: p.type,
                 maxStates: p.maxStates,
                 isDeterministic: p.isDeterministic,

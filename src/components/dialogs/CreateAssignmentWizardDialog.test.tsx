@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -258,6 +258,28 @@ describe('CreateAssignmentWizardDialog', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith('Assignment created');
     expect(onCreate).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('sends the rich description when one was written, and nothing when the editor is untouched', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.type(screen.getByLabelText('Title'), 'Homework 2');
+    // The Details step now hosts the rich editor. Drive it the way ProseMirror can be driven
+    // in jsdom: mutate the contenteditable, then let it read the DOM back.
+    const editor = await waitFor(() => screen.getByRole('textbox', { name: 'Description' }));
+    fireEvent.input(editor, { target: Object.assign(editor, { textContent: 'Prove it.' }) });
+
+    await clickNext(user); // -> Type
+    await clickNext(user); // -> Assign To
+    await clickNext(user); // -> Review
+    await user.click(screen.getByRole('button', { name: /create assignment/i }));
+
+    await waitFor(() => expect(postCalls('/assignments').length).toBeGreaterThan(0));
+    const body = JSON.parse((postCalls('/assignments')[0][1] as RequestInit).body as string);
+    // The document is authoritative; the server derives the plain text from it.
+    expect(body.descriptionJson?.version).toBe(1);
+    expect(body.description).toBeUndefined();
   });
 
   it('creates a group assignment pinned to the chosen group set (all groups by default)', async () => {

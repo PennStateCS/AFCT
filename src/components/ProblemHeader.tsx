@@ -1,10 +1,13 @@
 import React from 'react';
 import { CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { RichDescription } from '@/components/rich-description/RichDescription';
 
 type ProblemHeaderProps = {
   title: string;
   description?: string;
+  /** The stored rich description, when the problem has one. */
+  descriptionJson?: unknown;
   type?: string;
   maxStates?: number;
   isDeterministic?: boolean;
@@ -49,6 +52,7 @@ const getTypeBadge = (type?: string) => {
 export default function ProblemHeader({
   title,
   description,
+  descriptionJson,
   type,
   maxStates,
   isDeterministic,
@@ -65,7 +69,7 @@ export default function ProblemHeader({
   return (
     <div className={className}>
       <CardTitle className="text-lg">{title}</CardTitle>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-foreground">
+      <div className="text-foreground mt-2 flex flex-wrap items-center gap-2 text-xs">
         {badge ? (
           <Badge
             variant="outline"
@@ -91,7 +95,16 @@ export default function ProblemHeader({
           <span className={metaPillClass}>Autograder: {autograderEnabled ? 'On' : 'Off'}</span>
         ) : null}
       </div>
-      {description ? <div className="text-muted-foreground mt-2 text-sm">{description}</div> : null}
+      {description || descriptionJson ? (
+        <RichDescription
+          // Heading base: the CardTitle above is aria-level 3, so the description starts one level below it.
+          headingBaseLevel={4}
+          compact
+          description={description}
+          descriptionJson={descriptionJson}
+          className="text-muted-foreground mt-2 text-sm"
+        />
+      ) : null}
     </div>
   );
 }
