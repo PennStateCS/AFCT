@@ -38,6 +38,17 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// Polyfill document.elementFromPoint (absent in jsdom) for ProseMirror/Tiptap: it calls
+// posAtCoords on mousedown to map a click to a document position, and jsdom does no layout
+// so it never implemented the hit-testing APIs. Returning null is the "no element here"
+// answer ProseMirror already handles, which is enough for the editor to take focus.
+if (typeof document !== 'undefined' && typeof document.elementFromPoint !== 'function') {
+  Object.defineProperty(document, 'elementFromPoint', {
+    writable: true,
+    value: () => null,
+  });
+}
+
 // Polyfill matchMedia (absent in jsdom) for components that read it directly
 // (useIsMobile) or transitively (react-resizable-panels' pointer check). Defaults
 // to "does not match" so the desktop layout renders.

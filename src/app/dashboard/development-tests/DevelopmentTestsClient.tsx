@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { showToast } from '@/lib/toast';
 import { FontSamples } from './font-samples';
 import { DesignTokens } from './design-tokens';
+import { RichDescriptionDemo } from './rich-description-demo';
 
 export default function DevelopmentTestsClient() {
   return (
@@ -35,6 +36,7 @@ export default function DevelopmentTestsClient() {
           <TabsTrigger value="toast">Toast Message</TabsTrigger>
           <TabsTrigger value="tokens">Design Tokens</TabsTrigger>
           <TabsTrigger value="fonts">Fonts</TabsTrigger>
+          <TabsTrigger value="editor">Rich Description</TabsTrigger>
         </TabsList>
 
         <TabsContent value="toast">
@@ -149,6 +151,28 @@ export default function DevelopmentTestsClient() {
             </CardHeader>
             <CardContent>
               <FontSamples />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="editor">
+          <Card aria-labelledby="rich-description-title">
+            <CardHeader>
+              <CardTitle
+                id="rich-description-title"
+                role="heading"
+                aria-level={2}
+                className="text-lg"
+              >
+                Rich Description Editor
+              </CardTitle>
+              <div className="text-muted-foreground text-sm">
+                The shared description editor on its own, with the plain text derived for legacy
+                clients. No toolbar yet.
+              </div>
+            </CardHeader>
+            <CardContent>
+              <RichDescriptionDemo />
             </CardContent>
           </Card>
         </TabsContent>
