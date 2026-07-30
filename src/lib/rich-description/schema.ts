@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isAllowedLinkHref } from './link-url';
 
 /**
  * Rich-description storage format. This validates the versioned envelope we keep in
@@ -69,6 +70,10 @@ const markSchema = z
       const href = mark.attrs?.href;
       if (typeof href !== 'string' || href.length === 0) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'link mark requires a non-empty href' });
+      } else if (!isAllowedLinkHref(href)) {
+        // Same allowlist the dialog enforces, applied to stored documents: a payload that
+        // never went through the UI still cannot carry a javascript:/data:/http: href.
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'link href uses an unsupported protocol' });
       }
     }
   });

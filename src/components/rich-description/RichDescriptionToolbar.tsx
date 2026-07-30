@@ -10,6 +10,7 @@ import {
   Bold,
   Code,
   Italic,
+  Link2,
   List,
   ListOrdered,
   Minus,
@@ -68,6 +69,8 @@ export type RichDescriptionToolbarProps = {
   editor: Editor | null;
   /** Accessible name for the toolbar container. */
   label?: string;
+  /** Asked to open the link dialog (the editor owns the dialog state). */
+  onOpenLinkDialog?: () => void;
   className?: string;
 };
 
@@ -81,6 +84,7 @@ export type RichDescriptionToolbarProps = {
 export function RichDescriptionToolbar({
   editor,
   label = 'Formatting',
+  onOpenLinkDialog,
   className,
 }: RichDescriptionToolbarProps) {
   // Subscribe to exactly the editor state the toolbar renders. useEditorState re-runs this
@@ -98,6 +102,7 @@ export function RichDescriptionToolbar({
         code: instance.isActive('code'),
         blockquote: instance.isActive('blockquote'),
         codeBlock: instance.isActive('codeBlock'),
+        link: instance.isActive('link'),
         bulletList: instance.isActive('bulletList'),
         orderedList: instance.isActive('orderedList'),
         block: (instance.isActive('heading', { level: 2 })
@@ -242,6 +247,21 @@ export function RichDescriptionToolbar({
           onPressedChange={() => editor.chain().focus().toggleCode().run()}
         >
           <Code />
+        </Toggle>
+      </ToolbarTooltip>
+
+      {/* Link: opens the dialog (URL entry needs validation, so it is not a bare toggle).
+          Pressed state shows when the caret sits inside an existing link, which is also how a
+          keyboard user reaches "edit this link". */}
+      <ToolbarTooltip label={state.link ? 'Edit link (Ctrl+K)' : 'Add link (Ctrl+K)'}>
+        <Toggle
+          size="sm"
+          aria-label={state.link ? 'Edit link' : 'Add link'}
+          pressed={state.link}
+          disabled={disabledAll}
+          onPressedChange={() => onOpenLinkDialog?.()}
+        >
+          <Link2 />
         </Toggle>
       </ToolbarTooltip>
 

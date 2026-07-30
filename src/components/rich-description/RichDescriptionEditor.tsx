@@ -11,6 +11,7 @@ import {
 } from '@/lib/rich-description';
 import { richDescriptionExtensions } from './extensions';
 import { RichDescriptionToolbar } from './RichDescriptionToolbar';
+import { LinkDialog } from './LinkDialog';
 
 /**
  * A minimal handle onto the live editor. Deliberately narrow: callers drive the document
@@ -19,6 +20,8 @@ import { RichDescriptionToolbar } from './RichDescriptionToolbar';
  */
 export type RichDescriptionEditorHandle = {
   insertText: (text: string) => void;
+  /** Select the whole document (what a real Ctrl+A does; jsdom cannot drive that). */
+  selectAll: () => void;
   isEmpty: () => boolean;
 };
 
@@ -156,9 +159,28 @@ export function RichDescriptionEditor({
     if (!editor) return;
     onReadyRef.current?.({
       insertText: (text: string) => editor.chain().focus().insertContent(text).run(),
+      selectAll: () => editor.chain().focus().selectAll().run(),
       isEmpty: () => editor.isEmpty,
     });
   }, [editor]);
+
+  // The link dialog lives here (not in the toolbar) so the editor stays the single owner of
+  // editor-affecting UI, and the dialog is reachable even with the toolbar hidden.
+  const [linkDialogOpen, setLinkDialogOpen] = React.useState(false);
+
+  // Ctrl/Cmd+K opens the link dialog, matching the tooltip and the usual convention.
+  React.useEffect(() => {
+    if (!editor || !editable) return;
+    const dom = editor.view.dom;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setLinkDialogOpen(true);
+      }
+    };
+    dom.addEventListener('keydown', onKeyDown);
+    return () => dom.removeEventListener('keydown', onKeyDown);
+  }, [editor, editable]);
 
   // `editor.isEmpty` is mutable editor state, not React state, so track it explicitly:
   // reading it during render alone would never re-run when the document changes and the
@@ -186,7 +208,14 @@ export function RichDescriptionEditor({
         className,
       )}
     >
-      {showToolbar && <RichDescriptionToolbar editor={editor} label={toolbarLabel} />}
+      {showToolbar && (
+        <RichDescriptionToolbar
+          editor={editor}
+          label={toolbarLabel}
+          onOpenLinkDialog={() => setLinkDialogOpen(true)}
+        />
+      )}
+      <LinkDialog editor={editor} open={linkDialogOpen} onOpenChange={setLinkDialogOpen} />
       {/* The document area is its own positioning context so the placeholder overlays the text
           and never the toolbar above it. */}
       <div className="relative">

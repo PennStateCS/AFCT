@@ -680,3 +680,19 @@ input[type='week'] {
 .afct-rich-text :where([data-align='right']) {
   text-align: right;
 }
+
+/* Links inside rich descriptions. Keyboard-focusable by default (real anchors), with a
+   visible focus ring from the shared token so tabbing through a description is followable. */
+.afct-rich-text :where(a) {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.afct-rich-text :where(a):hover {
+  opacity: 0.85;
+}
+.afct-rich-text :where(a):focus-visible {
+  border-radius: 0.125rem;
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}

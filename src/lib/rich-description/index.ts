@@ -14,6 +14,12 @@ export {
   type RichDescriptionEnvelope,
   type ValidateResult,
 } from './schema';
+export {
+  ALLOWED_LINK_PROTOCOLS,
+  validateLinkUrl,
+  isAllowedLinkHref,
+  type LinkUrlResult,
+} from './link-url';
 export { plainTextToRichDescription, richDescriptionToPlainText } from './plain-text';
 export { resolveDescription, type DescriptionRecord, type ResolvedDescription } from './resolve';
 export {

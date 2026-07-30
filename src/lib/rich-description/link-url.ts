@@ -1,0 +1,73 @@
+/**
+ * Link-URL policy for rich descriptions.
+ *
+ * Deliberately a tiny allowlist rather than a blocklist: only `https:` and `mailto:` are
+ * accepted, so nothing has to reason about `javascript:`, `data:`, `vbscript:`, or any future
+ * scheme. Plain `http:` is rejected too, and the message says to use https, because AFCT is
+ * TLS-only in every supported deployment and a mixed-content link would be blocked anyway.
+ *
+ * Server-safe (no DOM). The editor uses it for the link dialog, and the same function backs
+ * validation of stored documents, so a hand-crafted payload cannot smuggle a scheme past the
+ * UI.
+ */
+
+export const ALLOWED_LINK_PROTOCOLS = ['https:', 'mailto:'] as const;
+
+export type LinkUrlResult = { ok: true; href: string } | { ok: false; error: string };
+
+// Whitespace and C0/C1 control characters. Browsers strip some of these before parsing the
+// scheme, which is exactly how `java\tscript:` slips past a naive prefix check, so anything
+// containing them is rejected outright rather than silently rewritten.
+const FORBIDDEN_CHARS = /[\s\u0000-\u001f\u007f-\u009f]/;
+
+/**
+ * Validate and normalize a user-entered link URL. Returns the href to store on success.
+ */
+export function validateLinkUrl(raw: string): LinkUrlResult {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return { ok: false, error: 'Enter a web address.' };
+
+  if (FORBIDDEN_CHARS.test(trimmed)) {
+    return { ok: false, error: 'A web address cannot contain spaces or control characters.' };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return {
+      ok: false,
+      error:
+        'Enter a full web address starting with https:// (or an email as mailto:name@example.edu).',
+    };
+  }
+
+  if (!ALLOWED_LINK_PROTOCOLS.includes(parsed.protocol as never)) {
+    // Name the offending scheme so the message is actionable, but never echo the rest of the
+    // URL back into the UI.
+    if (parsed.protocol === 'http:') {
+      return { ok: false, error: 'Use https:// for web links.' };
+    }
+    return { ok: false, error: `Links cannot use ${parsed.protocol} addresses.` };
+  }
+
+  // A mailto: with no recipient is a dead link.
+  if (parsed.protocol === 'mailto:' && !parsed.pathname.includes('@')) {
+    return { ok: false, error: 'Enter an email address, for example mailto:name@example.edu.' };
+  }
+
+  // An https: URL with no host is likewise unusable (e.g. "https://").
+  if (parsed.protocol === 'https:' && !parsed.hostname) {
+    return {
+      ok: false,
+      error: 'Enter a web address that includes a site, for example https://example.edu.',
+    };
+  }
+
+  return { ok: true, href: parsed.href };
+}
+
+/** Cheap predicate for validating stored documents. */
+export function isAllowedLinkHref(href: unknown): boolean {
+  return typeof href === 'string' && validateLinkUrl(href).ok;
+}
