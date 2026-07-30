@@ -7,7 +7,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import PrivilegeAssignmentView from './PrivilegeAssignmentView';
-import { warmRichDescriptionEditor } from '@/test/rich-editor';
+import { warmRichDescriptionEditor, WARM_TIMEOUT_MS } from '@/test/rich-editor';
 
 /* ─────────────────────────────── hoisted spies ──────────────────────────── */
 
@@ -325,7 +325,7 @@ const renderView = (props: Record<string, unknown> = {}) => {
   );
 };
 
-beforeAll(warmRichDescriptionEditor);
+beforeAll(warmRichDescriptionEditor, WARM_TIMEOUT_MS);
 
 beforeEach(() => {
   vi.clearAllMocks();

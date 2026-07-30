@@ -13,3 +13,16 @@
 export async function warmRichDescriptionEditor(): Promise<void> {
   await import('@/components/rich-description/RichDescriptionEditor');
 }
+
+/**
+ * Always pass this as the hook timeout:
+ *
+ *     beforeAll(warmRichDescriptionEditor, WARM_TIMEOUT_MS)
+ *
+ * The whole editor tree can take tens of seconds to transform when the full suite is running in
+ * parallel, and a timed-out hook does not fail: Vitest marks that file's tests SKIPPED, which
+ * still prints as a green summary. Coverage disappears and nothing says so. This is deliberately
+ * far above the global hook timeout, because the cost here is a one-off import rather than
+ * anything that could hang.
+ */
+export const WARM_TIMEOUT_MS = 120_000;

@@ -4,7 +4,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DuplicateProblemDialog } from './DuplicateProblemDialog';
-import { warmRichDescriptionEditor } from '@/test/rich-editor';
+import { warmRichDescriptionEditor, WARM_TIMEOUT_MS } from '@/test/rich-editor';
 
 const postMock = vi.hoisted(() => vi.fn());
 const toastSuccess = vi.hoisted(() => vi.fn());
@@ -42,7 +42,7 @@ const renderDialog = (over: Partial<React.ComponentProps<typeof DuplicateProblem
 };
 
 describe('DuplicateProblemDialog', () => {
-  beforeAll(warmRichDescriptionEditor);
+  beforeAll(warmRichDescriptionEditor, WARM_TIMEOUT_MS);
 
   beforeEach(() => {
     vi.clearAllMocks();
