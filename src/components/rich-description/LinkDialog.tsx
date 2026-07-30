@@ -99,7 +99,9 @@ export function LinkDialog({ editor, open, onOpenChange }: LinkDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      {/* bg-card for the same reason as the equation dialog: the DialogContent default is
+          the page background, not an elevated surface. */}
+      <DialogContent className="bg-card sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Edit link' : 'Add link'}</DialogTitle>

@@ -183,7 +183,10 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      {/* bg-card, not the DialogContent default. `--background` is the page grey
+          (oklch 0.94) while `--card` and `--popover` are white, so the default made this modal
+          render in the page colour while floating above the page. */}
+      <DialogContent className="bg-card sm:max-w-lg">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Edit equation' : 'Insert equation'}</DialogTitle>
@@ -261,7 +264,7 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
                 ref={previewRef}
                 role="region"
                 aria-labelledby={previewLabelId}
-                className="afct-rich-text bg-muted/30 border-input min-h-14 overflow-x-auto rounded-md border px-3 py-2"
+                className="afct-rich-text bg-muted/10 border-input min-h-14 overflow-x-auto rounded-md border px-3 py-2"
               />
             </div>
           </div>
