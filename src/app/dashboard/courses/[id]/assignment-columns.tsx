@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { AssignmentWithProblemCount } from '@/types/course';
+import { RichDescription } from '@/components/rich-description/RichDescription';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -155,14 +156,14 @@ function effectiveFieldValue(
   o: AssignmentOverrideSummary | null,
   field: OverrideField,
 ): Date | string | boolean | null {
-  const effAllowLate = (o?.allowLateSubmissions ?? assignment.allowLateSubmissions) ?? false;
+  const effAllowLate = o?.allowLateSubmissions ?? assignment.allowLateSubmissions ?? false;
   switch (field) {
     case 'unlockAt':
-      return (o?.unlockAt ?? assignment.unlockAt) ?? null;
+      return o?.unlockAt ?? assignment.unlockAt ?? null;
     case 'allowLateSubmissions':
       return effAllowLate;
     case 'lateCutoff':
-      return effAllowLate ? ((o?.lateCutoff ?? assignment.lateCutoff) ?? null) : null;
+      return effAllowLate ? (o?.lateCutoff ?? assignment.lateCutoff ?? null) : null;
   }
 }
 
@@ -203,7 +204,10 @@ export function OverrideAwareCell({
   const baseValue = effectiveFieldValue(assignment, null, field);
   const rows = [
     { name: everyoneLabel, value: baseValue },
-    ...overrides.map((o) => ({ name: o.studentName, value: effectiveFieldValue(assignment, o, field) })),
+    ...overrides.map((o) => ({
+      name: o.studentName,
+      value: effectiveFieldValue(assignment, o, field),
+    })),
   ];
   const distinct = new Set(rows.map((r) => fieldValueKey(r.value)));
   const isMultiple = overrides.length > 0 && distinct.size > 1;
@@ -297,6 +301,9 @@ function PublishSwitchCell({
 // column model threading dialog state through the table.
 function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblemCount }) {
   const [descOpen, setDescOpen] = useState(false);
+  // Either form counts: a rich-only assignment still has something to show. (In practice the
+  // plain text is always derived on save, so this mainly guards records written another way.)
+  const hasDescription = Boolean(assignment.description) || Boolean(assignment.descriptionJson);
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <Link
@@ -306,12 +313,12 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
       >
         {assignment.title}
       </Link>
-      {assignment.description ? (
+      {hasDescription ? (
         <>
           <button
             type="button"
             onClick={() => setDescOpen(true)}
-            className="text-primary self-start text-xs underline hover:text-primary/80"
+            className="text-primary hover:text-primary/80 self-start text-xs underline"
             title="View description"
           >
             View description
@@ -324,8 +331,12 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
                   {assignment.title}
                 </DialogDescription>
               </DialogHeader>
-              <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm break-words whitespace-pre-wrap">
-                {assignment.description}
+              <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm">
+                <RichDescription
+                  description={assignment.description}
+                  descriptionJson={assignment.descriptionJson}
+                  compact
+                />
               </div>
             </DialogContent>
           </Dialog>
@@ -524,7 +535,7 @@ export function useAssignmentColumns(
                   }}
                   hidden={courseIsArchived}
                   title={title}
-                  className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-muted-foreground opacity-50' : 'text-destructive focus:text-destructive'}`}
+                  className={`flex items-center gap-2 ${disabled ? 'text-muted-foreground cursor-not-allowed opacity-50' : 'text-destructive focus:text-destructive'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Assignment

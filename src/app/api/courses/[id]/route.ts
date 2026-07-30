@@ -104,9 +104,7 @@ export const GET = withCourseAuth(
                   // assigned to them (everyone, an individual assignee row, or a group
                   // they belong to). Without the membership filter an excluded student
                   // could read every published assignment's id and description.
-                  where: isStaff
-                    ? {}
-                    : { isPublished: true, ...assignedToStudentWhere(user.id) },
+                  where: isStaff ? {} : { isPublished: true, ...assignedToStudentWhere(user.id) },
                   include: {
                     problems: {
                       select: {
@@ -212,8 +210,7 @@ export const GET = withCourseAuth(
           // Enrollment standing, so the roster can badge dropped students (staff view only;
           // students never receive peer roster rows). Only meaningful for STUDENT rows.
           enrollmentStatus: r.status,
-          hasSubmissions:
-            r.role === 'STUDENT' ? submittedStudentIds.has(String(r.user.id)) : false,
+          hasSubmissions: r.role === 'STUDENT' ? submittedStudentIds.has(String(r.user.id)) : false,
         }));
       } else if (includeRoster) {
         // Non-staff (students) get a privacy-safe roster: course staff keep their
@@ -580,6 +577,9 @@ export const PUT = withCourseAuth(
           id: assignment.id,
           title: assignment.title,
           description: assignment.description,
+          // Ships with `description` so the table keeps rendering rich descriptions after a
+          // course update. No lock mask here: this handler is staff-only (access: 'manage').
+          descriptionJson: assignment.descriptionJson,
           dueDate: assignment.dueDate,
           maxPoints: sumProblemPoints(assignment.problems),
           isPublished: assignment.isPublished,
@@ -745,10 +745,7 @@ export const DELETE = withCourseAuth(
         prisma.submission.count({ where: { courseId: id } }),
       ]);
       const isEmpty =
-        assignmentCount === 0 &&
-        problemCount === 0 &&
-        studentCount === 0 &&
-        submissionCount === 0;
+        assignmentCount === 0 && problemCount === 0 && studentCount === 0 && submissionCount === 0;
 
       if (isEmpty) {
         // Hard delete: the schema cascades remove the (staff-only) roster, and the

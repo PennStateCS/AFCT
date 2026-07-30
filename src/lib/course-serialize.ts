@@ -37,6 +37,8 @@ export type OverrideRowRaw = {
 export type AssignmentRow = Record<string, unknown> & {
   id: string;
   description?: string | null;
+  /** The rich document. Travels with `description` and is masked with it. */
+  descriptionJson?: unknown;
   dueDate?: Date;
   unlockAt?: Date | null;
   allowLateSubmissions?: boolean;
@@ -100,6 +102,10 @@ export function serializeAssignment(assignment: AssignmentRow, ctx: SerializeAss
     id: assignment.id,
     title: assignment.title,
     description: locked ? null : assignment.description,
+    // Masked on exactly the same condition as `description`. Sending one without the other
+    // would either leak a locked prompt or leave a staff surface unable to render the rich
+    // form, which is the bug this pairing exists to prevent.
+    descriptionJson: locked ? null : (assignment.descriptionJson ?? null),
     locked,
     dueDate: assignment.dueDate,
     unlockAt: assignment.unlockAt ?? null,

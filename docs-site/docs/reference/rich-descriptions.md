@@ -9,11 +9,11 @@ the format needs to change.
 
 Three columns move together on both `Assignment` and `Problem`:
 
-| Column | Purpose |
-| --- | --- |
-| `description` | Plain text. Never null when a description exists. The only form other clients receive. |
-| `descriptionFormat` | `PLAIN_TEXT` or `TIPTAP_JSON`. Says which column is authoritative. |
-| `descriptionJson` | The versioned rich document, or null. |
+| Column              | Purpose                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `description`       | Plain text. Never null when a description exists. The only form other clients receive. |
+| `descriptionFormat` | `PLAIN_TEXT` or `TIPTAP_JSON`. Says which column is authoritative.                     |
+| `descriptionJson`   | The versioned rich document, or null.                                                  |
 
 `descriptionJson` holds an envelope, never a bare document:
 
@@ -111,8 +111,15 @@ display time with `trust: false` (which blocks `\href`, `\url`, `\includegraphic
 blanking the editor, and `maxSize` / `maxExpand` bounds. Output is `htmlAndMathml`, so screen
 readers get real MathML.
 
+When KaTeX rejects an expression, the dialog does not show its message raw. `describeLatexError`
+(`src/components/rich-description/latex-error.ts`) maps the common failures to a sentence that
+says what to fix, for example naming the unrecognised command or the unmatched brace, and shows
+KaTeX's own wording underneath as supporting detail. The detail is kept deliberately: these are
+computing-theory faculty, and many read LaTeX errors faster than prose. Add a rule there rather
+than reverting to the raw message.
+
 Equations are inserted and edited only through the equation dialog. The upstream extension's input
-rules are removed on purpose: they map `$$x$$` to *inline* math and `$$$x$$$` to a display block,
+rules are removed on purpose: they map `$$x$$` to _inline_ math and `$$$x$$$` to a display block,
 which inverts what LaTeX authors expect and disagrees with how AFCT writes math into the plain-text
 description. An expression KaTeX cannot parse is not saveable, because it would render as red
 error text for every student.
@@ -121,7 +128,161 @@ Block equations are always centred. The upstream `blockMath` node is an atom car
 LaTeX source, so there is nowhere to store a per-equation alignment; adding one would mean forking
 the official node.
 
-KaTeX's stylesheet and fonts are bundled with the app. They are never loaded from a CDN.
+KaTeX's stylesheet and fonts are served by the app itself, never from a CDN. See
+[Self-hosted KaTeX assets](#self-hosted-katex-assets) for how they get there.
+
+## Rendering on read surfaces
+
+`RichDescription` (`src/components/rich-description/RichDescription.tsx`) renders a stored
+document on read surfaces. It is a plain React walker over the validated JSON, not a second
+editor: read pages get no ProseMirror, the output is server-renderable, and it reuses the same
+`.afct-rich-text` styles the editor uses so authored and published content match. Pass both
+fields and let it decide:
+
+```tsx
+<RichDescription description={item.description} descriptionJson={item.descriptionJson} />
+```
+
+### Which surfaces render rich content
+
+| Surface                                                          | Audience |
+| ---------------------------------------------------------------- | -------- |
+| Student assignment page description                              | student  |
+| `ProblemHeader` (student problem view, faculty submissions view) | both     |
+| Problem description dialog on the assignment page                | faculty  |
+| Problem description dialog in the course problem bank            | faculty  |
+| Assignment description dialog in the course assignment table     | faculty  |
+
+Adding a surface takes two steps, and missing the first is the failure mode to watch for: the
+API response has to carry `descriptionJson` as well as `description`. The assignment table
+shipped rendering plain text only because `serializeAssignment` projected `description`
+explicitly and never included the rich field, so there was nothing for the component to render.
+Whenever a projection lists `description` by name, it must list `descriptionJson` beside it and
+apply the same content-lock mask.
+
+**`StudentAssignmentCard` on the dashboard stays plain text on purpose.** It is a truncated
+preview with a `title` tooltip, so rich markup would be clipped mid-element and the tooltip
+cannot carry formatting anyway. That is a deliberate choice, not an omission.
+
+`ProblemListCard` is not in the table because its `description` prop is the card's own static
+subtitle, not a stored description.
+
+### Fallback
+
+Validation is whole-document, so there is one fallback: if `descriptionJson` is missing,
+malformed, an unsupported version, or fails the allowlist in any way, the surface renders the
+plain-text `description` instead. That is not a lossy outcome for the words. `description` is
+derived from the rich document every time it is saved, so the reader still gets the full text and
+loses only the formatting.
+
+There is no partial rendering. One unsupported node takes the whole description down to plain
+text rather than rendering its valid siblings, because `validateRichDescription` accepts or
+rejects the envelope as a unit.
+
+`RichDescription` also carries per-node guards for an unsupported node type, unusable latex, and
+a rejected href. Those are **defense in depth, not behaviour you can observe**: the validator
+already rejects each of those cases using the same predicates the walker would, so a document
+that reaches the walker cannot contain them. They exist because the walker is the last thing
+between stored data and the DOM. Treat them as unreachable when reasoning about what a reader
+sees, and be wary of a test that appears to exercise them.
+
+Fallbacks log a `console.warn` outside production. There is no structured client logger to route
+them to, and a malformed description is a content problem for its author rather than an
+operational event.
+
+`RichDescription` also wraps its output in `RichDescriptionBoundary`, a React error boundary
+that swaps in the same plain-text fallback if rendering throws. Validation is total, so this
+should never fire; it is there because these surfaces carry assignment prompts, and a thrown
+render takes out the whole client tree rather than one description. A student seeing a blank
+assignment page near a deadline is a far worse failure than losing some formatting. It lives
+inside the shared component rather than at each call site, so a newly added surface inherits it.
+
+### Caching
+
+Two caches, both keyed on values that fully determine the result:
+
+- `renderDescriptionMath` memoizes KaTeX output by `(latex, displayMode)`. Rendering is pure, and
+  the walker re-runs it for every equation on every render. The map is bounded and cleared
+  wholesale when full, because the module is also loaded server-side where an unbounded map
+  would leak slowly.
+- `RichDescription` memoizes validation results in a `WeakMap` keyed on the `descriptionJson`
+  object. A `useMemo` would have been the obvious tool but would make the component a hook
+  consumer, and it is deliberately usable from a Server Component. Sound because the input is
+  parsed JSON that nobody mutates; a refetch yields a new object and revalidates.
+
+### Links
+
+Rendered links go back through the same policy the editor enforces. `https:` leaves AFCT, so it
+opens in a new tab with `rel="noopener noreferrer nofollow"`; `mailto:` stays in the same tab,
+because `target="_blank"` on a mail handoff leaves a stranded blank tab. There is no
+internal-link case: the protocol allowlist accepts only those two schemes, so a relative path
+cannot be stored in the first place. An href that fails the check renders as plain text.
+
+### Maths and accessibility
+
+`renderDescriptionMath(latex, displayMode)` in `render-math.ts` is the single place KaTeX is
+called for rendering. Output is `htmlAndMathml`, so screen readers get real MathML rather than
+styled spans. It is also the only `dangerouslySetInnerHTML` in the feature, and deliberately
+narrow: the input is a schema-validated latex string bounded by `MAX_LATEX_LENGTH`, and
+`trust: false` refuses the commands that emit markup or fetch resources. KaTeX does echo the
+original TeX into a MathML `<annotation>` element, which is inert text content.
+
+### Headings
+
+Descriptions render `h2` to `h4`, clamped by the renderer to `ALLOWED_HEADING_LEVELS` whatever an
+older document claims, so a description can never introduce a competing `h1`. Surfaces that embed
+one already sit under their own heading (the assignment page uses an `h2` "Description" label,
+and `DialogTitle` is itself an `h2`), which makes description headings siblings rather than
+children. That is a valid outline and avoided adding a level-shifting prop that every call site
+would have to get right.
+
+### Density
+
+`compact` tightens vertical rhythm through the `.afct-rich-text--compact` modifier, for cards,
+list rows, and problem headers. Prefer it over one-off spacing classes at call sites, which drift
+apart. No editor chrome is reused on read surfaces.
+
+### Locked content
+
+Locked content is removed before serialization, never merely hidden by a component. Before an
+assignment unlocks, `getStudentCourseAssignments` nulls **both** `description` and
+`descriptionJson` and returns no problems at all, so neither form reaches the browser.
+`student-assignments.lock.test.ts` proves it by putting distinctive secret strings in a locked
+description and asserting they appear nowhere in the serialized response.
+
+### Self-hosted KaTeX assets
+
+KaTeX's stylesheet and fonts live in `public/katex/` and are linked from the root layout
+(`src/app/layout.tsx`), not imported through the bundler. `scripts/vendor-katex.mjs` copies
+`katex.min.css` and the `fonts/` directory out of `node_modules/katex/dist` verbatim. This is
+KaTeX's documented browser setup: the stylesheet references its fonts with relative URLs, so
+keeping the two next to each other makes those URLs resolve with nothing rewritten.
+
+Re-run it after changing the `katex` dependency, and commit the result:
+
+```bash
+npm run vendor:katex
+```
+
+The copy is deliberately dumb. Nothing is parsed or rewritten, so the vendored files stay
+byte-identical to upstream and a KaTeX upgrade cannot half-apply. All three font formats are
+kept for the same reason, even though browsers only ever fetch the 20 `.woff2` files; the extra
+files cost repository size, not page weight.
+
+The reason it is a `<link>` rather than an import: the stylesheet references 60 font files, and
+a bundler import turns each one into a module in the chunk graph of every route that renders a
+description. That made dev compiles stall for minutes. Because Next steers you toward importing
+CSS, the tag trips `@next/next/no-css-tags`, which is suppressed on that one line with the
+reasoning recorded next to it. The assets are same-origin and are never fetched from a CDN.
+
+### Bundle tradeoff and a possible optimisation
+
+KaTeX's JavaScript (about 270 KB) still reaches any page that renders a description, because the
+read surfaces are client components. Only the CSS and fonts were moved out of the bundle above.
+`renderDescriptionMath` is isolated in its own module and uses no browser API precisely so maths
+rendering can later move behind a server-only boundary, keeping that JavaScript away from
+students, without rewriting the document walker. That refactor is not done: it needs the read
+surfaces to stop being client components, or a server-rendered HTML string threaded down to them.
 
 ## Introducing a new JSON version
 
