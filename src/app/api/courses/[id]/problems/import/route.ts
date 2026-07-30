@@ -7,6 +7,7 @@ import { logDenial, logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { canManageCourse } from '@/lib/permissions';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { descriptionWriteData } from '@/lib/description-write';
 import { readJson } from '@/lib/api/request';
 import { ProblemImportApiSchema } from '@/schemas/problem';
 
@@ -52,7 +53,7 @@ export const POST = withCourseAuth(
     try {
       const parsed = await readJson(req, ProblemImportApiSchema);
       if (!parsed.ok) return parsed.response;
-      const { sourceCourseId, sourceProblemId, title, description } = parsed.data;
+      const { sourceCourseId, sourceProblemId, title, description, descriptionJson } = parsed.data;
 
       // Importing from the same course is what Duplicate is for; reject it here so the
       // two flows stay distinct.
@@ -99,7 +100,9 @@ export const POST = withCourseAuth(
         created = await prisma.problem.create({
           data: {
             title,
-            description: description ?? null,
+            // The dialog can edit the description, so the body wins; rich JSON (when sent)
+            // is authoritative and the plain text is derived from it.
+            ...descriptionWriteData({ description, descriptionJson }),
             type: source.type,
             maxStates: source.maxStates,
             isDeterministic: source.isDeterministic,

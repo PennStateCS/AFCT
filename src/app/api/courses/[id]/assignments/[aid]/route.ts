@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { descriptionWriteData } from '@/lib/description-write';
 import type { ProblemTypeEnum } from '@/schemas/problem';
 import type { RoleEnum } from '@/schemas/user';
 import { AssignmentUpdateApiSchema } from '@/schemas/assignment';
@@ -426,7 +428,7 @@ export const PUT = withCourseAuth(
         where: { id },
         data: {
           title: data.title,
-          description: data.description,
+          ...descriptionWriteData(data),
           // Use the computed value (keeps the existing due date when none was sent)
           // rather than re-deriving from a possibly-undefined data.dueDate.
           dueDate,
@@ -562,7 +564,9 @@ export const PATCH = withCourseAuth(
       // Build update data object with only provided fields
       const updateData: {
         title?: string;
-        description?: string;
+        description?: string | null;
+        descriptionFormat?: 'PLAIN_TEXT' | 'TIPTAP_JSON';
+        descriptionJson?: Prisma.InputJsonValue | typeof Prisma.DbNull;
         dueDate?: Date;
         unlockAt?: Date | null;
         allowLateSubmissions?: boolean;
@@ -571,7 +575,11 @@ export const PATCH = withCourseAuth(
       } = {};
 
       if (data.title !== undefined) updateData.title = data.title;
-      if (data.description !== undefined) updateData.description = data.description;
+      // A description write means all three columns move together, so the rich JSON and the
+      // derived plain text can never drift. Either field arriving counts as a write.
+      if (data.description !== undefined || data.descriptionJson !== undefined) {
+        Object.assign(updateData, descriptionWriteData(data));
+      }
       if (data.dueDate !== undefined) updateData.dueDate = effectiveDueDate;
       if (unlockState.changed) updateData.unlockAt = unlockState.unlockAt;
       if (data.allowLateSubmissions !== undefined) {

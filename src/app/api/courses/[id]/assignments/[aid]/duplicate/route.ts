@@ -7,6 +7,7 @@ import { logError } from '@/lib/api/activity';
 import { withAssignmentAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { descriptionWriteData, descriptionCopyData } from '@/lib/description-write';
 import { AssignmentDuplicateApiSchema } from '@/schemas/assignment';
 
 type RouteCtx = { params: Promise<{ id: string; aid: string }> };
@@ -58,7 +59,7 @@ export const POST = withAssignmentAuth(
     try {
       const parsed = await readJson(req, AssignmentDuplicateApiSchema);
       if (!parsed.ok) return parsed.response;
-      const { title, description, problemMode } = parsed.data;
+      const { title, description, descriptionJson, problemMode } = parsed.data;
 
       // The wrapper already confirmed this assignment belongs to `courseId`.
       const source = await prisma.assignment.findFirst({
@@ -94,6 +95,8 @@ export const POST = withAssignmentAuth(
                   id: true,
                   title: true,
                   description: true,
+                  descriptionFormat: true,
+                  descriptionJson: true,
                   type: true,
                   maxStates: true,
                   isDeterministic: true,
@@ -143,7 +146,10 @@ export const POST = withAssignmentAuth(
         const dup = await tx.assignment.create({
           data: {
             title,
-            description: description ?? null,
+            // The dialog can edit the title/description, so the request body wins here. When
+            // it sends rich JSON the plain text is derived from it; otherwise this is a
+            // plain-text write. Callers that omit both get the same null as before.
+            ...descriptionWriteData({ description, descriptionJson }),
             dueDate: source.dueDate,
             unlockAt: source.unlockAt,
             assignedToEveryone: source.assignedToEveryone,
@@ -207,7 +213,8 @@ export const POST = withAssignmentAuth(
             const newProblem = await tx.problem.create({
               data: {
                 title: p.title,
-                description: p.description,
+                // Carry the rich description verbatim so a copy is not silently downgraded.
+                ...descriptionCopyData(p),
                 type: p.type,
                 maxStates: p.maxStates,
                 isDeterministic: p.isDeterministic,

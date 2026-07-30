@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { formBooleanOptional, formIntOptional } from './fields';
+import { richDescriptionEnvelopeSchema } from '@/lib/rich-description';
+
+// Optional versioned rich-description envelope accepted by the write APIs. When present it is
+// authoritative and the server derives the plain-text `description` from it.
+const descriptionJsonField = richDescriptionEnvelopeSchema.nullish();
 
 /** Keep in sync with your Prisma enum */
 export const ProblemTypeEnum = z.enum(['FA', 'PDA', 'CFG', 'RE', 'TM']);
@@ -134,6 +139,7 @@ const problemApiScalars = {
     .min(3, 'Title must be at least 3 characters.')
     .max(200, 'Title is too long.'),
   description: z.string().trim().max(20000, 'Description is too long.').optional(),
+  descriptionJson: descriptionJsonField,
   type: ProblemTypeEnum,
   // Optional context for the activity log when a problem is created inside an assignment.
   assignmentId: z.string().trim().optional(),
@@ -156,6 +162,7 @@ export const ProblemDuplicateApiSchema = z.object({
     .min(3, 'Title must be at least 3 characters.')
     .max(200, 'Title is too long.'),
   description: z.string().trim().max(20000, 'Description is too long.').nullable().optional(),
+  descriptionJson: descriptionJsonField,
 });
 
 // Import a problem from another course the caller can manage into this course. Like
@@ -170,6 +177,7 @@ export const ProblemImportApiSchema = z.object({
     .min(3, 'Title must be at least 3 characters.')
     .max(200, 'Title is too long.'),
   description: z.string().trim().max(20000, 'Description is too long.').nullable().optional(),
+  descriptionJson: descriptionJsonField,
 });
 
 /**

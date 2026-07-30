@@ -72,6 +72,14 @@ const source = {
         id: 'p1',
         title: 'Pipelining Lab',
         description: 'Do the thing',
+        descriptionFormat: 'TIPTAP_JSON',
+        descriptionJson: {
+          version: 1,
+          document: {
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Do the thing' }] }],
+          },
+        },
         type: 'FA',
         maxStates: 5,
         isDeterministic: true,
@@ -189,6 +197,16 @@ describe('POST /api/courses/[id]/assignments/[aid]/duplicate', () => {
         data: expect.objectContaining({ maxPoints: 40, maxSubmissions: 3, autograderEnabled: false }),
       }),
     );
+  });
+
+  it('duplicate mode preserves a copied problem\'s rich description verbatim', async () => {
+    const res = await call({ title: 'Copy', problemMode: 'duplicate' });
+    expect(res.status).toBe(201);
+
+    const data = prismaMock.problem.create.mock.calls[0][0].data;
+    expect(data.descriptionFormat).toBe('TIPTAP_JSON');
+    expect(data.descriptionJson).toEqual(source.problems[0].problem.descriptionJson);
+    expect(data.description).toBe('Do the thing');
   });
 
   it('duplicate mode leaves the new problem file-less if the source file is missing on disk', async () => {

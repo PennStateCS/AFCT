@@ -10,6 +10,7 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { readFormData } from '@/lib/api/request';
+import { descriptionWriteData } from '@/lib/description-write';
 import {
   ProblemCreateApiSchema,
   ALLOWED_PROBLEM_EXTENSIONS,
@@ -162,7 +163,7 @@ export const POST = withCourseAuth(
         problem = await prisma.problem.create({
           data: {
             title,
-            description: data.description ?? null,
+            ...descriptionWriteData(data),
             type: type as ProblemType,
             courseId,
             fileName,

@@ -16,3 +16,9 @@ export {
 } from './schema';
 export { plainTextToRichDescription, richDescriptionToPlainText } from './plain-text';
 export { resolveDescription, type DescriptionRecord, type ResolvedDescription } from './resolve';
+export {
+  buildDescriptionWrite,
+  InvalidRichDescriptionError,
+  type DescriptionWriteInput,
+  type DescriptionWriteFields,
+} from './write';
