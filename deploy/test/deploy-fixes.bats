@@ -283,6 +283,41 @@ EOF
   [[ "$output" == *"env file /x/.env.production not found"* ]]
 }
 
+@test "run_as_service forwards the AFCT_RUNTIME_* variables across the account switch" {
+  run sh -c '
+    SERVICE_USER=svc
+    . "'"$UNIX_DIR"'/lib/docker.sh"
+    # Stand-in runuser: drop "-u svc --" and run the rest, like the real thing minus the
+    # account switch. The env(1) wrapper the code adds is what carries the variables.
+    runuser() { shift 3; "$@"; }
+    AFCT_RUNTIME_ENV_FILE=/x/.env.production
+    AFCT_RUNTIME_COMPOSE_DIR=/x/runtime
+    AFCT_RUNTIME_SHARED_DIR=/x
+    export AFCT_RUNTIME_ENV_FILE AFCT_RUNTIME_COMPOSE_DIR AFCT_RUNTIME_SHARED_DIR
+    run_as_service sh -c "printf %s:%s \"\$AFCT_RUNTIME_ENV_FILE\" \"\$AFCT_RUNTIME_SHARED_DIR\""
+  '
+  [ "$output" = "/x/.env.production:/x" ]
+}
+
+@test "compose_project runs compose from the compose file's directory" {
+  mkdir -p "$TESTROOT/rt"
+  : > "$TESTROOT/rt/docker-compose.yml"
+  run sh -c '
+    COMPOSE_PROJECT_NAME=afct
+    COMPOSE_FILE="'"$TESTROOT"'/rt/docker-compose.yml"
+    ENV_FILE="'"$TESTROOT"'/absent.env"
+    . "'"$UNIX_DIR"'/lib/compose.sh"
+    updater_profile_args() { :; }
+    compose_raw() { pwd; }
+    cd /
+    compose_project config
+  '
+  case "$output" in
+    */rt) : ;;
+    *) echo "unexpected cwd: $output"; return 1 ;;
+  esac
+}
+
 @test "valid_compose_project_name accepts valid names and rejects invalid ones" {
   run sh -c '
     . "'"$UNIX_DIR"'/lib/migration.sh"
