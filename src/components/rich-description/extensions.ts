@@ -3,9 +3,9 @@ import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-// KaTeX ships its own stylesheet and fonts. Imported here (not from a CDN) so equations render
-// with no external request: the bundler inlines the fonts alongside the app's own assets.
-import 'katex/dist/katex.min.css';
+// KaTeX's stylesheet is served from public/katex and linked in the root layout, not imported
+// here: a bundler import pulls its 60 font files into the chunk graph of every route that
+// renders a description. See scripts/vendor-katex.mjs.
 import {
   ALLOWED_TEXT_ALIGN,
   ALLOWED_LINK_PROTOCOLS,
