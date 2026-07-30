@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AvatarCrop, type AvatarCropRef } from '../AvatarCrop';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -64,6 +65,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
+  const [photoConfirmOpen, setPhotoConfirmOpen] = useState(false);
   const [avatarCrop, setAvatarCrop] = useState({
     cropX: user.cropX ?? 0.5,
     cropY: user.cropY ?? 0.5,
@@ -271,13 +273,25 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                   type="button"
                   variant="outline"
                   className="flex flex-1 items-center justify-center gap-2 border-destructive text-destructive hover:bg-destructive/10"
-                  onClick={handleDeleteAvatar}
+                  onClick={() => setPhotoConfirmOpen(true)}
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete Avatar
                 </Button>
               )}
             </div>
+            <ConfirmDialog
+              open={photoConfirmOpen}
+              variant="destructive"
+              title="Delete profile photo?"
+              description="Removes your profile photo when you save. You can upload a new one anytime."
+              confirmText="Delete photo"
+              onConfirm={() => {
+                handleDeleteAvatar();
+                setPhotoConfirmOpen(false);
+              }}
+              onCancel={() => setPhotoConfirmOpen(false)}
+            />
             {errors.avatarFile?.message && (
               <p id={avatarErrorId} role="alert" className="text-xs text-destructive">
                 {typeof errors.avatarFile?.message === 'string'
@@ -381,7 +395,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
               disabled={!isValid || isSubmitting}
               title={!isValid ? 'Fix validation errors to save' : undefined}
             >
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
+              {isSubmitting ? 'Saving…' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </form>

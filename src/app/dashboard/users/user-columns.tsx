@@ -436,6 +436,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
 
       <ConfirmDialog
         open={deactivateOpen}
+        variant="destructive"
         onCancel={() => setDeactivateOpen(false)}
         onConfirm={() => handleStatusChange(true)}
         title="Deactivate account?"

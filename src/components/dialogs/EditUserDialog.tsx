@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import { Upload, Trash2 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -69,6 +70,7 @@ export function EditUserDialog({
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
+  const [photoConfirmOpen, setPhotoConfirmOpen] = useState(false);
   const [serverTimezone, setServerTimezone] = useState('UTC');
   const [avatarCrop, setAvatarCrop] = useState({
     cropX: user.cropX ?? 0.5,
@@ -317,12 +319,24 @@ export function EditUserDialog({
                     type="button"
                     variant="outline"
                     className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive/10"
-                    onClick={onDeleteAvatar}
+                    onClick={() => setPhotoConfirmOpen(true)}
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete Avatar
                   </Button>
                 )}
+                <ConfirmDialog
+                  open={photoConfirmOpen}
+                  variant="destructive"
+                  title="Delete profile photo?"
+                  description={`Removes ${user.firstName ?? 'this user'}'s profile photo when you save. They can upload a new one anytime.`}
+                  confirmText="Delete photo"
+                  onConfirm={() => {
+                    onDeleteAvatar();
+                    setPhotoConfirmOpen(false);
+                  }}
+                  onCancel={() => setPhotoConfirmOpen(false)}
+                />
               </div>
             </div>
           </div>

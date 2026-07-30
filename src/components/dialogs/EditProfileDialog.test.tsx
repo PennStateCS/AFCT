@@ -194,6 +194,7 @@ describe('EditProfileDialog', () => {
     renderWithClient(<EditProfileDialog user={avatarUser} open setOpen={setOpen} />);
 
     await userEvents.click(screen.getByRole('button', { name: /Delete Avatar/i }));
+    await userEvents.click(screen.getByRole('button', { name: 'Delete photo' }));
     await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));

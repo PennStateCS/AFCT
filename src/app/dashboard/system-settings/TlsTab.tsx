@@ -487,7 +487,6 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
 
       <ConfirmDialog
         open={tlsConfirm === 'reset'}
-        variant="destructive"
         busy={tlsBusy}
         title="Reset to a self-signed certificate?"
         description="This replaces the current trusted certificate with a self-signed one. Every visitor will see a browser security warning until a trusted certificate is installed again."

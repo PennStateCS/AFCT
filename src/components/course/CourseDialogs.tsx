@@ -136,8 +136,8 @@ export function CourseDialogs({
         title={pendingPublish ? 'Publish course?' : 'Unpublish course?'}
         description={
           pendingPublish
-            ? 'This takes effect immediately: the course becomes visible to enrolled students as soon as you confirm.'
-            : 'This takes effect immediately: students will no longer see the course as soon as you confirm.'
+            ? 'The course becomes visible to enrolled students immediately.'
+            : 'The course becomes invisible to students immediately.'
         }
         onConfirm={onPublishConfirm}
         onCancel={onPublishCancel}

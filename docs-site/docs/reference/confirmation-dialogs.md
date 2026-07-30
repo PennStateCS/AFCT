@@ -22,6 +22,17 @@ Do **not** add a confirmation to routine, easily reversible actions. Saving a fo
 enrolling a user, moving a group member, and re-running a single submission all run
 immediately. An extra click on a safe action is friction, not safety.
 
+A **staged** change is a special case: confirm before staging it, not only before the
+eventual save. `EditProfileDialog`'s "Delete Avatar" button doesn't call the API right
+away, it flags the photo for removal and applies that on the next Save. But someone can
+still click it and walk away, or another admin can hit Save on their behalf, so it gets
+the same `ConfirmDialog` an immediate delete would; the wording just says "when you save"
+instead of implying it happens right away.
+
+Placing a staged confirmation like that one inside the surrounding `<form>` is safe:
+`ConfirmDialog`'s own buttons are always `type="button"`, so confirming or canceling never
+triggers the form's submit handler.
+
 Match the tone to the consequence:
 
 - Use `variant="destructive"` (the red button) only for permanent or access-removing

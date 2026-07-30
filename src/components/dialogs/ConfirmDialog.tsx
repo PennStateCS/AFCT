@@ -220,10 +220,20 @@ export function ConfirmDialog({
         )}
 
         <DialogFooter className="flex gap-2">
-          <Button ref={cancelRef} variant="secondary" onClick={onCancel} disabled={pending}>
+          {/* Explicit type="button" on both buttons: some call sites render this dialog
+              inside a <form> (a staged change confirmed before the eventual Save), and a
+              bare <button> in that position defaults to type="submit". */}
+          <Button
+            type="button"
+            ref={cancelRef}
+            variant="secondary"
+            onClick={onCancel}
+            disabled={pending}
+          >
             {cancelText}
           </Button>
           <Button
+            type="button"
             variant={variant}
             onClick={() => void handleConfirm()}
             disabled={pending || !typedSatisfied}
