@@ -31,9 +31,9 @@ export function RichDescriptionDemo() {
           onChange={setValue}
         />
         <p id="demo-editor-help" className="text-muted-foreground mt-1 text-xs">
-          Paragraphs, headings, bold, italic, underline, alignment, links, equations, lists,
-          quotes, code, and rules. Click an equation to edit it, or use Expand editor for a
-          full-window view.
+          Paragraphs, headings, bold, italic, underline, alignment, links, equations, lists, quotes,
+          code, and rules. Click an equation to edit it, or use Expand editor for a full-window
+          view.
         </p>
       </div>
 

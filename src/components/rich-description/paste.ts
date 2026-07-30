@@ -23,7 +23,12 @@
  */
 
 /** Inline CSS properties the editor genuinely reads. Everything else is discarded. */
-const KEPT_STYLE_PROPERTIES = new Set(['text-align', 'font-weight', 'font-style', 'text-decoration']);
+const KEPT_STYLE_PROPERTIES = new Set([
+  'text-align',
+  'font-weight',
+  'font-style',
+  'text-decoration',
+]);
 
 /** Elements removed outright, with their contents. */
 const DROPPED_ELEMENTS = [
@@ -53,7 +58,19 @@ const DROPPED_ELEMENTS = [
 ];
 
 /** Attributes stripped from every surviving element (href/src handling is the schema's job). */
-const DROPPED_ATTRIBUTES = ['class', 'id', 'dir', 'lang', 'width', 'height', 'align', 'bgcolor', 'color', 'face', 'size'];
+const DROPPED_ATTRIBUTES = [
+  'class',
+  'id',
+  'dir',
+  'lang',
+  'width',
+  'height',
+  'align',
+  'bgcolor',
+  'color',
+  'face',
+  'size',
+];
 
 /**
  * The only `data-*` attributes kept. These are the ones AFCT's own extensions parse, so copying a
@@ -113,7 +130,9 @@ export function sanitizePastedHTML(html: string): string {
   // Google Docs' wrapper: a <b> that explicitly sets font-weight:normal is presentational noise,
   // and leaving it makes the whole paste bold.
   Array.from(doc.body.querySelectorAll('b,strong'))
-    .filter((element) => /font-weight\s*:\s*(normal|400)/i.test(element.getAttribute('style') ?? ''))
+    .filter((element) =>
+      /font-weight\s*:\s*(normal|400)/i.test(element.getAttribute('style') ?? ''),
+    )
     .forEach(unwrap);
 
   doc.body.querySelectorAll('*').forEach((element) => {
@@ -123,7 +142,8 @@ export function sanitizePastedHTML(html: string): string {
       .filter(
         (attribute) =>
           /^on/i.test(attribute.name) ||
-          (/^data-/i.test(attribute.name) && !KEPT_DATA_ATTRIBUTES.has(attribute.name.toLowerCase())),
+          (/^data-/i.test(attribute.name) &&
+            !KEPT_DATA_ATTRIBUTES.has(attribute.name.toLowerCase())),
       )
       .forEach((attribute) => element.removeAttribute(attribute.name));
     filterStyle(element);
