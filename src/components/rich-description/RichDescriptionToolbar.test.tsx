@@ -155,16 +155,21 @@ describe('RichDescriptionToolbar', () => {
 
   it('is keyboard reachable and operable', async () => {
     const user = userEvent.setup();
-    const { api } = await setup();
+    const { api, onChange } = await setup();
     api().insertText('typed');
+    // Let the edit settle before taking focus: the insert triggers an editor update and a
+    // toolbar re-render, and focusing mid-render can drop the focus we just set.
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
 
     const bold = screen.getByRole('button', { name: 'Bold' });
     bold.focus();
     expect(bold).toHaveFocus();
 
-    // Space activates a toggle for keyboard users.
+    // Space activates a toggle for keyboard users. The generous timeout is for a loaded CI box:
+    // the keypress runs a ProseMirror transaction and a toolbar re-render, which can take longer
+    // than testing-library's 1s default when the machine is busy.
     await user.keyboard(' ');
-    await waitFor(() => expect(bold).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(bold).toHaveAttribute('aria-pressed', 'true'), { timeout: 5000 });
   });
 
   it('returns focus to the document after a toolbar command', async () => {

@@ -46,28 +46,53 @@ describe('DuplicateProblemDialog', () => {
     postMock.mockResolvedValue({ id: 'p2' });
   });
 
-  it('prefills the title and description from the source', () => {
+  /** The description editor, once Tiptap has mounted on the client. */
+  const editor = () => screen.getByRole('textbox', { name: 'Description' });
+
+  it('prefills the title and description from the source', async () => {
     renderDialog();
     expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Pipelining Lab');
-    expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe(
-      'Original description',
-    );
+    // The description is now the rich editor, seeded with the source's text.
+    await waitFor(() => expect(editor().textContent).toContain('Original description'));
   });
 
-  it('duplicates with the edited title/description and reports the new problem', async () => {
+  it('duplicates with the edited title, keeping a legacy description as plain text', async () => {
     const { onDuplicated, setOpen } = renderDialog();
+    await waitFor(() => expect(editor()).toBeInTheDocument());
+
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Pipelining Lab v2' } });
-    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Edited' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create Duplicate' }));
 
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith('/api/courses/c1/problems/p1/duplicate', {
         title: 'Pipelining Lab v2',
-        description: 'Edited',
+        // Untouched editor over a plain-text original: the copy stays PLAIN_TEXT.
+        description: 'Original description',
       }),
     );
     expect(onDuplicated).toHaveBeenCalledWith({ id: 'p2' });
     expect(setOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps a rich original rich in the copy without the author touching the editor', async () => {
+    const descriptionJson = {
+      version: 1,
+      document: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Rich original' }] }],
+      },
+    };
+    renderDialog({ problem: { ...baseProblem, descriptionJson } });
+    await waitFor(() => expect(editor()).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Duplicate' }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        '/api/courses/c1/problems/p1/duplicate',
+        expect.objectContaining({ descriptionJson }),
+      ),
+    );
   });
 
   it('blocks a too-short title with an inline error and no request', () => {

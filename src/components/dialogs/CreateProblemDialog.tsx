@@ -12,8 +12,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
+import { RichDescriptionField } from '@/components/rich-description/RichDescriptionField';
+import type { RichDescriptionEnvelope } from '@/lib/rich-description';
 import { LimitField } from '@/components/ui/LimitField';
 import SwitchField from '@/components/ui/SwitchField';
 import { Stepper } from '@/components/ui/stepper';
@@ -63,7 +64,7 @@ type WizardStep = { title: string; fields: FieldPath<FormValues>[] };
 
 // Bank create: the problem definition only.
 const BANK_STEPS: ReadonlyArray<WizardStep> = [
-  { title: 'Details', fields: ['title', 'description'] },
+  { title: 'Details', fields: ['title', 'descriptionJson'] },
   {
     title: 'Type',
     fields: ['type', 'maxStates', 'isUnlimitedStates', 'isDeterministic'],
@@ -119,6 +120,7 @@ export function CreateProblemDialog({
     () => ({
       title: '',
       description: '',
+      descriptionJson: null,
       type: 'FA',
       isUnlimitedStates: true,
       maxStates: 100,
@@ -185,7 +187,13 @@ export function CreateProblemDialog({
 
       const formData = new FormData();
       formData.append('title', values.title);
-      formData.append('description', values.description ?? '');
+      // Rich JSON wins and the server derives the plain text from it. With an untouched editor
+      // neither field carries content, so the problem stays PLAIN_TEXT with no description.
+      if (values.descriptionJson) {
+        formData.append('descriptionJson', JSON.stringify(values.descriptionJson));
+      } else {
+        formData.append('description', values.description ?? '');
+      }
       formData.append('type', values.type);
       formData.append('courseId', values.courseId);
 
@@ -327,33 +335,15 @@ export function CreateProblemDialog({
                 />
                 <Controller
                   control={control}
-                  name="description"
+                  name="descriptionJson"
                   render={({ field }) => (
-                    <div>
-                      <Label htmlFor="problem-description" className="mb-2 block">
-                        Description
-                      </Label>
-                      <Textarea
-                        {...field}
-                        id="problem-description"
-                        value={field.value ?? ''}
-                        rows={4}
-                        placeholder="Optional description"
-                        aria-invalid={errors.description ? true : undefined}
-                        aria-describedby={
-                          errors.description ? 'problem-description-error' : undefined
-                        }
-                      />
-                      {errors.description && (
-                        <p
-                          id="problem-description-error"
-                          role="alert"
-                          className="mt-1 text-xs text-destructive"
-                        >
-                          {errors.description.message}
-                        </p>
-                      )}
-                    </div>
+                    <RichDescriptionField
+                      value={(field.value as RichDescriptionEnvelope | null | undefined) ?? null}
+                      onChange={field.onChange}
+                      error={errors.descriptionJson?.message}
+                      placeholder="Optional description"
+                      minHeightClassName="min-h-32"
+                    />
                   )}
                 />
               </>

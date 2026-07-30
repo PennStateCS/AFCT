@@ -16,11 +16,14 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import type { Problem } from '@prisma/client';
+import { asRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';
 
 export type DuplicateSourceProblem = {
   id: string;
   title: string;
   description?: string | null;
+  /** The source's stored rich description, so the copy keeps it. */
+  descriptionJson?: unknown;
 };
 
 type Props = {
@@ -47,6 +50,9 @@ export function DuplicateProblemDialog({
 }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  // The copy's rich description: the source's document, replaced by whatever is edited here.
+  // Null means the source was plain text and untouched, so the copy stays plain text.
+  const [descriptionJson, setDescriptionJson] = useState<RichDescriptionEnvelope | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Prefill from the source whenever the dialog opens (or targets a different problem).
@@ -54,6 +60,7 @@ export function DuplicateProblemDialog({
     if (open && problem) {
       setTitle(problem.title);
       setDescription(problem.description ?? '');
+      setDescriptionJson(asRichDescription(problem.descriptionJson));
       setSubmitting(false);
     }
   }, [open, problem]);
@@ -66,7 +73,14 @@ export function DuplicateProblemDialog({
     try {
       const created = await apiClient.post<Problem>(
         apiPaths.courseProblemDuplicate(courseId, problem.id),
-        { title: title.trim(), description: description.trim() ? description.trim() : null },
+        {
+          title: title.trim(),
+          // Rich JSON wins and the server derives the plain text from it, so a rich original
+          // stays rich in the copy. Falls back to the plain text for a legacy original.
+          ...(descriptionJson
+            ? { descriptionJson }
+            : { description: description.trim() ? description.trim() : null }),
+        },
       );
       showToast.success('Problem duplicated');
       onDuplicated?.(created);
@@ -90,6 +104,8 @@ export function DuplicateProblemDialog({
 
         <div className="space-y-4">
           <WizardTitleDescription
+            // Remount per source so the editor reloads its initial content.
+            key={problem?.id ?? 'none'}
             idPrefix="dup-problem"
             title={title}
             onTitleChange={setTitle}
@@ -98,6 +114,12 @@ export function DuplicateProblemDialog({
             titleError={titleError}
             titlePlaceholder="Problem title"
             descriptionPlaceholder="Enter problem description"
+            // Seeded straight from the source rather than from state: the editor takes its
+            // value as initial content only, and the prefill effect runs after it mounts.
+            rich={{
+              value: asRichDescription(problem?.descriptionJson) ?? problem?.description ?? '',
+              onChange: setDescriptionJson,
+            }}
             note="The solution file and the other settings (type, state limit, and determinism) are copied from the original. You can edit the remaining details after the copy is created."
           />
         </div>

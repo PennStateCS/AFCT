@@ -135,13 +135,20 @@ describe('rich description alignment', () => {
     const user = userEvent.setup();
     const { api, onChange } = await setup();
     api().insertText('keyboard aligned');
+    // Let the edit settle before taking focus: the insert triggers an editor update and a
+    // toolbar re-render, and focusing mid-render can drop the focus we just set.
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
 
     const center = screen.getByRole('radio', { name: 'Align center' });
     center.focus();
     expect(center).toHaveFocus();
 
+    // Generous timeout: the keypress runs a ProseMirror transaction and a toolbar re-render,
+    // which can exceed testing-library's 1s default on a loaded machine.
     await user.keyboard(' ');
-    await waitFor(() => expect(lastBlock(onChange)?.attrs?.textAlign).toBe('center'));
+    await waitFor(() => expect(lastBlock(onChange)?.attrs?.textAlign).toBe('center'), {
+      timeout: 5000,
+    });
   });
 
   it('keeps the text in the plain-text fallback and drops the visual alignment', async () => {

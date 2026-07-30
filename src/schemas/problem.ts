@@ -6,6 +6,23 @@ import { richDescriptionEnvelopeSchema } from '@/lib/rich-description';
 // authoritative and the server derives the plain-text `description` from it.
 const descriptionJsonField = richDescriptionEnvelopeSchema.nullish();
 
+/**
+ * The same envelope as it arrives in MULTIPART form data, where every value is a string. The
+ * problem create/update routes take form data (they carry the solution file), so the JSON is
+ * parsed here before the envelope schema runs. A blank value means "not sent"; anything that
+ * does not parse is passed through so the envelope schema rejects it with a real message.
+ */
+const descriptionJsonFormField = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (trimmed === '') return undefined;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}, descriptionJsonField);
+
 /** Keep in sync with your Prisma enum */
 export const ProblemTypeEnum = z.enum(['FA', 'PDA', 'CFG', 'RE', 'TM']);
 
@@ -41,6 +58,9 @@ const FileRequired = z
 const BaseProblemObject = z.object({
   title: z.string().trim().min(3, 'Title must be at least 3 characters.').max(200, 'Title is too long.'),
   description: z.string().trim().max(20000).optional(),
+  // The rich description as edited in the form. Present only once the author actually edits the
+  // editor, which is what keeps a legacy plain-text problem from converting on view.
+  descriptionJson: descriptionJsonField,
   type: ProblemTypeEnum,
   isUnlimitedStates: z.boolean().default(true),
   maxStates: z
@@ -139,7 +159,7 @@ const problemApiScalars = {
     .min(3, 'Title must be at least 3 characters.')
     .max(200, 'Title is too long.'),
   description: z.string().trim().max(20000, 'Description is too long.').optional(),
-  descriptionJson: descriptionJsonField,
+  descriptionJson: descriptionJsonFormField,
   type: ProblemTypeEnum,
   // Optional context for the activity log when a problem is created inside an assignment.
   assignmentId: z.string().trim().optional(),
