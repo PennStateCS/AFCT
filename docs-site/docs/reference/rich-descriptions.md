@@ -41,11 +41,10 @@ duplicate, and import path goes through it:
 - **Malformed rich JSON** → throw. A bad payload must never overwrite a good description. API
   routes reject it with a 400 before reaching this point via their Zod schema.
 
-Reads go through `resolveDescription` (`src/lib/rich-description/resolve.ts`), which returns the
-validated rich document only when the stored JSON is a supported envelope, and otherwise falls
-back to `description`. Missing JSON, malformed JSON, an unsupported version, and an unsupported
-node all take the same fallback path, so a document written by a newer version of AFCT degrades
-to readable text rather than breaking a page.
+Reads go through `resolveDescription` (`src/lib/rich-description/resolve.ts`) on the server, and
+through `parseRichDescriptionForRender` in the renderer. Missing JSON, malformed JSON, and an
+unsupported version fall back to `description`. An unsupported NODE does not: see
+[Fallback](#fallback) for how the renderer degrades a single node instead of the whole document.
 
 ### Why Java clients receive plain text only
 
@@ -87,17 +86,20 @@ Three layers, each independent:
 1. **The editor's extension set** (`src/components/rich-description/extensions.ts`) decides what
    can be produced. Links are restricted to `https:` and `mailto:` through both `protocols` and
    `isAllowedUri`; autolink and link-on-paste are off, so a URL only becomes a link through the
-   dialog.
+   dialog. The editor, the validator, the renderer, and the link dialog all call
+   `validateLinkUrl`, so there is one interpretation of the policy rather than four.
 2. **Paste cleanup** (`src/components/rich-description/paste.ts`) runs before Tiptap parses pasted
    HTML. It strips inline styles other than the few the editor genuinely reads, removes `class`,
    `id`, event handlers, and unknown `data-*` attributes, deletes elements that must never
    contribute content, and unwraps the `font-weight: normal` wrapper Google Docs puts around its
    whole clipboard payload. This is not a general HTML sanitizer, because nothing it returns is
    ever rendered as HTML.
-3. **The stored-document validator** (`validateRichDescription`) is the backstop. It runs
-   server-side on every write and again on every read, so a hand-crafted payload that never went
-   through the UI cannot smuggle a `javascript:` href, an unsupported node, or an oversized
-   equation into the database.
+3. **The stored-document validator** is the backstop, in two strengths.
+   `validateRichDescription` runs server-side on every WRITE and is strict: a hand-crafted payload
+   that never went through the UI cannot store a `javascript:` href, an unsupported node, or an
+   oversized equation. `parseRichDescriptionForRender` runs on READ and checks structure and the
+   size limits only, because a stored document may legitimately come from a newer AFCT; the walker
+   re-applies the same href, latex, heading, and alignment policies node by node.
 
 Content locks apply to both columns. Before an assignment unlocks, a student receives `null` for
 `description` **and** `descriptionJson`; masking only one would leak the content.
@@ -143,6 +145,27 @@ fields and let it decide:
 <RichDescription description={item.description} descriptionJson={item.descriptionJson} />
 ```
 
+### Moving the three columns together
+
+`description`, `descriptionFormat`, and `descriptionJson` are one value split across three
+columns, and reading or sending a subset is always a bug. It has shipped twice: an assignment
+serializer named `description` and omitted `descriptionJson`, so the staff table could only ever
+render plain text, and the course-update handler had the same gap. Both were invisible because
+nothing tied the fields together.
+
+Use the helpers in `src/lib/rich-description/projection.ts` instead of naming the columns:
+
+- `assignmentDescriptionSelect` / `problemDescriptionSelect` for Prisma selects.
+- `projectDescription(record, { locked })` for responses. It returns all three fields and applies
+  the content lock to all of them from one decision, so a locked prompt cannot leak through the
+  rich copy. When locked it reports `PLAIN_TEXT`, so a client cannot even infer that a rich
+  document exists.
+- `projectPlainDescriptionOnly(record, { locked })` for the Java-client paths that must not
+  receive the rich document.
+
+`projection.test.ts` asserts the key set structurally rather than by matching source text, so a
+field dropped from the projection fails there.
+
 ### Which surfaces render rich content
 
 | Surface                                                          | Audience |
@@ -169,94 +192,94 @@ subtitle, not a stored description.
 
 ### Fallback
 
-Validation is whole-document, so there is one fallback: if `descriptionJson` is missing,
-malformed, an unsupported version, or fails the allowlist in any way, the surface renders the
-plain-text `description` instead. That is not a lossy outcome for the words. `description` is
-derived from the rich document every time it is saved, so the reader still gets the full text and
-loses only the formatting.
+Failure is graded. Losing an entire assignment prompt because of one unrecognised node is a much
+worse outcome than losing the node, so the renderer degrades in layers.
 
-There is no partial rendering. One unsupported node takes the whole description down to plain
-text rather than rendering its valid siblings, because `validateRichDescription` accepts or
-rejects the envelope as a unit.
+The whole document falls back to the plain-text `description` only when there is nothing safe to
+show at all:
 
-`RichDescription` also carries per-node guards for an unsupported node type, unusable latex, and
-a rejected href. Those are **defense in depth, not behaviour you can observe**: the validator
-already rejects each of those cases using the same predicates the walker would, so a document
-that reaches the walker cannot contain them. They exist because the walker is the last thing
-between stored data and the DOM. Treat them as unreachable when reasoning about what a reader
-sees, and be wary of a test that appears to exercise them.
+- the envelope is missing or malformed,
+- `version` is not one this build supports,
+- the root is not a `doc`,
+- or the document exceeds the depth, node-count, or text-size limits.
+
+That is not lossy for the words. `description` is derived from the rich document every time it is
+saved, so the reader still gets the full text and loses only the formatting.
+
+Everything else degrades locally:
+
+| Situation                                        | What happens                                   |
+| ------------------------------------------------ | ---------------------------------------------- |
+| Node type this build does not know               | The wrapper is dropped and its children render |
+| Unknown node with no children but with text      | Its text renders                               |
+| Mark this build does not know                    | The styling is dropped and the text renders    |
+| Link href outside the protocol allowlist         | The link is dropped and the text renders       |
+| Alignment or heading level outside the allowlist | The attribute is ignored, the block renders    |
+| Equation whose source fails the latex policy     | Its LaTeX source renders as inline code        |
+
+A document written by a NEWER AFCT therefore keeps rendering here, minus the parts this build
+cannot draw.
+
+Two parsers back this. `validateRichDescription` stays strict and is what WRITES go through, so
+an unknown node or an unsafe href still cannot be stored via AFCT.
+`parseRichDescriptionForRender` checks structure and the size limits only, and hands everything
+else to the walker. The safety rules did not weaken, they moved: the walker re-checks every href
+through `isAllowedLinkHref`, every equation through `isAllowedLatex`, and every heading level and
+alignment against the shared allowlists, and it never emits an element or attribute for anything
+it does not recognise. What changed is the blast radius of one bad node.
+
+`RichDescription` also wraps its output in `RichDescriptionBoundary`, a React error boundary that
+swaps in the plain-text fallback if rendering throws. It lives inside the shared component rather
+than at each call site, so a newly added surface inherits it.
 
 Fallbacks log a `console.warn` outside production. There is no structured client logger to route
 them to, and a malformed description is a content problem for its author rather than an
 operational event.
 
-`RichDescription` also wraps its output in `RichDescriptionBoundary`, a React error boundary
-that swaps in the same plain-text fallback if rendering throws. Validation is total, so this
-should never fire; it is there because these surfaces carry assignment prompts, and a thrown
-render takes out the whole client tree rather than one description. A student seeing a blank
-assignment page near a deadline is a far worse failure than losing some formatting. It lives
-inside the shared component rather than at each call site, so a newly added surface inherits it.
+### Heading levels
+
+Authored headings are H2 to H4, written as if the description owned the page. Real surfaces sit
+at different depths, so `RichDescription` takes a `headingBaseLevel` prop that shifts the whole
+range while preserving the hierarchy the author wrote:
+
+```tsx
+<RichDescription headingBaseLevel={3} description={...} descriptionJson={...} />
+```
+
+With a base of 3, an authored H2/H3/H4 renders as H3/H4/H5. Levels are clamped to H2..H6, so a
+description can never emit an H1 (the page owns that) or an invalid tag. The default is 2, which
+is the behaviour every call site had before the prop existed.
+
+Pick the base from the heading that actually precedes the description on that surface:
+
+| Surface                                                               | Preceding heading                                     | Base |
+| --------------------------------------------------------------------- | ----------------------------------------------------- | ---- |
+| Student assignment description                                        | the `<h2>Description</h2>` above it                   | 3    |
+| `ProblemHeader`                                                       | `CardTitle`, which is `role="heading" aria-level={3}` | 4    |
+| Description dialogs (assignment table, problem bank, assignment page) | `DialogTitle`, an `h2`                                | 3    |
+
+If you change one of those surrounding headings, change the base with it.
 
 ### Caching
 
-Two caches, both keyed on values that fully determine the result:
+One cache, on the only operation expensive enough to warrant it: `renderDescriptionMath`
+memoizes KaTeX output by `(latex, displayMode)`. Rendering is pure, and the walker re-runs it for
+every equation on every render. The map is bounded and cleared wholesale when full, because the
+module is also loaded server-side where an unbounded map would leak slowly.
 
-- `renderDescriptionMath` memoizes KaTeX output by `(latex, displayMode)`. Rendering is pure, and
-  the walker re-runs it for every equation on every render. The map is bounded and cleared
-  wholesale when full, because the module is also loaded server-side where an unbounded map
-  would leak slowly.
-- `RichDescription` memoizes validation results in a `WeakMap` keyed on the `descriptionJson`
-  object. A `useMemo` would have been the obvious tool but would make the component a hook
-  consumer, and it is deliberately usable from a Server Component. Sound because the input is
-  parsed JSON that nobody mutates; a refetch yields a new object and revalidates.
-
-### Links
-
-Rendered links go back through the same policy the editor enforces. `https:` leaves AFCT, so it
-opens in a new tab with `rel="noopener noreferrer nofollow"`; `mailto:` stays in the same tab,
-because `target="_blank"` on a mail handoff leaves a stranded blank tab. There is no
-internal-link case: the protocol allowlist accepts only those two schemes, so a relative path
-cannot be stored in the first place. An href that fails the check renders as plain text.
-
-### Maths and accessibility
-
-`renderDescriptionMath(latex, displayMode)` in `render-math.ts` is the single place KaTeX is
-called for rendering. Output is `htmlAndMathml`, so screen readers get real MathML rather than
-styled spans. It is also the only `dangerouslySetInnerHTML` in the feature, and deliberately
-narrow: the input is a schema-validated latex string bounded by `MAX_LATEX_LENGTH`, and
-`trust: false` refuses the commands that emit markup or fetch resources. KaTeX does echo the
-original TeX into a MathML `<annotation>` element, which is inert text content.
-
-### Headings
-
-Descriptions render `h2` to `h4`, clamped by the renderer to `ALLOWED_HEADING_LEVELS` whatever an
-older document claims, so a description can never introduce a competing `h1`. Surfaces that embed
-one already sit under their own heading (the assignment page uses an `h2` "Description" label,
-and `DialogTitle` is itself an `h2`), which makes description headings siblings rather than
-children. That is a valid outline and avoided adding a level-shifting prop that every call site
-would have to get right.
-
-### Density
-
-`compact` tightens vertical rhythm through the `.afct-rich-text--compact` modifier, for cards,
-list rows, and problem headers. Prefer it over one-off spacing classes at call sites, which drift
-apart. No editor chrome is reused on read surfaces.
-
-### Locked content
-
-Locked content is removed before serialization, never merely hidden by a component. Before an
-assignment unlocks, `getStudentCourseAssignments` nulls **both** `description` and
-`descriptionJson` and returns no problems at all, so neither form reaches the browser.
-`student-assignments.lock.test.ts` proves it by putting distinctive secret strings in a locked
-description and asserting they appear nowhere in the serialized response.
+Parsing is deliberately NOT cached. It was memoized in a `WeakMap` keyed on the `descriptionJson`
+object for a while; that was removed. The saving was not measurable against a document of a few
+hundred nodes, and an identity cache quietly assumes nobody mutates the parsed JSON in place,
+which is an invariant no type in this codebase enforces. Regression tests in
+`subtree-fallback.test.tsx` assert that a mutated or replaced value re-parses.
 
 ### Self-hosted KaTeX assets
 
 KaTeX's stylesheet and fonts live in `public/katex/` and are linked from the root layout
-(`src/app/layout.tsx`), not imported through the bundler. `scripts/vendor-katex.mjs` copies
-`katex.min.css` and the `fonts/` directory out of `node_modules/katex/dist` verbatim. This is
-KaTeX's documented browser setup: the stylesheet references its fonts with relative URLs, so
-keeping the two next to each other makes those URLs resolve with nothing rewritten.
+(`src/app/layout.tsx`), not imported through the bundler. `scripts/vendor-katex.mjs` copies them
+out of `node_modules/katex/dist`. This is KaTeX's documented browser setup: the stylesheet
+references its fonts with relative URLs, so keeping the two next to each other makes those URLs
+resolve.
 
 Re-run it after changing the `katex` dependency, and commit the result:
 
@@ -264,25 +287,41 @@ Re-run it after changing the `katex` dependency, and commit the result:
 npm run vendor:katex
 ```
 
-The copy is deliberately dumb. Nothing is parsed or rewritten, so the vendored files stay
-byte-identical to upstream and a KaTeX upgrade cannot half-apply. All three font formats are
-kept for the same reason, even though browsers only ever fetch the 20 `.woff2` files; the extra
-files cost repository size, not page weight.
-
-The reason it is a `<link>` rather than an import: the stylesheet references 60 font files, and
-a bundler import turns each one into a module in the chunk graph of every route that renders a
+The reason it is a `<link>` rather than an import: the stylesheet references font files, and a
+bundler import turns each one into a module in the chunk graph of every route that renders a
 description. That made dev compiles stall for minutes. Because Next steers you toward importing
 CSS, the tag trips `@next/next/no-css-tags`, which is suppressed on that one line with the
-reasoning recorded next to it. The assets are same-origin and are never fetched from a CDN.
+reasoning recorded next to it. The assets are same-origin and never come from a CDN.
 
-### Bundle tradeoff and a possible optimisation
+**WOFF2 only.** Upstream ships each face three times (woff2, woff, ttf) and lists all three in
+one `src`. A browser takes the first format it supports, so every browser AFCT supports takes the
+woff2 and the other two are dead weight. The script keeps the 20 woff2 files and deletes the
+matching `url(...) format(...)` entries from the stylesheet, taking `public/katex` from about
+1.2 MB to about 328 KB in the repo and in every image built from it.
 
-KaTeX's JavaScript (about 270 KB) still reaches any page that renders a description, because the
-read surfaces are client components. Only the CSS and fonts were moved out of the bundle above.
-`renderDescriptionMath` is isolated in its own module and uses no browser API precisely so maths
-rendering can later move behind a server-only boundary, keeping that JavaScript away from
-students, without rewriting the document walker. That refactor is not done: it needs the read
-surfaces to stop being client components, or a server-rendered HTML string threaded down to them.
+Browser-support assumption: WOFF2 has shipped since Chrome 36, Firefox 39, Safari 10, and Edge 14
+(2016). A browser too old for it would fail on far more of AFCT than the maths. To reverse the
+decision, set `KEEP_FORMATS` in the script back to all three formats and re-run it.
+
+The script verifies itself and exits non-zero if the stylesheet references a file it did not
+write, if it wrote a file the stylesheet never references, or if a dropped format survived in the
+CSS. `vendored-katex.test.ts` asserts the same properties against the committed copy, so a KaTeX
+upgrade that renames a face fails in CI rather than silently rendering in a fallback font. Running
+the script twice produces byte-identical output.
+
+### KaTeX in the client bundle
+
+KaTeX's JavaScript (about 265 KB minified) still reaches any route that renders a description,
+because the read surfaces are client components and `DescriptionMath` imports the renderer
+statically. A production build puts KaTeX's code in three shared chunks; none of them is a root
+entry chunk, so it loads per route rather than app-wide, but a description containing no maths
+still pays for it.
+
+`DescriptionMath` (`src/components/rich-description/DescriptionMath.tsx`) exists to make that
+fixable in one place: it is the single import site for KaTeX on the read path, and it is
+synchronous and free of browser APIs so maths still server-renders. Moving KaTeX behind a
+server-only boundary or a lazy import is a change to that file and its importer, not to the
+document walker. That work is NOT done; see the follow-up note in the branch summary.
 
 ## Introducing a new JSON version
 
