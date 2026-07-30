@@ -10,6 +10,7 @@ import {
   type RichDescriptionEnvelope,
 } from '@/lib/rich-description';
 import { richDescriptionExtensions } from './extensions';
+import { RichDescriptionToolbar } from './RichDescriptionToolbar';
 
 /**
  * A minimal handle onto the live editor. Deliberately narrow: callers drive the document
@@ -39,6 +40,10 @@ export type RichDescriptionEditorProps = {
   /** Non-editable but not styled as disabled (e.g. a read-only viewer). */
   readOnly?: boolean;
   placeholder?: string;
+  /** Render the formatting toolbar above the document. */
+  showToolbar?: boolean;
+  /** Accessible name for the toolbar itself (defaults to "Formatting"). */
+  toolbarLabel?: string;
   /** Wired to aria-labelledby / aria-describedby by the caller's field wrapper. */
   ariaLabel?: string;
   ariaLabelledBy?: string;
@@ -71,6 +76,8 @@ export function RichDescriptionEditor({
   onChange,
   onBlur,
   onReady,
+  showToolbar = false,
+  toolbarLabel = 'Formatting',
   disabled = false,
   readOnly = false,
   placeholder = 'Enter a description',
@@ -179,29 +186,34 @@ export function RichDescriptionEditor({
         className,
       )}
     >
-      {/* Placeholder is rendered here (not via the Placeholder extension) so it needs no extra
-          dependency and stays out of the document. aria-hidden: the accessible name comes from
-          the field label, and screen readers announce the empty textbox already. */}
-      {isEmpty && (
-        <div
-          aria-hidden="true"
-          className="text-muted-foreground pointer-events-none absolute px-3 py-2 select-none"
-        >
-          {placeholder}
-        </div>
-      )}
-      {/* ARIA lives on the contenteditable via editorProps.attributes above, so this wrapper
-          stays a plain container (a second role="textbox" would double up for screen readers). */}
-      <EditorContent
-        editor={editor}
-        // Long words and code must wrap rather than scroll the page sideways. The min-height
-        // goes on this wrapper (a runtime-built Tailwind class would not be generated), and
-        // `.tiptap` stretches to fill it so clicking the blank area focuses the document.
-        className={cn(
-          'afct-rich-text px-3 py-2 break-words [&_.tiptap]:h-full [&_.tiptap]:outline-none',
-          minHeightClassName,
+      {showToolbar && <RichDescriptionToolbar editor={editor} label={toolbarLabel} />}
+      {/* The document area is its own positioning context so the placeholder overlays the text
+          and never the toolbar above it. */}
+      <div className="relative">
+        {/* Placeholder is rendered here (not via the Placeholder extension) so it needs no extra
+            dependency and stays out of the document. aria-hidden: the accessible name comes from
+            the field label, and screen readers announce the empty textbox already. */}
+        {isEmpty && (
+          <div
+            aria-hidden="true"
+            className="text-muted-foreground pointer-events-none absolute px-3 py-2 select-none"
+          >
+            {placeholder}
+          </div>
         )}
-      />
+        {/* ARIA lives on the contenteditable via editorProps.attributes above, so this wrapper
+            stays a plain container (a second role="textbox" would double up for screen readers). */}
+        <EditorContent
+          editor={editor}
+          // Long words and code must wrap rather than scroll the page sideways. The min-height
+          // goes on this wrapper (a runtime-built Tailwind class would not be generated), and
+          // `.tiptap` stretches to fill it so clicking the blank area focuses the document.
+          className={cn(
+            'afct-rich-text px-3 py-2 break-words [&_.tiptap]:h-full [&_.tiptap]:outline-none',
+            minHeightClassName,
+          )}
+        />
+      </div>
     </div>
   );
 }

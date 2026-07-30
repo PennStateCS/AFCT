@@ -24,6 +24,7 @@ export function RichDescriptionDemo() {
           Description
         </span>
         <RichDescriptionEditor
+          showToolbar
           ariaLabelledBy="demo-editor-label"
           ariaDescribedBy="demo-editor-help"
           value={value}
