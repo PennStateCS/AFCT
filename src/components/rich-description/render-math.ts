@@ -1,5 +1,7 @@
 import katex from 'katex';
 
+import { KATEX_PUBLISHED_OPTIONS } from '@/lib/rich-description';
+
 /**
  * Turn stored LaTeX into KaTeX markup for a read surface.
  *
@@ -8,23 +10,10 @@ import katex from 'katex';
  * boundary (keeping the ~270 KB KaTeX bundle away from students) without touching the document
  * walker that calls it.
  *
- * The options match the editor's exactly, which is what keeps a description looking the same
- * while it is being written and after it is published:
- *  - trust: false blocks the commands that emit markup or fetch resources (\href, \url,
- *    \includegraphics, \html*), so rendered output cannot become an injection vector.
- *  - throwOnError: false renders a malformed expression as visible error text instead of
- *    throwing part-way through a page.
- *  - htmlAndMathml emits MathML alongside the visual output, so screen readers read the maths
- *    rather than a pile of styled spans.
+ * The options come from `KATEX_PUBLISHED_OPTIONS` rather than being spelled out here, so the
+ * editor, this renderer, and the dialog's validation cannot drift apart on `trust` or on the
+ * size and expansion limits. Only `displayMode` is decided per call.
  */
-const KATEX_OPTIONS = {
-  throwOnError: false,
-  output: 'htmlAndMathml' as const,
-  trust: false,
-  strict: 'ignore' as const,
-  maxSize: 20,
-  maxExpand: 200,
-};
 
 /**
  * Rendered output, keyed by the exact input that produced it.
@@ -54,7 +43,7 @@ export function renderDescriptionMath(latex: string, displayMode: boolean): stri
 
   let html: string | null;
   try {
-    html = katex.renderToString(latex, { ...KATEX_OPTIONS, displayMode });
+    html = katex.renderToString(latex, { ...KATEX_PUBLISHED_OPTIONS, displayMode });
   } catch {
     // With throwOnError disabled KaTeX handles bad input itself, so reaching here means
     // something unexpected. Degrade to the source text instead of breaking the page.

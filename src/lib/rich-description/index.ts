@@ -41,3 +41,10 @@ export {
   type DescriptionWriteInput,
   type DescriptionWriteFields,
 } from './write';
+
+export {
+  KATEX_SHARED_OPTIONS,
+  KATEX_PUBLISHED_OPTIONS,
+  KATEX_VALIDATION_OPTIONS,
+} from './katex-options';
+export { parseLatexSource, isParsableLatex } from './latex-parse';

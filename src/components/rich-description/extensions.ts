@@ -3,14 +3,19 @@ import TextAlign from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { NodeSelection } from '@tiptap/pm/state';
+import type { Editor } from '@tiptap/react';
 // KaTeX's stylesheet is served from public/katex and linked in the root layout, not imported
 // here: a bundler import pulls its 60 font files into the chunk graph of every route that
 // renders a description. See scripts/vendor-katex.mjs.
 import {
   ALLOWED_TEXT_ALIGN,
   ALLOWED_LINK_PROTOCOLS,
+  BLOCK_MATH_NODE,
+  INLINE_MATH_NODE,
   isAllowedLinkHref,
   MATH_LATEX_ATTR,
+  KATEX_PUBLISHED_OPTIONS,
 } from '@/lib/rich-description';
 
 /** Which kind of equation a math node is. */
@@ -34,14 +39,28 @@ export type RichDescriptionExtensionOptions = {
  *  - maxSize / maxExpand bound how far a single expression can blow up the render.
  *  - htmlAndMathml gives screen readers real MathML alongside the visual HTML.
  */
-const KATEX_OPTIONS = {
-  throwOnError: false,
-  output: 'htmlAndMathml' as const,
-  trust: false,
-  strict: 'ignore' as const,
-  maxSize: 20,
-  maxExpand: 200,
-};
+
+/**
+ * The equation the cursor is currently ON, or null.
+ *
+ * Both math nodes are ProseMirror atoms, so arrow-keying onto one produces a NodeSelection
+ * rather than a text cursor inside it. That is the whole keyboard story for equations: this
+ * turns that selection into the same target shape a click produces, so the toolbar can relabel
+ * itself and Enter/Space can open the edit dialog without a pointer.
+ */
+export function selectedMathTarget(editor: Editor | null): MathClickTarget | null {
+  if (!editor) return null;
+  const { selection } = editor.state;
+  if (!(selection instanceof NodeSelection)) return null;
+  const { node } = selection;
+  if (node.type.name === INLINE_MATH_NODE) {
+    return { mode: 'inline', latex: latexOf(node), pos: selection.from };
+  }
+  if (node.type.name === BLOCK_MATH_NODE) {
+    return { mode: 'block', latex: latexOf(node), pos: selection.from };
+  }
+  return null;
+}
 
 /** Read the latex source off a clicked math node. */
 function latexOf(node: ProseMirrorNode) {
@@ -105,13 +124,13 @@ export function createRichDescriptionExtensions({
     // Equations therefore come from the dialog only, the same rule links follow, and typing
     // dollar signs in prose stays literal text.
     InlineMath.extend({ addInputRules: () => [] }).configure({
-      katexOptions: { ...KATEX_OPTIONS, displayMode: false },
+      katexOptions: { ...KATEX_PUBLISHED_OPTIONS, displayMode: false },
       onClick: onMathClick
         ? (node, pos) => onMathClick({ mode: 'inline', latex: latexOf(node), pos })
         : undefined,
     }),
     BlockMath.extend({ addInputRules: () => [] }).configure({
-      katexOptions: { ...KATEX_OPTIONS, displayMode: true },
+      katexOptions: { ...KATEX_PUBLISHED_OPTIONS, displayMode: true },
       onClick: onMathClick
         ? (node, pos) => onMathClick({ mode: 'block', latex: latexOf(node), pos })
         : undefined,
