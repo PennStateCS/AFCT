@@ -102,6 +102,10 @@ function Test-AfctHttpHealth {
 function Wait-AfctHealth {
     Write-AfctInfo 'waiting for the application health check...'
     $elapsed = 0
+    # A single restart can happen during a normal recreate, but repeated restarts mean a
+    # crash loop that will never become healthy, so fail fast instead of waiting out the
+    # whole timeout (mirrors the Unix controller).
+    $restarting = 0
     while ($elapsed -lt $HealthTimeout) {
         $state = Get-AfctAppContainerState
         if ($state) {
@@ -117,6 +121,12 @@ function Wait-AfctHealth {
             }
             if ($containerState -in 'exited', 'dead') {
                 throw 'afct-fatal: the application container stopped before becoming healthy.'
+            }
+            if ($containerState -eq 'restarting') {
+                $restarting++
+                if ($restarting -ge 3) {
+                    throw "afct-fatal: the $AppService container keeps restarting (crash loop) instead of becoming healthy. Check the logs: afctctl logs"
+                }
             }
             if ($containerState -eq 'running' -and $healthState -eq 'none') {
                 throw "afct-fatal: the $AppService service has no Docker health check configured."

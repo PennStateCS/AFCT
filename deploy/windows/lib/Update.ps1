@@ -117,8 +117,11 @@ function Restore-AfctPreviousImages {
 }
 
 # Delete AFCT images that are neither running nor needed for rollback. Protected images are
-# kept by ID; anything not positively identified is kept. Never fails the update.
+# kept by ID; anything not positively identified is kept. -ProtectTag names a previous
+# release whose images are also kept (the operator's downgrade path after a pinned
+# update, which the snapshot does not cover). Never fails the update.
 function Remove-AfctSupersededImages {
+    param([string]$ProtectTag)
     try {
         $keepIds = @{}
         foreach ($entry in $script:AfctImageSnapshot) { if ($entry.Id) { $keepIds[$entry.Id] = $true } }
@@ -128,6 +131,23 @@ function Remove-AfctSupersededImages {
                 if (-not $reference) { continue }
                 $id = (& docker image inspect -f '{{.Id}}' $reference 2>&1 | ForEach-Object { "$_" } | Select-Object -First 1)
                 if ($LASTEXITCODE -eq 0 -and $id) { $keepIds[$id] = $true }
+            }
+        }
+        if ($ProtectTag) {
+            $saved = [Environment]::GetEnvironmentVariable('AFCT_APP_TAG')
+            try {
+                $env:AFCT_APP_TAG = $ProtectTag
+                $previous = Invoke-AfctCompose config --images
+                if ($LASTEXITCODE -eq 0) {
+                    foreach ($reference in $previous) {
+                        if (-not $reference) { continue }
+                        $id = (& docker image inspect -f '{{.Id}}' $reference 2>&1 | ForEach-Object { "$_" } | Select-Object -First 1)
+                        if ($LASTEXITCODE -eq 0 -and $id) { $keepIds[$id] = $true }
+                    }
+                }
+            } finally {
+                if ($null -eq $saved) { Remove-Item Env:\AFCT_APP_TAG -ErrorAction SilentlyContinue }
+                else { $env:AFCT_APP_TAG = $saved }
             }
         }
         if ($keepIds.Count -eq 0) { return }
@@ -179,27 +199,68 @@ function Save-AfctDeployedAppTag {
     Write-AfctInfo "recorded the deployed version (AFCT_APP_TAG=$deployed) in $File."
 }
 
+# Redeploy the release that was pinned before this update. The image snapshot only
+# covers same-tag updates (it re-tags recorded IDs under the deployed references), so a
+# failed PINNED update to a different tag has nothing to re-tag; its rollback is simply
+# recreating the stack on the previous tag, whose images are still local.
+function Restore-AfctPreviousRelease {
+    param([string]$Tag)
+    Write-AfctWarn "restoring the previously pinned release $Tag..."
+    $saved = [Environment]::GetEnvironmentVariable('AFCT_APP_TAG')
+    try {
+        $env:AFCT_APP_TAG = $Tag
+        Invoke-AfctCompose up -d | Out-Null
+        if ($LASTEXITCODE -ne 0) { return $false }
+        Wait-AfctHealth
+        Write-AfctSuccess "The previously pinned AFCT release ($Tag) was restored."
+        return $true
+    } catch {
+        return $false
+    } finally {
+        if ($null -eq $saved) { Remove-Item Env:\AFCT_APP_TAG -ErrorAction SilentlyContinue }
+        else { $env:AFCT_APP_TAG = $saved }
+    }
+}
+
 function Invoke-AfctUpdate {
     Assert-AfctStack
-    Write-AfctInfo 'updating AFCT to the latest published images...'
+    $prevTag = Read-AfctEnvValue 'AFCT_APP_TAG' $EnvFile
+    if (-not $prevTag) { $prevTag = 'main' }
+    $targetTag = [Environment]::GetEnvironmentVariable('AFCT_APP_TAG')
+    if (-not $targetTag) { $targetTag = $prevTag }
+    if ($targetTag -cne $prevTag) { Write-AfctInfo "updating AFCT from $prevTag to the pinned $targetTag..." }
+    else { Write-AfctInfo "updating AFCT to the latest published $targetTag images..." }
     Test-AfctComposeConfig
     Assert-AfctUpdateDiskSpace
     Save-AfctRunningImages
     Get-AfctImages
 
     $ok = $true
-    try { Start-AfctStack; Wait-AfctHealth } catch { $ok = $false }
+    $failReason = ''
+    try { Start-AfctStack; Wait-AfctHealth } catch {
+        $ok = $false
+        $failReason = ($_.Exception.Message -replace '^afct-fatal:\s*', '')
+    }
 
     if ($ok) {
         Save-AfctDeployedAppTag $EnvFile
         Write-AfctSuccess 'AFCT update completed.'
-        Remove-AfctSupersededImages
+        # The previous tag stays protected as the operator's downgrade path.
+        Remove-AfctSupersededImages -ProtectTag $prevTag
         return
     }
 
-    Write-AfctError 'the newly downloaded AFCT version did not pass its health check.'
+    Write-AfctError "AFCT $targetTag did not pass its health check."
+    if ($failReason) { Write-AfctError $failReason }
+    try { Invoke-AfctDiagnostics -Reason "failed-update-from-$prevTag-to-$targetTag" | Out-Null }
+    catch { Write-AfctWarn 'could not collect a diagnostics archive.' }
+
     if (Restore-AfctPreviousImages) {
         Write-AfctWarn 'the update failed, but AFCT was returned to the previously deployed images.'
+        exit 1
+    }
+    if (($targetTag -cne $prevTag) -and (Restore-AfctPreviousRelease $prevTag)) {
+        Write-AfctWarn "the update to $targetTag failed, but AFCT was returned to $prevTag."
         exit 1
     }
     throw 'afct-fatal: the update failed and automatic rollback was unsuccessful. Review the logs with: afctctl logs'
