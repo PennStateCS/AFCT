@@ -20,7 +20,7 @@ vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => 
 
 import { AssignmentBasicsForm } from './AssignmentBasicsForm';
 import { RICH_DESCRIPTION_VERSION, type RichDescriptionEnvelope } from '@/lib/rich-description';
-import { warmRichDescriptionEditor } from '@/test/rich-editor';
+import { warmRichDescriptionEditor, WARM_TIMEOUT_MS } from '@/test/rich-editor';
 
 const richDescription: RichDescriptionEnvelope = {
   version: RICH_DESCRIPTION_VERSION,
@@ -62,7 +62,7 @@ function typeInEditor(text: string) {
 }
 
 describe('AssignmentBasicsForm', () => {
-  beforeAll(warmRichDescriptionEditor);
+  beforeAll(warmRichDescriptionEditor, WARM_TIMEOUT_MS);
 
   beforeEach(() => {
     vi.clearAllMocks();

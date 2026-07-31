@@ -142,7 +142,9 @@ describe('link dialog', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add link' }));
 
-    await waitFor(() => expect(screen.getAllByText('syllabus link text').length).toBeGreaterThan(1));
+    await waitFor(() =>
+      expect(screen.getAllByText('syllabus link text').length).toBeGreaterThan(1),
+    );
   });
 
   it('cancel leaves the document untouched', async () => {
@@ -170,7 +172,9 @@ describe('link dialog', () => {
     await user.click(screen.getByRole('button', { name: 'Add link' }));
     await user.type(screen.getByLabelText('Web address'), 'https://old.example.edu');
     await user.click(screen.getByRole('button', { name: 'Save link' }));
-    await waitFor(() => expect(linkMarks(onChange)[0]?.attrs?.href).toBe('https://old.example.edu/'));
+    await waitFor(() =>
+      expect(linkMarks(onChange)[0]?.attrs?.href).toBe('https://old.example.edu/'),
+    );
 
     // The button now offers editing, seeded with the current href.
     api().selectAll();
@@ -181,7 +185,9 @@ describe('link dialog', () => {
     await user.clear(field);
     await user.type(field, 'https://new.example.edu');
     await user.click(screen.getByRole('button', { name: 'Update link' }));
-    await waitFor(() => expect(linkMarks(onChange)[0]?.attrs?.href).toBe('https://new.example.edu/'));
+    await waitFor(() =>
+      expect(linkMarks(onChange)[0]?.attrs?.href).toBe('https://new.example.edu/'),
+    );
 
     // And removal drops the mark entirely.
     api().selectAll();

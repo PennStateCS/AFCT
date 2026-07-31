@@ -220,7 +220,7 @@ export function EditProblemDialog({
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Edit Problem</DialogTitle>
           <DialogDescription className="sr-only">

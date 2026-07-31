@@ -307,7 +307,7 @@ export default function JffViewerDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="bg-card max-h-[calc(100vh-2rem)] !max-w-none overflow-auto p-0"
+        className="max-h-[calc(100vh-2rem)] !max-w-none overflow-auto p-0"
         style={{ width }}
       >
         <DialogHeader className="px-4 pt-4">

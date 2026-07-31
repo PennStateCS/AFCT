@@ -101,8 +101,17 @@ export function LinkDialog({ editor, open, onOpenChange }: LinkDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* bg-card for the same reason as the equation dialog: the DialogContent default is
           the page background, not an elevated surface. */}
-      <DialogContent className="bg-card sm:max-w-md">
-        <form onSubmit={handleSubmit}>
+      <DialogContent className="sm:max-w-md">
+        {/* stopPropagation, not just preventDefault: Radix portals this dialog out of the
+            surrounding DOM, but React's synthetic events still travel the REACT tree, so a submit
+            here reached the enclosing form. Committing an equation was silently saving the whole
+            assignment. */}
+        <form
+          onSubmit={(event) => {
+            event.stopPropagation();
+            handleSubmit(event);
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Edit link' : 'Add link'}</DialogTitle>
             <DialogDescription>

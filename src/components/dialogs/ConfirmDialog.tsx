@@ -174,7 +174,6 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="bg-card"
         // No close "X": Cancel and Escape are the two clear ways out of a confirmation.
         showCloseButton={false}
         onEscapeKeyDown={(event) => {

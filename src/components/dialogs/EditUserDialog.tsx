@@ -252,7 +252,7 @@ export function EditUserDialog({
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>Modify the user’s information and profile photo.</DialogDescription>

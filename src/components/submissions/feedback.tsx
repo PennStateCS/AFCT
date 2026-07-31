@@ -26,7 +26,7 @@ export function FeedbackDialog({
 }: FeedbackDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card max-w-xl p-0">
+      <DialogContent className="max-w-xl p-0">
         <DialogHeader className="px-6 pt-6">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>

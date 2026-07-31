@@ -28,6 +28,7 @@ export {
   type LinkPresentation,
 } from './link-url';
 export { MAX_LATEX_LENGTH, validateLatex, isAllowedLatex, type LatexResult } from './latex';
+export { serializeRichDescription } from './compare';
 export { plainTextToRichDescription, richDescriptionToPlainText } from './plain-text';
 export {
   resolveDescription,

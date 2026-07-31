@@ -5,7 +5,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 
 import { RichDescriptionField } from './RichDescriptionField';
-import { warmRichDescriptionEditor } from '@/test/rich-editor';
+import { warmRichDescriptionEditor, WARM_TIMEOUT_MS } from '@/test/rich-editor';
 
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
@@ -19,7 +19,7 @@ globalWithReact.React = React;
  * So these tests go through the field, the way the app does.
  */
 describe('RichDescriptionField', () => {
-  beforeAll(warmRichDescriptionEditor);
+  beforeAll(warmRichDescriptionEditor, WARM_TIMEOUT_MS);
 
   it('loads the editor and gives it the field label', async () => {
     render(<RichDescriptionField label="Description" onChange={vi.fn()} />);

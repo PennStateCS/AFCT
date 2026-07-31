@@ -116,7 +116,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card max-w-2xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create New User</DialogTitle>
           <DialogDescription>Fill out the fields to create a user account.</DialogDescription>

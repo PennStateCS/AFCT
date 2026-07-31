@@ -183,11 +183,17 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* bg-card, not the DialogContent default. `--background` is the page grey
-          (oklch 0.94) while `--card` and `--popover` are white, so the default made this modal
-          render in the page colour while floating above the page. */}
-      <DialogContent className="bg-card sm:max-w-lg">
-        <form onSubmit={handleSubmit}>
+      <DialogContent className="sm:max-w-lg">
+        {/* stopPropagation, not just preventDefault: Radix portals this dialog out of the
+            surrounding DOM, but React's synthetic events still travel the REACT tree, so a submit
+            here reached the enclosing form. Committing an equation was silently saving the whole
+            assignment. */}
+        <form
+          onSubmit={(event) => {
+            event.stopPropagation();
+            handleSubmit(event);
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Edit equation' : 'Insert equation'}</DialogTitle>
             <DialogDescription>

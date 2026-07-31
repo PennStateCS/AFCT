@@ -153,7 +153,7 @@ export function EnrollUserDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
-        className="bg-card max-w-lg"
+        className="max-w-lg"
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>

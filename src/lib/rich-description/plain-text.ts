@@ -14,9 +14,13 @@ import {
  * a round-trip through richDescriptionToPlainText.
  */
 export function plainTextToRichDescription(text: string): RichDescriptionEnvelope {
-  const content: TiptapNode[] = (text ?? '').split('\n').map((line) =>
-    line.length === 0 ? { type: 'paragraph' } : { type: 'paragraph', content: [{ type: 'text', text: line }] },
-  );
+  const content: TiptapNode[] = (text ?? '')
+    .split('\n')
+    .map((line) =>
+      line.length === 0
+        ? { type: 'paragraph' }
+        : { type: 'paragraph', content: [{ type: 'text', text: line }] },
+    );
   return { version: RICH_DESCRIPTION_VERSION, document: { type: 'doc', content } };
 }
 
@@ -69,7 +73,9 @@ function blocksText(nodes: TiptapNode[]): string {
  * Preserves paragraph breaks, list items, code content, and LaTeX source. Formatting marks
  * (bold/italic/etc.) drop away but the text they wrap is kept - nothing is silently omitted.
  */
-export function richDescriptionToPlainText(input: RichDescriptionEnvelope | TiptapDocument): string {
+export function richDescriptionToPlainText(
+  input: RichDescriptionEnvelope | TiptapDocument,
+): string {
   const doc = 'document' in input ? input.document : input;
   return blocksText(doc.content ?? []);
 }

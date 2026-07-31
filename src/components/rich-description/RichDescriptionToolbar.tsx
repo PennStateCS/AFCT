@@ -519,7 +519,7 @@ export function RichDescriptionToolbar({
       // container knows the difference. Still wraps below the overflow tier, so nothing is ever
       // cut off.
       className={cn(
-        '@container/toolbar border-input flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b px-2 py-1.5',
+        'border-input @container/toolbar flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b px-2 py-1.5',
         className,
       )}
     >

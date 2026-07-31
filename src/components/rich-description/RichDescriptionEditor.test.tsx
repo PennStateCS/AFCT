@@ -101,7 +101,9 @@ describe('RichDescriptionEditor', () => {
   it('does not accept input when disabled', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
-    render(<RichDescriptionEditor ariaLabel="Description" disabled value="locked" onChange={onChange} />);
+    render(
+      <RichDescriptionEditor ariaLabel="Description" disabled value="locked" onChange={onChange} />,
+    );
 
     const editable = await getEditable();
     expect(editable.getAttribute('contenteditable')).toBe('false');
@@ -113,7 +115,14 @@ describe('RichDescriptionEditor', () => {
 
   it('does not accept input when read-only', async () => {
     const onChange = vi.fn();
-    render(<RichDescriptionEditor ariaLabel="Description" readOnly value="view me" onChange={onChange} />);
+    render(
+      <RichDescriptionEditor
+        ariaLabel="Description"
+        readOnly
+        value="view me"
+        onChange={onChange}
+      />,
+    );
 
     const editable = await getEditable();
     expect(editable.getAttribute('contenteditable')).toBe('false');
@@ -141,7 +150,9 @@ describe('RichDescriptionEditor', () => {
 
   it('does not emit a change just from mounting (a pristine form stays pristine)', async () => {
     const onChange = vi.fn();
-    render(<RichDescriptionEditor ariaLabel="Description" value="existing text" onChange={onChange} />);
+    render(
+      <RichDescriptionEditor ariaLabel="Description" value="existing text" onChange={onChange} />,
+    );
 
     await getEditable();
     expect(onChange).not.toHaveBeenCalled();
@@ -165,7 +176,9 @@ describe('RichDescriptionEditor', () => {
   });
 
   it('keeps one editor instance across re-renders with a new inline onChange', async () => {
-    const { rerender } = render(<RichDescriptionEditor ariaLabel="Description" onChange={() => {}} />);
+    const { rerender } = render(
+      <RichDescriptionEditor ariaLabel="Description" onChange={() => {}} />,
+    );
     const first = await getEditable();
 
     rerender(<RichDescriptionEditor ariaLabel="Description" onChange={() => {}} />);

@@ -170,7 +170,11 @@ describe('rich description alignment', () => {
       document: {
         type: 'doc',
         content: [
-          { type: 'paragraph', attrs: { textAlign: 'justify' }, content: [{ type: 'text', text: 'x' }] },
+          {
+            type: 'paragraph',
+            attrs: { textAlign: 'justify' },
+            content: [{ type: 'text', text: 'x' }],
+          },
         ],
       },
     };

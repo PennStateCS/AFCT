@@ -5,7 +5,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 
 import { RichDescriptionField } from './RichDescriptionField';
-import { warmRichDescriptionEditor } from '@/test/rich-editor';
+import { warmRichDescriptionEditor, WARM_TIMEOUT_MS } from '@/test/rich-editor';
 import {
   BLOCK_MATH_NODE,
   INLINE_MATH_NODE,
@@ -32,7 +32,7 @@ async function insertEquation(latex: string, placement?: 'Display') {
 }
 
 describe('inserting an equation through the description field', () => {
-  beforeAll(warmRichDescriptionEditor);
+  beforeAll(warmRichDescriptionEditor, WARM_TIMEOUT_MS);
 
   it('puts the equation in the document the form would save', async () => {
     const onChange = vi.fn();

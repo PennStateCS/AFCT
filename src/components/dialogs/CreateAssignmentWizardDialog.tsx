@@ -223,7 +223,7 @@ export function CreateAssignmentWizardDialog({
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Create Assignment</DialogTitle>
           <DialogDescription className="sr-only">

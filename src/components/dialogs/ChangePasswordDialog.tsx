@@ -76,7 +76,6 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
       }}
     >
       <DialogContent
-        className="bg-card"
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
