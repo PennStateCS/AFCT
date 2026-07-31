@@ -38,7 +38,18 @@ services:
       # Windows bind mount, which is why dev-in-Docker runs webpack.
       CHOKIDAR_USEPOLLING: 'true'
       CHOKIDAR_INTERVAL: '1000'
-      WATCHPACK_POLLING: 'true'
+      # Milliseconds, not a boolean. Watchpack reads this as
+      # `${+value} === value ? +value : !!value`, so 'true' meant "poll at chokidar's
+      # default", which is 100ms, and CHOKIDAR_INTERVAL above was never consulted on this
+      # path at all. Ten polls a second across a bind mount where a single file walk takes
+      # over a minute is how the compiler ended up starved. 1000 matches the interval this
+      # file always meant to set.
+      WATCHPACK_POLLING: '1000'
+      # Node serves every filesystem call from libuv's thread pool, which defaults to FOUR
+      # threads. Over 9p each call is a round trip to the Windows host, so four threads is
+      # the ceiling on the whole dev server's file I/O: during the stall all four sat in
+      # p9_client_rpc while webpack waited. Raising it costs idle threads and nothing else.
+      UV_THREADPOOL_SIZE: '32'
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
       DB_HOST: postgres
       DB_PORT: 5432
@@ -66,6 +77,16 @@ services:
       # Container-owned copies so the host doesn't shadow them.
       - afct-dev-node-modules:/app/node_modules
       - afct-dev-next:/app/.next
+      # Keep the docs site off the bind mount. Nothing in the container builds Docusaurus,
+      # but its dependency tree is 64,782 files, and every one of them is reachable through
+      # the Windows bind mount, which Docker Desktop serves over WSL2's 9p transport. A
+      # single walk of that tree from inside the container measured 126 SECONDS (the same
+      # walk over a container volume: 69ms). Webpack's watcher polls here, so those files
+      # were being stat'ed over and over while the compiler queued behind them. Masking
+      # them with empty volumes removes 85% of the files on the slow path.
+      - afct-dev-docs-node-modules:/app/docs-site/node_modules
+      - afct-dev-docs-build:/app/docs-site/build
+      - afct-dev-docs-cache:/app/docs-site/.docusaurus
       # Uploads + admin TLS cert on named volumes.
       - afct-dev-uploads-data:/app/public/uploads
       - afct-dev-private-uploads:/private/uploads
@@ -248,3 +269,8 @@ volumes:
   afct-dev-acme-challenge:
   afct-dev-db-backups:
   afct-dev-backup-triggers:
+  # Empty stand-ins that hide the docs site's build artefacts from the container. See the
+  # note on the app service's volumes.
+  afct-dev-docs-node-modules:
+  afct-dev-docs-build:
+  afct-dev-docs-cache:
