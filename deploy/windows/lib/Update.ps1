@@ -156,6 +156,29 @@ function Remove-AfctSupersededImages {
     }
 }
 
+# Compose interpolation prefers a process-level AFCT_APP_TAG over the value in the env
+# file, so a pinned update ($env:AFCT_APP_TAG = 'vX.Y.Z'; afctctl update) deploys that tag
+# while the file keeps the old pin, and the next plain update would silently redeploy the
+# OLD release. After a healthy deploy, record the effective tag back to the env file. The
+# rolling "main" is never recorded: pins name published releases only, matching
+# Set-AfctReleasePin.
+function Save-AfctDeployedAppTag {
+    param([string]$File)
+    $deployed = [Environment]::GetEnvironmentVariable('AFCT_APP_TAG')
+    if (-not $deployed) { return }
+    if ((Read-AfctEnvValue 'AFCT_APP_TAG' $File) -ceq $deployed) { return }
+    if ($deployed -ceq 'main') {
+        Write-AfctWarn "deployed the rolling main build without recording it as a pin (pins name published releases only). A plain 'afctctl update' will redeploy the release pinned in $File."
+        return
+    }
+    if ($deployed -match '[^A-Za-z0-9._-]') {
+        Write-AfctWarn "AFCT_APP_TAG contains unsupported characters; not recording it in $File."
+        return
+    }
+    Set-AfctEnvFlag 'AFCT_APP_TAG' $deployed $File
+    Write-AfctInfo "recorded the deployed version (AFCT_APP_TAG=$deployed) in $File."
+}
+
 function Invoke-AfctUpdate {
     Assert-AfctStack
     Write-AfctInfo 'updating AFCT to the latest published images...'
@@ -168,6 +191,7 @@ function Invoke-AfctUpdate {
     try { Start-AfctStack; Wait-AfctHealth } catch { $ok = $false }
 
     if ($ok) {
+        Save-AfctDeployedAppTag $EnvFile
         Write-AfctSuccess 'AFCT update completed.'
         Remove-AfctSupersededImages
         return

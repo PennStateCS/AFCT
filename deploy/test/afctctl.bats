@@ -344,6 +344,46 @@ EOF
   [[ "$output" == *"update completed"* ]]
 }
 
+# --- pinned updates persist the deployed tag -----------------------------------
+#
+# Compose lets an exported AFCT_APP_TAG override the env file, so a pinned update
+# (AFCT_APP_TAG=vX.Y.Z afctctl update) deploys that tag. The env file must then record
+# it, or the next plain update silently redeploys the OLD pin while reporting success.
+
+@test "a pinned update records the deployed tag in the env file" {
+  write_complete_env
+  export AFCT_APP_TAG="v0.2.0"
+  run sh install.sh update < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -Eq '^AFCT_APP_TAG=v0.2.0$' .env.production; [ "$status" -eq 0 ]
+  run grep -c '^AFCT_APP_TAG=' .env.production; [ "$output" = "1" ]
+}
+
+@test "a plain update leaves the existing pin unchanged" {
+  write_complete_env
+  run sh install.sh update < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -Eq '^AFCT_APP_TAG=v0.0.1$' .env.production; [ "$status" -eq 0 ]
+}
+
+@test "a pinned update that fails its health check does not touch the pin" {
+  write_complete_env
+  export AFCT_APP_TAG="v0.2.0"
+  export MOCK_HEALTH="unhealthy"
+  run sh install.sh update < /dev/null
+  [ "$status" -ne 0 ]
+  run grep -Eq '^AFCT_APP_TAG=v0.0.1$' .env.production; [ "$status" -eq 0 ]
+}
+
+@test "a pinned update to main never records a main pin" {
+  write_complete_env
+  export AFCT_APP_TAG="main"
+  run sh install.sh update < /dev/null
+  [ "$status" -eq 0 ]
+  run grep -Eq '^AFCT_APP_TAG=v0.0.1$' .env.production; [ "$status" -eq 0 ]
+  [[ "$output" == *"rolling main build"* ]]
+}
+
 @test "update is refused up-front when the disk is too small for the images" {
   write_complete_env
   # An unreachable requirement stands in for a full disk. The real failure this
