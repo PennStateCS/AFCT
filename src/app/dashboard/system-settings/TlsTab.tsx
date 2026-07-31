@@ -196,7 +196,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             if (!open) setTlsMethod(null);
           }}
         >
-          <DialogContent className="bg-card sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Get a free certificate (Let’s Encrypt)</DialogTitle>
               <DialogDescription>
@@ -298,7 +298,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             if (!open) setTlsMethod(null);
           }}
         >
-          <DialogContent className="bg-card sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>
                 {tlsMethod === 'csr'
@@ -409,7 +409,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             if (!open) setTlsMethod(null);
           }}
         >
-          <DialogContent className="bg-card sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Upload an existing certificate</DialogTitle>
               <DialogDescription>

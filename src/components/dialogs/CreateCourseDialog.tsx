@@ -174,7 +174,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       }}
     >
       <DialogContent
-        className="bg-card sm:max-w-3xl"
+        className="sm:max-w-3xl"
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>

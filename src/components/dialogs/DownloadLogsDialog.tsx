@@ -180,7 +180,7 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           {/* Title */}
           <DialogTitle>Download Logs</DialogTitle>

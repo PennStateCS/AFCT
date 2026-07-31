@@ -78,7 +78,6 @@ export function ResetPasswordDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
-        className="bg-card"
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>

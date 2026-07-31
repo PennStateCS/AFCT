@@ -234,7 +234,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         }
       }}
     >
-      <DialogContent className="bg-card max-w-lg">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>
           <DialogDescription>Update your personal information.</DialogDescription>

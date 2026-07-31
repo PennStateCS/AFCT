@@ -324,7 +324,7 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
             View description
           </button>
           <Dialog open={descOpen} onOpenChange={setDescOpen}>
-            <DialogContent className="bg-card">
+            <DialogContent>
               <DialogHeader>
                 <DialogTitle>Assignment Description</DialogTitle>
                 <DialogDescription className="text-muted-foreground">

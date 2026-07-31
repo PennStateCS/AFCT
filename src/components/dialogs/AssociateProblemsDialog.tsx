@@ -256,7 +256,6 @@ export function AssociateProblemsDialog({
   return (
     <Dialog open={internalOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent
-        className="bg-card"
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>

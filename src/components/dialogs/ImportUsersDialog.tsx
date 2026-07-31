@@ -224,7 +224,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card flex max-h-[85vh] max-w-3xl flex-col overflow-hidden">
+      <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Import Users</DialogTitle>
           <DialogDescription>

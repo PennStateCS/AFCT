@@ -94,7 +94,7 @@ export function DuplicateProblemDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Duplicate Problem</DialogTitle>
           <DialogDescription className="sr-only">

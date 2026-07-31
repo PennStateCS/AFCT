@@ -214,7 +214,7 @@ export function EditRoleDialog({
         }
       }}
     >
-      <DialogContent className="bg-card max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>Modify course-specific settings for this user.</DialogDescription>

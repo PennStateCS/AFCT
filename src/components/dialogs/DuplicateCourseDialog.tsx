@@ -296,7 +296,7 @@ export default function DuplicateCourseDialog({
         if (!v) resetAll();
       }}
     >
-      <DialogContent className="bg-card sm:max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Copy className="text-muted-foreground size-4" />

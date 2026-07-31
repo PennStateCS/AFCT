@@ -297,7 +297,7 @@ export const useProblemColumns = ({
       open={descDialog.open}
       onOpenChange={(open) => setDescDialog({ open, problem: open ? descDialog.problem : null })}
     >
-      <DialogContent className="bg-card">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Problem Description</DialogTitle>
           <DialogDescription className="text-muted-foreground">
