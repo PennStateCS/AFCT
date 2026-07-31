@@ -10,8 +10,10 @@ vi.mock('@/lib/api/fetch-client', () => ({
   ApiError: class ApiError extends Error {},
 }));
 vi.mock('@/lib/toast', () => ({ showToast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 
 import { AssignmentBasicsForm } from './AssignmentBasicsForm';
+import { UnsavedChangesProvider } from '@/components/unsaved-changes/UnsavedChangesProvider';
 import { warmRichDescriptionEditor, WARM_TIMEOUT_MS } from '@/test/rich-editor';
 import {
   BLOCK_MATH_NODE,
@@ -238,5 +240,51 @@ describe('rich description comparison', () => {
     const inline = doc(para(inlineMath('x')));
     const block = doc({ type: BLOCK_MATH_NODE, attrs: { latex: 'x' } });
     expect(JSON.stringify(inline)).not.toBe(JSON.stringify(block));
+  });
+});
+
+describe('assignment dirty state: the unsaved-changes guard', () => {
+  beforeAll(warmRichDescriptionEditor, WARM_TIMEOUT_MS);
+  beforeEach(() => vi.clearAllMocks());
+
+  it('challenges an in-app link once the form is dirty, and not before', async () => {
+    render(
+      <UnsavedChangesProvider>
+        <AssignmentBasicsForm {...BASE} initialDescriptionJson={stored} />
+        <a href="/dashboard/elsewhere">Back to courses</a>
+      </UnsavedChangesProvider>,
+    );
+    await screen.findByRole('textbox', { name: 'Description' });
+
+    // Pristine: the link is not intercepted.
+    fireEvent.click(screen.getByRole('link', { name: 'Back to courses' }));
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).toBeNull();
+
+    // Dirty via a real edit path: change the title.
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Renamed' } });
+    fireEvent.click(screen.getByRole('link', { name: 'Back to courses' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Discard unsaved changes?' }),
+    ).toBeInTheDocument();
+
+    // Staying preserves the edit.
+    fireEvent.click(screen.getByRole('button', { name: 'Stay on page' }));
+    expect(screen.getByLabelText('Title')).toHaveValue('Renamed');
+  });
+
+  it('releases the guard when the title returns to its stored value', async () => {
+    render(
+      <UnsavedChangesProvider>
+        <AssignmentBasicsForm {...BASE} initialDescriptionJson={stored} />
+        <a href="/dashboard/elsewhere">Back to courses</a>
+      </UnsavedChangesProvider>,
+    );
+    await screen.findByRole('textbox', { name: 'Description' });
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Renamed' } });
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: BASE.initialTitle } });
+    fireEvent.click(screen.getByRole('link', { name: 'Back to courses' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).toBeNull();
   });
 });
