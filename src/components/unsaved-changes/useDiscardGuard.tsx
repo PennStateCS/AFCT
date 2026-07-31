@@ -35,10 +35,37 @@ export function useDiscardGuard({
     onDiscardRef.current = onDiscard;
   }, [onDiscard]);
 
+  /**
+   * Where the author was when the confirm interrupted them.
+   *
+   * A dialog normally restores focus on its own, to whatever was active when it opened. That is
+   * no help here: the confirm is raised from the HOST dialog's Escape handling, which has already
+   * moved focus off the field, so what gets restored is the document body. The author chooses
+   * "Keep editing", the form is still open in front of them, and their focus is at the top of the
+   * page: they have to tab all the way back in to reach the field they were in.
+   */
+  const returnFocusRef = React.useRef<HTMLElement | null>(null);
+
   const requestClose = React.useCallback(() => {
-    if (dirty) setConfirmOpen(true);
-    else onDiscardRef.current();
+    if (dirty) {
+      const active = document.activeElement;
+      returnFocusRef.current = active instanceof HTMLElement ? active : null;
+      setConfirmOpen(true);
+    } else onDiscardRef.current();
   }, [dirty]);
+
+  // Keep editing means carry on where you were, so put focus back. After a frame, so it lands
+  // after the confirm's own restore rather than being overwritten by it, and only if the element
+  // is still in the document (the host dialog can re-render between the two).
+  const keepEditing = React.useCallback(() => {
+    setConfirmOpen(false);
+    const target = returnFocusRef.current;
+    returnFocusRef.current = null;
+    if (!target || !target.isConnected) return;
+    requestAnimationFrame(() => {
+      if (target.isConnected) target.focus();
+    });
+  }, []);
 
   const discardConfirm = (
     <ConfirmDialog
@@ -50,10 +77,11 @@ export function useDiscardGuard({
       cancelText="Keep editing"
       onConfirm={() => {
         setConfirmOpen(false);
+        returnFocusRef.current = null;
         onDiscardRef.current();
       }}
       // Cancel, Escape, or any dismissal of the confirm all mean keep editing.
-      onCancel={() => setConfirmOpen(false)}
+      onCancel={keepEditing}
     />
   );
 
