@@ -46,6 +46,8 @@ export type RichDescriptionFieldProps = {
    */
   value?: RichDescriptionEnvelope | string | null;
   onChange: (value: RichDescriptionEnvelope) => void;
+  /** The document as loaded, once, before any edit. See the editor prop of the same name. */
+  onDocumentReady?: (value: RichDescriptionEnvelope) => void;
   /** Helper text under the editor. */
   help?: React.ReactNode;
   error?: string;
@@ -69,6 +71,7 @@ export function RichDescriptionField({
   label = 'Description',
   value,
   onChange,
+  onDocumentReady,
   help,
   error,
   disabled = false,
@@ -95,6 +98,7 @@ export function RichDescriptionField({
           showToolbar
           value={value}
           onChange={onChange}
+          onDocumentReady={onDocumentReady}
           disabled={disabled}
           invalid={Boolean(error)}
           placeholder={placeholder}

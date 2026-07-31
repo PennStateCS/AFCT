@@ -43,6 +43,17 @@ export type RichDescriptionEditorProps = {
   value?: RichDescriptionEnvelope | string | null;
   /** Emits the updated versioned envelope on every document change. */
   onChange?: (value: RichDescriptionEnvelope) => void;
+  /**
+   * The document as loaded, reported once, before any edit.
+   *
+   * Initialization stated outright rather than inferred. A form comparing "current versus
+   * original" needs the original in the EDITOR's own terms: Tiptap normalises what it parses, so
+   * the stored JSON and the document holding exactly that content are not textually equal, and a
+   * form comparing against the raw stored value would call an undone edit a change forever.
+   *
+   * Deliberately separate from `onChange`, so a caller can never mistake loading for editing.
+   */
+  onDocumentReady?: (value: RichDescriptionEnvelope) => void;
   onBlur?: () => void;
   /** Called once the editor exists, with a handle for programmatic edits. */
   onReady?: (handle: RichDescriptionEditorHandle) => void;
@@ -92,6 +103,7 @@ function toInitialContent(value: RichDescriptionEditorProps['value']) {
 export function RichDescriptionEditor({
   value,
   onChange,
+  onDocumentReady,
   onBlur,
   onReady,
   showToolbar = false,
@@ -116,6 +128,10 @@ export function RichDescriptionEditor({
   React.useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+  const onDocumentReadyRef = React.useRef(onDocumentReady);
+  React.useEffect(() => {
+    onDocumentReadyRef.current = onDocumentReady;
+  }, [onDocumentReady]);
   const onBlurRef = React.useRef(onBlur);
   React.useEffect(() => {
     onBlurRef.current = onBlur;
@@ -186,8 +202,14 @@ export function RichDescriptionEditor({
     // document during SSR then hydrating produces a mismatch.
     immediatelyRender: false,
     editorProps,
-    onCreate: () => {
+    onCreate: ({ editor: instance }) => {
       readyRef.current = true;
+      // The loaded document, in the editor's own terms. Reported before any edit can happen, so
+      // a caller comparing against it is comparing like with like.
+      onDocumentReadyRef.current?.({
+        version: RICH_DESCRIPTION_VERSION,
+        document: instance.getJSON() as RichDescriptionEnvelope['document'],
+      });
     },
     onUpdate: ({ editor: instance }) => {
       if (!readyRef.current) return;

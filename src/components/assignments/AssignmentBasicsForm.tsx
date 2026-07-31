@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { RichDescriptionField } from '@/components/rich-description/RichDescript
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { apiPaths } from '@/lib/api-paths';
 import { showToast } from '@/lib/toast';
-import type { RichDescriptionEnvelope } from '@/lib/rich-description';
+import { serializeRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';
 
 /**
  * The assignment's title and description, edited on the Assignment tab. Defaults to the
@@ -47,26 +47,75 @@ export function AssignmentBasicsForm({
   const [descriptionJson, setDescriptionJson] = useState<RichDescriptionEnvelope | null>(
     initialDescriptionJson ?? null,
   );
-  const [descriptionEdited, setDescriptionEdited] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Re-seed when the assignment changes (e.g. after a save refetch, or switching assignment).
+  /**
+   * The stored document as a stable string.
+   *
+   * It has to be content-derived, not object-derived. The page renders this form with
+   * `initialDescriptionJson={asRichDescription(assignment.descriptionJson)}`, and that runs a Zod
+   * parse on every render, so the prop is a NEW object each time with identical contents. An
+   * effect that depended on it re-ran on every parent render, and it cleared the dirty flag.
+   *
+   * That is what made equations look broken while typing looked fine: typing re-marks the form
+   * dirty on the next keystroke, so a wiped flag was invisible. Inserting an equation emits once,
+   * and the very next render of the page threw the edit away.
+   */
+  const initialKey = serializeRichDescription(initialDescriptionJson);
+
+  /**
+   * What the editor loaded, in the editor's own terms.
+   *
+   * Tiptap normalises what it parses, so the stored JSON and the document holding exactly that
+   * content are not textually identical. Comparing against the stored value would leave an undone
+   * edit looking like a change forever. The editor reports its loaded document once, and that is
+   * the thing to compare against. Until it does, fall back to the stored value so a change
+   * arriving early is never missed.
+   */
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const [currentKey, setCurrentKey] = useState<string | null>(null);
+
+  // Re-seed when the assignment genuinely changes (a save refetch with new content, or switching
+  // assignment), keyed on values rather than identities so a re-render alone is not a change.
   useEffect(() => {
     setTitle(initialTitle);
     setDescriptionJson(initialDescriptionJson ?? null);
-    setDescriptionEdited(false);
+    setLoadedKey(null);
+    setCurrentKey(null);
     setError(null);
-  }, [initialTitle, initialDescription, initialDescriptionJson]);
+    // initialDescriptionJson is deliberately absent: initialKey is its content, and depending on
+    // the object itself is exactly the bug this replaces (a new identity every render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignmentId, initialTitle, initialDescription, initialKey]);
 
-  const dirty = title !== initialTitle || descriptionEdited;
+  /**
+   * Dirty means the current values differ from the stored ones, not "an edit event happened".
+   *
+   * A boolean flag cannot answer "did they undo it again", and undo is ordinary here: insert an
+   * equation, think better of it, Ctrl+Z. Comparing content means the form goes back to pristine
+   * on its own, and no longer depends on catching every edit exactly once.
+   */
+  const descriptionChanged = loadedKey !== null && currentKey !== null && currentKey !== loadedKey;
+  const dirty = title !== initialTitle || descriptionChanged;
+
+  /**
+   * One save at a time, tracked in a ref rather than the `busy` state.
+   *
+   * Two submits in the same tick both read the same render's `busy`, so a state flag lets the
+   * second through and the record is PUT twice. A ref updates immediately. Grade-bearing records
+   * are not somewhere to leave duplicate writes to luck.
+   */
+  const savingRef = useRef(false);
 
   const save = async () => {
+    if (savingRef.current) return;
     const trimmed = title.trim();
     if (trimmed.length < 3) {
       setError('Title must be at least 3 characters.');
       return;
     }
+    savingRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -81,6 +130,7 @@ export function AssignmentBasicsForm({
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save the assignment');
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   };
@@ -113,14 +163,19 @@ export function AssignmentBasicsForm({
         value={initialDescriptionJson ?? initialDescription}
         onChange={(value) => {
           setDescriptionJson(value);
-          setDescriptionEdited(true);
+          setCurrentKey(serializeRichDescription(value));
+        }}
+        onDocumentReady={(value) => {
+          const key = serializeRichDescription(value);
+          setLoadedKey(key);
+          setCurrentKey(key);
         }}
         disabled={courseIsArchived}
         placeholder="Enter assignment description"
       />
 
       {error && (
-        <p id={errorId} role="alert" className="text-xs text-destructive">
+        <p id={errorId} role="alert" className="text-destructive text-xs">
           {error}
         </p>
       )}
