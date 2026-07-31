@@ -196,6 +196,68 @@ describe('link dialog', () => {
     await waitFor(() => expect(linkMarks(onChange)).toHaveLength(0));
   });
 
+  it('links the whole selection when it spans linked and unlinked text', async () => {
+    const user = userEvent.setup();
+    const { onChange, api } = await setup();
+    api().insertText('before and after');
+
+    // Link only part of it first.
+    api().selectAll();
+    await user.click(screen.getByRole('button', { name: 'Add link' }));
+    await user.type(screen.getByLabelText('Web address'), 'https://one.example.edu');
+    await user.click(screen.getByRole('button', { name: 'Save link' }));
+    await waitFor(() => expect(linkMarks(onChange)).not.toHaveLength(0));
+
+    // Now re-link the same span with a different address: the whole selection ends up on the
+    // new href rather than keeping a mixture of the two.
+    api().selectAll();
+    await user.click(await screen.findByRole('button', { name: 'Edit link' }));
+    const field = screen.getByLabelText('Web address');
+    await user.clear(field);
+    await user.type(field, 'https://two.example.edu');
+    await user.click(screen.getByRole('button', { name: 'Update link' }));
+
+    await waitFor(() => {
+      const hrefs = new Set(linkMarks(onChange).map((m) => m.attrs?.href));
+      expect(hrefs).toEqual(new Set(['https://two.example.edu/']));
+    });
+  });
+
+  it('keeps the text when the link is removed', async () => {
+    const user = userEvent.setup();
+    const { onChange, api } = await setup();
+    api().insertText('keep this text');
+    api().selectAll();
+
+    await user.click(screen.getByRole('button', { name: 'Add link' }));
+    await user.type(screen.getByLabelText('Web address'), 'https://example.edu');
+    await user.click(screen.getByRole('button', { name: 'Save link' }));
+    await waitFor(() => expect(linkMarks(onChange)).not.toHaveLength(0));
+
+    api().selectAll();
+    await user.click(await screen.findByRole('button', { name: 'Edit link' }));
+    await user.click(screen.getByRole('button', { name: 'Remove link' }));
+
+    await waitFor(() => expect(linkMarks(onChange)).toHaveLength(0));
+    // Unlinking must not take the words with it.
+    expect(JSON.stringify(onChange.mock.calls.at(-1)?.[0])).toContain('keep this text');
+  });
+
+  it('inserts the address as its own text when nothing is selected', async () => {
+    const user = userEvent.setup();
+    const { onChange } = await setup();
+
+    // No selection: there is nothing to put a mark on, so the URL becomes the link text.
+    await user.click(screen.getByRole('button', { name: 'Add link' }));
+    await user.type(screen.getByLabelText('Web address'), 'https://example.edu');
+    await user.click(screen.getByRole('button', { name: 'Save link' }));
+
+    await waitFor(() => expect(linkMarks(onChange)).toHaveLength(1));
+    const emitted = JSON.stringify(onChange.mock.calls.at(-1)?.[0]);
+    expect(emitted).toContain('https://example.edu/');
+    expect(linkMarks(onChange)[0]?.attrs?.href).toBe('https://example.edu/');
+  });
+
   it('produces a document that still validates, and rejects an unsafe href at the schema level', async () => {
     const user = userEvent.setup();
     const { onChange, api } = await setup();

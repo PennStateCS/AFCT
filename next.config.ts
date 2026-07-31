@@ -65,7 +65,17 @@ const nextConfig: NextConfig = {
     // and applies to anyone running dev outside Docker too.
     config.watchOptions = {
       ...config.watchOptions,
-      ignored: ['**/.git/**', '**/node_modules/**', '**/.next/**', '**/docs-site/**'],
+      ignored: [
+        '**/.git/**',
+        '**/node_modules/**',
+        '**/.next/**',
+        '**/docs-site/**',
+        // Playwright writes failure artifacts while its webServer (next dev) is running.
+        // Unignored, the first failing spec triggers a Fast Refresh that remounts every
+        // component mid-test and cascades into unrelated failures.
+        '**/test-results/**',
+        '**/e2e-report/**',
+      ],
     };
 
     // Fix CommonJS/ESM module issues
