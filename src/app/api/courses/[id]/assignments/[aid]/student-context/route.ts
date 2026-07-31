@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { canManageCourse } from '@/lib/permissions';
 import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
+import { effectiveMaxSubmissions } from '@/lib/submission-limits';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
@@ -27,6 +28,9 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *             submissionCount: { type: integer }
  *             submissionsByProblem: { type: object }
  *             commentsByProblem: { type: object }
+ *             problemLimits:
+ *               type: object
+ *               description: Per-problem effective submission cap for the caller (base plus any grants); max null means unlimited.
  *   401: { description: Not signed in. }
  *   403: { description: Caller is not enrolled in the course. }
  *   404: { description: "Assignment not found in this course, or unpublished (for students)." }
@@ -43,9 +47,11 @@ export const GET = withCourseAuth(
         select: {
           id: true,
           isPublished: true,
+          groupSetId: true,
           problems: {
             select: {
               problemId: true,
+              maxSubmissions: true,
             },
           },
         },
@@ -85,6 +91,7 @@ export const GET = withCourseAuth(
             submissionCount: 0,
             submissionsByProblem: {},
             commentsByProblem: {},
+            problemLimits: {},
             locked: true,
           });
         }
@@ -92,12 +99,22 @@ export const GET = withCourseAuth(
 
       const problemIds = assignment.problems.map((problem) => problem.problemId);
 
-      const [submissions, comments, grades] = await Promise.all([
+      // On a group assignment the submission set is shared, so attempts (and the cap
+      // they count against) are group-wide, matching submit enforcement.
+      const myGroup = assignment.groupSetId
+        ? await prisma.groupMembership.findFirst({
+            where: { userId, groupSetId: assignment.groupSetId },
+            select: { groupId: true },
+          })
+        : null;
+      const myGroupId = myGroup?.groupId ?? null;
+
+      const [submissions, comments, grades, grants] = await Promise.all([
         prisma.submission.findMany({
           where: {
             assignmentId,
-            studentId: userId,
             problemId: { in: problemIds },
+            OR: [{ studentId: userId }, ...(myGroupId ? [{ studentGroupId: myGroupId }] : [])],
           },
           orderBy: { submittedAt: 'desc' },
           select: {
@@ -134,7 +151,35 @@ export const GET = withCourseAuth(
             grade: true,
           },
         }),
+        prisma.submissionGrant.findMany({
+          where: {
+            assignmentId,
+            problemId: { in: problemIds },
+            OR: [{ userId }, ...(myGroupId ? [{ groupId: myGroupId }] : [])],
+          },
+          select: {
+            problemId: true,
+            targetType: true,
+            userId: true,
+            groupId: true,
+            extraSubmissions: true,
+          },
+        }),
       ]);
+
+      // The cap that applies to THIS caller per problem (base plus grants); max null
+      // means unlimited. The client pairs this with the attempt lists below.
+      const problemLimits = Object.fromEntries(
+        assignment.problems.map((p) => {
+          const limit = effectiveMaxSubmissions(
+            p.maxSubmissions,
+            grants.filter((g) => g.problemId === p.problemId),
+            userId,
+            myGroupId ? [myGroupId] : [],
+          );
+          return [p.problemId, limit];
+        }),
+      );
 
       const submissionsByProblem: Record<string, (typeof submissions)[number][]> = {};
       for (const problemId of problemIds) {
@@ -167,6 +212,7 @@ export const GET = withCourseAuth(
       return NextResponse.json({
         assignmentGrade,
         problemGrades,
+        problemLimits,
         submissionCount: submissions.length,
         submissionsByProblem: Object.fromEntries(
           Object.entries(submissionsByProblem).map(([problemId, problemSubmissions]) => [

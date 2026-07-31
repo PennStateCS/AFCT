@@ -7,6 +7,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { logDenial } from '@/lib/api/activity';
 import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
 import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
+import { effectiveMaxSubmissions } from '@/lib/submission-limits';
 
 type SubmissionRecord = {
   id: string;
@@ -208,6 +209,42 @@ export const GET = withCourseAuth(
         assignmentId && studentId
           ? await resolveStudentSubmissionGroupId(assignmentId, studentId)
           : null;
+
+      // The submission cap this student is actually working against per problem: the
+      // base maxSubmissions plus any extra-submission grants for them or their group.
+      const [linkCaps, grantRows] = await Promise.all([
+        prisma.assignmentProblem.findMany({
+          where: { assignmentId },
+          select: { problemId: true, maxSubmissions: true },
+        }),
+        prisma.submissionGrant.findMany({
+          where: {
+            assignmentId,
+            OR: [{ userId: studentId }, ...(groupId ? [{ groupId }] : [])],
+          },
+          select: {
+            problemId: true,
+            targetType: true,
+            userId: true,
+            groupId: true,
+            extraSubmissions: true,
+          },
+        }),
+      ]);
+      const problemLimits = Object.fromEntries(
+        linkCaps.map((l) => [
+          l.problemId,
+          {
+            base: l.maxSubmissions,
+            ...effectiveMaxSubmissions(
+              l.maxSubmissions,
+              grantRows.filter((g) => g.problemId === l.problemId),
+              studentId ?? '',
+              groupId ? [groupId] : [],
+            ),
+          },
+        ]),
+      );
       const submissionsWhere: Prisma.SubmissionWhereInput = groupId
         ? { assignmentId, OR: [{ studentId }, { studentGroupId: groupId }] }
         : { assignmentId, studentId };
@@ -335,6 +372,9 @@ export const GET = withCourseAuth(
         problemGrades,
         // Group assignment for this student => the workspace shows a "Submitted by" column.
         isGroup: !!groupId,
+        // The student's group for this assignment (grant targets need it); null otherwise.
+        groupId,
+        problemLimits,
       });
     } catch (error) {
       console.error('GET /api/courses/[id]/[aid]/review-data/[studentId]/route.ts error:', error);

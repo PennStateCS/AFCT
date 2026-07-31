@@ -7,6 +7,7 @@ const prismaMock = vi.hoisted(() => ({
   comment: { findMany: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn() },
   submission: { findMany: vi.fn() },
+  submissionGrant: { findMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -38,8 +39,12 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     contentGateMock.mockResolvedValue({ assigned: true, locked: false, unlockAt: null });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: params.aid, isPublished: true });
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'FACULTY' });
+    prismaMock.submissionGrant.findMany.mockResolvedValue([]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
+        // The route also re-reads this list for the per-problem caps (problemLimits).
+        problemId: 'p1',
+        maxSubmissions: 2,
         problem: {
           id: 'p1',
           title: 'P1',
@@ -231,6 +236,8 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
         },
       },
       isGroup: false,
+      groupId: null,
+      problemLimits: { p1: { base: 2, max: 2, granted: 0 } },
       comments: [
         {
           id: 'comment-1',

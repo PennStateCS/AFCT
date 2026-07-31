@@ -51,11 +51,10 @@ enum LogSeverity {
   SECURITY // auth failures and access-control denials
 }
 
-// Who an AssignmentOverride targets. Only STUDENT ships now; GROUP is reserved for the
-// Group Sets rework (see AssignmentOverride).
+// Who a per-target row (AssignmentOverride, SubmissionGrant) targets.
 enum OverrideTargetType {
   STUDENT // userId set, groupId null
-  GROUP // groupId set, userId null (reserved)
+  GROUP // groupId set, userId null
 }
 
 // How an assignment/problem description is stored. PLAIN_TEXT keeps the legacy `description`
@@ -117,6 +116,8 @@ model User {
   assignmentAssignees AssignmentAssignee[]     @relation("AssigneeTarget") // assignments this student is individually assigned
   assignmentOverrides AssignmentOverride[]     @relation("OverrideTarget") // deadline overrides targeting this student
   overridesCreated    AssignmentOverride[]     @relation("OverrideCreatedBy") // overrides this user created
+  submissionGrants    SubmissionGrant[]        @relation("SubmissionGrantTarget") // extra-submission grants targeting this student
+  grantsCreated       SubmissionGrant[]        @relation("SubmissionGrantCreatedBy") // grants this user created
 
   @@index([isAdmin])
   @@index([inactive])
@@ -393,9 +394,51 @@ model AssignmentProblem {
 
   submissions Submission[]
   grades      AssignmentProblemGrade[]
+  grants      SubmissionGrant[]
 
   @@id([assignmentId, problemId])
   @@index([assignmentId])
+}
+
+// Extra submissions granted to ONE student or ONE group on ONE assignment problem, on top
+// of the problem's shared maxSubmissions (e.g. they submitted the wrong file and staff want
+// to give them another try). Additive and per-target, so the shared cap never moves for
+// everyone else; a grant on an unlimited problem (maxSubmissions <= 0) changes nothing.
+// Kept as its own row (never by mutating maxSubmissions) because submission limits are a
+// research variable: the record of who granted how many to whom must survive.
+// Resolved through lib/submission-limits, which both enforcement and display use.
+model SubmissionGrant {
+  id         String             @id @default(cuid())
+  targetType OverrideTargetType
+
+  assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade)
+  assignmentId      String
+  problemId         String
+
+  // STUDENT target: the student this grant applies to.
+  user   User?   @relation("SubmissionGrantTarget", fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+
+  // GROUP target: the StudentGroup this grant applies to (its shared submission set).
+  studentGroup StudentGroup? @relation("SubmissionGrantGroupTarget", fields: [groupId], references: [id], onDelete: Cascade)
+  groupId      String?
+
+  // Always positive (DB CHECK); repeat grants to the same target add onto this row.
+  extraSubmissions Int
+  reason           String?
+
+  // Nullable + SetNull so deleting the staff account that granted does not block user
+  // deletion (same pattern as AssignmentOverride). The durable actor identity is in the
+  // activity log, not this column.
+  createdBy   User?    @relation("SubmissionGrantCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([assignmentId, problemId, userId]) // at most one grant row per (problem, student)
+  @@unique([assignmentId, problemId, groupId]) // at most one grant row per (problem, group)
+  @@index([userId])
+  @@index([groupId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -443,6 +486,7 @@ model StudentGroup {
   memberships         GroupMembership[]
   assignmentAssignees AssignmentAssignee[] @relation("AssigneeGroupTarget")
   assignmentOverrides AssignmentOverride[] @relation("OverrideGroupTarget")
+  submissionGrants    SubmissionGrant[]    @relation("SubmissionGrantGroupTarget")
   submissions         Submission[]
 
   // Unique group name within its set (case-insensitive + trimmed in the service

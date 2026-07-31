@@ -5,6 +5,8 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findMany: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn() },
   submission: { groupBy: vi.fn(), findMany: vi.fn() },
+  submissionGrant: { findMany: vi.fn() },
+  groupMembership: { findMany: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -62,6 +64,8 @@ function seed({ unlockAt }: { unlockAt: Date | null }) {
   prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
   prismaMock.submission.groupBy.mockResolvedValue([]);
   prismaMock.submission.findMany.mockResolvedValue([]);
+  prismaMock.submissionGrant.findMany.mockResolvedValue([]);
+  prismaMock.groupMembership.findMany.mockResolvedValue([]);
 }
 
 describe('student assignment content lock', () => {

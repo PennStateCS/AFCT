@@ -8,6 +8,8 @@ const prismaMock = vi.hoisted(() => ({
   submission: { findMany: vi.fn() },
   comment: { findMany: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn() },
+  submissionGrant: { findMany: vi.fn() },
+  groupMembership: { findFirst: vi.fn() },
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -23,6 +25,8 @@ const url = 'http://localhost/api/courses/c1/assignments/a1/student-context';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.submissionGrant.findMany.mockResolvedValue([]);
+  prismaMock.groupMembership.findFirst.mockResolvedValue(null);
   // Assigned and open by default; the audience/unlock cases override it.
   contentGateMock.mockResolvedValue({ assigned: true, locked: false, unlockAt: null });
 });

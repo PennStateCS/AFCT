@@ -38,6 +38,26 @@ The grade field applies to the selected student and problem.
 
 Enter a score only after checking that you have the right student and problem. You can also edit several problem scores at once from the [Grades](grades.md) page by opening a student's assignment breakdown.
 
+## Grant extra submissions
+
+Each problem has a shared submission limit set in the assignment's problem settings.
+When one student needs another try (for example, they submitted the wrong file), use
+**Grant extra submissions** above the problem list instead of raising the shared limit
+for everyone.
+
+1. Select the student and the problem.
+2. Select **Grant extra submissions**.
+3. On a group assignment, choose whether the whole group or just this student receives
+   them. Attempts are counted group-wide, so granting the group lets any member use
+   them; granting one student lets only that student submit past the shared limit.
+4. Enter how many extra attempts to add and, optionally, why.
+5. Select **Grant**.
+
+Grants add together: granting one more twice gives two extra attempts. The student sees
+their own higher limit in their assignment view, and the workspace header here shows the
+limit that applies to the selected student. A problem with unlimited submissions cannot
+be granted more.
+
 ## Use the discussion
 
 The **Discussion** panel belongs to the selected student and problem. Add a comment when you need to explain a score, ask for clarification, or leave feedback that does not fit the autograder result.
