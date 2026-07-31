@@ -356,6 +356,16 @@ export function RichDescriptionEditor({
         // plus a dashed border survives both, and the two states look different from each other.
         disabled && 'bg-muted cursor-not-allowed border-dashed opacity-70',
         readOnly && !disabled && 'bg-muted/40 cursor-default',
+        // Inline: a flex column, so the document area fills whatever height the box has, and
+        // the box itself carries the drag-to-resize grip.
+        //
+        // The grip has to live HERE, on the bordered box, rather than on the document area
+        // inside it. `resize` works by setting an explicit height on the element it is applied
+        // to, and the document area is a flex child whose height the column already dictates,
+        // so the browser drew a grip that moved nothing. Measured in a real browser before and
+        // after a 150px drag: 160px -> 160px.
+        !expanded && cn('flex flex-col overflow-hidden', minHeightClassName),
+        !expanded && !disabled && 'max-h-[80vh] resize-y',
         // Expanded: fill the overlay, no rounded card chrome, and let the document scroll
         // rather than the whole overlay, which keeps the toolbar in view.
         expanded && 'flex min-h-0 flex-1 flex-col rounded-none border-0 shadow-none ring-0',
@@ -405,20 +415,8 @@ export function RichDescriptionEditor({
           if (pos) editor.chain().focus().setTextSelection(pos.pos).run();
           else editor.commands.focus('end');
         }}
-        className={cn(
-          'relative',
-          expanded
-            ? 'min-h-0 flex-1 overflow-y-auto'
-            : // The author can drag the editor taller, like a textarea (the browser's native
-              // resize grip; not keyboard-operable, but the same trade the Textarea control
-              // already makes). The min-height rides here so resizing has a floor, and the
-              // max keeps the grip from swallowing the page.
-              cn(
-                'flex flex-col overflow-auto',
-                minHeightClassName,
-                !disabled && 'max-h-[80vh] resize-y',
-              ),
-        )}
+        // Fills whatever height the box has, in both modes, so the whole area takes clicks.
+        className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
       >
         {/* Placeholder is rendered here (not via the Placeholder extension) so it needs no extra
             dependency and stays out of the document. aria-hidden: the accessible name comes from

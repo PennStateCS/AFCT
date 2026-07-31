@@ -91,9 +91,10 @@ export function RichDescriptionField({
       <Label id={labelId} className="mb-2 block">
         {label}
       </Label>
-      {/* Reserves the requested height for the placeholder, which cannot see these props. Inert
-          once the editor arrives, since the editor is taller than its own minimum. */}
-      <div className={cn('grid', minHeightClassName)}>
+      {/* Reserves the requested height for the placeholder, which cannot see these props. Once
+          the editor arrives it carries its own min-height, and this wrapper must NOT stretch it:
+          a grid item forced to the row height cannot then be resized by the drag grip. */}
+      <div className={cn('flex flex-col', minHeightClassName)}>
         <RichDescriptionEditor
           showToolbar
           value={value}
