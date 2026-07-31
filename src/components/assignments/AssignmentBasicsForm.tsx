@@ -9,6 +9,7 @@ import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { apiPaths } from '@/lib/api-paths';
 import { showToast } from '@/lib/toast';
 import { serializeRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';
+import { useUnsavedChangesGuard } from '@/components/unsaved-changes/UnsavedChangesProvider';
 
 /**
  * The assignment's title and description, edited on the Assignment tab. Defaults to the
@@ -98,6 +99,12 @@ export function AssignmentBasicsForm({
    */
   const descriptionChanged = loadedKey !== null && currentKey !== null && currentKey !== loadedKey;
   const dirty = title !== initialTitle || descriptionChanged;
+
+  // Leaving the page with pending edits asks first. Stays registered while a save is in flight
+  // (the values still differ until the refetch reseeds the form), so a navigation racing a save
+  // is still challenged; a successful save reseeds, the comparison goes pristine, and the guard
+  // releases itself. An archived course cannot be edited, so it never registers.
+  useUnsavedChangesGuard(dirty && !courseIsArchived);
 
   /**
    * One save at a time, tracked in a ref rather than the `busy` state.

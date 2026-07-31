@@ -10,6 +10,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import AuthGate from '@/components/AuthGate';
 import { NavbarBreadcrumbProvider } from '@/components/navbar/NavbarBreadcrumbContext';
 import QueryProvider from '@/components/providers/QueryProvider';
+import UnsavedChangesProvider from '@/components/unsaved-changes/UnsavedChangesProvider';
 import SessionWatcher from '@/components/session/SessionWatcher';
 
 export const metadata: Metadata = {
@@ -55,28 +56,32 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <AuthGate>
         <QueryProvider>
           <SessionWatcher />
-          <NavbarBreadcrumbProvider>
-            <div className="flex min-h-screen w-full">
-              {/* Skip link: visually hidden until a keyboard user tabs to it, then it
+          {/* Inside QueryProvider, outside the page: every dashboard surface shares ONE guard,
+              so two dirty forms cannot stack two confirmation dialogs. */}
+          <UnsavedChangesProvider>
+            <NavbarBreadcrumbProvider>
+              <div className="flex min-h-screen w-full">
+                {/* Skip link: visually hidden until a keyboard user tabs to it, then it
                   jumps focus past the sidebar and navbar to the page content. */}
-              <a
-                href="#main-content"
-                className="bg-background text-foreground ring-ring sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:px-3 focus:py-2 focus:shadow-md focus:ring-2"
-              >
-                Skip to main content
-              </a>
-              <DashboardSidebarShell />
-              {/* min-w-0: without it this flex item refuses to shrink below its
+                <a
+                  href="#main-content"
+                  className="bg-background text-foreground ring-ring sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:px-3 focus:py-2 focus:shadow-md focus:ring-2"
+                >
+                  Skip to main content
+                </a>
+                <DashboardSidebarShell />
+                {/* min-w-0: without it this flex item refuses to shrink below its
                   content's intrinsic width, so a wide table stretches the whole
                   page sideways instead of scrolling inside its own container. */}
-              <div className="flex min-w-0 flex-1 flex-col p-4">
-                <Navbar />
-                <main id="main-content" tabIndex={-1} lang="en">
-                  {children}
-                </main>
+                <div className="flex min-w-0 flex-1 flex-col p-4">
+                  <Navbar />
+                  <main id="main-content" tabIndex={-1} lang="en">
+                    {children}
+                  </main>
+                </div>
               </div>
-            </div>
-          </NavbarBreadcrumbProvider>
+            </NavbarBreadcrumbProvider>
+          </UnsavedChangesProvider>
         </QueryProvider>
       </AuthGate>
     </SidebarProvider>

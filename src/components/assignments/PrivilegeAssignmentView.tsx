@@ -39,6 +39,7 @@ import { AssignmentStatisticsPanel } from '@/components/assignments/AssignmentSt
 import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSimilarityPanel';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar } from '@/components/course/course-tabs';
+import { useConfirmIfDirty } from '@/components/unsaved-changes/UnsavedChangesProvider';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
 import type { Prisma, Problem } from '@prisma/client';
@@ -199,14 +200,22 @@ export default function AssignmentDashboardPage({
     setDescOpen(true);
   }, []);
 
+  // Tab switches flip local state BEFORE the URL changes, unmounting the current tab's
+  // content, so a router-level guard would fire too late: the edits are already gone. Ask
+  // first. `confirmIfDirty` resolves true immediately when nothing is dirty, so the pristine
+  // path is unchanged.
+  const confirmIfDirty = useConfirmIfDirty();
   const handleTabChange = useCallback(
     (value: string) => {
-      setTab(value);
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('tab', value);
-      router.replace(`?${params.toString()}`);
+      void confirmIfDirty().then((proceed) => {
+        if (!proceed) return;
+        setTab(value);
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('tab', value);
+        router.replace(`?${params.toString()}`);
+      });
     },
-    [searchParams, router],
+    [confirmIfDirty, searchParams, router],
   );
 
   // Read 1: all course problems (used by the problems tab and the add/create
@@ -429,11 +438,16 @@ export default function AssignmentDashboardPage({
                 <SearchableSelect
                   items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
                   onSelect={(assignmentId) => {
-                    // Carry the current tab across the jump so switching assignments keeps
-                    // you on the same view (e.g. staying on Submissions or Statistics).
-                    const tabQuery = `?tab=${encodeURIComponent(tab)}`;
-                    if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
-                    else window.location.href = `${assignmentId}${tabQuery}`;
+                    // Switching assignments unmounts every form on this page; ask first when
+                    // one of them holds pending edits.
+                    void confirmIfDirty().then((proceed) => {
+                      if (!proceed) return;
+                      // Carry the current tab across the jump so switching assignments keeps
+                      // you on the same view (e.g. staying on Submissions or Statistics).
+                      const tabQuery = `?tab=${encodeURIComponent(tab)}`;
+                      if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
+                      else window.location.href = `${assignmentId}${tabQuery}`;
+                    });
                   }}
                   placeholder={assignmentsLoading ? 'Loading…' : 'Switch assignment'}
                   searchPlaceholder="Search assignments..."
