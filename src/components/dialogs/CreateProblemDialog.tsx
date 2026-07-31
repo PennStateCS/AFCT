@@ -15,12 +15,12 @@ import { Label } from '@/components/ui/label';
 import InputGroup from '@/components/ui/InputGroup';
 import { RichDescriptionField } from '@/components/rich-description/RichDescriptionField';
 import { useDiscardGuard } from '@/components/unsaved-changes/useDiscardGuard';
-import type { RichDescriptionEnvelope } from '@/lib/rich-description';
+import { serializeRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';
 import { LimitField } from '@/components/ui/LimitField';
 import SwitchField from '@/components/ui/SwitchField';
 import { Stepper } from '@/components/ui/stepper';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, Controller, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -81,6 +81,31 @@ const SETTINGS_STEP: WizardStep = { title: 'Assignment Settings', fields: [] };
 // the problem definition only (Details, Type, Answer File, Review). Opened from an
 // assignment it adds an Assignment Settings step and associates the new problem with that
 // assignment using those settings.
+/**
+ * Is the description genuinely different from the one that was loaded?
+ *
+ * react-hook-form compares the emitted document against the stored JSON, and Tiptap NORMALISES
+ * what it parses, so the two are never textually equal once the editor has touched the field:
+ * `isDirty` latched true the moment anyone put a caret in the description, and stayed true even
+ * after an undo. The editor reports its loaded document once, before any edit, and that is the
+ * honest baseline. Same comparison the assignment form uses.
+ */
+function useDescriptionDirty() {
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const [currentKey, setCurrentKey] = useState<string | null>(null);
+  const onDocumentReady = useCallback((value: RichDescriptionEnvelope) => {
+    const key = serializeRichDescription(value);
+    setLoadedKey(key);
+    setCurrentKey(key);
+  }, []);
+  const onDescriptionChange = useCallback(
+    (value: RichDescriptionEnvelope) => setCurrentKey(serializeRichDescription(value)),
+    [],
+  );
+  const descriptionDirty = loadedKey !== null && currentKey !== null && currentKey !== loadedKey;
+  return { descriptionDirty, onDocumentReady, onDescriptionChange };
+}
+
 export function CreateProblemDialog({
   open,
   setOpen,
@@ -142,7 +167,7 @@ export function CreateProblemDialog({
     setValue,
     setError,
     clearErrors,
-    formState: { errors, isSubmitting, isValid, isDirty },
+    formState: { errors, isSubmitting, isValid, dirtyFields },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
     defaultValues: defaults,
@@ -278,8 +303,12 @@ export function CreateProblemDialog({
   const linkSettingsChanged =
     inAssignment &&
     (linkMaxPoints !== '100' || !linkUnlimited || linkMaxSubmissions !== '1' || !linkAutograder);
+  const { descriptionDirty, onDocumentReady, onDescriptionChange } = useDescriptionDirty();
+  // Every changed field EXCEPT the description, which is compared by content above.
+  const otherFieldsDirty = Object.keys(dirtyFields).some((k) => k !== 'descriptionJson');
+
   const { requestClose, discardConfirm } = useDiscardGuard({
-    dirty: open && (isDirty || linkSettingsChanged),
+    dirty: open && (descriptionDirty || otherFieldsDirty || linkSettingsChanged),
     onDiscard: () => {
       setOpen(false);
       resetForm();
@@ -358,7 +387,11 @@ export function CreateProblemDialog({
                     render={({ field }) => (
                       <RichDescriptionField
                         value={(field.value as RichDescriptionEnvelope | null | undefined) ?? null}
-                        onChange={field.onChange}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          onDescriptionChange(value);
+                        }}
+                        onDocumentReady={onDocumentReady}
                         error={errors.descriptionJson?.message}
                         placeholder="Optional description"
                         minHeightClassName="min-h-32"

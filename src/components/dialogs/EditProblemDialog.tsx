@@ -13,13 +13,17 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RichDescriptionField } from '@/components/rich-description/RichDescriptionField';
 import { useDiscardGuard } from '@/components/unsaved-changes/useDiscardGuard';
-import { asRichDescription, type RichDescriptionEnvelope } from '@/lib/rich-description';
+import {
+  asRichDescription,
+  serializeRichDescription,
+  type RichDescriptionEnvelope,
+} from '@/lib/rich-description';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { LimitField } from '@/components/ui/LimitField';
 import { Stepper } from '@/components/ui/stepper';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, Controller, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -64,6 +68,31 @@ const LAST_STEP = STEPS.length - 1;
 // A four-step wizard mirroring the create-problem wizard, for editing the bank problem
 // definition (title, description, type, FA/PDA shape, answer file). The answer file is
 // optional on edit (the current one is kept) unless the problem type changes.
+/**
+ * Is the description genuinely different from the one that was loaded?
+ *
+ * react-hook-form compares the emitted document against the stored JSON, and Tiptap NORMALISES
+ * what it parses, so the two are never textually equal once the editor has touched the field:
+ * `isDirty` latched true the moment anyone put a caret in the description, and stayed true even
+ * after an undo. The editor reports its loaded document once, before any edit, and that is the
+ * honest baseline. Same comparison the assignment form uses.
+ */
+function useDescriptionDirty() {
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const [currentKey, setCurrentKey] = useState<string | null>(null);
+  const onDocumentReady = useCallback((value: RichDescriptionEnvelope) => {
+    const key = serializeRichDescription(value);
+    setLoadedKey(key);
+    setCurrentKey(key);
+  }, []);
+  const onDescriptionChange = useCallback(
+    (value: RichDescriptionEnvelope) => setCurrentKey(serializeRichDescription(value)),
+    [],
+  );
+  const descriptionDirty = loadedKey !== null && currentKey !== null && currentKey !== loadedKey;
+  return { descriptionDirty, onDocumentReady, onDescriptionChange };
+}
+
 export function EditProblemDialog({
   courseIsArchived,
   problem,
@@ -105,7 +134,7 @@ export function EditProblemDialog({
     setValue,
     setError,
     clearErrors,
-    formState: { errors, isSubmitting, isValid, isDirty },
+    formState: { errors, isSubmitting, isValid, dirtyFields },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
     defaultValues: defaults,
@@ -222,8 +251,12 @@ export function EditProblemDialog({
   // Any change to the loaded problem counts (react-hook-form compares against the loaded
   // values). Escape or the X on a dirty dialog asks before discarding; a successful save
   // closes via setOpen(false) directly and is never asked.
+  const { descriptionDirty, onDocumentReady, onDescriptionChange } = useDescriptionDirty();
+  // Every changed field EXCEPT the description, which is compared by content above.
+  const otherFieldsDirty = Object.keys(dirtyFields).some((k) => k !== 'descriptionJson');
+
   const { requestClose, discardConfirm } = useDiscardGuard({
-    dirty: open && isDirty,
+    dirty: open && (descriptionDirty || otherFieldsDirty),
     onDiscard: () => {
       setOpen(false);
       resetForm();
@@ -306,7 +339,11 @@ export function EditProblemDialog({
                           defaults.description ??
                           ''
                         }
-                        onChange={field.onChange}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          onDescriptionChange(value);
+                        }}
+                        onDocumentReady={onDocumentReady}
                         error={errors.descriptionJson?.message}
                         placeholder="Optional description"
                         minHeightClassName="min-h-32"
