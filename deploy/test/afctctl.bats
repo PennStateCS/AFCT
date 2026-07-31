@@ -380,8 +380,8 @@ EOF
   export AFCT_APP_TAG="main"
   run sh install.sh update < /dev/null
   [ "$status" -eq 0 ]
-  run grep -Eq '^AFCT_APP_TAG=v0.0.1$' .env.production; [ "$status" -eq 0 ]
   [[ "$output" == *"rolling main build"* ]]
+  run grep -Eq '^AFCT_APP_TAG=v0.0.1$' .env.production; [ "$status" -eq 0 ]
 }
 
 @test "update is refused up-front when the disk is too small for the images" {
