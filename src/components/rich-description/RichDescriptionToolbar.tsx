@@ -10,6 +10,7 @@ import {
   Bold,
   Code,
   Italic,
+  Keyboard,
   Link2,
   List,
   ListOrdered,
@@ -39,6 +40,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { EDITOR_SHORTCUTS, KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -48,19 +50,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 /** The paragraph/heading choices. H1 is reserved for the page itself. */
-/**
- * Shortcut hints name both modifiers rather than detecting the platform.
- *
- * This used to read `navigator` at module load. That is wrong in a Next app: the module is
- * evaluated on the server too, where there is no navigator, so the server rendered "Ctrl" while a
- * Mac client hydrated to "Command" and React saw a mismatch. Naming both is deterministic
- * everywhere and still tells a Mac user what to press.
- *
- * Only the TOOLTIP carries the shortcut. The accessible name stays the bare action ("Bold"), so
- * a screen reader and voice control get the verb rather than keyboard trivia.
- */
-const MOD_KEY = 'Ctrl/Command';
-
 const BLOCK_OPTIONS = [
   { value: 'paragraph', label: 'Paragraph' },
   { value: 'heading-2', label: 'Heading 2' },
@@ -116,10 +105,18 @@ export type ToolbarCommand = {
   run: (pressed: boolean) => void;
 };
 
-/** Icon-only control: tooltip text doubles as the accessible name. */
+/**
+ * Icon-only control: tooltip text doubles as the accessible name.
+ *
+ * The delay is deliberate. The shared Tooltip primitive opens instantly, which is right for a
+ * lone control and oppressive on a toolbar: sweeping the mouse across it popped a tooltip per
+ * icon. Accessibility does not need them open fast (every control's accessible name is its
+ * aria-label; the tooltip is a sighted-user affordance), so these wait for a deliberate hover,
+ * and the Keyboard shortcuts dialog carries the same information at leisure.
+ */
 function ToolbarTooltip({ label, children }: { label: string; children: React.ReactElement }) {
   return (
-    <Tooltip>
+    <Tooltip delayDuration={600}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
@@ -357,6 +354,9 @@ export function RichDescriptionToolbar({
     },
   });
 
+  // The shortcuts dialog is the toolbar's own: it needs no editor and holds no document state.
+  const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+
   if (!editor || !state) return null;
   const disabledAll = !state.editable;
 
@@ -376,7 +376,7 @@ export function RichDescriptionToolbar({
     {
       id: 'bold',
       label: 'Bold',
-      tooltip: `Bold (${MOD_KEY}+B)`,
+      tooltip: `Bold (${EDITOR_SHORTCUTS.bold})`,
       Icon: Bold,
       pressed: state.bold,
       disabled: disabledAll || !state.canBold,
@@ -385,7 +385,7 @@ export function RichDescriptionToolbar({
     {
       id: 'italic',
       label: 'Italic',
-      tooltip: `Italic (${MOD_KEY}+I)`,
+      tooltip: `Italic (${EDITOR_SHORTCUTS.italic})`,
       Icon: Italic,
       pressed: state.italic,
       disabled: disabledAll || !state.canItalic,
@@ -394,7 +394,7 @@ export function RichDescriptionToolbar({
     {
       id: 'underline',
       label: 'Underline',
-      tooltip: `Underline (${MOD_KEY}+U)`,
+      tooltip: `Underline (${EDITOR_SHORTCUTS.underline})`,
       Icon: UnderlineIcon,
       pressed: state.underline,
       disabled: disabledAll || !state.canUnderline,
@@ -403,7 +403,7 @@ export function RichDescriptionToolbar({
     {
       id: 'code',
       label: 'Inline code',
-      tooltip: `Inline code (${MOD_KEY}+E)`,
+      tooltip: `Inline code (${EDITOR_SHORTCUTS.code})`,
       Icon: Code,
       pressed: state.code,
       disabled: disabledAll || !state.canCode,
@@ -552,7 +552,7 @@ export function RichDescriptionToolbar({
     >
       {/* History */}
       <Group>
-        <ToolbarTooltip label={`Undo (${MOD_KEY}+Z)`}>
+        <ToolbarTooltip label={`Undo (${EDITOR_SHORTCUTS.undo})`}>
           <Button
             type="button"
             variant="ghost"
@@ -565,7 +565,7 @@ export function RichDescriptionToolbar({
             <Undo2 />
           </Button>
         </ToolbarTooltip>
-        <ToolbarTooltip label={`Redo (${MOD_KEY}+Shift+Z)`}>
+        <ToolbarTooltip label={`Redo (${EDITOR_SHORTCUTS.redo})`}>
           <Button
             type="button"
             variant="ghost"
@@ -619,7 +619,13 @@ export function RichDescriptionToolbar({
         {/* Link: opens the dialog (URL entry needs validation, so it is not a bare toggle).
           Pressed state shows when the caret sits inside an existing link, which is also how a
           keyboard user reaches "edit this link". */}
-        <ToolbarTooltip label={state.link ? `Edit link (${MOD_KEY}+K)` : `Add link (${MOD_KEY}+K)`}>
+        <ToolbarTooltip
+          label={
+            state.link
+              ? `Edit link (${EDITOR_SHORTCUTS.link})`
+              : `Add link (${EDITOR_SHORTCUTS.link})`
+          }
+        >
           <Toggle
             size="sm"
             aria-label={state.link ? 'Edit link' : 'Add link'}
@@ -710,13 +716,26 @@ export function RichDescriptionToolbar({
         <ToolbarOverflowMenu commands={[...alignCommands, ...structureCommands]} />
       </Group>
 
-      {/* Expanded editing, pushed to the far end because it changes the whole editing surface
-          rather than the document. `ml-auto` belongs on the GROUP: the group is the flex child of
-          the wrapping row, so on the button it pushed against nothing and never moved anything.
-          Stays enabled while the editor is read-only: expanding to read a long description is
-          useful even when it cannot be edited. */}
-      {onExpand && (
-        <Group className="ml-auto">
+      {/* The far-end group: controls about the editing surface, not the document. `ml-auto`
+          belongs on the GROUP: the group is the flex child of the wrapping row, so on a button it
+          pushed against nothing and never moved anything. Both stay enabled while the editor is
+          read-only: reading a long description expanded, or looking up a shortcut, needs no edit
+          permission. */}
+      <Group className="ml-auto">
+        <ToolbarTooltip label="Keyboard shortcuts">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label="Keyboard shortcuts"
+            aria-haspopup="dialog"
+            onClick={() => setShortcutsOpen(true)}
+          >
+            <Keyboard />
+          </Button>
+        </ToolbarTooltip>
+        {onExpand && (
           <ToolbarTooltip label="Expand editor">
             <Button
               ref={expandButtonRef}
@@ -730,8 +749,9 @@ export function RichDescriptionToolbar({
               <Maximize2 />
             </Button>
           </ToolbarTooltip>
-        </Group>
-      )}
+        )}
+      </Group>
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 }
