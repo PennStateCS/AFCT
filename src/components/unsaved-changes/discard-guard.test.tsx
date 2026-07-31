@@ -140,4 +140,20 @@ describe('useDiscardGuard', () => {
     makeDirty();
     expect(added.mock.calls.map(([type]) => type)).toContain('beforeunload');
   });
+
+  it('a value that returns to its original releases the guard', async () => {
+    // The reason the problem dialogs compare the description by CONTENT rather than trusting
+    // react-hook-form's isDirty: Tiptap normalises what it parses, so the emitted document is
+    // never textually equal to the stored JSON, and an edit-then-undo would otherwise leave the
+    // dialog asking to discard changes that no longer exist.
+    mount();
+    const field = screen.getByLabelText('Field');
+    fireEvent.change(field, { target: { value: 'typed something' } });
+    fireEvent.change(field, { target: { value: '' } });
+
+    fireEvent.keyDown(host(), { key: 'Escape', code: 'Escape' });
+
+    await waitFor(() => expect(state()).toBe('closed'));
+    expect(confirm()).toBeNull();
+  });
 });
