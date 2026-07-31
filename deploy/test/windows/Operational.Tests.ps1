@@ -8,7 +8,7 @@ directly without a running Docker daemon.
 BeforeAll {
     $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
     $script:LibDir   = Join-Path $RepoRoot 'deploy\windows\lib'
-    foreach ($m in 'Output', 'Docker', 'Validation', 'Environment', 'Config', 'Compose', 'Diagnostics') {
+    foreach ($m in 'Output', 'Docker', 'Validation', 'Environment', 'Config', 'Compose', 'Diagnostics', 'Update') {
         . (Join-Path $LibDir "$m.ps1")
     }
     $script:Bootstrap   = Join-Path $RepoRoot 'deploy\windows\install.ps1'
@@ -132,6 +132,39 @@ Describe 'Environment' {
         $b = Backup-AfctEnvFile $f
         $b | Should -Not -BeNullOrEmpty
         Test-Path $b | Should -BeTrue
+    }
+}
+
+# A pinned update ($env:AFCT_APP_TAG = 'vX.Y.Z'; afctctl update) deploys the exported tag,
+# which Compose prefers over the env file. After a healthy deploy the tag must be written
+# back, or the next plain update silently redeploys the old pin.
+Describe 'Deployed-tag persistence (Save-AfctDeployedAppTag)' {
+    BeforeEach {
+        $script:f = New-TmpFile
+        Write-AfctEnvContent $f @('NODE_ENV=production', 'AFCT_APP_TAG=v0.1.0', 'NEXTAUTH_SECRET=keepme')
+    }
+    AfterEach { Remove-Item Env:\AFCT_APP_TAG -ErrorAction SilentlyContinue }
+
+    It 'records an exported pin, preserving the rest of the file' {
+        $env:AFCT_APP_TAG = 'v0.2.0'
+        Save-AfctDeployedAppTag $f
+        Read-AfctEnvValue 'AFCT_APP_TAG' $f | Should -Be 'v0.2.0'
+        Read-AfctEnvValue 'NEXTAUTH_SECRET' $f | Should -Be 'keepme'
+        @(Get-Content $f | Where-Object { $_ -match '^AFCT_APP_TAG=' }).Count | Should -Be 1
+    }
+    It 'does nothing without an exported pin' {
+        Save-AfctDeployedAppTag $f
+        Read-AfctEnvValue 'AFCT_APP_TAG' $f | Should -Be 'v0.1.0'
+    }
+    It 'never records the rolling main build' {
+        $env:AFCT_APP_TAG = 'main'
+        Save-AfctDeployedAppTag $f
+        Read-AfctEnvValue 'AFCT_APP_TAG' $f | Should -Be 'v0.1.0'
+    }
+    It 'refuses a tag with unsupported characters' {
+        $env:AFCT_APP_TAG = 'v0.2.0 or 1=1'
+        Save-AfctDeployedAppTag $f
+        Read-AfctEnvValue 'AFCT_APP_TAG' $f | Should -Be 'v0.1.0'
     }
 }
 

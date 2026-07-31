@@ -248,5 +248,6 @@ See [Update AFCT](../operations/updates.md) for the operator-facing update flow 
 - **In-app:** the Updates tab lists restore points; downgrading restores the database
   backup taken before that version and runs the older image. This is destructive: it
   discards everything created since that backup.
-- **By pin:** set `AFCT_APP_TAG` back to a previously released tag and re-run
-  `sh install.sh update`.
+- **By pin:** run the update with `AFCT_APP_TAG` set to a previously released tag, for
+  example `AFCT_APP_TAG=v0.1.2 afctctl update`. Once the deploy passes its health check,
+  the tag is recorded in `.env.production`, so later plain updates stay on it.

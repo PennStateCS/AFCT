@@ -73,6 +73,29 @@ pin_release_tag_on_fresh_install() {
 # --------------------------------------------------------------------------- #
 # Application update + rollback
 # --------------------------------------------------------------------------- #
+# Compose interpolation prefers an exported AFCT_APP_TAG over the value in the env file,
+# so a pinned update (AFCT_APP_TAG=vX.Y.Z afctctl update) deploys that tag while the file
+# keeps the old pin, and the next plain update would silently redeploy the OLD release.
+# After a healthy deploy, record the effective tag back to the env file. The rolling
+# "main" is never recorded: pins name published releases only, matching
+# pin_release_tag_on_fresh_install.
+persist_deployed_app_tag() {
+  _deployed=${AFCT_APP_TAG:-}
+  [ -n "$_deployed" ] || return 0
+  [ "$_deployed" = "$(read_env_value AFCT_APP_TAG "$ENV_FILE")" ] && return 0
+  if [ "$_deployed" = "main" ]; then
+    warn "deployed the rolling main build without recording it as a pin (pins name published releases only). A plain 'afctctl update' will redeploy the release pinned in ${ENV_FILE}."
+    return 0
+  fi
+  case "$_deployed" in *[!A-Za-z0-9._-]*)
+    warn "AFCT_APP_TAG contains unsupported characters; not recording it in ${ENV_FILE}."
+    return 0
+    ;;
+  esac
+  set_env_flag AFCT_APP_TAG "$_deployed"
+  info "recorded the deployed version (AFCT_APP_TAG=${_deployed}) in ${ENV_FILE}."
+}
+
 do_update() {
   acquire_lock
   prepare_existing_stack
@@ -87,6 +110,7 @@ do_update() {
   pull_images
 
   if ( start_stack; wait_for_health ); then
+    persist_deployed_app_tag
     success "AFCT update completed."
     prune_superseded_images || true
     DIAG_ON_EXIT="false"
