@@ -116,6 +116,13 @@ collect_diagnostics() {
     if [ -n "$COMPOSE_KIND" ] && [ -f "$COMPOSE_FILE" ]; then
       compose_project ps > "$_bundle_dir/compose-ps.txt" 2>&1 || true
       compose_project logs --no-color --tail 400 > "$_bundle_dir/compose-logs.txt" 2>&1 || true
+      # The app container's state (health-probe log, exit code, OOM flag): the evidence
+      # behind a failed health check. .State only, never .Config, whose Env carries every
+      # secret the container was started with.
+      _diag_app_id=$(compose_project ps -q "$APP_SERVICE" 2>/dev/null | head -n 1 || true)
+      if [ -n "$_diag_app_id" ]; then
+        docker_cmd inspect -f '{{json .State}}' "$_diag_app_id" > "$_bundle_dir/app-state.json" 2>&1 || true
+      fi
     fi
   else
     printf 'Docker was unavailable or its daemon could not be reached without prompting.\n' \

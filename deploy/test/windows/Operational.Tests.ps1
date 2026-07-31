@@ -135,6 +135,46 @@ Describe 'Environment' {
     }
 }
 
+# Wait-AfctHealth reads the controller globals; the docker-facing seams
+# (Get-AfctAppContainerState, Test-AfctHttpHealth) are mocked so each failure mode can be
+# driven without a daemon.
+Describe 'Wait-AfctHealth failure modes' {
+    BeforeAll {
+        $script:HealthTimeout = 30
+        $script:HealthInterval = 1
+        $script:AppService = 'app'
+        $script:HealthPath = '/api/health'
+    }
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Start-Sleep -MockWith { }
+    }
+
+    It 'returns when the container is healthy' {
+        Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+        { Wait-AfctHealth } | Should -Not -Throw
+    }
+    It 'names an unhealthy container as the reason' {
+        Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|unhealthy' }
+        { Wait-AfctHealth } | Should -Throw '*unhealthy state*'
+    }
+    It 'fails fast on a crash loop instead of waiting out the timeout' {
+        Mock -CommandName Get-AfctAppContainerState -MockWith { 'restarting|none' }
+        { Wait-AfctHealth } | Should -Throw '*crash loop*'
+        Should -Invoke Get-AfctAppContainerState -Exactly 3
+    }
+    It 'still reports a plain timeout when the container never appears' {
+        $script:HealthTimeout = 3
+        try {
+            Mock -CommandName Get-AfctAppContainerState -MockWith { $null }
+            { Wait-AfctHealth } | Should -Throw '*did not become healthy*'
+        } finally { $script:HealthTimeout = 30 }
+    }
+}
+
 # A pinned update ($env:AFCT_APP_TAG = 'vX.Y.Z'; afctctl update) deploys the exported tag,
 # which Compose prefers over the env file. After a healthy deploy the tag must be written
 # back, or the next plain update silently redeploys the old pin.

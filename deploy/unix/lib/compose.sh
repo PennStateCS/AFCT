@@ -189,10 +189,13 @@ capture_running_images() {
     die "could not create an update rollback snapshot."
   : > "$UPDATE_IMAGE_SNAPSHOT"
 
+  # The explicit `if` keeps the loop's exit status 0 when the LAST reference is not
+  # local (normal on a pinned update, whose new tag is not pulled yet); the bare
+  # `[ -n ] && printf` form made the pipeline fail and set -e abort the whole update.
   compose_project config --images 2>/dev/null | while IFS= read -r _reference; do
     [ -n "$_reference" ] || continue
     _id=$(docker_cmd image inspect -f '{{.Id}}' "$_reference" 2>/dev/null || true)
-    [ -n "$_id" ] && printf '%s|%s\n' "$_reference" "$_id"
+    if [ -n "$_id" ]; then printf '%s|%s\n' "$_reference" "$_id"; fi
   done > "$UPDATE_IMAGE_SNAPSHOT"
 
   if [ -s "$UPDATE_IMAGE_SNAPSHOT" ]; then

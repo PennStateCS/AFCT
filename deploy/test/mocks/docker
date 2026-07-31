@@ -23,6 +23,9 @@
 #                         agree or disagree with a tag (transaction-recovery tests).
 #   MOCK_MISSING_TAGS     space-separated tags whose `docker image inspect` fails (image
 #                         not present locally), to exercise the rollback retag fallback
+#   MOCK_CONFIG_IMAGES_HONOR_TAG  if set, `compose config --images` interpolates the
+#                         exported AFCT_APP_TAG (like real compose) instead of the fixed
+#                         :latest, for the pinned-update rollback and prune tests
 
 [ -n "${MOCK_ARGS_LOG:-}" ] && printf '%s\n' "$*" >> "$MOCK_ARGS_LOG" 2>/dev/null
 
@@ -178,7 +181,13 @@ case "$cmd" in
       version) printf 'Docker Compose version v99.9.9 (mock)\n'; exit 0 ;;
       config)
         case "$*" in
-          *--images*) printf 'ghcr.io/example/afct:latest\n'; exit "${MOCK_CONFIG_RC:-0}" ;;
+          *--images*)
+            if [ -n "${MOCK_CONFIG_IMAGES_HONOR_TAG:-}" ]; then
+              printf 'ghcr.io/example/afct:%s\n' "${AFCT_APP_TAG:-latest}"
+            else
+              printf 'ghcr.io/example/afct:latest\n'
+            fi
+            exit "${MOCK_CONFIG_RC:-0}" ;;
           *--volumes*) printf '%s\n' "${MOCK_CONFIG_VOLUMES:-afct_data}"; exit 0 ;;
           *) exit "${MOCK_CONFIG_RC:-0}" ;;
         esac

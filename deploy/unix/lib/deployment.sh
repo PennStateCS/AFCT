@@ -53,6 +53,31 @@ http_health_responding() {
     curl -kfsS --max-time 10 "http://localhost${HEALTH_PATH}" >/dev/null 2>&1
 }
 
+# Best-effort evidence dump for a failed deploy: the app container's most recent health
+# probe results and its last log lines, so the failure message says WHY, not just that it
+# happened. Never fails the caller.
+explain_app_failure() {
+  _fail_id=${1:-}
+  [ -n "$_fail_id" ] || return 0
+  _probes=$(docker_cmd inspect \
+    -f '{{if .State.Health}}{{range .State.Health.Log}}exit={{.ExitCode}} {{.Output}}{{printf "\n"}}{{end}}{{end}}' \
+    "$_fail_id" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -n 3 || true)
+  if [ -n "$_probes" ]; then
+    error "recent health probe results:"
+    printf '%s\n' "$_probes" | while IFS= read -r _probe_line; do
+      error "  ${_probe_line}"
+    done
+  fi
+  _app_tail=$(docker_cmd logs --tail 20 "$_fail_id" 2>&1 | tail -n 20 || true)
+  if [ -n "$_app_tail" ]; then
+    error "last ${APP_SERVICE} log lines:"
+    printf '%s\n' "$_app_tail" | while IFS= read -r _log_line; do
+      error "  ${_log_line}"
+    done
+  fi
+  return 0
+}
+
 wait_for_health() {
   info "waiting for the application health check..."
 
@@ -61,10 +86,12 @@ wait_for_health() {
   # crash loop that will never become healthy, so fail fast instead of waiting the whole
   # timeout.
   _restarting=0
+  _seen_container="false"
   while [ "$_elapsed" -lt "$HEALTH_TIMEOUT" ]; do
     _app_id=$(compose_project ps -q "$APP_SERVICE" 2>/dev/null || true)
 
     if [ -n "$_app_id" ]; then
+      _seen_container="true"
       _state=$(docker_cmd inspect \
         -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
         "$_app_id" 2>/dev/null || printf 'missing|none')
@@ -82,14 +109,17 @@ wait_for_health() {
           return 0
           ;;
         running\|unhealthy)
+          explain_app_failure "$_app_id"
           die "the application container reported an unhealthy state."
           ;;
         exited\|*|dead\|*)
+          explain_app_failure "$_app_id"
           die "the application container stopped before becoming healthy."
           ;;
         restarting\|*)
           _restarting=$((_restarting + 1))
           if [ "$_restarting" -ge 3 ]; then
+            explain_app_failure "$_app_id"
             die "the ${APP_SERVICE} container keeps restarting (crash loop) instead of becoming healthy. Check the logs: afctctl logs"
           fi
           ;;
@@ -103,6 +133,10 @@ wait_for_health() {
     _elapsed=$((_elapsed + HEALTH_INTERVAL))
   done
 
+  if [ "$_seen_container" = "false" ]; then
+    die "the ${APP_SERVICE} container was never created, so the application did not become healthy within ${HEALTH_TIMEOUT} seconds. Check 'afctctl status'."
+  fi
+  explain_app_failure "$_app_id"
   die "the application did not become healthy within ${HEALTH_TIMEOUT} seconds."
 }
 
