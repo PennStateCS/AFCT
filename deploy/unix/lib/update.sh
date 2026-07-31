@@ -92,6 +92,7 @@ effective_app_tag() {
 rollback_to_previous_tag() {
   _rb_tag=$1
   warn "restoring the previously pinned release ${_rb_tag}..."
+  # shellcheck disable=SC2030  # the subshell-local AFCT_APP_TAG override is the point
   if [ "${LOG_ENABLED:-false}" = "true" ]; then
     ( AFCT_APP_TAG=$_rb_tag; export AFCT_APP_TAG; compose_project up -d ) >> "$LOG_FILE" 2>&1 || return 1
   else
@@ -111,6 +112,8 @@ rollback_to_previous_tag() {
 # "main" is never recorded: pins name published releases only, matching
 # pin_release_tag_on_fresh_install.
 persist_deployed_app_tag() {
+  # shellcheck disable=SC2031  # reads the caller's exported value; the subshell override
+  # in rollback_to_previous_tag never reaches this function
   _deployed=${AFCT_APP_TAG:-}
   [ -n "$_deployed" ] || return 0
   [ "$_deployed" = "$(read_env_value AFCT_APP_TAG "$ENV_FILE")" ] && return 0
