@@ -15,6 +15,13 @@ export type ReviewDataResponse = {
   problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
   /** True when the selected student submits this assignment as a group. */
   isGroup?: boolean;
+  /** The selected student's group for this assignment (grant targets), or null. */
+  groupId?: string | null;
+  /**
+   * Per-problem submission cap for the selected student: the shared base plus any
+   * extra-submission grants for them or their group. `max` null means unlimited.
+   */
+  problemLimits?: Record<string, { base: number; max: number | null; granted: number }>;
 };
 
 /**

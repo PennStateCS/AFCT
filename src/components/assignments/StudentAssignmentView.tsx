@@ -90,6 +90,17 @@ export default function StudentAssignmentPage({
   const comments = contextQuery.data?.commentsByProblem ?? EMPTY_COMMENTS;
   const problemGrades = contextQuery.data?.problemGrades ?? EMPTY_GRADES;
   const assignmentGrade = contextQuery.data?.assignmentGrade ?? null;
+  const problemLimits = contextQuery.data?.problemLimits;
+  // The cap that applies to THIS student (base plus any extra-submission grants). An
+  // unlimited effective cap keeps the base sentinel so the existing "<= 0 or null means
+  // unlimited" rendering stays the single convention.
+  const effectiveMax = useCallback(
+    (problemId: string, base: number | null | undefined) => {
+      const limit = problemLimits?.[problemId];
+      return limit && limit.max != null ? limit.max : (base ?? null);
+    },
+    [problemLimits],
+  );
   // Cold-load only: after the student adds/deletes a comment the context query is
   // invalidated and refetches; isFetching would blank the submissions/comments
   // panels on every such refetch. isPending is true only before the first load.
@@ -221,9 +232,9 @@ export default function StudentAssignmentPage({
       grade: problemGrades[assignmentProblem.problem.id] ?? null,
       maxGrade: assignmentProblem.maxPoints ?? null,
       submissionsCount: submissions[assignmentProblem.problem.id]?.length ?? 0,
-      maxSubmissions: assignmentProblem.maxSubmissions ?? null,
+      maxSubmissions: effectiveMax(assignmentProblem.problem.id, assignmentProblem.maxSubmissions),
     }));
-  }, [assignment, submissions, problemGrades]);
+  }, [assignment, submissions, problemGrades, effectiveMax]);
 
   if (loading) {
     return <div className="p-6">Loading assignment...</div>;
@@ -282,9 +293,10 @@ export default function StudentAssignmentPage({
   const selectedProblemDetails = selectedProblem
     ? {
         ...selectedProblem.problem,
-        // Points / submission cap / autograding are per-assignment (on the link).
+        // Points / submission cap / autograding are per-assignment (on the link). The
+        // cap shown is the one that applies to THIS student, grants included.
         maxPoints: selectedProblem.maxPoints,
-        maxSubmissions: selectedProblem.maxSubmissions,
+        maxSubmissions: effectiveMax(selectedProblem.problem.id, selectedProblem.maxSubmissions),
         autograderEnabled: selectedProblem.autograderEnabled,
       }
     : null;

@@ -110,6 +110,10 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/overrides`,
   assignmentOverride: (courseId: string, aid: string, oid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/overrides/${oid}`,
+  problemSubmissionGrants: (courseId: string, aid: string, pid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/problems/${pid}/grants`,
+  problemSubmissionGrant: (courseId: string, aid: string, pid: string, gid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/problems/${pid}/grants/${gid}`,
 
   // --- Global assignment routes -------------------------------------------
   assignmentByIdProblems: (id: string) => `/api/assignments/${id}/problems`,

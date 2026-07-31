@@ -19,6 +19,8 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
+import { GrantExtraSubmissionsDialog } from '@/components/dialogs/GrantExtraSubmissionsDialog';
+import { Button } from '@/components/ui/button';
 import { useReviewData, type ReviewDataResponse } from './useReviewData';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'> & { enrollmentStatus?: string | null };
@@ -96,6 +98,7 @@ export default function AssignmentSubmissions({
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  const [grantDialogOpen, setGrantDialogOpen] = useState(false);
 
   // Grade editing state (robust, GradesCard style)
   const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
@@ -340,6 +343,15 @@ export default function AssignmentSubmissions({
         maxSubmissions: problem.maxSubmissions ?? null,
       })),
     [visibleProblems, limitText, problemGrades, submissions],
+  );
+
+  // The problem whose submissions are on screen; also the target of a grant action.
+  const selectedProblem = useMemo(
+    () =>
+      selectedProblemId
+        ? (visibleProblems.find((p) => p.id === selectedProblemId) ?? null)
+        : (visibleProblems[0] ?? null),
+    [selectedProblemId, visibleProblems],
   );
 
   // Seed the local editable GRADE state from the cached review data. Submissions and
@@ -677,13 +689,25 @@ export default function AssignmentSubmissions({
               </div>
             ) : (
               (() => {
-                const selectedProblem = selectedProblemId
-                  ? visibleProblems.find((p) => p.id === selectedProblemId) || null
-                  : visibleProblems[0] || null;
                 const selectedSubs = selectedProblem
                   ? extractSubs(submissions[selectedProblem.id])
                   : [];
                 const selectedComments = selectedProblem ? comments[selectedProblem.id] || [] : [];
+
+                // Staff can hand the selected student (or their group) extra attempts on
+                // the selected problem, on top of the shared cap.
+                const grantAction = selectedProblem ? (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setGrantDialogOpen(true)}
+                      disabled={courseIsArchived}
+                    >
+                      Grant extra submissions
+                    </Button>
+                  </div>
+                ) : null;
 
                 const listCard = (
                   <ProblemListCard
@@ -702,7 +726,18 @@ export default function AssignmentSubmissions({
 
                 const workspace = (
                   <ProblemWorkspace
-                    problem={selectedProblem}
+                    // The header shows the cap the SELECTED student is working against
+                    // (base plus any grants), not just the shared base value.
+                    problem={
+                      selectedProblem
+                        ? {
+                            ...selectedProblem,
+                            maxSubmissions:
+                              reviewData?.problemLimits?.[selectedProblem.id]?.max ??
+                              selectedProblem.maxSubmissions,
+                          }
+                        : null
+                    }
                     submissions={selectedSubs}
                     assignmentDueDate={assignmentDueDate}
                     showSubmitter={reviewIsGroup}
@@ -752,6 +787,7 @@ export default function AssignmentSubmissions({
                 if (isMobile) {
                   return (
                     <div className="flex flex-col gap-4">
+                      {grantAction}
                       {listCard}
                       <div className="print:col-span-2">{workspace}</div>
                     </div>
@@ -759,15 +795,37 @@ export default function AssignmentSubmissions({
                 }
 
                 return (
-                  <div className="grid grid-cols-[280px_minmax(0,1fr)] items-stretch gap-6 print:block">
-                    <div className="min-w-0">{listCard}</div>
-                    <div className="min-w-0 print:col-span-2">{workspace}</div>
+                  <div className="space-y-3">
+                    {grantAction}
+                    <div className="grid grid-cols-[280px_minmax(0,1fr)] items-stretch gap-6 print:block">
+                      <div className="min-w-0">{listCard}</div>
+                      <div className="min-w-0 print:col-span-2">{workspace}</div>
+                    </div>
                   </div>
                 );
               })()
             )}
           </div>
         </div>
+      )}
+
+      {selectedStudent && selectedProblem && (
+        <GrantExtraSubmissionsDialog
+          open={grantDialogOpen}
+          setOpen={setGrantDialogOpen}
+          courseId={courseId}
+          assignmentId={assignmentId}
+          problemId={selectedProblem.id}
+          problemTitle={selectedProblem.title ?? null}
+          student={{
+            id: selectedStudent.id,
+            name:
+              `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+              'this student',
+          }}
+          groupId={reviewData?.groupId ?? null}
+          onGranted={refreshReview}
+        />
       )}
 
       {openDialog.submission && (

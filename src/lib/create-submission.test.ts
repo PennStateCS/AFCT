@@ -19,6 +19,7 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findUnique: vi.fn() },
   assignment: { findUnique: vi.fn() },
   submission: { count: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+  submissionGrant: { findMany: vi.fn() },
   $transaction: vi.fn(),
 }));
 const auditMock = vi.hoisted(() => vi.fn());
@@ -80,6 +81,7 @@ type Overrides = {
   lastSubmittedAt?: Date | null;
   cooldownMs?: number;
   countInTx?: number;
+  grants?: Array<Record<string, unknown>>;
 };
 
 /** Happy path by default; each test overrides only the thing it is about. */
@@ -120,6 +122,7 @@ function setup(o: Overrides = {}) {
   prismaMock.submission.findFirst.mockResolvedValue(
     o.lastSubmittedAt ? { submittedAt: o.lastSubmittedAt } : null,
   );
+  prismaMock.submissionGrant.findMany.mockResolvedValue(o.grants ?? []);
 
   const tx = txClient(created, o.countInTx ?? 0);
   prismaMock.$transaction.mockImplementation(async (cb: (c: typeof tx) => unknown) => cb(tx));
@@ -251,6 +254,50 @@ describe('createSubmission', () => {
       setup({
         link: { maxSubmissions: -1, problem: { fileName: 'p.jff', type: 'FA' } },
         priorCount: 500,
+      });
+      expect(await call()).toMatchObject({ ok: true });
+    });
+
+    it('an extra-submission grant raises the cap for its target', async () => {
+      // Base cap 3 already used; a +1 grant for this student lets a 4th through.
+      setup({
+        priorCount: 3,
+        grants: [
+          { targetType: 'STUDENT', userId: STUDENT.id, groupId: null, extraSubmissions: 1 },
+        ],
+      });
+      expect(await call()).toMatchObject({ ok: true });
+    });
+
+    it('the raised cap is enforced too, and the error names the effective limit', async () => {
+      setup({
+        priorCount: 4,
+        grants: [
+          { targetType: 'STUDENT', userId: STUDENT.id, groupId: null, extraSubmissions: 1 },
+        ],
+      });
+      const res = await call();
+      expect(res).toMatchObject({ ok: false, status: 409 });
+      expect((res as { error: string }).error).toMatch(/limit reached \(4\)/);
+    });
+
+    it("someone else's grant does not raise this student's cap", async () => {
+      setup({
+        priorCount: 3,
+        grants: [{ targetType: 'STUDENT', userId: 'other-1', groupId: null, extraSubmissions: 5 }],
+      });
+      expect(await call()).toMatchObject({ ok: false, status: 409 });
+    });
+
+    it("a GROUP grant raises the cap for the group's members", async () => {
+      setup({
+        assignment: {
+          ...baseAssignment(),
+          groupSetId: 'gs-1',
+          assignees: [{ targetType: 'GROUP', userId: null, groupId: 'grp-1' }],
+        },
+        priorCount: 3,
+        grants: [{ targetType: 'GROUP', userId: null, groupId: 'grp-1', extraSubmissions: 1 }],
       });
       expect(await call()).toMatchObject({ ok: true });
     });

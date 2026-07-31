@@ -201,6 +201,13 @@ Each assignment reports `isGroup` (whether it is a group assignment) and, for a 
 
 `solved` is `true` once the caller has earned full marks on the problem (see the tree endpoint below for details).
 
+`maxSubmissions` is the cap that applies to THIS caller: the problem's shared limit plus
+any extra submissions staff granted to them or their group. A value of `-1` (or any value
+at or below zero) means unlimited. `submissionCount` counts the attempts used against that
+cap; on a group assignment the group shares one submission set, so both fields are
+group-wide there. Remaining attempts are `maxSubmissions - submissionCount` when the cap
+is finite.
+
 `dueDate`, `lateCutoff`, and `serverTime` are UTC timestamps. Convert deadlines to the returned course timezone for display.
 
 `serverTime` allows the client to display an accurate countdown without trusting the local device clock.

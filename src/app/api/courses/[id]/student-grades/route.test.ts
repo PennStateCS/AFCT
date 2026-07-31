@@ -6,6 +6,8 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findMany: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn() },
   submission: { groupBy: vi.fn(), findMany: vi.fn() },
+  submissionGrant: { findMany: vi.fn() },
+  groupMembership: { findMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -49,6 +51,8 @@ const seedGradeData = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.submissionGrant.findMany.mockResolvedValue([]);
+  prismaMock.groupMembership.findMany.mockResolvedValue([]);
 });
 
 describe('GET /api/courses/[id]/student-grades', () => {

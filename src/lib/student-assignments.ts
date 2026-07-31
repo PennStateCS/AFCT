@@ -2,6 +2,7 @@
 import { prisma } from '@/lib/prisma';
 import type { ProblemType } from '@prisma/client';
 import { effectiveDeadline } from '@/lib/effective-deadline';
+import { effectiveMaxSubmissions, type SubmissionGrantRow } from '@/lib/submission-limits';
 import { assignedToStudentWhere } from '@/lib/assignment-visibility';
 
 export type StudentAssignmentProblem = {
@@ -17,8 +18,13 @@ export type StudentAssignmentProblem = {
   isDeterministic: boolean | null;
   autograderEnabled: boolean;
   maxPoints: number;
+  /**
+   * The cap that applies to THIS student: the problem's shared maxSubmissions plus any
+   * extra-submission grants targeting them or their group. `<= 0` means unlimited.
+   */
   maxSubmissions: number;
   grade: number | null;
+  /** Attempts used: the student's own, plus their group's on a group assignment. */
   submissionCount: number;
   /** Status of the student's most recent submission for this problem ('' if none). */
   status: string;
@@ -84,9 +90,12 @@ export async function getStudentCourseAssignments(
       dueDate: true,
       allowLateSubmissions: true,
       lateCutoff: true,
-      // Only this student's override (0 or 1 row) so we can resolve their dates.
+      // The overrides that apply to this student: their own STUDENT row and/or the GROUP
+      // row for a group they belong to (matching create-submission's resolution).
       overrides: {
-        where: { userId },
+        where: {
+          OR: [{ userId }, { studentGroup: { memberships: { some: { userId } } } }],
+        },
         select: {
           targetType: true,
           userId: true,
@@ -104,8 +113,16 @@ export async function getStudentCourseAssignments(
   const assignmentIds = assignments.map((a) => a.id);
   if (assignmentIds.length === 0) return [];
 
-  // All four reads depend only on `assignmentIds`, so run them concurrently.
-  const [problems, grades, submissionCounts, latestSubmissions] = await Promise.all([
+  // Attempts and grants follow the same scope as submit enforcement: the student's own
+  // rows plus their group's on a group assignment. The membership subquery keeps each
+  // read self-contained (no precomputed group-id list to thread through).
+  const groupScopedWhere = {
+    OR: [{ studentId: userId }, { studentGroup: { memberships: { some: { userId } } } }],
+  };
+
+  // All the reads depend only on `assignmentIds`, so run them concurrently.
+  const [problems, grades, submissionCounts, latestSubmissions, grants, memberships] =
+    await Promise.all([
     prisma.assignmentProblem.findMany({
       where: { assignmentId: { in: assignmentIds } },
       select: {
@@ -134,16 +151,47 @@ export async function getStudentCourseAssignments(
     }),
     prisma.submission.groupBy({
       by: ['assignmentId', 'problemId'],
-      where: { assignmentId: { in: assignmentIds }, studentId: userId },
+      where: { assignmentId: { in: assignmentIds }, ...groupScopedWhere },
       _count: { id: true },
     }),
     prisma.submission.findMany({
-      where: { assignmentId: { in: assignmentIds }, studentId: userId },
+      where: { assignmentId: { in: assignmentIds }, ...groupScopedWhere },
       distinct: ['assignmentId', 'problemId'],
       orderBy: { createdAt: 'desc' },
       select: { assignmentId: true, problemId: true, status: true },
     }),
+    prisma.submissionGrant.findMany({
+      where: {
+        assignmentId: { in: assignmentIds },
+        OR: [{ userId }, { studentGroup: { memberships: { some: { userId } } } }],
+      },
+      select: {
+        assignmentId: true,
+        problemId: true,
+        targetType: true,
+        userId: true,
+        groupId: true,
+        extraSubmissions: true,
+      },
+    }),
+    prisma.groupMembership.findMany({
+      where: { userId },
+      select: { groupSetId: true, groupId: true },
+    }),
   ]);
+
+  // The student's group per group set, for resolving GROUP-targeted grants per assignment.
+  const groupBySet = new Map(memberships.map((m) => [m.groupSetId, m.groupId]));
+  const groupIdByAssignment = new Map(
+    assignments.map((a) => [a.id, a.groupSetId ? (groupBySet.get(a.groupSetId) ?? null) : null]),
+  );
+  const grantMap = new Map<string, SubmissionGrantRow[]>();
+  for (const g of grants) {
+    const key = `${g.assignmentId}:${g.problemId}`;
+    const list = grantMap.get(key);
+    if (list) list.push(g);
+    else grantMap.set(key, [g]);
+  }
 
   const gradeMap = new Map<string, number | null>();
   grades.forEach((g) => gradeMap.set(`${g.assignmentId}:${g.problemId}`, g.grade ?? null));
@@ -155,6 +203,13 @@ export async function getStudentCourseAssignments(
   const byAssignment: Record<string, StudentAssignmentProblem[]> = {};
   for (const p of problems) {
     const key = `${p.assignmentId}:${p.problem.id}`;
+    const myGroupId = groupIdByAssignment.get(p.assignmentId) ?? null;
+    const limit = effectiveMaxSubmissions(
+      Number(p.maxSubmissions ?? 0),
+      grantMap.get(key) ?? [],
+      userId,
+      myGroupId ? [myGroupId] : [],
+    );
     (byAssignment[p.assignmentId] ??= []).push({
       id: p.problem.id,
       title: p.problem.title,
@@ -165,7 +220,8 @@ export async function getStudentCourseAssignments(
       isDeterministic: p.problem.isDeterministic,
       autograderEnabled: p.autograderEnabled,
       maxPoints: Number(p.maxPoints ?? 0),
-      maxSubmissions: Number(p.maxSubmissions ?? 0),
+      // Unlimited keeps the base sentinel so clients still read `<= 0` as unlimited.
+      maxSubmissions: limit.max ?? Number(p.maxSubmissions ?? 0),
       grade: gradeMap.get(key) ?? null,
       submissionCount: countMap.get(key) ?? 0,
       status: statusMap.get(key) ?? '',
@@ -174,6 +230,7 @@ export async function getStudentCourseAssignments(
 
   const now = new Date();
   const resolved = assignments.map((a) => {
+    const myGroupId = groupIdByAssignment.get(a.id) ?? null;
     const eff = effectiveDeadline(
       {
         unlockAt: a.unlockAt,
@@ -183,6 +240,7 @@ export async function getStudentCourseAssignments(
       },
       a.overrides ?? [],
       userId,
+      myGroupId ? [myGroupId] : [],
     );
     // Before an assignment unlocks, the student sees it exists and when it opens, but not
     // its description or problems (Canvas-style content lock).

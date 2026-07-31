@@ -85,4 +85,9 @@ export type StudentAssignmentContext = {
   problemGrades: Record<string, number | null>;
   submissionsByProblem: Record<string, StudentProblemSubmission[]>;
   commentsByProblem: Record<string, StudentProblemComment[]>;
+  /**
+   * Per-problem submission cap for THIS caller: the shared base plus any
+   * extra-submission grants for them or their group. `max` null means unlimited.
+   */
+  problemLimits?: Record<string, { max: number | null; granted: number }>;
 };

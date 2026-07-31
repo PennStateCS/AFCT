@@ -329,6 +329,29 @@ export const OverrideCreateApiSchema = z
 export const OverrideUpdateApiSchema = z.object({ ...OverrideDateFields });
 
 /**
+ * Extra submissions for one student or group on one assignment problem, on top of the
+ * problem's shared cap. Additive: repeat grants to the same target accumulate. The
+ * handler enforces the rest: the target is on the roster / in the assignment's group
+ * set, and the problem's cap is not unlimited (a grant would change nothing).
+ */
+export const SubmissionGrantCreateApiSchema = z
+  .object({
+    userId: z.string().min(1).optional(),
+    groupId: z.string().min(1).optional(),
+    extraSubmissions: z.number().int().min(1).max(100),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (!!d.userId === !!d.groupId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['userId'],
+        message: 'Provide exactly one target: a student or a group.',
+      });
+    }
+  });
+
+/**
  * Change an assignment's individual/group type. `groupSetId` null makes it individual; a
  * set id makes it a group assignment tied to that set. Switching type resets the audience
  * and clears every assignee + override (they reference the old type's targets), so the
@@ -364,3 +387,4 @@ export type UpdateAssignmentInput = z.infer<typeof UpdateAssignmentSchema>;
 export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
 export type OverrideCreateInput = z.infer<typeof OverrideCreateApiSchema>;
 export type OverrideUpdateInput = z.infer<typeof OverrideUpdateApiSchema>;
+export type SubmissionGrantCreateInput = z.infer<typeof SubmissionGrantCreateApiSchema>;

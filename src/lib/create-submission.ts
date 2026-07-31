@@ -18,6 +18,7 @@ import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { errMessage } from '@/lib/errors';
 import { evaluateSubmissionWindow } from '@/lib/submission-window';
 import { effectiveDeadline } from '@/lib/effective-deadline';
+import { effectiveMaxSubmissions } from '@/lib/submission-limits';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 import { lockGroupSetIfUsed } from '@/lib/group-set-service';
 
@@ -213,6 +214,19 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     ? { assignmentId, problemId, studentGroupId: submissionGroupId }
     : { assignmentId, problemId, studentId: user.id };
 
+  // The extra-submission grants that apply to this submitter: their own STUDENT grant
+  // and/or a GROUP grant for a group of theirs on this assignment. Resolved into the
+  // effective cap by lib/submission-limits (unlimited stays unlimited).
+  const grants = await prisma.submissionGrant.findMany({
+    where: {
+      assignmentId,
+      problemId,
+      OR: [{ userId: user.id }, { groupId: { in: [...studentGroupIds] } }],
+    },
+    select: { targetType: true, userId: true, groupId: true, extraSubmissions: true },
+  });
+  const limit = effectiveMaxSubmissions(link.maxSubmissions, grants, user.id, studentGroupIds);
+
   // Authorization: admins may submit anywhere; everyone else must be on the roster.
   if (!(await canAccessCourse(user, courseId))) {
     await audit('SUBMISSION_FORBIDDEN', 'SECURITY', {
@@ -258,17 +272,19 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     };
   }
 
-  // Per-problem cap (staff exempt; `<= 0` is unlimited). Fast path; the authoritative
-  // check runs again inside the serializable transaction below.
+  // Per-problem cap: the base maxSubmissions plus any per-target grants (staff exempt;
+  // base `<= 0` is unlimited). Fast path; the authoritative check runs again inside the
+  // serializable transaction below.
   const isCourseStaff = submitterIsStaff;
-  if (!isCourseStaff && link.maxSubmissions > 0) {
+  if (!isCourseStaff && limit.max != null) {
     const priorCount = await prisma.submission.count({ where: countScope });
-    if (priorCount >= link.maxSubmissions) {
+    if (priorCount >= limit.max) {
       await audit('SUBMISSION_LIMIT_REACHED', 'WARNING', {
-        maxSubmissions: link.maxSubmissions,
+        maxSubmissions: limit.max,
+        grantedExtra: limit.granted,
         priorCount,
       });
-      return { ok: false, status: 409, error: `Submission limit reached (${link.maxSubmissions}).` };
+      return { ok: false, status: 409, error: `Submission limit reached (${limit.max}).` };
     }
   }
 
@@ -392,9 +408,9 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     try {
       submission = await prisma.$transaction(
         async (tx) => {
-          if (!isCourseStaff && link.maxSubmissions > 0) {
+          if (!isCourseStaff && limit.max != null) {
             const priorCount = await tx.submission.count({ where: countScope });
-            if (priorCount >= link.maxSubmissions) {
+            if (priorCount >= limit.max) {
               throw new SubmissionCapReachedError();
             }
           }
@@ -423,7 +439,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     } catch (err) {
       cleanupFile(uploadedFilePath);
       if (err instanceof SubmissionCapReachedError) {
-        return { ok: false, status: 409, error: `Submission limit reached (${link.maxSubmissions}).` };
+        return { ok: false, status: 409, error: `Submission limit reached (${limit.max}).` };
       }
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
         return { ok: false, status: 409, error: 'A concurrent submission conflicted; please retry.' };
