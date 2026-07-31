@@ -73,6 +73,38 @@ pin_release_tag_on_fresh_install() {
 # --------------------------------------------------------------------------- #
 # Application update + rollback
 # --------------------------------------------------------------------------- #
+# The tag Compose will actually deploy: an exported AFCT_APP_TAG wins over the env file
+# (matching Compose interpolation precedence), and an empty or absent value falls back to
+# the Compose default "main".
+effective_app_tag() {
+  if [ "${AFCT_APP_TAG+set}" = "set" ]; then
+    printf '%s' "${AFCT_APP_TAG:-main}"
+    return 0
+  fi
+  _eff=$(read_env_value AFCT_APP_TAG "$ENV_FILE")
+  printf '%s' "${_eff:-main}"
+}
+
+# Redeploy the release that was pinned before this update. The image-ID snapshot only
+# covers same-tag updates (it re-tags recorded IDs under the deployed references), so a
+# failed PINNED update to a different tag has nothing to re-tag; its rollback is simply
+# recreating the stack on the previous tag, whose images are still local.
+rollback_to_previous_tag() {
+  _rb_tag=$1
+  warn "restoring the previously pinned release ${_rb_tag}..."
+  # shellcheck disable=SC2030  # the subshell-local AFCT_APP_TAG override is the point
+  if [ "${LOG_ENABLED:-false}" = "true" ]; then
+    ( AFCT_APP_TAG=$_rb_tag; export AFCT_APP_TAG; compose_project up -d ) >> "$LOG_FILE" 2>&1 || return 1
+  else
+    ( AFCT_APP_TAG=$_rb_tag; export AFCT_APP_TAG; compose_project up -d ) || return 1
+  fi
+  if ( wait_for_health ); then
+    success "The previously pinned AFCT release (${_rb_tag}) was restored."
+    return 0
+  fi
+  return 1
+}
+
 # Compose interpolation prefers an exported AFCT_APP_TAG over the value in the env file,
 # so a pinned update (AFCT_APP_TAG=vX.Y.Z afctctl update) deploys that tag while the file
 # keeps the old pin, and the next plain update would silently redeploy the OLD release.
@@ -80,6 +112,8 @@ pin_release_tag_on_fresh_install() {
 # "main" is never recorded: pins name published releases only, matching
 # pin_release_tag_on_fresh_install.
 persist_deployed_app_tag() {
+  # shellcheck disable=SC2031  # reads the caller's exported value; the subshell override
+  # in rollback_to_previous_tag never reaches this function
   _deployed=${AFCT_APP_TAG:-}
   [ -n "$_deployed" ] || return 0
   [ "$_deployed" = "$(read_env_value AFCT_APP_TAG "$ENV_FILE")" ] && return 0
@@ -100,7 +134,15 @@ do_update() {
   acquire_lock
   prepare_existing_stack
   DIAG_ON_EXIT="true"
-  info "updating AFCT to the latest published images..."
+
+  _prev_tag=$(read_env_value AFCT_APP_TAG "$ENV_FILE")
+  [ -n "$_prev_tag" ] || _prev_tag="main"
+  _target_tag=$(effective_app_tag)
+  if [ "$_target_tag" != "$_prev_tag" ]; then
+    info "updating AFCT from ${_prev_tag} to the pinned ${_target_tag}..."
+  else
+    info "updating AFCT to the latest published ${_target_tag} images..."
+  fi
 
   validate_compose
   # Before anything is downloaded, so a short disk stops the update while the running
@@ -112,17 +154,23 @@ do_update() {
   if ( start_stack; wait_for_health ); then
     persist_deployed_app_tag
     success "AFCT update completed."
-    prune_superseded_images || true
+    # The previous tag stays protected as the operator's downgrade path.
+    prune_superseded_images "$_prev_tag" || true
     DIAG_ON_EXIT="false"
     return 0
   fi
 
-  error "the newly downloaded AFCT version did not pass its health check."
-  collect_diagnostics "failed-update-before-rollback" || true
+  error "AFCT ${_target_tag} did not pass its health check."
+  collect_diagnostics "failed-update-from-${_prev_tag}-to-${_target_tag}" || true
   DIAG_ON_EXIT="false"
 
   if rollback_update_images; then
     warn "the update failed, but AFCT was returned to the previously deployed images."
+    return 1
+  fi
+
+  if [ "$_target_tag" != "$_prev_tag" ] && rollback_to_previous_tag "$_prev_tag"; then
+    warn "the update to ${_target_tag} failed, but AFCT was returned to ${_prev_tag}."
     return 1
   fi
 
