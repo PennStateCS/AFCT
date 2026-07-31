@@ -164,13 +164,19 @@ do_update() {
   collect_diagnostics "failed-update-from-${_prev_tag}-to-${_target_tag}" || true
   DIAG_ON_EXIT="false"
 
-  if rollback_update_images; then
+  # Two rollbacks, and which one applies depends on how the images changed. A pinned update to
+  # a different tag can simply redeploy the old tag, which still names the old images. A
+  # same-tag update cannot: the pull moved the tag, so the recorded image IDs are the only way
+  # back. Trying the image snapshot first in the cross-tag case redeploys the FAILING tag (it
+  # is still exported, so `up -d` resolves to it), which burns a second full health timeout and,
+  # if that attempt happened to pass, reported a rollback while running the new version.
+  if [ "$_target_tag" != "$_prev_tag" ]; then
+    if rollback_to_previous_tag "$_prev_tag"; then
+      warn "the update to ${_target_tag} failed, but AFCT was returned to ${_prev_tag}."
+      return 1
+    fi
+  elif rollback_update_images; then
     warn "the update failed, but AFCT was returned to the previously deployed images."
-    return 1
-  fi
-
-  if [ "$_target_tag" != "$_prev_tag" ] && rollback_to_previous_tag "$_prev_tag"; then
-    warn "the update to ${_target_tag} failed, but AFCT was returned to ${_prev_tag}."
     return 1
   fi
 

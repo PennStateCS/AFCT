@@ -58,7 +58,7 @@ STATE_DIR="$SHARED_DIR"
 # --------------------------------------------------------------------------- #
 # Configuration (deployment-tool version is distinct from the app image version)
 # --------------------------------------------------------------------------- #
-INSTALLER_VERSION="2.4.0"
+INSTALLER_VERSION="2.4.1"
 REPO=${AFCT_REPO:-PennStateCS/AFCT}
 
 # The stack is defined by a MUTABLE runtime Compose file under the shared directory, not
