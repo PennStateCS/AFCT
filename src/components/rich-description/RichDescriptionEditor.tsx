@@ -384,8 +384,42 @@ export function RichDescriptionEditor({
         target={mathTarget}
       />
       {/* The document area is its own positioning context so the placeholder overlays the text
-          and never the toolbar above it. */}
-      <div className={cn('relative', expanded && 'min-h-0 flex-1 overflow-y-auto')}>
+          and never the toolbar above it.
+
+          It is also the click net. The contenteditable is stretched to fill this box (flex, see
+          below), so most clicks land on ProseMirror and place the caret natively. Clicks that
+          still miss it (the expanded view's gutters beside the centered column, the padding)
+          are mapped to the nearest document position here rather than doing nothing: a click
+          in the box should always give the author a caret. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- a mouse-only
+          convenience, not an interactive control: it forwards stray clicks to the contenteditable
+          textbox inside, which is the real control and is fully keyboard-reachable (Tab). Giving
+          this wrapper a role or tabindex would announce a second phantom control to AT. */}
+      <div
+        onMouseDown={(event) => {
+          if (!editor || disabled) return;
+          // Inside the contenteditable: ProseMirror places the caret itself; stay out of it.
+          if (editor.view.dom.contains(event.target as Node)) return;
+          event.preventDefault();
+          const pos = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (pos) editor.chain().focus().setTextSelection(pos.pos).run();
+          else editor.commands.focus('end');
+        }}
+        className={cn(
+          'relative',
+          expanded
+            ? 'min-h-0 flex-1 overflow-y-auto'
+            : // The author can drag the editor taller, like a textarea (the browser's native
+              // resize grip; not keyboard-operable, but the same trade the Textarea control
+              // already makes). The min-height rides here so resizing has a floor, and the
+              // max keeps the grip from swallowing the page.
+              cn(
+                'flex flex-col overflow-auto',
+                minHeightClassName,
+                !disabled && 'max-h-[80vh] resize-y',
+              ),
+        )}
+      >
         {/* Placeholder is rendered here (not via the Placeholder extension) so it needs no extra
             dependency and stays out of the document. aria-hidden: the accessible name comes from
             the field label, and screen readers announce the empty textbox already. */}
@@ -404,15 +438,19 @@ export function RichDescriptionEditor({
             stays a plain container (a second role="textbox" would double up for screen readers). */}
         <EditorContent
           editor={editor}
-          // Long words and code must wrap rather than scroll the page sideways. The min-height
-          // goes on this wrapper (a runtime-built Tailwind class would not be generated), and
-          // `.tiptap` stretches to fill it so clicking the blank area focuses the document.
+          // Long words and code must wrap rather than scroll the page sideways.
+          //
+          // Flex, not `h-full`, to stretch `.tiptap`: the parent's height comes from a
+          // min-height, which a percentage height resolves against as AUTO, so `h-full` left
+          // the contenteditable exactly as tall as its text and the rest of the box dead to
+          // clicks. Flex stretch works against a min-height. This is what makes the empty part
+          // of the box clickable at all.
           //
           // Expanded caps the measure at max-w-3xl: the overlay is as wide as the viewport, but
           // prose set to a 2000px line length is unreadable.
           className={cn(
-            'afct-rich-text px-3 py-2 break-words [&_.tiptap]:h-full [&_.tiptap]:outline-none',
-            expanded ? 'mx-auto min-h-full w-full max-w-3xl py-6' : minHeightClassName,
+            'afct-rich-text flex flex-col px-3 py-2 break-words [&_.tiptap]:flex-1 [&_.tiptap]:outline-none',
+            expanded ? 'mx-auto min-h-full w-full max-w-3xl py-6' : 'flex-1',
           )}
         />
       </div>
