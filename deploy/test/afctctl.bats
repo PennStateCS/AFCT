@@ -384,6 +384,56 @@ EOF
   run grep -Eq '^AFCT_APP_TAG=v0.0.1$' .env.production; [ "$status" -eq 0 ]
 }
 
+# --- pinned updates roll back and keep a downgrade path ------------------------
+#
+# The image-ID snapshot only helps same-tag updates (it re-tags IDs under the deployed
+# references). A pinned update to a DIFFERENT tag has nothing to snapshot, so its
+# rollback is redeploying the previously pinned release, and pruning must keep that
+# release's images as the downgrade path.
+
+@test "a failed pinned update falls back to redeploying the previous release" {
+  write_complete_env
+  export AFCT_APP_TAG="v0.2.0"
+  export MOCK_CONFIG_IMAGES_HONOR_TAG=1
+  export MOCK_MISSING_TAGS="v0.2.0"          # the new tag has no local images to snapshot
+  export MOCK_HEALTH_FLIP_AT=2               # new version unhealthy; the redeploy is healthy
+  export MOCK_HEALTH_COUNT_FILE="$TESTDIR/health-count"
+  run sh install.sh update < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"returned to v0.0.1"* ]]
+  run grep -Eq '^AFCT_APP_TAG=v0.0.1$' .env.production; [ "$status" -eq 0 ]
+}
+
+@test "a failed update names the version and shows the health evidence" {
+  write_complete_env
+  export AFCT_APP_TAG="v0.2.0"
+  export MOCK_HEALTH="unhealthy"
+  run sh install.sh update < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"AFCT v0.2.0 did not pass its health check"* ]]
+  [[ "$output" == *"recent health probe results:"* ]]
+}
+
+@test "a pinned update keeps the previous release's images as the downgrade path" {
+  write_complete_env
+  export AFCT_APP_TAG="v0.2.0"
+  export MOCK_CONFIG_IMAGES_HONOR_TAG=1
+  export MOCK_DEPLOYED_TAG=v0.0.1            # image inspect resolves per-tag IDs
+  export MOCK_RMI_LOG="$TESTDIR/rmi.log"
+  export MOCK_IMAGES="sha256:img-v0.2.0|ghcr.io/pennstatecs/afct-dashboard:v0.2.0
+sha256:img-v0.0.1|ghcr.io/pennstatecs/afct-dashboard:v0.0.1
+sha256:img-ancient|ghcr.io/pennstatecs/afct-dashboard:v0.0.0
+sha256:pg|postgres:15-alpine"
+  run sh install.sh update < /dev/null
+  [ "$status" -eq 0 ]
+  # Anything older than the previous release still goes...
+  run grep -q 'afct-dashboard:v0.0.0' "$MOCK_RMI_LOG"; [ "$status" -eq 0 ]
+  # ...but the release we just left stays as the downgrade path...
+  run grep -q 'afct-dashboard:v0.0.1' "$MOCK_RMI_LOG"; [ "$status" -ne 0 ]
+  # ...and images we don't own are never touched.
+  run grep -q 'postgres' "$MOCK_RMI_LOG"; [ "$status" -ne 0 ]
+}
+
 @test "update is refused up-front when the disk is too small for the images" {
   write_complete_env
   # An unreachable requirement stands in for a full disk. The real failure this

@@ -292,9 +292,13 @@ ensure_docker_boot() {
 }
 
 # Remove AFCT images that are neither in use nor needed for rollback. rollback_update_images
-# re-tags recorded image IDs, so those are protected here by ID rather than by tag.
-# Anything that cannot be positively identified is kept; failures never fail the update.
+# re-tags recorded image IDs, so those are protected here by ID rather than by tag. An
+# optional argument names a previous release tag whose images are also kept: after a
+# pinned update to a different tag the snapshot has nothing recorded, and the previous
+# release is the operator's downgrade path. Anything that cannot be positively identified
+# is kept; failures never fail the update.
 prune_superseded_images() {
+  _protect_tag=${1:-}
   _keep=$(mktemp "${TMPDIR:-/tmp}/afct-keep.XXXXXX") || return 0
 
   if [ -n "${UPDATE_IMAGE_SNAPSHOT:-}" ] && [ -s "$UPDATE_IMAGE_SNAPSHOT" ]; then
@@ -304,6 +308,13 @@ prune_superseded_images() {
     [ -n "$_reference" ] || continue
     docker_cmd image inspect -f '{{.Id}}' "$_reference" 2>/dev/null || true
   done >> "$_keep"
+  if [ -n "$_protect_tag" ]; then
+    ( AFCT_APP_TAG=$_protect_tag; export AFCT_APP_TAG; compose_project config --images 2>/dev/null ) | \
+      while IFS= read -r _reference; do
+        [ -n "$_reference" ] || continue
+        docker_cmd image inspect -f '{{.Id}}' "$_reference" 2>/dev/null || true
+      done >> "$_keep"
+  fi
 
   if [ ! -s "$_keep" ]; then
     rm -f "$_keep"
