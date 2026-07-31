@@ -27,6 +27,23 @@ CERT_POLL_SECONDS="${CERT_POLL_SECONDS:-15}"
 HSTS_CONF="/etc/nginx/hsts.conf"
 HSTS_HEADER='add_header Strict-Transport-Security "max-age=31536000" always;'
 
+# Where the plain-HTTP redirect should send people.
+#
+# `$host` carries no port, so the redirect always pointed at the default 443. That is right in
+# production, where this container really is on 80 and 443, and wrong anywhere the ports are
+# remapped: the dev stack publishes 8443, so http://localhost:8080 bounced the browser to
+# https://localhost/ and nothing was listening. Set HTTPS_PORT when the published port is not 443.
+REDIRECT_CONF="/etc/nginx/redirect-target.conf"
+HTTPS_PORT="${HTTPS_PORT:-443}"
+
+write_redirect_target() {
+  if [ "$HTTPS_PORT" = "443" ]; then
+    printf 'set $afct_https_target "https://$host$request_uri";\n' > "$REDIRECT_CONF"
+  else
+    printf 'set $afct_https_target "https://$host:%s$request_uri";\n' "$HTTPS_PORT" > "$REDIRECT_CONF"
+  fi
+}
+
 # HSTS is only safe with a real cert: once a browser sees it, it won't let the
 # user click through a self-signed warning for a year. So on=real, off=self-signed.
 write_hsts() {
@@ -45,8 +62,9 @@ fi
 
 mkdir -p "$ACTIVE_DIR"
 
-# The include must exist before any `nginx -t`, or config validation fails.
+# The includes must exist before any `nginx -t`, or config validation fails.
 write_hsts off
+write_redirect_target
 
 # Generate the self-signed fallback once.
 ensure_self_signed() {
