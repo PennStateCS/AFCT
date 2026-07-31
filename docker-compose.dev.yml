@@ -161,6 +161,11 @@ services:
       app:
         condition: service_started
 
+    environment:
+      # Dev publishes HTTPS on 8443, so the plain-HTTP redirect has to name that port. Without
+      # it nginx sends the browser to https://localhost/ (port 443), where nothing is listening.
+      HTTPS_PORT: '8443'
+
     ports:
       - '8080:80'
       - '8443:443'
