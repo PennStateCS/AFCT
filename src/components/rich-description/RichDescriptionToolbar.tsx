@@ -218,8 +218,12 @@ const Group = ({ children, className }: { children: React.ReactNode; className?:
 );
 
 /** Separators live BETWEEN groups, never inside one, so a wrap cannot strand one. */
-const GroupDivider = () => (
-  <Separator orientation="vertical" className="mx-1 !h-6 flex-none" aria-hidden="true" />
+const GroupDivider = ({ className }: { className?: string }) => (
+  <Separator
+    orientation="vertical"
+    className={cn('mx-1 !h-6 flex-none', className)}
+    aria-hidden="true"
+  />
 );
 
 /**
@@ -464,6 +468,29 @@ export function RichDescriptionToolbar({
     },
   ];
 
+  /**
+   * Alignment, described the same way the other commands are, so the overflow menu can render it.
+   *
+   * The visible control stays a ToggleGroup: a block has exactly one alignment, and a radio group
+   * says that in a way a row of independent buttons does not. In the menu the same three become
+   * checkable items, where only one is ever ticked.
+   */
+  const alignCommands: ToolbarCommand[] = ALIGN_OPTIONS.map(({ value, label, Icon }) => ({
+    id: `align-${value}`,
+    label,
+    tooltip: label,
+    Icon,
+    pressed: state.align === value,
+    disabled: disabledAll || !state.canAlign,
+    run: (pressed) => {
+      // Choosing the alignment a block already has is a no-op, not a toggle back to unaligned.
+      if (!pressed) return;
+      const chain = editor.chain().focus();
+      if (value === 'left') chain.unsetTextAlign().run();
+      else chain.setTextAlign(value).run();
+    },
+  }));
+
   /** Render a command as a toolbar control, picking a toggle or a button from its shape. */
   const renderCommand = (command: ToolbarCommand) => {
     const { id, label: name, tooltip, Icon, disabled, pressed, run } = command;
@@ -623,12 +650,12 @@ export function RichDescriptionToolbar({
         </ToolbarTooltip>
       </Group>
 
-      <GroupDivider />
+      <GroupDivider className="@max-[40rem]/toolbar:hidden" />
 
       {/* Alignment: a single-select group, since a block has exactly one alignment. Radix's
           single type ignores a press on the already-selected item, so the user cannot toggle
-          alignment off into an undefined state. */}
-      <Group>
+          alignment off into an undefined state. Below the narrow tier it moves into the menu. */}
+      <Group className="@max-[40rem]/toolbar:hidden">
         <ToggleGroup
           type="single"
           size="sm"
@@ -666,23 +693,37 @@ export function RichDescriptionToolbar({
           first wrap rather than after it. Exactly one of the two is displayed at any width, so no
           command is ever reachable twice. */}
       <Group className="@max-[52rem]/toolbar:hidden">{structureCommands.map(renderCommand)}</Group>
-      <Group className="hidden @max-[52rem]/toolbar:flex">
+
+      {/* Two menus rather than one, because a menu cannot see the toolbar.
+          Radix portals the menu content to the body, so it is outside the container and container
+          queries do not reach it. One INSTANCE per tier sidesteps that: each has a fixed command
+          list, and the container query only decides which trigger is displayed. Exactly one is
+          ever visible, so nothing is reachable twice.
+
+          Medium: the five structure commands. Narrow (a description inside a dialog): alignment
+          joins them, which is what stops the row overflowing and stranding the expand button on a
+          line of its own. */}
+      <Group className="hidden @max-[52rem]/toolbar:@min-[40rem]/toolbar:flex">
         <ToolbarOverflowMenu commands={structureCommands} />
       </Group>
+      <Group className="hidden @max-[40rem]/toolbar:flex">
+        <ToolbarOverflowMenu commands={[...alignCommands, ...structureCommands]} />
+      </Group>
 
-      {/* Expanded editing. Pushed to the far end (ml-auto) because it changes the whole
-          editing surface rather than the document, so it does not belong among the
-          formatting controls. Stays enabled while the editor is read-only: expanding to read
-          a long description is useful even when it cannot be edited. */}
+      {/* Expanded editing, pushed to the far end because it changes the whole editing surface
+          rather than the document. `ml-auto` belongs on the GROUP: the group is the flex child of
+          the wrapping row, so on the button it pushed against nothing and never moved anything.
+          Stays enabled while the editor is read-only: expanding to read a long description is
+          useful even when it cannot be edited. */}
       {onExpand && (
-        <Group>
+        <Group className="ml-auto">
           <ToolbarTooltip label="Expand editor">
             <Button
               ref={expandButtonRef}
               type="button"
               variant="ghost"
               size="icon"
-              className="ml-auto size-8"
+              className="size-8"
               aria-label="Expand editor"
               onClick={onExpand}
             >
