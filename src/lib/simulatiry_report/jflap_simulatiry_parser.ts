@@ -3,20 +3,20 @@ import { createHash } from 'crypto';
 import { XMLParser } from 'fast-xml-parser';
 
 export interface JflapSimilarityData {
-  fileUserId: string | undefined;
-  fileHash: string | undefined;
+  fileHashEmail: string | undefined;
+  fileHashData: string | undefined;
   calcHash: string;
 }
 
-// Shape of the <data><one>/<two> block appended after <structure> in submitted .jff
-// files, carrying the submitting user's id and a content hash used for similarity
-// detection. Narrowed from the parser's `unknown` output before use below.
+// Shape of the parsed JFLAP file before the appended hash comments.
 interface ParsedJflapFile {
-  data?: {
-    one?: unknown;
-    two?: unknown;
-  };
   structure?: unknown;
+}
+
+function extractCommentTagValue(line: string, tagName: string): string | undefined {
+  const regex = new RegExp(`^\s*<!--\s*<${tagName}>([^<]*)<\/${tagName}>\s*-->\s*$`);
+  const match = line.match(regex);
+  return match?.[1]?.trim();
 }
 
 export async function jflapSimilarityParser(filePath: string): Promise<JflapSimilarityData | null> {
@@ -33,14 +33,15 @@ export async function jflapSimilarityParser(filePath: string): Promise<JflapSimi
     const parser = new XMLParser();
     const parsed = parser.parse(fileContents) as ParsedJflapFile;
 
-    const fileUserId: string | undefined = parsed.data?.one as string | undefined;
-    const fileHash: string | undefined = parsed.data?.two as string | undefined;
+    const lines = fileContents.trimEnd().split(/\r?\n/);
+    const fileHashEmail = extractCommentTagValue(lines[lines.length - 2] ?? '', 'hashE');
+    const fileHashData = extractCommentTagValue(lines[lines.length - 1] ?? '', 'hashD');
 
-    // Hash the parsed <structure> (excluding the appended <data> block) so it can be
-    const calcHash = createHash('sha256').update(JSON.stringify(parsed.structure)).digest('hex');
-    console.log(parsed.structure);
+    const calcHash = createHash('sha256')
+      .update(JSON.stringify(parsed.structure))
+      .digest('hex');
 
-    return { fileUserId, fileHash, calcHash };
+    return { fileHashEmail, fileHashData, calcHash };
   } catch (error) {
     console.error('Failed to read JFLAP file:', error);
     return null;

@@ -678,8 +678,8 @@ async function evaluateWithJar(
 
       // Run simularity report
       const similarityData = await jflapSimilarityParser(uploadedFilePath);
-      const fileUserId = similarityData?.fileUserId ?? undefined;
-      const fileHash = similarityData?.fileHash ?? undefined;
+      const fileUserId = similarityData?.fileHashEmail ?? undefined;
+      const fileHash = similarityData?.fileHashData ?? undefined;
       const contentHash = similarityData?.calcHash ?? undefined;
 
       const similarityReportJson = await check_file_status(fileHash, contentHash, fileUserId, submission.studentId);
