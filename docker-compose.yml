@@ -171,13 +171,16 @@ services:
       start_period: 30s
 
   db-backup:
-    # Same Postgres image so pg_dump matches the server version exactly. Runs a
-    # daily backup to the db_backups volume, a matched pair of the database dump
-    # and a tarball of the upload volumes (DB rows reference files by name, so both
-    # are needed for a coherent restore). The schedule (on/off, hour, retention)
-    # comes from System Settings; see backup.sh. Copy the db_backups volume
-    # off-host regularly: it protects against bad data/migrations, but not host loss.
-    image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+    # The built backup image: Postgres (so pg_dump matches the server version exactly)
+    # plus GNU tar and gpg, which backup.sh needs to write the single .tar.gz archive
+    # holding the database dump AND the upload volumes (DB rows reference files by
+    # name, so both are needed for a coherent restore). The raw postgres image only
+    # has busybox tar, which silently dropped the database from the archive. The
+    # schedule (on/off, hour, retention) comes from System Settings; see backup.sh.
+    # Copy the db_backups volume off-host regularly: it protects against bad
+    # data/migrations, but not host loss.
+    build:
+      context: ./docker/backup
     container_name: afct-db-backup
     restart: unless-stopped
     logging: *default-logging

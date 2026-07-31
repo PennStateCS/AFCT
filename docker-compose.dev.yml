@@ -207,7 +207,14 @@ services:
   db-backup:
     # Mirrors the prod backup service so backups work in dev too, daily schedule
     # from System Settings plus the on-demand "back up now" trigger.
-    image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+    #
+    # The BUILT image, not raw postgres: backup.sh needs GNU tar (it repeats -C to put the
+    # dump and the uploads in one archive) and gpg, which the Dockerfile installs. On the raw
+    # image, busybox tar silently wrote archives with no database in them and every backup
+    # failed verification. The bind mount below still shadows the baked-in script, so
+    # backup.sh stays live-editable in dev.
+    build:
+      context: ./docker/backup
     container_name: afct-dev-db-backup
     restart: unless-stopped
     logging: *default-logging
