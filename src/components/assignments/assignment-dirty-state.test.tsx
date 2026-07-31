@@ -288,3 +288,68 @@ describe('assignment dirty state: the unsaved-changes guard', () => {
     expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).toBeNull();
   });
 });
+
+/**
+ * A second edit, after a save has already landed.
+ *
+ * Saving refetches, so the form is handed genuinely new stored content, which is a real change and
+ * must not be confused with the same-content re-render above. The editor keeps its document across
+ * that refetch (it is uncontrolled and is only remounted when the assignment changes), so it never
+ * reports a fresh baseline, and the form has to rebaseline itself when the save succeeds. Getting
+ * this wrong strands the form: Save stays disabled no matter what is typed, and because the form
+ * also looks pristine, leaving the page does not warn.
+ */
+describe('assignment dirty state: after a save', () => {
+  beforeAll(warmRichDescriptionEditor, WARM_TIMEOUT_MS);
+  beforeEach(() => {
+    vi.clearAllMocks();
+    putMock.mockResolvedValue({ id: 'a1' });
+  });
+
+  it('goes pristine after saving, then dirty again on the next edit', async () => {
+    const { rerender } = await mount(structuredClone(stored));
+
+    await openEquation('a^n b^n');
+    commit();
+    await waitFor(() => expect(save()).not.toBeDisabled());
+    fireEvent.click(save());
+    await waitFor(() => expect(putMock).toHaveBeenCalledTimes(1));
+
+    // The refetch lands: the stored document is now the one that was just saved.
+    const saved = putMock.mock.calls[0][1].descriptionJson as RichDescriptionEnvelope;
+    rerender(
+      <AssignmentBasicsForm
+        {...BASE}
+        initialDescription="Show that a^n b^n is not regular"
+        initialDescriptionJson={structuredClone(saved)}
+      />,
+    );
+
+    await waitFor(() => expect(save()).toBeDisabled());
+
+    // A second edit still has to count.
+    await openEquation('\sum_{i=1}^{n} i', 'Display');
+    commit();
+    await waitFor(() => expect(save()).not.toBeDisabled());
+  });
+
+  it('keeps the title editable and dirty-tracked after a save', async () => {
+    const { rerender } = await mount(structuredClone(stored));
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Renamed' } });
+    fireEvent.click(save());
+    await waitFor(() => expect(putMock).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <AssignmentBasicsForm
+        {...BASE}
+        initialTitle="Renamed"
+        initialDescriptionJson={structuredClone(stored)}
+      />,
+    );
+    await waitFor(() => expect(save()).toBeDisabled());
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Renamed again' } });
+    expect(save()).not.toBeDisabled();
+  });
+});

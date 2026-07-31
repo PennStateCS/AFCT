@@ -52,20 +52,6 @@ export function AssignmentBasicsForm({
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * The stored document as a stable string.
-   *
-   * It has to be content-derived, not object-derived. The page renders this form with
-   * `initialDescriptionJson={asRichDescription(assignment.descriptionJson)}`, and that runs a Zod
-   * parse on every render, so the prop is a NEW object each time with identical contents. An
-   * effect that depended on it re-ran on every parent render, and it cleared the dirty flag.
-   *
-   * That is what made equations look broken while typing looked fine: typing re-marks the form
-   * dirty on the next keystroke, so a wiped flag was invisible. Inserting an equation emits once,
-   * and the very next render of the page threw the edit away.
-   */
-  const initialKey = serializeRichDescription(initialDescriptionJson);
-
-  /**
    * What the editor loaded, in the editor's own terms.
    *
    * Tiptap normalises what it parses, so the stored JSON and the document holding exactly that
@@ -77,18 +63,31 @@ export function AssignmentBasicsForm({
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [currentKey, setCurrentKey] = useState<string | null>(null);
 
-  // Re-seed when the assignment genuinely changes (a save refetch with new content, or switching
-  // assignment), keyed on values rather than identities so a re-render alone is not a change.
+  // Re-seed the title when the stored value genuinely changes, keyed on the value rather than the
+  // object so a re-render alone is not a change.
   useEffect(() => {
     setTitle(initialTitle);
+    setError(null);
+  }, [assignmentId, initialTitle]);
+
+  /**
+   * Re-seed the description only when the assignment itself changes.
+   *
+   * Clearing the baseline means waiting for the editor to report a new one, and it only reports on
+   * creation, so this is correct exactly when the editor is remounted: on `assignmentId`, which is
+   * its key. Keying this on the stored content instead stranded the form after a save, because a
+   * save refetches new content without remounting the editor, so the baseline was cleared and
+   * never replaced: Save stayed disabled through every later edit, and since the form also looked
+   * pristine, leaving the page did not warn. Rebaselining after a save is `save`'s job, below.
+   */
+  useEffect(() => {
     setDescriptionJson(initialDescriptionJson ?? null);
     setLoadedKey(null);
     setCurrentKey(null);
-    setError(null);
-    // initialDescriptionJson is deliberately absent: initialKey is its content, and depending on
-    // the object itself is exactly the bug this replaces (a new identity every render).
+    // initialDescriptionJson is deliberately absent: it is a new object on every render, and
+    // depending on the object itself is the bug this replaces.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assignmentId, initialTitle, initialDescription, initialKey]);
+  }, [assignmentId]);
 
   /**
    * Dirty means the current values differ from the stored ones, not "an edit event happened".
@@ -132,6 +131,11 @@ export function AssignmentBasicsForm({
         // this stays a plain-text write of the existing description.
         ...(descriptionJson ? { descriptionJson } : { description: initialDescription }),
       });
+      // What was just sent is now what is stored, so that becomes the baseline. The refetch cannot
+      // do this: the editor keeps its document across it and only reports a baseline when it is
+      // remounted. Reading the key captured by this render is the point, not a stale read; edits
+      // made while the save was in flight were not part of it and stay unsaved.
+      setLoadedKey(currentKey);
       showToast.success('Assignment updated');
       onSaved?.();
     } catch (err) {
