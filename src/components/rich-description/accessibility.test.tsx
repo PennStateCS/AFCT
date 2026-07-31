@@ -77,8 +77,16 @@ describe('toolbar accessible names', () => {
       .filter(Boolean);
 
     expect(names.every((n) => n.length > 0)).toBe(true);
-    // Duplicates would make "click Bold" ambiguous for voice control.
-    expect(new Set(names).size).toBe(names.length);
+
+    /**
+     * The overflow menu is rendered once per width tier, and all of them say "More formatting".
+     * That is not ambiguous on screen: a container query displays exactly one, so a user only ever
+     * meets a single trigger. jsdom applies no CSS, so every tier is in the tree here. Collapse
+     * them to one before checking, and keep asserting uniqueness for everything else, because a
+     * genuine duplicate ("click Bold" hitting two controls) is what this test is for.
+     */
+    const distinct = names.filter((n, i) => n !== 'More formatting' || names.indexOf(n) === i);
+    expect(new Set(distinct).size).toBe(distinct.length);
   });
 });
 
