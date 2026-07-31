@@ -88,14 +88,41 @@ function Set-AfctReleasePin {
 }
 
 # --- update with automatic image rollback ------------------------------------------------
+
+# The local image ID for a reference, or $null when it has none and when it should not be
+# recorded at all.
+#
+# Two traps, both of which silently disabled rollback and pruning on Windows:
+#
+# - $LASTEXITCODE is read BEFORE narrowing with Select-Object. Piping a native command into
+#   `Select-Object -First 1` stops the pipeline early and corrupts $LASTEXITCODE to -1 even on
+#   success, the same trap Get-AfctAppContainerState documents. Every id was therefore
+#   discarded, so the snapshot was always empty and nothing was ever pruned.
+# - Digest-pinned references (the postgres image) are skipped. A digest names one exact image
+#   that no pull can move, so it never needs restoring, and `docker image tag` refuses a digest
+#   as its target, which failed the restore loop before the stack was ever brought back up.
+function Get-AfctImageId {
+    param([string]$Reference)
+    if (-not $Reference) { return $null }
+    if ($Reference -like '*@sha256:*') { return $null }
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $out = & docker image inspect -f '{{.Id}}' $Reference 2>&1 | ForEach-Object { "$_" } }
+    finally { $ErrorActionPreference = $eap }
+    $code = $LASTEXITCODE
+    if ($code -ne 0) { return $null }
+    $id = $out | Select-Object -First 1
+    if (-not $id) { return $null }
+    return $id
+}
+
 function Save-AfctRunningImages {
     $script:AfctImageSnapshot = @()
     $references = Invoke-AfctCompose config --images
     if ($LASTEXITCODE -ne 0) { $references = @() }
     foreach ($reference in $references) {
-        if (-not $reference) { continue }
-        $id = (& docker image inspect -f '{{.Id}}' $reference 2>&1 | ForEach-Object { "$_" } | Select-Object -First 1)
-        if ($LASTEXITCODE -eq 0 -and $id) {
+        $id = Get-AfctImageId $reference
+        if ($id) {
             $script:AfctImageSnapshot += [pscustomobject]@{ Reference = $reference; Id = $id }
         }
     }
@@ -128,9 +155,8 @@ function Remove-AfctSupersededImages {
         $current = Invoke-AfctCompose config --images
         if ($LASTEXITCODE -eq 0) {
             foreach ($reference in $current) {
-                if (-not $reference) { continue }
-                $id = (& docker image inspect -f '{{.Id}}' $reference 2>&1 | ForEach-Object { "$_" } | Select-Object -First 1)
-                if ($LASTEXITCODE -eq 0 -and $id) { $keepIds[$id] = $true }
+                $id = Get-AfctImageId $reference
+                if ($id) { $keepIds[$id] = $true }
             }
         }
         if ($ProtectTag) {
@@ -140,9 +166,8 @@ function Remove-AfctSupersededImages {
                 $previous = Invoke-AfctCompose config --images
                 if ($LASTEXITCODE -eq 0) {
                     foreach ($reference in $previous) {
-                        if (-not $reference) { continue }
-                        $id = (& docker image inspect -f '{{.Id}}' $reference 2>&1 | ForEach-Object { "$_" } | Select-Object -First 1)
-                        if ($LASTEXITCODE -eq 0 -and $id) { $keepIds[$id] = $true }
+                        $id = Get-AfctImageId $reference
+                        if ($id) { $keepIds[$id] = $true }
                     }
                 }
             } finally {
@@ -255,12 +280,20 @@ function Invoke-AfctUpdate {
     try { Invoke-AfctDiagnostics -Reason "failed-update-from-$prevTag-to-$targetTag" | Out-Null }
     catch { Write-AfctWarn 'could not collect a diagnostics archive.' }
 
-    if (Restore-AfctPreviousImages) {
+    # Two rollbacks, and which one applies depends on how the images changed. A pinned update to
+    # a different tag can simply redeploy the old tag, which still names the old images. A
+    # same-tag update cannot: the pull moved the tag, so the recorded image IDs are the only way
+    # back. Trying the image snapshot first in the cross-tag case redeploys the FAILING tag (it
+    # is still the effective one, so `up -d` resolves to it), which burns a second full health
+    # timeout and, if that attempt happened to pass, reported a rollback while running the new
+    # version. Matches do_update in deploy/unix/lib/update.sh.
+    if ($targetTag -cne $prevTag) {
+        if (Restore-AfctPreviousRelease $prevTag) {
+            Write-AfctWarn "the update to $targetTag failed, but AFCT was returned to $prevTag."
+            exit 1
+        }
+    } elseif (Restore-AfctPreviousImages) {
         Write-AfctWarn 'the update failed, but AFCT was returned to the previously deployed images.'
-        exit 1
-    }
-    if (($targetTag -cne $prevTag) -and (Restore-AfctPreviousRelease $prevTag)) {
-        Write-AfctWarn "the update to $targetTag failed, but AFCT was returned to $prevTag."
         exit 1
     }
     throw 'afct-fatal: the update failed and automatic rollback was unsuccessful. Review the logs with: afctctl logs'

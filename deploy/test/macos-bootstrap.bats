@@ -83,10 +83,10 @@ switch_only() {
   [[ "$output" == *"$VERSION"* ]]
 }
 
-@test "the bundle is version 2.4.0" {
-  [ "$VERSION" = "2.4.0" ]
+@test "the bundle is version 2.4.1" {
+  [ "$VERSION" = "2.4.1" ]
   case "$(basename "$TARBALL")" in
-    afct-macos-deploy-2.4.0.tar.gz) : ;;
+    afct-macos-deploy-2.4.1.tar.gz) : ;;
     *) echo "unexpected bundle: $TARBALL"; return 1 ;;
   esac
 }

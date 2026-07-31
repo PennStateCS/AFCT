@@ -362,3 +362,60 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"AFCTCTL_ARGS:install"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# Update rollback: the digest-pinned image in the compose set
+# ---------------------------------------------------------------------------
+# deploy/docker-compose.yml pins postgres by digest. `docker image tag` refuses a digest as
+# its target, so recording that reference made the restore loop fail on it and return before
+# the stack was ever brought back up: a failed update had no rollback at all. The mock docker
+# in deploy/test/mocks only ever emitted a plain tag, which is why nothing caught it.
+
+@test "capture_running_images skips digest-pinned references" {
+  run sh -c '
+    die() { echo "DIE:$*"; exit 1; }
+    info() { :; }; warn() { :; }
+    . "'"$UNIX_DIR"'/lib/compose.sh"
+    compose_project() {
+      printf "ghcr.io/example/afct-app:v1\n"
+      printf "postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e\n"
+    }
+    docker_cmd() { printf "sha256:someid\n"; }
+    capture_running_images
+    cat "$UPDATE_IMAGE_SNAPSHOT"
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ghcr.io/example/afct-app:v1|sha256:someid"* ]]
+  [[ "$output" != *"@sha256:cd17e2ac"* ]]
+}
+
+@test "rollback_update_images brings the stack back up when a digest-pinned image is present" {
+  run sh -c '
+    die() { echo "DIE:$*"; exit 1; }
+    info() { :; }; warn() { :; }; success() { echo "SUCCESS:$*"; }
+    . "'"$UNIX_DIR"'/lib/compose.sh"
+    compose_project() {
+      case "$1" in
+        config) printf "ghcr.io/example/afct-app:v1\n"
+                printf "postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e\n" ;;
+        up) echo "UP" ;;
+      esac
+    }
+    # Real docker behaviour: a digest target is rejected outright.
+    docker_cmd() {
+      case "$*" in
+        *"image tag"*|"image tag"*)
+          for _a in "$@"; do _last=$_a; done
+          case "$_last" in *@sha256:*) echo "refusing to create a tag with a digest reference" >&2; return 1 ;; esac
+          return 0 ;;
+        *) printf "sha256:someid\n" ;;
+      esac
+    }
+    wait_for_health() { return 0; }
+    capture_running_images
+    rollback_update_images
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"UP"* ]]
+  [[ "$output" == *"SUCCESS:"* ]]
+}

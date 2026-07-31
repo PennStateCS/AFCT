@@ -194,6 +194,11 @@ capture_running_images() {
   # `[ -n ] && printf` form made the pipeline fail and set -e abort the whole update.
   compose_project config --images 2>/dev/null | while IFS= read -r _reference; do
     [ -n "$_reference" ] || continue
+    # Digest-pinned references (the postgres image) are skipped. A digest names one exact
+    # image and no pull can move it, so it never needs restoring; and `docker image tag`
+    # refuses a digest as its target, which failed the whole rollback loop before `up -d`
+    # was ever reached. That left a failed update with no rollback at all.
+    case "$_reference" in *@sha256:*) continue ;; esac
     _id=$(docker_cmd image inspect -f '{{.Id}}' "$_reference" 2>/dev/null || true)
     if [ -n "$_id" ]; then printf '%s|%s\n' "$_reference" "$_id"; fi
   done > "$UPDATE_IMAGE_SNAPSHOT"
