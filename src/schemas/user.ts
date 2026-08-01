@@ -2,13 +2,15 @@
 import { z } from 'zod';
 import { formBoolean, formBooleanOptional } from './fields';
 import { passwordRules, PASSWORD_MAX_LENGTH } from '@/lib/password-policy';
+import { COURSE_ROLE_VALUES } from '@/lib/course-roles';
 
 // App-level role set (no Prisma counterpart; the global User.role was dropped).
 export const RoleEnum = z.enum(['ADMIN', 'FACULTY', 'TA', 'STUDENT']);
-// Keep in sync with the Prisma `CourseRole` enum. Kept as string literals (not
-// z.nativeEnum) so this schema stays importable from client components without
-// pulling @prisma/client into the browser bundle.
-export const CourseRoleEnum = z.enum(['FACULTY', 'TA', 'STUDENT']);
+// Built from the plain literal in lib/course-roles rather than z.nativeEnum, so this schema
+// stays importable from client components without pulling @prisma/client into the browser
+// bundle. The list lives over there, not here, so that the roster tables can read it without
+// importing this module and dragging zod along with it.
+export const CourseRoleEnum = z.enum(COURSE_ROLE_VALUES);
 
 /** Body for changing a user's course role (CourseEditUserDialog ↔ roster/[userId] PATCH). */
 export const CourseRoleChangeSchema = z.object({ role: CourseRoleEnum });

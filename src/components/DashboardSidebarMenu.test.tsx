@@ -162,6 +162,12 @@ describe('DashboardSidebarMenu', () => {
 
     renderWithClient(<DashboardSidebarMenu />);
 
+    // The dialog is loaded on demand and only rendered once opened, so it does not exist until
+    // the menu item is used. That is what keeps zod out of every dashboard route's bundle.
+    expect(ChangePasswordDialogMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Change Password'));
+    await waitFor(() => expect(ChangePasswordDialogMock).toHaveBeenCalled());
+
     const props = ChangePasswordDialogMock.mock.calls.at(-1)?.[0] as {
       onChangePassword: (oldP: string, newP: string) => Promise<void>;
     };

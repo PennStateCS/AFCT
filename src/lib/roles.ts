@@ -1,8 +1,12 @@
 import type { CourseRole } from '@prisma/client';
-import { CourseRoleEnum } from '@/schemas/user';
 import type { Row } from '@tanstack/react-table';
 
-export const courseRoleOptions: CourseRole[] = CourseRoleEnum.options as CourseRole[];
+// Sourced from a zod-free module on purpose: this file is reachable from every roster table,
+// and taking the list off the zod schema put the whole zod runtime in those bundles.
+// See lib/course-roles.
+import { courseRoleOptions } from '@/lib/course-roles';
+
+export { courseRoleOptions };
 
 // Role ordering used for sorting roster tables by course role.
 export const roleOrder: Record<string, number> = {

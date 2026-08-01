@@ -19,7 +19,17 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
-import { GrantExtraSubmissionsDialog } from '@/components/dialogs/GrantExtraSubmissionsDialog';
+import dynamic from 'next/dynamic';
+
+// On demand: the grant dialog carries the form stack and was the last thing putting zod on the
+// assignment route. Staff open it rarely, and never on arrival.
+const GrantExtraSubmissionsDialog = dynamic(
+  () =>
+    import('@/components/dialogs/GrantExtraSubmissionsDialog').then(
+      (m) => m.GrantExtraSubmissionsDialog,
+    ),
+  { ssr: false },
+);
 import { Button } from '@/components/ui/button';
 import { useReviewData, type ReviewDataResponse } from './useReviewData';
 
@@ -99,6 +109,11 @@ export default function AssignmentSubmissions({
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [grantDialogOpen, setGrantDialogOpen] = useState(false);
+  // Set on first open and never cleared, so the dynamic import above stays deferred.
+  const [grantMounted, setGrantMounted] = useState(false);
+  useEffect(() => {
+    if (grantDialogOpen) setGrantMounted(true);
+  }, [grantDialogOpen]);
 
   // Grade editing state (robust, GradesCard style)
   const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
@@ -809,7 +824,7 @@ export default function AssignmentSubmissions({
         </div>
       )}
 
-      {selectedStudent && selectedProblem && (
+      {selectedStudent && selectedProblem && grantMounted && (
         <GrantExtraSubmissionsDialog
           open={grantDialogOpen}
           setOpen={setGrantDialogOpen}

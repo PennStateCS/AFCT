@@ -10,8 +10,24 @@ import { DataTable } from '@/components/ui/data-table';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { CreateUserDialog } from '@/components/dialogs/CreateUserDialog';
-import { ImportUsersDialog } from '@/components/dialogs/ImportUsersDialog';
+import dynamic from 'next/dynamic';
+// On demand: both carry the form stack and neither is open on arrival.
+const CreateUserDialog = dynamic(
+  () => import('@/components/dialogs/CreateUserDialog').then((m) => m.CreateUserDialog),
+  { ssr: false },
+);
+const ImportUsersDialog = dynamic(
+  () => import('@/components/dialogs/ImportUsersDialog').then((m) => m.ImportUsersDialog),
+  { ssr: false },
+);
+/** True once `open` has first been true, so a dynamic import stays deferred until first use. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 import { UserRoundPlus, Users } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
@@ -33,6 +49,8 @@ export default function UsersClient() {
 
   const [open, setOpen] = useState(searchParams.get('create') === 'open');
   const [importOpen, setImportOpen] = useState(false);
+  const createMounted = useMountedOnce(open);
+  const importMounted = useMountedOnce(importOpen);
   const { timezone } = useEffectiveTimezone();
 
   const [pageIndex, setPageIndex] = useState(0);
@@ -253,8 +271,12 @@ export default function UsersClient() {
         />
       </CardContent>
 
-      <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={refresh} />
-      <ImportUsersDialog open={importOpen} setOpen={setImportOpen} onSuccess={refresh} />
+      {createMounted && (
+        <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={refresh} />
+      )}
+      {importMounted && (
+        <ImportUsersDialog open={importOpen} setOpen={setImportOpen} onSuccess={refresh} />
+      )}
     </Card>
   );
 }

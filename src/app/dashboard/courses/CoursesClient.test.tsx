@@ -74,7 +74,11 @@ describe('CoursesClient', () => {
 
     renderWithClient(<CoursesClient initialCourses={[course('c1', 'Original')]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Trigger Refresh' }));
+    // The create dialog is loaded on demand and only rendered once opened, so open it before
+    // reaching for the handle its mock provides.
+    fireEvent.click(screen.getAllByRole('button', { name: /Create Course/ })[0]);
+    const trigger = await screen.findByRole('button', { name: 'Trigger Refresh' });
+    fireEvent.click(trigger);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/me/courses', { cache: 'no-store' });
@@ -91,7 +95,11 @@ describe('CoursesClient', () => {
 
     renderWithClient(<CoursesClient initialCourses={[course('c1', 'Active')]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Trigger Refresh' }));
+    // The create dialog is loaded on demand and only rendered once opened, so open it before
+    // reaching for the handle its mock provides.
+    fireEvent.click(screen.getAllByRole('button', { name: /Create Course/ })[0]);
+    const trigger = await screen.findByRole('button', { name: 'Trigger Refresh' });
+    fireEvent.click(trigger);
 
     await waitFor(() => {
       expect(screen.getByText('Active')).toBeInTheDocument();
@@ -109,7 +117,11 @@ describe('CoursesClient', () => {
 
     renderWithClient(<CoursesClient initialCourses={[course('c1', 'Original')]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Trigger Refresh' }));
+    // The create dialog is loaded on demand and only rendered once opened, so open it before
+    // reaching for the handle its mock provides.
+    fireEvent.click(screen.getAllByRole('button', { name: /Create Course/ })[0]);
+    const trigger = await screen.findByRole('button', { name: 'Trigger Refresh' });
+    fireEvent.click(trigger);
 
     await waitFor(() => {
       expect(screen.getByText('Failed to refresh courses. Please try again.')).toBeInTheDocument();

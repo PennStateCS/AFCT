@@ -139,12 +139,13 @@ describe('UsersClient', () => {
     });
   });
 
-  it('opens dialog from query string and clears query on close', () => {
+  it('opens dialog from query string and clears query on close', async () => {
     searchState.create = 'open';
 
     renderWithClient(<UsersClient />);
 
-    expect(screen.getByTestId('create-dialog-state')).toHaveTextContent('open');
+    // The dialog is loaded on demand, so it arrives a tick after the render that opens it.
+    expect(await screen.findByTestId('create-dialog-state')).toHaveTextContent('open');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Dialog' }));
 
@@ -171,7 +172,8 @@ describe('UsersClient', () => {
   it('opens import users dialog from button click', async () => {
     renderWithClient(<UsersClient />);
 
-    expect(screen.getByTestId('bulk-dialog-state')).toHaveTextContent('closed');
+    // Loaded on demand: it does not exist at all until the button is used, which is the point.
+    expect(screen.queryByTestId('bulk-dialog-state')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Import Users' }));
 

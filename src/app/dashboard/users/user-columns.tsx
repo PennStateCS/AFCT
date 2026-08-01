@@ -8,10 +8,39 @@ import type { UserListItem } from '@/lib/users-list';
 
 import { Button } from '@/components/ui/button';
 import { Badge as StatusBadge } from '@/components/ui/badge';
-import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
-import { ResetPasswordDialog } from '@/components/dialogs/ResetPasswordDialog';
-import { ChangeUserEmailDialog } from '@/components/dialogs/ChangeUserEmailDialog';
+import dynamic from 'next/dynamic';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+
+/**
+ * The row dialogs load on demand, and this file is worth the care because it is rendered PER
+ * ROW: a hundred-person roster used to mount three heavy dialogs and four confirms for every
+ * row, none of them open. That is a runtime cost as well as a bundle one, and the bundle side
+ * put zod on both this page and the course roster, which share these columns.
+ *
+ * `ConfirmDialog` stays static: it is small, carries no form machinery, and is used app-wide,
+ * so it is in the shared chunk regardless.
+ */
+const EditUserDialog = dynamic(
+  () => import('@/components/dialogs/EditUserDialog').then((m) => m.EditUserDialog),
+  { ssr: false },
+);
+const ResetPasswordDialog = dynamic(
+  () => import('@/components/dialogs/ResetPasswordDialog').then((m) => m.ResetPasswordDialog),
+  { ssr: false },
+);
+const ChangeUserEmailDialog = dynamic(
+  () => import('@/components/dialogs/ChangeUserEmailDialog').then((m) => m.ChangeUserEmailDialog),
+  { ssr: false },
+);
+
+/** True once `open` has first been true. See the dynamic imports above. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -231,6 +260,9 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
+  const editUserMounted = useMountedOnce(editUserOpen);
+  const resetMounted = useMountedOnce(resetOpen);
+  const changeEmailMounted = useMountedOnce(changeEmailOpen);
 
   const fullName = `${user.firstName} ${user.lastName}`;
 
@@ -409,30 +441,36 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
 
   return (
     <>
-      <EditUserDialog
-        user={user as unknown as User}
-        open={editUserOpen}
-        setOpen={setEditUserOpen}
-        onSave={async () => {
-          onUserUpdate();
-        }}
-      />
+      {editUserMounted && (
+        <EditUserDialog
+          user={user as unknown as User}
+          open={editUserOpen}
+          setOpen={setEditUserOpen}
+          onSave={async () => {
+            onUserUpdate();
+          }}
+        />
+      )}
 
-      <ResetPasswordDialog
-        open={resetOpen}
-        setOpen={setResetOpen}
-        onResetPassword={handlePasswordReset}
-        targetUserName={fullName}
-      />
+      {resetMounted && (
+        <ResetPasswordDialog
+          open={resetOpen}
+          setOpen={setResetOpen}
+          onResetPassword={handlePasswordReset}
+          targetUserName={fullName}
+        />
+      )}
 
-      <ChangeUserEmailDialog
-        open={changeEmailOpen}
-        setOpen={setChangeEmailOpen}
-        userId={user.id}
-        currentEmail={user.email}
-        userName={fullName}
-        onChanged={onUserUpdate}
-      />
+      {changeEmailMounted && (
+        <ChangeUserEmailDialog
+          open={changeEmailOpen}
+          setOpen={setChangeEmailOpen}
+          userId={user.id}
+          currentEmail={user.email}
+          userName={fullName}
+          onChanged={onUserUpdate}
+        />
+      )}
 
       <ConfirmDialog
         open={deactivateOpen}

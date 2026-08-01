@@ -11,7 +11,21 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
 import { ScrollText } from 'lucide-react';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
-import { DownloadLogsDialog } from '@/components/dialogs/DownloadLogsDialog';
+import dynamic from 'next/dynamic';
+
+// On demand: the export dialog is the only thing putting the form stack on this page.
+const DownloadLogsDialog = dynamic(
+  () => import('@/components/dialogs/DownloadLogsDialog').then((m) => m.DownloadLogsDialog),
+  { ssr: false },
+);
+/** True once `open` has first been true, so a dynamic import stays deferred until first use. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 import { apiPaths } from '@/lib/api-paths';
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
@@ -81,6 +95,7 @@ export default function SystemLogsClient() {
   const [title, setTitle] = useState('');
   const [viewerOpen, setViewerOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const downloadMounted = useMountedOnce(downloadOpen);
 
   // Debounce typing, and jump back to the first page when the query changes.
   useEffect(() => {
@@ -323,7 +338,9 @@ export default function SystemLogsClient() {
           onOpenChange={setViewerOpen}
           title={title}
         />
+        {downloadMounted && (
         <DownloadLogsDialog open={downloadOpen} onOpenChange={setDownloadOpen} />
+      )}
       </CardContent>
     </Card>
   );

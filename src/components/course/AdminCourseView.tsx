@@ -1,10 +1,10 @@
+import dynamic from 'next/dynamic';
 import { Settings } from 'lucide-react';
 
 import { Tabs } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { CourseHeaderContent } from '@/components/course/CourseHeader';
 import { CourseTabBar, CourseTabPanel } from '@/components/course/course-tabs';
-import { CourseSettingsForm } from '@/components/course/CourseSettingsForm';
 import { CourseStatusCard } from '@/components/course/CourseStatusCard';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
@@ -15,20 +15,65 @@ import { GroupSetsCard } from '@/components/groups/GroupSetsCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
-import {
-  DuplicateAssignmentDialog,
-  type DuplicateSourceAssignment,
-} from '@/components/dialogs/DuplicateAssignmentDialog';
-import {
-  DuplicateProblemDialog,
-  type DuplicateSourceProblem,
-} from '@/components/dialogs/DuplicateProblemDialog';
-import { ImportAssignmentDialog } from '@/components/dialogs/ImportAssignmentDialog';
-import { ImportProblemDialog } from '@/components/dialogs/ImportProblemDialog';
+import type { DuplicateSourceAssignment } from '@/components/dialogs/DuplicateAssignmentDialog';
+import type { DuplicateSourceProblem } from '@/components/dialogs/DuplicateProblemDialog';
+
+/**
+ * The duplicate/import dialogs load on demand: they carry the form stack, and a course page
+ * that is only being read should not pay for four dialogs nobody opened. Each is also rendered
+ * only once opened, because a dynamic import is deferred only while its component is unrendered.
+ */
+const DuplicateAssignmentDialog = dynamic(
+  () =>
+    import('@/components/dialogs/DuplicateAssignmentDialog').then(
+      (m) => m.DuplicateAssignmentDialog,
+    ),
+  { ssr: false },
+);
+const DuplicateProblemDialog = dynamic(
+  () => import('@/components/dialogs/DuplicateProblemDialog').then((m) => m.DuplicateProblemDialog),
+  { ssr: false },
+);
+const ImportAssignmentDialog = dynamic(
+  () => import('@/components/dialogs/ImportAssignmentDialog').then((m) => m.ImportAssignmentDialog),
+  { ssr: false },
+);
+const ImportProblemDialog = dynamic(
+  () => import('@/components/dialogs/ImportProblemDialog').then((m) => m.ImportProblemDialog),
+  { ssr: false },
+);
+
+/**
+ * The settings form is the last thing holding zod on this route, and it is a whole tab that
+ * most visits never open: people come here to look at assignments, problems or the roster.
+ * `CourseTabPanel` already renders its children only while the tab is active, so the import is
+ * genuinely deferred without any extra gating.
+ *
+ * Unlike the dialogs above this one gets a `loading` state, because it occupies the panel the
+ * author is looking at rather than appearing over it, and an empty panel reads as a bug.
+ */
+const CourseSettingsForm = dynamic(
+  () => import('@/components/course/CourseSettingsForm').then((m) => m.CourseSettingsForm),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="text-muted-foreground w-full text-sm">Loading course settings…</p>
+    ),
+  },
+);
 import type { FullCourse, TabType } from '@/types/course';
 import type { Problem, Course } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+/** True once `open` has first been true. See the dynamic imports above. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 
 interface AdminCourseViewProps {
   course: FullCourse;
@@ -103,6 +148,11 @@ export function AdminCourseView({
     onDuplicate: setDuplicateProblemTarget,
     timeZone: timezone,
   });
+
+  const duplicateAssignmentMounted = useMountedOnce(!!duplicateTarget);
+  const importAssignmentMounted = useMountedOnce(importAssignmentOpen);
+  const duplicateProblemMounted = useMountedOnce(!!duplicateProblemTarget);
+  const importProblemMounted = useMountedOnce(importProblemOpen);
 
   // Memoize roster columns so a re-render doesn't recreate the array (and its
   // cell components), which would force RosterCard's DataTable and its rows to
@@ -222,59 +272,67 @@ export function AdminCourseView({
       </Card>
     </Tabs>
 
-    <DuplicateAssignmentDialog
-      open={!!duplicateTarget}
-      setOpen={(v) => {
-        if (!v) setDuplicateTarget(null);
-      }}
-      courseId={course.id}
-      courseIsArchived={course.isArchived}
-      assignment={duplicateTarget}
-      onDuplicated={() => {
-        setDuplicateTarget(null);
-        // The new (unpublished) assignment now exists; refresh the list to show it.
-        onRefreshCourse();
-      }}
-    />
+    {duplicateAssignmentMounted && (
+      <DuplicateAssignmentDialog
+        open={!!duplicateTarget}
+        setOpen={(v) => {
+          if (!v) setDuplicateTarget(null);
+        }}
+        courseId={course.id}
+        courseIsArchived={course.isArchived}
+        assignment={duplicateTarget}
+        onDuplicated={() => {
+          setDuplicateTarget(null);
+          // The new (unpublished) assignment now exists; refresh the list to show it.
+          onRefreshCourse();
+        }}
+      />
+    )}
 
-    <ImportAssignmentDialog
-      open={importAssignmentOpen}
-      setOpen={setImportAssignmentOpen}
-      courseId={course.id}
-      courseIsArchived={course.isArchived}
-      onImported={() => {
-        setImportAssignmentOpen(false);
-        // The imported (unpublished) assignment now exists; refresh the list to show it.
-        onRefreshCourse();
-      }}
-    />
+    {importAssignmentMounted && (
+      <ImportAssignmentDialog
+        open={importAssignmentOpen}
+        setOpen={setImportAssignmentOpen}
+        courseId={course.id}
+        courseIsArchived={course.isArchived}
+        onImported={() => {
+          setImportAssignmentOpen(false);
+          // The imported (unpublished) assignment now exists; refresh the list to show it.
+          onRefreshCourse();
+        }}
+      />
+    )}
 
-    <DuplicateProblemDialog
-      open={!!duplicateProblemTarget}
-      setOpen={(v) => {
-        if (!v) setDuplicateProblemTarget(null);
-      }}
-      courseId={course.id}
-      courseIsArchived={course.isArchived}
-      problem={duplicateProblemTarget}
-      onDuplicated={() => {
-        setDuplicateProblemTarget(null);
-        // Back on the Problems tab: refresh so the new problem appears in the list.
-        onRefreshCourse();
-      }}
-    />
+    {duplicateProblemMounted && (
+      <DuplicateProblemDialog
+        open={!!duplicateProblemTarget}
+        setOpen={(v) => {
+          if (!v) setDuplicateProblemTarget(null);
+        }}
+        courseId={course.id}
+        courseIsArchived={course.isArchived}
+        problem={duplicateProblemTarget}
+        onDuplicated={() => {
+          setDuplicateProblemTarget(null);
+          // Back on the Problems tab: refresh so the new problem appears in the list.
+          onRefreshCourse();
+        }}
+      />
+    )}
 
-    <ImportProblemDialog
-      open={importProblemOpen}
-      setOpen={setImportProblemOpen}
-      courseId={course.id}
-      courseIsArchived={course.isArchived}
-      onImported={() => {
-        setImportProblemOpen(false);
-        // The imported problem now exists in this course; refresh the problems list.
-        onRefreshCourse();
-      }}
-    />
+    {importProblemMounted && (
+      <ImportProblemDialog
+        open={importProblemOpen}
+        setOpen={setImportProblemOpen}
+        courseId={course.id}
+        courseIsArchived={course.isArchived}
+        onImported={() => {
+          setImportProblemOpen(false);
+          // The imported problem now exists in this course; refresh the problems list.
+          onRefreshCourse();
+        }}
+      />
+    )}
     </>
   );
 }
