@@ -10,12 +10,34 @@ import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { Table, Download, RefreshCw, GraduationCap } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { GradeBreakdownDialog } from '@/components/dialogs/GradeBreakdownDialog';
+import dynamic from 'next/dynamic';
 import { formatTimeInTimeZone } from '@/lib/date-format';
-import { GradesLmsExportDialog } from '@/components/dialogs/GradesLmsExportDialog';
 import { findCanvasReservedTitleConflicts, type LmsPlatform } from '@/lib/lms-grade-export';
 import { useSession } from 'next-auth/react';
 import { apiPaths } from '@/lib/api-paths';
+
+/**
+ * On demand: the breakdown dialog carries the form stack and was the last thing putting zod on
+ * the course page. Each is also rendered only once opened, since a dynamic import is deferred
+ * only while its component is unrendered.
+ */
+const GradeBreakdownDialog = dynamic(
+  () => import('@/components/dialogs/GradeBreakdownDialog').then((m) => m.GradeBreakdownDialog),
+  { ssr: false },
+);
+const GradesLmsExportDialog = dynamic(
+  () => import('@/components/dialogs/GradesLmsExportDialog').then((m) => m.GradesLmsExportDialog),
+  { ssr: false },
+);
+
+/** True once `open` has first been true, so a dynamic import stays deferred until first use. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 
 type StudentRow = {
   id: string;
@@ -67,6 +89,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const { timezone } = useEffectiveTimezone();
   const queryClient = useQueryClient();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const exportMounted = useMountedOnce(exportDialogOpen);
   const canExport = Boolean(session?.user?.isAdmin);
 
   // The gradebook loads in two halves so the table paints its columns and rows while the
@@ -226,6 +249,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   );
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const breakdownMounted = useMountedOnce(dialogOpen);
   const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null);
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
 
@@ -460,7 +484,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       </div>
 
       {/* breakdown dialog */}
-      {selectedStudent && selectedAssignment && (
+      {selectedStudent && selectedAssignment && breakdownMounted && (
         <GradeBreakdownDialog
           courseId={courseId}
           assignmentId={selectedAssignment.id}
@@ -473,7 +497,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         />
       )}
 
-      {canExport ? (
+      {canExport && exportMounted ? (
         <GradesLmsExportDialog
           open={exportDialogOpen}
           setOpen={setExportDialogOpen}

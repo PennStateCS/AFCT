@@ -1,12 +1,25 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { columns } from './course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { CreateCourseDialog } from '@/components/dialogs/CreateCourseDialog';
+// On demand: the create wizard carries the form stack and is not open on arrival.
+const CreateCourseDialog = dynamic(
+  () => import('@/components/dialogs/CreateCourseDialog').then((m) => m.CreateCourseDialog),
+  { ssr: false },
+);
+/** True once `open` has first been true, so a dynamic import stays deferred until first use. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 import { BookPlus, BookOpen } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
@@ -19,6 +32,7 @@ export const coursesListQueryKey = ['courses', 'list'] as const;
 
 export default function CoursesClient({ initialCourses }: { initialCourses: CourseWithRoster[] }) {
   const [open, setOpen] = useState(false);
+  const createMounted = useMountedOnce(open);
   const { timezone } = useEffectiveTimezone();
 
   // Cached courses list: the SSR-provided list seeds the cache and is treated as
@@ -89,7 +103,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
         />
       </CardContent>
 
-      <CreateCourseDialog open={open} setOpen={setOpen} onSuccess={refresh} />
+      {createMounted && <CreateCourseDialog open={open} setOpen={setOpen} onSuccess={refresh} />}
     </Card>
   );
 }

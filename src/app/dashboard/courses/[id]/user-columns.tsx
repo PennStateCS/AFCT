@@ -13,10 +13,36 @@ import {
 import type { User } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
-import { EditRoleDialog } from '@/components/dialogs/EditRoleDialog';
-import { ResetPasswordDialog } from '@/components/dialogs/ResetPasswordDialog';
+import dynamic from 'next/dynamic';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+
+/**
+ * On demand, and this file is rendered PER ROSTER ROW, so a large course used to mount three
+ * form dialogs per student before anyone opened one. Deferring them takes zod off the course
+ * page as well as trimming that runtime cost. `ConfirmDialog` stays static; it is small and
+ * shared app-wide.
+ */
+const EditUserDialog = dynamic(
+  () => import('@/components/dialogs/EditUserDialog').then((m) => m.EditUserDialog),
+  { ssr: false },
+);
+const EditRoleDialog = dynamic(
+  () => import('@/components/dialogs/EditRoleDialog').then((m) => m.EditRoleDialog),
+  { ssr: false },
+);
+const ResetPasswordDialog = dynamic(
+  () => import('@/components/dialogs/ResetPasswordDialog').then((m) => m.ResetPasswordDialog),
+  { ssr: false },
+);
+
+/** True once `open` has first been true. See the dynamic imports above. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/RoleBadge';
 import {
@@ -30,7 +56,7 @@ import {
 import { roleSortingFn } from '@/lib/roles';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type RosterUser = User & {
   role?: string;
@@ -61,6 +87,9 @@ function ActionsCell({
   const [resetOpen, setResetOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [dropConfirmOpen, setDropConfirmOpen] = useState(false);
+  const editUserMounted = useMountedOnce(editUserOpen);
+  const editRoleMounted = useMountedOnce(editRoleOpen);
+  const resetMounted = useMountedOnce(resetOpen);
 
   async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
@@ -233,32 +262,38 @@ function ActionsCell({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <EditUserDialog
-        user={user}
-        open={editUserOpen}
-        setOpen={setEditUserOpen}
-        // The roster's user objects don't carry the global `isAdmin` flag, and changing
-        // global admin from a course context is out of scope, so never manage it here.
-        canManageAdmin={false}
-        onSave={async () => {
-          onChange();
-        }}
-      />
+      {editUserMounted && (
+        <EditUserDialog
+          user={user}
+          open={editUserOpen}
+          setOpen={setEditUserOpen}
+          // The roster's user objects don't carry the global `isAdmin` flag, and changing
+          // global admin from a course context is out of scope, so never manage it here.
+          canManageAdmin={false}
+          onSave={async () => {
+            onChange();
+          }}
+        />
+      )}
 
-      <EditRoleDialog
-        open={editRoleOpen}
-        setOpen={setEditRoleOpen}
-        courseId={courseId}
-        userId={user.id}
-        onSaved={onChange}
-      />
+      {editRoleMounted && (
+        <EditRoleDialog
+          open={editRoleOpen}
+          setOpen={setEditRoleOpen}
+          courseId={courseId}
+          userId={user.id}
+          onSaved={onChange}
+        />
+      )}
 
-      <ResetPasswordDialog
-        open={resetOpen}
-        setOpen={setResetOpen}
-        onResetPassword={handlePasswordReset}
-        targetUserName={`${user.firstName} ${user.lastName}`}
-      />
+      {resetMounted && (
+        <ResetPasswordDialog
+          open={resetOpen}
+          setOpen={setResetOpen}
+          onResetPassword={handlePasswordReset}
+          targetUserName={`${user.firstName} ${user.lastName}`}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDeleteOpen}
