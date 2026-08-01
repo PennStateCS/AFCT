@@ -576,10 +576,11 @@ describe('PrivilegeAssignmentView — render viewer', () => {
     searchState.value = 'tab=problems';
   });
 
-  it('opens the submission viewer with the solution file for a problem that has one', () => {
+  // The viewer is loaded on demand, so it arrives a tick after the click that opens it.
+  it('opens the submission viewer with the solution file for a problem that has one', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'render-p1' }));
-    const viewer = screen.getByTestId('viewer-dialog');
+    const viewer = await screen.findByTestId('viewer-dialog');
     expect(viewer).toHaveAttribute('data-src', '/api/files/solutions/sol1.jff');
     expect(viewer).toHaveAttribute('data-type', 'FA');
     expect(viewer).toHaveTextContent('orig1.jff - Problem One');
@@ -605,10 +606,10 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     expect(screen.getByText('Desc one')).toBeInTheDocument();
   });
 
-  it('opens the problem-settings dialog with the ids injected', () => {
+  it('opens the problem-settings dialog with the ids injected', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'edit-p1' }));
-    const dialog = screen.getByTestId('problem-settings-dialog');
+    const dialog = await screen.findByTestId('problem-settings-dialog');
     expect(dialog).toHaveAttribute('data-problem-id', 'p1');
     expect(dialog).toHaveAttribute('data-course-id', 'c1');
   });
@@ -624,8 +625,10 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     renderView();
     const createBtn = screen.getByRole('button', { name: 'Create Problem' });
     await waitFor(() => expect(createBtn).toBeEnabled());
+    // Not in the DOM at all until the button is used: the dialog loads on demand.
+    expect(screen.queryByTestId('create-dialog')).not.toBeInTheDocument();
     fireEvent.click(createBtn);
-    expect(screen.getByTestId('create-dialog')).toBeInTheDocument();
+    expect(await screen.findByTestId('create-dialog')).toBeInTheDocument();
   });
 });
 

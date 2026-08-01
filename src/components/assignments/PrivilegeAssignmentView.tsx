@@ -13,15 +13,13 @@ import {
   Users,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Switch } from '@/components/ui/switch';
-import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
-import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import {
   Dialog,
   DialogContent,
@@ -31,10 +29,8 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { showToast } from '@/lib/toast';
-import { AssignmentSettingsCard } from '@/components/assignments/AssignmentSettingsCard';
 import { AssignmentTypeCard } from '@/components/assignments/AssignmentTypeCard';
 import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsForm';
-import { AssignmentProblemSettingsDialog } from '@/components/dialogs/AssignmentProblemSettingsDialog';
 import { AssignmentStatisticsPanel } from '@/components/assignments/AssignmentStatisticsPanel';
 import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSimilarityPanel';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
@@ -52,6 +48,56 @@ import { queryKeys } from '@/lib/query-keys';
 import { asRichDescription } from '@/lib/rich-description';
 import { RichDescription } from '@/components/rich-description/RichDescription';
 import { buildProblemColumns } from './problem-columns';
+
+/**
+ * The dialogs and the settings tab load on demand. Between them they were the only things
+ * putting the form stack on this route, and none of them is on screen when the page opens: the
+ * viewer needs a submission chosen, the settings card needs its tab selected, and the rest need
+ * a menu item clicked.
+ *
+ * `ConfirmDialog` stays a normal import; it is small, has no form machinery, and is shared
+ * app-wide, so splitting it would add a request without removing bytes.
+ */
+const AssociateProblemsDialog = dynamic(
+  () =>
+    import('@/components/dialogs/AssociateProblemsDialog').then((m) => m.AssociateProblemsDialog),
+  { ssr: false },
+);
+const CreateProblemDialog = dynamic(
+  () => import('@/components/dialogs/CreateProblemDialog').then((m) => m.CreateProblemDialog),
+  { ssr: false },
+);
+const SubmissionViewerDialog = dynamic(
+  () =>
+    import('@/components/dialogs/SubmissionViewerDialog').then((m) => m.SubmissionViewerDialog),
+  { ssr: false },
+);
+const AssignmentProblemSettingsDialog = dynamic(
+  () =>
+    import('@/components/dialogs/AssignmentProblemSettingsDialog').then(
+      (m) => m.AssignmentProblemSettingsDialog,
+    ),
+  { ssr: false },
+);
+const AssignmentSettingsCard = dynamic(
+  () =>
+    import('@/components/assignments/AssignmentSettingsCard').then((m) => m.AssignmentSettingsCard),
+  {
+    ssr: false,
+    // This one fills the panel the author is looking at rather than appearing over it, so an
+    // empty panel would read as a bug. Same reasoning as the course settings form.
+    loading: () => <p className="text-muted-foreground text-sm">Loading assignment settings…</p>,
+  },
+);
+
+/** True once `open` has first been true, so a dynamic import stays deferred until first use. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 
 type ProblemLinkSettings = {
   problemId: string;
@@ -96,6 +142,8 @@ export default function AssignmentDashboardPage({
   const [publishTarget, setPublishTarget] = useState<boolean | null>(null);
   const [addProblemDialogOpen, setAddProblemDialogOpen] = useState(false);
   const [createProblemOpen, setCreateProblemOpen] = useState(false);
+  const associateMounted = useMountedOnce(addProblemDialogOpen);
+  const createProblemMounted = useMountedOnce(createProblemOpen);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
   const [tab, setTab] = useState(searchParams.get('tab') || 'description');
@@ -637,31 +685,35 @@ export default function AssignmentDashboardPage({
           </DialogClose>
         </DialogContent>
       </Dialog>
-      <AssociateProblemsDialog
-        open={addProblemDialogOpen}
-        onClose={() => setAddProblemDialogOpen(false)}
-        courseId={id}
-        assignmentId={aid}
-        courseIsArchived={courseIsArchived}
-        allProblems={allProblems.map(normalizeProblem)}
-        usedProblems={usedProblems}
-        onAddProblems={(selectedProblemIds, problemSettings) => {
-          return handleAddProblems(selectedProblemIds, problemSettings);
-        }}
-      />
-      <CreateProblemDialog
-        open={createProblemOpen}
-        setOpen={setCreateProblemOpen}
-        courseId={id}
-        courseIsArchived={courseIsArchived}
-        assignmentId={aid}
-        onCreated={async (created) => {
-          await queryClient.invalidateQueries({ queryKey: ['course', id, 'problems'] });
-          if (created?.id && !aid) {
-            await handleAddProblems([created.id]);
-          }
-        }}
-      />
+      {associateMounted && (
+        <AssociateProblemsDialog
+          open={addProblemDialogOpen}
+          onClose={() => setAddProblemDialogOpen(false)}
+          courseId={id}
+          assignmentId={aid}
+          courseIsArchived={courseIsArchived}
+          allProblems={allProblems.map(normalizeProblem)}
+          usedProblems={usedProblems}
+          onAddProblems={(selectedProblemIds, problemSettings) => {
+            return handleAddProblems(selectedProblemIds, problemSettings);
+          }}
+        />
+      )}
+      {createProblemMounted && (
+        <CreateProblemDialog
+          open={createProblemOpen}
+          setOpen={setCreateProblemOpen}
+          courseId={id}
+          courseIsArchived={courseIsArchived}
+          assignmentId={aid}
+          onCreated={async (created) => {
+            await queryClient.invalidateQueries({ queryKey: ['course', id, 'problems'] });
+            if (created?.id && !aid) {
+              await handleAddProblems([created.id]);
+            }
+          }}
+        />
+      )}
       <ConfirmDialog
         open={!!problemToRemove}
         variant="destructive"
