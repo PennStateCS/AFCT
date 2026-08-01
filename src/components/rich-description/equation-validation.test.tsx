@@ -57,32 +57,26 @@ const saveButton = () =>
   screen.queryByRole('button', { name: 'Save equation' }) ??
   screen.getByRole('button', { name: 'Update equation' });
 
-describe('the worked example', () => {
-  /**
-   * The field starts genuinely empty. It used to carry the example as a placeholder, which sat
-   * in the same monospace face as real input: test users read it as something they had already
-   * typed and could not work out why the preview stayed blank. The example still exists, in
-   * prose, where nothing about it looks like field content.
-   */
-  it('leaves the input empty rather than pre-filling it with something that looks typed', () => {
+/**
+ * Nothing on this screen may look like sample input.
+ *
+ * The field used to carry a worked example as a placeholder, in the same monospace face as real
+ * input, and test users read it as text they had already typed, then could not work out why the
+ * preview stayed blank. The field is empty and no example is offered anywhere on the dialog.
+ */
+describe('the empty state', () => {
+  it('leaves the input empty, with no placeholder to mistake for typed text', () => {
     renderDialog();
     expect(field()).toHaveValue('');
     expect(field().getAttribute('placeholder')).toBeNull();
   });
 
-  it('shows the example in the description, as real LaTeX with a single backslash', () => {
+  it('offers no LaTeX sample anywhere on the dialog', () => {
     renderDialog();
-    // Written as JSX text, which does NOT process backslash escapes the way a JavaScript string
-    // literal would. Doubling the backslash in the source would show the reader two of them, and
-    // a bare `\f` would be a form feed. This asserts what the DOM actually contains.
-    const example = screen.getByText(/\\frac/).textContent!;
-
-    expect(example).toContain('\\frac{n(n-1)}{2}');
-    expect(example).not.toContain('\f'); // no form feed
-    // And it is LaTeX a professor could actually paste in.
-    expect(() =>
-      katex.renderToString('\\frac{n(n-1)}{2}', { ...KATEX_VALIDATION_OPTIONS }),
-    ).not.toThrow();
+    // The dialog is portaled, so this reads the whole document rather than a render container.
+    // Any backslash command on screen would read as something to copy, or worse, as content.
+    expect(document.body.textContent ?? '').not.toContain('\\');
+    expect(screen.queryByText(/\\frac/)).toBeNull();
   });
 
   it('says why the preview is blank instead of showing an unexplained empty box', () => {

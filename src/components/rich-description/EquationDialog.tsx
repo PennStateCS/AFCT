@@ -196,14 +196,13 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
         >
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Edit equation' : 'Insert equation'}</DialogTitle>
-            {/* The example lives here, in prose, rather than in the field as a placeholder. As a
-                placeholder it sat in the same monospace face as real input and authors read it as
-                something they had already typed, then could not work out why the preview was
-                empty. Outside the field it cannot be mistaken for content. */}
+            {/* Deliberately no worked example, here or in the field. As a placeholder one sat in
+                the same monospace face as real input, so authors read it as something they had
+                already typed and could not work out why the preview stayed blank. Nothing on this
+                screen should be mistakable for sample input. */}
             <DialogDescription>
-              Write the equation in LaTeX, for example{' '}
-              <code className="font-mono">\frac{'{'}n(n-1){'}'}{'{'}2{'}'}</code>. Inline equations
-              sit inside a sentence; display equations stand on their own centered line.
+              Write the equation in LaTeX. Inline equations sit inside a sentence; display
+              equations stand on their own centered line.
             </DialogDescription>
           </DialogHeader>
 
