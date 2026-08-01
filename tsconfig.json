@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "DOM",
-      "DOM.Iterable",
-      "ES2022"
-    ],
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -27,18 +23,10 @@
     "tsBuildInfoFile": ".next/cache/tsconfig.tsbuildinfo",
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "src/*"
-      ]
+      "@/*": ["src/*"]
     },
-    "typeRoots": [
-      "src/types",
-      "node_modules/@types"
-    ],
-    "types": [
-      "next-auth",
-      "node"
-    ],
+    "typeRoots": ["src/types", "node_modules/@types"],
+    "types": ["next-auth", "node"],
     "plugins": [
       {
         "name": "next"
@@ -53,13 +41,7 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "docs-site",
-    ".next",
-    "**/*.test.ts",
-    "**/*.test.tsx"
-  ],
+  "exclude": ["node_modules", "docs-site", ".next", "**/*.test.ts", "**/*.test.tsx"],
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node"

@@ -59,7 +59,9 @@ const evalEnv = {
   UPGRADED_FEEDBACK: 'true',
 };
 
-console.log(`Evaluating ${manifest.cases.length} golden case(s) against ${path.relative(ROOT, JAR)}\n`);
+console.log(
+  `Evaluating ${manifest.cases.length} golden case(s) against ${path.relative(ROOT, JAR)}\n`,
+);
 
 let failures = 0;
 for (const c of manifest.cases) {
@@ -75,14 +77,18 @@ for (const c of manifest.cases) {
     });
     const feedback = parseFeedback(stdout);
     if (typeof feedback.correct !== 'boolean') {
-      throw new Error(`evaluator returned no boolean 'correct' (feedback: ${feedback.feedback ?? '?'})`);
+      throw new Error(
+        `evaluator returned no boolean 'correct' (feedback: ${feedback.feedback ?? '?'})`,
+      );
     }
 
     // Cases that assert the *rejection* path: the jar must refuse the file with a
     // recognizable message rather than crash or silently mark it wrong. Without this
     // a student uploading an unsupported machine could get a bare "incorrect".
     if (c.expectErrorContains) {
-      const haystack = [feedback.feedback ?? '', ...(feedback.errors ?? [])].join(' ').toLowerCase();
+      const haystack = [feedback.feedback ?? '', ...(feedback.errors ?? [])]
+        .join(' ')
+        .toLowerCase();
       if (!haystack.includes(c.expectErrorContains.toLowerCase())) {
         failures++;
         console.error(

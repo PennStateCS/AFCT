@@ -120,26 +120,23 @@ test.describe('student assignment visibility', () => {
     expect(seen.leaksTitle).toBe(true);
   });
 
-  test(
-    'an assignment assigned to someone else is unreadable',
-    async ({ browser }) => {
-      const faculty = await asFaculty(browser);
-      const { id, title } = await createAssignment(faculty.request, {
-        isPublished: true,
-        assignedToEveryone: false,
-        // A real audience that simply does not include our student. An empty list is
-        // rejected by validation, so "assigned to nobody" is not a reachable state.
-        assignees: [{ targetType: 'STUDENT', userId: OTHER_STUDENT_ID }],
-      });
+  test('an assignment assigned to someone else is unreadable', async ({ browser }) => {
+    const faculty = await asFaculty(browser);
+    const { id, title } = await createAssignment(faculty.request, {
+      isPublished: true,
+      assignedToEveryone: false,
+      // A real audience that simply does not include our student. An empty list is
+      // rejected by validation, so "assigned to nobody" is not a reachable state.
+      assignees: [{ targetType: 'STUDENT', userId: OTHER_STUDENT_ID }],
+    });
 
-      const seen = await studentView(browser, id, title);
+    const seen = await studentView(browser, id, title);
 
-      // Masked as 404 by the API, and the page must not render it either. These used
-      // to disagree - see the note at the bottom of this file.
-      expect(seen.apiStatus).toBe(404);
-      expect(seen.leaksTitle).toBe(false);
-    },
-  );
+    // Masked as 404 by the API, and the page must not render it either. These used
+    // to disagree - see the note at the bottom of this file.
+    expect(seen.apiStatus).toBe(404);
+    expect(seen.leaksTitle).toBe(false);
+  });
 
   test('an assignment before its unlock date hides its body', async ({ browser }) => {
     const faculty = await asFaculty(browser);
