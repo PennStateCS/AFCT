@@ -53,19 +53,19 @@ const [open, setOpen] = useState(false);
 
 ### Props
 
-| Prop | Purpose |
-| --- | --- |
-| `open` | Whether the dialog is visible. |
-| `title` | Short question naming the action. |
-| `description` | One sentence on the consequence. Accepts a React node. |
-| `confirmText` | Action-specific confirm label. Defaults to "Confirm". |
-| `cancelText` | Defaults to "Cancel". |
-| `variant` | `'default'` or `'destructive'`. Defaults to `'default'`. |
-| `busy` | Externally tracked pending flag; disables the buttons and shows a spinner. |
-| `requireTypedConfirmation` | Requires the user to type this exact string before confirming. |
-| `typedConfirmationLabel` | Help text shown above the type-to-confirm field. |
-| `onConfirm` | Runs on confirm. May return a Promise. |
-| `onCancel` | Runs on cancel, Escape, or dismissal. |
+| Prop                       | Purpose                                                                    |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `open`                     | Whether the dialog is visible.                                             |
+| `title`                    | Short question naming the action.                                          |
+| `description`              | One sentence on the consequence. Accepts a React node.                     |
+| `confirmText`              | Action-specific confirm label. Defaults to "Confirm".                      |
+| `cancelText`               | Defaults to "Cancel".                                                      |
+| `variant`                  | `'default'` or `'destructive'`. Defaults to `'default'`.                   |
+| `busy`                     | Externally tracked pending flag; disables the buttons and shows a spinner. |
+| `requireTypedConfirmation` | Requires the user to type this exact string before confirming.             |
+| `typedConfirmationLabel`   | Help text shown above the type-to-confirm field.                           |
+| `onConfirm`                | Runs on confirm. May return a Promise.                                     |
+| `onCancel`                 | Runs on cancel, Escape, or dismissal.                                      |
 
 ### Preventing repeated submissions
 
@@ -120,3 +120,9 @@ returned to the trigger on close. Beyond that, the component:
 For a case where the triggering control becomes disabled while a long action runs (so the
 default focus return would drop to the page body), pass `onCloseAutoFocus` to redirect
 focus. The Updates tab uses this to send focus to its progress panel.
+
+## After the action runs
+
+The dialog asks; it does not report. Whatever the confirm handler does still has to say
+whether it worked. See [Toast messages](./toast-messages.md) for who shows that message and
+how to word it.

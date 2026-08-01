@@ -108,6 +108,7 @@ const sidebars: SidebarsConfig = {
             'reference/rich-descriptions',
             'reference/roles-and-permissions',
             'reference/system-architecture',
+            'reference/toast-messages',
             'reference/evaluator-tests',
           ],
         },
