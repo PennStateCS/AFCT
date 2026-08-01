@@ -285,6 +285,7 @@ export const useProblemColumns = ({
             }
             src={apiPaths.files.solution(encodeURIComponent(openDialog.problem.fileName ?? ''))}
             title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+            epsSymbol={epsSymbol}
           />
         );
       default:
