@@ -149,6 +149,16 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       isPublished: true,
       assignedToEveryone: true,
       groupSetId: true,
+      // The submitter's group within this assignment's set, if any. Unique on
+      // (groupSetId, userId), so this is at most one row.
+      groupSet: {
+        select: {
+          groups: {
+            where: { memberships: { some: { userId: user.id } } },
+            select: { id: true },
+          },
+        },
+      },
       // The assignee rows that cover this submitter: their own STUDENT row and/or the
       // GROUP row for a group they belong to. Drives "is this student assigned" and, for a
       // group target, the group submission set.
@@ -193,12 +203,18 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
   const courseId = assignment.courseId;
   ctx.courseId = courseId;
 
-  // The submitter's group(s) for this assignment: any group they belong to that is either
-  // assigned (an assignee row) or carries a date override. Used for the group submission
-  // set and to match GROUP overrides/assignees. At most one applies (no double-targeting).
+  // The submitter's group for this assignment: their group in the assignment's group set.
+  // Membership decides it, not the audience rows, so an ordinary group assignment (the
+  // default, `assignedToEveryone`, which carries no assignee rows) still behaves as a group.
+  // See resolveStudentAssignmentGroupIds, which is the same rule for every read path.
+  const membershipGroupId = assignment.groupSet?.groups[0]?.id ?? null;
+  // Group ids that can match a GROUP assignee or override row. The membership group first,
+  // then anything the audience/override rows name, so a group targeted by an override the
+  // student is somehow no longer a member of still resolves its dates.
   const studentGroupIds = [
     ...new Set(
       [
+        membershipGroupId,
         ...(assignment.assignees ?? []).filter((a) => a.groupId != null).map((a) => a.groupId),
         ...(assignment.overrides ?? [])
           .filter((o) => o.targetType === 'GROUP' && o.groupId != null)
@@ -206,9 +222,10 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       ].filter((id): id is string => id != null),
     ),
   ];
-  // If the submitter is group-targeted, they submit into the group's shared set: any
-  // member submits, all members share it, and the cap/cooldown count group-wide.
-  const submissionGroupId = studentGroupIds[0] ?? null;
+  // A group assignment writes into the group's shared submission set: any member submits,
+  // all members see it, and the cap and cooldown count group-wide. An individual assignment
+  // never does, even if a stray GROUP override names a group the submitter is in.
+  const submissionGroupId = assignment.groupSetId ? membershipGroupId : null;
   // Count scope for the per-problem cap + cooldown: the whole group, or just this student.
   const countScope = submissionGroupId
     ? { assignmentId, problemId, studentGroupId: submissionGroupId }

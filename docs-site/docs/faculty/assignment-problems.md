@@ -8,7 +8,9 @@ The **Problems** tab is where you choose which problems make up the assignment.
 Each problem has per-assignment settings:
 
 - **Max Points** controls how much the problem contributes to the assignment grade.
-- **Max Submissions** can be a fixed number or unlimited.
+- **Max Submissions** can be a fixed number or unlimited. On a [group](groups.md) assignment the
+  limit belongs to the group, not to each member: a limit of 5 means 5 attempts between them,
+  and any member's submission uses one of the group's attempts.
 - **Automatic Grading** controls whether AFCT sends submissions for that problem to the autograder.
 
 These settings can differ from the defaults in the problem bank. Every assigned student (or group) gets the same set of problems. Removing a problem from an assignment does not delete it from the course.
