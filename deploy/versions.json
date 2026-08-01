@@ -3,7 +3,7 @@
     {
       "tag": "v0.2.1",
       "label": "v0.2.1",
-      "notes": "Release v0.2.1.",
+      "notes": "Groups now share one submission set and limit per problem (existing submissions are migrated). Also fixes a lost description edit after the first save. NOTE: the deployment tooling fix in this release (automatic rollback could not complete) only arrives via 'sudo afctctl self-update' on the server; upgrading here does not deliver it.",
       "requiresHostUpdate": false,
       "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
     },
