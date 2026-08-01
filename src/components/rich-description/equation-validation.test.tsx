@@ -57,19 +57,37 @@ const saveButton = () =>
   screen.queryByRole('button', { name: 'Save equation' }) ??
   screen.getByRole('button', { name: 'Update equation' });
 
-describe('placeholder', () => {
-  it('shows real LaTeX, with a single backslash', () => {
+describe('the worked example', () => {
+  /**
+   * The field starts genuinely empty. It used to carry the example as a placeholder, which sat
+   * in the same monospace face as real input: test users read it as something they had already
+   * typed and could not work out why the preview stayed blank. The example still exists, in
+   * prose, where nothing about it looks like field content.
+   */
+  it('leaves the input empty rather than pre-filling it with something that looks typed', () => {
     renderDialog();
-    const placeholder = field().getAttribute('placeholder')!;
+    expect(field()).toHaveValue('');
+    expect(field().getAttribute('placeholder')).toBeNull();
+  });
 
-    // The attribute is written as a JSX string, which does NOT process backslash escapes the way
-    // a JavaScript string literal would. Doubling the backslash in the source would show the
-    // user two of them. This asserts the value the textarea actually exposes.
-    expect(placeholder).toBe('\\frac{n(n-1)}{2}');
-    expect(placeholder).not.toContain('\f'); // no form feed
-    expect(placeholder.startsWith('\\frac')).toBe(true);
+  it('shows the example in the description, as real LaTeX with a single backslash', () => {
+    renderDialog();
+    // Written as JSX text, which does NOT process backslash escapes the way a JavaScript string
+    // literal would. Doubling the backslash in the source would show the reader two of them, and
+    // a bare `\f` would be a form feed. This asserts what the DOM actually contains.
+    const example = screen.getByText(/\\frac/).textContent!;
+
+    expect(example).toContain('\\frac{n(n-1)}{2}');
+    expect(example).not.toContain('\f'); // no form feed
     // And it is LaTeX a professor could actually paste in.
-    expect(() => katex.renderToString(placeholder, { ...KATEX_VALIDATION_OPTIONS })).not.toThrow();
+    expect(() =>
+      katex.renderToString('\\frac{n(n-1)}{2}', { ...KATEX_VALIDATION_OPTIONS }),
+    ).not.toThrow();
+  });
+
+  it('says why the preview is blank instead of showing an unexplained empty box', () => {
+    renderDialog();
+    expect(screen.getByText('Your equation will appear here.')).toBeInTheDocument();
   });
 });
 
