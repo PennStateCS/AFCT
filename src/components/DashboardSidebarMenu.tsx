@@ -11,11 +11,26 @@ import { cn } from '@/lib/utils';
 import { useChangePassword } from '@/hooks/use-change-password';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import dynamic from 'next/dynamic';
 import { safeSignOut } from '@/lib/safe-signout';
 import { getCourseDateBucket } from '@/lib/course-status';
 
-import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
-import { EditProfileDialog } from './dialogs/EditProfileDialog';
+/**
+ * On demand, for the same reason as the navbar's copies: the sidebar is in the dashboard
+ * layout, so a static import here puts zod and react-hook-form in the chunk every dashboard
+ * route shares. Both entry points have to be dynamic or the shared chunk keeps them anyway.
+ *
+ * The mount flags below are load-bearing: `next/dynamic` fetches as soon as the component
+ * renders, so rendering these with `open={false}` would defeat it.
+ */
+const ChangePasswordDialog = dynamic(
+  () => import('./dialogs/ChangePasswordDialog').then((m) => m.ChangePasswordDialog),
+  { ssr: false },
+);
+const EditProfileDialog = dynamic(
+  () => import('./dialogs/EditProfileDialog').then((m) => m.EditProfileDialog),
+  { ssr: false },
+);
 
 import {
   SidebarContent,
@@ -286,6 +301,17 @@ export default function DashboardSidebarMenu() {
   const changePassword = useChangePassword();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  // Set on first open and never cleared: see the dynamic imports above.
+  const [changePasswordMounted, setChangePasswordMounted] = useState(false);
+  const [editProfileMounted, setEditProfileMounted] = useState(false);
+  const openChangePassword = () => {
+    setChangePasswordMounted(true);
+    setChangePasswordOpen(true);
+  };
+  const openEditProfile = () => {
+    setEditProfileMounted(true);
+    setEditProfileOpen(true);
+  };
 
   // Cached courses list for sidebar nav, fetched client-side and revalidated.
   const {
@@ -603,14 +629,14 @@ export default function DashboardSidebarMenu() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  onClick={() => setEditProfileOpen(true)}
+                  onClick={openEditProfile}
                 >
                   <UserPen className="h-4 w-4" />
                   Edit Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  onClick={() => setChangePasswordOpen(true)}
+                  onClick={openChangePassword}
                 >
                   <LockKeyhole className="h-4 w-4" />
                   Change Password
@@ -629,14 +655,19 @@ export default function DashboardSidebarMenu() {
         </SidebarMenu>
       </SidebarFooter>
 
-      {/* Modals */}
-      <ChangePasswordDialog
-        open={changePasswordOpen}
-        setOpen={setChangePasswordOpen}
-        onChangePassword={changePassword}
-      />
+      {/* Modals, mounted on first use. Rendering them unconditionally would fetch their chunk
+          on every page load and undo the point of the dynamic import above. */}
+      {changePasswordMounted && (
+        <ChangePasswordDialog
+          open={changePasswordOpen}
+          setOpen={setChangePasswordOpen}
+          onChangePassword={changePassword}
+        />
+      )}
 
-      <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
+      {editProfileMounted && (
+        <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
+      )}
     </>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
@@ -12,8 +13,26 @@ import type { SessionUser } from '@/types/next-auth';
 import { getInitials } from '@/app/utils/initials';
 import { safeSignOut } from '@/lib/safe-signout';
 
-import { ChangePasswordDialog } from '@/components/dialogs/ChangePasswordDialog';
-import { EditProfileDialog } from '@/components/dialogs/EditProfileDialog';
+/**
+ * The two account dialogs load on demand, not with the navbar.
+ *
+ * The navbar is in the dashboard layout, so it is on every page, and importing these
+ * statically put their whole dependency graph, most of it zod and react-hook-form, into the
+ * chunk every dashboard route shares: 285 KB paid on every page load for two dialogs most
+ * sessions never open.
+ *
+ * `next/dynamic` only defers until the component RENDERS, so the mount flags below matter as
+ * much as the import: rendering these unconditionally with `open={false}`, which is what the
+ * navbar used to do, would fetch them on mount and change nothing.
+ */
+const ChangePasswordDialog = dynamic(
+  () => import('@/components/dialogs/ChangePasswordDialog').then((m) => m.ChangePasswordDialog),
+  { ssr: false },
+);
+const EditProfileDialog = dynamic(
+  () => import('@/components/dialogs/EditProfileDialog').then((m) => m.EditProfileDialog),
+  { ssr: false },
+);
 import { useChangePassword } from '@/hooks/use-change-password';
 
 // UI Components
@@ -49,6 +68,18 @@ const Navbar: React.FC = () => {
   const { courseLabel, assignmentLabel } = useNavbarBreadcrumbs();
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  // Set on first open and never cleared: it is what actually defers the dynamic import, and
+  // keeping the dialog mounted afterwards leaves Radix its closing animation.
+  const [editProfileMounted, setEditProfileMounted] = useState(false);
+  const [changePasswordMounted, setChangePasswordMounted] = useState(false);
+  const openEditProfile = () => {
+    setEditProfileMounted(true);
+    setEditProfileOpen(true);
+  };
+  const openChangePassword = () => {
+    setChangePasswordMounted(true);
+    setChangePasswordOpen(true);
+  };
   const changePassword = useChangePassword();
 
   const crumbs = useMemo(() => {
@@ -204,14 +235,14 @@ const Navbar: React.FC = () => {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="cursor-pointer"
-              onClick={() => setEditProfileOpen(true)}
+              onClick={openEditProfile}
             >
               <UserPen className="h-4 w-4" />
               Edit Profile
             </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer"
-              onClick={() => setChangePasswordOpen(true)}
+              onClick={openChangePassword}
             >
               <LockKeyhole className="h-4 w-4" />
               Change Password
@@ -249,8 +280,12 @@ const Navbar: React.FC = () => {
         </DropdownMenu>
       </div>
     </header>
-    <ChangePasswordDialog open={changePasswordOpen} setOpen={setChangePasswordOpen} onChangePassword={changePassword} />
-    <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
+    {changePasswordMounted && (
+      <ChangePasswordDialog open={changePasswordOpen} setOpen={setChangePasswordOpen} onChangePassword={changePassword} />
+    )}
+    {editProfileMounted && (
+      <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
+    )}
   </div>
   );
 };
