@@ -427,8 +427,10 @@ export function RichDescriptionEditor({
           <div
             aria-hidden="true"
             className={cn(
+              // Must track the document's own padding in each mode, or the placeholder sits
+              // somewhere the first character will not appear.
               'text-muted-foreground pointer-events-none absolute px-3 py-2 select-none',
-              expanded && 'inset-x-0 mx-auto max-w-3xl',
+              expanded && 'max-w-5xl px-4 py-6',
             )}
           >
             {placeholder}
@@ -446,11 +448,15 @@ export function RichDescriptionEditor({
           // clicks. Flex stretch works against a min-height. This is what makes the empty part
           // of the box clickable at all.
           //
-          // Expanded caps the measure at max-w-3xl: the overlay is as wide as the viewport, but
-          // prose set to a 2000px line length is unreadable.
+          // Expanded still caps the measure, because the overlay is as wide as the monitor and
+          // prose set to a 2000px line length is unreadable. It is NOT centred, though: centring
+          // it left a narrow column floating in the middle of the screen while the heading and
+          // the toolbar ran the full width, which reads as a stray block of text rather than as
+          // the document those controls act on. Left-aligned, it starts under the toolbar, the
+          // way it does inline.
           className={cn(
             'afct-rich-text flex flex-col px-3 py-2 break-words [&_.tiptap]:flex-1 [&_.tiptap]:outline-none',
-            expanded ? 'mx-auto min-h-full w-full max-w-3xl py-6' : 'flex-1',
+            expanded ? 'min-h-full w-full max-w-5xl px-4 py-6' : 'flex-1',
           )}
         />
       </div>

@@ -131,10 +131,12 @@ test.describe('description editor surface', () => {
     await expect(page.getByRole('button', { name: 'Bullet list' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'More formatting' })).toBeHidden();
 
-    // A click in the left gutter, outside the centered column, must still land a caret.
+    // The document is left-aligned with a capped measure, so the empty gutter is the space to
+    // the RIGHT of the column. A click out there still has to land a caret rather than do
+    // nothing; that is the whole job of the click net.
     const dialog = page.getByRole('dialog');
     const box = await dialog.boundingBox();
-    await page.mouse.click(box!.x + 40, box!.y + box!.height / 2);
+    await page.mouse.click(box!.x + box!.width - 60, box!.y + box!.height / 2);
     await expect(textbox(page)).toBeFocused();
     await page.keyboard.type('gutter click landed');
     await expect(textbox(page)).toContainText('gutter click landed');
