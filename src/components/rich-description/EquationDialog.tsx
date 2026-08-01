@@ -270,7 +270,7 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
                 ref={previewRef}
                 role="region"
                 aria-labelledby={previewLabelId}
-                className="afct-rich-text bg-muted/10 border-input min-h-14 overflow-x-auto rounded-md border px-3 py-2"
+                className="afct-rich-text bg-muted border-input min-h-14 overflow-x-auto rounded-md border px-3 py-2"
               />
             </div>
           </div>

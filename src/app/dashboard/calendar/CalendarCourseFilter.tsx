@@ -38,7 +38,7 @@ export function CalendarCourseFilter({
               const checked = !uncheckedCourseIds.has(c.id);
               return (
                 <li key={c.id}>
-                  <label className="hover:bg-muted/50 flex items-start gap-2 rounded p-1 text-sm">
+                  <label className="hover:bg-muted flex items-start gap-2 rounded p-1 text-sm">
                     <Checkbox
                       checked={checked}
                       onCheckedChange={() => onToggle(c.id)}

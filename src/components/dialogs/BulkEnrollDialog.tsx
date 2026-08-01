@@ -184,7 +184,7 @@ export default function BulkEnrollDialog({
                 ) : (
                   <ul className="space-y-1 text-sm">
                     {notFound.map((e) => (
-                      <li key={e} className="bg-muted/10 rounded px-2 py-1 break-all">
+                      <li key={e} className="bg-muted rounded px-2 py-1 break-all">
                         {e}
                       </li>
                     ))}

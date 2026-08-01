@@ -100,7 +100,7 @@ function DraggableStudentRow({
   });
   return (
     <li ref={setNodeRef} className={isDragging ? 'opacity-40' : undefined}>
-      <div className="hover:bg-muted/50 flex items-center gap-2 rounded p-1 text-sm">
+      <div className="hover:bg-muted flex items-center gap-2 rounded p-1 text-sm">
         <label className="flex min-w-0 flex-1 items-center gap-2">
           <Checkbox
             checked={selected}
@@ -539,7 +539,7 @@ export function GroupSetView({
       {/* Selection action bar */}
       {selected.size > 0 && (
         <div
-          className="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md border p-2"
+          className="bg-muted flex flex-wrap items-center gap-2 rounded-md border p-2"
           role="region"
           aria-label="Selection actions"
         >

@@ -205,7 +205,7 @@ export function AssignToFields({
           </p>
         </div>
       ) : (
-        <div className="bg-muted/35 rounded-lg px-3 py-2 text-sm">
+        <div className="bg-muted rounded-lg px-3 py-2 text-sm">
           <span className="font-medium">Closes at the due date</span>
           <p className="text-muted-foreground mt-0.5 text-xs">
             Students cannot submit after it passes.

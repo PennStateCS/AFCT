@@ -302,7 +302,7 @@ export function ImportAssignmentDialog({
                         className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
                           isSelected
                             ? 'border-primary bg-primary/5 ring-primary/30 ring-1'
-                            : 'hover:bg-muted/40'
+                            : 'hover:bg-muted'
                         }`}
                       >
                         <input

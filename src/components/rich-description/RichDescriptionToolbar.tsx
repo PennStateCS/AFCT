@@ -661,7 +661,9 @@ export function RichDescriptionToolbar({
       {/* Alignment: a single-select group, since a block has exactly one alignment. Radix's
           single type ignores a press on the already-selected item, so the user cannot toggle
           alignment off into an undefined state. Below the narrow tier it moves into the menu. */}
-      <Group className="@max-[40rem]/toolbar:hidden">
+      {/* Must use the SAME threshold as the narrow overflow menu below, or alignment is on the
+          bar and in the menu at once and the row never sheds the width it was supposed to. */}
+      <Group className="@max-[44rem]/toolbar:hidden">
         <ToggleGroup
           type="single"
           size="sm"
@@ -708,11 +710,17 @@ export function RichDescriptionToolbar({
 
           Medium: the five structure commands. Narrow (a description inside a dialog): alignment
           joins them, which is what stops the row overflowing and stranding the expand button on a
-          line of its own. */}
-      <Group className="hidden @max-[52rem]/toolbar:@min-[40rem]/toolbar:flex">
+          line of its own.
+
+          The 44rem boundary is measured, not guessed. With alignment on the bar the row needs
+          681px, and the assignment Details form is 670px wide (max-w-2xl), so a 40rem boundary
+          put that page in a dead band where the medium tier applied but did not fit, and the
+          trailing group wrapped. Re-measure before moving this: add a control and the number
+          changes. */}
+      <Group className="hidden @max-[52rem]/toolbar:@min-[44rem]/toolbar:flex">
         <ToolbarOverflowMenu commands={structureCommands} />
       </Group>
-      <Group className="hidden @max-[40rem]/toolbar:flex">
+      <Group className="hidden @max-[44rem]/toolbar:flex">
         <ToolbarOverflowMenu commands={[...alignCommands, ...structureCommands]} />
       </Group>
 

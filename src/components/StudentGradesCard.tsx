@@ -179,7 +179,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                     </div>
                   </CardHeader>
 
-                  <CollapsibleContent className="border-border bg-muted/30 border-t px-2 py-2">
+                  <CollapsibleContent className="border-border bg-muted border-t px-2 py-2">
                     <div className="space-y-1">
                       {assignment.problems.map((problem, index) => (
                         <button

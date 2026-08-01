@@ -221,7 +221,7 @@ export function DateOverridesEditor({
             return (
               <li key={f.id}>
                 <Collapsible open={isOpen} onOpenChange={(open) => toggleExpanded(key, open)}>
-                  <div className="hover:bg-muted/20 flex items-stretch gap-1 px-2 sm:px-3">
+                  <div className="hover:bg-muted flex items-stretch gap-1 px-2 sm:px-3">
                     <CollapsibleTrigger
                       id={overrideTriggerId(key)}
                       className="focus-visible:ring-ring grid min-w-0 flex-1 gap-2 rounded-md px-2 py-3 text-left focus-visible:ring-2 focus-visible:outline-none md:grid-cols-[minmax(11rem,1.2fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)] md:items-center md:gap-3"
@@ -265,7 +265,7 @@ export function DateOverridesEditor({
                       <X className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </div>
-                  <CollapsibleContent className="bg-muted/10 border-t px-4 py-4">
+                  <CollapsibleContent className="bg-muted border-t px-4 py-4">
                     <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <CourseDateTimeField
                         control={control}

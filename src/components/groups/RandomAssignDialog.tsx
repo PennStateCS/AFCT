@@ -182,7 +182,7 @@ export function RandomAssignDialog({
                 const group = assignedGroupByUser.get(s.id);
                 return (
                   <li key={s.id}>
-                    <label className="flex items-center gap-2 rounded p-1 text-sm hover:bg-muted/50">
+                    <label className="flex items-center gap-2 rounded p-1 text-sm hover:bg-muted">
                       <Checkbox
                         checked={selected.has(s.id)}
                         onCheckedChange={() => toggle(s.id)}

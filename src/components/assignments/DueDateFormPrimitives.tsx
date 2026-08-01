@@ -35,7 +35,7 @@ export function DueDateSection({
       aria-labelledby={id}
       className={cn('bg-card overflow-hidden rounded-xl border shadow-xs', className)}
     >
-      <div className="bg-muted/25 flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="bg-muted flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
           <span
             className="bg-primary/10 text-primary mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg"

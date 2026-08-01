@@ -42,7 +42,7 @@ export function GeneralTab({
             setting. Shown for reference with instructions to change it. */}
         <div className="space-y-1">
           <p className="text-sm font-medium">Configured URL</p>
-          <p className="bg-muted/10 rounded-md border px-3 py-2 font-mono text-sm break-all">
+          <p className="bg-muted rounded-md border px-3 py-2 font-mono text-sm break-all">
             {loading ? 'Loading…' : configuredUrl ? configuredUrl : 'Not set'}
           </p>
           <p className="text-muted-foreground text-xs">

@@ -86,18 +86,38 @@ test.describe('description editor surface', () => {
     expect(after!.height).toBeGreaterThan(before!.height + 80);
   });
 
-  test('the Details-tab toolbar sits at the medium tier: structure in the More menu', async ({
+  /**
+   * The Details form is `max-w-2xl`, so its toolbar container is about 670px. With alignment on
+   * the bar the row needs 681px, so this page sits at the narrow tier: alignment goes into the
+   * menu with the structure commands. Getting that boundary wrong is what put the trailing
+   * controls on a second line, which is the whole reason these widths are asserted.
+   */
+  test('the Details-tab toolbar fits on one row, with alignment in the More menu', async ({
     page,
   }) => {
     await openDetails(page);
 
     await expect(page.getByRole('button', { name: 'More formatting' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Bullet list' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Align left' })).toBeHidden();
+
+    // One row: every visible control shares the top offset of the first one.
+    const rows = await page
+      .locator('[role="group"][aria-label="Formatting"]')
+      .first()
+      .evaluate(
+        (el) =>
+          new Set(
+            (Array.from(el.children) as HTMLElement[])
+              .filter((k) => k.offsetParent !== null && k.offsetWidth > 4)
+              .map((k) => k.offsetTop),
+          ).size,
+      );
+    expect(rows).toBe(1);
 
     await page.getByRole('button', { name: 'More formatting' }).click();
     await expect(page.getByRole('menuitemcheckbox', { name: 'Quote' })).toBeVisible();
-    // Alignment stays out of the menu at this tier; it is on the toolbar itself.
-    await expect(page.getByRole('menuitemcheckbox', { name: 'Align left' })).toBeHidden();
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Align left' })).toBeVisible();
     await page.keyboard.press('Escape');
   });
 

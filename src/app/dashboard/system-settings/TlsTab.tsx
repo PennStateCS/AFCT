@@ -74,7 +74,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
         {/* Current status */}
         <div className="space-y-2">
           <h2 className="text-sm font-medium">Current certificate</h2>
-          <div className="bg-muted/10 w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+          <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
             {tls?.installed ? (
               <>
                 <div className="flex flex-wrap items-center gap-2">
@@ -258,7 +258,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 boxClassName="border-input"
               />
               {leProgress && (
-                <div role="status" className="bg-muted/10 space-y-2 rounded-md border p-3 text-sm">
+                <div role="status" className="bg-muted space-y-2 rounded-md border p-3 text-sm">
                   {deriveAcmeSteps(leProgress.phase) && (
                     <StepList
                       steps={deriveAcmeSteps(leProgress.phase)!}
@@ -343,7 +343,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             </div>
 
             {tlsMethod === 'csr' && tls?.pendingCsr && (
-              <div className="bg-muted/30 space-y-3 rounded-md border p-3">
+              <div className="bg-muted space-y-3 rounded-md border p-3">
                 <p className="text-sm">
                   CSR generated (<span className="font-mono text-xs">afct.csr</span>). Upload the
                   signed certificate from your CA:
