@@ -134,7 +134,11 @@ export default function AssignmentSubmissions({
     queryKey: ['course', courseId, 'students', 'all'],
     queryFn: async () => {
       const res = await fetch(apiPaths.courseStudents(courseId, { includeDropped: true }));
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
+      if (!res.ok)
+        throw new Error(
+          (await res.json())?.error ||
+            'Could not load the student list. Refresh the page to try again.',
+        );
       return (await res.json()) as Person[];
     },
     staleTime: 30_000,
@@ -161,7 +165,7 @@ export default function AssignmentSubmissions({
   useEffect(() => {
     if (studentsQueryIsError) {
       console.error('Fetch students error:', studentsQuery.error);
-      showToast.error('Failed to load students');
+      showToast.error('Could not load the student list. Refresh the page to try again.');
     }
   }, [studentsQueryIsError, studentsQuery.error]);
 
@@ -382,7 +386,7 @@ export default function AssignmentSubmissions({
 
     if (reviewQueryIsError) {
       console.error('Fetch review data error:', reviewError);
-      showToast.error('Failed to load review data');
+      showToast.error('Could not load this submission. Refresh the page to try again.');
       setProblemGrades({});
       setGradeInputs({});
       return;
@@ -450,7 +454,7 @@ export default function AssignmentSubmissions({
         void queryClient.invalidateQueries({
           queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
         });
-        showToast.success('Comment saved successfully');
+        showToast.saved('Comment');
       } catch (err) {
         console.error('Save comment error:', err);
         showToast.error(errMessage(err, 'Failed to save comment'));
@@ -482,7 +486,7 @@ export default function AssignmentSubmissions({
             selectedStudentId ?? '',
           ),
         });
-        showToast.success('Comment deleted successfully');
+        showToast.deleted('Comment');
       } catch (err) {
         console.error('Delete comment error:', err);
         showToast.error(errMessage(err, 'Failed to delete comment'));
@@ -502,7 +506,9 @@ export default function AssignmentSubmissions({
     async (problemId: string) => {
       if (!selectedStudent) return;
       if (courseIsArchived) {
-        showToast.error('Course is archived; grades cannot be edited.');
+        showToast.error(
+          'This course is archived, so grades cannot be edited. Unarchive the course to make changes.',
+        );
         return;
       }
 
@@ -514,20 +520,18 @@ export default function AssignmentSubmissions({
       const trimmed = rawValue.trim();
       const numericValue = trimmed === '' ? null : Number(trimmed);
 
+      // Each of these shows the same sentence twice on purpose: inline next to the field, so it
+      // stays put while the grader fixes it, and as a toast, because the field can be scrolled
+      // out of view in a long problem list.
       if (numericValue !== null) {
-        if (Number.isNaN(numericValue)) {
-          setProblemGradeErrors((prev) => ({ ...prev, [problemId]: 'Grade must be a number' }));
-          showToast.error('Grade must be a number');
-          return;
-        }
-        if (numericValue < 0) {
-          const message = 'Grade must be at least 0';
-          setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
-          showToast.error(message);
-          return;
-        }
-        if (hasUpperBound && rawMaxPoints !== null && numericValue > rawMaxPoints) {
-          const message = `Grade must be between 0 and ${rawMaxPoints}`;
+        const message = Number.isNaN(numericValue)
+          ? 'Enter the grade as a number.'
+          : numericValue < 0
+            ? 'Enter a grade of at least 0.'
+            : hasUpperBound && rawMaxPoints !== null && numericValue > rawMaxPoints
+              ? `Enter a grade between 0 and ${rawMaxPoints}.`
+              : null;
+        if (message) {
           setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
           showToast.error(message);
           return;
@@ -640,8 +644,7 @@ export default function AssignmentSubmissions({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [students.length]);
 
-  const isStudentDataLoading =
-    loadingSubmissions || loadingComments || loadingProblemGrades;
+  const isStudentDataLoading = loadingSubmissions || loadingComments || loadingProblemGrades;
 
   useEffect(() => {
     if (isStudentDataLoading) {

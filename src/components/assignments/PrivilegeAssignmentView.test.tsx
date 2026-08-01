@@ -11,7 +11,6 @@ import { warmRichDescriptionEditor, WARM_TIMEOUT_MS } from '@/test/rich-editor';
 
 /* ─────────────────────────────── hoisted spies ──────────────────────────── */
 
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 // The search params the component reads on mount (drives the initial tab).
 const searchState = vi.hoisted(() => ({ value: '' }));
@@ -23,7 +22,10 @@ const colParams = vi.hoisted(
 
 /* ──────────────────────────────────  mocks  ─────────────────────────────── */
 
-vi.mock('@/lib/toast', () => ({ showToast: toast }));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toast = toastMock;
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'c1', aid: 'a1' }),
@@ -499,7 +501,7 @@ describe('PrivilegeAssignmentView — add problems', () => {
         String(u).endsWith('/assignments/a1/problems') && (init as RequestInit)?.method === 'POST',
     );
     expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ problemIds: ['p9'] });
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Problem Added'));
+    await waitFor(() => expect(toast.added).toHaveBeenCalledWith('Problem'));
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/assignments/a1?view=problems'),
     );
@@ -512,7 +514,11 @@ describe('PrivilegeAssignmentView — add problems', () => {
     await waitFor(() => expect(addBtn).toBeEnabled());
     fireEvent.click(addBtn);
     fireEvent.click(await screen.findByRole('button', { name: 'assoc-add' }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to add problems'));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'Could not add the problem to this assignment. Check your connection and try again.',
+      ),
+    );
   });
 });
 
@@ -540,7 +546,7 @@ describe('PrivilegeAssignmentView — remove problem', () => {
     );
     expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ problemId: 'p1' });
     await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('"Problem One" removed from assignment'),
+      expect(toast.removed).toHaveBeenCalledWith('Problem', { name: 'Problem One' }),
     );
   });
 
@@ -553,7 +559,11 @@ describe('PrivilegeAssignmentView — remove problem', () => {
         name: 'confirm-remove',
       }),
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to remove "Problem One"'));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'Could not remove the problem from this assignment. Check your connection and try again.',
+      ),
+    );
   });
 
   it('closes the confirm dialog without deleting on cancel', async () => {
@@ -589,7 +599,7 @@ describe('PrivilegeAssignmentView — render viewer', () => {
   it('toasts an error and opens nothing when the problem has no file', () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'render-p2' }));
-    expect(toast.error).toHaveBeenCalledWith('No file available to render');
+    expect(toast.error).toHaveBeenCalledWith('This problem has no file to preview.');
     expect(screen.queryByTestId('viewer-dialog')).not.toBeInTheDocument();
   });
 });

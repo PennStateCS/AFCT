@@ -264,15 +264,16 @@ export default function SubmissionsClient() {
   }, [problems]);
 
   useEffect(() => {
-    if (coursesError) showToast.error('Unable to load courses');
+    if (coursesError) showToast.error('Could not load courses. Refresh the page to try again.');
   }, [coursesError]);
 
   useEffect(() => {
-    if (assignmentsError) showToast.error('Unable to load assignments');
+    if (assignmentsError)
+      showToast.error('Could not load assignments. Refresh the page to try again.');
   }, [assignmentsError]);
 
   useEffect(() => {
-    if (problemsError) showToast.error('Unable to load problems');
+    if (problemsError) showToast.error('Could not load problems. Refresh the page to try again.');
   }, [problemsError]);
 
   // Cached submissions list keyed by the selected problem set. The query varies
@@ -291,7 +292,7 @@ export default function SubmissionsClient() {
 
   useEffect(() => {
     if (submissionsError) {
-      showToast.error('Unable to load submissions');
+      showToast.error('Could not load submissions. Refresh the page to try again.');
     }
   }, [submissionsError]);
 
@@ -574,7 +575,7 @@ export default function SubmissionsClient() {
                   <TableCell colSpan={8} className="py-10 text-center">
                     {loadingCourses || loadingAssignments || loadingSubmissions ? (
                       <div
-                        className="flex flex-col items-center justify-center gap-2 text-muted-foreground"
+                        className="text-muted-foreground flex flex-col items-center justify-center gap-2"
                         role="status"
                         aria-live="polite"
                       >
@@ -593,7 +594,10 @@ export default function SubmissionsClient() {
                          hide everything" -- the fix for the second is a filter change,
                          not doing more work. */
                       <div className="text-muted-foreground flex flex-col items-center whitespace-normal">
-                        <FileCode2 className="mb-2 h-10 w-10 text-muted-foreground" aria-hidden={true} />
+                        <FileCode2
+                          className="text-muted-foreground mb-2 h-10 w-10"
+                          aria-hidden={true}
+                        />
                         <p className="font-medium">
                           {submissions.length === 0
                             ? 'No submissions yet'

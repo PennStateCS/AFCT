@@ -13,14 +13,10 @@ vi.mock('@/components/ui/InputGroup', () =>
 );
 vi.mock('@/components/ui/select', () => import('@/test/mocks/ui').then((mod) => mod.selectMock));
 
-const { toastError } = vi.hoisted(() => ({
-  toastError: vi.fn(),
-}));
-vi.mock('sonner', () => ({
-  toast: {
-    error: toastError,
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastError = toastMock.error;
 
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),

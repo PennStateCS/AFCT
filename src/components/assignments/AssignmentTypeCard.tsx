@@ -72,10 +72,14 @@ export function AssignmentTypeCard({
       await apiClient.put(apiPaths.assignmentType(courseId, assignmentId), {
         groupSetId: isGroup ? selectedSetId : null,
       });
-      showToast.success('Assignment type changed');
+      showToast.updated('Assignment type');
       onChanged?.();
     } catch (err) {
-      showToast.error(err instanceof ApiError ? err.message : 'Failed to change type');
+      showToast.error(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not change the assignment type. Check your connection and try again.',
+      );
     } finally {
       setSaving(false);
       setConfirmOpen(false);
@@ -89,8 +93,8 @@ export function AssignmentTypeCard({
         Type
       </h2>
       <p className="text-muted-foreground max-w-3xl text-sm">
-        Whether students work individually or together as a group. Changing the type resets who
-        the assignment is assigned to and clears any date exceptions.
+        Whether students work individually or together as a group. Changing the type resets who the
+        assignment is assigned to and clears any date exceptions.
       </p>
 
       <fieldset className="grid max-w-3xl gap-3 sm:grid-cols-2" aria-label="Assignment type">

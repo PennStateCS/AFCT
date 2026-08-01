@@ -7,16 +7,14 @@ import { DuplicateProblemDialog } from './DuplicateProblemDialog';
 import { warmRichDescriptionEditor, WARM_TIMEOUT_MS } from '@/test/rich-editor';
 
 const postMock = vi.hoisted(() => vi.fn());
-const toastSuccess = vi.hoisted(() => vi.fn());
-const toastError = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/api/fetch-client', () => ({
   apiClient: { post: postMock },
   ApiError: class ApiError extends Error {},
 }));
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccess, error: toastError },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 const baseProblem = {
   id: 'p1',
@@ -73,6 +71,7 @@ describe('DuplicateProblemDialog', () => {
         description: 'Original description',
       }),
     );
+    expect(toastMock.duplicated).toHaveBeenCalled();
     expect(onDuplicated).toHaveBeenCalledWith({ id: 'p2' });
     expect(setOpen).toHaveBeenCalledWith(false);
   });

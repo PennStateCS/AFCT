@@ -241,7 +241,7 @@ export function EditUserDialog({
 
     resetForm();
     setOpen(false);
-    showToast.success('User updated successfully.');
+    showToast.updated('User');
   };
 
   return (
@@ -304,7 +304,11 @@ export function EditUserDialog({
                         Upload Avatar
                       </Button>
                       {avatarFileErrorMessage && (
-                        <p id={avatarErrorId} role="alert" className="mt-1 text-xs text-destructive">
+                        <p
+                          id={avatarErrorId}
+                          role="alert"
+                          className="text-destructive mt-1 text-xs"
+                        >
                           {avatarFileErrorMessage}
                         </p>
                       )}
@@ -316,7 +320,7 @@ export function EditUserDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive/10"
+                    className="border-destructive text-destructive hover:bg-destructive/10 flex items-center gap-2"
                     onClick={onDeleteAvatar}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -404,7 +408,7 @@ export function EditUserDialog({
               value={user.email}
               readOnly
               aria-readonly="true"
-              className="w-full cursor-not-allowed rounded border bg-muted p-2 text-sm opacity-70"
+              className="bg-muted w-full cursor-not-allowed rounded border p-2 text-sm opacity-70"
             />
           </div>
 

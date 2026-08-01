@@ -18,16 +18,11 @@ function renderWithClient(ui: React.ReactElement) {
 vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
 vi.mock('@/components/ui/select', () => import('@/test/mocks/ui').then((mod) => mod.selectMock));
 
-const { showToastSuccess, showToastError } = vi.hoisted(() => ({
-  showToastSuccess: vi.fn(),
-  showToastError: vi.fn(),
-}));
-vi.mock('@/lib/toast', () => ({
-  showToast: {
-    success: showToastSuccess,
-    error: showToastError,
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const showToastSuccess = toastMock.success;
+const showToastError = toastMock.error;
 
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
@@ -86,7 +81,7 @@ describe('CourseEditUserDialog', () => {
 
     expect(onSaved).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
-    expect(showToastSuccess).toHaveBeenCalledWith('Roster updated');
+    expect(toastMock.updated).toHaveBeenCalledWith('Roster');
   });
 
   it('shows an error toast when saving fails', async () => {

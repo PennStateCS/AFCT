@@ -125,7 +125,7 @@ export function DuplicateAssignmentDialog({
           problemMode: hasProblems ? problemMode : 'none',
         },
       );
-      showToast.success('Assignment duplicated');
+      showToast.duplicated('Assignment', { name: assignment?.title });
       onDuplicated?.(created);
       setOpen(false);
     } catch (err) {
@@ -177,7 +177,8 @@ export function DuplicateAssignmentDialog({
               // Seeded straight from the source rather than from state: the editor takes its
               // value as initial content only, and the prefill effect runs after it mounts.
               rich={{
-                value: asRichDescription(assignment?.descriptionJson) ?? assignment?.description ?? '',
+                value:
+                  asRichDescription(assignment?.descriptionJson) ?? assignment?.description ?? '',
                 onChange: setDescriptionJson,
               }}
               note="The title and description start as the original's. Edit them here or leave them unchanged. The assignment type and the Assign To settings (audience, dates, and any exceptions) are copied from the original and can be changed after the copy is created."

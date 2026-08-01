@@ -11,17 +11,11 @@ import { EditProblemDialog } from './EditProblemDialog';
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
 
-const { toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
-  toastSuccessMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-}));
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('@/lib/toast', () => ({
-  showToast: {
-    success: toastSuccessMock,
-    error: toastErrorMock,
-  },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccessMock = toastMock.success;
+const toastErrorMock = toastMock.error;
 
 vi.mock('@/components/ui/InputGroup', () => ({
   __esModule: true,
@@ -189,7 +183,7 @@ describe('EditProblemDialog (bank wizard)', () => {
     expect(formData.get('maxSubmissions')).toBeNull();
     expect(formData.get('autograderEnabled')).toBeNull();
 
-    expect(toastSuccessMock).toHaveBeenCalledWith('Problem updated.');
+    expect(toastMock.updated).toHaveBeenCalledWith('Problem', { name: 'Sample Problem' });
     expect(setOpen).toHaveBeenCalledWith(false);
     expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ id: 'problem-1' }));
   });

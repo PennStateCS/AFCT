@@ -8,15 +8,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { CreateAssignmentWizardDialog } from './CreateAssignmentWizardDialog';
 
-const { toastSuccessMock, toastErrorMock, toastWarningMock } = vi.hoisted(() => ({
-  toastSuccessMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-  toastWarningMock: vi.fn(),
-}));
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('sonner', () => ({
-  toast: { success: toastSuccessMock, error: toastErrorMock, warning: toastWarningMock },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccessMock = toastMock.success;
+const toastErrorMock = toastMock.error;
+const toastWarningMock = toastMock.warning;
 
 vi.mock('@/components/ui/InputGroup', () => ({
   __esModule: true,
@@ -56,7 +53,11 @@ vi.mock('@/components/ui/SelectField', () => ({
   }) => (
     <label>
       {label}
-      <select aria-label={label} value={value ?? ''} onChange={(e) => onValueChange?.(e.target.value)}>
+      <select
+        aria-label={label}
+        value={value ?? ''}
+        onChange={(e) => onValueChange?.(e.target.value)}
+      >
         <option value="" />
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -153,7 +154,13 @@ const groupSetDetail = {
       id: 'grp-1',
       name: 'Team A',
       members: [
-        { id: 'stu-2', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', inactive: false },
+        {
+          id: 'stu-2',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          email: 'ada@example.com',
+          inactive: false,
+        },
       ],
     },
   ],
@@ -168,10 +175,12 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   const method = (init?.method ?? 'GET').toUpperCase();
   if (method === 'GET' && u.includes('/students')) return studentsResp() as unknown as Response;
   // Group-set detail (has an id segment) before the group-set list.
-  if (method === 'GET' && u.includes('/group-sets/')) return ok(groupSetDetail) as unknown as Response;
+  if (method === 'GET' && u.includes('/group-sets/'))
+    return ok(groupSetDetail) as unknown as Response;
   if (method === 'GET' && u.includes('/group-sets')) return ok(groupSets) as unknown as Response;
   if (method === 'POST' && u.includes('/overrides')) return overrideResp() as unknown as Response;
-  if (method === 'POST' && u.includes('/assignments')) return assignmentResp() as unknown as Response;
+  if (method === 'POST' && u.includes('/assignments'))
+    return assignmentResp() as unknown as Response;
   throw new Error(`Unexpected fetch: ${method} ${u}`);
 });
 
@@ -207,7 +216,7 @@ const renderDialog = () => {
 beforeEach(() => {
   fetchMock.mockClear();
   studentsResp = () => ok(students);
-  assignmentResp = () => ok({ id: 'a1' });
+  assignmentResp = () => ok({ id: 'a1', title: 'Homework 1' });
   overrideResp = () => ok({ id: 'o1' });
   global.fetch = fetchMock as unknown as typeof fetch;
   toastSuccessMock.mockReset();
@@ -240,7 +249,9 @@ describe('CreateAssignmentWizardDialog', () => {
 
     await waitFor(() => expect(postCalls('/assignments').length).toBeGreaterThan(0));
 
-    const assignmentPost = postCalls('/assignments').find((c) => !String(c[0]).includes('/overrides'));
+    const assignmentPost = postCalls('/assignments').find(
+      (c) => !String(c[0]).includes('/overrides'),
+    );
     const body = JSON.parse((assignmentPost?.[1] as RequestInit).body as string);
     // Individual (no groupSetId), unpublished, restricted audience with the one assignee.
     expect(body).toMatchObject({
@@ -255,7 +266,10 @@ describe('CreateAssignmentWizardDialog', () => {
     // No separate override calls anymore; the audience is in the create body.
     expect(postCalls('/overrides')).toHaveLength(0);
 
-    expect(toastSuccessMock).toHaveBeenCalledWith('Assignment created');
+    // The dialog owns the success message, because it is what performed the write; its caller
+    // only updates state. Toasting in both places is what showed two messages for one assignment.
+    expect(toastMock.created).toHaveBeenCalledWith('Assignment', { name: 'Homework 1' });
+    expect(toastSuccessMock).not.toHaveBeenCalled();
     expect(onCreate).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
   });

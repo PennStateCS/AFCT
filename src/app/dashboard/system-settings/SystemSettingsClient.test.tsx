@@ -17,14 +17,10 @@ import { formatBackupTsLocal } from './system-settings-shared';
 
 // Spy on the toast helpers so we can assert the success/error branches without
 // pulling in sonner's real DOM rendering.
-const showToast = vi.hoisted(() => ({
-  success: vi.fn(),
-  error: vi.fn(),
-  warning: vi.fn(),
-  info: vi.fn(),
-  loading: vi.fn(),
-}));
-vi.mock('@/lib/toast', () => ({ showToast }));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const showToast = toastMock;
 
 // Render with a fresh QueryClient per test (retry off, no lingering cache) so each
 // of the three mount queries starts clean.
@@ -206,7 +202,7 @@ describe('SystemSettingsClient', () => {
 
     // Success path: success toast fired, no error toast.
     await waitFor(() => {
-      expect(showToast.success).toHaveBeenCalledWith('System settings updated successfully.');
+      expect(showToast.updated).toHaveBeenCalledWith('System settings');
     });
     expect(showToast.error).not.toHaveBeenCalled();
   });
@@ -265,9 +261,7 @@ describe('SystemSettingsClient', () => {
     expect(screen.getByText('2030-01-01')).toBeInTheDocument();
     // The TLS tab runs its own actions and has no savable fields, so the shared Save
     // button is hidden here rather than looking like it has unsaved settings.
-    expect(
-      screen.queryByRole('button', { name: 'Save system settings' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save system settings' })).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -485,7 +479,9 @@ describe('SystemSettingsClient — TLS certificate', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderWithClient(<SystemSettingsClient />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Create a self-signed certificate' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create a self-signed certificate' }),
+    );
     fireEvent.change(await screen.findByLabelText(/Hostname \(Common Name\)/), {
       target: { value: 'afct.test.edu' },
     });
@@ -502,7 +498,10 @@ describe('SystemSettingsClient — TLS certificate', () => {
 
   it('generates and downloads a CSR for the entered hostname', async () => {
     const { fetchMock, postBodies } = makeTlsFetch({
-      post: () => ({ ok: true, json: async () => ({ installed: false, pendingCsr: true, csr: 'CSR-DATA' }) }),
+      post: () => ({
+        ok: true,
+        json: async () => ({ installed: false, pendingCsr: true, csr: 'CSR-DATA' }),
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
     renderWithClient(<SystemSettingsClient />);

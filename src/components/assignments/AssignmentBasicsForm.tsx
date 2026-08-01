@@ -136,10 +136,14 @@ export function AssignmentBasicsForm({
       // remounted. Reading the key captured by this render is the point, not a stale read; edits
       // made while the save was in flight were not part of it and stay unsaved.
       setLoadedKey(currentKey);
-      showToast.success('Assignment updated');
+      showToast.updated('Assignment', { name: trimmed });
       onSaved?.();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to save the assignment');
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not save the assignment. Check your connection and try again.',
+      );
     } finally {
       savingRef.current = false;
       setBusy(false);

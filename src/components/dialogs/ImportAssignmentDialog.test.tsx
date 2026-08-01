@@ -7,16 +7,14 @@ import { ImportAssignmentDialog } from './ImportAssignmentDialog';
 
 const getMock = vi.hoisted(() => vi.fn());
 const postMock = vi.hoisted(() => vi.fn());
-const toastSuccess = vi.hoisted(() => vi.fn());
-const toastError = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/api/fetch-client', () => ({
   apiClient: { get: getMock, post: postMock },
   ApiError: class ApiError extends Error {},
 }));
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccess, error: toastError },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 // Replace the Radix-based SelectField with a native <select> so the wizard is drivable
 // in jsdom (Radix Select's portal/pointer model doesn't work headlessly).
@@ -121,6 +119,7 @@ describe('ImportAssignmentDialog', () => {
         problemMode: 'copy',
       }),
     );
+    expect(toastMock.imported).toHaveBeenCalledWith('Assignment');
     expect(onImported).toHaveBeenCalledWith({ id: 'a2' });
   });
 
@@ -129,7 +128,15 @@ describe('ImportAssignmentDialog', () => {
       Promise.resolve(
         url.includes('manageable-courses')
           ? courses
-          : [{ id: 'g1', title: 'Team Project', description: null, problemCount: 0, isGroup: true }],
+          : [
+              {
+                id: 'g1',
+                title: 'Team Project',
+                description: null,
+                problemCount: 0,
+                isGroup: true,
+              },
+            ],
       ),
     );
     renderDialog();
@@ -142,9 +149,7 @@ describe('ImportAssignmentDialog', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
-    await waitFor(() =>
-      expect(screen.getByRole('note')).toHaveTextContent(/group assignment/i),
-    );
+    await waitFor(() => expect(screen.getByRole('note')).toHaveTextContent(/group assignment/i));
     expect(screen.getByRole('note')).toHaveTextContent(/individual assignment/i);
   });
 });

@@ -32,7 +32,7 @@ function RegistrationCode({ code }: { code: string }) {
       showToast.success(okMsg);
       window.setTimeout(() => setCopied(null), 1500);
     } catch {
-      showToast.error('Could not copy to the clipboard');
+      showToast.error('Could not copy to the clipboard. Select the code and copy it manually.');
     }
   };
 
@@ -50,7 +50,9 @@ function RegistrationCode({ code }: { code: string }) {
         size="icon"
         className="h-6 w-6"
         onClick={copyCode}
-        aria-label={copied === 'code' ? 'Registration code copied' : `Copy registration code ${formatted}`}
+        aria-label={
+          copied === 'code' ? 'Registration code copied' : `Copy registration code ${formatted}`
+        }
         title="Copy registration code"
       >
         {copied === 'code' ? (

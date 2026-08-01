@@ -23,14 +23,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { DuplicateFormSchema } from '@/schemas/course';
 import type { Course } from '@prisma/client';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
 import { CourseDateTimeField } from './CourseDateTimeField';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
 import { formatDateTimeLocal, toDateTimeLocalInTimeZone } from '@/lib/date-convert';
-
 
 type FormValues = z.input<typeof DuplicateFormSchema>;
 
@@ -89,8 +88,8 @@ export default function DuplicateCourseDialog({
       ? toDateTimeLocalInTimeZone(course.registrationCloseAt, zone)
       : '',
     emptyStringNotation:
-      ((course as { emptyStringNotation?: FormValues['emptyStringNotation'] })?.emptyStringNotation) ??
-      'EPSILON',
+      (course as { emptyStringNotation?: FormValues['emptyStringNotation'] })
+        ?.emptyStringNotation ?? 'EPSILON',
     copyMode: 'assignments_with_problems',
     instructorIds: [],
     taIds: [],
@@ -144,7 +143,10 @@ export default function DuplicateCourseDialog({
   });
   const currentRoster = courseRosterQuery.data ?? [];
   useEffect(() => {
-    if (courseRosterQuery.isError) toast.error('Failed to load current course roster.');
+    if (courseRosterQuery.isError)
+      showToast.error(
+        'Could not load the course roster. Close and reopen this dialog to try again.',
+      );
   }, [courseRosterQuery.isError]);
 
   // Keep min (end) in sync with start
@@ -168,8 +170,8 @@ export default function DuplicateCourseDialog({
         ? toDateTimeLocalInTimeZone(course.registrationCloseAt, zone)
         : '',
       emptyStringNotation:
-        ((course as { emptyStringNotation?: FormValues['emptyStringNotation'] })?.emptyStringNotation) ??
-        'EPSILON',
+        (course as { emptyStringNotation?: FormValues['emptyStringNotation'] })
+          ?.emptyStringNotation ?? 'EPSILON',
       copyMode: 'assignments_with_problems',
       instructorIds: [],
       taIds: [],
@@ -194,7 +196,7 @@ export default function DuplicateCourseDialog({
       .filter((row) => row.role === 'FACULTY')
       .map((row) => row.user.id);
     if (currentFacultyIds.length === 0) {
-      toast.info('This course has no current faculty members to add.');
+      showToast.info('This course has no current faculty members to add.');
       return;
     }
     const existingIds = new Set(getValues('instructorIds') ?? []);
@@ -206,7 +208,7 @@ export default function DuplicateCourseDialog({
       shouldTouch: true,
       shouldValidate: true,
     });
-    toast.success(
+    showToast.success(
       added === 0
         ? 'All current faculty were already selected.'
         : `Added ${added} current faculty member${added === 1 ? '' : 's'}.`,
@@ -214,11 +216,9 @@ export default function DuplicateCourseDialog({
   };
 
   const selectCurrentTAs = async () => {
-    const currentTAIds = currentRoster
-      .filter((row) => row.role === 'TA')
-      .map((row) => row.user.id);
+    const currentTAIds = currentRoster.filter((row) => row.role === 'TA').map((row) => row.user.id);
     if (currentTAIds.length === 0) {
-      toast.info('This course has no current TAs to add.');
+      showToast.info('This course has no current TAs to add.');
       return;
     }
     const existingIds = new Set(getValues('taIds') ?? []);
@@ -230,7 +230,7 @@ export default function DuplicateCourseDialog({
       shouldTouch: true,
       shouldValidate: true,
     });
-    toast.success(
+    showToast.success(
       added === 0
         ? 'All current TAs were already selected.'
         : `Added ${added} current TA${added === 1 ? '' : 's'}.`,
@@ -251,7 +251,7 @@ export default function DuplicateCourseDialog({
   const onSubmit = async (raw: FormValues) => {
     const courseId = course?.id;
     if (!courseId) {
-      toast.error('Cannot duplicate course because the course ID is missing.');
+      showToast.error('Could not duplicate the course. Refresh the page to try again.');
       return;
     }
 
@@ -273,7 +273,10 @@ export default function DuplicateCourseDialog({
     };
 
     try {
-      const data = await apiClient.post<{ id: string }>(apiPaths.courseDuplicate(courseId), payload);
+      const data = await apiClient.post<{ id: string }>(
+        apiPaths.courseDuplicate(courseId),
+        payload,
+      );
       setOpen(false);
       if (onSuccess) {
         onSuccess(data.id);
@@ -281,7 +284,7 @@ export default function DuplicateCourseDialog({
         window.location.href = `/dashboard/courses/${data.id}`;
       }
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : 'Failed to duplicate course');
+      showToast.error(e instanceof ApiError ? e.message : 'Failed to duplicate course');
     }
   };
 
@@ -303,8 +306,8 @@ export default function DuplicateCourseDialog({
             <DialogTitle>Duplicate Course</DialogTitle>
           </div>
           <DialogDescription className="sr-only">
-            Copy this course into a new one in five steps: details, schedule, what to copy,
-            roster, then review.
+            Copy this course into a new one in five steps: details, schedule, what to copy, roster,
+            then review.
           </DialogDescription>
         </DialogHeader>
 
@@ -483,8 +486,8 @@ export default function DuplicateCourseDialog({
                         <div>
                           <div className="font-medium">Assignments and their problems</div>
                           <div className="text-muted-foreground text-sm">
-                            Copy assignments and duplicate the problems attached to each
-                            assignment; new assignments will reference copied problems only.
+                            Copy assignments and duplicate the problems attached to each assignment;
+                            new assignments will reference copied problems only.
                           </div>
                         </div>
                       </label>
@@ -520,7 +523,9 @@ export default function DuplicateCourseDialog({
                       variant="secondary"
                       onClick={selectCurrentFaculty}
                       aria-describedby="duplicate-roster-status"
-                      disabled={!course?.id || courseRosterQuery.isLoading || courseRosterQuery.isError}
+                      disabled={
+                        !course?.id || courseRosterQuery.isLoading || courseRosterQuery.isError
+                      }
                     >
                       Select current faculty
                     </Button>
@@ -529,7 +534,9 @@ export default function DuplicateCourseDialog({
                       variant="secondary"
                       onClick={selectCurrentTAs}
                       aria-describedby="duplicate-roster-status"
-                      disabled={!course?.id || courseRosterQuery.isLoading || courseRosterQuery.isError}
+                      disabled={
+                        !course?.id || courseRosterQuery.isLoading || courseRosterQuery.isError
+                      }
                     >
                       Select current TAs
                     </Button>
@@ -537,7 +544,11 @@ export default function DuplicateCourseDialog({
                   {/* Persistent explanation for why the buttons are disabled (the
                       error toast is transient); described-by from both buttons. */}
                   {(courseRosterQuery.isLoading || courseRosterQuery.isError) && (
-                    <p id="duplicate-roster-status" role="status" className="text-muted-foreground text-xs">
+                    <p
+                      id="duplicate-roster-status"
+                      role="status"
+                      className="text-muted-foreground text-xs"
+                    >
                       {courseRosterQuery.isLoading
                         ? 'Loading the current roster…'
                         : 'The current roster could not be loaded. Close and reopen this dialog to retry, or add members below.'}
@@ -586,8 +597,8 @@ export default function DuplicateCourseDialog({
                 />
 
                 <div className="text-muted-foreground text-xs">
-                  The copy needs at least one faculty member: use Select current faculty or
-                  add faculty above. Students are never copied.
+                  The copy needs at least one faculty member: use Select current faculty or add
+                  faculty above. Students are never copied.
                 </div>
               </div>
             )}
@@ -644,8 +655,7 @@ export default function DuplicateCourseDialog({
                 </dl>
 
                 <p className="text-muted-foreground text-xs">
-                  The duplicated course is created unpublished, and submissions are never
-                  copied.
+                  The duplicated course is created unpublished, and submissions are never copied.
                 </p>
 
                 <label className="mt-2 flex items-center gap-2">
@@ -664,12 +674,7 @@ export default function DuplicateCourseDialog({
 
           <DialogFooter>
             <DialogClose asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={isSubmitting}
-                onClick={resetAll}
-              >
+              <Button type="button" variant="ghost" disabled={isSubmitting} onClick={resetAll}>
                 Cancel
               </Button>
             </DialogClose>
@@ -684,7 +689,12 @@ export default function DuplicateCourseDialog({
                 so the pending click's default action can't submit the form (same
                 hazard as CreateCourseDialog). */}
             {step < LAST_STEP ? (
-              <Button key="wizard-next" type="button" disabled={isSubmitting} onClick={() => void next()}>
+              <Button
+                key="wizard-next"
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => void next()}
+              >
                 Next
               </Button>
             ) : (
@@ -698,4 +708,3 @@ export default function DuplicateCourseDialog({
     </Dialog>
   );
 }
-

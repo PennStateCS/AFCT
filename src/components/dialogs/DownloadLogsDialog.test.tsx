@@ -31,10 +31,10 @@ vi.mock('@/components/ui/InputGroup', () => ({
   default: () => <div data-testid="input-group" />,
 }));
 
-const toastError = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/toast', () => ({
-  showToast: { error: toastError, success: vi.fn() },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastError = toastMock.error;
 
 describe('DownloadLogsDialog', () => {
   beforeEach(() => {
@@ -91,7 +91,9 @@ describe('DownloadLogsDialog', () => {
     renderWithClient(<DownloadLogsDialog open onOpenChange={() => {}} />);
 
     await waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith('Failed to get log fields');
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not load the list of log fields. Close and reopen this dialog to try again.',
+      );
     });
   });
 });

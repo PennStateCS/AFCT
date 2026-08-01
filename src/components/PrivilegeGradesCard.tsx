@@ -100,7 +100,10 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     queryKey: ['course', courseId, 'grades', 'structure'],
     queryFn: async () => {
       const res = await fetch(apiPaths.courseGrades(courseId, 'structure'));
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load grades');
+      if (!res.ok)
+        throw new Error(
+          (await res.json())?.error || 'Could not load grades. Refresh the page to try again.',
+        );
       const body = (await res.json()) as {
         students: ApiStudent[];
         assignments: Assignment[];
@@ -150,7 +153,10 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     queryKey: ['course', courseId, 'grades', 'values'],
     queryFn: async () => {
       const res = await fetch(apiPaths.courseGrades(courseId, 'values'));
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load grades');
+      if (!res.ok)
+        throw new Error(
+          (await res.json())?.error || 'Could not load grades. Refresh the page to try again.',
+        );
       const body = (await res.json()) as {
         grades: Record<string, Record<string, number | null>>;
       };
@@ -186,7 +192,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   useEffect(() => {
     if (gradesError) {
       console.error('Fetch grades error:', structureQuery.error ?? valuesQuery.error);
-      showToast.error('Failed to load grades');
+      showToast.error('Could not load grades. Refresh the page to try again.');
     }
   }, [gradesError, structureQuery.error, valuesQuery.error]);
 
@@ -313,7 +319,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           <div className="flex items-center gap-2">
             <span>{String(row.original.lastName ?? '')}</span>
             {row.original.enrollmentStatus === 'DROPPED' ? (
-              <span className="inline-flex items-center rounded-full bg-status-warning-bg px-2 py-0.5 text-xs font-medium text-status-warning">
+              <span className="bg-status-warning-bg text-status-warning inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">
                 Dropped
               </span>
             ) : null}
@@ -343,7 +349,9 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         header: () => (
           <div className="flex flex-col items-center leading-tight">
             <span>{a.title}</span>
-            <span className="text-muted-foreground text-xs font-normal">{a.maxPoints ?? 0} pts</span>
+            <span className="text-muted-foreground text-xs font-normal">
+              {a.maxPoints ?? 0} pts
+            </span>
           </div>
         ),
         cell: ({ row }) => {
@@ -381,7 +389,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           return (
             <button
               type="button"
-              className="flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1 hover:bg-accent"
+              className="hover:bg-accent flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1"
               title="View grade breakdown"
               onClick={handleClick}
               aria-label={`View breakdown for ${user.firstName} ${user.lastName} on ${a.title}`}

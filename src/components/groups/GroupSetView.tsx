@@ -111,7 +111,7 @@ function DraggableStudentRow({
           <span className="min-w-0 flex-1 truncate">{studentName(student)}</span>
         </label>
         {inactive && (
-          <Badge variant="outline" className="shrink-0 text-status-warning">
+          <Badge variant="outline" className="text-status-warning shrink-0">
             Inactive
           </Badge>
         )}
@@ -319,7 +319,9 @@ export function GroupSetView({
 
   const zoneName = useCallback(
     (id: string) =>
-      id === UNASSIGNED_ZONE ? 'Unassigned' : (detail?.groups.find((g) => g.id === id)?.name ?? 'group'),
+      id === UNASSIGNED_ZONE
+        ? 'Unassigned'
+        : (detail?.groups.find((g) => g.id === id)?.name ?? 'group'),
     [detail],
   );
 
@@ -397,7 +399,7 @@ export function GroupSetView({
     await apiClient.post(apiPaths.courseGroupSetGroups(courseId, setId), { name });
     void queryClient.invalidateQueries({ queryKey: detailKey });
     onListChanged();
-    showToast.success('Group created');
+    showToast.created('Group');
   };
 
   const doRenameGroup = async (name: string) => {
@@ -413,7 +415,7 @@ export function GroupSetView({
       await apiClient.del(apiPaths.courseGroupSetGroup(courseId, setId, deleteGroup.id));
       void queryClient.invalidateQueries({ queryKey: detailKey });
       onListChanged();
-      showToast.success('Group deleted');
+      showToast.deleted('Group');
     } catch (err) {
       showToast.error(err instanceof ApiError ? err.message : 'Failed to delete group');
     } finally {
@@ -425,7 +427,7 @@ export function GroupSetView({
     setBusy(true);
     try {
       await apiClient.del(apiPaths.courseGroupSet(courseId, setId));
-      showToast.success('Group set deleted');
+      showToast.deleted('Group set');
       onListChanged();
       onSelectSet('');
     } catch (err) {
@@ -441,7 +443,7 @@ export function GroupSetView({
   }
   if (detailQuery.isError || !detail) {
     return (
-      <div className="rounded-md border border-status-danger-border bg-status-danger-bg p-4 text-sm text-status-danger">
+      <div className="border-status-danger-border bg-status-danger-bg text-status-danger rounded-md border p-4 text-sm">
         Could not load this group set.{' '}
         <button
           type="button"
@@ -463,11 +465,7 @@ export function GroupSetView({
           {detail.locked && <Badge variant="secondary">Locked</Badge>}
         </h3>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setCreateGroupOpen(true)}
-            disabled={disabled}
-          >
+          <Button variant="secondary" onClick={() => setCreateGroupOpen(true)} disabled={disabled}>
             <Plus className="h-4 w-4" /> Add group
           </Button>
           <Button
@@ -508,11 +506,11 @@ export function GroupSetView({
       {detail.locked && (
         <div
           role="status"
-          className="rounded-md border border-status-warning-border bg-status-warning-bg p-3 text-sm text-status-warning"
+          className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border p-3 text-sm"
         >
-          This group set has associated submissions or grades. Its groups and memberships can
-          no longer be changed because doing so could affect academic records. Duplicate the
-          group set to create a new arrangement.
+          This group set has associated submissions or grades. Its groups and memberships can no
+          longer be changed because doing so could affect academic records. Duplicate the group set
+          to create a new arrangement.
         </div>
       )}
 

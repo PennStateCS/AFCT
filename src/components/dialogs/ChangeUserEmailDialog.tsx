@@ -106,7 +106,7 @@ export function ChangeUserEmailDialog({
     setSubmitting(true);
     try {
       await apiClient.patch(apiPaths.user(userId), { email: normalized });
-      showToast.success('Email updated');
+      showToast.updated('Email address');
       onChanged?.();
       setOpen(false);
     } catch (err) {
@@ -140,7 +140,7 @@ export function ChangeUserEmailDialog({
             placeholder="name@example.edu"
           />
           {error ? (
-            <p id="change-email-error" className="text-xs text-destructive" role="alert">
+            <p id="change-email-error" className="text-destructive text-xs" role="alert">
               {error}
             </p>
           ) : availability === 'available' ? (

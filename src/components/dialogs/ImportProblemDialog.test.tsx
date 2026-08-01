@@ -7,16 +7,14 @@ import { ImportProblemDialog } from './ImportProblemDialog';
 
 const getMock = vi.hoisted(() => vi.fn());
 const postMock = vi.hoisted(() => vi.fn());
-const toastSuccess = vi.hoisted(() => vi.fn());
-const toastError = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/api/fetch-client', () => ({
   apiClient: { get: getMock, post: postMock },
   ApiError: class ApiError extends Error {},
 }));
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccess, error: toastError },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 // Native <select> stand-in so the wizard is drivable in jsdom (Radix Select's
 // portal/pointer model doesn't work headlessly).
@@ -112,6 +110,7 @@ describe('ImportProblemDialog', () => {
         description: 'Original desc',
       }),
     );
+    expect(toastMock.imported).toHaveBeenCalledWith('Problem');
     expect(onImported).toHaveBeenCalledWith({ id: 'p2' });
   });
 });

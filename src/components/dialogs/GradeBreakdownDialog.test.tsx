@@ -14,12 +14,10 @@ const renderWithClient = (ui: React.ReactElement) => {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-const toastSuccess = vi.hoisted(() => vi.fn());
-const toastError = vi.hoisted(() => vi.fn());
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccess, error: toastError },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastError = toastMock.error;
 
 // Row shape as produced by the component (mirrors its internal Row type).
 type Row = {
@@ -225,6 +223,7 @@ describe('GradeBreakdownDialog', () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(toastMock.saved).toHaveBeenCalledWith('Grades');
 
     // Exactly one POST to the bulk problem-grades endpoint (studentId in the URL).
     const postCalls = fetchMock.mock.calls.filter(
@@ -307,7 +306,9 @@ describe('GradeBreakdownDialog', () => {
     renderWithClient(<GradeBreakdownDialog {...baseProps} setOpen={vi.fn()} />);
 
     await waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith('Failed to load grade breakdown');
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not load the grade breakdown. Close and reopen this dialog to try again.',
+      );
     });
   });
 });

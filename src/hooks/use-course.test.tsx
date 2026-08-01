@@ -21,8 +21,9 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParamsMock,
 }));
 
-const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/lib/toast', () => ({ showToast: toastMock }));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 import {
   useCourseData,
@@ -109,7 +110,11 @@ describe('useCourseData', () => {
   it('surfaces a toast when the course fetch fails', async () => {
     fetchMock.mockResolvedValue({ ok: false });
     renderHook(() => useCourseData('c1'), { wrapper: createWrapper() });
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Failed to load course'));
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        'Could not load the course. Refresh the page to try again.',
+      ),
+    );
   });
 
   it('lazily loads the assignments section and merges it into the course', async () => {
@@ -200,7 +205,7 @@ describe('useEnrollment', () => {
       '/api/courses/c1/roster',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(toastMock.success).toHaveBeenCalledWith('User enrolled!');
+    expect(toastMock.success).toHaveBeenCalledWith('User enrolled');
     expect(refetch).toHaveBeenCalled();
   });
 
@@ -210,6 +215,8 @@ describe('useEnrollment', () => {
     await act(async () => {
       await result.current.handleEnrollUser({ id: 'u9' } as never, 'c1', vi.fn());
     });
-    expect(toastMock.error).toHaveBeenCalledWith('Error enrolling user');
+    expect(toastMock.error).toHaveBeenCalledWith(
+      'Could not enroll the user. Check your connection and try again.',
+    );
   });
 });

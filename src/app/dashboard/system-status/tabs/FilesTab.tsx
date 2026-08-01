@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { fetchJson } from '@/lib/query-fetch';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import { showToast } from '@/lib/toast';
 import type { FilesStatusResponse } from '@/lib/status/types';
 import { Loading, Stat, Section, useStatusQuery } from '../status-ui';
 
@@ -41,12 +42,17 @@ export default function FilesTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vars),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.statusFiles() });
+      showToast.deleted('File', { name: vars.fileName });
     },
     onError: (err) => {
       console.error('Delete abandoned file error:', err);
-      window.alert(err instanceof Error ? err.message : 'Failed to delete file');
+      showToast.error(
+        err instanceof Error
+          ? err.message
+          : 'Could not delete the file. Check your connection and try again.',
+      );
     },
   });
 

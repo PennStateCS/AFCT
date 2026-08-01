@@ -94,7 +94,9 @@ export function GradeBreakdownDialog({
   // Surface a load failure the same way the imperative fetch did.
   useEffect(() => {
     if (loadFailed) {
-      showToast.error('Failed to load grade breakdown');
+      showToast.error(
+        'Could not load the grade breakdown. Close and reopen this dialog to try again.',
+      );
     }
   }, [loadFailed]);
 
@@ -153,13 +155,13 @@ export function GradeBreakdownDialog({
       await queryClient.invalidateQueries({
         queryKey: queryKeys.assignment.problemGrades(courseId, assignmentId, studentId),
       });
-      showToast.success('Grades saved');
+      showToast.saved('Grades');
       onSaved?.();
       setOpen(false);
     },
     onError: (err) => {
       console.error('save error', err);
-      showToast.error('Failed to save grades');
+      showToast.error('Could not save the grades. Check your connection and try again.');
     },
   });
 

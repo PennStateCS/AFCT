@@ -8,13 +8,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AssignmentTypeCard } from './AssignmentTypeCard';
 
-const { toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
-  toastSuccessMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-}));
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccessMock, error: toastErrorMock, warning: vi.fn() },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccessMock = toastMock.success;
+const toastErrorMock = toastMock.error;
 
 // Render SelectField as a native select so the group-set choice is queryable.
 vi.mock('@/components/ui/SelectField', () => ({
@@ -32,7 +30,11 @@ vi.mock('@/components/ui/SelectField', () => ({
   }) => (
     <label>
       {label}
-      <select aria-label={label} value={value ?? ''} onChange={(e) => onValueChange?.(e.target.value)}>
+      <select
+        aria-label={label}
+        value={value ?? ''}
+        onChange={(e) => onValueChange?.(e.target.value)}
+      >
         <option value="" />
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -131,7 +133,7 @@ describe('AssignmentTypeCard', () => {
     expect(JSON.parse((putCalls()[0][1] as RequestInit).body as string)).toEqual({
       groupSetId: 'gs-1',
     });
-    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalled());
+    await waitFor(() => expect(toastMock.updated).toHaveBeenCalledWith('Assignment type'));
     expect(onChanged).toHaveBeenCalled();
   });
 
