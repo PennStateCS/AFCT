@@ -63,7 +63,7 @@ export function CreateGroupSetDialog({
         name: trimmed,
         initialGroupCount,
       });
-      showToast.success('Group set created');
+      showToast.created('Group set');
       setOpen(false);
       onCreated(created.id);
     } catch (err) {
@@ -121,7 +121,7 @@ export function CreateGroupSetDialog({
           </div>
 
           {error && (
-            <p id={errorId} role="alert" className="text-xs text-destructive">
+            <p id={errorId} role="alert" className="text-destructive text-xs">
               {error}
             </p>
           )}

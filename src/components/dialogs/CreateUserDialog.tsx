@@ -11,7 +11,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import InputGroup from '@/components/ui/InputGroup';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
@@ -102,7 +102,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
     } else {
       const text = JSON.parse(await res.text().catch(() => '{"error":"Unexpected Error"}'));
       console.error('Failed to create user:', text);
-      toast.error(text.error);
+      showToast.error(text.error);
     }
   };
 

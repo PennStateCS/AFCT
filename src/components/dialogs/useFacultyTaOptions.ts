@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import type { User } from '@prisma/client';
 import { apiPaths } from '@/lib/api-paths';
 
@@ -32,7 +32,8 @@ export function useFacultyTaOptions(open: boolean): {
     staleTime: 30_000,
   });
   useEffect(() => {
-    if (facultyQuery.isError) toast.error('Failed to load faculty list.');
+    if (facultyQuery.isError)
+      showToast.error('Could not load the faculty list. Refresh the page to try again.');
   }, [facultyQuery.isError]);
 
   const taQuery = useQuery({
@@ -47,7 +48,8 @@ export function useFacultyTaOptions(open: boolean): {
     staleTime: 30_000,
   });
   useEffect(() => {
-    if (taQuery.isError) toast.error('Failed to load TA list.');
+    if (taQuery.isError)
+      showToast.error('Could not load the TA list. Refresh the page to try again.');
   }, [taQuery.isError]);
 
   return { facultyList: facultyQuery.data ?? [], taList: taQuery.data ?? [] };

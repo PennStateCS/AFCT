@@ -19,8 +19,9 @@ const utils = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/course-mutations', () => utils);
 
-const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/lib/toast', () => ({ showToast: toastMock }));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 import { useCourseHandlers } from '@/lib/course-handlers';
 
@@ -35,7 +36,15 @@ const renderHook: typeof rtlRenderHook = (cb, options) => {
   });
 };
 
-const course = { id: 'c1', startDate: new Date('2026-01-01'), endDate: new Date('2026-05-01') } as never;
+const course = {
+  id: 'c1',
+  startDate: new Date('2026-01-01'),
+  endDate: new Date('2026-05-01'),
+  // The delete handler reads the item's title off these before deleting it, so a course
+  // fixture without them is not a course the hook can be handed.
+  assignments: [{ id: 'a1', title: 'Pumping Lemma' }],
+  problems: [{ id: 'p1', title: 'Even Length Strings' }],
+} as never;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -76,7 +85,7 @@ describe('useCourseHandlers — course save', () => {
       await result.current.handleCourseSave({ name: 'New name' });
     });
     expect(utils.saveCourse).toHaveBeenCalled();
-    expect(toastMock.success).toHaveBeenCalledWith('Course updated!');
+    expect(toastMock.updated).toHaveBeenCalledWith('Course');
   });
 
   it('toasts a failure when the save rejects', async () => {
@@ -85,7 +94,9 @@ describe('useCourseHandlers — course save', () => {
     await act(async () => {
       await result.current.handleCourseSave({ name: 'x' });
     });
-    expect(toastMock.error).toHaveBeenCalledWith('Failed to save course');
+    expect(toastMock.error).toHaveBeenCalledWith(
+      'Could not save the course. Check your connection and try again.',
+    );
   });
 });
 
@@ -98,7 +109,7 @@ describe('useCourseHandlers — optimistic state updates', () => {
     });
     expect(utils.updateCourseAfterAssignmentSave).toHaveBeenCalled();
     expect(setCourse).toHaveBeenCalled();
-    expect(toastMock.success).toHaveBeenCalledWith('Assignment updated!');
+    expect(toastMock.updated).toHaveBeenCalledWith('Assignment', { name: undefined });
   });
 
   it('applies an assignment creation to course state', () => {
@@ -106,7 +117,7 @@ describe('useCourseHandlers — optimistic state updates', () => {
     const { result } = renderHook(() => useCourseHandlers(course, setCourse));
     act(() => result.current.handleAssignmentCreate({ id: 'a2' } as never));
     expect(utils.updateCourseAfterAssignmentCreate).toHaveBeenCalled();
-    expect(toastMock.success).toHaveBeenCalledWith('Assignment created!');
+    expect(toastMock.created).not.toHaveBeenCalled();
   });
 
   it('applies a problem creation to course state', () => {
@@ -114,7 +125,7 @@ describe('useCourseHandlers — optimistic state updates', () => {
     const { result } = renderHook(() => useCourseHandlers(course, setCourse));
     act(() => result.current.handleProblemCreated({ id: 'p1' } as never));
     expect(utils.updateCourseAfterProblemCreate).toHaveBeenCalled();
-    expect(toastMock.success).toHaveBeenCalledWith('Problem created!');
+    expect(toastMock.created).not.toHaveBeenCalled();
   });
 
   it('ignores a problem creation with no problem payload', () => {
@@ -130,7 +141,7 @@ describe('useCourseHandlers — optimistic state updates', () => {
     const { result } = renderHook(() => useCourseHandlers(course, setCourse));
     act(() => result.current.handleProblemSaved({ id: 'p1' } as never));
     expect(utils.updateCourseAfterProblemSave).toHaveBeenCalled();
-    expect(toastMock.success).toHaveBeenCalledWith('Problem updated!');
+    expect(toastMock.updated).not.toHaveBeenCalled();
   });
 
   it('is a no-op for edit/delete click handlers except returning their argument', () => {
@@ -162,7 +173,6 @@ describe('useCourseHandlers — course publish toggle', () => {
     });
     expect(toastMock.error).toHaveBeenCalled();
   });
-
 });
 
 describe('useCourseHandlers — delete', () => {
@@ -175,7 +185,9 @@ describe('useCourseHandlers — delete', () => {
     });
     expect(utils.deleteItem).toHaveBeenCalled();
     expect(setCourse).toHaveBeenCalled();
-    expect(toastMock.success).toHaveBeenCalledWith('Problem deleted');
+    expect(toastMock.deleted).toHaveBeenCalledWith('Problem', {
+      name: 'Even Length Strings',
+    });
   });
 
   it('toasts an error when the delete fails', async () => {
@@ -184,6 +196,8 @@ describe('useCourseHandlers — delete', () => {
     await act(async () => {
       await result.current.handleDelete({ id: 'p1', type: 'problem' });
     });
-    expect(toastMock.error).toHaveBeenCalledWith('Error deleting item');
+    expect(toastMock.error).toHaveBeenCalledWith(
+      'Could not delete the problem. Check your connection and try again.',
+    );
   });
 });

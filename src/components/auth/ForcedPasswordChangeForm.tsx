@@ -54,7 +54,7 @@ export function ForcedPasswordChangeForm() {
       return;
     }
 
-    showToast.success('Password changed successfully.');
+    showToast.success('Password changed');
     // Re-sync the JWT to the just-changed credentials before navigating. Without this the
     // token still snapshots the old password instant, so the session callback revokes it
     // and bounces the user right back to this screen. Then send them to the dashboard.
@@ -139,7 +139,7 @@ export function ForcedPasswordChangeForm() {
             <PasswordRulesHelper id={helperId} rules={passwordRuleStatuses} />
 
             {submitError ? (
-              <p role="alert" className="text-sm text-destructive">
+              <p role="alert" className="text-destructive text-sm">
                 {submitError}
               </p>
             ) : null}

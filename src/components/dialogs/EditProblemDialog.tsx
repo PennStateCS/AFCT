@@ -226,7 +226,7 @@ export function EditProblemDialog({
         throw err;
       }
 
-      showToast.success('Problem updated.');
+      showToast.updated('Problem', { name: payload.title });
       resetForm();
       onSaved?.(updatedProblem ?? undefined);
       setOpen(false);
@@ -238,10 +238,10 @@ export function EditProblemDialog({
         return;
       }
       if (error instanceof z.ZodError) {
-        showToast.error('Please fix validation errors before saving.');
+        showToast.error('Some fields need attention. Check the highlighted fields and save again.');
         return;
       }
-      showToast.error('Failed to save problem changes.');
+      showToast.error('Could not save the problem. Check your connection and try again.');
     }
   };
 

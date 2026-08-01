@@ -300,7 +300,9 @@ function ActionsCell({
         onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={async () => {
           if (courseIsArchived) {
-            showToast.error('Cannot remove user from archived course');
+            showToast.error(
+              'This course is archived, so its roster cannot be changed. Unarchive the course first.',
+            );
             setConfirmDeleteOpen(false);
             return;
           }
@@ -310,7 +312,9 @@ function ActionsCell({
             return;
           }
           if (hasSubmissions) {
-            showToast.error('This user cannot be removed from the course');
+            showToast.error(
+              'This student has submitted work, so they cannot be removed. Their submissions are part of the course record.',
+            );
             setConfirmDeleteOpen(false);
             return;
           }
@@ -438,7 +442,7 @@ export const userColumns = (
         // Status only applies to students; staff show a dash.
         if (r.role !== 'STUDENT') return <span className="text-muted-foreground">—</span>;
         return r.enrollmentStatus === 'DROPPED' ? (
-          <span className="inline-flex items-center rounded-full bg-status-warning-bg px-2 py-0.5 text-xs font-medium text-status-warning">
+          <span className="bg-status-warning-bg text-status-warning inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">
             Dropped
           </span>
         ) : (

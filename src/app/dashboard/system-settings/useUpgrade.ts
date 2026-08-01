@@ -103,11 +103,7 @@ export function useUpgrade(enabled: boolean) {
     requestedAtRef.current = Date.now();
   };
 
-  const {
-    data,
-    isLoading,
-    refetch,
-  } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: UPGRADE_QUERY_KEY,
     queryFn: () => fetchJson<UpgradeInfo>(apiPaths.admin.upgrade(), { cache: 'no-store' }),
     enabled,
@@ -162,7 +158,9 @@ export function useUpgrade(enabled: boolean) {
       const current = queryClient.getQueryData<UpgradeInfo>(UPGRADE_QUERY_KEY)?.current;
       markInProgress({
         phase: 'backing_up',
-        message: v.force ? 'Starting the restore (without a safety backup)…' : 'Starting the restore…',
+        message: v.force
+          ? 'Starting the restore (without a safety backup)…'
+          : 'Starting the restore…',
         fromTag: current,
         toTag: v.tag,
       });
@@ -233,10 +231,15 @@ export function useUpgrade(enabled: boolean) {
   useEffect(() => {
     if (selfUpdate.phase !== 'updating') return;
     const remaining = SELF_UPDATE_TIMEOUT_MS - (Date.now() - selfUpdate.startedAt);
-    const timer = setTimeout(() => {
-      selfUpdatingRef.current = false;
-      setSelfUpdate((s) => (s.phase === 'updating' ? { phase: 'timeout', targetTag: s.targetTag } : s));
-    }, Math.max(0, remaining));
+    const timer = setTimeout(
+      () => {
+        selfUpdatingRef.current = false;
+        setSelfUpdate((s) =>
+          s.phase === 'updating' ? { phase: 'timeout', targetTag: s.targetTag } : s,
+        );
+      },
+      Math.max(0, remaining),
+    );
     return () => clearTimeout(timer);
   }, [selfUpdate]);
 
@@ -268,7 +271,7 @@ export function useUpgrade(enabled: boolean) {
       showToast.error(err instanceof Error ? err.message : 'Failed to delete the restore point');
     },
     onSuccess: () => {
-      showToast.success('Restore point deleted.');
+      showToast.deleted('Restore point');
     },
     onSettled: () => {
       // The sidecar polls for the request, so give it a moment before reconciling.

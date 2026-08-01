@@ -142,15 +142,15 @@ export default function StudentAssignmentPage({
         });
 
         if (!response.ok) {
-          throw new Error('Failed to submit comment');
+          throw new Error('Could not post your comment. Check your connection and try again.');
         }
 
         setNewComment((prev) => ({ ...prev, [problemId]: '' }));
         await refreshContext();
-        showToast.success('Comment added successfully!');
+        showToast.created('Comment');
       } catch (error) {
         console.error('Error submitting comment:', error);
-        showToast.error('Failed to submit comment');
+        showToast.error('Could not post your comment. Check your connection and try again.');
       } finally {
         setSubmittingComment((prev) => ({ ...prev, [problemId]: false }));
       }
@@ -166,13 +166,15 @@ export default function StudentAssignmentPage({
         });
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
-          throw new Error(error?.error || 'Failed to delete comment');
+          throw new Error(
+            error?.error || 'Could not delete the comment. Check your connection and try again.',
+          );
         }
         await refreshContext();
-        showToast.success('Comment deleted successfully');
+        showToast.deleted('Comment');
       } catch (error) {
         console.error('Error deleting comment:', error);
-        showToast.error('Failed to delete comment');
+        showToast.error('Could not delete the comment. Check your connection and try again.');
       }
     },
     [refreshContext],
@@ -184,18 +186,20 @@ export default function StudentAssignmentPage({
     const err = assignmentQuery.error as (Error & { status?: number }) | null;
     if (!err) return;
     if (err.status === 404) {
-      showToast.error('Assignment not found or you do not have permission to view it');
+      showToast.error(
+        'This assignment is not available. It may have been removed, or you may not have access to it.',
+      );
       router.push('/dashboard');
     } else {
       console.error('Error fetching assignment:', err);
-      showToast.error('Failed to load assignment');
+      showToast.error('Could not load the assignment. Refresh the page to try again.');
     }
   }, [assignmentQuery.error, router]);
 
   useEffect(() => {
     if (contextQuery.isError) {
       console.error('Error fetching assignment context:', contextQuery.error);
-      showToast.error('Failed to load assignment context');
+      showToast.error('Could not load the assignment. Refresh the page to try again.');
     }
   }, [contextQuery.isError, contextQuery.error]);
 

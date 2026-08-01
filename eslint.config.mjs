@@ -97,6 +97,33 @@ const eslintConfig = [
     },
   },
   {
+    // Toasts go through `@/lib/toast`, never sonner directly.
+    //
+    // That wrapper is what sets role="alert" + aria-live="assertive" on errors and
+    // role="status" + polite on everything else. Importing sonner straight gets sonner's
+    // defaults instead, so a failed save announces politely and can sit behind whatever a
+    // screen reader is already reading. Eleven files had drifted that way, costing sixteen
+    // error toasts their interrupt.
+    //
+    // The wrapper itself and the <Toaster> mount are the only legitimate importers.
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    ignores: ['src/lib/toast.ts', 'src/components/providers/RootProviders.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'sonner',
+              message:
+                "Import { showToast } from '@/lib/toast' instead: it carries the ARIA roles that make error toasts interrupt.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     rules: {
       // Honor the conventional `_` prefix for intentionally-unused identifiers.
       '@typescript-eslint/no-unused-vars': [

@@ -51,7 +51,7 @@ vi.mock('@/components/ui/data-table', () => ({
     ),
 }));
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 const activity = (id: string, action: string): ActivityLog =>
   ({ id, action }) as unknown as ActivityLog;
@@ -79,9 +79,7 @@ describe('ActivityCard', () => {
       expect(screen.getByTestId('table-rows').textContent).toBe('2');
     });
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      '/api/courses/course-1/activity?limit=50&offset=0',
-    );
+    expect(global.fetch).toHaveBeenCalledWith('/api/courses/course-1/activity?limit=50&offset=0');
     expect(screen.getByText('ENROLLED')).toBeInTheDocument();
     expect(screen.getByText('GRADED')).toBeInTheDocument();
   });

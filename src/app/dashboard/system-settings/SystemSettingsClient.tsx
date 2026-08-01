@@ -133,7 +133,8 @@ export default function SystemSettingsClient() {
 
   // Surface a load failure the same way the imperative fetch did.
   useEffect(() => {
-    if (settingsError) showToast.error('Failed to load system settings.');
+    if (settingsError)
+      showToast.error('Could not load system settings. Refresh the page to try again.');
   }, [settingsError]);
 
   // Restore the last-viewed tab on load, and remember it on change.
@@ -303,7 +304,7 @@ export default function SystemSettingsClient() {
             }
           : prev,
       );
-      showToast.success('System settings updated successfully.');
+      showToast.updated('System settings');
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Failed to save settings.');
     } finally {

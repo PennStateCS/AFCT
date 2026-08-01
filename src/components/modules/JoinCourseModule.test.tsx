@@ -7,17 +7,11 @@ import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 
 import { JoinCourseModule } from './JoinCourseModule';
 
-const { toastSuccess, toastError } = vi.hoisted(() => ({
-  toastSuccess: vi.fn(),
-  toastError: vi.fn(),
-}));
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('sonner', () => ({
-  toast: {
-    success: toastSuccess,
-    error: toastError,
-  },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccess = toastMock.success;
+const toastError = toastMock.error;
 
 vi.mock('@/components/ui/input-otp', () => {
   const InputOTPSlot = ({ index }: { index: number }) => <input aria-label={`slot-${index}`} />;

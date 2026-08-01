@@ -10,7 +10,7 @@ import {
   type ActivityLog,
 } from '@/app/dashboard/courses/[id]/activity-columns';
 import { Loader2, RefreshCw, Activity } from 'lucide-react';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 
@@ -70,7 +70,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
   // Surface fetch failures as a toast, matching the prior UX.
   useEffect(() => {
     if (isError) {
-      toast.error(
+      showToast.error(
         `Failed to load activity data: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }

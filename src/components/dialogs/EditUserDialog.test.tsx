@@ -21,16 +21,11 @@ vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: { user: { isAdmin: true } }, status: 'authenticated' }),
 }));
 
-const { showToastSuccess, showToastError } = vi.hoisted(() => ({
-  showToastSuccess: vi.fn(),
-  showToastError: vi.fn(),
-}));
-vi.mock('@/lib/toast', () => ({
-  showToast: {
-    success: showToastSuccess,
-    error: showToastError,
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const showToastSuccess = toastMock.success;
+const showToastError = toastMock.error;
 
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
@@ -92,6 +87,6 @@ describe('EditUserDialog', () => {
     expect(payload).toMatchObject({ firstName: 'Ada', lastName: 'Lovelace' });
     expect(onSave).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
-    expect(showToastSuccess).toHaveBeenCalledWith('User updated successfully.');
+    expect(toastMock.updated).toHaveBeenCalledWith('User');
   });
 });

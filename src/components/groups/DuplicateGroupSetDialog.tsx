@@ -67,7 +67,7 @@ export function DuplicateGroupSetDialog({
         apiPaths.courseGroupSetDuplicate(courseId, sourceSetId),
         { name: trimmed, includeMemberships },
       );
-      showToast.success('Group set duplicated');
+      showToast.duplicated('Group set');
       setOpen(false);
       onDuplicated(created.id);
     } catch (err) {
@@ -142,7 +142,7 @@ export function DuplicateGroupSetDialog({
           </fieldset>
 
           {error && (
-            <p id={errorId} role="alert" className="text-xs text-destructive">
+            <p id={errorId} role="alert" className="text-destructive text-xs">
               {error}
             </p>
           )}

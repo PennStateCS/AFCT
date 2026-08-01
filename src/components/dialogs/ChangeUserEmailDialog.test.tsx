@@ -7,16 +7,14 @@ import { ChangeUserEmailDialog } from './ChangeUserEmailDialog';
 
 const getMock = vi.hoisted(() => vi.fn());
 const patchMock = vi.hoisted(() => vi.fn());
-const toastSuccess = vi.hoisted(() => vi.fn());
-const toastError = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/api/fetch-client', () => ({
   apiClient: { get: getMock, patch: patchMock },
   ApiError: class ApiError extends Error {},
 }));
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccess, error: toastError },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 const renderDialog = (over: Partial<React.ComponentProps<typeof ChangeUserEmailDialog>> = {}) => {
   const onChanged = vi.fn();
@@ -39,9 +37,7 @@ describe('ChangeUserEmailDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Availability check: only "taken@" is reported as existing.
-    getMock.mockImplementation((url: string) =>
-      Promise.resolve({ exists: url.includes('taken') }),
-    );
+    getMock.mockImplementation((url: string) => Promise.resolve({ exists: url.includes('taken') }));
     patchMock.mockResolvedValue({ id: 'u1' });
   });
 
@@ -64,17 +60,18 @@ describe('ChangeUserEmailDialog', () => {
     await waitFor(() =>
       expect(patchMock).toHaveBeenCalledWith('/api/users/u1', { email: 'new@example.com' }),
     );
+    expect(toastMock.updated).toHaveBeenCalledWith('Email address');
     expect(onChanged).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
   });
 
   it('blocks a taken email with an inline error and no request', async () => {
     renderDialog();
-    fireEvent.change(screen.getByLabelText('New email'), { target: { value: 'taken@example.com' } });
+    fireEvent.change(screen.getByLabelText('New email'), {
+      target: { value: 'taken@example.com' },
+    });
 
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(/already in use/i),
-    );
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/already in use/i));
     expect(screen.getByRole('button', { name: 'Change Email' })).toBeDisabled();
     expect(patchMock).not.toHaveBeenCalled();
   });

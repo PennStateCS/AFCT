@@ -82,7 +82,7 @@ export function DuplicateProblemDialog({
             : { description: description.trim() ? description.trim() : null }),
         },
       );
-      showToast.success('Problem duplicated');
+      showToast.duplicated('Problem', { name: problem?.title });
       onDuplicated?.(created);
       setOpen(false);
     } catch (err) {

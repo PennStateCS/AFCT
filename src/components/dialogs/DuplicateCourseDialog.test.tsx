@@ -8,12 +8,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import DuplicateCourseDialog from './DuplicateCourseDialog';
 
-const toastErrorMock = vi.fn();
-vi.mock('sonner', () => ({
-  toast: {
-    error: (...args: unknown[]) => toastErrorMock(...args),
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastErrorMock = toastMock.error;
 
 vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
 vi.mock('@/components/ui/InputGroup', () =>
@@ -245,7 +243,7 @@ describe('DuplicateCourseDialog', () => {
     // No duplicate request went out because the course id is missing.
     expect(duplicateCalls()).toHaveLength(0);
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'Cannot duplicate course because the course ID is missing.',
+      'Could not duplicate the course. Refresh the page to try again.',
     );
   });
 

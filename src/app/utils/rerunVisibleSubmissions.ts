@@ -59,7 +59,11 @@ export async function rerunVisibleSubmissions({
     await fetchReviewData();
   } catch (err) {
     console.error('Bulk rerun submission error:', err);
-    showToast.error(err instanceof Error ? err.message : 'Failed to rerun visible submissions');
+    showToast.error(
+      err instanceof Error
+        ? err.message
+        : 'Could not re-evaluate the submissions. Check your connection and try again.',
+    );
   } finally {
     setRerunning((prev) => {
       const next = { ...prev };

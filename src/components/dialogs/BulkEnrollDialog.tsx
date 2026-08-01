@@ -102,7 +102,7 @@ export default function BulkEnrollDialog({
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.message || 'Could not enroll the selected users. Please try again.');
       }
-      showToast.success(`Enrolled ${found.length} student${found.length === 1 ? '' : 's'}.`);
+      showToast.success(`Enrolled ${found.length} student${found.length === 1 ? '' : 's'}`);
       setStep(2);
       onComplete?.();
     } catch (err) {

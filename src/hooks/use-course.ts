@@ -66,7 +66,7 @@ export function useCourseData(
 
   // Surface the load failure once (Query owns the fetch; there is no onError in v5).
   useEffect(() => {
-    if (isError) showToast.error('Failed to load course');
+    if (isError) showToast.error('Could not load the course. Refresh the page to try again.');
   }, [isError]);
 
   // Optimistic updates write straight to the base cache entry; `useQuery` then
@@ -133,7 +133,7 @@ export function useCourseData(
         );
       } catch (error) {
         setLoadingSections((prev) => ({ ...prev, [section]: false }));
-        showToast.error('Failed to load tab data');
+        showToast.error('Could not load this tab. Refresh the page to try again.');
         console.error('Error loading tab data:', error);
       }
     },
@@ -271,7 +271,7 @@ export function useEnrollment(course: FullCourse | null) {
       setAllUsers(users as unknown as EnrollableUser[]);
       return users as unknown as EnrollableUser[];
     } catch (error) {
-      showToast.error('Failed to load user list');
+      showToast.error('Could not load the user list. Refresh the page to try again.');
       console.error('Error fetching users:', error);
       return [] as EnrollableUser[];
     }
@@ -286,10 +286,10 @@ export function useEnrollment(course: FullCourse | null) {
           body: JSON.stringify({ userId: user.id }),
         });
         if (!res.ok) throw new Error('Failed to enroll user');
-        showToast.success('User enrolled!');
+        showToast.success('User enrolled');
         refetchCourse();
       } catch (error) {
-        showToast.error('Error enrolling user');
+        showToast.error('Could not enroll the user. Check your connection and try again.');
         console.error('Error enrolling user:', error);
       }
     },

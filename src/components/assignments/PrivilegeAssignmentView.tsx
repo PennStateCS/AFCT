@@ -68,8 +68,7 @@ const CreateProblemDialog = dynamic(
   { ssr: false },
 );
 const SubmissionViewerDialog = dynamic(
-  () =>
-    import('@/components/dialogs/SubmissionViewerDialog').then((m) => m.SubmissionViewerDialog),
+  () => import('@/components/dialogs/SubmissionViewerDialog').then((m) => m.SubmissionViewerDialog),
   { ssr: false },
 );
 const AssignmentProblemSettingsDialog = dynamic(
@@ -230,7 +229,7 @@ export default function AssignmentDashboardPage({
     const fileName = p.fileName ?? null;
     const original = p.originalFileName ?? null;
     if (!fileName) {
-      showToast.error('No file available to render');
+      showToast.error('This problem has no file to preview.');
       return;
     }
     const src = apiPaths.files.solution(encodeURIComponent(fileName));
@@ -329,9 +328,11 @@ export default function AssignmentDashboardPage({
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
-      showToast.success('Problem Added');
+      showToast.added(problemIds.length === 1 ? 'Problem' : `${problemIds.length} problems`);
     } catch {
-      showToast.error('Failed to add problems');
+      showToast.error(
+        `Could not add the ${problemIds.length === 1 ? 'problem' : 'problems'} to this assignment. Check your connection and try again.`,
+      );
     }
     await invalidateAssignment();
   }
@@ -345,9 +346,11 @@ export default function AssignmentDashboardPage({
         body: JSON.stringify({ problemId: problemToRemove.id }),
       });
       if (!res.ok) throw new Error();
-      showToast.success(`"${problemToRemove.title}" removed from assignment`);
+      showToast.removed('Problem', { name: problemToRemove.title });
     } catch {
-      showToast.error(`Failed to remove "${problemToRemove.title}"`);
+      showToast.error(
+        'Could not remove the problem from this assignment. Check your connection and try again.',
+      );
     }
     await invalidateAssignment();
     setProblemToRemove(null);

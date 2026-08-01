@@ -103,7 +103,10 @@ export function ImportAssignmentDialog({
         );
         if (!cancelled) setAssignments(list);
       } catch {
-        if (!cancelled) showToast.error('Failed to load assignments');
+        if (!cancelled)
+          showToast.error(
+            'Could not load assignments to import from. Close and reopen this dialog to try again.',
+          );
       } finally {
         if (!cancelled) setAssignmentsLoading(false);
       }
@@ -158,7 +161,7 @@ export function ImportAssignmentDialog({
         // With no problems there is nothing to copy, so the mode is moot; send 'none'.
         problemMode: hasProblems ? problemMode : 'none',
       });
-      showToast.success('Assignment imported');
+      showToast.imported('Assignment');
       onImported?.(created);
       setOpen(false);
     } catch (err) {
@@ -263,7 +266,7 @@ export function ImportAssignmentDialog({
                   {groupNote && (
                     <span
                       role="note"
-                      className="mt-2 block rounded-md border border-status-warning-border bg-status-warning-bg p-2 text-status-warning"
+                      className="border-status-warning-border bg-status-warning-bg text-status-warning mt-2 block rounded-md border p-2"
                     >
                       {groupNote}
                     </span>
@@ -278,8 +281,8 @@ export function ImportAssignmentDialog({
               <legend className="text-sm font-medium">Problems</legend>
               {!hasProblems ? (
                 <p className="text-muted-foreground text-sm">
-                  This assignment has no problems, so there is nothing to copy. The import will start
-                  empty.
+                  This assignment has no problems, so there is nothing to copy. The import will
+                  start empty.
                 </p>
               ) : (
                 <div className="grid gap-3">
@@ -341,7 +344,7 @@ export function ImportAssignmentDialog({
               {groupNote && (
                 <p
                   role="note"
-                  className="rounded-md border border-status-warning-border bg-status-warning-bg p-2 text-xs text-status-warning"
+                  className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border p-2 text-xs"
                 >
                   {groupNote}
                 </p>

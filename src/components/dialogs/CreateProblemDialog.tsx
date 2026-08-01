@@ -258,7 +258,8 @@ export function CreateProblemDialog({
       }
 
       // If we were opened in the context of an assignment, associate the created problem
-      // with it using the per-assignment settings gathered in the wizard (best-effort).
+      // with it using the per-assignment settings gathered in the wizard.
+      let linked = true;
       if (created?.id && assignmentId) {
         try {
           await apiClient.post(apiPaths.assignmentProblems(courseId, assignmentId), {
@@ -273,8 +274,20 @@ export function CreateProblemDialog({
             ],
           });
         } catch (err) {
+          linked = false;
           console.error('Failed to add created problem to assignment:', err);
         }
+      }
+
+      // This dialog performs the write, so it reports the outcome. Half-success is its own
+      // message: the problem exists in the bank, but it is not on the assignment, and silently
+      // closing left the author thinking it was. They can add it from the Problems tab.
+      if (linked) {
+        showToast.created('Problem', { name: created?.title });
+      } else {
+        showToast.warning('Problem created, but it was not added to this assignment', {
+          description: 'Add it from the assignment’s Problems tab.',
+        });
       }
 
       onCreated?.(created ?? undefined, true);

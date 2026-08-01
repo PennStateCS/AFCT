@@ -95,7 +95,10 @@ export function ImportProblemDialog({
         const list = await apiClient.get<SourceProblem[]>(apiPaths.courseProblems(sourceCourseId));
         if (!cancelled) setProblems(list);
       } catch {
-        if (!cancelled) showToast.error('Failed to load problems');
+        if (!cancelled)
+          showToast.error(
+            'Could not load problems to import from. Close and reopen this dialog to try again.',
+          );
       } finally {
         if (!cancelled) setProblemsLoading(false);
       }
@@ -140,7 +143,7 @@ export function ImportProblemDialog({
           ? { descriptionJson }
           : { description: description.trim() ? description.trim() : null }),
       });
-      showToast.success('Problem imported');
+      showToast.imported('Problem');
       onImported?.(created);
       setOpen(false);
     } catch (err) {

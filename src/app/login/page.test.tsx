@@ -12,9 +12,8 @@ const LoginPage = (props: { allowSignup?: boolean; hcaptchaSiteKey?: string } = 
   <LoginForm allowSignup={props.allowSignup ?? true} hcaptchaSiteKey={props.hcaptchaSiteKey} />
 );
 
-const { signInMock, showToastErrorMock, searchState } = vi.hoisted(() => ({
+const { signInMock, searchState } = vi.hoisted(() => ({
   signInMock: vi.fn(),
-  showToastErrorMock: vi.fn(),
   searchState: { current: new URLSearchParams() },
 }));
 
@@ -27,12 +26,10 @@ vi.mock('next-auth/react', () => ({
   signIn: signInMock,
 }));
 
-vi.mock('@/lib/toast', () => ({
-  showToast: {
-    error: showToastErrorMock,
-    success: vi.fn(),
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const showToastErrorMock = toastMock.error;
 
 vi.mock('@/components/ui/InputGroup', () => ({
   __esModule: true,

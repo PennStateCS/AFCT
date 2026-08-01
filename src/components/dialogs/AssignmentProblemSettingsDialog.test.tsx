@@ -10,14 +10,11 @@ import { AssignmentProblemSettingsDialog } from './AssignmentProblemSettingsDial
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
 
-const { toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
-  toastSuccessMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-}));
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccessMock, error: toastErrorMock },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccessMock = toastMock.success;
+const toastErrorMock = toastMock.error;
 
 vi.mock('@/components/ui/InputGroup', () => ({
   __esModule: true,
@@ -142,7 +139,7 @@ describe('AssignmentProblemSettingsDialog', () => {
         body: JSON.stringify({ maxPoints: 15, maxSubmissions: 5, autograderEnabled: true }),
       }),
     );
-    expect(toastSuccessMock).toHaveBeenCalledWith('Settings updated.');
+    expect(toastMock.updated).toHaveBeenCalledWith('Problem settings');
     expect(onSaved).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
   });

@@ -24,7 +24,7 @@ vi.mock('next-auth/react', () => ({ useSession: () => useSessionMock() }));
 vi.mock('next/navigation', () => ({ usePathname: () => usePathnameMock() }));
 vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => isMobileMock() }));
 vi.mock('@/lib/safe-signout', () => ({ safeSignOut: vi.fn() }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 // The account dialogs pull in heavy form deps and are not what this file exercises.
 vi.mock('./dialogs/ChangePasswordDialog', () => ({ ChangePasswordDialog: () => null }));
@@ -83,7 +83,9 @@ beforeEach(() => {
   usePathnameMock.mockReturnValue('/dashboard');
   isMobileMock.mockReturnValue(false);
   useSessionMock.mockReturnValue({
-    data: { user: { id: 'u1', email: 'prof@example.com', firstName: 'Charles', lastName: 'Xavier' } },
+    data: {
+      user: { id: 'u1', email: 'prof@example.com', firstName: 'Charles', lastName: 'Xavier' },
+    },
   });
 });
 
@@ -179,8 +181,7 @@ describe('dashboard sidebar (real primitives)', () => {
     // While the drawer is open Radix marks the rest of the document aria-hidden, so the
     // trigger leaves the accessibility tree; query it with `hidden: true` to inspect the
     // state it is reporting.
-    const triggerNode = () =>
-      screen.getByRole('button', { name: /sidebar$/i, hidden: true });
+    const triggerNode = () => screen.getByRole('button', { name: /sidebar$/i, hidden: true });
 
     it('reports the mobile drawer state, not the desktop one', async () => {
       const user = userEvent.setup();
@@ -221,7 +222,13 @@ describe('dashboard sidebar (real primitives)', () => {
     useSessionMock.mockReturnValue({
       data: {
         id: 'a1',
-        user: { id: 'a1', email: 'admin@example.com', firstName: 'A', lastName: 'D', isAdmin: true },
+        user: {
+          id: 'a1',
+          email: 'admin@example.com',
+          firstName: 'A',
+          lastName: 'D',
+          isAdmin: true,
+        },
       },
     });
     renderSidebar();

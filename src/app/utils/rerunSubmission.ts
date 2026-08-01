@@ -24,14 +24,21 @@ export async function rerunSubmission({
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      throw new Error(error?.error || 'Failed to rerun submission');
+      throw new Error(
+        error?.error ||
+          'Could not re-evaluate the submission. Check your connection and try again.',
+      );
     }
 
     showToast.success('Submission re-evaluated');
     await fetchReviewData();
   } catch (err) {
     console.error('Rerun submission error:', err);
-    showToast.error(err instanceof Error ? err.message : 'Failed to rerun submission');
+    showToast.error(
+      err instanceof Error
+        ? err.message
+        : 'Could not re-evaluate the submission. Check your connection and try again.',
+    );
   } finally {
     setRerunning((prev) => ({ ...prev, [submission.id]: false }));
   }

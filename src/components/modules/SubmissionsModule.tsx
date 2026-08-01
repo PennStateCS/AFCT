@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useState } from 'react';
 import { apiPaths } from '@/lib/api-paths';
+import { showToast } from '@/lib/toast';
 
 type PendingAssignment = {
   assignmentId: string;
@@ -35,13 +36,21 @@ export function SubmissionsModule({ assignments }: SubmissionsModuleProps) {
           processedCourses.add(item.courseId);
 
           // Trigger the API request for the course
-          await fetch(apiPaths.courseSubmissionsRerun(item.courseId), {
+          const res = await fetch(apiPaths.courseSubmissionsRerun(item.courseId), {
             method: 'POST',
           });
+          if (!res.ok) throw new Error(`rerun failed for course ${item.courseId}`);
         }
       }
+      // Re-grading is queued, not instant, so say so rather than implying it is finished.
+      showToast.success('Submissions queued for re-evaluation', {
+        description: 'Grades update as each one finishes.',
+      });
     } catch (error) {
       console.error('Failed to rerun submissions:', error);
+      showToast.error(
+        'Could not re-evaluate the submissions. Check your connection and try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }

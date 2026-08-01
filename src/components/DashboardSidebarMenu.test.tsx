@@ -122,12 +122,7 @@ vi.mock('./dialogs/EditProfileDialog', () => ({
   EditProfileDialog: (props: unknown) => EditProfileDialogMock(props),
 }));
 
-vi.mock('sonner', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 import DashboardSidebarMenu from './DashboardSidebarMenu';
 
@@ -503,7 +498,14 @@ describe('DashboardSidebarMenu — collapsible sections', () => {
       data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
     });
     setNavCourses([
-      { id: 'past', code: 'CS001', isPublished: true, isArchived: false, startDate: '2000-01-01', endDate: '2000-12-31' },
+      {
+        id: 'past',
+        code: 'CS001',
+        isPublished: true,
+        isArchived: false,
+        startDate: '2000-01-01',
+        endDate: '2000-12-31',
+      },
     ]);
     renderWithClient(<DashboardSidebarMenu />);
 

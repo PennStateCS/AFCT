@@ -12,16 +12,11 @@ vi.mock('@/components/ui/InputGroup', () =>
   import('@/test/mocks/ui').then((mod) => mod.inputGroupMock),
 );
 
-const { toastSuccess, toastError } = vi.hoisted(() => ({
-  toastSuccess: vi.fn(),
-  toastError: vi.fn(),
-}));
-vi.mock('sonner', () => ({
-  toast: {
-    success: toastSuccess,
-    error: toastError,
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccess = toastMock.success;
+const toastError = toastMock.error;
 
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
@@ -47,7 +42,7 @@ describe('ChangePasswordDialog', () => {
 
     await waitFor(() => expect(onChangePassword).toHaveBeenCalledWith('OldPass1!', 'NewPass1!'));
     expect(setOpen).toHaveBeenCalledWith(false);
-    expect(toastSuccess).toHaveBeenCalledWith('Password changed successfully!');
+    expect(toastSuccess).toHaveBeenCalledWith('Password changed');
   });
 
   it('surfaces API errors', async () => {

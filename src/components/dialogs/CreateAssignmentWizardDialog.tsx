@@ -17,7 +17,7 @@ import SelectField from '@/components/ui/SelectField';
 import { RichDescriptionField } from '@/components/rich-description/RichDescriptionField';
 import type { RichDescriptionEnvelope } from '@/lib/rich-description';
 import { AssignToFields } from '@/components/assignments/AssignToFields';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 
 import { useForm, Controller, type FieldPath } from 'react-hook-form';
 import { useDiscardGuard } from '@/components/unsaved-changes/useDiscardGuard';
@@ -200,12 +200,18 @@ export function CreateAssignmentWizardDialog({
     try {
       created = await apiClient.post<Assignment>(apiPaths.courseAssignments(courseId), basePayload);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Failed to create assignment');
+      showToast.error(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not create the assignment. Check your connection and try again.',
+      );
       return; // stay open so the user can retry without duplicating anything
     }
 
-    // Date overrides are added later on the assignment's page.
-    toast.success('Assignment created');
+    // This dialog performed the write, so it reports the outcome: `onCreate` updates the caller's
+    // state and nothing more. Toasting in both places is what produced two messages for one
+    // assignment. Date overrides are added later on the assignment's page.
+    showToast.created('Assignment', { name: created.title });
     onCreate?.(created);
     resetForm();
     setOpen(false);

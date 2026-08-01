@@ -255,7 +255,7 @@ export function getUserColumns(
 function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpdate: () => void }) {
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
-  const [ unlockConfirmOpen, setUnlockConfirmOpen ] = useState(false);
+  const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
@@ -280,7 +280,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error || 'Failed to update account status.');
       }
-      showToast.success(inactive ? 'Account deactivated.' : 'Account reactivated.');
+      showToast.success(inactive ? 'Account deactivated' : 'Account reactivated');
       setDeactivateOpen(false);
       setReactivateOpen(false);
       onUserUpdate();
@@ -320,7 +320,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error || 'Failed to unlock account.');
       }
-      showToast.success('Account unlocked.');
+      showToast.success('Account unlocked');
       setUnlockConfirmOpen(false);
       onUserUpdate();
     } catch (error) {
@@ -336,17 +336,18 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
 
       if (!res.ok) {
         const body = await res.json();
-        const errorMsg = body?.error || 'Unexpected Error: Failed to delete user';
+        const errorMsg =
+          body?.error || 'Could not delete the user. Check your connection and try again.';
 
         showToast.error(errorMsg);
         return;
       }
 
-      showToast.success('User deleted successfully.');
+      showToast.deleted('User', { name: fullName });
       setConfirmDeleteOpen(false);
       onUserUpdate();
     } catch {
-      showToast.error('Unexpected Error: Failed to delete user');
+      showToast.error('Could not delete the user. Check your connection and try again.');
     }
   }
 
@@ -531,7 +532,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
           <DropdownMenuItem
             onClick={() => setConfirmDeleteOpen(true)}
             disabled={!user.inactive}
-            className="hover:bg-secondary flex items-center gap-2 text-destructive focus:text-destructive"
+            className="hover:bg-secondary text-destructive focus:text-destructive flex items-center gap-2"
           >
             <Trash2 className="h-4 w-4" />
             Delete Inactive User

@@ -143,7 +143,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
       // the whole ['courses'] prefix. Without this the list keeps its cached row until
       // its 30s staleTime elapses, forcing a manual refresh.
       void queryClient.invalidateQueries({ queryKey: ['courses'] });
-      showToast.success('Course updated!');
+      showToast.updated('Course');
     },
     [setCourse, queryClient],
   );

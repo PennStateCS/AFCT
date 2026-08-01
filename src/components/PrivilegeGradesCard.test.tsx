@@ -13,11 +13,10 @@ const renderWithClient = (ui: React.ReactElement) => {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-const toastError = vi.hoisted(() => vi.fn());
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('@/lib/toast', () => ({
-  showToast: { error: toastError, success: vi.fn() },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastError = toastMock.error;
 
 vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: { user: { isAdmin: false } } }),
@@ -47,7 +46,12 @@ vi.mock('@/components/ui/data-table', () => ({
     data,
     loading,
   }: {
-    columns: Array<{ id?: string; accessorKey?: string; header?: unknown; cell?: (ctx: unknown) => React.ReactNode }>;
+    columns: Array<{
+      id?: string;
+      accessorKey?: string;
+      header?: unknown;
+      cell?: (ctx: unknown) => React.ReactNode;
+    }>;
     data: Array<Record<string, unknown>>;
     loading?: boolean;
   }) => (
@@ -195,7 +199,9 @@ describe('PrivilegeGradesCard', () => {
     renderWithClient(<PrivilegeGradesCard courseId="c1" />);
 
     await waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith('Failed to load grades');
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not load grades. Refresh the page to try again.',
+      );
     });
     expect(screen.getByTestId('table-rows').textContent).toBe('0');
   });

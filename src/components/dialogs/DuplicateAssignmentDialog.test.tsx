@@ -6,16 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DuplicateAssignmentDialog } from './DuplicateAssignmentDialog';
 
 const postMock = vi.hoisted(() => vi.fn());
-const toastSuccess = vi.hoisted(() => vi.fn());
-const toastError = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/api/fetch-client', () => ({
   apiClient: { post: postMock },
   ApiError: class ApiError extends Error {},
 }));
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccess, error: toastError },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 const baseAssignment = {
   id: 'a1',
@@ -25,7 +23,9 @@ const baseAssignment = {
   problemCount: 2,
 };
 
-const renderDialog = (over: Partial<React.ComponentProps<typeof DuplicateAssignmentDialog>> = {}) => {
+const renderDialog = (
+  over: Partial<React.ComponentProps<typeof DuplicateAssignmentDialog>> = {},
+) => {
   const onDuplicated = vi.fn();
   const setOpen = vi.fn();
   render(
@@ -82,6 +82,9 @@ describe('DuplicateAssignmentDialog', () => {
         problemMode: 'link',
       }),
     );
+    expect(toastMock.duplicated).toHaveBeenCalledWith('Assignment', {
+      name: 'Pipelining Lab',
+    });
     expect(onDuplicated).toHaveBeenCalledWith({ id: 'a2' });
   });
 

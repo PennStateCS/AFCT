@@ -45,7 +45,8 @@ export function useManageableCourses(
         );
         if (!cancelled) setCourses(list);
       } catch {
-        if (!cancelled) showToast.error('Failed to load courses');
+        if (!cancelled)
+          showToast.error('Could not load your courses. Refresh the page to try again.');
       } finally {
         if (!cancelled) setLoading(false);
       }

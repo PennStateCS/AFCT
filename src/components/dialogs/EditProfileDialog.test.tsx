@@ -26,16 +26,11 @@ vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: null, status: 'authenticated', update: updateSession }),
 }));
 
-const { toastSuccess, toastError } = vi.hoisted(() => ({
-  toastSuccess: vi.fn(),
-  toastError: vi.fn(),
-}));
-vi.mock('sonner', () => ({
-  toast: {
-    success: toastSuccess,
-    error: toastError,
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccess = toastMock.success;
+const toastError = toastMock.error;
 
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
@@ -131,7 +126,7 @@ describe('EditProfileDialog', () => {
       zoom: 1,
     });
     expect(setOpen).toHaveBeenCalledWith(false);
-    expect(toastSuccess).toHaveBeenCalledWith('Profile updated!');
+    expect(toastMock.updated).toHaveBeenCalledWith('Profile');
     // The session is refreshed so navbar/sidebar avatars update without a reload.
     expect(updateSession).toHaveBeenCalled();
   });
@@ -149,9 +144,7 @@ describe('EditProfileDialog', () => {
     const zonedUser = { ...user, timezone: 'America/New_York' };
     renderWithClient(<EditProfileDialog user={zonedUser} open setOpen={setOpen} onSave={onSave} />);
 
-    await userEvents.click(
-      screen.getByRole('button', { name: 'Automatic (detect from browser)' }),
-    );
+    await userEvents.click(screen.getByRole('button', { name: 'Automatic (detect from browser)' }));
     await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -160,9 +153,7 @@ describe('EditProfileDialog', () => {
     const formData = requestInit.body as FormData;
     // Blank timezone is what tells the server to clear the override.
     expect(formData.get('timezone')).toBe('');
-    expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ timezone: undefined }),
-    );
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ timezone: undefined }));
   });
 
   it('shows an error and keeps the dialog open when the save fails', async () => {
@@ -175,7 +166,11 @@ describe('EditProfileDialog', () => {
 
     await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
 
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to update profile.'));
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not save your profile. Check your connection and try again.',
+      ),
+    );
     // Dialog stays open and the session is not refreshed on a failed save.
     expect(setOpen).not.toHaveBeenCalledWith(false);
     expect(updateSession).not.toHaveBeenCalled();

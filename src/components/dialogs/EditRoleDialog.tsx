@@ -142,7 +142,9 @@ export function EditRoleDialog({
   useEffect(() => {
     if (open && !initialRoster && rosterQuery.isError) {
       console.error('Error loading roster entry', rosterQuery.error);
-      showToast.error('Failed to load roster entry');
+      showToast.error(
+        'Could not load this roster entry. Close and reopen this dialog to try again.',
+      );
       setOpen(false);
     }
   }, [open, initialRoster, rosterQuery.isError, rosterQuery.error, setOpen]);
@@ -158,7 +160,7 @@ export function EditRoleDialog({
       // Reflect the saved state so isDirty resets to false.
       originalRosterRef.current = roster ? JSON.parse(JSON.stringify(roster)) : null;
       invalidateRoster();
-      showToast.success('Roster updated');
+      showToast.updated('Roster');
       onSaved?.();
       setOpen(false);
     },
@@ -192,7 +194,7 @@ export function EditRoleDialog({
       void queryClient.invalidateQueries({
         queryKey: queryKeys.course.rosterEntry(courseId, userId),
       });
-      showToast.success('Profile photo removed');
+      showToast.removed('Profile photo');
       onSaved?.();
     },
     onError: (err) => {
@@ -258,7 +260,7 @@ export function EditRoleDialog({
                     viewerDefaultRole === 'ADMIN') && (
                     <Button
                       variant="outline"
-                      className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive/10"
+                      className="border-destructive text-destructive hover:bg-destructive/10 flex items-center gap-2"
                       onClick={() => setPhotoConfirmOpen(true)}
                       disabled={!roster.user?.avatar}
                       title={!roster.user?.avatar ? 'No profile photo to delete' : undefined}
