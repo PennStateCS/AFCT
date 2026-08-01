@@ -64,7 +64,7 @@ export function CaptchaTab({
       {/* Current status */}
       <div className="mb-5 space-y-2">
         <h2 className="text-sm font-medium">Current status</h2>
-        <div className="bg-muted/10 w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+        <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
           <Badge variant={hcaptchaEnabled ? 'success' : 'warning'} className="w-fit">
             {hcaptchaEnabled ? 'Enabled' : 'Disabled'}
           </Badge>

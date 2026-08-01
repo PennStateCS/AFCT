@@ -100,7 +100,7 @@ export function AssignmentTypeCard({
             <label
               key={opt.label}
               className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
-                checked ? 'border-primary bg-primary/5 ring-primary/30 ring-1' : 'hover:bg-muted/40'
+                checked ? 'border-primary bg-primary/5 ring-primary/30 ring-1' : 'hover:bg-muted'
               } ${courseIsArchived ? 'cursor-not-allowed opacity-60' : ''}`}
             >
               <input

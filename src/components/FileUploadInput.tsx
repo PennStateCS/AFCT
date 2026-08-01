@@ -119,14 +119,14 @@ export default function FileUploadInput({
         onDrop={handleDrop}
         className={`relative rounded-lg border-2 border-dashed transition-colors ${
           disabled
-            ? 'bg-muted/5 border-border cursor-not-allowed'
+            ? 'bg-muted border-border cursor-not-allowed'
             : isDragging
               ? 'border-primary bg-primary/5'
               : value
                 ? 'border-status-success-border bg-status-success-bg'
                 : hasError
                   ? 'border-destructive bg-destructive/5'
-                  : 'border-border bg-muted/15 hover:border-primary/50'
+                  : 'border-border bg-muted hover:border-primary/50'
         }`}
       >
         <input

@@ -174,7 +174,7 @@ export function SearchableSelect({
                   data-option
                   onClick={() => pick(item.id)}
                   onKeyDown={handleOptionKeyDown}
-                  className="hover:bg-muted/50 focus-visible:bg-muted flex w-full cursor-pointer items-center px-3 py-2 text-left text-sm focus-visible:outline-none"
+                  className="hover:bg-muted focus-visible:bg-muted flex w-full cursor-pointer items-center px-3 py-2 text-left text-sm focus-visible:outline-none"
                 >
                   <span className="truncate">{item.label}</span>
                 </button>

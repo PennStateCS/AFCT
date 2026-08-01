@@ -174,7 +174,7 @@ export function AudienceSelect({
                 filtered.map((item) => (
                   <label
                     key={item.id}
-                    className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
+                    className="hover:bg-muted flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
                   >
                     <Checkbox
                       checked={selectedSet.has(item.id)}

@@ -354,8 +354,10 @@ export function RichDescriptionEditor({
         // in forced-colors mode (Windows High Contrast overrides colours but not alpha) and is
         // invisible to anyone who cannot compare it against an enabled control. A muted fill
         // plus a dashed border survives both, and the two states look different from each other.
-        disabled && 'bg-muted cursor-not-allowed border-dashed opacity-70',
-        readOnly && !disabled && 'bg-muted/40 cursor-default',
+        // Two different fills, not one fill at two opacities: --muted is a surface token now, so
+        // a fraction of it over the page background is indistinguishable from no fill at all.
+        disabled && 'bg-accent cursor-not-allowed border-dashed opacity-70',
+        readOnly && !disabled && 'bg-muted cursor-default',
         // Inline: a flex column, so the document area fills whatever height the box has, and
         // the box itself carries the drag-to-resize grip.
         //

@@ -108,7 +108,13 @@
   --secondary-foreground: oklch(1 0.0001 271.152);
   --tertiary: oklch(0.5424 0.1381 45.828);
   --tertiary-foreground: oklch(1 0 0);
-  --muted: oklch(0.5624 0.0001 271.152);
+  /* A muted SURFACE, so it sits just off the page background. It used to be a 56%-lightness
+     mid grey, which is a foreground value, not a surface one: anything painted with it solid
+     (the keyboard-shortcut keys, the equation hover) came out darker than the toolbar, and
+     every subtle panel in the app had to dilute it with an opacity fraction to look right.
+     This is the conventional light-theme value, and --muted-foreground stays dark so text on
+     it keeps its contrast. */
+  --muted: oklch(0.967 0.001 286.375);
   --muted-foreground: oklch(0.329 0 0);
   --accent: oklch(0.9128 0 0);
   --accent-foreground: oklch(0.21 0.006 285.885);

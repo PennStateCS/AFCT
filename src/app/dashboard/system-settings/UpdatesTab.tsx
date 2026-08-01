@@ -314,7 +314,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                 so announce them to screen readers as they happen. */}
             <div
               role="status"
-              className="bg-muted/10 w-full max-w-xl space-y-2 rounded-md border p-3 text-sm xl:max-w-3xl"
+              className="bg-muted w-full max-w-xl space-y-2 rounded-md border p-3 text-sm xl:max-w-3xl"
             >
               <Badge
                 variant={
