@@ -196,9 +196,13 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
         >
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Edit equation' : 'Insert equation'}</DialogTitle>
+            {/* Deliberately no worked example, here or in the field. As a placeholder one sat in
+                the same monospace face as real input, so authors read it as something they had
+                already typed and could not work out why the preview stayed blank. Nothing on this
+                screen should be mistakable for sample input. */}
             <DialogDescription>
-              Write the equation in LaTeX. Inline equations sit inside a sentence; display equations
-              stand on their own centered line.
+              Write the equation in LaTeX. Inline equations sit inside a sentence; display
+              equations stand on their own centered line.
             </DialogDescription>
           </DialogHeader>
 
@@ -228,7 +232,6 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
                 spellCheck={false}
                 autoComplete="off"
                 maxLength={MAX_LATEX_LENGTH}
-                placeholder="\frac{n(n-1)}{2}"
                 value={latex}
                 onChange={(event) => setLatex(event.target.value)}
                 aria-invalid={error ? true : undefined}
@@ -267,11 +270,18 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
                   and speaking each intermediate expression would be unusable. A long expression
                   scrolls inside the box rather than widening the dialog. */}
               <div
-                ref={previewRef}
                 role="region"
                 aria-labelledby={previewLabelId}
                 className="afct-rich-text bg-muted border-input min-h-14 overflow-x-auto rounded-md border px-3 py-2"
-              />
+              >
+                {/* Says why the box is blank, so an empty field beside an empty panel reads as
+                    "nothing yet" rather than as a preview that has failed. A sibling of the KaTeX
+                    container, not its content: KaTeX owns that element and overwrites it. */}
+                {latex.trim() === '' && (
+                  <p className="text-muted-foreground text-sm">Your equation will appear here.</p>
+                )}
+                <div ref={previewRef} />
+              </div>
             </div>
           </div>
 

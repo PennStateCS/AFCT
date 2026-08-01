@@ -57,19 +57,31 @@ const saveButton = () =>
   screen.queryByRole('button', { name: 'Save equation' }) ??
   screen.getByRole('button', { name: 'Update equation' });
 
-describe('placeholder', () => {
-  it('shows real LaTeX, with a single backslash', () => {
+/**
+ * Nothing on this screen may look like sample input.
+ *
+ * The field used to carry a worked example as a placeholder, in the same monospace face as real
+ * input, and test users read it as text they had already typed, then could not work out why the
+ * preview stayed blank. The field is empty and no example is offered anywhere on the dialog.
+ */
+describe('the empty state', () => {
+  it('leaves the input empty, with no placeholder to mistake for typed text', () => {
     renderDialog();
-    const placeholder = field().getAttribute('placeholder')!;
+    expect(field()).toHaveValue('');
+    expect(field().getAttribute('placeholder')).toBeNull();
+  });
 
-    // The attribute is written as a JSX string, which does NOT process backslash escapes the way
-    // a JavaScript string literal would. Doubling the backslash in the source would show the
-    // user two of them. This asserts the value the textarea actually exposes.
-    expect(placeholder).toBe('\\frac{n(n-1)}{2}');
-    expect(placeholder).not.toContain('\f'); // no form feed
-    expect(placeholder.startsWith('\\frac')).toBe(true);
-    // And it is LaTeX a professor could actually paste in.
-    expect(() => katex.renderToString(placeholder, { ...KATEX_VALIDATION_OPTIONS })).not.toThrow();
+  it('offers no LaTeX sample anywhere on the dialog', () => {
+    renderDialog();
+    // The dialog is portaled, so this reads the whole document rather than a render container.
+    // Any backslash command on screen would read as something to copy, or worse, as content.
+    expect(document.body.textContent ?? '').not.toContain('\\');
+    expect(screen.queryByText(/\\frac/)).toBeNull();
+  });
+
+  it('says why the preview is blank instead of showing an unexplained empty box', () => {
+    renderDialog();
+    expect(screen.getByText('Your equation will appear here.')).toBeInTheDocument();
   });
 });
 
