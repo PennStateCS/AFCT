@@ -125,9 +125,7 @@ export async function createFixtureCourse(browser: Browser): Promise<string> {
           (users as { users?: unknown[] }).users ??
           [])
     ) as Array<{ id: string; email: string }>;
-    const classmate = userList.find(
-      (u) => u.email?.startsWith('student') && u.id !== studentId,
-    );
+    const classmate = userList.find((u) => u.email?.startsWith('student') && u.id !== studentId);
 
     // A course cannot be created published (the create schema enforces it), and an
     // unpublished course is invisible to students - which showed up as a puzzling 403
@@ -173,8 +171,9 @@ export async function courseWithoutStudent(browser: Browser): Promise<string | n
     const res = await page.request.get('/api/courses');
     if (!res.ok()) return null;
     const body = (await res.json()) as unknown;
-    const all = (Array.isArray(body) ? body : ((body as { courses?: unknown[] }).courses ?? [])) as
-      Array<{ id: string }>;
+    const all = (
+      Array.isArray(body) ? body : ((body as { courses?: unknown[] }).courses ?? [])
+    ) as Array<{ id: string }>;
 
     const studentContext = await browser.newContext();
     try {

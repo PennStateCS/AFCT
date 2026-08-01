@@ -31,18 +31,18 @@ docker exec afct-dev-worker sh -c 'cd /app && npm run test:evaluator'
    ```json
    {
      "name": "Short human-readable description",
-     "type": "FA",                       // FA | RE | CFG | PDA | TM
-     "answer": "my-solution.jff",        // the answer key, relative to cases/
-     "submission": "my-submission.jff",  // the file being graded
-     "maxStates": -1,                    // FA/PDA only; -1 = no limit
-     "deterministic": false,             // FA only; must the FA be a DFA?
-     "expectCorrect": true               // the verdict this jar must return
+     "type": "FA", // FA | RE | CFG | PDA | TM
+     "answer": "my-solution.jff", // the answer key, relative to cases/
+     "submission": "my-submission.jff", // the file being graded
+     "maxStates": -1, // FA/PDA only; -1 = no limit
+     "deterministic": false, // FA only; must the FA be a DFA?
+     "expectCorrect": true // the verdict this jar must return
    }
    ```
 
    Optional: `"expectErrorContains": "unsupported answer type"` additionally requires
    the jar to explain itself in `feedback`/`errors`. Use it for files the evaluator is
-   meant to *refuse*, so a refusal never degrades into a bare "incorrect" that a student
+   meant to _refuse_, so a refusal never degrades into a bare "incorrect" that a student
    would read as a wrong answer.
 
    `maxStates`/`deterministic` map to the same per-type args
