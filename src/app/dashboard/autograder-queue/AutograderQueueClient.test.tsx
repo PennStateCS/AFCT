@@ -15,6 +15,18 @@ const renderWithClient = (ui: React.ReactElement) => {
 
 vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
+// The table's Filters control is a Radix popover, which needs pointer capture jsdom does
+// not implement. Render its content inline so the status checkboxes are queryable.
+vi.mock('@/components/ui/popover', () => {
+  const Pass = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  return {
+    Popover: Pass,
+    PopoverTrigger: Pass,
+    PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    PopoverAnchor: Pass,
+  };
+});
+
 // The manage menu is a Radix dropdown, which drives itself with pointer capture and
 // portals that jsdom does not implement. Render its content inline so the items are
 // queryable; the trigger is a plain button either way.
@@ -168,13 +180,16 @@ const submissionsPostCalls = (fetchMock: FetchMock) =>
   );
 
 /**
- * Clear the status filter so every row shows.
+ * Clear the Result filter so every row shows.
  *
  * The page opens filtered to Pending, because that is what an admin comes to the queue
- * for. The fixture row is graded, so a test that wants to see it has to press All first,
- * exactly as a user would.
+ * for. The fixture row is graded, so a test that wants to see it unticks Pending first,
+ * exactly as a user would through the Filters button.
  */
-const showAllStatuses = () => fireEvent.click(screen.getByRole('button', { name: 'All' }));
+const showAllStatuses = async () => {
+  const pending = await screen.findByRole('checkbox', { name: /^Pending/ });
+  fireEvent.click(pending);
+};
 
 describe('AutograderQueueClient', () => {
   beforeEach(() => {
@@ -212,8 +227,7 @@ describe('AutograderQueueClient', () => {
     });
 
     renderWithClient(<AutograderQueueClient />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
-    showAllStatuses();
+    await showAllStatuses();
 
     // The submitted student row renders once the cascade completes.
     await waitFor(() => {
@@ -274,8 +288,7 @@ describe('AutograderQueueClient', () => {
     });
 
     renderWithClient(<AutograderQueueClient />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
-    showAllStatuses();
+    await showAllStatuses();
 
     // Wait until the row renders (the submissions POST resolved).
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
@@ -315,35 +328,30 @@ describe('AutograderQueueClient', () => {
 
     // Releasing the POST lets the row render.
     releaseSubmissions?.();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
-    showAllStatuses();
+    await showAllStatuses();
     await waitFor(() => {
       expect(screen.getByText('ada@example.com')).toBeInTheDocument();
     });
   });
 
-  it('opens filtered to Pending, hiding a graded submission until All is pressed', async () => {
+  it('opens with the Result filter set to Pending, hiding a graded submission', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Pending' })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      ),
-    );
-    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false');
+
+    // Pending starts ticked in the table's own Filters popover.
+    const pending = await screen.findByRole('checkbox', { name: /^Pending/ });
+    await waitFor(() => expect(pending).toHaveAttribute('data-state', 'checked'));
     // The fixture row is graded, so the default view excludes it.
     expect(screen.queryByText('ada@example.com')).toBeNull();
 
-    showAllStatuses();
+    await showAllStatuses();
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
   });
 
   it('offers the row actions in a manage menu, including a link into submission review', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
-    showAllStatuses();
+    await showAllStatuses();
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // One Manage control per row, named after the student so screen reader users can
@@ -367,21 +375,15 @@ describe('AutograderQueueClient', () => {
     );
   });
 
-  it('toggling a status filter updates aria-pressed and hides the row', async () => {
+  it('ticking a Result value in the table filter narrows the rows', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
-    showAllStatuses();
+    await showAllStatuses();
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
-    // The single row is on-time + correct, so filtering to "Incorrect" hides it.
-    fireEvent.click(screen.getByRole('button', { name: 'Incorrect' }));
+    // The single row is correct, so filtering to Incorrect hides it.
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Incorrect/ }));
 
-    expect(screen.getByRole('button', { name: 'Incorrect' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false');
     await waitFor(() => {
       expect(screen.queryByText('ada@example.com')).toBeNull();
       // DataTable's own empty state takes over, and says the filters are the reason

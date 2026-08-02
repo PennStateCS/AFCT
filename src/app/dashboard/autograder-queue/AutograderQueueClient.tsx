@@ -28,7 +28,7 @@ import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import { showToast } from '@/lib/toast';
 import type { SubmissionStatusFilter } from '@/lib/submission-status-filter';
-import { filterSubmissions, STATUS_FILTER_OPTIONS } from '@/lib/submission-status-filter';
+import { getSubmissionReviewStatus } from '@/lib/submission-status-filter';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import { statusToneClass, getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
 import { apiPaths } from '@/lib/api-paths';
@@ -202,12 +202,6 @@ export default function AutograderQueueClient() {
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedProblems, setSelectedProblems] = useState<string[]>([]);
-  // Opens filtered to Pending. This page is the queue: what an admin comes here to see is
-  // what has not been graded yet, not the whole history. Clearing the filter, or pressing
-  // All, still shows everything.
-  const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(
-    () => new Set<SubmissionStatusFilter>(['pending']),
-  );
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
@@ -374,6 +368,14 @@ export default function AutograderQueueClient() {
     [problems],
   );
 
+  /*
+   * Rows the course / assignment / problem pickers allow through.
+   *
+   * Status filtering is NOT done here any more: the table owns it, through the `timing`
+   * and `result` columns and the toolbar's Filters button. Note the consequence for the
+   * header's Rerun button below, which reruns what this list holds and therefore ignores
+   * a status filter set inside the table.
+   */
   const visibleSubmissions = useMemo(
     () =>
       submissions.filter((submission) => {
@@ -384,33 +386,10 @@ export default function AutograderQueueClient() {
         const matchesProblem =
           selectedProblems.length === 0 || selectedProblems.includes(submission.problemId);
 
-        const assignment = assignments.find((item) => item.id === submission.assignmentId);
-        const dueDate = assignment?.dueDate ? new Date(assignment.dueDate) : null;
-        const hasValidDueDate = dueDate instanceof Date && !Number.isNaN(dueDate.getTime());
-        const matchesFilter =
-          activeFilters.size === 0 ||
-          filterSubmissions([submission], activeFilters, dueDate, hasValidDueDate).length > 0;
-
-        return matchesCourse && matchesAssignment && matchesProblem && matchesFilter;
+        return matchesCourse && matchesAssignment && matchesProblem;
       }),
-    [
-      activeFilters,
-      assignments,
-      selectedAssignments,
-      selectedCourses,
-      selectedProblems,
-      submissions,
-    ],
+    [selectedAssignments, selectedCourses, selectedProblems, submissions],
   );
-
-  const toggleFilter = (filter: SubmissionStatusFilter) => {
-    setActiveFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(filter)) next.delete(filter);
-      else next.add(filter);
-      return next;
-    });
-  };
 
   const handleSelectAll = () => {
     setSelectedCourses(courses.map((course) => course.id));
@@ -577,6 +556,53 @@ export default function AutograderQueueClient() {
           );
         },
         meta: { priority: 1 },
+      },
+      /*
+       * Two filter-only columns behind the toolbar's Filters button, both hidden in the
+       * grid because the Status column above already shows the same two chips.
+       *
+       * They are separate on purpose. A submission has a timing (was it late) AND a result
+       * (was it graded, and was it right), and those are independent: "late" and "correct"
+       * describe the same row. One combined list would make picking two values mean "rows
+       * matching either", which reads as a widening when the user meant to narrow. Same
+       * reasoning the user table uses for keeping Lock apart from Active/Inactive.
+       */
+      {
+        id: 'timing',
+        header: 'Timing',
+        accessorFn: (s) => {
+          const due = dueDateFor(s);
+          if (!due) return '';
+          return new Date(s.submittedAt).getTime() <= due.getTime() ? 'on-time' : 'late';
+        },
+        enableHiding: true,
+        meta: {
+          priority: 5,
+          filterVariant: 'multiselect',
+          filterLabel: 'Timing',
+          filterOptions: [
+            { label: 'On time', value: 'on-time' },
+            { label: 'Late', value: 'late' },
+          ],
+        },
+      },
+      {
+        id: 'result',
+        header: 'Result',
+        accessorFn: (s) => getSubmissionReviewStatus(s as ProblemSubmission),
+        enableHiding: true,
+        meta: {
+          priority: 5,
+          filterVariant: 'multiselect',
+          filterLabel: 'Result',
+          filterOptions: [
+            { label: 'Pending', value: 'pending' },
+            { label: 'Processing', value: 'processing' },
+            { label: 'Failed', value: 'failed' },
+            { label: 'Correct', value: 'correct' },
+            { label: 'Incorrect', value: 'incorrect' },
+          ],
+        },
       },
       {
         id: 'actions',
@@ -764,45 +790,6 @@ export default function AutograderQueueClient() {
           />
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              aria-pressed={activeFilters.size === 0}
-              onClick={() => setActiveFilters(new Set())}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                activeFilters.size === 0
-                  ? 'border-foreground bg-foreground text-background'
-                  : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
-              }`}
-            >
-              All
-            </button>
-            {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
-              const active = activeFilters.has(value);
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => toggleFilter(value)}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    active
-                      ? 'border-foreground bg-foreground text-background'
-                      : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
-                  }`}
-                >
-                  <span
-                    className={`inline-flex h-2.5 w-2.5 rounded-full ${dot}`}
-                    aria-hidden="true"
-                  />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <DataTable
           columns={columns}
           data={visibleSubmissions}
@@ -813,7 +800,13 @@ export default function AutograderQueueClient() {
           // Due is off by default: the deadline matters far less than arrival order when
           // you are working a queue, and the Status column already flags late work. The
           // Columns menu turns it back on, and that choice is remembered per browser.
-          defaultColumnVisibility={{ due: false }}
+          // `timing` and `result` exist only to drive the Filters popover; the Status
+          // column already shows both as chips.
+          defaultColumnVisibility={{ due: false, timing: false, result: false }}
+          // Opens showing only what has not been graded. This page is the queue: what an
+          // admin comes here for is outstanding work, not the whole history. The Filters
+          // button clears it like any other filter.
+          defaultColumnFilters={[{ id: 'result', value: ['pending'] }]}
           emptyIcon={FileCode2}
           {...(submissions.length === 0
             ? {
