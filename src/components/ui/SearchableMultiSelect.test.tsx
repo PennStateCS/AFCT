@@ -120,6 +120,39 @@ describe('SearchableMultiSelect', () => {
     expect(trigger).toHaveTextContent('Ada Lovelace, Alan Turing');
   });
 
+  // A comma-joined list of long names is wider than the control, so it was truncated to
+  // the first name plus noise, which hid how many were selected and blew out the layout.
+  it('summarises the count past two, rather than listing every name', () => {
+    render(
+      <SearchableMultiSelect
+        label="Faculty"
+        items={facultyItems}
+        value={['ada', 'alan', 'grace']}
+        onChange={() => {}}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Faculty' });
+    expect(trigger).toHaveTextContent('3 selected');
+    expect(trigger).not.toHaveTextContent('Ada Lovelace');
+  });
+
+  it('ignores selected ids that are no longer in the list when counting', () => {
+    render(
+      <SearchableMultiSelect
+        label="Faculty"
+        items={facultyItems}
+        value={['ada', 'alan', 'deleted-1', 'deleted-2']}
+        onChange={() => {}}
+      />,
+    );
+
+    // Two real matches, so it still lists them rather than claiming four.
+    expect(screen.getByRole('button', { name: 'Faculty' })).toHaveTextContent(
+      'Ada Lovelace, Alan Turing',
+    );
+  });
+
   it('groups the options as checkboxes rather than a menu', () => {
     render(
       <SearchableMultiSelect

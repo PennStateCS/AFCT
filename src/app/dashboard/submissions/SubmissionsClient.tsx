@@ -477,7 +477,11 @@ export default function SubmissionsClient() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr]">
+        {/* Stacked until there is genuinely room for three. Three equal tracks at the `sm`
+            breakpoint left each filter narrower than its own label, so they now go side by
+            side only from `lg`. Each track is `minmax(0,1fr)` so a long selection truncates
+            inside its column instead of widening it. */}
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <SearchableMultiSelect
             label="Course filter"
             items={courseOptions}
