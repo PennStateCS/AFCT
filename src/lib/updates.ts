@@ -19,6 +19,14 @@ export const UPDATE_UPDATER_VERSION_FILE = path.join(UPDATE_TRIGGER_DIR, 'update
 // app has no Docker access, so a fresh file here is how it knows the sidecar is
 // actually installed and running.
 export const UPDATE_PRESENCE_FILE = path.join(UPDATE_TRIGGER_DIR, 'updater.alive');
+// Whether the running updater can still see the env and compose files it has to rewrite.
+// A container keeps the paths it started with, so a compose change that moves them leaves
+// an updater that is the right VERSION but cannot perform an upgrade. It reported itself
+// "up to date" while every upgrade failed; this is how the app can tell the difference.
+export const UPDATE_UPDATER_READINESS_FILE = path.join(
+  UPDATE_TRIGGER_DIR,
+  'updater.readiness.json',
+);
 // Generous vs the updater's ~5s beat: tolerates a busy loop / long upgrade without
 // falsely reporting the sidecar as gone.
 const UPDATER_PRESENCE_MAX_AGE_MS = 180_000;
@@ -228,6 +236,38 @@ export function updaterVersion(): string {
     return fs.readFileSync(UPDATE_UPDATER_VERSION_FILE, 'utf8').trim();
   } catch {
     return '';
+  }
+}
+
+/** What the updater reports about its own configuration. Paths only, never contents. */
+export type UpdaterReadiness = {
+  envFile: string;
+  composeFile: string;
+  envFileOk: boolean;
+  composeFileOk: boolean;
+};
+
+/**
+ * The updater's self-report, or null when it hasn't written one.
+ *
+ * Null is NOT "broken": an updater older than this file simply never stamps it, and that
+ * is the common case right after upgrading. Treat null as unknown and say nothing, so a
+ * healthy old install isn't nagged about a problem it may not have.
+ */
+export function updaterReadiness(): UpdaterReadiness | null {
+  try {
+    const raw: unknown = JSON.parse(fs.readFileSync(UPDATE_UPDATER_READINESS_FILE, 'utf8'));
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    if (typeof r.envFileOk !== 'boolean' || typeof r.composeFileOk !== 'boolean') return null;
+    return {
+      envFile: typeof r.envFile === 'string' ? r.envFile : '',
+      composeFile: typeof r.composeFile === 'string' ? r.composeFile : '',
+      envFileOk: r.envFileOk,
+      composeFileOk: r.composeFileOk,
+    };
+  } catch {
+    return null;
   }
 }
 

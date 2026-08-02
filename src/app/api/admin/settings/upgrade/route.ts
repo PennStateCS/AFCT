@@ -14,6 +14,7 @@ import {
   readRestorePoints,
   readStatus,
   updaterAvailable,
+  updaterReadiness,
   updaterVersion,
   writeDeleteRestorePointRequest,
   writeDowngradeRequest,
@@ -42,6 +43,17 @@ import { listBackups } from '@/lib/backups';
  *             versions: { type: array, items: { type: object } }
  *             manifestError: { type: boolean }
  *             updaterAvailable: { type: boolean }
+ *             updaterReadiness:
+ *               type: object
+ *               nullable: true
+ *               description: >
+ *                 What the update service reports about its own configuration. Null when it
+ *                 is too old to report, which is not an error.
+ *               properties:
+ *                 envFile: { type: string }
+ *                 composeFile: { type: string }
+ *                 envFileOk: { type: boolean }
+ *                 composeFileOk: { type: boolean }
  *   403: { description: Caller is not a system administrator. }
  */
 export const GET = withAdminAuth(
@@ -65,6 +77,7 @@ export const GET = withAdminAuth(
       manifestError,
       updaterAvailable: updaterAvailable(),
       updaterVersion: updaterVersion(),
+      updaterReadiness: updaterReadiness(),
       // Enrich with each backup's size + encrypted flag, read from the same backup dir
       // the Backups tab lists, so the restore table can show them without the updater
       // recording anything extra.
@@ -188,9 +201,7 @@ export const POST = withAdminAuth(
         return apiError(400, 'A valid restore point is required to downgrade');
       }
       // The (version, restorePoint) pair must be one the updater actually recorded.
-      const match = readRestorePoints().find(
-        (r) => r.version === tag && r.backup === restorePoint,
-      );
+      const match = readRestorePoints().find((r) => r.version === tag && r.backup === restorePoint);
       if (!match) {
         return apiError(400, `No restore point ${restorePoint} for ${tag}`);
       }

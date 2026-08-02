@@ -806,3 +806,42 @@ supending() { printf '%s' "$1" > "$TESTDIR/triggers/.self-update-pending.json"; 
   [ ! -f triggers/.processing.json ]
   [ "$(tag_now)" = "v1.0.0" ]
 }
+
+
+@test "a missing env file names the path instead of failing opaquely" {
+  # The failure that made an upgrade unexplainable in production: the updater kept the
+  # env path it was created with after the file moved, so every upgrade failed here.
+  rm -f "$TESTDIR/.env.production"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"noenv","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ "$(phase)" = "failed" ]
+  jq -r '.message' triggers/status.json | grep -q "$TESTDIR/.env.production"
+  jq -r '.message' triggers/status.json | grep -qi 'UPDATER_ENV_FILE'
+}
+
+@test "a failed tag rewrite leaves no temp file behind" {
+  rm -f "$TESTDIR/.env.production"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"notmp","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  # Root-owned empty .updtmp.* files used to accumulate, one per attempt.
+  [ -z "$(ls "$TESTDIR"/.env.production.updtmp.* 2>/dev/null)" ]
+}
+
+@test "readiness reports the resolved paths and that they exist" {
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ -f triggers/updater.readiness.json ]
+  [ "$(jq -r '.envFileOk' triggers/updater.readiness.json)" = "true" ]
+  [ "$(jq -r '.composeFileOk' triggers/updater.readiness.json)" = "true" ]
+  [ "$(jq -r '.envFile' triggers/updater.readiness.json)" = "$TESTDIR/.env.production" ]
+}
+
+@test "readiness reports a missing env file, which is how the UI can warn first" {
+  rm -f "$TESTDIR/.env.production"
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.envFileOk' triggers/updater.readiness.json)" = "false" ]
+  [ "$(jq -r '.composeFileOk' triggers/updater.readiness.json)" = "true" ]
+}

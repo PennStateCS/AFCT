@@ -3293,6 +3293,13 @@ export interface operations {
                         versions?: Record<string, never>[];
                         manifestError?: boolean;
                         updaterAvailable?: boolean;
+                        /** @description What the update service reports about its own configuration. Null when it is too old to report, which is not an error. */
+                        updaterReadiness?: {
+                            envFile?: string;
+                            composeFile?: string;
+                            envFileOk?: boolean;
+                            composeFileOk?: boolean;
+                        } | null;
                     };
                 };
             };
