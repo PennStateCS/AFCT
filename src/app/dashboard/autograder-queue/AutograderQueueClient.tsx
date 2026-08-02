@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Download, Eye, File, FileCode2, RotateCcw } from 'lucide-react';
-import { PulseLoader } from 'react-spinners';
 import type { Course } from '@prisma/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,14 +15,7 @@ import { FeedbackDialog } from '@/components/dialogs/FeedbackDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import Link from 'next/link';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { DataTable } from '@/components/ui/data-table';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import { showToast } from '@/lib/toast';
@@ -436,6 +429,211 @@ export default function AutograderQueueClient() {
     });
   };
 
+  /** The assignment's due date for a row, or null when it has none or it is unparseable. */
+  const dueDateFor = (submission: SubmissionItem): Date | null => {
+    const assignment = assignments.find((a) => a.id === submission.assignmentId);
+    const due = assignment?.dueDate ? new Date(assignment.dueDate) : null;
+    return due && !Number.isNaN(due.getTime()) ? due : null;
+  };
+
+  /*
+   * Columns for the shared DataTable.
+   *
+   * Date columns sort on a timestamp through `accessorFn` while rendering CompactDate, so
+   * "newest first" orders by instant rather than by the formatted string. Text columns put
+   * the value a person would search for in the accessor, which is what the toolbar's search
+   * box reads. `priority` decides what survives on a narrow screen.
+   */
+  const columns: ColumnDef<SubmissionItem>[] = useMemo(
+    () => [
+      {
+        id: 'submittedAt',
+        header: 'Submitted',
+        accessorFn: (s) => new Date(s.submittedAt).getTime(),
+        cell: ({ row }) => <CompactDate value={row.original.submittedAt} timeZone={timezone} />,
+        meta: { priority: 1 },
+      },
+      {
+        id: 'student',
+        header: 'Student',
+        // Both name and email, so either one finds the row from the search box.
+        accessorFn: (s) => `${formatStudentName(s) ?? ''} ${s.studentEmail ?? ''}`.trim(),
+        cell: ({ row }) => (
+          <div className="min-w-0">
+            <p className="text-foreground truncate text-sm">
+              {formatStudentName(row.original) ?? row.original.studentEmail ?? 'Unknown'}
+            </p>
+            <p className="text-muted-foreground truncate text-xs">{row.original.studentEmail}</p>
+          </div>
+        ),
+        meta: { priority: 1 },
+      },
+      {
+        id: 'course',
+        header: 'Course',
+        accessorFn: (s) => s.courseName,
+        cell: ({ row }) => (
+          <Link
+            href={`/dashboard/courses/${row.original.courseId}`}
+            className="text-foreground text-sm hover:underline"
+          >
+            {row.original.courseName}
+          </Link>
+        ),
+        meta: { priority: 3 },
+      },
+      {
+        id: 'assignment',
+        header: 'Assignment',
+        accessorFn: (s) => s.assignmentTitle,
+        cell: ({ row }) => (
+          <Link
+            href={`/dashboard/courses/${row.original.courseId}/${row.original.assignmentId}`}
+            className="text-foreground text-sm hover:underline"
+          >
+            {row.original.assignmentTitle}
+          </Link>
+        ),
+        meta: { priority: 3 },
+      },
+      {
+        id: 'problem',
+        header: 'Problem',
+        accessorFn: (s) => s.problemTitle ?? s.problemId,
+        cell: ({ row }) => (
+          <Link
+            href={`/dashboard/courses/${row.original.courseId}/${row.original.assignmentId}?tab=submissions&studentId=${encodeURIComponent(
+              row.original.studentId,
+            )}${row.original.problemId ? `&problemId=${encodeURIComponent(row.original.problemId)}` : ''}`}
+            className="text-foreground text-sm hover:underline"
+          >
+            {row.original.problemTitle ?? row.original.problemId}
+          </Link>
+        ),
+        meta: { priority: 2 },
+      },
+      {
+        id: 'due',
+        header: 'Due',
+        accessorFn: (s) => dueDateFor(s)?.getTime() ?? 0,
+        cell: ({ row }) => <CompactDate value={dueDateFor(row.original)} timeZone={timezone} />,
+        meta: { priority: 3 },
+      },
+      {
+        id: 'grade',
+        header: 'Grade',
+        accessorFn: (s) => s.grade ?? -1,
+        cell: ({ row }) => {
+          const { grade, maxPoints } = row.original;
+          const text =
+            maxPoints != null
+              ? `${grade ?? '-'} / ${maxPoints}`
+              : grade != null
+                ? String(grade)
+                : '-';
+          return <span className="text-foreground text-sm whitespace-nowrap">{text}</span>;
+        },
+        meta: { priority: 2 },
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const due = dueDateFor(row.original);
+          const chips = [
+            getTimingStatusChip(row.original as ProblemSubmission, !!due, due),
+            getReviewStatusChip(row.original as ProblemSubmission),
+          ];
+          return (
+            <div className="flex flex-col gap-1">
+              {chips.map((chip) => (
+                <span
+                  key={chip.label}
+                  className="inline-flex items-center gap-2 text-xs font-medium"
+                  title={chip.title}
+                >
+                  <span
+                    className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[chip.tone]}`}
+                    aria-hidden="true"
+                  />
+                  <span>{chip.label}</span>
+                </span>
+              ))}
+            </div>
+          );
+        },
+        meta: { priority: 1 },
+      },
+      {
+        id: 'actions',
+        header: () => <span className="sr-only">Actions</span>,
+        enableSorting: false,
+        meta: { align: 'right', priority: 1 },
+        cell: ({ row }) => {
+          const submission = row.original;
+          const busy =
+            submission.status?.toLowerCase() === 'pending' ||
+            submission.status?.toLowerCase() === 'processing';
+          return (
+            <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleViewFeedback(submission)}
+                title="View feedback"
+                aria-label="View submission feedback"
+                className="h-8 w-8 p-0"
+                disabled={!submission.feedback || busy}
+              >
+                <File className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleViewSubmission(submission)}
+                title="View submission"
+                aria-label="View submission"
+                disabled={!submission.fileName}
+                className="h-8 w-8 p-0"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={!submission.fileName}
+                onClick={() => handleDownloadSubmission(submission)}
+                title="Download submission"
+                aria-label="Download submission"
+                className="h-8 w-8 p-0"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                title="Rerun submission"
+                aria-label="Rerun submission"
+                className="h-8 w-8 p-0"
+                onClick={() => handleRerunSubmission(submission)}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assignments, timezone],
+  );
+
   return (
     <Card className="p-4">
       <CardHeader className="pb-4">
@@ -575,249 +773,28 @@ export default function AutograderQueueClient() {
           </div>
         </div>
 
-        {/* Announce the filtered result count to screen readers (this is a
-            hand-rolled table, so it has no DataTable live region). */}
-        <p className="sr-only" role="status" aria-live="polite">
-          {visibleSubmissions.length} submission{visibleSubmissions.length === 1 ? '' : 's'}
-        </p>
-
-        <div className="overflow-x-auto rounded-md border">
-          <Table className="text-sm" aria-label="Submissions">
-            <TableHeader>
-              <TableRow>
-                {/* Submitted leads: this is a queue, so when the work arrived is the
-                    column a reader scans first. */}
-                <TableHead className="px-2 py-1">Submitted</TableHead>
-                <TableHead className="px-2 py-1">Student</TableHead>
-                <TableHead className="px-2 py-1">Course</TableHead>
-                <TableHead className="px-2 py-1">Assignment</TableHead>
-                <TableHead className="px-2 py-1">Problem</TableHead>
-                <TableHead className="px-2 py-1">Due</TableHead>
-                <TableHead className="px-2 py-1">Grade</TableHead>
-                <TableHead className="px-2 py-1">Status</TableHead>
-                <TableHead className="px-2 py-1">Manage</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleSubmissions.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={9} className="py-10 text-center">
-                    {loadingCourses || loadingAssignments || loadingSubmissions ? (
-                      <div
-                        className="text-muted-foreground flex flex-col items-center justify-center gap-2"
-                        role="status"
-                        aria-live="polite"
-                      >
-                        <span aria-hidden="true" className="text-brand-teal">
-                          <PulseLoader
-                            color="currentColor"
-                            size={8}
-                            margin={3}
-                            speedMultiplier={0.65}
-                          />
-                        </span>
-                        <span>Loading submissions, please wait...</span>
-                      </div>
-                    ) : (
-                      /* Distinguish "you haven't submitted anything" from "your filters
-                         hide everything" -- the fix for the second is a filter change,
-                         not doing more work. */
-                      <div className="text-muted-foreground flex flex-col items-center whitespace-normal">
-                        <FileCode2
-                          className="text-muted-foreground mb-2 h-10 w-10"
-                          aria-hidden={true}
-                        />
-                        <p className="font-medium">
-                          {submissions.length === 0
-                            ? 'No submissions yet'
-                            : 'No submissions match your filters'}
-                        </p>
-                        <p className="text-sm">
-                          {submissions.length === 0
-                            ? 'Work you submit for a problem will show up here.'
-                            : 'Try clearing a course, assignment, problem or status filter.'}
-                        </p>
-                      </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                visibleSubmissions.map((submission) => {
-                  const assignment = assignments.find(
-                    (assignment) => assignment.id === submission.assignmentId,
-                  );
-                  const dueDate = assignment?.dueDate ? new Date(assignment.dueDate) : null;
-                  const hasValidDueDate =
-                    dueDate instanceof Date && !Number.isNaN(dueDate.getTime());
-
-                  const renderStatusCell = (submission: ProblemSubmission) => {
-                    const timingStatus = getTimingStatusChip(submission, hasValidDueDate, dueDate);
-                    const reviewStatus = getReviewStatusChip(submission);
-
-                    return (
-                      <div className="flex flex-col gap-1">
-                        {[timingStatus, reviewStatus].map((chip) => (
-                          <span
-                            key={chip.label}
-                            className="inline-flex items-center gap-2 text-xs font-medium"
-                            title={chip.title}
-                          >
-                            <span
-                              className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[chip.tone]}`}
-                              aria-hidden="true"
-                            />
-                            <span>{chip.label}</span>
-                          </span>
-                        ))}
-                      </div>
-                    );
-                  };
-
-                  return (
-                    <TableRow key={submission.id} className="hover:bg-[var(--table-highlight)]">
-                      <TableCell className="p-1 align-top">
-                        <CompactDate value={submission.submittedAt} timeZone={timezone} />
-                      </TableCell>
-                      <TableCell className="p-1 align-top">
-                        {/* Name over email. No avatar: this is a dense working list, not a
-                            roster, and a face does not help you find a row. Falls back to
-                            the email when a student has no name recorded, so the row is
-                            never blank. */}
-                        <div className="min-w-0">
-                          <p className="text-foreground truncate text-sm">
-                            {formatStudentName(submission) ?? submission.studentEmail ?? 'Unknown'}
-                          </p>
-                          <p className="text-muted-foreground truncate text-xs">
-                            {submission.studentEmail}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="p-1 align-top">
-                        <div className="min-w-0">
-                          <Link
-                            href={`/dashboard/courses/${submission.courseId}`}
-                            className="text-foreground text-sm hover:underline"
-                          >
-                            {submission.courseName}
-                          </Link>
-                        </div>
-                      </TableCell>
-                      <TableCell className="p-1 align-top">
-                        <div className="min-w-0">
-                          <Link
-                            href={`/dashboard/courses/${submission.courseId}/${submission.assignmentId}`}
-                            className="text-foreground text-sm hover:underline"
-                          >
-                            {submission.assignmentTitle}
-                          </Link>
-                        </div>
-                      </TableCell>
-                      <TableCell className="p-1 align-top">
-                        <div className="min-w-0">
-                          <Link
-                            href={`/dashboard/courses/${submission.courseId}/${submission.assignmentId}?tab=submissions&studentId=${encodeURIComponent(
-                              submission.studentId,
-                            )}${submission.problemId ? `&problemId=${encodeURIComponent(submission.problemId)}` : ''}`}
-                            className="text-foreground text-sm hover:underline"
-                          >
-                            {submission.problemTitle ?? submission.problemId}
-                          </Link>
-                        </div>
-                      </TableCell>
-                      <TableCell className="p-1 align-top">
-                        {/* The assignment's due date. This column is headed "Due" but was
-                            rendering `submittedAt`, so it showed when the work arrived
-                            while claiming to be the deadline; the two are now separate
-                            columns. Both use the course page's date-over-time format. */}
-                        <CompactDate value={dueDate} timeZone={timezone} />
-                      </TableCell>
-                      <TableCell className="p-1 align-top">
-                        <div className="min-w-0">
-                          <p className="text-foreground text-sm">
-                            {submission.maxPoints != null
-                              ? submission.grade != null
-                                ? `${submission.grade} / ${submission.maxPoints}`
-                                : `- / ${submission.maxPoints}`
-                              : submission.grade != null
-                                ? String(submission.grade)
-                                : '-'}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="p-1 align-top">
-                        {renderStatusCell(submission)}
-                      </TableCell>
-                      <TableCell className="p-1 align-top">
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleViewFeedback(submission)}
-                            title="View feedback"
-                            aria-label="View submission feedback"
-                            className="h-8 w-8 p-0"
-                            disabled={
-                              !submission.feedback ||
-                              submission.status?.toLowerCase() === 'pending' ||
-                              submission.status?.toLowerCase() === 'processing'
-                            }
-                          >
-                            <File className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleViewSubmission(submission)}
-                            title="View submission"
-                            aria-label="View submission"
-                            // Same guard as Download. The handler already refused to open
-                            // a submission with no file, so the button just did nothing.
-                            disabled={!submission.fileName}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            disabled={!submission.fileName}
-                            onClick={() => handleDownloadSubmission(submission)}
-                            title="Download submission"
-                            aria-label="Download submission"
-                            className="h-8 w-8 p-0"
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            disabled={
-                              submission.status?.toLowerCase() === 'pending' ||
-                              submission.status?.toLowerCase() === 'processing'
-                            }
-                            title="Rerun submission"
-                            aria-label="Rerun submission"
-                            className="h-8 w-8 p-0"
-                            onClick={() => handleRerunSubmission(submission)}
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable
+          columns={columns}
+          data={visibleSubmissions}
+          loading={loadingCourses || loadingAssignments || loadingSubmissions}
+          loadingMessage="Loading submissions, please wait..."
+          storageKey="autograder-queue-columns"
+          tableLabel="Autograder queue"
+          emptyIcon={FileCode2}
+          {...(submissions.length === 0
+            ? {
+                emptyTitle: 'No submissions yet',
+                emptyDescription: 'Work submitted for a problem will show up here.',
+              }
+            : {
+                // Distinguish "nothing has been submitted" from "your filters hide
+                // everything": the fix for the second is a filter change, not more work.
+                emptyTitle: 'No submissions match your filters',
+                emptyDescription: 'Try clearing a course, assignment, problem or status filter.',
+              })}
+          // Newest first: a queue is read from the most recent arrival down.
+          defaultSorting={[{ id: 'submittedAt', desc: true }]}
+        />
         <SubmissionViewerDialog
           open={jffViewerOpen}
           onOpenChange={(open) => {

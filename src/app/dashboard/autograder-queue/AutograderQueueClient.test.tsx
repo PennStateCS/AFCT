@@ -264,7 +264,7 @@ describe('AutograderQueueClient', () => {
     });
   });
 
-  it('marks the All filter pressed by default and announces the result count', async () => {
+  it('marks the All filter pressed by default and shows the matching row', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
@@ -274,11 +274,9 @@ describe('AutograderQueueClient', () => {
       'aria-pressed',
       'false',
     );
-    // The sr-only live region reports the visible count.
-    expect(screen.getByRole('status')).toHaveTextContent('1 submission');
   });
 
-  it('toggling a status filter updates aria-pressed and the announced count', async () => {
+  it('toggling a status filter updates aria-pressed and hides the row', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
@@ -292,8 +290,10 @@ describe('AutograderQueueClient', () => {
     );
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false');
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent('0 submissions');
       expect(screen.queryByText('ada@example.com')).toBeNull();
+      // DataTable's own empty state takes over, and says the filters are the reason
+      // rather than leaving the table silently blank.
+      expect(screen.getByText('No submissions match your filters')).toBeInTheDocument();
     });
   });
 });
