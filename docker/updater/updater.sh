@@ -83,6 +83,12 @@ RESTORE_POINTS_FILE="${TRIGGER_DIR}/restore-points.json"
 # swap is verified.
 SELF_UPDATE_PENDING_FILE="${TRIGGER_DIR}/.self-update-pending.json"
 UPDATER_VERSION_FILE="${TRIGGER_DIR}/updater.version"
+# Whether this updater can actually see the two files it has to rewrite to perform an
+# upgrade. Stamped every poll, read by the app. A container left running across a compose
+# change keeps whatever paths it started with, so it can be the right VERSION and still be
+# unable to do the job; without this the Updates tab called that "up to date" and every
+# upgrade failed late with an error the operator could not act on.
+UPDATER_READINESS_FILE="${TRIGGER_DIR}/updater.readiness.json"
 
 HEALTH_TIMEOUT="${UPDATER_HEALTH_TIMEOUT:-300}"
 HEALTH_INTERVAL="${UPDATER_HEALTH_INTERVAL:-5}"
@@ -403,26 +409,64 @@ current_app_tag() {
   [ -n "$_v" ] && printf '%s' "$_v" || printf '%s' "$DEFAULT_TAG"
 }
 
+# Why the last set_app_tag failed, in a form an operator can act on. Empty when it
+# worked. The caller puts this in the status message, because "could not update the
+# version in the environment file" on its own does not say which file or why, and a
+# stale env-file path is exactly the failure this function hits.
+SET_APP_TAG_ERROR=""
+
 # Rewrite only the AFCT_APP_TAG line, preserving every other line (and the file's
 # secrets). Writes in place so a bind-mounted env file is updated on the host.
 set_app_tag() {
   _tag=$1
   _tmp="${ENV_FILE}.updtmp.$$"
+  SET_APP_TAG_ERROR=""
+
+  # Check the file first so the message can name the actual problem. Reaching the
+  # redirect below with a missing file leaves an empty temp file and returns a bare 1,
+  # which is how a mismounted env path looked like an unexplained upgrade failure.
+  if [ ! -f "$ENV_FILE" ]; then
+    SET_APP_TAG_ERROR="no environment file at ${ENV_FILE} (check the updater's UPDATER_ENV_FILE and its mounts)"
+    return 1
+  fi
+  if [ ! -r "$ENV_FILE" ]; then
+    SET_APP_TAG_ERROR="cannot read ${ENV_FILE}"
+    return 1
+  fi
+  if [ ! -w "$(dirname "$ENV_FILE")" ]; then
+    SET_APP_TAG_ERROR="cannot write to $(dirname "$ENV_FILE") (read-only mount?)"
+    return 1
+  fi
+
   # We run as root but the file belongs to the non-root install user; capture its
   # ownership so we can restore it after the rewrite. Otherwise the file becomes
   # root-owned and the next host-side `install.sh` (run by that user) can't read it.
   _owner=$(stat -c '%u:%g' "$ENV_FILE" 2>/dev/null || true)
+  # Every failure below clears the temp file. Leaving it behind used to litter the
+  # deploy directory with root-owned empty files, one per failed attempt.
   if grep -qE '^AFCT_APP_TAG=' "$ENV_FILE" 2>/dev/null; then
     awk -v t="$_tag" '/^AFCT_APP_TAG=/ { print "AFCT_APP_TAG=" t; next } { print }' \
-      "$ENV_FILE" > "$_tmp" || return 1
+      "$ENV_FILE" > "$_tmp" || {
+        SET_APP_TAG_ERROR="could not write ${_tmp} (out of disk?)"
+        rm -f "$_tmp"
+        return 1
+      }
   else
-    { cat "$ENV_FILE" && printf 'AFCT_APP_TAG=%s\n' "$_tag"; } > "$_tmp" || return 1
+    { cat "$ENV_FILE" && printf 'AFCT_APP_TAG=%s\n' "$_tag"; } > "$_tmp" || {
+      SET_APP_TAG_ERROR="could not write ${_tmp} (out of disk?)"
+      rm -f "$_tmp"
+      return 1
+    }
   fi
   chmod 600 "$_tmp" 2>/dev/null || true
   [ -n "$_owner" ] && chown "$_owner" "$_tmp" 2>/dev/null || true
   # Same directory as the target, so this rename is atomic and stays on the host
   # filesystem (the deploy directory is bind-mounted, not the single file).
-  mv "$_tmp" "$ENV_FILE" || { rm -f "$_tmp"; return 1; }
+  mv "$_tmp" "$ENV_FILE" || {
+    SET_APP_TAG_ERROR="could not replace ${ENV_FILE}"
+    rm -f "$_tmp"
+    return 1
+  }
   return 0
 }
 
@@ -1103,7 +1147,8 @@ process_request() {
   txn_phase "pulling"
   write_status "pulling" "downloading ${IMAGE_REPO}:${_tag}" "$_from" "$_tag" "$_rid"
   if ! set_app_tag "$_tag"; then
-    write_status "failed" "could not update the version in the environment file" "$_from" "$_tag" "$_rid"
+    write_status "failed" "could not update the version in the environment file: ${SET_APP_TAG_ERROR:-unknown reason}" "$_from" "$_tag" "$_rid"
+    progress_note "set_app_tag failed: ${SET_APP_TAG_ERROR:-unknown reason}"
     txn_clear
     rm -f "$CLAIM_FILE"
     return 0
@@ -1265,6 +1310,23 @@ stamp_updater_version() {
     esac
   fi
   [ -n "$_ver" ] && printf '%s\n' "$_ver" > "$UPDATER_VERSION_FILE" 2>/dev/null || true
+}
+
+# Report whether the paths this updater resolved at startup still point at real files.
+# Paths only, never their contents: the env file holds secrets.
+stamp_updater_readiness() {
+  _env_ok=false
+  _compose_ok=false
+  [ -f "$ENV_FILE" ] && [ -r "$ENV_FILE" ] && _env_ok=true
+  [ -f "$COMPOSE_FILE" ] && [ -r "$COMPOSE_FILE" ] && _compose_ok=true
+  jq -n \
+    --arg envFile "$ENV_FILE" \
+    --arg composeFile "$COMPOSE_FILE" \
+    --argjson envFileOk "$_env_ok" \
+    --argjson composeFileOk "$_compose_ok" \
+    '{envFile:$envFile, composeFile:$composeFile, envFileOk:$envFileOk, composeFileOk:$composeFileOk}' \
+    > "${UPDATER_READINESS_FILE}.tmp" 2>/dev/null &&
+    mv "${UPDATER_READINESS_FILE}.tmp" "$UPDATER_READINESS_FILE" 2>/dev/null || true
 }
 
 # This updater's own running version, recomputed live (same logic as stamp_updater_version
@@ -1492,7 +1554,11 @@ recover_transaction() {
 # --------------------------------------------------------------------------- #
 log "AFCT updater started (watching ${TRIGGER_DIR})"
 stamp_updater_version
+stamp_updater_readiness
 beat
+# Say it in the log too, so `docker logs` shows the misconfiguration without the app.
+[ -f "$ENV_FILE" ] || log "WARNING: no environment file at ${ENV_FILE}; upgrades will fail until this updater is recreated"
+[ -f "$COMPOSE_FILE" ] || log "WARNING: no compose file at ${COMPOSE_FILE}; upgrades will fail until this updater is recreated"
 
 # If the previous updater handed off a self-update, this replacement confirms it is now
 # running the requested version and writes the final status (or reports a mismatch).
@@ -1515,6 +1581,9 @@ fi
 
 while :; do
   beat
+  # Re-stamped each poll rather than only at startup: the operator can fix a bad mount or
+  # restore a missing env file on the host, and the Updates tab should clear on its own.
+  stamp_updater_readiness
   if [ -f "$REQUEST_FILE" ]; then
     process_request || log "request processing raised an unexpected error"
   fi

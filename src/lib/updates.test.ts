@@ -17,6 +17,7 @@ import {
   readStatus,
   readRestorePoints,
   updaterAvailable,
+  updaterReadiness,
   withBackupDetails,
   writeUpdateRequest,
   writeDowngradeRequest,
@@ -76,6 +77,41 @@ describe('withBackupDetails', () => {
     ]);
     expect(result[1].size).toBeUndefined();
     expect(result[1].encrypted).toBeUndefined();
+  });
+});
+
+describe('updaterReadiness', () => {
+  it('reads the updater self-report', () => {
+    fsMock.readFileSync.mockReturnValue(
+      JSON.stringify({
+        envFile: '/afct-shared/.env.production',
+        composeFile: '/afct-compose/docker-compose.yml',
+        envFileOk: false,
+        composeFileOk: true,
+      }),
+    );
+    expect(updaterReadiness()).toEqual({
+      envFile: '/afct-shared/.env.production',
+      composeFile: '/afct-compose/docker-compose.yml',
+      envFileOk: false,
+      composeFileOk: true,
+    });
+  });
+
+  // Null means "no report", which the UI must not treat as a fault: an updater older than
+  // this stamp never writes the file, and that is the normal state right after upgrading.
+  it('returns null when the file is absent', () => {
+    fsMock.readFileSync.mockImplementation(() => {
+      throw new Error('ENOENT');
+    });
+    expect(updaterReadiness()).toBeNull();
+  });
+
+  it('returns null for malformed content rather than guessing', () => {
+    fsMock.readFileSync.mockReturnValue('not json');
+    expect(updaterReadiness()).toBeNull();
+    fsMock.readFileSync.mockReturnValue(JSON.stringify({ envFileOk: 'yes' }));
+    expect(updaterReadiness()).toBeNull();
   });
 });
 

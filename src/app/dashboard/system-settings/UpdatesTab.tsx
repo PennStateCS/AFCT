@@ -7,7 +7,12 @@ import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import SelectField from '@/components/ui/SelectField';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { useUpgrade, isUpgradeInProgress, type SelfUpdateState } from './useUpgrade';
+import {
+  useUpgrade,
+  isUpgradeInProgress,
+  isUpdaterMisconfigured,
+  type SelfUpdateState,
+} from './useUpgrade';
 import {
   upgradePhaseLabel,
   formatBackupTs,
@@ -76,6 +81,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
   const [confirmForceOpen, setConfirmForceOpen] = useState(false);
 
   const upgradeInProgress = isUpgradeInProgress(upgradeInfo?.status);
+  // Running, current, and still unable to do the job: the case that produced an upgrade
+  // failure with nothing on this page hinting at the cause.
+  const updaterMisconfigured = isUpdaterMisconfigured(upgradeInfo);
   // The updater refuses a downgrade when it can't confirm a pre-downgrade safety backup,
   // BEFORE it stops the app or restores anything, so it's a safe state to offer a forced
   // retry from. Only surface it for a downgrade this session refused for exactly that
@@ -135,7 +143,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         ) : row.original.encrypted ? (
           <span className="whitespace-nowrap">Yes</span>
         ) : (
-          <span className="whitespace-nowrap text-status-warning">No</span>
+          <span className="text-status-warning whitespace-nowrap">No</span>
         ),
       meta: { priority: 2 },
     },
@@ -218,6 +226,42 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
           </Badge>
         </div>
+
+        {/* Separate from the version check below, and deliberately above it: an updater
+            can be the CURRENT version and still be unable to upgrade, because a container
+            keeps the file paths it was created with. Updating it recreates the container,
+            which is the fix, so this offers the same button for a different reason. */}
+        {updaterMisconfigured && selfUpdate.phase === 'idle' && !upgradeInProgress && (
+          <div
+            role="note"
+            className="border-status-warning-border bg-status-warning-bg text-status-warning max-w-xl space-y-2 rounded-md border p-4 text-sm"
+          >
+            <p className="font-medium">
+              The update service needs restarting before it can upgrade.
+            </p>
+            <p>
+              It is running, but it can&apos;t find the{' '}
+              {!upgradeInfo?.updaterReadiness?.envFileOk ? 'settings file' : 'stack file'} it has to
+              change:{' '}
+              <span className="font-mono break-all">
+                {!upgradeInfo?.updaterReadiness?.envFileOk
+                  ? upgradeInfo?.updaterReadiness?.envFile
+                  : upgradeInfo?.updaterReadiness?.composeFile}
+              </span>
+              . This happens when it has been running since before the file moved. Upgrades will
+              fail until it is restarted on the current configuration.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={disabled || selfUpdateBusy || !upgradeInfo}
+              onClick={() => upgradeInfo && startSelfUpdate(upgradeInfo.current)}
+            >
+              {selfUpdateBusy ? 'Restarting…' : 'Update the update service'}
+            </Button>
+          </div>
+        )}
 
         {/* The updater sidecar tracks the app version but is recreated on its own, so it
             can lag after an app upgrade. Offer to bring it up to date from here. Once a
@@ -381,15 +425,19 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                   <dt className="text-muted-foreground">Update service</dt>
                   <dd>
                     <span className="font-mono">{upgradeInfo?.updaterVersion || 'unknown'}</span>
-                    {upgradeInfo?.updaterVersion &&
+                    {/* Matching versions is not the same as being able to upgrade, and
+                        saying "up to date" over a misconfigured updater is what sent the
+                        last investigation looking in the wrong place. */}
+                    {updaterMisconfigured ? (
+                      <span className="text-status-warning"> · needs restarting</span>
+                    ) : (
+                      upgradeInfo?.updaterVersion &&
                       (upgradeInfo.updaterVersion === upgradeInfo.current ? (
                         <span className="text-muted-foreground"> · up to date</span>
                       ) : (
-                        <span className="text-status-warning">
-                          {' '}
-                          · behind the app
-                        </span>
-                      ))}
+                        <span className="text-status-warning"> · behind the app</span>
+                      ))
+                    )}
                   </dd>
                   <dt className="text-muted-foreground">Update service health</dt>
                   <dd>
@@ -487,7 +535,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             downloads the new version, and restarts. This may take a few minutes, during which the
             site may be briefly unavailable. A failed upgrade is rolled back automatically.
             {selectedVersionInfo?.upgradeNote && (
-              <span className="mt-2 block font-medium whitespace-pre-line text-status-warning">
+              <span className="text-status-warning mt-2 block font-medium whitespace-pre-line">
                 {selectedVersionInfo.upgradeNote}
               </span>
             )}

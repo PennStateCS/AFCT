@@ -112,6 +112,12 @@ Some releases change more than the application image: they add a service, a heal
 
 This means the console is normally not needed to keep a deployment current. The host-side `sh install.sh self-update` remains available as a manual path and as the way to update the installer script, but routine upgrades, including ones that change the stack layout, can be done entirely from the Updates tab.
 
+### "The update service needs restarting before it can upgrade"
+
+A container keeps the file paths it was created with. So if a release moves the settings file or the stack file, an update service that has been running since before the move keeps looking in the old place, and it will be the correct _version_ while still being unable to perform an upgrade. It reports this itself, and the Updates tab shows the warning above along with the path it cannot find.
+
+The fix is the same **Update the update service** action, which recreates the container on the current configuration. Upgrades will keep failing until you do, so treat the warning as blocking rather than advisory.
+
 ### Recovery after an interruption
 
 An upgrade can be interrupted partway through: the server reboots, Docker restarts, or the updater container is recreated while it is working. The updater is built to recover from this on its own, so an interrupted upgrade does not leave the deployment in an unknown state.

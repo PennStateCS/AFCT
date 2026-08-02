@@ -43,6 +43,12 @@ type Info = {
   versions?: { tag: string; label?: string; notes?: string; upgradeNote?: string }[];
   restorePoints?: { version: string; backup: string; encrypted?: boolean; size?: number }[];
   status?: { phase: string; message?: string } | null;
+  updaterReadiness?: {
+    envFile: string;
+    composeFile: string;
+    envFileOk: boolean;
+    composeFileOk: boolean;
+  } | null;
 };
 
 const state = (over: Partial<Record<string, unknown>> = {}, info: Partial<Info> | null = {}) => ({
@@ -249,6 +255,60 @@ describe('UpdatesTab: the update service banner', () => {
     mount(undefined, { current: 'v1.1.0', updaterVersion: 'v1.0.0' });
     fireEvent.click(screen.getByRole('button', { name: 'Update the update service' }));
     expect(hook.startSelfUpdate).toHaveBeenCalledWith('v1.1.0');
+  });
+
+  // A container keeps the paths it was created with, so one left running across a compose
+  // change is the right version and still cannot upgrade. That combination reported itself
+  // "up to date" while every upgrade failed.
+  it('warns when the service is current but cannot reach its settings file', () => {
+    mount(undefined, {
+      current: 'v1.1.0',
+      updaterVersion: 'v1.1.0',
+      updaterReadiness: {
+        envFile: '/afct/.env.production',
+        composeFile: '/afct-compose/docker-compose.yml',
+        envFileOk: false,
+        composeFileOk: true,
+      },
+    });
+    expect(screen.getByText(/needs restarting before it can upgrade/i)).toBeInTheDocument();
+    // Names the path, because that is what an operator has to go and check.
+    expect(screen.getByText('/afct/.env.production')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update the update service' })).toBeEnabled();
+  });
+
+  it('names the stack file when that is the missing one', () => {
+    mount(undefined, {
+      current: 'v1.1.0',
+      updaterVersion: 'v1.1.0',
+      updaterReadiness: {
+        envFile: '/afct-shared/.env.production',
+        composeFile: '/afct-compose/docker-compose.yml',
+        envFileOk: true,
+        composeFileOk: false,
+      },
+    });
+    expect(screen.getByText('/afct-compose/docker-compose.yml')).toBeInTheDocument();
+  });
+
+  it('stays quiet when the service reports both files present', () => {
+    mount(undefined, {
+      current: 'v1.1.0',
+      updaterVersion: 'v1.1.0',
+      updaterReadiness: {
+        envFile: '/afct-shared/.env.production',
+        composeFile: '/afct-compose/docker-compose.yml',
+        envFileOk: true,
+        composeFileOk: true,
+      },
+    });
+    expect(screen.queryByText(/needs restarting before it can upgrade/i)).toBeNull();
+  });
+
+  // An updater older than the readiness stamp reports nothing. Unknown is not broken.
+  it('says nothing when the service is too old to report its configuration', () => {
+    mount(undefined, { current: 'v1.1.0', updaterVersion: 'v1.1.0', updaterReadiness: null });
+    expect(screen.queryByText(/needs restarting before it can upgrade/i)).toBeNull();
   });
 
   it('explains that a restart is expected while it runs', () => {

@@ -46,8 +46,30 @@ export type UpgradeInfo = {
   // separately, so when this lags `current` the UI can offer to update it. Empty if an
   // older updater that doesn't stamp its version is running.
   updaterVersion?: string;
+  // What the updater reports about its own configuration. A container keeps the paths it
+  // started with, so one left running across a compose change can be the right VERSION and
+  // still not find the files it must rewrite. Null when the updater is too old to report,
+  // which is not a problem: treat it as unknown, not as broken.
+  updaterReadiness?: {
+    envFile: string;
+    composeFile: string;
+    envFileOk: boolean;
+    composeFileOk: boolean;
+  } | null;
   restorePoints: RestorePoint[];
 };
+
+/**
+ * The updater is running, but cannot reach a file it has to rewrite to do an upgrade.
+ *
+ * Deliberately false when there is no report at all, so an older updater is never accused
+ * of a fault it hasn't reported.
+ */
+export function isUpdaterMisconfigured(info: UpgradeInfo | null | undefined): boolean {
+  const r = info?.updaterReadiness;
+  if (!r) return false;
+  return !r.envFileOk || !r.composeFileOk;
+}
 
 const UPGRADE_QUERY_KEY = ['admin', 'settings', 'upgrade'] as const;
 
