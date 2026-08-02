@@ -102,6 +102,7 @@ const sidebars: SidebarsConfig = {
             'reference/contributing',
             'reference/creating-a-release',
             'reference/development-setup',
+            'reference/windows-wsl-setup',
             'reference/development-troubleshooting',
             'reference/conventions',
             'reference/login-protection',
