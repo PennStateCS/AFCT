@@ -12,7 +12,6 @@ import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { CompactDate } from '@/components/ui/CompactDate';
 import { FeedbackDialog } from '@/components/dialogs/FeedbackDialog';
-import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import Link from 'next/link';
 import { DataTable } from '@/components/ui/data-table';
@@ -25,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
-import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import { showToast } from '@/lib/toast';
 import type { SubmissionStatusFilter } from '@/lib/submission-status-filter';
 import { getSubmissionReviewStatus } from '@/lib/submission-status-filter';
@@ -202,7 +200,9 @@ export default function AutograderQueueClient() {
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedProblems, setSelectedProblems] = useState<string[]>([]);
-  const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
+  // Only the setter is used: `rerunSubmission` flips a per-row flag while it works, and
+  // nothing on this page reads it now that the bulk rerun button is gone.
+  const [, setRerunning] = useState<Record<string, boolean>>({});
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
   const [jffViewerOpen, setJffViewerOpen] = useState(false);
@@ -215,8 +215,6 @@ export default function AutograderQueueClient() {
   // The viewer's own effective zone is the honest choice here; the course pages still show
   // each assignment in ITS course's zone.
   const { timezone } = useEffectiveTimezone();
-  const isRerunning = useMemo(() => Object.values(rerunning).some(Boolean), [rerunning]);
-  const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
 
   // --- Filter data (cascading: courses → assignments → problems) -------------
   // Each list is a cached, deduped, retried query. staleTime:Infinity means a
@@ -411,16 +409,6 @@ export default function AutograderQueueClient() {
     });
   };
 
-  const handleRerunVisible = async () => {
-    if (visibleSubmissions.length === 0) return;
-
-    await rerunVisibleSubmissions({
-      visibleSubmissions,
-      setRerunning,
-      fetchReviewData,
-    });
-  };
-
   /** The assignment's due date for a row, or null when it has none or it is unparseable. */
   const dueDateFor = (submission: SubmissionItem): Date | null => {
     const assignment = assignments.find((a) => a.id === submission.assignmentId);
@@ -442,7 +430,27 @@ export default function AutograderQueueClient() {
         id: 'submittedAt',
         header: 'Submitted',
         accessorFn: (s) => new Date(s.submittedAt).getTime(),
-        cell: ({ row }) => <CompactDate value={row.original.submittedAt} timeZone={timezone} />,
+        // On time / late sits under the timestamp it is a judgement about, rather than in
+        // the Status column, which now carries only the grading result.
+        cell: ({ row }) => {
+          const due = dueDateFor(row.original);
+          const timing = getTimingStatusChip(row.original as ProblemSubmission, !!due, due);
+          return (
+            <div className="flex flex-col gap-0.5">
+              <CompactDate value={row.original.submittedAt} timeZone={timezone} />
+              <span
+                className="inline-flex items-center gap-2 text-xs font-medium"
+                title={timing.title}
+              >
+                <span
+                  className={`inline-flex h-2 w-2 rounded-full ${statusToneClass[timing.tone]}`}
+                  aria-hidden="true"
+                />
+                <span>{timing.label}</span>
+              </span>
+            </div>
+          );
+        },
         meta: { priority: 1 },
       },
       {
@@ -531,28 +539,17 @@ export default function AutograderQueueClient() {
         id: 'status',
         header: 'Status',
         enableSorting: false,
+        // The grading result only. Timing moved under the Submitted timestamp above.
         cell: ({ row }) => {
-          const due = dueDateFor(row.original);
-          const chips = [
-            getTimingStatusChip(row.original as ProblemSubmission, !!due, due),
-            getReviewStatusChip(row.original as ProblemSubmission),
-          ];
+          const chip = getReviewStatusChip(row.original as ProblemSubmission);
           return (
-            <div className="flex flex-col gap-1">
-              {chips.map((chip) => (
-                <span
-                  key={chip.label}
-                  className="inline-flex items-center gap-2 text-xs font-medium"
-                  title={chip.title}
-                >
-                  <span
-                    className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[chip.tone]}`}
-                    aria-hidden="true"
-                  />
-                  <span>{chip.label}</span>
-                </span>
-              ))}
-            </div>
+            <span className="inline-flex items-center gap-2 text-xs font-medium" title={chip.title}>
+              <span
+                className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[chip.tone]}`}
+                aria-hidden="true"
+              />
+              <span>{chip.label}</span>
+            </span>
           );
         },
         meta: { priority: 1 },
@@ -699,30 +696,10 @@ export default function AutograderQueueClient() {
               Autograder Queue
             </CardTitle>
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setRerunConfirmOpen(true)}
-            disabled={visibleSubmissions.length === 0 || isRerunning}
-            className="whitespace-nowrap"
-          >
-            {isRerunning ? 'Rerunning…' : 'Rerun'}
-          </Button>
-
-          <ConfirmDialog
-            open={rerunConfirmOpen}
-            busy={isRerunning}
-            title="Rerun all visible submissions?"
-            description={`This re-runs the autograder on all ${visibleSubmissions.length} submission${
-              visibleSubmissions.length === 1 ? '' : 's'
-            } currently shown. Autograded results may change.`}
-            confirmText="Rerun all"
-            onConfirm={async () => {
-              await handleRerunVisible();
-              setRerunConfirmOpen(false);
-            }}
-            onCancel={() => setRerunConfirmOpen(false)}
-          />
+          {/* No bulk rerun here. It re-ran whatever the page's own selection held, which
+              stopped matching what the table showed once status filtering moved into the
+              table, so the button could not honestly describe what it was about to do.
+              Rerunning one submission lives in its row's Manage menu. */}
         </div>
 
         <div className="mt-3 flex gap-2">
@@ -803,10 +780,10 @@ export default function AutograderQueueClient() {
           // `timing` and `result` exist only to drive the Filters popover; the Status
           // column already shows both as chips.
           defaultColumnVisibility={{ due: false, timing: false, result: false }}
-          // Opens showing only what has not been graded. This page is the queue: what an
-          // admin comes here for is outstanding work, not the whole history. The Filters
-          // button clears it like any other filter.
-          defaultColumnFilters={[{ id: 'result', value: ['pending'] }]}
+          // Opens showing only outstanding work: queued and in flight. This page is the
+          // queue, and what an admin comes here for is what has not finished, not the
+          // whole history. The Filters button clears it like any other filter.
+          defaultColumnFilters={[{ id: 'result', value: ['pending', 'processing'] }]}
           emptyIcon={FileCode2}
           {...(submissions.length === 0
             ? {

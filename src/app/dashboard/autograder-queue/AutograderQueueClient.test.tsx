@@ -182,13 +182,13 @@ const submissionsPostCalls = (fetchMock: FetchMock) =>
 /**
  * Clear the Result filter so every row shows.
  *
- * The page opens filtered to Pending, because that is what an admin comes to the queue
- * for. The fixture row is graded, so a test that wants to see it unticks Pending first,
- * exactly as a user would through the Filters button.
+ * The page opens filtered to Pending and Processing, because that is the outstanding work
+ * an admin comes to the queue for. The fixture row is graded, so a test that wants to see
+ * it unticks both first, exactly as a user would through the Filters button.
  */
 const showAllStatuses = async () => {
-  const pending = await screen.findByRole('checkbox', { name: /^Pending/ });
-  fireEvent.click(pending);
+  fireEvent.click(await screen.findByRole('checkbox', { name: /^Pending/ }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: /^Processing/ }));
 };
 
 describe('AutograderQueueClient', () => {
@@ -364,9 +364,9 @@ describe('AutograderQueueClient', () => {
     expect(screen.getByText('View submission')).toBeInTheDocument();
     expect(screen.getByText('View feedback')).toBeInTheDocument();
     expect(screen.getByText('Download')).toBeInTheDocument();
-    // Two Reruns on the page: the header's "rerun everything visible" button and this
-    // row's menu item, so match all and assert the row one appeared.
-    expect(screen.getAllByText('Rerun').length).toBeGreaterThan(1);
+    // The only Rerun on the page: rerunning is per submission now, from this menu, since
+    // the header's bulk rerun could no longer describe which rows it would act on.
+    expect(screen.getAllByText('Rerun')).toHaveLength(1);
 
     const review = screen.getByRole('link', { name: /open in submission review/i });
     expect(review).toHaveAttribute(
