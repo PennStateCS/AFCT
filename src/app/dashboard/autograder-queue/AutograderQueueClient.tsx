@@ -9,8 +9,10 @@ import { getInitials } from '@/app/utils/initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import JffViewerDialog from '@/components/JffViewerDialog';
+import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { CompactDate } from '@/components/ui/CompactDate';
 import { FeedbackDialog } from '@/components/dialogs/FeedbackDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
@@ -185,7 +187,7 @@ const EMPTY_COURSES: CourseItem[] = [];
 const EMPTY_ASSIGNMENTS: AssignmentItem[] = [];
 const EMPTY_PROBLEMS: ProblemItem[] = [];
 
-export default function SubmissionsClient() {
+export default function AutograderQueueClient() {
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedProblems, setSelectedProblems] = useState<string[]>([]);
@@ -197,7 +199,12 @@ export default function SubmissionsClient() {
   const [jffViewerSrc, setJffViewerSrc] = useState<string | null>(null);
   const [jffViewerTitle, setJffViewerTitle] = useState<string | null>(null);
   const [jffViewerCourseId, setJffViewerCourseId] = useState<string | null>(null);
+  const [viewerProblemType, setViewerProblemType] = useState<string | null>(null);
   const jffEpsSymbol = useEmptyStringSymbol(jffViewerCourseId);
+  // This page spans every course, so there is no single course timezone to show dates in.
+  // The viewer's own effective zone is the honest choice here; the course pages still show
+  // each assignment in ITS course's zone.
+  const { timezone } = useEffectiveTimezone();
   const isRerunning = useMemo(() => Object.values(rerunning).some(Boolean), [rerunning]);
   const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
 
@@ -311,6 +318,11 @@ export default function SubmissionsClient() {
     setJffViewerSrc(apiPaths.files.submission(encodeURIComponent(submission.fileName)));
     setJffViewerTitle(submission.originalFileName || submission.fileName);
     setJffViewerCourseId(submission.courseId ?? null);
+    // A submission's file is only a JFLAP machine for FA/PDA/TM; RE and CFG answers need
+    // their own viewers. This page sent every one of them to the JFLAP viewer, so opening
+    // a grammar or a regular expression produced a parse error instead of the answer.
+    // The problem list is already loaded for the filter above, so read the type from it.
+    setViewerProblemType(problems.find((p) => p.id === submission.problemId)?.type ?? null);
     setJffViewerOpen(true);
   };
 
@@ -420,7 +432,7 @@ export default function SubmissionsClient() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <CardTitle role="heading" aria-level={1} className="text-2xl">
-              System Submission Logs
+              Autograder Queue
             </CardTitle>
           </div>
           <Button
@@ -568,6 +580,7 @@ export default function SubmissionsClient() {
                 <TableHead className="px-2 py-1">Assignment</TableHead>
                 <TableHead className="px-2 py-1">Problem</TableHead>
                 <TableHead className="px-2 py-1">Due</TableHead>
+                <TableHead className="px-2 py-1">Submitted</TableHead>
                 <TableHead className="px-2 py-1">Grade</TableHead>
                 <TableHead className="px-2 py-1">Status</TableHead>
                 <TableHead className="px-2 py-1">Manage</TableHead>
@@ -576,7 +589,7 @@ export default function SubmissionsClient() {
             <TableBody>
               {visibleSubmissions.length === 0 ? (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={8} className="py-10 text-center">
+                  <TableCell colSpan={9} className="py-10 text-center">
                     {loadingCourses || loadingAssignments || loadingSubmissions ? (
                       <div
                         className="text-muted-foreground flex flex-col items-center justify-center gap-2"
@@ -719,13 +732,14 @@ export default function SubmissionsClient() {
                         </div>
                       </TableCell>
                       <TableCell className="p-1 align-top">
-                        <div className="min-w-0">
-                          <p className="text-foreground text-sm">
-                            {submission.submittedAt
-                              ? new Date(submission.submittedAt).toLocaleDateString()
-                              : 'Unknown'}
-                          </p>
-                        </div>
+                        {/* The assignment's due date. This column is headed "Due" but was
+                            rendering `submittedAt`, so it showed when the work arrived
+                            while claiming to be the deadline; the two are now separate
+                            columns. Both use the course page's date-over-time format. */}
+                        <CompactDate value={dueDate} timeZone={timezone} />
+                      </TableCell>
+                      <TableCell className="p-1 align-top">
+                        <CompactDate value={submission.submittedAt} timeZone={timezone} />
                       </TableCell>
                       <TableCell className="p-1 align-top">
                         <div className="min-w-0">
@@ -769,6 +783,9 @@ export default function SubmissionsClient() {
                             onClick={() => handleViewSubmission(submission)}
                             title="View submission"
                             aria-label="View submission"
+                            // Same guard as Download. The handler already refused to open
+                            // a submission with no file, so the button just did nothing.
+                            disabled={!submission.fileName}
                             className="h-8 w-8 p-0"
                           >
                             <Eye className="h-4 w-4" />
@@ -811,7 +828,7 @@ export default function SubmissionsClient() {
             </TableBody>
           </Table>
         </div>
-        <JffViewerDialog
+        <SubmissionViewerDialog
           open={jffViewerOpen}
           onOpenChange={(open) => {
             setJffViewerOpen(open);
@@ -819,8 +836,10 @@ export default function SubmissionsClient() {
               setJffViewerSrc(null);
               setJffViewerTitle(null);
               setJffViewerCourseId(null);
+              setViewerProblemType(null);
             }
           }}
+          problemType={viewerProblemType}
           src={jffViewerSrc ?? ''}
           title={jffViewerTitle ?? 'Submission'}
           epsSymbol={jffEpsSymbol}

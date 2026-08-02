@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import SubmissionsClient from './SubmissionsClient';
+import AutograderQueueClient from './AutograderQueueClient';
 
 export const metadata: Metadata = {
   title: 'Submissions',
 };
 
 export default function SubmissionsPage() {
-  return <SubmissionsClient />;
+  return <AutograderQueueClient />;
 }

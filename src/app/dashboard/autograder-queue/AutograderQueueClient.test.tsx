@@ -4,7 +4,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import SubmissionsClient from './SubmissionsClient';
+import AutograderQueueClient from './AutograderQueueClient';
 
 // Fresh QueryClient per test (retry off, no lingering cache) so the submissions
 // query starts clean each time.
@@ -124,11 +124,11 @@ const submissionsPostCalls = (fetchMock: FetchMock) =>
       url === '/api/admin/submissions' && (init as RequestInit | undefined)?.method === 'POST',
   );
 
-describe('SubmissionsClient', () => {
+describe('AutograderQueueClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
-    // SubmissionsClient.tsx does not import React, and the test transform uses
+    // AutograderQueueClient.tsx does not import React, and the test transform uses
     // the classic JSX runtime, so its compiled `React.createElement` calls
     // resolve `React` from the global scope. Provide it without touching the
     // component. (This test file itself uses the same classic transform.)
@@ -144,7 +144,7 @@ describe('SubmissionsClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
 
     // Nothing selected -> fetchSubmissions short-circuits to [] with no network call.
     await waitFor(() => {
@@ -159,7 +159,7 @@ describe('SubmissionsClient', () => {
       capturedInit = init;
     });
 
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
 
     // The submitted student row renders once the cascade completes.
     await waitFor(() => {
@@ -219,7 +219,7 @@ describe('SubmissionsClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
 
     // Wait until the row renders (the submissions POST resolved).
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
@@ -249,7 +249,7 @@ describe('SubmissionsClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
 
     // While the POST is pending, the table shows the loading placeholder.
     await waitFor(() => {
@@ -266,7 +266,7 @@ describe('SubmissionsClient', () => {
 
   it('marks the All filter pressed by default and announces the result count', async () => {
     installFetchRouter();
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
@@ -280,7 +280,7 @@ describe('SubmissionsClient', () => {
 
   it('toggling a status filter updates aria-pressed and the announced count', async () => {
     installFetchRouter();
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // The single row is on-time + correct, so filtering to "Incorrect" hides it.

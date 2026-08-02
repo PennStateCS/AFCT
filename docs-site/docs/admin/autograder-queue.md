@@ -1,6 +1,6 @@
-# Submission Logs
+# Autograder Queue
 
-The **Submission Logs** page shows submissions across the AFCT installation. It is useful when an administrator needs to investigate an evaluator problem that is not limited to one course.
+The **Autograder Queue** page shows submissions across the AFCT installation, including what is still waiting to be graded and what is being graded now. It is useful when an administrator needs to investigate an evaluator problem that is not limited to one course.
 
 ## Choose the scope
 

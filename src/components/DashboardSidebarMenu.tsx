@@ -100,8 +100,8 @@ const COURSE_SECTIONS = [
 
 // Static admin menu items (kept alphabetical by title)
 const adminMenu = [
+  { title: 'Autograder Queue', url: '/dashboard/autograder-queue', icon: Layers },
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
-  { title: 'Submission Logs', url: '/dashboard/submissions', icon: Layers },
   { title: 'System Logs', url: '/dashboard/system-logs', icon: Logs },
   { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
   { title: 'System Status', url: '/dashboard/system-status', icon: Activity },
@@ -488,7 +488,10 @@ export default function DashboardSidebarMenu() {
                       </SidebarMenuItem>
                     ) : coursesFailed ? (
                       <SidebarMenuItem>
-                        <div role="alert" className="flex w-full flex-col items-start gap-1 px-2 py-1.5">
+                        <div
+                          role="alert"
+                          className="flex w-full flex-col items-start gap-1 px-2 py-1.5"
+                        >
                           <span className="text-sidebar-foreground/70 text-sm">
                             Could not load courses.
                           </span>
@@ -582,7 +585,7 @@ export default function DashboardSidebarMenu() {
                   // plus the visible span) and never said what activating it does.
                   aria-label={`Open account menu for ${user.name}`}
                   className={cn(
-                    'hover:bg-brand-teal data-[state=open]:bg-brand-teal/70 data-[state=open]:text-white bg-sidebar-foreground/10 h-14 px-3 py-3 transition-colors',
+                    'hover:bg-brand-teal data-[state=open]:bg-brand-teal/70 bg-sidebar-foreground/10 h-14 px-3 py-3 transition-colors data-[state=open]:text-white',
                     // In the icon rail the button shrinks to 32px; drop the padding and
                     // center so the 32px avatar fills the tile as a clean circle instead
                     // of overflowing an 8px-padded 16px box behind the (hidden) name.
@@ -620,24 +623,18 @@ export default function DashboardSidebarMenu() {
               >
                 {/* Section header, not an action. A Label keeps it out of the menu's
                     focus/arrow-key order; overrides preserve the exact resting look. */}
-                <DropdownMenuLabel className="font-normal [&_svg:not([class*='text-'])]:text-muted-foreground">
+                <DropdownMenuLabel className="[&_svg:not([class*='text-'])]:text-muted-foreground font-normal">
                   <span className="flex w-full items-center gap-2 text-left">
                     <UserRound className="h-4 w-4" />
                     User Account
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={openEditProfile}
-                >
+                <DropdownMenuItem className="cursor-pointer" onClick={openEditProfile}>
                   <UserPen className="h-4 w-4" />
                   Edit Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={openChangePassword}
-                >
+                <DropdownMenuItem className="cursor-pointer" onClick={openChangePassword}>
                   <LockKeyhole className="h-4 w-4" />
                   Change Password
                 </DropdownMenuItem>

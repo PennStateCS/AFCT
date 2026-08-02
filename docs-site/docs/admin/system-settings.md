@@ -42,7 +42,7 @@ These settings control submission processing:
 | **Max retry attempts**           |       3 |     1 to 10 | Sets the attempts before a failed evaluation stays failed.                        |
 | **Analyzer exploration limit**   |      15 |    1 to 100 | Controls the depth of the context-free grammar equivalence check.                 |
 
-Increase concurrency, memory, or exploration limits only when the server has enough capacity. After changing evaluator settings, watch [Submission Logs](submission-logs.md) and [System Status](system-status.md).
+Increase concurrency, memory, or exploration limits only when the server has enough capacity. After changing evaluator settings, watch [Autograder Queue](autograder-queue.md) and [System Status](system-status.md).
 
 ## Backups
 
