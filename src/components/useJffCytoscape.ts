@@ -107,7 +107,10 @@ export function useJffCytoscape({
   const [parsed, setParsed] = useState<Parsed | null>(null);
 
   // Customization variables
-  const FIT_PADDING = 40;
+  const FIT_PADDING = 80;
+  // Ceiling on the zoom the initial fit may choose. 1 is the size the states were drawn
+  // at; past that a small machine is only bigger, not clearer.
+  const MAX_INITIAL_ZOOM = 1;
   // How far the self-loop arcs out from the state, and the line box of a label at the
   // 16px edge font. Used to lift a multi-line loop label clear of its own loop.
   const LOOP_STEP_SIZE = 48;
@@ -377,13 +380,47 @@ export function useJffCytoscape({
                 : `${containerRef.current.clientWidth / containerRef.current.clientHeight}f`;
             let layoutOptions;
             if (!honorPositions) {
+              /*
+               * Give the layout room for the LABELS, not just the states.
+               *
+               * ELK lays out nodes and edges; it knows nothing about the text cytoscape
+               * later draws on an edge. With a flat 50px node spacing that was fine for an
+               * FA whose labels are one character, and hopeless for a PDA or TM, where
+               * `0 → 0, R` or eight stacked stack-operations end up longer than the edge
+               * they sit on. Adjacent labels then landed on top of each other.
+               *
+               * So measure the widest and tallest label actually present and ask for edges
+               * long enough to hold one. A machine of single-character labels keeps a
+               * compact layout; a wordy one spreads out only as much as it has to.
+               */
+              let widestLabel = 0;
+              let tallestLabel = 1;
+              cy.edges().forEach((e: any) => {
+                const lines = String(e.data('label') ?? '').split('\n');
+                tallestLabel = Math.max(tallestLabel, lines.length);
+                for (const line of lines) {
+                  widestLabel = Math.max(widestLabel, line.length);
+                }
+              });
+              // ~8px per character at the 16px edge font, capped so one pathological label
+              // can't push the whole machine apart.
+              const labelWidth = Math.min(widestLabel * 8, 220);
+              const labelHeight = Math.min(tallestLabel * LABEL_LINE_HEIGHT, 220);
+
               layoutOptions = {
                 name: 'elk',
                 nodeDimensionsIncludeLabels: true,
                 elk: {
-                  algorithm: 'force',
+                  // `stress` over `force`: it honours a desired edge length, which is the
+                  // one lever that actually buys space for a label, and it produces a
+                  // stable, symmetric result for the small cyclic graphs automata are.
+                  algorithm: 'stress',
                   'elk.aspectRatio': elkAspectRatio,
-                  'elk.spacing.nodeNode': '50',
+                  'elk.stress.desiredEdgeLength': String(160 + labelWidth),
+                  'elk.spacing.nodeNode': String(60 + labelHeight),
+                  // Deterministic: the same machine should lay out the same way every time
+                  // it is opened, so a student and an instructor discuss the same picture.
+                  'elk.randomSeed': '1',
                 },
               };
             } else {
@@ -417,7 +454,16 @@ export function useJffCytoscape({
             // outside the box it fitted to, and a tall self-loop label or a wide transition
             // label was reliably cut off at the edge of the canvas. `fit` measures the
             // rendered bounding box, which is what the reader actually has to see.
-            cy.animate({ fit: { eles: cy.elements(), padding: FIT_PADDING } }, { duration: 120 });
+            cy.fit(cy.elements(), FIT_PADDING);
+
+            // Then back off if that magnified a small machine. Fitting alone fills the
+            // canvas whatever is in it, so a two-state automaton arrived at 4x with states
+            // the size of a fist and no context around them. Above 1:1 there is nothing
+            // more to see, only bigger circles, so cap it and re-centre.
+            if (cy.zoom() > MAX_INITIAL_ZOOM) {
+              cy.zoom(MAX_INITIAL_ZOOM);
+              cy.center(cy.elements());
+            }
           } catch {}
         }
 
