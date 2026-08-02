@@ -99,7 +99,12 @@ export function useJffCytoscape({
   const [parsed, setParsed] = useState<Parsed | null>(null);
 
   // Customization variables
-  const FIT_PADDING = 80;
+  const FIT_PADDING = 40;
+  // How far the self-loop arcs out from the state, and the line box of a label at the
+  // 16px edge font. Used to lift a multi-line loop label clear of its own loop.
+  const LOOP_STEP_SIZE = 48;
+  const LABEL_LINE_HEIGHT = 19;
+  const LABEL_LOOP_GAP = 10;
 
   // Expose onResize for Fit button
   const onResizeRef = useRef<(() => void) | null>(null);
@@ -315,17 +320,25 @@ export function useJffCytoscape({
         // Function to update the self-loop geometry of the transition label
         async function selfLoopGeometry() {
           cy.edges('[isLoop = 1]').forEach((e: any) => {
+            // Every transition between the same pair of states is bundled into ONE edge
+            // whose label is those transitions on separate lines, so a busy state's loop
+            // can carry a dozen. Cytoscape centres that whole block on the loop, and the
+            // fixed -12 offset then ran it straight through the loop and the state:
+            // a 9-line label is ~170px tall, so half of it landed on top of the node.
+            // Offset by the block's own half-height so it always clears the loop.
+            const lines = String(e.data('label') ?? '').split('\n').length;
+            const blockHalfHeight = (lines * LABEL_LINE_HEIGHT) / 2;
             e.style({
               'curve-style': 'loop',
               'loop-direction': '0deg',
               'loop-sweep': '50deg',
-              'control-point-step-size': 48,
+              'control-point-step-size': LOOP_STEP_SIZE,
               'source-arrow-shape': 'triangle',
               'target-arrow-shape': 'none',
               'arrow-scale': 0.95,
               'line-cap': 'round',
               'text-rotation': 'none',
-              'text-margin-y': -12,
+              'text-margin-y': -(LOOP_STEP_SIZE + blockHalfHeight + LABEL_LOOP_GAP),
             });
           });
         }
@@ -376,38 +389,14 @@ export function useJffCytoscape({
             await selfLoopGeometry();
             repositionStartNodes(cy);
 
-            // Fit and center using cy.center(cy.nodes())
-            const nodes = cy.nodes();
-            if (nodes.length === 0) return;
+            if (cy.nodes().length === 0) return;
 
-            // Calculate fit zoom (preserve previous logic for zoom, but use cy.center for center)
-            let minX = Infinity,
-              minY = Infinity,
-              maxX = -Infinity,
-              maxY = -Infinity;
-            nodes.forEach((n: any) => {
-              const pos = n.position();
-              if (pos.x < minX) minX = pos.x;
-              if (pos.y < minY) minY = pos.y;
-              if (pos.x > maxX) maxX = pos.x;
-              if (pos.y > maxY) maxY = pos.y;
-            });
-
-            // Add padding
-            minX -= FIT_PADDING;
-            minY -= FIT_PADDING;
-            maxX += FIT_PADDING;
-            maxY += FIT_PADDING;
-
-            const fitWidth = maxX - minX;
-            const fitHeight = maxY - minY;
-            const scaleX = cy.width() / fitWidth;
-            const scaleY = cy.height() / fitHeight;
-            const fitZoom = Math.min(scaleX, scaleY, cy.maxZoom ? cy.maxZoom() : 6);
-
-            // Use cy.center(cy.nodes()) to get the center position
-            const center = cy.center(cy.nodes());
-            cy.animate({ zoom: fitZoom, center }, { duration: 120 });
+            // Fit to the real extent of everything, LABELS INCLUDED. The old maths took the
+            // min/max of node CENTRES, so each node's own radius and every edge label lay
+            // outside the box it fitted to, and a tall self-loop label or a wide transition
+            // label was reliably cut off at the edge of the canvas. `fit` measures the
+            // rendered bounding box, which is what the reader actually has to see.
+            cy.animate({ fit: { eles: cy.elements(), padding: FIT_PADDING } }, { duration: 120 });
           } catch {}
         }
 
