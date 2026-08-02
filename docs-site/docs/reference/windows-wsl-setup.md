@@ -118,17 +118,39 @@ cd ~ && git clone https://github.com/PennStateCS/AFCT.git afct
 cd ~/afct
 ```
 
-## Step 6: Create your environment file
+## Step 6: Bring across your environment file
+
+`.env.development` is not in the repository, so the clone does not have one. If you already have a working checkout on `C:`, copy yours across rather than filling in a new one.
+
+Windows drives are available inside Ubuntu under `/mnt/`, so `C:\Users\yourname\Desktop\afct` is `/mnt/c/Users/yourname/Desktop/afct`. Adjust the path below to wherever your old checkout actually is:
 
 ```bash
-cp .env.development.example .env.development
+cp /mnt/c/Users/yourname/Desktop/afct/.env.development ~/afct/.env.development
 ```
 
+Check it arrived, without printing the contents, since the file holds secrets:
+
 ```bash
-nano .env.development
+ls -l ~/afct/.env.development
+```
+
+If you do not have an existing checkout, start from the example instead:
+
+```bash
+cp .env.development.example .env.development && nano .env.development
 ```
 
 The example file documents each variable. See [Development setup](./development-setup.md) for what to change.
+
+Two other files are worth copying the same way if your old checkout has them, since neither is in the repository:
+
+```bash
+cp /mnt/c/Users/yourname/Desktop/afct/CLAUDE.md ~/afct/CLAUDE.md
+```
+
+```bash
+cp -r /mnt/c/Users/yourname/Desktop/afct/docs ~/afct/docs
+```
 
 ## Step 7: Start the stack
 

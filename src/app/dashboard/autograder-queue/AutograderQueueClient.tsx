@@ -83,6 +83,22 @@ type ProblemItem = {
   grade: number | null;
 };
 
+/**
+ * "Lastname, Firstname" for a submission's student, or null when neither is recorded.
+ *
+ * Sorted-by-surname order, because that is how a roster reads and how staff look someone
+ * up. One name alone is returned on its own rather than left with a dangling comma.
+ */
+function formatStudentName(submission: {
+  studentFirstName?: string | null;
+  studentLastName?: string | null;
+}): string | null {
+  const first = submission.studentFirstName?.trim();
+  const last = submission.studentLastName?.trim();
+  if (last && first) return `${last}, ${first}`;
+  return last || first || null;
+}
+
 const fetchCourseList = async (): Promise<CourseItem[]> => {
   const response = await fetch(apiPaths.myCourses());
   if (!response.ok) {
@@ -575,12 +591,14 @@ export default function AutograderQueueClient() {
           <Table className="text-sm" aria-label="Submissions">
             <TableHeader>
               <TableRow>
+                {/* Submitted leads: this is a queue, so when the work arrived is the
+                    column a reader scans first. */}
+                <TableHead className="px-2 py-1">Submitted</TableHead>
                 <TableHead className="px-2 py-1">Student</TableHead>
                 <TableHead className="px-2 py-1">Course</TableHead>
                 <TableHead className="px-2 py-1">Assignment</TableHead>
                 <TableHead className="px-2 py-1">Problem</TableHead>
                 <TableHead className="px-2 py-1">Due</TableHead>
-                <TableHead className="px-2 py-1">Submitted</TableHead>
                 <TableHead className="px-2 py-1">Grade</TableHead>
                 <TableHead className="px-2 py-1">Status</TableHead>
                 <TableHead className="px-2 py-1">Manage</TableHead>
@@ -664,6 +682,9 @@ export default function AutograderQueueClient() {
                   return (
                     <TableRow key={submission.id} className="hover:bg-[var(--table-highlight)]">
                       <TableCell className="p-1 align-top">
+                        <CompactDate value={submission.submittedAt} timeZone={timezone} />
+                      </TableCell>
+                      <TableCell className="p-1 align-top">
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="relative h-11 w-11 shrink-0">
                             <Avatar className="h-11 w-11">
@@ -688,11 +709,19 @@ export default function AutograderQueueClient() {
                             </Avatar>
                           </div>
 
+                          {/* Name over email. The id underneath was only ever useful for
+                              debugging, and a list of people reads better sorted by the
+                              name a human would look for. Falls back to the email when a
+                              student has no name recorded, so the row is never blank. */}
                           <div className="min-w-0">
-                            <p className="text-foreground text-sm">
-                              {submission.studentEmail ?? submission.studentId ?? 'Unknown'}
+                            <p className="text-foreground truncate text-sm">
+                              {formatStudentName(submission) ??
+                                submission.studentEmail ??
+                                'Unknown'}
                             </p>
-                            <p className="text-muted-foreground text-xs">{submission.studentId}</p>
+                            <p className="text-muted-foreground truncate text-xs">
+                              {submission.studentEmail}
+                            </p>
                           </div>
                         </div>
                       </TableCell>
@@ -737,9 +766,6 @@ export default function AutograderQueueClient() {
                             while claiming to be the deadline; the two are now separate
                             columns. Both use the course page's date-over-time format. */}
                         <CompactDate value={dueDate} timeZone={timezone} />
-                      </TableCell>
-                      <TableCell className="p-1 align-top">
-                        <CompactDate value={submission.submittedAt} timeZone={timezone} />
                       </TableCell>
                       <TableCell className="p-1 align-top">
                         <div className="min-w-0">
