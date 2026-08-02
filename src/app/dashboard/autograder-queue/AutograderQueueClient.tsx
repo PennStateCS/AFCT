@@ -5,8 +5,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Download, Eye, File, FileCode2, RotateCcw } from 'lucide-react';
 import { PulseLoader } from 'react-spinners';
 import type { Course } from '@prisma/client';
-import { getInitials } from '@/app/utils/initials';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
@@ -62,10 +60,6 @@ type SubmissionItem = {
   correct?: boolean | null;
   maxPoints?: number | null;
   problemTitle?: string | null;
-  avatar?: string | null;
-  cropX?: number | null;
-  cropY?: number | null;
-  zoom?: number | null;
   fileName?: string | null;
   originalFileName?: string | null;
   feedback: string;
@@ -685,44 +679,17 @@ export default function AutograderQueueClient() {
                         <CompactDate value={submission.submittedAt} timeZone={timezone} />
                       </TableCell>
                       <TableCell className="p-1 align-top">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="relative h-11 w-11 shrink-0">
-                            <Avatar className="h-11 w-11">
-                              <AvatarImage
-                                src={
-                                  submission.avatar
-                                    ? apiPaths.files.pfp(submission.avatar)
-                                    : undefined
-                                }
-                                alt={submission.studentEmail || submission.studentId || 'User'}
-                                cropX={submission.cropX ?? 0.5}
-                                cropY={submission.cropY ?? 0.5}
-                                zoom={submission.zoom ?? 1}
-                              />
-                              <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-                                {getInitials(
-                                  submission.studentFirstName,
-                                  submission.studentLastName,
-                                  submission.studentEmail,
-                                )}
-                              </AvatarFallback>
-                            </Avatar>
-                          </div>
-
-                          {/* Name over email. The id underneath was only ever useful for
-                              debugging, and a list of people reads better sorted by the
-                              name a human would look for. Falls back to the email when a
-                              student has no name recorded, so the row is never blank. */}
-                          <div className="min-w-0">
-                            <p className="text-foreground truncate text-sm">
-                              {formatStudentName(submission) ??
-                                submission.studentEmail ??
-                                'Unknown'}
-                            </p>
-                            <p className="text-muted-foreground truncate text-xs">
-                              {submission.studentEmail}
-                            </p>
-                          </div>
+                        {/* Name over email. No avatar: this is a dense working list, not a
+                            roster, and a face does not help you find a row. Falls back to
+                            the email when a student has no name recorded, so the row is
+                            never blank. */}
+                        <div className="min-w-0">
+                          <p className="text-foreground truncate text-sm">
+                            {formatStudentName(submission) ?? submission.studentEmail ?? 'Unknown'}
+                          </p>
+                          <p className="text-muted-foreground truncate text-xs">
+                            {submission.studentEmail}
+                          </p>
                         </div>
                       </TableCell>
                       <TableCell className="p-1 align-top">
@@ -733,7 +700,6 @@ export default function AutograderQueueClient() {
                           >
                             {submission.courseName}
                           </Link>
-                          <p className="text-muted-foreground text-xs">{submission.courseId}</p>
                         </div>
                       </TableCell>
                       <TableCell className="p-1 align-top">
@@ -744,7 +710,6 @@ export default function AutograderQueueClient() {
                           >
                             {submission.assignmentTitle}
                           </Link>
-                          <p className="text-muted-foreground text-xs">{submission.assignmentId}</p>
                         </div>
                       </TableCell>
                       <TableCell className="p-1 align-top">
@@ -757,7 +722,6 @@ export default function AutograderQueueClient() {
                           >
                             {submission.problemTitle ?? submission.problemId}
                           </Link>
-                          <p className="text-muted-foreground text-xs">{submission.problemId}</p>
                         </div>
                       </TableCell>
                       <TableCell className="p-1 align-top">
