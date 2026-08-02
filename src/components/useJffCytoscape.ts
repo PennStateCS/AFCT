@@ -108,9 +108,10 @@ export function useJffCytoscape({
 
   // Customization variables
   const FIT_PADDING = 80;
-  // Ceiling on the zoom the initial fit may choose. 1 is the size the states were drawn
-  // at; past that a small machine is only bigger, not clearer.
-  const MAX_INITIAL_ZOOM = 1;
+  // Ceiling on the zoom the initial fit may choose. Without one, fitting fills the canvas
+  // whatever is in it, and a two-state machine arrived at roughly 4x. 1:1 turned out to
+  // read as too distant on a large screen, so allow a moderate enlargement and no more.
+  const MAX_INITIAL_ZOOM = 1.5;
   // How far the self-loop arcs out from the state, and the line box of a label at the
   // 16px edge font. Used to lift a multi-line loop label clear of its own loop.
   const LOOP_STEP_SIZE = 48;
