@@ -151,7 +151,10 @@ export function useJffCytoscape({
           // Create the start node if it doesn't exist
           cy.add({
             group: 'nodes',
-            data: { id: `__start${idx}` },
+            // An explicit empty label: the node style maps `label` from data, and a node
+            // without the field makes cytoscape warn about a mapping it cannot resolve.
+            // This stub is the tail of the initial-state arrow and never shows text.
+            data: { id: `__start${idx}`, label: '' },
             position: pos,
             classes: 'start',
           });
@@ -274,7 +277,11 @@ export function useJffCytoscape({
             {
               selector: 'edge[isLoop = 1]',
               style: {
-                'curve-style': 'loop',
+                // `bezier`, not `loop`. Cytoscape has no `loop` curve-style: it recognises
+                // a self-loop on its own and shapes it from `loop-direction`, `loop-sweep`
+                // and `control-point-step-size` below. Naming one made cytoscape reject
+                // the property and log an error per loop on every single render.
+                'curve-style': 'bezier',
                 'loop-direction': '0deg',
                 'loop-sweep': '50deg',
                 'control-point-step-size': 48,
@@ -354,7 +361,8 @@ export function useJffCytoscape({
             const lines = String(e.data('label') ?? '').split('\n').length;
             const blockHalfHeight = (lines * LABEL_LINE_HEIGHT) / 2;
             e.style({
-              'curve-style': 'loop',
+              // See the stylesheet above: cytoscape has no `loop` curve-style.
+              'curve-style': 'bezier',
               'loop-direction': '0deg',
               'loop-sweep': '50deg',
               'control-point-step-size': LOOP_STEP_SIZE,
