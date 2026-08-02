@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Download, Eye, File, FileCode2, RotateCcw } from 'lucide-react';
+import { ChevronDown, Download, ExternalLink, Eye, File, FileCode2, RotateCcw } from 'lucide-react';
 import type { Course } from '@prisma/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,14 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import Link from 'next/link';
 import { DataTable } from '@/components/ui/data-table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import { showToast } from '@/lib/toast';
@@ -194,7 +202,12 @@ export default function AutograderQueueClient() {
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedProblems, setSelectedProblems] = useState<string[]>([]);
-  const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
+  // Opens filtered to Pending. This page is the queue: what an admin comes here to see is
+  // what has not been graded yet, not the whole history. Clearing the filter, or pressing
+  // All, still shows everything.
+  const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(
+    () => new Set<SubmissionStatusFilter>(['pending']),
+  );
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
@@ -575,56 +588,73 @@ export default function AutograderQueueClient() {
           const busy =
             submission.status?.toLowerCase() === 'pending' ||
             submission.status?.toLowerCase() === 'processing';
+          const student = formatStudentName(submission) ?? submission.studentEmail;
+          const reviewHref = `/dashboard/courses/${submission.courseId}/${submission.assignmentId}?tab=submissions&studentId=${encodeURIComponent(
+            submission.studentId,
+          )}${submission.problemId ? `&problemId=${encodeURIComponent(submission.problemId)}` : ''}`;
           return (
-            <div className="flex items-center justify-end gap-2 whitespace-nowrap">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => handleViewFeedback(submission)}
-                title="View feedback"
-                aria-label="View submission feedback"
-                className="h-8 w-8 p-0"
-                disabled={!submission.feedback || busy}
-              >
-                <File className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => handleViewSubmission(submission)}
-                title="View submission"
-                aria-label="View submission"
-                disabled={!submission.fileName}
-                className="h-8 w-8 p-0"
-              >
-                <Eye className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={!submission.fileName}
-                onClick={() => handleDownloadSubmission(submission)}
-                title="Download submission"
-                aria-label="Download submission"
-                className="h-8 w-8 p-0"
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={busy}
-                title="Rerun submission"
-                aria-label="Rerun submission"
-                className="h-8 w-8 p-0"
-                onClick={() => handleRerunSubmission(submission)}
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
+            <div className="flex justify-end">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    aria-label={`Manage submission by ${student}`}
+                  >
+                    <ChevronDown />
+                    Manage
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel className="flex items-center gap-2">
+                    <FileCode2 className="h-4 w-4" />
+                    {submission.problemTitle ?? submission.problemId}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => handleViewSubmission(submission)}
+                    disabled={!submission.fileName}
+                    className="flex items-center gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    View submission
+                  </DropdownMenuItem>
+                  {/* Opens the assignment's own review screen, where the submission sits
+                      alongside the grade box and the discussion, rather than the read-only
+                      dialog above. */}
+                  <DropdownMenuItem asChild className="flex items-center gap-2">
+                    <Link href={reviewHref}>
+                      <ExternalLink className="h-4 w-4" />
+                      Open in submission review
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleViewFeedback(submission)}
+                    disabled={!submission.feedback || busy}
+                    className="flex items-center gap-2"
+                  >
+                    <File className="h-4 w-4" />
+                    View feedback
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleDownloadSubmission(submission)}
+                    disabled={!submission.fileName}
+                    className="flex items-center gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => handleRerunSubmission(submission)}
+                    disabled={busy}
+                    className="flex items-center gap-2"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Rerun
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           );
         },
@@ -780,6 +810,10 @@ export default function AutograderQueueClient() {
           loadingMessage="Loading submissions, please wait..."
           storageKey="autograder-queue-columns"
           tableLabel="Autograder queue"
+          // Due is off by default: the deadline matters far less than arrival order when
+          // you are working a queue, and the Status column already flags late work. The
+          // Columns menu turns it back on, and that choice is remembered per browser.
+          defaultColumnVisibility={{ due: false }}
           emptyIcon={FileCode2}
           {...(submissions.length === 0
             ? {

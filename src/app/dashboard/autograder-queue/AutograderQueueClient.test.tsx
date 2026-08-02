@@ -13,8 +13,51 @@ const renderWithClient = (ui: React.ReactElement) => {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/lib/toast', () => ({ showToast: toastMock }));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+
+// The manage menu is a Radix dropdown, which drives itself with pointer capture and
+// portals that jsdom does not implement. Render its content inline so the items are
+// queryable; the trigger is a plain button either way.
+vi.mock('@/components/ui/dropdown-menu', () => {
+  const Pass = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  const Item = ({
+    children,
+    onClick,
+    disabled,
+    asChild,
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+    asChild?: boolean;
+  }) =>
+    // asChild means the caller supplied its own element (a Link here); render it as is
+    // so the anchor and its href survive.
+    asChild ? (
+      <>{children}</>
+    ) : (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    );
+  return {
+    DropdownMenu: Pass,
+    DropdownMenuPortal: Pass,
+    DropdownMenuTrigger: Pass,
+    DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenuGroup: Pass,
+    DropdownMenuLabel: Pass,
+    DropdownMenuItem: Item,
+    DropdownMenuCheckboxItem: Item,
+    DropdownMenuRadioGroup: Pass,
+    DropdownMenuRadioItem: Item,
+    DropdownMenuSeparator: () => null,
+    DropdownMenuShortcut: Pass,
+    DropdownMenuSub: Pass,
+    DropdownMenuSubTrigger: Pass,
+    DropdownMenuSubContent: Pass,
+  };
+});
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn() }),
@@ -124,6 +167,15 @@ const submissionsPostCalls = (fetchMock: FetchMock) =>
       url === '/api/admin/submissions' && (init as RequestInit | undefined)?.method === 'POST',
   );
 
+/**
+ * Clear the status filter so every row shows.
+ *
+ * The page opens filtered to Pending, because that is what an admin comes to the queue
+ * for. The fixture row is graded, so a test that wants to see it has to press All first,
+ * exactly as a user would.
+ */
+const showAllStatuses = () => fireEvent.click(screen.getByRole('button', { name: 'All' }));
+
 describe('AutograderQueueClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -160,6 +212,8 @@ describe('AutograderQueueClient', () => {
     });
 
     renderWithClient(<AutograderQueueClient />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
+    showAllStatuses();
 
     // The submitted student row renders once the cascade completes.
     await waitFor(() => {
@@ -220,6 +274,8 @@ describe('AutograderQueueClient', () => {
     });
 
     renderWithClient(<AutograderQueueClient />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
+    showAllStatuses();
 
     // Wait until the row renders (the submissions POST resolved).
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
@@ -259,26 +315,63 @@ describe('AutograderQueueClient', () => {
 
     // Releasing the POST lets the row render.
     releaseSubmissions?.();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
+    showAllStatuses();
     await waitFor(() => {
       expect(screen.getByText('ada@example.com')).toBeInTheDocument();
     });
   });
 
-  it('marks the All filter pressed by default and shows the matching row', async () => {
+  it('opens filtered to Pending, hiding a graded submission until All is pressed', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Pending' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false');
+    // The fixture row is graded, so the default view excludes it.
+    expect(screen.queryByText('ada@example.com')).toBeNull();
+
+    showAllStatuses();
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+  });
+
+  it('offers the row actions in a manage menu, including a link into submission review', async () => {
+    installFetchRouter();
+    renderWithClient(<AutograderQueueClient />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
+    showAllStatuses();
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
-    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Correct' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
+    // One Manage control per row, named after the student so screen reader users can
+    // tell two rows apart.
+    expect(
+      screen.getByRole('button', { name: 'Manage submission by Lovelace, Ada' }),
+    ).toBeInTheDocument();
+
+    // Every action the old icon row offered still exists, plus the review link.
+    expect(screen.getByText('View submission')).toBeInTheDocument();
+    expect(screen.getByText('View feedback')).toBeInTheDocument();
+    expect(screen.getByText('Download')).toBeInTheDocument();
+    // Two Reruns on the page: the header's "rerun everything visible" button and this
+    // row's menu item, so match all and assert the row one appeared.
+    expect(screen.getAllByText('Rerun').length).toBeGreaterThan(1);
+
+    const review = screen.getByRole('link', { name: /open in submission review/i });
+    expect(review).toHaveAttribute(
+      'href',
+      '/dashboard/courses/course-1/assign-1?tab=submissions&studentId=student-1&problemId=prob-1',
     );
   });
 
   it('toggling a status filter updates aria-pressed and hides the row', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument());
+    showAllStatuses();
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // The single row is on-time + correct, so filtering to "Incorrect" hides it.
