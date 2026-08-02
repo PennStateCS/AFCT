@@ -330,7 +330,10 @@ export default function JffViewerDialog({
         style={{ width }}
       >
         <DialogHeader className="shrink-0 px-4 pt-4">
-          <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
+          {/* Wraps to a second line rather than truncating. These titles are a file name
+              followed by the problem's own title, so the ellipsis landed mid-name and cut
+              off the part that identifies the file. Two lines, then it clips. */}
+          <DialogTitle className="line-clamp-2 break-words">{title ?? 'JFLAP Viewer'}</DialogTitle>
         </DialogHeader>
         <div className="min-h-0 flex-1 p-4 pt-2">
           {open ? (

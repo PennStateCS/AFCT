@@ -7,21 +7,29 @@ import { parseJflap, toElements, type MachineType, type Parsed } from '@/lib/jfl
 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
 
-const NODE_FILL =
-  typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--node-color').trim() ||
-      '#38bdf8'
-    : '#38bdf8';
-const STROKE =
-  typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() ||
-      '#0f172a'
-    : '#0f172a';
-const TEXT_COLOR =
-  typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() ||
-      '#0f172a'
-    : '#0f172a';
+/*
+ * JFLAP's own palette, read out of the `gui` classes in `jars/afct-evaluator.jar` rather
+ * than eyeballed, so a student sees the same automaton here as in the desktop tool:
+ *
+ *   gui/viewer/StateDrawer.STATE_COLOR      = Color(255, 255, 150)  the state fill
+ *   gui/viewer/StateDrawer.HIGHLIGHT_COLOR  = Color(100, 200, 200)
+ *   gui/Globals.FROM_COLOR                  = Color( 37,  99, 235)  the selection blue
+ *
+ * JFLAP draws the outline and the state's own name in black on that fill, which reads
+ * correctly on either theme because it sits INSIDE the yellow circle.
+ *
+ * These are literals, not `var(--node-color)`. Cytoscape renders to canvas and parses
+ * colours itself; it does not understand the `oklch()` this app's tokens are written in,
+ * so every one of those custom properties was silently rejected and the states fell back
+ * to cytoscape's default grey. That is why they were grey rather than the yellow the
+ * token already specified.
+ */
+const STATE_FILL = '#ffff96';
+const STATE_STROKE = '#000000';
+const STATE_TEXT = '#000000';
+const HIGHLIGHT_COLOR = '#2563eb';
+
+const NODE_FILL = STATE_FILL;
 
 const EDGE_WIDTH = 1.6;
 export const DEFAULT_EPS = 'ε';
@@ -195,6 +203,12 @@ export function useJffCytoscape({
           (typeof window !== 'undefined' && getComputedStyle(document.body).fontFamily) ||
           'ui-sans-serif, system-ui';
 
+        // Edges and their labels sit on the canvas, not inside a state, so unlike the
+        // state fill they cannot be JFLAP's flat black: that is invisible on a dark
+        // background. They follow the theme; everything on the state stays JFLAP's.
+        const STROKE = darkMode ? '#e2e8f0' : '#000000';
+        const TEXT_COLOR = STROKE;
+
         const cy = cytoscape({
           container: containerRef.current!,
           elements,
@@ -206,12 +220,12 @@ export function useJffCytoscape({
               selector: 'node',
               style: {
                 'background-color': NODE_FILL,
-                'border-color': STROKE,
+                'border-color': STATE_STROKE,
                 'border-width': 2,
                 label: 'data(label)',
                 'font-family': uiFontFamily,
                 'font-size': 16,
-                color: TEXT_COLOR,
+                color: STATE_TEXT,
                 'text-valign': 'center',
                 'text-halign': 'center',
                 width: 58,
@@ -219,7 +233,9 @@ export function useJffCytoscape({
                 shape: 'ellipse',
               },
             },
-            { selector: 'node.final', style: { 'border-width': 6 } },
+            // JFLAP marks a final state with a second, inner circle. A double border is
+            // the same picture without a second element per state.
+            { selector: 'node.final', style: { 'border-width': 6, 'border-style': 'double' } },
             {
               selector: 'node.start',
               style: { width: 4, height: 4, 'background-opacity': 0, 'border-opacity': 0 },
@@ -244,7 +260,10 @@ export function useJffCytoscape({
                 color: TEXT_COLOR,
                 'text-wrap': 'wrap',
                 'text-max-width': 140,
-                'text-rotation': 'autorotate',
+                // Horizontal, like JFLAP. Autorotate turned a diagonal edge's label
+                // sideways and a right-to-left one upside down, which is unreadable for
+                // exactly the long PDA/TM labels that need reading most.
+                'text-rotation': 'none',
               },
             },
             /* self-loops on TOP with arrow at start */
@@ -281,15 +300,17 @@ export function useJffCytoscape({
               },
             },
 
-            /* interaction */
+            /* interaction: JFLAP's own selection blue (gui/Globals.FROM_COLOR) */
             {
               selector: '.highlighted',
               style: {
-                'line-color': '#2563eb',
-                'target-arrow-color': '#2563eb',
-                'source-arrow-color': '#2563eb',
-                'border-color': '#2563eb',
-                'background-color': darkMode ? '#0b1220' : NODE_FILL,
+                'line-color': HIGHLIGHT_COLOR,
+                'target-arrow-color': HIGHLIGHT_COLOR,
+                'source-arrow-color': HIGHLIGHT_COLOR,
+                'border-color': HIGHLIGHT_COLOR,
+                // The fill stays JFLAP's yellow so a highlighted state still reads as a
+                // state; only its outline and its edges change.
+                'background-color': NODE_FILL,
               },
             },
             { selector: '.faded', style: { opacity: 0.25 } },
@@ -322,10 +343,10 @@ export function useJffCytoscape({
           cy.edges('[isLoop = 1]').forEach((e: any) => {
             // Every transition between the same pair of states is bundled into ONE edge
             // whose label is those transitions on separate lines, so a busy state's loop
-            // can carry a dozen. Cytoscape centres that whole block on the loop, and the
-            // fixed -12 offset then ran it straight through the loop and the state:
-            // a 9-line label is ~170px tall, so half of it landed on top of the node.
-            // Offset by the block's own half-height so it always clears the loop.
+            // can carry a dozen. Cytoscape centres that whole block on the loop's apex, so
+            // the offset only has to lift it by its OWN half-height plus a small gap. It
+            // must not also add the loop's height: the apex is already the anchor, and
+            // counting it twice parked a one-line label a long way off in space.
             const lines = String(e.data('label') ?? '').split('\n').length;
             const blockHalfHeight = (lines * LABEL_LINE_HEIGHT) / 2;
             e.style({
@@ -338,7 +359,7 @@ export function useJffCytoscape({
               'arrow-scale': 0.95,
               'line-cap': 'round',
               'text-rotation': 'none',
-              'text-margin-y': -(LOOP_STEP_SIZE + blockHalfHeight + LABEL_LOOP_GAP),
+              'text-margin-y': -(blockHalfHeight + LABEL_LOOP_GAP),
             });
           });
         }
