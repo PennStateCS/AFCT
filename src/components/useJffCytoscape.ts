@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   bestLoopDirection,
   edgeLabelOffset,
-  labelRotation,
   loopLabelOffset,
   startMarkerPosition,
   LABEL_LINE_HEIGHT,
@@ -254,11 +253,11 @@ export function useJffCytoscape({
                 color: TEXT_COLOR,
                 'text-wrap': 'wrap',
                 'text-max-width': 140,
-                // A starting value only: `updateEdgeLabelMargins` gives every transition
-                // label the angle of its own edge, which is what JFLAP does. Cytoscape's
-                // own `autorotate` is not used, because it renders a right-to-left edge's
-                // label upside down; see `labelRotation`.
-                'text-rotation': 'none',
+                // Lay each label along its own edge, as JFLAP does. This was previously
+                // 'none', on the grounds that autorotate rendered a right-to-left edge's
+                // label upside down; on the cytoscape this now ships, it does not, and
+                // keeps every label the right way up whichever way its edge runs.
+                'text-rotation': 'autorotate',
               },
             },
             /* self-loops on TOP with arrow at start */
@@ -306,14 +305,15 @@ export function useJffCytoscape({
             // loop and leaves it horizontal, as JFLAP does. Source and target coincide, so
             // there is no edge direction here to work from anyway.
             if (edge.data('isLoop') === 1) return;
-            const source = edge.source().position();
-            const target = edge.target().position();
-            const { x, y } = edgeLabelOffset(source, target, edge.midpoint());
-            edge.style({
-              'text-rotation': labelRotation(source, target),
-              'text-margin-x': x,
-              'text-margin-y': y,
-            });
+            const { x, y } = edgeLabelOffset(
+              edge.source().position(),
+              edge.target().position(),
+              edge.midpoint(),
+            );
+            // The angle comes from `text-rotation: autorotate` in the stylesheet. These
+            // margins are in screen space, not the label's own rotated frame, so the
+            // standoff stays perpendicular to the edge whatever angle the label is at.
+            edge.style({ 'text-margin-x': x, 'text-margin-y': y });
           });
         }
 

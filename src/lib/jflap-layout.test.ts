@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   bestLoopDirection,
   edgeLabelOffset,
-  labelRotation,
   loopLabelOffset,
   startMarkerPosition,
   EDGE_LABEL_GAP,
@@ -90,45 +89,6 @@ describe('edgeLabelOffset', () => {
     expect(Number.isFinite(off.x)).toBe(true);
     expect(Number.isFinite(off.y)).toBe(true);
     expect(off).toEqual({ x: 0, y: EDGE_LABEL_GAP });
-  });
-});
-
-describe('labelRotation', () => {
-  const origin = { x: 0, y: 0 };
-  const deg = (radians: number) => Math.round((radians * 180) / Math.PI);
-
-  it('leaves a left-to-right edge horizontal', () => {
-    expect(labelRotation(origin, { x: 100, y: 0 })).toBe(0);
-  });
-
-  it('lays the label along a diagonal edge', () => {
-    expect(deg(labelRotation(origin, { x: 100, y: 100 }))).toBe(45);
-    expect(deg(labelRotation(origin, { x: 100, y: -100 }))).toBe(-45);
-  });
-
-  it('turns a right-to-left edge the rest of the way, so it is not upside down', () => {
-    // Using the raw edge angle here would be 180°, which renders the label mirrored.
-    expect(labelRotation(origin, { x: -100, y: 0 })).toBe(0);
-    expect(deg(labelRotation(origin, { x: -100, y: 100 }))).toBe(-45);
-    expect(deg(labelRotation(origin, { x: -100, y: -100 }))).toBe(45);
-  });
-
-  it('never returns an angle that would read upside down', () => {
-    for (let d = -180; d <= 180; d += 5) {
-      const radians = (d * Math.PI) / 180;
-      const rotation = labelRotation(origin, {
-        x: Math.cos(radians) * 100,
-        y: Math.sin(radians) * 100,
-      });
-      expect(rotation).toBeGreaterThan(-Math.PI / 2 - 1e-9);
-      expect(rotation).toBeLessThanOrEqual(Math.PI / 2 + 1e-9);
-    }
-  });
-
-  it('gives an edge and its opposite the same angle, so a pair of labels stay parallel', () => {
-    const a = { x: 10, y: 20 };
-    const b = { x: 90, y: 70 };
-    expect(labelRotation(a, b)).toBeCloseTo(labelRotation(b, a));
   });
 });
 
