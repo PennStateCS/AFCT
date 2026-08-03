@@ -1,35 +1,88 @@
 import { describe, it, expect } from 'vitest';
 import {
   bestLoopDirection,
+  bestStartMarkerDirection,
   edgeLabelOffset,
   loopLabelOffset,
+  startMarkerPolygon,
   startMarkerPosition,
   EDGE_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   LABEL_LOOP_GAP,
   LOOP_REACH,
   NODE_DIAMETER,
-  START_MARKER_WIDTH,
+  START_MARKER_SIZE,
 } from './jflap-layout';
 
-describe('startMarkerPosition', () => {
-  it('puts the marker due west of the state, as JFLAP does', () => {
-    const pos = startMarkerPosition({ x: 100, y: 40 });
-    expect(pos.x).toBeLessThan(100);
-    expect(pos.y).toBe(40);
+describe('the initial-state marker', () => {
+  const state = { x: 100, y: 40 };
+  const WEST = Math.PI;
+
+  it('sits due west of the state by default, as JFLAP draws it', () => {
+    const pos = startMarkerPosition(state);
+    expect(pos.x).toBeLessThan(state.x);
+    expect(pos.y).toBeCloseTo(state.y);
   });
 
-  it('leaves the marker just touching the state, with no gap and no overlap', () => {
-    const state = { x: 100, y: 40 };
-    const pos = startMarkerPosition(state);
-    // The marker's point is its right edge; the state's rim is one radius out.
-    const markerPoint = pos.x + START_MARKER_WIDTH / 2;
-    expect(markerPoint).toBeCloseTo(state.x - NODE_DIAMETER / 2);
+  it('puts the triangle point on the state rim, with no gap and no overlap', () => {
+    for (const angle of [WEST, 0, Math.PI / 2, -Math.PI / 4]) {
+      const pos = startMarkerPosition(state, angle);
+      // The point is half a box out from the box centre, facing back at the state.
+      const point = {
+        x: pos.x - (Math.cos(angle) * START_MARKER_SIZE) / 2,
+        y: pos.y - (Math.sin(angle) * START_MARKER_SIZE) / 2,
+      };
+      expect(Math.hypot(point.x - state.x, point.y - state.y)).toBeCloseTo(NODE_DIAMETER / 2);
+    }
   });
 
   it('respects a custom node diameter', () => {
-    const pos = startMarkerPosition({ x: 0, y: 0 }, 100);
-    expect(pos.x).toBeCloseTo(-50 - START_MARKER_WIDTH / 2);
+    const pos = startMarkerPosition({ x: 0, y: 0 }, WEST, 100);
+    expect(pos.x).toBeCloseTo(-100);
+  });
+
+  it('stays on the left when nothing is in the way', () => {
+    expect(bestStartMarkerDirection(state, [], [])).toBeCloseTo(WEST);
+  });
+
+  it('moves off the left when a transition runs out that side', () => {
+    // This is the automatic layout's problem: nothing there keeps the initial state's
+    // left clear, and the marker was drawn across the transitions leaving it.
+    const angle = bestStartMarkerDirection(state, [], [WEST]);
+    expect(angle).not.toBeCloseTo(WEST);
+  });
+
+  it('moves off the left when another state is sitting there', () => {
+    const blocked = { x: state.x - NODE_DIAMETER, y: state.y };
+    expect(bestStartMarkerDirection(state, [blocked], [])).not.toBeCloseTo(WEST);
+  });
+
+  it('points the triangle east when it sits on the left of the state', () => {
+    // Three corners in cytoscape's -1..1 box: top left, the point, bottom left.
+    expect(startMarkerPolygon(WEST)).toBe('0 -1, 1 0, 0 1');
+  });
+
+  it('turns the triangle to keep pointing back at the state', () => {
+    // Sitting due east, the point must face west instead.
+    const points = startMarkerPolygon(0)
+      .split(', ')
+      .map((p) => p.split(' ').map(Number) as [number, number]);
+    const point = points.find(([x, y]) => Math.abs(y) < 0.001 && Math.abs(x) > 0.5);
+    expect(point?.[0]).toBeCloseTo(-1);
+  });
+
+  it('keeps the triangle the same shape whichever way it faces', () => {
+    // The box is square, so a turned triangle must not stretch: every corner stays the
+    // same distance from the centre.
+    for (const angle of [WEST, 0, Math.PI / 2, -Math.PI / 4, Math.PI / 4]) {
+      const radii = startMarkerPolygon(angle)
+        .split(', ')
+        .map((p) => {
+          const [x, y] = p.split(' ').map(Number) as [number, number];
+          return Math.hypot(x, y);
+        });
+      for (const r of radii) expect(r).toBeCloseTo(1);
+    }
   });
 });
 

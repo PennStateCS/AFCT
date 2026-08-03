@@ -4,13 +4,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   bestLoopDirection,
+  bestStartMarkerDirection,
   edgeLabelOffset,
   loopLabelOffset,
+  startMarkerPolygon,
   startMarkerPosition,
   LABEL_LINE_HEIGHT,
-  START_MARKER_HEIGHT,
-  START_MARKER_POLYGON,
-  START_MARKER_WIDTH,
+  LOOP_REACH,
+  START_MARKER_SIZE,
 } from '@/lib/jflap-layout';
 import { parseJflap, toElements, type MachineType, type Parsed } from '@/lib/jflap-parse';
 
@@ -81,6 +82,99 @@ function debounce(fn: () => void, ms: number) {
   };
 }
 
+// Where every transition label has ended up, for the things that have to dodge them.
+// Only meaningful once `updateEdgeLabelMargins` has run.
+function edgeLabelAnchors(cy: any): { x: number; y: number }[] {
+  return cy
+    .edges()
+    .filter((e: any) => e.data('isLoop') !== 1 && String(e.data('label') ?? '') !== '')
+    .map((e: any) => {
+      const mid = e.midpoint();
+      const off = edgeLabelOffset(e.source().position(), e.target().position(), mid);
+      return { x: mid.x + off.x, y: mid.y + off.y };
+    });
+}
+
+// The ground this state's self-loops cover: the far side of each loop and where its label
+// sits. A loop is a wide arc rather than a line, so an angle alone describes it badly and
+// left the initial-state marker grazing one; these are the two points it actually has to
+// keep away from. `selfLoopGeometry` records the direction it chose, so this is only
+// meaningful once that has run.
+function selfLoopObstacles(node: any): { x: number; y: number }[] {
+  const nodePos = node.position();
+  const points: { x: number; y: number }[] = [];
+
+  node
+    .connectedEdges()
+    .filter((e: any) => e.data('isLoop') === 1 && typeof e.data('loopDirection') === 'number')
+    .forEach((e: any) => {
+      const degrees = e.data('loopDirection');
+      const angle = ((degrees - 90) * Math.PI) / 180;
+      const apex = {
+        x: nodePos.x + Math.cos(angle) * LOOP_REACH,
+        y: nodePos.y + Math.sin(angle) * LOOP_REACH,
+      };
+      const lines = String(e.data('label') ?? '').split('\n').length;
+      const labelOffset = loopLabelOffset(degrees, lines);
+      points.push(apex, { x: apex.x + labelOffset.x, y: apex.y + labelOffset.y });
+    });
+
+  return points;
+}
+
+// The screen angles of the transitions at a state, ignoring its own loops: a loop has no
+// direction to speak of, since its two ends are the same point.
+function incidentEdgeAngles(node: any): number[] {
+  const nodePos = node.position();
+  return node
+    .connectedEdges()
+    .filter((e: any) => e.source().id() !== e.target().id())
+    .map((e: any) => {
+      const other = e.source().id() === node.id() ? e.target() : e.source();
+      const p = other.position();
+      return Math.atan2(p.y - nodePos.y, p.x - nodePos.x);
+    });
+}
+
+// Utility: put the initial-state marker beside each initial state, creating it once.
+function repositionStartNodes(cy: any) {
+  const labelAnchors = edgeLabelAnchors(cy);
+
+  cy.nodes()
+    .filter((n: any) => n.data('initial'))
+    .forEach((node: any, idx: number) => {
+      const obstacles = cy
+        .nodes()
+        .filter((n: any) => n.id() !== node.id() && !n.hasClass('start'))
+        .map((n: any) => n.position())
+        .concat(labelAnchors)
+        .concat(selfLoopObstacles(node));
+
+      const angle = bestStartMarkerDirection(node.position(), obstacles, incidentEdgeAngles(node));
+      const pos = startMarkerPosition(node.position(), angle);
+      const startNodeId = `__start${idx}`;
+      let startNode = cy.getElementById(startNodeId);
+
+      if (!startNode || startNode.empty()) {
+        cy.add({
+          group: 'nodes',
+          // An explicit empty label: the node style maps `label` from data, and a node
+          // without the field makes cytoscape warn about a mapping it cannot resolve.
+          // This marker is the initial-state triangle and never shows text.
+          data: { id: startNodeId, label: '' },
+          position: pos,
+          classes: 'start',
+        });
+        startNode = cy.getElementById(startNodeId);
+      } else {
+        startNode.position(pos);
+      }
+      // Turn the triangle to point back at its state, which only matters when the
+      // marker has had to leave the state's left side.
+      startNode.style({ 'shape-polygon-points': startMarkerPolygon(angle) });
+    });
+}
+
 /* ─────────────────────────────── The hook ──────────────────────────────── */
 
 export type UseJffCytoscapeOptions = {
@@ -127,31 +221,6 @@ export function useJffCytoscape({
 
   // Expose onResize for Fit button
   const onResizeRef = useRef<(() => void) | null>(null);
-
-  // Utility: put the initial-state marker beside each initial state, creating it once.
-  function repositionStartNodes(cy: any) {
-    cy.nodes()
-      .filter((n: any) => n.data('initial'))
-      .forEach((node: any, idx: number) => {
-        const pos = startMarkerPosition(node.position());
-        const startNodeId = `__start${idx}`;
-        const startNode = cy.getElementById(startNodeId);
-
-        if (!startNode || startNode.empty()) {
-          cy.add({
-            group: 'nodes',
-            // An explicit empty label: the node style maps `label` from data, and a node
-            // without the field makes cytoscape warn about a mapping it cannot resolve.
-            // This marker is the initial-state triangle and never shows text.
-            data: { id: startNodeId, label: '' },
-            position: pos,
-            classes: 'start',
-          });
-        } else {
-          startNode.position(pos);
-        }
-      });
-  }
 
   const load = useMemo(
     () => async () => {
@@ -224,9 +293,9 @@ export function useJffCytoscape({
               selector: 'node.start',
               style: {
                 shape: 'polygon',
-                'shape-polygon-points': START_MARKER_POLYGON,
-                width: START_MARKER_WIDTH,
-                height: START_MARKER_HEIGHT,
+                'shape-polygon-points': startMarkerPolygon(),
+                width: START_MARKER_SIZE,
+                height: START_MARKER_SIZE,
                 'background-opacity': 0,
                 'border-color': STROKE,
                 'border-width': 2,
@@ -321,14 +390,7 @@ export function useJffCytoscape({
         // `updateEdgeLabelMargins`, so where every other transition label sits is already
         // settled and a loop can be steered clear of them.
         async function selfLoopGeometry() {
-          const labelAnchors = cy
-            .edges()
-            .filter((e: any) => e.data('isLoop') !== 1 && String(e.data('label') ?? '') !== '')
-            .map((e: any) => {
-              const mid = e.midpoint();
-              const off = edgeLabelOffset(e.source().position(), e.target().position(), mid);
-              return { x: mid.x + off.x, y: mid.y + off.y };
-            });
+          const labelAnchors = edgeLabelAnchors(cy);
 
           cy.edges('[isLoop = 1]').forEach((e: any) => {
             const node = e.source();
@@ -338,18 +400,11 @@ export function useJffCytoscape({
               .filter((n: any) => n.id() !== node.id() && !n.hasClass('start'))
               .map((n: any) => n.position())
               .concat(labelAnchors);
-            // Angles of the transitions already at this state, in either direction: a loop
-            // arcing along one of them would sit on top of it.
-            const incidentAngles = node
-              .connectedEdges()
-              .filter((x: any) => x.source().id() !== x.target().id())
-              .map((x: any) => {
-                const other = x.source().id() === node.id() ? x.target() : x.source();
-                const p = other.position();
-                return Math.atan2(p.y - nodePos.y, p.x - nodePos.x);
-              });
 
-            const direction = bestLoopDirection(nodePos, obstacles, incidentAngles);
+            const direction = bestLoopDirection(nodePos, obstacles, incidentEdgeAngles(node));
+            // Remembered so the initial-state marker, which is placed after this, can be
+            // steered clear of the loop.
+            e.data('loopDirection', direction);
             const lines = String(e.data('label') ?? '').split('\n').length;
             const offset = loopLabelOffset(direction, lines);
 

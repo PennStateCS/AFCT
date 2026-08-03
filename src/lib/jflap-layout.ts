@@ -46,48 +46,117 @@ const LOOP_LABEL_CLEARANCE = NODE_DIAMETER / 2 + LABEL_LINE_HEIGHT / 2;
 /** The 8 compass directions, starting straight up and turning clockwise. */
 const COMPASS_FROM_NORTH = Array.from({ length: 8 }, (_, i) => -Math.PI / 2 + i * (Math.PI / 4));
 
-/**
- * The initial-state marker, as JFLAP draws it: an unfilled triangle lying on its side,
- * its point touching the left of the state. As wide as the state's radius and as tall as
- * its diameter.
- *
- * `START_MARKER_POLYGON` is in the -1..1 box cytoscape's `shape-polygon-points` uses, so
- * the three corners are the top left, the point, and the bottom left.
- */
-export const START_MARKER_POLYGON = '-1 -1, 1 0, -1 1';
-export const START_MARKER_WIDTH = NODE_DIAMETER / 2;
-export const START_MARKER_HEIGHT = NODE_DIAMETER;
+/** The same 8, starting due west, for things that belong on the left if they can be. */
+const COMPASS_FROM_WEST = Array.from({ length: 8 }, (_, i) => {
+  const angle = Math.PI + i * (Math.PI / 4);
+  return angle > Math.PI ? angle - 2 * Math.PI : angle;
+});
 
 /**
- * Where the initial-state marker goes: due west of the state, far enough out that its
- * point meets the rim.
- *
- * JFLAP always puts it on the left, so this does too. It used to hunt for the emptiest of
- * the eight compass directions, which meant the same machine could have its start arrow
- * anywhere, and it read as one more thing that did not look like the desktop tool.
+ * Box the initial-state marker is drawn in. Square, which is what lets the triangle be
+ * turned to any angle without the shape distorting: cytoscape stretches
+ * `shape-polygon-points` over the node's width and height, so an oblong box would squash
+ * the triangle differently at every angle.
  */
-export function startMarkerPosition(statePos: Point, nodeDiameter: number = NODE_DIAMETER): Point {
-  return { x: statePos.x - nodeDiameter / 2 - START_MARKER_WIDTH / 2, y: statePos.y };
+export const START_MARKER_SIZE = NODE_DIAMETER;
+
+/**
+ * The marker itself, as JFLAP draws it: an unfilled triangle lying on its side with its
+ * point against the state, as wide as the state's radius and as tall as its diameter.
+ * Given in the -1..1 box `shape-polygon-points` uses, pointing due east, which is the
+ * shape wanted when the marker sits on the state's left.
+ */
+const START_MARKER_POINTS: Point[] = [
+  { x: 0, y: -1 },
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+];
+
+/**
+ * Which way out of the state the initial-state marker should sit.
+ *
+ * Due west whenever it can be, because that is where JFLAP puts it and this viewer is
+ * read alongside JFLAP. It moves only when west is genuinely taken, which on an
+ * automatic layout it often is: nothing there arranges the states so as to leave the
+ * initial one's left side free, and the marker was landing across the transitions
+ * running out of it. On a machine drawn by hand it stays on the left essentially always,
+ * because whoever drew it left that space.
+ *
+ * `incidentAngles` matters more here than the obstacle list, since what the marker
+ * usually has to avoid is a line rather than another state.
+ */
+export function bestStartMarkerDirection(
+  nodePos: Point,
+  obstacles: Point[],
+  incidentAngles: number[],
+  nodeDiameter: number = NODE_DIAMETER,
+): number {
+  return leastClutteredAngle(
+    COMPASS_FROM_WEST,
+    nodePos,
+    obstacles,
+    incidentAngles,
+    nodeDiameter,
+    nodeDiameter * 0.9,
+  );
 }
 
 /**
- * Of the 8 compass directions, the one with the least around it, trying them from
- * straight up and turning clockwise so a clear `up` always wins. Lining up with an edge
- * already leaving the state is penalized too, since whatever is placed there would sit
- * along that edge.
+ * Where the marker's box goes for a given direction: far enough out that the triangle's
+ * point lands on the state's rim. The point sits half a box from the box's centre, so a
+ * whole diameter from the state's centre puts it exactly on the rim.
+ */
+export function startMarkerPosition(
+  statePos: Point,
+  angle: number = Math.PI,
+  nodeDiameter: number = NODE_DIAMETER,
+): Point {
+  return {
+    x: statePos.x + Math.cos(angle) * nodeDiameter,
+    y: statePos.y + Math.sin(angle) * nodeDiameter,
+  };
+}
+
+/**
+ * The marker's outline for a given direction, as cytoscape's `shape-polygon-points`
+ * string. The triangle is turned to point back at the state it belongs to.
+ */
+export function startMarkerPolygon(angle: number = Math.PI): string {
+  // The marker sits at `angle` from the state, so its point faces the opposite way.
+  const facing = angle + Math.PI;
+  const cos = Math.cos(facing);
+  const sin = Math.sin(facing);
+  return START_MARKER_POINTS.map((p) => {
+    const x = p.x * cos - p.y * sin;
+    const y = p.x * sin + p.y * cos;
+    return `${round3(x)} ${round3(y)}`;
+  }).join(', ');
+}
+
+/** Trims floating-point dust out of the polygon string; cytoscape parses it as text. */
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+/**
+ * Of the given candidate directions, the one with the least around it. Lining up with an
+ * edge already leaving the state is penalized too, since whatever is placed there would
+ * sit along that edge. Ties go to the earliest candidate, so each caller passes its
+ * directions in order of preference and gets that one whenever it is clear.
  *
  * `radius` is how far out the thing being placed will sit, `obstacles` are the points it
  * has to stay clear of, and `incidentAngles` are the screen angles of the edges already
  * at this state.
  */
 function leastClutteredAngle(
+  candidates: number[],
   nodePos: Point,
   obstacles: Point[],
   incidentAngles: number[],
   radius: number,
   clearance: number,
 ): number {
-  const scores = COMPASS_FROM_NORTH.map((angle) => {
+  const scores = candidates.map((angle) => {
     const testX = nodePos.x + Math.cos(angle) * radius;
     const testY = nodePos.y + Math.sin(angle) * radius;
 
@@ -115,7 +184,7 @@ function leastClutteredAngle(
       bestIdx = i;
     }
   }
-  return COMPASS_FROM_NORTH[bestIdx] ?? 0;
+  return candidates[bestIdx] ?? 0;
 }
 
 /**
@@ -143,6 +212,7 @@ export function bestLoopDirection(
   reach: number = LOOP_REACH,
 ): number {
   const angle = leastClutteredAngle(
+    COMPASS_FROM_NORTH,
     nodePos,
     obstacles,
     incidentAngles,
