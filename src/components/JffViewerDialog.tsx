@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { describeMachine, type MachineType } from '@/lib/jflap-parse';
 import { cn } from '@/lib/utils';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import {
   Grid,
-  Waypoints,
   Download,
   ImageDown,
   Copy,
@@ -138,18 +138,24 @@ export function JffCytoscapeViewer({
             >
               <Grid className="mr-2 h-4 w-4" /> Grid
             </Button>
-            <Button
-              size="sm"
-              variant={honorPositions ? 'default' : 'outline'}
-              className={honorPositions ? undefined : controlBtnClass}
-              onClick={toggleHonorPositions}
-              title="Original Positions"
-              aria-label="Original positions"
-              aria-pressed={honorPositions}
-            >
-              <Waypoints className="mr-2 h-4 w-4" />
-              Original Positions
-            </Button>
+            {/* Both choices are named and on screen. This was one button labelled
+                "Original Positions", which named only the state it was in: with it
+                un-pressed there was nothing to say what you were looking at instead, and
+                "positions" described the node coordinates rather than anything the reader
+                of a diagram thinks about. */}
+            <span className="text-muted-foreground ml-1 text-sm whitespace-nowrap">Layout</span>
+            <SegmentedControl
+              name="jff-layout"
+              ariaLabel="Layout"
+              value={honorPositions ? 'as-drawn' : 'auto'}
+              onValueChange={(next) => {
+                if ((next === 'as-drawn') !== honorPositions) toggleHonorPositions();
+              }}
+              options={[
+                { value: 'as-drawn', label: 'As drawn' },
+                { value: 'auto', label: 'Auto-arranged' },
+              ]}
+            />
             <Button
               size="sm"
               variant="outline"
