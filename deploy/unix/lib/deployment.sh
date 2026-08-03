@@ -8,6 +8,10 @@
 # shellcheck shell=sh
 # shellcheck disable=SC2154  # globals are provided by afctctl
 
+# Where the images come from. Only used to tell an operator which host to check when a
+# pull fails; the Compose file is what actually decides where images are fetched.
+REGISTRY_HOST=${AFCT_REGISTRY_HOST:-ghcr.io}
+
 preflight() {
   step "System checks"
 
@@ -140,13 +144,61 @@ wait_for_health() {
   die "the application did not become healthy within ${HEALTH_TIMEOUT} seconds."
 }
 
+# Can THIS MACHINE open a connection to the image registry? Any HTTP reply counts,
+# including the 401 ghcr.io returns for an unauthenticated request: the question is
+# whether the packets get there, not whether we are allowed in.
+#
+# Deliberately separate from whether DOCKER can reach it. Docker Desktop runs its own
+# virtual machine with its own network, and the interesting failure is when the two
+# disagree.
+registry_reachable_from_host() {
+  command -v curl >/dev/null 2>&1 || return 2
+  curl -sS -o /dev/null --connect-timeout 10 --max-time 20 "https://${REGISTRY_HOST}/v2/" \
+    >/dev/null 2>&1
+}
+
+# Turn a failed `compose pull` into a sentence naming the likely cause. Reads the captured
+# output, because Docker already says exactly what went wrong and the old message
+# ("check the network and registry authentication") threw that away and guessed at two
+# causes at once.
+explain_pull_failure() {
+  _out=${1:-}
+  _text=""
+  [ -n "$_out" ] && [ -s "$_out" ] && _text=$(cat "$_out" 2>/dev/null || printf '')
+
+  case "$_text" in
+    *"unauthorized"*|*"authentication required"*|*"denied:"*)
+      printf '%s' "the registry refused the credentials. Run 'docker login ghcr.io' if these images are private."
+      return
+      ;;
+    *"manifest unknown"*|*"not found"*)
+      printf '%s' "the registry has no image for that version. Check AFCT_APP_TAG against the published releases."
+      return
+      ;;
+    *"no space left on device"*)
+      printf '%s' "the disk filled up while downloading. Free space and try again."
+      return
+      ;;
+  esac
+
+  # Everything else that reaches here is a connection problem. Which side is broken
+  # changes the fix completely, so say which.
+  if registry_reachable_from_host; then
+    printf '%s' "this machine can reach ${REGISTRY_HOST}, but Docker cannot, so this is Docker's own networking rather than your internet connection. Quit Docker Desktop completely and reopen it, disconnect any VPN, and if your network requires a proxy set it under Settings, Resources, Proxies."
+  else
+    printf '%s' "this machine cannot reach ${REGISTRY_HOST} either. Check the internet connection, a VPN, or a firewall between here and the registry."
+  fi
+}
+
 pull_images() {
   info "downloading AFCT container images..."
   PULL_OUTPUT=$(mktemp "${TMPDIR:-/tmp}/afct-pull.XXXXXX") || \
     die "could not create temporary pull output."
 
   if [ -t 1 ]; then
-    if compose_project pull; then _pull_status=0; else _pull_status=$?; fi
+    # `tee` so an interactive operator still watches the download AND we keep a copy.
+    # Without the copy there is nothing to diagnose from on the one run that matters.
+    if compose_project pull 2>&1 | tee "$PULL_OUTPUT"; then _pull_status=0; else _pull_status=$?; fi
   else
     if [ "$COMPOSE_KIND" = "v2" ]; then
       if compose_project pull --quiet > "$PULL_OUTPUT" 2>&1; then _pull_status=0; else _pull_status=$?; fi
@@ -157,8 +209,12 @@ pull_images() {
   fi
 
   if [ "$_pull_status" -ne 0 ]; then
-    [ -s "$PULL_OUTPUT" ] && cat "$PULL_OUTPUT" >&2 2>/dev/null || true
-    die "container images could not be downloaded. Check the network and registry authentication."
+    # Only re-print the output when it has not already been on screen.
+    if [ ! -t 1 ]; then
+      [ -s "$PULL_OUTPUT" ] && cat "$PULL_OUTPUT" >&2 2>/dev/null || true
+    fi
+    _why=$(explain_pull_failure "$PULL_OUTPUT")
+    die "container images could not be downloaded: ${_why}"
   fi
 
   rm -f "$PULL_OUTPUT" 2>/dev/null || true
