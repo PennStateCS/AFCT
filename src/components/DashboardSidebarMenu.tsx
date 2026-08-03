@@ -62,7 +62,7 @@ import {
   Book,
   Users,
   UserRound,
-  Layers,
+  CircleCheckBig,
   LogOut,
   Logs,
   LockKeyhole,
@@ -100,7 +100,7 @@ const COURSE_SECTIONS = [
 
 // Static admin menu items (kept alphabetical by title)
 const adminMenu = [
-  { title: 'Autograder Queue', url: '/dashboard/autograder-queue', icon: Layers },
+  { title: 'Autograder Queue', url: '/dashboard/autograder-queue', icon: CircleCheckBig },
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
   { title: 'System Logs', url: '/dashboard/system-logs', icon: Logs },
   { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
