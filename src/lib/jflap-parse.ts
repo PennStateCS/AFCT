@@ -6,7 +6,33 @@
 // independent of the imperative rendering. Uses DOMParser, which browsers and jsdom
 // provide.
 
+import { NODE_DIAMETER } from './jflap-layout';
+
 export type MachineType = 'fa' | 'pda' | 'tm' | 'unknown';
+
+/**
+ * The diameter JFLAP draws a state at, read out of `jars/afct-evaluator.jar`:
+ * `gui/viewer/StateDrawer.STATE_RADIUS = 20`. Its transition labels are 12px, set in
+ * `gui/viewer/AutomatonDrawer` with `deriveFont(12.0f)`.
+ */
+const JFLAP_STATE_DIAMETER = 40;
+
+/**
+ * How much to open out the coordinates in a .jff before drawing them.
+ *
+ * Whoever laid the machine out was dragging JFLAP's 40px states around, so the gaps they
+ * left are only big enough for circles that size. This viewer draws a state at
+ * NODE_DIAMETER, half again as wide, and using the saved coordinates as they stand spends
+ * that extra width out of the space between states: labels then ran into the neighbouring
+ * circles. Scaling every coordinate by the same ratio gives back the proportions the
+ * machine was drawn with. It is a uniform scale, so the arrangement is untouched, and the
+ * viewer fits the result to the canvas afterwards, so the machine is no smaller on screen
+ * than it was, only less cramped.
+ *
+ * The viewer's own sizes (labels, loops, standoffs) are all in these same scaled units,
+ * which is why this is one number here rather than a rescale of each of them.
+ */
+export const POSITION_SCALE = NODE_DIAMETER / JFLAP_STATE_DIAMETER;
 
 export type Parsed = {
   type: MachineType;
@@ -158,7 +184,7 @@ export function toElements(parsed: Parsed, eps: string, honorPositions?: boolean
     if (honorPositions) {
       return {
         ...base,
-        position: { x: s.xPos, y: s.yPos },
+        position: { x: s.xPos * POSITION_SCALE, y: s.yPos * POSITION_SCALE },
         locked: false,
         grabbable: true,
       };
