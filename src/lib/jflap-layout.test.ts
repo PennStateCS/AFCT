@@ -57,6 +57,22 @@ describe('edgeLabelOffset', () => {
     expect(gapBetweenLabels).toBe(64);
   });
 
+  it('lines up the two labels of a bidirectional pair', () => {
+    // The midpoints here are what cytoscape actually reports for two level states 200
+    // apart: each is ~0.9px towards its own source, because the drawn curve is shortened
+    // at the target end for the arrowhead. Pointing opposite ways, the pair drifted 1.7px
+    // apart and visibly failed to line up.
+    const q0 = { x: 100, y: 150 };
+    const q1 = { x: 300, y: 150 };
+    const there = edgeLabelOffset(q0, q1, { x: 199.14, y: 136.89 });
+    const back = edgeLabelOffset(q1, q0, { x: 200.86, y: 163.11 });
+
+    expect(199.14 + there.x).toBeCloseTo(200.86 + back.x, 0);
+    // Still one above the pair and one below, each on its own arc.
+    expect(136.89 + there.y).toBeLessThan(150);
+    expect(163.11 + back.y).toBeGreaterThan(150);
+  });
+
   it('stands off perpendicular to a diagonal edge, on the side it bows towards', () => {
     const off = edgeLabelOffset({ x: 0, y: 0 }, { x: 100, y: 100 }, { x: 30, y: 70 });
     expect(off.x).toBe(Math.round(-EDGE_LABEL_GAP * Math.SQRT1_2));

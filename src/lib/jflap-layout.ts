@@ -207,22 +207,33 @@ export function edgeLabelOffset(
   // A self-loop or a zero-length edge has no direction to stand off from.
   if (!length || !Number.isFinite(length)) return { x: 0, y: gap };
 
+  const alongX = dx / length;
+  const alongY = dy / length;
   const perpX = -dy / length;
   const perpY = dx / length;
+
+  const centreX = (source.x + target.x) / 2 - midpoint.x;
+  const centreY = (source.y + target.y) / 2 - midpoint.y;
 
   // How far the curve bows, and to which side. Cytoscape's midpoint for a straight edge
   // lands a pixel or two off the true midpoint, and reading a direction out of that
   // rounding noise is what used to leave a label sitting across its own edge, so only a
   // bow clearly bigger than the noise gets a vote. Below it, either side is as good, and
   // keeping the sign positive leaves a lone edge's label where it has always been.
-  const bow =
-    (midpoint.x - (source.x + target.x) / 2) * perpX +
-    (midpoint.y - (source.y + target.y) / 2) * perpY;
+  const bow = centreX * -perpX + centreY * -perpY;
   const side = bow < -MIN_BOW ? -1 : 1;
+
+  // Slide the label back to the halfway point along the edge. Cytoscape anchors it to the
+  // middle of the DRAWN curve, which runs rim to rim and is shortened at the target end to
+  // leave room for the arrowhead, so the anchor sits slightly towards the source. Two
+  // states joined in both directions point opposite ways, so their labels drifted apart
+  // by twice that and stopped lining up. Only the drift ALONG the edge is corrected; the
+  // part across it is the bow, which the label should keep following.
+  const drift = centreX * alongX + centreY * alongY;
 
   // `|| 0` keeps a zero component as plain 0 rather than JavaScript's -0.
   return {
-    x: Math.round(perpX * side * gap) || 0,
-    y: Math.round(perpY * side * gap) || 0,
+    x: Math.round(alongX * drift + perpX * side * gap) || 0,
+    y: Math.round(alongY * drift + perpY * side * gap) || 0,
   };
 }
