@@ -43,32 +43,51 @@ export const LOOP_REACH = 61;
  */
 const LOOP_LABEL_CLEARANCE = NODE_DIAMETER / 2 + LABEL_LINE_HEIGHT / 2;
 
-/** Screen angle of each of the 8 compass directions, starting due east. */
-const COMPASS = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4));
-
-/** The same 8 directions, but starting straight up and turning clockwise. */
+/** The 8 compass directions, starting straight up and turning clockwise. */
 const COMPASS_FROM_NORTH = Array.from({ length: 8 }, (_, i) => -Math.PI / 2 + i * (Math.PI / 4));
 
 /**
- * Of the given candidate directions, the one with the least around it. Lining up with an
- * edge already leaving the state is penalized as well, since whatever is placed there
- * would sit along that edge. Ties go to the earliest candidate, so callers order the list
- * by preference.
+ * The initial-state marker, as JFLAP draws it: an unfilled triangle lying on its side,
+ * its point touching the left of the state. As wide as the state's radius and as tall as
+ * its diameter.
+ *
+ * `START_MARKER_POLYGON` is in the -1..1 box cytoscape's `shape-polygon-points` uses, so
+ * the three corners are the top left, the point, and the bottom left.
+ */
+export const START_MARKER_POLYGON = '-1 -1, 1 0, -1 1';
+export const START_MARKER_WIDTH = NODE_DIAMETER / 2;
+export const START_MARKER_HEIGHT = NODE_DIAMETER;
+
+/**
+ * Where the initial-state marker goes: due west of the state, far enough out that its
+ * point meets the rim.
+ *
+ * JFLAP always puts it on the left, so this does too. It used to hunt for the emptiest of
+ * the eight compass directions, which meant the same machine could have its start arrow
+ * anywhere, and it read as one more thing that did not look like the desktop tool.
+ */
+export function startMarkerPosition(statePos: Point, nodeDiameter: number = NODE_DIAMETER): Point {
+  return { x: statePos.x - nodeDiameter / 2 - START_MARKER_WIDTH / 2, y: statePos.y };
+}
+
+/**
+ * Of the 8 compass directions, the one with the least around it, trying them from
+ * straight up and turning clockwise so a clear `up` always wins. Lining up with an edge
+ * already leaving the state is penalized too, since whatever is placed there would sit
+ * along that edge.
  *
  * `radius` is how far out the thing being placed will sit, `obstacles` are the points it
  * has to stay clear of, and `incidentAngles` are the screen angles of the edges already
- * at this state. `penalty` scores one obstacle from its distance, which is what separates
- * the two callers: see each of them for why.
+ * at this state.
  */
 function leastClutteredAngle(
-  candidates: number[],
   nodePos: Point,
   obstacles: Point[],
   incidentAngles: number[],
   radius: number,
-  penalty: (distance: number) => number,
+  clearance: number,
 ): number {
-  const scores = candidates.map((angle) => {
+  const scores = COMPASS_FROM_NORTH.map((angle) => {
     const testX = nodePos.x + Math.cos(angle) * radius;
     const testY = nodePos.y + Math.sin(angle) * radius;
 
@@ -76,7 +95,7 @@ function leastClutteredAngle(
     for (const pos of obstacles) {
       const dx = testX - pos.x;
       const dy = testY - pos.y;
-      score += penalty(Math.sqrt(dx * dx + dy * dy));
+      if (Math.sqrt(dx * dx + dy * dy) < clearance) score += 1000;
     }
 
     for (const edgeAngle of incidentAngles) {
@@ -96,34 +115,7 @@ function leastClutteredAngle(
       bestIdx = i;
     }
   }
-  return candidates[bestIdx] ?? 0;
-}
-
-/**
- * Choose where to place the start-arrow stub for an initial node: the least-cluttered of
- * the 8 compass directions, at 1.5× the node diameter. Returns the chosen point.
- */
-export function bestStartNodePosition(
-  nodePos: Point,
-  otherNodePositions: Point[],
-  incomingAngles: number[],
-  nodeDiameter: number = NODE_DIAMETER,
-): Point {
-  const radius = 1.5 * nodeDiameter;
-  const angle = leastClutteredAngle(
-    COMPASS,
-    nodePos,
-    otherNodePositions,
-    incomingAngles,
-    radius,
-    // The stub has no natural home, so past the overlap penalty it also drifts towards
-    // whichever side is emptiest.
-    (dist) => (dist < nodeDiameter * 1.1 ? 1000 : 1 / dist),
-  );
-  return {
-    x: nodePos.x + Math.cos(angle) * radius,
-    y: nodePos.y + Math.sin(angle) * radius,
-  };
+  return COMPASS_FROM_NORTH[bestIdx] ?? 0;
 }
 
 /**
@@ -151,14 +143,13 @@ export function bestLoopDirection(
   reach: number = LOOP_REACH,
 ): number {
   const angle = leastClutteredAngle(
-    COMPASS_FROM_NORTH,
     nodePos,
     obstacles,
     incidentAngles,
     // Test where the loop's LABEL will sit, not the loop: that is the part that reaches
     // furthest and the part that has to stay readable.
     reach + LABEL_LINE_HEIGHT,
-    (dist) => (dist < LOOP_LABEL_CLEARANCE ? 1000 : 0),
+    LOOP_LABEL_CLEARANCE,
   );
   // Screen angle (east, clockwise) back to cytoscape's loop angle (north, clockwise).
   const degrees = Math.round((Math.atan2(Math.cos(angle), -Math.sin(angle)) * 180) / Math.PI);

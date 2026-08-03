@@ -4,10 +4,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   bestLoopDirection,
-  bestStartNodePosition,
   edgeLabelOffset,
   loopLabelOffset,
+  startMarkerPosition,
   LABEL_LINE_HEIGHT,
+  START_MARKER_HEIGHT,
+  START_MARKER_POLYGON,
+  START_MARKER_WIDTH,
 } from '@/lib/jflap-layout';
 import { parseJflap, toElements, type MachineType, type Parsed } from '@/lib/jflap-parse';
 
@@ -125,61 +128,27 @@ export function useJffCytoscape({
   // Expose onResize for Fit button
   const onResizeRef = useRef<(() => void) | null>(null);
 
-  // Utility: Reposition start nodes for !honorPositions
+  // Utility: put the initial-state marker beside each initial state, creating it once.
   function repositionStartNodes(cy: any) {
-    // For each initial node, ensure a start node and edge exist, and position the start node
     cy.nodes()
       .filter((n: any) => n.data('initial'))
       .forEach((node: any, idx: number) => {
-        const nodePos = node.position();
-
-        // Exclude both the current node and its corresponding start node from the calculation
+        const pos = startMarkerPosition(node.position());
         const startNodeId = `__start${idx}`;
-        const otherNodes = cy
-          .nodes()
-          .filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
-        const otherNodePositions = otherNodes.map((n2: any) => n2.position());
+        const startNode = cy.getElementById(startNodeId);
 
-        // Gather incoming edge angles
-        const incomingEdges = node.incomers('edge');
-        const incomingAngles = incomingEdges.map((e: any) => {
-          const src = e.source().position();
-          return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
-        });
-
-        // Pick the least-cluttered direction for the start-node stub.
-        const pos = bestStartNodePosition(nodePos, otherNodePositions, incomingAngles);
-
-        let startNode = cy.getElementById(`__start${idx}`);
         if (!startNode || startNode.empty()) {
-          // Create the start node if it doesn't exist
           cy.add({
             group: 'nodes',
             // An explicit empty label: the node style maps `label` from data, and a node
             // without the field makes cytoscape warn about a mapping it cannot resolve.
-            // This stub is the tail of the initial-state arrow and never shows text.
-            data: { id: `__start${idx}`, label: '' },
+            // This marker is the initial-state triangle and never shows text.
+            data: { id: startNodeId, label: '' },
             position: pos,
             classes: 'start',
           });
-          startNode = cy.getElementById(`__start${idx}`);
         } else {
           startNode.position(pos);
-        }
-        // Ensure the start edge exists
-        const startEdgeId = `__startEdge${idx}`;
-        const startEdge = cy.getElementById(startEdgeId);
-        if (!startEdge || startEdge.empty()) {
-          cy.add({
-            group: 'edges',
-            data: {
-              id: startEdgeId,
-              source: `__start${idx}`,
-              target: node.id(),
-              label: '',
-            },
-            classes: 'startEdge',
-          });
         }
       });
   }
@@ -247,9 +216,22 @@ export function useJffCytoscape({
             // JFLAP marks a final state with a second, inner circle. A double border is
             // the same picture without a second element per state.
             { selector: 'node.final', style: { 'border-width': 6, 'border-style': 'double' } },
+            // The initial-state marker, drawn the way JFLAP draws it: an unfilled
+            // triangle on its side with its point against the state. It follows the theme
+            // rather than JFLAP's flat black, for the same reason the edges do: it sits on
+            // the canvas, not inside a state, so black disappears on a dark background.
             {
               selector: 'node.start',
-              style: { width: 4, height: 4, 'background-opacity': 0, 'border-opacity': 0 },
+              style: {
+                shape: 'polygon',
+                'shape-polygon-points': START_MARKER_POLYGON,
+                width: START_MARKER_WIDTH,
+                height: START_MARKER_HEIGHT,
+                'background-opacity': 0,
+                'border-color': STROKE,
+                'border-width': 2,
+                events: 'no',
+              },
             },
 
             /* edges (default) */
@@ -294,24 +276,6 @@ export function useJffCytoscape({
                 'arrow-scale': 0.95,
                 'line-cap': 'round',
                 'text-rotation': 'none',
-              },
-            },
-
-            /* initial arrow from hidden start node - make it only node diameter away */
-            {
-              selector: 'edge.startEdge',
-              style: {
-                'curve-style': 'straight',
-                'line-color': STROKE,
-                'target-arrow-color': STROKE,
-                'target-arrow-shape': 'triangle',
-                'arrow-scale': 1.1,
-                width: EDGE_WIDTH,
-                label: '',
-                'source-endpoint': 'outside-to-node',
-                'target-endpoint': 'outside-to-node',
-                'segment-distances': 58, // node diameter
-                'segment-weights': 1,
               },
             },
 
@@ -542,43 +506,16 @@ export function useJffCytoscape({
           neighborhood.addClass('highlighted').removeClass('faded');
         });
 
-        // Update self-loop geometry, edge label margins, and start node position when a node is moved
+        // Keep the label and loop geometry, and the initial-state marker, following a
+        // state the reader has dragged. Moving the marker itself fires this too, so skip
+        // it: it has nothing hanging off it, and reacting would only recurse.
         cy.on('position', async (evt: any) => {
-          // Only update if a node was moved
-          if (evt.target && evt.target.isNode && evt.target.isNode()) {
-            await updateEdgeLabelMargins();
-            await selfLoopGeometry();
+          const target = evt.target;
+          if (!target?.isNode?.() || target.hasClass('start')) return;
 
-            // If the moved node is an initial node, update its corresponding __start node position
-            if (evt.target.data('initial')) {
-              // Find the index of this initial node among all initial nodes
-              const initialNodes = cy.nodes().filter((n: any) => n.data('initial'));
-              let idx = -1;
-              initialNodes.forEach((n: any, i: number) => {
-                if (n.id() === evt.target.id()) idx = i;
-              });
-              if (idx !== -1) {
-                // Recompute the best position for the __start node
-                const node = evt.target;
-                const nodePos = node.position();
-                const startNodeId = `__start${idx}`;
-                const otherNodes = cy
-                  .nodes()
-                  .filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
-                const otherNodePositions = otherNodes.map((n2: any) => n2.position());
-                const incomingEdges = node.incomers('edge');
-                const incomingAngles = incomingEdges.map((e: any) => {
-                  const src = e.source().position();
-                  return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
-                });
-                const pos = bestStartNodePosition(nodePos, otherNodePositions, incomingAngles);
-                const startNode = cy.getElementById(startNodeId);
-                if (startNode && !startNode.empty()) {
-                  startNode.position(pos);
-                }
-              }
-            }
-          }
+          await updateEdgeLabelMargins();
+          await selfLoopGeometry();
+          repositionStartNodes(cy);
         });
       } catch (e: any) {
         console.error(e);
