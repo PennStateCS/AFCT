@@ -9,7 +9,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
-function parseRegex(xmlText: string){
+function parseRegex(xmlText: string) {
   type MachineType = 'cfg' | 're' | 'fa' | 'pda' | 'unknown';
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
   const parseError = doc.querySelector('parsererror');
@@ -17,57 +17,63 @@ function parseRegex(xmlText: string){
     const msg = parseError.textContent?.split('\n')[0]?.trim() || 'XML parse error';
     throw new Error(`Invalid JFLAP (.jff) file: ${msg}`);
   }
-  
+
   const rawType = (doc.querySelector('type')?.textContent || '').toLowerCase();
   let type: MachineType = 'unknown';
   if (rawType.includes('re')) type = 're';
 
-  if (type === 'unknown'){
+  if (type === 'unknown') {
     throw new Error(`${rawType} not regular expression`);
   }
 
   const expression = doc.querySelector('expression')?.textContent ?? '';
-  return { type: type, expression: expression }; 
+  return { type: type, expression: expression };
 }
 
-export function RegexViewerDialog({ src, open, onOpenChange, title }: { src: string; open: boolean; onOpenChange: (v: boolean) => void; title: string | null | undefined;}){
-
+export function RegexViewerDialog({
+  src,
+  open,
+  onOpenChange,
+  title,
+}: {
+  src: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  title: string | null | undefined;
+}) {
   const [data, setData] = React.useState<string | null>(null);
 
-  if (!title){
-    title = "";
+  if (!title) {
+    title = '';
   }
   React.useEffect(() => {
-	
-	const load = async () => {
+    const load = async () => {
       try {
-	    const res = await fetch(src);
-	    if (!res.ok) throw new Error(`Failed to Fetch : ${res.status} ${res.statusText}`);
-	    const text = await res.text();
-		setData(text);
+        const res = await fetch(src);
+        if (!res.ok) throw new Error(`Failed to Fetch : ${res.status} ${res.statusText}`);
+        const text = await res.text();
+        setData(text);
       } catch (err) {
-		console.error('Fetch error:', err);
+        console.error('Fetch error:', err);
       }
-	};
+    };
 
-	void load();
+    void load();
   }, [src, open]);
   if (!data) return null;
   const parsed = parseRegex(data);
   return (
     <div className="p-8">
-
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="truncate">{title || 'JFLAP Viewer'}</DialogTitle>
-            <DialogDescription className="sr-only">
-              Regular expression contents.
-            </DialogDescription>
+            {/* Wraps rather than truncating; see CfgViewerDialog for why `leading-snug`. */}
+            <DialogTitle className="line-clamp-2 leading-snug break-words">
+              {title || 'JFLAP Viewer'}
+            </DialogTitle>
+            <DialogDescription className="sr-only">Regular expression contents.</DialogDescription>
           </DialogHeader>
-		   <div className="p-4 pt-2 text-center">
-             {parsed.expression}
-           </div>
+          <div className="p-4 pt-2 text-center">{parsed.expression}</div>
         </DialogContent>
       </Dialog>
     </div>
