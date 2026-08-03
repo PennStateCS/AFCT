@@ -180,7 +180,7 @@ const submissionsPostCalls = (fetchMock: FetchMock) =>
   );
 
 /**
- * Clear the Result filter so every row shows.
+ * Clear the Status filter so every row shows.
  *
  * The page opens filtered to Pending and Processing, because that is the outstanding work
  * an admin comes to the queue for. The fixture row is graded, so a test that wants to see
@@ -375,7 +375,7 @@ describe('AutograderQueueClient', () => {
     );
   });
 
-  it('ticking a Result value in the table filter narrows the rows', async () => {
+  it('ticking a Status value in the table filter narrows the rows', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
     await showAllStatuses();

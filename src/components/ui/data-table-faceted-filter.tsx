@@ -63,9 +63,12 @@ function FilterSection<TData>({ column, label, options }: FilterableColumn<TData
 
   return (
     <div className="w-44 space-y-1.5">
+      {/* Heading rule + full-strength text: without it the sections read as one
+          undivided list of checkboxes, so e.g. On time / Late looks like part of the
+          group above it rather than a filter of its own. */}
       <p
         id={labelId}
-        className="text-muted-foreground text-xs font-medium tracking-wide uppercase"
+        className="text-foreground border-b pb-1 text-xs font-semibold tracking-wide uppercase"
       >
         {label}
       </p>
@@ -150,7 +153,7 @@ function FilterPopoverShell({
         {/* Column-direction wrap: sections stack vertically until they hit the popover's
             (viewport-bounded) height, then flow into another column, widening up to the
             available width before any scrollbar appears. */}
-        <div className="flex min-h-0 flex-1 flex-col flex-wrap content-start gap-x-6 gap-y-3 overflow-auto p-3">
+        <div className="flex min-h-0 flex-1 flex-col flex-wrap content-start gap-x-6 gap-y-5 overflow-auto p-3">
           {children}
         </div>
       </PopoverContent>
@@ -202,7 +205,12 @@ function ControlledFilterSection({ group }: { group: FilterMenuGroup }) {
   };
   return (
     <div className="w-44 space-y-1.5">
-      <p id={labelId} className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+      {/* Same heading treatment as FilterSection above, so server-driven pages and
+          client tables present their filter groups identically. */}
+      <p
+        id={labelId}
+        className="text-foreground border-b pb-1 text-xs font-semibold tracking-wide uppercase"
+      >
         {group.label}
       </p>
       <div role="group" aria-labelledby={labelId} className="space-y-0.5">

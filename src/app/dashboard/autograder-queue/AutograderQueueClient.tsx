@@ -523,6 +523,9 @@ export default function AutograderQueueClient() {
         id: 'grade',
         header: 'Grade',
         accessorFn: (s) => s.grade ?? -1,
+        // Correct / Incorrect sits under the grade it explains, the same way On time / Late
+        // sits under the timestamp above. It carried its own priority-1 column before, so
+        // Grade takes that priority to keep the verdict on screen when the table narrows.
         cell: ({ row }) => {
           const { grade, maxPoints } = row.original;
           const text =
@@ -531,34 +534,31 @@ export default function AutograderQueueClient() {
               : grade != null
                 ? String(grade)
                 : '-';
-          return <span className="text-foreground text-sm whitespace-nowrap">{text}</span>;
-        },
-        meta: { priority: 2 },
-      },
-      {
-        id: 'status',
-        header: 'Status',
-        enableSorting: false,
-        // The grading result only. Timing moved under the Submitted timestamp above.
-        cell: ({ row }) => {
-          const chip = getReviewStatusChip(row.original as ProblemSubmission);
+          const review = getReviewStatusChip(row.original as ProblemSubmission);
           return (
-            <span className="inline-flex items-center gap-2 text-xs font-medium" title={chip.title}>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-foreground text-sm whitespace-nowrap">{text}</span>
               <span
-                className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[chip.tone]}`}
-                aria-hidden="true"
-              />
-              <span>{chip.label}</span>
-            </span>
+                className="inline-flex items-center gap-2 text-xs font-medium"
+                title={review.title}
+              >
+                <span
+                  className={`inline-flex h-2 w-2 rounded-full ${statusToneClass[review.tone]}`}
+                  aria-hidden="true"
+                />
+                <span>{review.label}</span>
+              </span>
+            </div>
           );
         },
         meta: { priority: 1 },
       },
       /*
        * Two filter-only columns behind the toolbar's Filters button, both hidden in the
-       * grid because the Status column above already shows the same two chips.
+       * grid because the chips under Submitted and Grade above already show the same
+       * two values.
        *
-       * They are separate on purpose. A submission has a timing (was it late) AND a result
+       * They are separate on purpose. A submission has a timing (was it late) AND a status
        * (was it graded, and was it right), and those are independent: "late" and "correct"
        * describe the same row. One combined list would make picking two values mean "rows
        * matching either", which reads as a widening when the user meant to narrow. Same
@@ -585,13 +585,15 @@ export default function AutograderQueueClient() {
       },
       {
         id: 'result',
-        header: 'Result',
+        header: 'Status',
         accessorFn: (s) => getSubmissionReviewStatus(s as ProblemSubmission),
         enableHiding: true,
         meta: {
           priority: 5,
           filterVariant: 'multiselect',
-          filterLabel: 'Result',
+          // "Status" is what this reads as to someone working the queue; the column keeps
+          // the id `result` because the default filter below addresses it by that id.
+          filterLabel: 'Status',
           filterOptions: [
             { label: 'Pending', value: 'pending' },
             { label: 'Processing', value: 'processing' },
@@ -775,10 +777,10 @@ export default function AutograderQueueClient() {
           storageKey="autograder-queue-columns"
           tableLabel="Autograder queue"
           // Due is off by default: the deadline matters far less than arrival order when
-          // you are working a queue, and the Status column already flags late work. The
+          // you are working a queue, and the Submitted column already flags late work. The
           // Columns menu turns it back on, and that choice is remembered per browser.
-          // `timing` and `result` exist only to drive the Filters popover; the Status
-          // column already shows both as chips.
+          // `timing` and `result` exist only to drive the Filters popover; the chips under
+          // Submitted and Grade already show both.
           defaultColumnVisibility={{ due: false, timing: false, result: false }}
           // Opens showing only outstanding work: queued and in flight. This page is the
           // queue, and what an admin comes here for is what has not finished, not the
