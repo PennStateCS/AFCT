@@ -1371,7 +1371,17 @@ recreate_updater() {
   # mounting each at its own host path handles both without special-casing.
   _env_file="${_shared_src}/.env.production"
   _compose_file="${_compose_src}/docker-compose.yml"
-  _cmd="sleep 3; export AFCT_RUNTIME_ENV_FILE='${_env_file}'; docker compose -p '${_proj}' --env-file '${_env_file}' -f '${_compose_file}' --profile updater up -d --no-deps ${UPDATER_SERVICE}"
+  # All three interpolation variables have to be exported, not just the env file. The
+  # Compose file builds this service's own mounts from
+  # ${AFCT_RUNTIME_COMPOSE_DIR:-.}:/afct-compose and ${AFCT_RUNTIME_SHARED_DIR:-.}:/afct-shared,
+  # so leaving either unset silently falls back to `.`, which Compose resolves against the
+  # compose file's directory. On the versioned Linux layout the shared directory is the
+  # PARENT of the runtime compose directory, so the replacement updater came back with
+  # /afct-shared bound to the runtime directory and could no longer find .env.production:
+  # every later upgrade failed with "no environment file at /afct-shared/.env.production"
+  # until a host-side `afctctl update` recreated it. Resolve them from the mounts this
+  # container actually has, so the replacement inherits the same layout.
+  _cmd="sleep 3; export AFCT_RUNTIME_ENV_FILE='${_env_file}' AFCT_RUNTIME_COMPOSE_DIR='${_compose_src}' AFCT_RUNTIME_SHARED_DIR='${_shared_src}'; docker compose -p '${_proj}' --env-file '${_env_file}' -f '${_compose_file}' --profile updater up -d --no-deps ${UPDATER_SERVICE}"
   if [ "$_compose_src" = "$_shared_src" ]; then
     docker run -d --rm \
       -v /var/run/docker.sock:/var/run/docker.sock \

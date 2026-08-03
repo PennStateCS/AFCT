@@ -115,6 +115,28 @@ tag_now() { sed -n 's/^AFCT_APP_TAG=//p' "$TESTDIR/.env.production"; }
   [ "$(tag_now)" = "v1.0.0" ]
 }
 
+@test "self-update carries the compose and shared directories into the replacement" {
+  # The versioned Linux layout keeps the runtime compose file in a SUBDIRECTORY of the
+  # shared config directory. The Compose file builds the updater's own mounts from
+  # AFCT_RUNTIME_COMPOSE_DIR / AFCT_RUNTIME_SHARED_DIR, so if the swap helper does not
+  # export both, they fall back to `.` and the replacement comes back with /afct-shared
+  # bound to the runtime directory: it can no longer find .env.production, and every
+  # later upgrade fails until a host-side update recreates it.
+  export MOCK_ARGS_LOG="$TESTDIR/docker-args.log"
+  export MOCK_AFCT_COMPOSE_MOUNT=/opt/afct/shared/runtime
+  export MOCK_AFCT_SHARED_MOUNT=/opt/afct/shared
+  request '{"action":"self-update","tag":"v1.1.0","requestId":"su3"}'
+  run sh updater.sh
+
+  run grep -q -- "AFCT_RUNTIME_COMPOSE_DIR='/opt/afct/shared/runtime'" "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  run grep -q -- "AFCT_RUNTIME_SHARED_DIR='/opt/afct/shared'" "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  # The env file comes from the shared directory, not the runtime one.
+  run grep -q -- "AFCT_RUNTIME_ENV_FILE='/opt/afct/shared/.env.production'" "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  # Both host directories are mounted at their real paths so the helper resolves them.
+  run grep -q -- '-v /opt/afct/shared/runtime:/opt/afct/shared/runtime' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+  run grep -q -- '-v /opt/afct/shared:/opt/afct/shared' "$MOCK_ARGS_LOG"; [ "$status" -eq 0 ]
+}
+
 @test "an invalid tag is rejected and the version is unchanged" {
   request '{"action":"upgrade","tag":"bad tag!","requestId":"r2","backupFirst":false}'
   run sh updater.sh

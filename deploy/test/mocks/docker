@@ -96,8 +96,17 @@ case "$cmd" in
       # Compose project discovery (updater): empty when MOCK_NO_PROJECT is set.
       *Labels*) [ -n "${MOCK_NO_PROJECT:-}" ] && printf '\n' || printf '%s\n' "${MOCK_PROJECT:-afct}" ;;
       *Config.Image*) printf 'ghcr.io/example/afct:%s\n' "${MOCK_SELF_IMAGE_TAG:-latest}" ;;
-      # The updater resolves its own /afct host mount to spawn the self-update helper.
-      *Mounts*) printf '%s\n' "${MOCK_AFCT_MOUNT:-/host/afct}" ;;
+      # The updater resolves its own host mounts to spawn the self-update helper. The two
+      # destinations can be different host directories (the versioned Linux layout keeps
+      # the runtime compose file in a subdirectory of the shared config directory), so a
+      # test can set them apart; both default to the single co-located directory.
+      *Mounts*)
+        case "$_tmpl" in
+          */afct-compose*) printf '%s\n' "${MOCK_AFCT_COMPOSE_MOUNT:-${MOCK_AFCT_MOUNT:-/host/afct}}" ;;
+          */afct-shared*) printf '%s\n' "${MOCK_AFCT_SHARED_MOUNT:-${MOCK_AFCT_MOUNT:-/host/afct}}" ;;
+          *) printf '%s\n' "${MOCK_AFCT_MOUNT:-/host/afct}" ;;
+        esac
+        ;;
       *.Image*)
         # The running container's image id. With MOCK_DEPLOYED_TAG a test pins which
         # tag the container is actually on, so recovery can compare it against a target.
