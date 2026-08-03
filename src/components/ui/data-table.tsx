@@ -111,13 +111,6 @@ interface DataTableProps<TData, TValue> {
   onSortingChange?: OnChangeFn<SortingState>;
   /** Initial client-side sort (uncontrolled). Ignored when `sorting` is controlled. */
   defaultSorting?: SortingState;
-  /**
-   * Initial client-side value filters, for a table that should open already narrowed
-   * (e.g. a queue showing only pending work). The user can clear them like any other
-   * filter. Ignored in `manualFiltering` mode, where the parent owns filtering.
-   */
-  defaultColumnFilters?: ColumnFiltersState;
-
   manualFiltering?: boolean;
   globalFilter?: string;
   onGlobalFilterChange?: (value: string) => void;
@@ -158,7 +151,6 @@ export function DataTable<TData, TValue>({
   sorting: sortingProp,
   onSortingChange,
   defaultSorting = [],
-  defaultColumnFilters = [],
   manualFiltering = false,
   globalFilter: globalFilterProp,
   onGlobalFilterChange,
@@ -178,7 +170,7 @@ export function DataTable<TData, TValue>({
   const setGlobalFilter = onGlobalFilterChange ?? setInternalGlobalFilter;
 
   // Client-side value filters (faceted). Server mode owns its own filtering.
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(defaultColumnFilters);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   // Search scope: 'all' searches every column, otherwise only the named column
   // (client mode). In server mode the parent controls the scope value + meaning.

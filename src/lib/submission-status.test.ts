@@ -70,6 +70,13 @@ describe('getReviewStatusChip', () => {
     expect(getReviewStatusChip(sub({ status: 'complete' })).label).toBe('Incorrect');
   });
 
+  it('gives Failed and Incorrect different badge colours', () => {
+    // Both land in the Grade column, and Failed means the autograder broke rather than the
+    // student being wrong, so they must not read as the same thing.
+    expect(getReviewStatusChip(sub({ status: 'failed' })).variant).toBe('danger');
+    expect(getReviewStatusChip(sub({ status: 'complete', correct: false })).variant).toBe('warning');
+  });
+
   it('prioritizes an in-flight status over correctness', () => {
     // A row can be flagged correct while still processing; status wins.
     expect(getReviewStatusChip(sub({ status: 'processing', correct: true })).label).toBe('Processing');

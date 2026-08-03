@@ -26,9 +26,9 @@ import {
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import { showToast } from '@/lib/toast';
 import type { SubmissionStatusFilter } from '@/lib/submission-status-filter';
-import { getSubmissionReviewStatus } from '@/lib/submission-status-filter';
 import type { ProblemSubmission } from '@/lib/problem-submission';
-import { statusToneClass, getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
+import { getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -370,7 +370,7 @@ export default function AutograderQueueClient() {
    * Rows the course / assignment / problem pickers allow through.
    *
    * Status filtering is NOT done here any more: the table owns it, through the `timing`
-   * and `result` columns and the toolbar's Filters button. Note the consequence for the
+   * and `status` columns and the toolbar's Filters button. Note the consequence for the
    * header's Rerun button below, which reruns what this list holds and therefore ignores
    * a status filter set inside the table.
    */
@@ -430,28 +430,36 @@ export default function AutograderQueueClient() {
         id: 'submittedAt',
         header: 'Submitted',
         accessorFn: (s) => new Date(s.submittedAt).getTime(),
-        // On time / late sits under the timestamp it is a judgement about, rather than in
-        // the Status column, which now carries only the grading result.
+        cell: ({ row }) => <CompactDate value={row.original.submittedAt} timeZone={timezone} />,
+        meta: { priority: 1 },
+      },
+      {
+        id: 'timing',
+        header: 'Timing',
+        // Next to the timestamp it is a judgement about. Like Status, the accessor is the
+        // chip's own label, so search, export and the mobile cards read "On time" rather
+        // than a code, a row with no due date filters as the On time the grid already
+        // calls it, and sorting is the plain A to Z of what the badge says (Late, then
+        // On time) rather than an invented order a user would have to learn.
+        accessorFn: (s) => {
+          const due = dueDateFor(s);
+          return getTimingStatusChip(s as ProblemSubmission, !!due, due).label;
+        },
         cell: ({ row }) => {
           const due = dueDateFor(row.original);
-          const timing = getTimingStatusChip(row.original as ProblemSubmission, !!due, due);
           return (
-            <div className="flex flex-col gap-0.5">
-              <CompactDate value={row.original.submittedAt} timeZone={timezone} />
-              <span
-                className="inline-flex items-center gap-2 text-xs font-medium"
-                title={timing.title}
-              >
-                <span
-                  className={`inline-flex h-2 w-2 rounded-full ${statusToneClass[timing.tone]}`}
-                  aria-hidden="true"
-                />
-                <span>{timing.label}</span>
-              </span>
-            </div>
+            <StatusBadge chip={getTimingStatusChip(row.original as ProblemSubmission, !!due, due)} />
           );
         },
-        meta: { priority: 1 },
+        meta: {
+          priority: 2,
+          filterVariant: 'multiselect',
+          filterLabel: 'Timing',
+          filterOptions: [
+            { label: 'On time', value: 'On time' },
+            { label: 'Late', value: 'Late' },
+          ],
+        },
       },
       {
         id: 'student',
@@ -523,9 +531,6 @@ export default function AutograderQueueClient() {
         id: 'grade',
         header: 'Grade',
         accessorFn: (s) => s.grade ?? -1,
-        // Correct / Incorrect sits under the grade it explains, the same way On time / Late
-        // sits under the timestamp above. It carried its own priority-1 column before, so
-        // Grade takes that priority to keep the verdict on screen when the table narrows.
         cell: ({ row }) => {
           const { grade, maxPoints } = row.original;
           const text =
@@ -534,66 +539,31 @@ export default function AutograderQueueClient() {
               : grade != null
                 ? String(grade)
                 : '-';
-          const review = getReviewStatusChip(row.original as ProblemSubmission);
-          return (
-            <div className="flex flex-col gap-0.5">
-              <span className="text-foreground text-sm whitespace-nowrap">{text}</span>
-              <span
-                className="inline-flex items-center gap-2 text-xs font-medium"
-                title={review.title}
-              >
-                <span
-                  className={`inline-flex h-2 w-2 rounded-full ${statusToneClass[review.tone]}`}
-                  aria-hidden="true"
-                />
-                <span>{review.label}</span>
-              </span>
-            </div>
-          );
+          return <span className="text-foreground text-sm whitespace-nowrap">{text}</span>;
         },
-        meta: { priority: 1 },
-      },
-      /*
-       * Two filter-only columns behind the toolbar's Filters button, both hidden in the
-       * grid because the chips under Submitted and Grade above already show the same
-       * two values.
-       *
-       * They are separate on purpose. A submission has a timing (was it late) AND a status
-       * (was it graded, and was it right), and those are independent: "late" and "correct"
-       * describe the same row. One combined list would make picking two values mean "rows
-       * matching either", which reads as a widening when the user meant to narrow. Same
-       * reasoning the user table uses for keeping Lock apart from Active/Inactive.
-       */
-      {
-        id: 'timing',
-        header: 'Timing',
-        accessorFn: (s) => {
-          const due = dueDateFor(s);
-          if (!due) return '';
-          return new Date(s.submittedAt).getTime() <= due.getTime() ? 'on-time' : 'late';
-        },
-        enableHiding: true,
-        meta: {
-          priority: 5,
-          filterVariant: 'multiselect',
-          filterLabel: 'Timing',
-          filterOptions: [
-            { label: 'On time', value: 'on-time' },
-            { label: 'Late', value: 'late' },
-          ],
-        },
+        meta: { priority: 2 },
       },
       {
-        id: 'result',
+        id: 'status',
         header: 'Status',
-        accessorFn: (s) => getSubmissionReviewStatus(s as ProblemSubmission),
-        enableHiding: true,
+        /*
+         * The grading result, next to the grade it explains. Accessor, sorting and filter
+         * follow the Timing column above for the same reasons.
+         *
+         * Timing and Status stay separate columns on purpose: a submission has a timing
+         * (was it late) AND a result (was it graded, and was it right), and those are
+         * independent, so "late" and "correct" can describe the same row. Filters AND
+         * across columns, which is what makes picking one of each narrow rather than
+         * widen. Same reasoning the user table uses for keeping Lock apart from
+         * Active/Inactive.
+         */
+        accessorFn: (s) => getReviewStatusChip(s as ProblemSubmission).label,
+        cell: ({ row }) => (
+          <StatusBadge chip={getReviewStatusChip(row.original as ProblemSubmission)} />
+        ),
         meta: {
-          priority: 5,
+          priority: 1,
           filterVariant: 'multiselect',
-          // "Status" is what this reads as to someone working the queue; the column keeps
-          // the id `result` because the default filter below addresses it by that id.
-          filterLabel: 'Status',
           /*
            * One column, shown as two headings. Where it is up to (Pending / Processing /
            * Failed) and how it turned out (Correct / Incorrect) are different questions,
@@ -606,16 +576,16 @@ export default function AutograderQueueClient() {
             {
               label: 'Status',
               options: [
-                { label: 'Pending', value: 'pending' },
-                { label: 'Processing', value: 'processing' },
-                { label: 'Failed', value: 'failed' },
+                { label: 'Pending', value: 'Pending' },
+                { label: 'Processing', value: 'Processing' },
+                { label: 'Failed', value: 'Failed' },
               ],
             },
             {
               label: 'Submission',
               options: [
-                { label: 'Correct', value: 'correct' },
-                { label: 'Incorrect', value: 'incorrect' },
+                { label: 'Correct', value: 'Correct' },
+                { label: 'Incorrect', value: 'Incorrect' },
               ],
             },
           ],
@@ -792,18 +762,14 @@ export default function AutograderQueueClient() {
           data={visibleSubmissions}
           loading={loadingCourses || loadingAssignments || loadingSubmissions}
           loadingMessage="Loading submissions, please wait..."
-          storageKey="autograder-queue-columns"
+          // Suffixed because the column set changed: a saved layout wins over these
+          // defaults, so browsers holding the old one would keep hiding Timing and Status.
+          storageKey="autograder-queue-columns-v2"
           tableLabel="Autograder queue"
           // Due is off by default: the deadline matters far less than arrival order when
-          // you are working a queue, and the Submitted column already flags late work. The
+          // you are working a queue, and the Timing column already flags late work. The
           // Columns menu turns it back on, and that choice is remembered per browser.
-          // `timing` and `result` exist only to drive the Filters popover; the chips under
-          // Submitted and Grade already show both.
-          defaultColumnVisibility={{ due: false, timing: false, result: false }}
-          // Opens showing only outstanding work: queued and in flight. This page is the
-          // queue, and what an admin comes here for is what has not finished, not the
-          // whole history. The Filters button clears it like any other filter.
-          defaultColumnFilters={[{ id: 'result', value: ['pending', 'processing'] }]}
+          defaultColumnVisibility={{ due: false }}
           emptyIcon={FileCode2}
           {...(submissions.length === 0
             ? {

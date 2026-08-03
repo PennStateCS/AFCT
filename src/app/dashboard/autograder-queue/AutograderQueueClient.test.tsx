@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AutograderQueueClient from './AutograderQueueClient';
@@ -179,18 +179,6 @@ const submissionsPostCalls = (fetchMock: FetchMock) =>
       url === '/api/admin/submissions' && (init as RequestInit | undefined)?.method === 'POST',
   );
 
-/**
- * Clear the Status filter so every row shows.
- *
- * The page opens filtered to Pending and Processing, because that is the outstanding work
- * an admin comes to the queue for. The fixture row is graded, so a test that wants to see
- * it unticks both first, exactly as a user would through the Filters button.
- */
-const showAllStatuses = async () => {
-  fireEvent.click(await screen.findByRole('checkbox', { name: /^Pending/ }));
-  fireEvent.click(await screen.findByRole('checkbox', { name: /^Processing/ }));
-};
-
 describe('AutograderQueueClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -227,7 +215,6 @@ describe('AutograderQueueClient', () => {
     });
 
     renderWithClient(<AutograderQueueClient />);
-    await showAllStatuses();
 
     // The submitted student row renders once the cascade completes.
     await waitFor(() => {
@@ -288,7 +275,6 @@ describe('AutograderQueueClient', () => {
     });
 
     renderWithClient(<AutograderQueueClient />);
-    await showAllStatuses();
 
     // Wait until the row renders (the submissions POST resolved).
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
@@ -328,30 +314,25 @@ describe('AutograderQueueClient', () => {
 
     // Releasing the POST lets the row render.
     releaseSubmissions?.();
-    await showAllStatuses();
     await waitFor(() => {
       expect(screen.getByText('ada@example.com')).toBeInTheDocument();
     });
   });
 
-  it('opens with the Result filter set to Pending, hiding a graded submission', async () => {
+  it('opens with nothing filtered, so every submission is on screen', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
 
-    // Pending starts ticked in the table's own Filters popover.
-    const pending = await screen.findByRole('checkbox', { name: /^Pending/ });
-    await waitFor(() => expect(pending).toHaveAttribute('data-state', 'checked'));
-    // The fixture row is graded, so the default view excludes it.
-    expect(screen.queryByText('ada@example.com')).toBeNull();
-
-    await showAllStatuses();
+    // The fixture row is graded, and it shows: the queue no longer opens narrowed to
+    // outstanding work, so what is on screen is everything the pickers allow through.
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+    const pending = await screen.findByRole('checkbox', { name: /^Pending/ });
+    expect(pending).toHaveAttribute('data-state', 'unchecked');
   });
 
   it('offers the row actions in a manage menu, including a link into submission review', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
-    await showAllStatuses();
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // One Manage control per row, named after the student so screen reader users can
@@ -375,10 +356,32 @@ describe('AutograderQueueClient', () => {
     );
   });
 
+  it('shows the grading result as a badge in its own Status column', async () => {
+    installFetchRouter();
+    renderWithClient(<AutograderQueueClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    // Scoped to the grid, because the same words label the checkboxes in the Filters
+    // popover. The fixture row is graded correct and on time.
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Correct').closest('[data-slot="badge"]')).not.toBeNull();
+    expect(within(table).getByText('On time').closest('[data-slot="badge"]')).not.toBeNull();
+
+    // Each has a column of its own, and both sort. aria-sort is only set on a sortable
+    // header, so its presence is the assertion.
+    expect(within(table).getByRole('columnheader', { name: 'Status' })).toHaveAttribute(
+      'aria-sort',
+      'none',
+    );
+    expect(within(table).getByRole('columnheader', { name: 'Timing' })).toHaveAttribute(
+      'aria-sort',
+      'none',
+    );
+  });
+
   it('ticking a Status value in the table filter narrows the rows', async () => {
     installFetchRouter();
     renderWithClient(<AutograderQueueClient />);
-    await showAllStatuses();
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // The single row is correct, so filtering to Incorrect hides it.
