@@ -349,15 +349,27 @@ export function useJffCytoscape({
           });
         }
 
-        // Function to aim each self-loop at free space and put its label beyond it
+        // Function to aim each self-loop and put its label beyond it. Runs after
+        // `updateEdgeLabelMargins`, so where every other transition label sits is already
+        // settled and a loop can be steered clear of them.
         async function selfLoopGeometry() {
+          const labelAnchors = cy
+            .edges()
+            .filter((e: any) => e.data('isLoop') !== 1 && String(e.data('label') ?? '') !== '')
+            .map((e: any) => {
+              const mid = e.midpoint();
+              const off = edgeLabelOffset(e.source().position(), e.target().position(), mid);
+              return { x: mid.x + off.x, y: mid.y + off.y };
+            });
+
           cy.edges('[isLoop = 1]').forEach((e: any) => {
             const node = e.source();
             const nodePos = node.position();
-            const otherNodePositions = cy
+            const obstacles = cy
               .nodes()
               .filter((n: any) => n.id() !== node.id() && !n.hasClass('start'))
-              .map((n: any) => n.position());
+              .map((n: any) => n.position())
+              .concat(labelAnchors);
             // Angles of the transitions already at this state, in either direction: a loop
             // arcing along one of them would sit on top of it.
             const incidentAngles = node
@@ -369,7 +381,7 @@ export function useJffCytoscape({
                 return Math.atan2(p.y - nodePos.y, p.x - nodePos.x);
               });
 
-            const direction = bestLoopDirection(nodePos, otherNodePositions, incidentAngles);
+            const direction = bestLoopDirection(nodePos, obstacles, incidentAngles);
             const lines = String(e.data('label') ?? '').split('\n').length;
             const offset = loopLabelOffset(direction, lines);
 
