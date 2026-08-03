@@ -119,6 +119,7 @@ export function DataTableToolbar<TData>({
               column: col,
               label: getColumnLabel(col),
               options: col.columnDef.meta?.filterOptions,
+              sections: col.columnDef.meta?.filterSections,
             }))}
           />
         )}

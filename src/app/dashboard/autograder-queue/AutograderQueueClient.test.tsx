@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import SubmissionsClient from './SubmissionsClient';
+import AutograderQueueClient from './AutograderQueueClient';
 
 // Fresh QueryClient per test (retry off, no lingering cache) so the submissions
 // query starts clean each time.
@@ -13,8 +13,63 @@ const renderWithClient = (ui: React.ReactElement) => {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/lib/toast', () => ({ showToast: toastMock }));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+
+// The table's Filters control is a Radix popover, which needs pointer capture jsdom does
+// not implement. Render its content inline so the status checkboxes are queryable.
+vi.mock('@/components/ui/popover', () => {
+  const Pass = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  return {
+    Popover: Pass,
+    PopoverTrigger: Pass,
+    PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    PopoverAnchor: Pass,
+  };
+});
+
+// The manage menu is a Radix dropdown, which drives itself with pointer capture and
+// portals that jsdom does not implement. Render its content inline so the items are
+// queryable; the trigger is a plain button either way.
+vi.mock('@/components/ui/dropdown-menu', () => {
+  const Pass = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  const Item = ({
+    children,
+    onClick,
+    disabled,
+    asChild,
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+    asChild?: boolean;
+  }) =>
+    // asChild means the caller supplied its own element (a Link here); render it as is
+    // so the anchor and its href survive.
+    asChild ? (
+      <>{children}</>
+    ) : (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    );
+  return {
+    DropdownMenu: Pass,
+    DropdownMenuPortal: Pass,
+    DropdownMenuTrigger: Pass,
+    DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenuGroup: Pass,
+    DropdownMenuLabel: Pass,
+    DropdownMenuItem: Item,
+    DropdownMenuCheckboxItem: Item,
+    DropdownMenuRadioGroup: Pass,
+    DropdownMenuRadioItem: Item,
+    DropdownMenuSeparator: () => null,
+    DropdownMenuShortcut: Pass,
+    DropdownMenuSub: Pass,
+    DropdownMenuSubTrigger: Pass,
+    DropdownMenuSubContent: Pass,
+  };
+});
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn() }),
@@ -124,11 +179,11 @@ const submissionsPostCalls = (fetchMock: FetchMock) =>
       url === '/api/admin/submissions' && (init as RequestInit | undefined)?.method === 'POST',
   );
 
-describe('SubmissionsClient', () => {
+describe('AutograderQueueClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
-    // SubmissionsClient.tsx does not import React, and the test transform uses
+    // AutograderQueueClient.tsx does not import React, and the test transform uses
     // the classic JSX runtime, so its compiled `React.createElement` calls
     // resolve `React` from the global scope. Provide it without touching the
     // component. (This test file itself uses the same classic transform.)
@@ -144,7 +199,7 @@ describe('SubmissionsClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
 
     // Nothing selected -> fetchSubmissions short-circuits to [] with no network call.
     await waitFor(() => {
@@ -159,7 +214,7 @@ describe('SubmissionsClient', () => {
       capturedInit = init;
     });
 
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
 
     // The submitted student row renders once the cascade completes.
     await waitFor(() => {
@@ -219,7 +274,7 @@ describe('SubmissionsClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
 
     // Wait until the row renders (the submissions POST resolved).
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
@@ -249,7 +304,7 @@ describe('SubmissionsClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
 
     // While the POST is pending, the table shows the loading placeholder.
     await waitFor(() => {
@@ -264,36 +319,79 @@ describe('SubmissionsClient', () => {
     });
   });
 
-  it('marks the All filter pressed by default and announces the result count', async () => {
+  it('opens with nothing filtered, so every submission is on screen', async () => {
     installFetchRouter();
-    renderWithClient(<SubmissionsClient />);
-    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+    renderWithClient(<AutograderQueueClient />);
 
-    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Correct' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-    // The sr-only live region reports the visible count.
-    expect(screen.getByRole('status')).toHaveTextContent('1 submission');
+    // The fixture row is graded, and it shows: the queue no longer opens narrowed to
+    // outstanding work, so what is on screen is everything the pickers allow through.
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+    const pending = await screen.findByRole('checkbox', { name: /^Pending/ });
+    expect(pending).toHaveAttribute('data-state', 'unchecked');
   });
 
-  it('toggling a status filter updates aria-pressed and the announced count', async () => {
+  it('offers the row actions in a manage menu, including a link into submission review', async () => {
     installFetchRouter();
-    renderWithClient(<SubmissionsClient />);
+    renderWithClient(<AutograderQueueClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
-    // The single row is on-time + correct, so filtering to "Incorrect" hides it.
-    fireEvent.click(screen.getByRole('button', { name: 'Incorrect' }));
+    // One Manage control per row, named after the student so screen reader users can
+    // tell two rows apart.
+    expect(
+      screen.getByRole('button', { name: 'Manage submission by Lovelace, Ada' }),
+    ).toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: 'Incorrect' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    // Every action the old icon row offered still exists, plus the review link.
+    expect(screen.getByText('View submission')).toBeInTheDocument();
+    expect(screen.getByText('View feedback')).toBeInTheDocument();
+    expect(screen.getByText('Download')).toBeInTheDocument();
+    // The only Rerun on the page: rerunning is per submission now, from this menu, since
+    // the header's bulk rerun could no longer describe which rows it would act on.
+    expect(screen.getAllByText('Rerun')).toHaveLength(1);
+
+    const review = screen.getByRole('link', { name: /open in submission review/i });
+    expect(review).toHaveAttribute(
+      'href',
+      '/dashboard/courses/course-1/assign-1?tab=submissions&studentId=student-1&problemId=prob-1',
     );
-    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('shows the grading result as a badge in its own Status column', async () => {
+    installFetchRouter();
+    renderWithClient(<AutograderQueueClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    // Scoped to the grid, because the same words label the checkboxes in the Filters
+    // popover. The fixture row is graded correct and on time.
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('Correct').closest('[data-slot="badge"]')).not.toBeNull();
+    expect(within(table).getByText('On time').closest('[data-slot="badge"]')).not.toBeNull();
+
+    // Each has a column of its own, and both sort. aria-sort is only set on a sortable
+    // header, so its presence is the assertion.
+    expect(within(table).getByRole('columnheader', { name: 'Status' })).toHaveAttribute(
+      'aria-sort',
+      'none',
+    );
+    expect(within(table).getByRole('columnheader', { name: 'Timing' })).toHaveAttribute(
+      'aria-sort',
+      'none',
+    );
+  });
+
+  it('ticking a Status value in the table filter narrows the rows', async () => {
+    installFetchRouter();
+    renderWithClient(<AutograderQueueClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    // The single row is correct, so filtering to Incorrect hides it.
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Incorrect/ }));
+
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent('0 submissions');
       expect(screen.queryByText('ada@example.com')).toBeNull();
+      // DataTable's own empty state takes over, and says the filters are the reason
+      // rather than leaving the table silently blank.
+      expect(screen.getByText('No submissions match your filters')).toBeInTheDocument();
     });
   });
 });

@@ -84,7 +84,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'admin/courses',
             'admin/development-tests',
-            'admin/submission-logs',
+            'admin/autograder-queue',
             'admin/system-logs',
             'admin/system-settings',
             'admin/system-status',
@@ -102,6 +102,7 @@ const sidebars: SidebarsConfig = {
             'reference/contributing',
             'reference/creating-a-release',
             'reference/development-setup',
+            'reference/windows-wsl-setup',
             'reference/development-troubleshooting',
             'reference/conventions',
             'reference/login-protection',
