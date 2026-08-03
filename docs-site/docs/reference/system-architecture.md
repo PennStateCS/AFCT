@@ -206,6 +206,12 @@ left in `PROCESSING` too long is returned to `PENDING` by a periodic reaper so i
 retried, and a row that keeps failing is moved to `FAILED` so it cannot loop forever. On a
 completed autograded submission, grades are written without overwriting a manual grade.
 
+The worker finds new submissions by checking the queue on a timer rather than being pushed
+to, and it checks less often the longer the queue stays empty, down to twice a minute. A
+submission arriving after a quiet period can therefore sit for up to half a minute before
+grading starts. Once the queue is busy the workers check every few seconds, so this shows up
+only on the first submission of a session, never during an assignment rush.
+
 ## TLS certificate issuance and renewal
 
 The application container obtains and renews the Let's Encrypt certificate itself. nginx only
