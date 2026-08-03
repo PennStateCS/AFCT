@@ -67,10 +67,37 @@ const STUCK_GRACE_MS = 60_000; // grace beyond the eval timeout before a row is 
 
 // How long a worker loop waits before checking the queue again, by outcome.
 const LOOP_DELAY_MS = {
-  IDLE: 3_000, // queue was empty; no rush
   NEXT: 100, // just finished (or lost a claim); the queue may still be full
   ERROR: 5_000, // a loop error; back off longer
 };
+
+// Idle backoff. Every loop that finds an empty queue costs two queries, so a fixed
+// 3s poll across the default five loops was ~200 queries/minute with nothing to do,
+// around the clock. The wait now grows the longer the queue has been empty.
+//
+// Keyed on how long we have been idle rather than on a count of empty passes,
+// because the loop count is admin-configurable (1-20): a counter shared by twenty
+// loops would reach the longest wait twenty times faster than one shared by one.
+//
+// The cost is latency on the first submission after a quiet spell, up to the longest
+// wait here. That is a deliberate trade: the reaper already runs on a 60s cycle, so
+// this is not the slowest thing in the queue's recovery path.
+const IDLE_BACKOFF_MS = [
+  { idleFor: 300_000, wait: 30_000 }, // quiet for 5min+: check twice a minute
+  { idleFor: 60_000, wait: 10_000 }, // quiet for 1min+: ease off
+  { idleFor: 0, wait: 3_000 }, // just went quiet; work may still be arriving
+];
+
+// When the queue last had something in it. Shared by every loop so one loop finding
+// work speeds all of them back up, which is what should happen when a burst starts.
+let lastWorkAt = Date.now();
+
+function idleDelayMs(): number {
+  const idleFor = Date.now() - lastWorkAt;
+  // Ordered longest-idle first, and the last entry is `idleFor: 0`, so this always
+  // matches.
+  return IDLE_BACKOFF_MS.find((step) => idleFor >= step.idleFor)!.wait;
+}
 
 type SubmissionEvaluationStatus = keyof typeof SubmissionStatus;
 
@@ -198,6 +225,9 @@ async function reapStuckSubmissions() {
     });
 
     if (reaped.count > 0) {
+      // The reaper puts work back on the queue, so the loops should stop backing off.
+      // Without this they would keep the long wait, having seen nothing themselves.
+      lastWorkAt = Date.now();
       console.warn(`[SubmissionWorker] Reaped ${reaped.count} stuck submission(s) back to PENDING`);
       // Stuck PROCESSING rows almost always mean the server died mid-evaluation.
       await logQueueEvent('SUBMISSION_QUEUE_REAPED', 'WARNING', { count: reaped.count });
@@ -284,9 +314,14 @@ async function runWorkerLoop() {
 
     // No work to be done
     if (nextSubmission === null) {
-      scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.IDLE);
+      scheduleAsync(runWorkerLoop, idleDelayMs());
       return;
     }
+
+    // The queue is not empty, so drop every loop back to the shortest wait. This is
+    // set on finding a row rather than on winning the claim: losing the race still
+    // means there is work about, and that loop should come back promptly.
+    lastWorkAt = Date.now();
 
     // Poison-pill guard: a submission that has been claimed too many times keeps
     // failing (or keeps getting reaped); fail it rather than retry forever.
@@ -487,6 +522,10 @@ export const __test__ = {
   runJavaEvaluator,
   reapStuckSubmissions,
   runWorkerLoop,
+  idleDelayMs,
+  markWorkSeen: () => {
+    lastWorkAt = Date.now();
+  },
 };
 
 // The evaluator interface both the constructor and the fallback factory produce,

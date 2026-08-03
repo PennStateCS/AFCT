@@ -37,7 +37,14 @@ vi.mock('os', () => ({ default: { platform: platformMock }, platform: platformMo
 
 import { __test__ } from '@/lib/submission-worker';
 
-const { evaluateSubmission, runJavaEvaluator, reapStuckSubmissions, runWorkerLoop } = __test__;
+const {
+  evaluateSubmission,
+  runJavaEvaluator,
+  reapStuckSubmissions,
+  runWorkerLoop,
+  idleDelayMs,
+  markWorkSeen,
+} = __test__;
 
 const CONFIG = { timeoutMs: 5_000, maxMemoryMb: 256, analyzerLimit: 100 };
 
@@ -389,6 +396,76 @@ describe('runWorkerLoop — claiming and prioritization', () => {
     prismaMock.submission.findMany.mockRejectedValue(new Error('db down'));
     await runWorkerLoop();
     expect(loggedActions()).toContain('SUBMISSION_QUEUE_ERROR');
+  });
+});
+
+describe('idle backoff', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    prismaMock.submission.findMany.mockResolvedValue([]);
+    markWorkSeen(); // start every case from "the queue just had work"
+  });
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it('polls quickly right after the queue empties, then eases off', () => {
+    expect(idleDelayMs()).toBe(3_000);
+
+    vi.advanceTimersByTime(60_000);
+    expect(idleDelayMs()).toBe(10_000);
+
+    vi.advanceTimersByTime(240_000); // 5 minutes idle
+    expect(idleDelayMs()).toBe(30_000);
+  });
+
+  it('caps the wait however long the queue stays empty', () => {
+    vi.advanceTimersByTime(24 * 60 * 60_000);
+    expect(idleDelayMs()).toBe(30_000);
+  });
+
+  it('drops back to the shortest wait as soon as a loop finds a submission', async () => {
+    vi.advanceTimersByTime(600_000);
+    expect(idleDelayMs()).toBe(30_000);
+
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+    await runWorkerLoop();
+
+    expect(idleDelayMs()).toBe(3_000);
+  });
+
+  it('speeds back up when the loser of a claim race sees work', async () => {
+    vi.advanceTimersByTime(600_000);
+
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 0 }); // another loop won
+    await runWorkerLoop();
+
+    // It graded nothing, but a row existed, so the queue is active.
+    expect(idleDelayMs()).toBe(3_000);
+  });
+
+  it('speeds back up when the reaper puts work back on the queue', async () => {
+    vi.advanceTimersByTime(600_000);
+
+    getEvaluatorConfigMock.mockResolvedValue(CONFIG);
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 1 });
+    await reapStuckSubmissions();
+
+    expect(idleDelayMs()).toBe(3_000);
+  });
+
+  it('leaves the backoff alone when the reaper finds nothing stuck', async () => {
+    vi.advanceTimersByTime(600_000);
+
+    getEvaluatorConfigMock.mockResolvedValue(CONFIG);
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 0 });
+    await reapStuckSubmissions();
+
+    expect(idleDelayMs()).toBe(30_000);
   });
 });
 
