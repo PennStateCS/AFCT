@@ -156,7 +156,6 @@ describe('JffCytoscapeViewer — toolbar presence', () => {
     render(<JffCytoscapeViewer src="/x.jff" />);
     for (const label of [
       'Toggle grid',
-      'Original positions',
       'Zoom out',
       'Zoom in',
       'Fit to view',
@@ -188,12 +187,38 @@ describe('JffCytoscapeViewer — view toggles', () => {
     );
   });
 
-  it('toggles the original-positions pressed-state on click', async () => {
+  it('names both layouts, not just the one in use', () => {
+    // The single "Original Positions" toggle this replaced left the other choice
+    // unnamed: with the button un-pressed nothing said what you were looking at.
     render(<JffCytoscapeViewer src="/x.jff" />);
-    const btn = screen.getByRole('button', { name: 'Original positions' });
-    expect(btn).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(btn);
-    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('radiogroup', { name: 'Layout' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'As drawn' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Auto-arranged' })).toBeInTheDocument();
+  });
+
+  it('starts on the auto-arranged layout and switches to as-drawn on click', () => {
+    render(<JffCytoscapeViewer src="/x.jff" />);
+    const asDrawn = screen.getByRole('radio', { name: 'As drawn' });
+    const auto = screen.getByRole('radio', { name: 'Auto-arranged' });
+
+    expect(auto).toBeChecked();
+    expect(asDrawn).not.toBeChecked();
+
+    fireEvent.click(asDrawn);
+    expect(asDrawn).toBeChecked();
+    expect(auto).not.toBeChecked();
+  });
+
+  it('honors honorPositionsDefault for the initial selection', () => {
+    render(<JffCytoscapeViewer src="/x.jff" honorPositionsDefault />);
+    expect(screen.getByRole('radio', { name: 'As drawn' })).toBeChecked();
+  });
+
+  it('does not flip the layout when the selected option is chosen again', () => {
+    render(<JffCytoscapeViewer src="/x.jff" honorPositionsDefault />);
+    const asDrawn = screen.getByRole('radio', { name: 'As drawn' });
+    fireEvent.click(asDrawn);
+    expect(asDrawn).toBeChecked();
   });
 });
 

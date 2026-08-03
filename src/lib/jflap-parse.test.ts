@@ -1,7 +1,15 @@
 /** @vitest-environment jsdom */
 
 import { describe, it, expect } from 'vitest';
-import { parseJflap, labelFor, wrapLines, bundleEdges, toElements } from './jflap-parse';
+import {
+  parseJflap,
+  labelFor,
+  wrapLines,
+  bundleEdges,
+  toElements,
+  POSITION_SCALE,
+} from './jflap-parse';
+import { NODE_DIAMETER, type Point } from './jflap-layout';
 
 const faXml = `
 <structure>
@@ -106,9 +114,32 @@ describe('toElements', () => {
     const withPos = toElements(parsed, 'ε', true).find((e) => 'position' in e) as
       | { position?: { x: number; y: number } }
       | undefined;
-    expect(withPos?.position).toEqual({ x: 10, y: 20 });
+    // Opened out from the coordinates in the file, which were laid out around JFLAP's
+    // smaller states; see POSITION_SCALE.
+    expect(withPos?.position).toEqual({ x: 10 * POSITION_SCALE, y: 20 * POSITION_SCALE });
 
     const withoutPos = toElements(parsed, 'ε', false).some((e) => 'position' in e);
     expect(withoutPos).toBe(false);
+  });
+
+  it('opens the machine out enough for this viewer to draw a bigger state', () => {
+    // The gaps in a .jff were sized for JFLAP's 40px state. Anything less than the ratio
+    // between that and the state this viewer draws leaves labels running into circles.
+    expect(POSITION_SCALE).toBeCloseTo(NODE_DIAMETER / 40);
+    expect(POSITION_SCALE).toBeGreaterThan(1);
+  });
+
+  it('keeps the arrangement the author drew, scaling every state by the same amount', () => {
+    const parsed = parseJflap(faXml);
+    const positions = (toElements(parsed, 'ε', true) as Array<{ position?: Point }>)
+      .map((e) => e.position)
+      .filter((p): p is Point => !!p);
+
+    // A uniform scale, so every state stays in the same place relative to the others.
+    for (const [i, p] of positions.entries()) {
+      const state = parsed.states[i]!;
+      expect(p.x).toBeCloseTo(state.xPos * POSITION_SCALE);
+      expect(p.y).toBeCloseTo(state.yPos * POSITION_SCALE);
+    }
   });
 });

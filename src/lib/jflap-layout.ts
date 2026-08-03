@@ -1,46 +1,176 @@
 // src/lib/jflap-layout.ts
 //
-// Pure geometry for placing a finite-automaton "start" stub next to its initial state.
-// Extracted from JffViewerDialog, where the same clutter-scoring loop was duplicated
-// (initial layout + drag reposition), so it can live and be tested on its own.
+// Pure geometry for the JFLAP viewer: placing a finite-automaton "start" stub next to its
+// initial state, aiming a self-loop into free space, and offsetting a transition label
+// clear of whatever it belongs to. Extracted from JffViewerDialog, where the
+// clutter-scoring loop was duplicated (initial layout + drag reposition), so it can live
+// and be tested on its own.
+//
+// Angles in this file are screen angles in radians unless a name says otherwise: measured
+// from due east, and turning clockwise, because canvas y grows downwards.
 
 export type Point = { x: number; y: number };
 
 /** Diameter of a state node in the JFLAP viewer; sets the overlap threshold. */
 export const NODE_DIAMETER = 58;
 
+/** How far a transition label sits off its edge, in pixels. */
+export const EDGE_LABEL_GAP = 12;
+
 /**
- * Choose where to place the start-arrow stub for an initial node: try 8 compass
- * directions at 1.5× the node diameter and pick the least-cluttered one, penalizing
- * overlap with other nodes and alignment with incoming edges. Returns the chosen point.
+ * Smallest curve bow that counts as one rather than as rounding. Cytoscape reports the
+ * midpoint of a straight edge up to about two pixels off the true midpoint; the bow it
+ * puts on a pair of opposed edges is an order of magnitude larger.
  */
-export function bestStartNodePosition(
+const MIN_BOW = 4;
+
+/** Line box of a transition label at the 16px edge font, and its clearance from a loop. */
+export const LABEL_LINE_HEIGHT = 19;
+export const LABEL_LOOP_GAP = 10;
+
+/**
+ * How far a self-loop's far side sits from the centre of its state. Measured off the
+ * rendered graph at the loop styling the viewer uses (a 58px state, a 48px control-point
+ * step); cytoscape works it out from several style properties at once, so there is no
+ * single one to read it from.
+ */
+export const LOOP_REACH = 61;
+
+/**
+ * How much room a self-loop's label needs around it before its direction counts as taken.
+ * Roughly a state's radius plus a label's own half-height, so a loop is turned aside by
+ * something genuinely in its way and not by a neighbour merely being on that side.
+ */
+const LOOP_LABEL_CLEARANCE = NODE_DIAMETER / 2 + LABEL_LINE_HEIGHT / 2;
+
+/** The 8 compass directions, starting straight up and turning clockwise. */
+const COMPASS_FROM_NORTH = Array.from({ length: 8 }, (_, i) => -Math.PI / 2 + i * (Math.PI / 4));
+
+/** The same 8, starting due west, for things that belong on the left if they can be. */
+const COMPASS_FROM_WEST = Array.from({ length: 8 }, (_, i) => {
+  const angle = Math.PI + i * (Math.PI / 4);
+  return angle > Math.PI ? angle - 2 * Math.PI : angle;
+});
+
+/**
+ * Box the initial-state marker is drawn in. Square, which is what lets the triangle be
+ * turned to any angle without the shape distorting: cytoscape stretches
+ * `shape-polygon-points` over the node's width and height, so an oblong box would squash
+ * the triangle differently at every angle.
+ */
+export const START_MARKER_SIZE = NODE_DIAMETER;
+
+/**
+ * The marker itself, as JFLAP draws it: an unfilled triangle lying on its side with its
+ * point against the state, as wide as the state's radius and as tall as its diameter.
+ * Given in the -1..1 box `shape-polygon-points` uses, pointing due east, which is the
+ * shape wanted when the marker sits on the state's left.
+ */
+const START_MARKER_POINTS: Point[] = [
+  { x: 0, y: -1 },
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+];
+
+/**
+ * Which way out of the state the initial-state marker should sit.
+ *
+ * Due west whenever it can be, because that is where JFLAP puts it and this viewer is
+ * read alongside JFLAP. It moves only when west is genuinely taken, which on an
+ * automatic layout it often is: nothing there arranges the states so as to leave the
+ * initial one's left side free, and the marker was landing across the transitions
+ * running out of it. On a machine drawn by hand it stays on the left essentially always,
+ * because whoever drew it left that space.
+ *
+ * `incidentAngles` matters more here than the obstacle list, since what the marker
+ * usually has to avoid is a line rather than another state.
+ */
+export function bestStartMarkerDirection(
   nodePos: Point,
-  otherNodePositions: Point[],
-  incomingAngles: number[],
+  obstacles: Point[],
+  incidentAngles: number[],
+  nodeDiameter: number = NODE_DIAMETER,
+): number {
+  return leastClutteredAngle(
+    COMPASS_FROM_WEST,
+    nodePos,
+    obstacles,
+    incidentAngles,
+    nodeDiameter,
+    nodeDiameter * 0.9,
+  );
+}
+
+/**
+ * Where the marker's box goes for a given direction: far enough out that the triangle's
+ * point lands on the state's rim. The point sits half a box from the box's centre, so a
+ * whole diameter from the state's centre puts it exactly on the rim.
+ */
+export function startMarkerPosition(
+  statePos: Point,
+  angle: number = Math.PI,
   nodeDiameter: number = NODE_DIAMETER,
 ): Point {
-  const directions = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4)); // 0,45,…,315°
-  const radius = 1.5 * nodeDiameter;
+  return {
+    x: statePos.x + Math.cos(angle) * nodeDiameter,
+    y: statePos.y + Math.sin(angle) * nodeDiameter,
+  };
+}
 
-  const scores = directions.map((angle) => {
+/**
+ * The marker's outline for a given direction, as cytoscape's `shape-polygon-points`
+ * string. The triangle is turned to point back at the state it belongs to.
+ */
+export function startMarkerPolygon(angle: number = Math.PI): string {
+  // The marker sits at `angle` from the state, so its point faces the opposite way.
+  const facing = angle + Math.PI;
+  const cos = Math.cos(facing);
+  const sin = Math.sin(facing);
+  return START_MARKER_POINTS.map((p) => {
+    const x = p.x * cos - p.y * sin;
+    const y = p.x * sin + p.y * cos;
+    return `${round3(x)} ${round3(y)}`;
+  }).join(', ');
+}
+
+/** Trims floating-point dust out of the polygon string; cytoscape parses it as text. */
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+/**
+ * Of the given candidate directions, the one with the least around it. Lining up with an
+ * edge already leaving the state is penalized too, since whatever is placed there would
+ * sit along that edge. Ties go to the earliest candidate, so each caller passes its
+ * directions in order of preference and gets that one whenever it is clear.
+ *
+ * `radius` is how far out the thing being placed will sit, `obstacles` are the points it
+ * has to stay clear of, and `incidentAngles` are the screen angles of the edges already
+ * at this state.
+ */
+function leastClutteredAngle(
+  candidates: number[],
+  nodePos: Point,
+  obstacles: Point[],
+  incidentAngles: number[],
+  radius: number,
+  clearance: number,
+): number {
+  const scores = candidates.map((angle) => {
     const testX = nodePos.x + Math.cos(angle) * radius;
     const testY = nodePos.y + Math.sin(angle) * radius;
 
     let score = 0;
-    for (const pos of otherNodePositions) {
+    for (const pos of obstacles) {
       const dx = testX - pos.x;
       const dy = testY - pos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < nodeDiameter * 1.1)
-        score += 1000; // heavy penalty for overlap
-      else score += 1 / dist;
+      if (Math.sqrt(dx * dx + dy * dy) < clearance) score += 1000;
     }
 
-    for (const edgeAngle of incomingAngles) {
+    for (const edgeAngle of incidentAngles) {
       let diff = Math.abs(angle - edgeAngle);
       if (diff > Math.PI) diff = 2 * Math.PI - diff;
-      if (diff < Math.PI / 6) score += 10; // within 30° of an incoming edge
+      if (diff < Math.PI / 6) score += 10; // within 30° of an edge already there
     }
     return score;
   });
@@ -54,10 +184,126 @@ export function bestStartNodePosition(
       bestIdx = i;
     }
   }
+  return candidates[bestIdx] ?? 0;
+}
 
-  const bestAngle = directions[bestIdx] ?? 0;
+/**
+ * Which way a state's self-loop should arc, in the degrees cytoscape's `loop-direction`
+ * wants: zero is straight up and the angle turns clockwise.
+ *
+ * Straight up is where JFLAP puts every loop, and where this returns whenever there is
+ * room, because matching the desktop tool is worth more than a tidier picture. But JFLAP
+ * draws a far smaller loop. At the size this viewer draws them, a loop and its label
+ * reach a good way past the state, so on a crowded state the label landed on top of the
+ * transitions above it. Hence: up unless up is taken, and only then the next way round.
+ *
+ * That is why this scores obstacles by a flat threshold and not by distance. Anything
+ * that merely prefers open space walks loops away from `up` on machines that read fine
+ * with them there, and the picture stops looking like the one the student drew.
+ *
+ * `obstacles` should be the other states plus the anchor of every transition label
+ * already placed, because on a tight machine it is a label, not a state, that the loop
+ * collides with.
+ */
+export function bestLoopDirection(
+  nodePos: Point,
+  obstacles: Point[],
+  incidentAngles: number[],
+  reach: number = LOOP_REACH,
+): number {
+  const angle = leastClutteredAngle(
+    COMPASS_FROM_NORTH,
+    nodePos,
+    obstacles,
+    incidentAngles,
+    // Test where the loop's LABEL will sit, not the loop: that is the part that reaches
+    // furthest and the part that has to stay readable.
+    reach + LABEL_LINE_HEIGHT,
+    LOOP_LABEL_CLEARANCE,
+  );
+  // Screen angle (east, clockwise) back to cytoscape's loop angle (north, clockwise).
+  const degrees = Math.round((Math.atan2(Math.cos(angle), -Math.sin(angle)) * 180) / Math.PI);
+  return degrees;
+}
+
+/**
+ * How far to shift a self-loop's label off the point cytoscape anchors it to, which is
+ * the far side of the loop. Pushes it further out along the loop's own direction, by
+ * enough to clear its own height: every transition between the same pair of states is
+ * bundled into one edge whose label is those transitions on separate lines, so a busy
+ * state's loop can carry a dozen.
+ *
+ * `loopDirectionDegrees` is what `bestLoopDirection` returned. The loop's far side is
+ * already the anchor, so this must not also count the loop's own reach: doing that parked
+ * a one-line label a long way off in space.
+ */
+export function loopLabelOffset(
+  loopDirectionDegrees: number,
+  lineCount: number,
+  lineHeight: number = LABEL_LINE_HEIGHT,
+  gap: number = LABEL_LOOP_GAP,
+): Point {
+  const angle = ((loopDirectionDegrees - 90) * Math.PI) / 180; // back to a screen angle
+  const push = (Math.max(1, lineCount) * lineHeight) / 2 + gap;
   return {
-    x: nodePos.x + Math.cos(bestAngle) * radius,
-    y: nodePos.y + Math.sin(bestAngle) * radius,
+    x: Math.round(Math.cos(angle) * push),
+    y: Math.round(Math.sin(angle) * push),
+  };
+}
+
+/**
+ * How far to shift a transition label off the point cytoscape anchors it to, which is the
+ * midpoint of the drawn curve.
+ *
+ * The label always moves straight out from the edge, which is the direction that clears
+ * the line for the least distance travelled. Only the SIDE comes from the curve: it goes
+ * to whichever side that curve already bows towards.
+ *
+ * The side is the part that matters, because of two states with a transition each way.
+ * Cytoscape bows those two curves apart, and the rule this replaced turned 90° from each
+ * edge's own source→target direction, which sent both labels into the gap between the
+ * curves, one on top of the other. Picking the side by the bow separates them, the way
+ * JFLAP puts one label above the pair and one below.
+ */
+export function edgeLabelOffset(
+  source: Point,
+  target: Point,
+  midpoint: Point,
+  gap: number = EDGE_LABEL_GAP,
+): Point {
+  const dx = target.x - source.x;
+  const dy = target.y - source.y;
+  const length = Math.hypot(dx, dy);
+  // A self-loop or a zero-length edge has no direction to stand off from.
+  if (!length || !Number.isFinite(length)) return { x: 0, y: gap };
+
+  const alongX = dx / length;
+  const alongY = dy / length;
+  const perpX = -dy / length;
+  const perpY = dx / length;
+
+  const centreX = (source.x + target.x) / 2 - midpoint.x;
+  const centreY = (source.y + target.y) / 2 - midpoint.y;
+
+  // How far the curve bows, and to which side. Cytoscape's midpoint for a straight edge
+  // lands a pixel or two off the true midpoint, and reading a direction out of that
+  // rounding noise is what used to leave a label sitting across its own edge, so only a
+  // bow clearly bigger than the noise gets a vote. Below it, either side is as good, and
+  // keeping the sign positive leaves a lone edge's label where it has always been.
+  const bow = centreX * -perpX + centreY * -perpY;
+  const side = bow < -MIN_BOW ? -1 : 1;
+
+  // Slide the label back to the halfway point along the edge. Cytoscape anchors it to the
+  // middle of the DRAWN curve, which runs rim to rim and is shortened at the target end to
+  // leave room for the arrowhead, so the anchor sits slightly towards the source. Two
+  // states joined in both directions point opposite ways, so their labels drifted apart
+  // by twice that and stopped lining up. Only the drift ALONG the edge is corrected; the
+  // part across it is the bow, which the label should keep following.
+  const drift = centreX * alongX + centreY * alongY;
+
+  // `|| 0` keeps a zero component as plain 0 rather than JavaScript's -0.
+  return {
+    x: Math.round(alongX * drift + perpX * side * gap) || 0,
+    y: Math.round(alongY * drift + perpY * side * gap) || 0,
   };
 }
