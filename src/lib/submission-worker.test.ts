@@ -458,6 +458,33 @@ describe('idle backoff', () => {
     expect(idleDelayMs()).toBe(3_000);
   });
 
+  // The cases above prove idleDelayMs computes the right number. These two prove the
+  // loop actually waits it, which is the part that would silently break if someone
+  // reverted the scheduleAsync call to a constant.
+  it('waits the backed-off delay before the next pass when the queue is empty', async () => {
+    vi.advanceTimersByTime(600_000);
+    prismaMock.submission.findFirst.mockResolvedValue(null);
+    const scheduled = vi.spyOn(globalThis, 'setTimeout');
+
+    await runWorkerLoop();
+
+    expect(scheduled).toHaveBeenCalledWith(expect.any(Function), 30_000);
+    scheduled.mockRestore();
+  });
+
+  it('comes straight back after handling a submission, whatever the backoff was', async () => {
+    vi.advanceTimersByTime(600_000);
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+    const scheduled = vi.spyOn(globalThis, 'setTimeout');
+
+    await runWorkerLoop();
+
+    expect(scheduled).toHaveBeenCalledWith(expect.any(Function), 100);
+    scheduled.mockRestore();
+  });
+
   it('leaves the backoff alone when the reaper finds nothing stuck', async () => {
     vi.advanceTimersByTime(600_000);
 
