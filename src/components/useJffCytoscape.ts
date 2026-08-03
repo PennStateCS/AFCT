@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   bestLoopDirection,
   edgeLabelOffset,
+  labelRotation,
   loopLabelOffset,
   startMarkerPosition,
   LABEL_LINE_HEIGHT,
@@ -253,9 +254,10 @@ export function useJffCytoscape({
                 color: TEXT_COLOR,
                 'text-wrap': 'wrap',
                 'text-max-width': 140,
-                // Horizontal, like JFLAP. Autorotate turned a diagonal edge's label
-                // sideways and a right-to-left one upside down, which is unreadable for
-                // exactly the long PDA/TM labels that need reading most.
+                // A starting value only: `updateEdgeLabelMargins` gives every transition
+                // label the angle of its own edge, which is what JFLAP does. Cytoscape's
+                // own `autorotate` is not used, because it renders a right-to-left edge's
+                // label upside down; see `labelRotation`.
                 'text-rotation': 'none',
               },
             },
@@ -297,19 +299,21 @@ export function useJffCytoscape({
           layout: { name: 'preset' },
         });
 
-        // Function to lift each transition label clear of the edge it belongs to.
+        // Function to lay each transition label along its edge and lift it clear of the line.
         async function updateEdgeLabelMargins() {
           cy.edges().forEach((edge: any) => {
-            // Self-loops are handled by `selfLoopGeometry`, which lifts the label above
-            // the loop instead; source and target coincide, so there is no edge direction
-            // here to work from anyway.
+            // Self-loops are handled by `selfLoopGeometry`, which lifts the label past the
+            // loop and leaves it horizontal, as JFLAP does. Source and target coincide, so
+            // there is no edge direction here to work from anyway.
             if (edge.data('isLoop') === 1) return;
-            const { x, y } = edgeLabelOffset(
-              edge.source().position(),
-              edge.target().position(),
-              edge.midpoint(),
-            );
-            edge.style({ 'text-margin-x': x, 'text-margin-y': y });
+            const source = edge.source().position();
+            const target = edge.target().position();
+            const { x, y } = edgeLabelOffset(source, target, edge.midpoint());
+            edge.style({
+              'text-rotation': labelRotation(source, target),
+              'text-margin-x': x,
+              'text-margin-y': y,
+            });
           });
         }
 

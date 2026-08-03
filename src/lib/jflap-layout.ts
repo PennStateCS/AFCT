@@ -182,6 +182,27 @@ export function loopLabelOffset(
 }
 
 /**
+ * The angle to draw a transition label at, in the radians cytoscape's `text-rotation`
+ * takes, so the label lies along its own edge the way JFLAP draws it.
+ *
+ * Turned to keep the text the right way up: an edge running right to left is at roughly
+ * 180°, and using that directly renders the label upside down, so it is turned the other
+ * half-turn to read the same way as everything else. That upside-down text is why
+ * cytoscape's own `autorotate` was abandoned here and every label left horizontal, which
+ * lost the alignment as well.
+ *
+ * A label lying along its edge also makes the standoff behave: whatever direction the
+ * edge runs in, the label now only has to clear the line by half its HEIGHT, where a
+ * horizontal label beside a steep edge had to clear it by half its much greater width.
+ */
+export function labelRotation(source: Point, target: Point): number {
+  const angle = Math.atan2(target.y - source.y, target.x - source.x);
+  if (angle > Math.PI / 2) return angle - Math.PI;
+  if (angle <= -Math.PI / 2) return angle + Math.PI;
+  return angle;
+}
+
+/**
  * How far to shift a transition label off the point cytoscape anchors it to, which is the
  * midpoint of the drawn curve.
  *
