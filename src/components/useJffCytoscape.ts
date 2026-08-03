@@ -2,7 +2,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { bestStartNodePosition } from '@/lib/jflap-layout';
+import {
+  bestLoopDirection,
+  bestStartNodePosition,
+  edgeLabelOffset,
+  loopLabelOffset,
+  LABEL_LINE_HEIGHT,
+} from '@/lib/jflap-layout';
 import { parseJflap, toElements, type MachineType, type Parsed } from '@/lib/jflap-parse';
 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
@@ -112,11 +118,9 @@ export function useJffCytoscape({
   // whatever is in it, and a two-state machine arrived at roughly 4x. 1:1 turned out to
   // read as too distant on a large screen, so allow a moderate enlargement and no more.
   const MAX_INITIAL_ZOOM = 1.5;
-  // How far the self-loop arcs out from the state, and the line box of a label at the
-  // 16px edge font. Used to lift a multi-line loop label clear of its own loop.
+  // How far the self-loop arcs out from the state. The label geometry that goes with it
+  // lives in lib/jflap-layout, which is where LOOP_REACH records what this produces.
   const LOOP_STEP_SIZE = 48;
-  const LABEL_LINE_HEIGHT = 19;
-  const LABEL_LOOP_GAP = 10;
 
   // Expose onResize for Fit button
   const onResizeRef = useRef<(() => void) | null>(null);
@@ -329,41 +333,50 @@ export function useJffCytoscape({
           layout: { name: 'preset' },
         });
 
-        // Function to set label margins based on edge angle
+        // Function to lift each transition label clear of the edge it belongs to.
         async function updateEdgeLabelMargins() {
           cy.edges().forEach((edge: any) => {
-            const src = edge.source().position();
-            const tgt = edge.target().position();
-            const dx = tgt.x - src.x;
-            const dy = tgt.y - src.y;
-            const angle = Math.atan2(dy, dx); // radians
-
-            // Project margin away from the midpoint, perpendicular to the edge
-            const marginDistance = 12;
-            const marginX = Math.round(Math.cos(angle + Math.PI / 2) * marginDistance);
-            const marginY = Math.round(Math.sin(angle + Math.PI / 2) * marginDistance);
-            edge.style({
-              'text-margin-x': marginX,
-              'text-margin-y': marginY,
-            });
+            // Self-loops are handled by `selfLoopGeometry`, which lifts the label above
+            // the loop instead; source and target coincide, so there is no edge direction
+            // here to work from anyway.
+            if (edge.data('isLoop') === 1) return;
+            const { x, y } = edgeLabelOffset(
+              edge.source().position(),
+              edge.target().position(),
+              edge.midpoint(),
+            );
+            edge.style({ 'text-margin-x': x, 'text-margin-y': y });
           });
         }
 
-        // Function to update the self-loop geometry of the transition label
+        // Function to aim each self-loop at free space and put its label beyond it
         async function selfLoopGeometry() {
           cy.edges('[isLoop = 1]').forEach((e: any) => {
-            // Every transition between the same pair of states is bundled into ONE edge
-            // whose label is those transitions on separate lines, so a busy state's loop
-            // can carry a dozen. Cytoscape centres that whole block on the loop's apex, so
-            // the offset only has to lift it by its OWN half-height plus a small gap. It
-            // must not also add the loop's height: the apex is already the anchor, and
-            // counting it twice parked a one-line label a long way off in space.
+            const node = e.source();
+            const nodePos = node.position();
+            const otherNodePositions = cy
+              .nodes()
+              .filter((n: any) => n.id() !== node.id() && !n.hasClass('start'))
+              .map((n: any) => n.position());
+            // Angles of the transitions already at this state, in either direction: a loop
+            // arcing along one of them would sit on top of it.
+            const incidentAngles = node
+              .connectedEdges()
+              .filter((x: any) => x.source().id() !== x.target().id())
+              .map((x: any) => {
+                const other = x.source().id() === node.id() ? x.target() : x.source();
+                const p = other.position();
+                return Math.atan2(p.y - nodePos.y, p.x - nodePos.x);
+              });
+
+            const direction = bestLoopDirection(nodePos, otherNodePositions, incidentAngles);
             const lines = String(e.data('label') ?? '').split('\n').length;
-            const blockHalfHeight = (lines * LABEL_LINE_HEIGHT) / 2;
+            const offset = loopLabelOffset(direction, lines);
+
             e.style({
               // See the stylesheet above: cytoscape has no `loop` curve-style.
               'curve-style': 'bezier',
-              'loop-direction': '0deg',
+              'loop-direction': `${direction}deg`,
               'loop-sweep': '50deg',
               'control-point-step-size': LOOP_STEP_SIZE,
               'source-arrow-shape': 'triangle',
@@ -371,7 +384,8 @@ export function useJffCytoscape({
               'arrow-scale': 0.95,
               'line-cap': 'round',
               'text-rotation': 'none',
-              'text-margin-y': -(blockHalfHeight + LABEL_LOOP_GAP),
+              'text-margin-x': offset.x,
+              'text-margin-y': offset.y,
             });
           });
         }
