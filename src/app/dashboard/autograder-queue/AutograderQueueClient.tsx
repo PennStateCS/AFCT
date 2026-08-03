@@ -594,12 +594,30 @@ export default function AutograderQueueClient() {
           // "Status" is what this reads as to someone working the queue; the column keeps
           // the id `result` because the default filter below addresses it by that id.
           filterLabel: 'Status',
-          filterOptions: [
-            { label: 'Pending', value: 'pending' },
-            { label: 'Processing', value: 'processing' },
-            { label: 'Failed', value: 'failed' },
-            { label: 'Correct', value: 'correct' },
-            { label: 'Incorrect', value: 'incorrect' },
+          /*
+           * One column, shown as two headings. Where it is up to (Pending / Processing /
+           * Failed) and how it turned out (Correct / Incorrect) are different questions,
+           * so they get their own lists. They stay one column because a submission has
+           * exactly one of these five values: as separate columns the popover would AND
+           * them, and any cross-heading pick (say Failed plus Correct) could only ever
+           * return nothing. Sharing the column keeps that pick meaning "either".
+           */
+          filterSections: [
+            {
+              label: 'Status',
+              options: [
+                { label: 'Pending', value: 'pending' },
+                { label: 'Processing', value: 'processing' },
+                { label: 'Failed', value: 'failed' },
+              ],
+            },
+            {
+              label: 'Submission',
+              options: [
+                { label: 'Correct', value: 'correct' },
+                { label: 'Incorrect', value: 'incorrect' },
+              ],
+            },
           ],
         },
       },

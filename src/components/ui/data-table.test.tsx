@@ -301,6 +301,47 @@ describe('DataTable', () => {
     expect(screen.getByRole('button', { name: /clear all/i })).toBeInTheDocument();
   });
 
+  it('splits one column across filter headings and still ORs the picks', async () => {
+    const user = userEvent.setup();
+    const sectionColumns: ColumnDef<RowData>[] = [
+      { accessorKey: 'name', header: 'Name', meta: { priority: 1 } },
+      {
+        accessorKey: 'role',
+        header: 'Role',
+        meta: {
+          priority: 2,
+          filterVariant: 'multiselect',
+          filterSections: [
+            { label: 'Staff', options: [{ label: 'Admin', value: 'Admin' }] },
+            {
+              label: 'Enrolled',
+              options: [
+                { label: 'Student', value: 'Student' },
+                { label: 'TA', value: 'TA' },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+
+    render(<DataTable columns={sectionColumns} data={data} />);
+    await user.click(screen.getByRole('button', { name: 'Filters' }));
+
+    // Both headings label a group of their own, rather than one undivided list.
+    expect(await screen.findByRole('group', { name: 'Staff' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Enrolled' })).toBeInTheDocument();
+
+    // Ticking one value from each heading widens rather than producing an empty
+    // intersection, because both write to the same column filter.
+    await user.click(screen.getByRole('checkbox', { name: /^admin/i }));
+    await user.click(screen.getByRole('checkbox', { name: /^TA/ }));
+
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.getByText('Carol')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+  });
+
   it('does not render a Filters button when no column opts in', () => {
     render(<DataTable columns={columns} data={data} />);
     expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
