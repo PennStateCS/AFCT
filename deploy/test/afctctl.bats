@@ -270,6 +270,40 @@ EOF
   [[ "$output" == *"could not be downloaded"* ]]
 }
 
+@test "a pull refused for credentials says so, and does not blame the network" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export MOCK_PULL_RC=1
+  export MOCK_PULL_STDERR='Error response from daemon: unauthorized: authentication required'
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"refused the credentials"* ]]
+  [[ "$output" != *"internet connection"* ]]
+}
+
+@test "a pull that cannot reach the registry names the side that is broken" {
+  # Jesse's CIAA case: the host had internet, Docker's own VM did not, and the old
+  # message blamed "the network and registry authentication" without saying which.
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export MOCK_PULL_RC=1
+  export MOCK_PULL_STDERR='dialing ghcr.io:443 container via direct connection because Docker Desktop has no HTTPS proxy: connecting to ghcr.io:443: dial tcp 140.82.114.33:443: connect: network is unreachable'
+  # The curl mock answers successfully, standing in for a host that CAN reach ghcr.io.
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"but Docker cannot"* ]]
+}
+
+@test "a pull that runs out of disk says so rather than blaming the network" {
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+  export MOCK_PULL_RC=1
+  export MOCK_PULL_STDERR='write /var/lib/docker/tmp/x: no space left on device'
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"disk filled up"* ]]
+}
+
 @test "an invalid compose configuration is fatal (before pulling)" {
   export ADMIN_EMAIL="admin@example.com"
   export ADMIN_PASSWORD="Str0ng!Pass1"
