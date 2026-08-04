@@ -60,11 +60,13 @@ const setNavCourses = (courses: unknown[]) => {
   });
 };
 
-const renderSidebar = () => {
+// `open: false` starts the sidebar as the collapsed icon rail, which is where the
+// Courses flyout lives.
+const renderSidebar = ({ open = true }: { open?: boolean } = {}) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={client}>
-      <SidebarProvider defaultOpen>
+      <SidebarProvider defaultOpen={open}>
         <EnhancedSidebarTrigger />
         <Sidebar collapsible="icon">
           <DashboardSidebarHeader />
@@ -73,6 +75,46 @@ const renderSidebar = () => {
       </SidebarProvider>
     </QueryClientProvider>,
   );
+};
+
+// One course per bucket. The titles are here so a test can prove the flyout lists codes
+// only, the way the expanded sidebar does.
+const BUCKETED_COURSES = [
+  {
+    id: 'up-1',
+    code: 'CS900',
+    name: 'Quantum Automata',
+    isPublished: true,
+    isArchived: false,
+    startDate: '2999-01-01',
+    endDate: '2999-12-31',
+  },
+  {
+    id: 'cur-1',
+    code: 'CS101',
+    name: 'Computing Theory',
+    isPublished: true,
+    isArchived: false,
+    startDate: '2000-01-01',
+    endDate: '2999-12-31',
+  },
+  {
+    id: 'past-1',
+    code: 'CS001',
+    name: 'Discrete Structures',
+    isPublished: true,
+    isArchived: false,
+    startDate: '2000-01-01',
+    endDate: '2000-12-31',
+  },
+];
+
+const coursesButton = () => screen.getByRole('button', { name: 'Courses' });
+
+/** Open the collapsed rail's Courses flyout and return its panel. */
+const openCoursesFlyout = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await screen.findByRole('button', { name: 'Courses' }));
+  return screen.findByRole('dialog', { name: 'Courses' });
 };
 
 beforeEach(() => {
@@ -211,6 +253,198 @@ describe('dashboard sidebar (real primitives)', () => {
 
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       expect(triggerNode()).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
+
+  describe('collapsed rail courses flyout', () => {
+    beforeEach(() => setNavCourses(BUCKETED_COURSES));
+
+    it('replaces the per-course icons with one Courses button', async () => {
+      renderSidebar({ open: false });
+
+      // The rail used to repeat the same book icon per course, which is what this
+      // replaces, so no course link may be in the rail before the flyout is opened.
+      expect(await screen.findByRole('button', { name: 'Courses' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /CS101/ })).toBeNull();
+      expect(coursesButton()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('leaves the expanded sidebar listing courses directly', async () => {
+      renderSidebar({ open: true });
+
+      expect(await screen.findByRole('link', { name: /CS101/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Courses' })).toBeNull();
+    });
+
+    it('keeps the mobile drawer on full labels rather than the flyout', async () => {
+      isMobileMock.mockReturnValue(true);
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      await user.click(screen.getByRole('button', { name: 'Open sidebar' }));
+      const drawer = await screen.findByRole('dialog');
+
+      expect(await within(drawer).findByRole('link', { name: /CS101/ })).toBeInTheDocument();
+      expect(within(drawer).queryByRole('button', { name: 'Courses' })).toBeNull();
+    });
+
+    it('titles the panel and lists each course by its code, grouped', async () => {
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      const panel = await openCoursesFlyout(user);
+      expect(coursesButton()).toHaveAttribute('aria-expanded', 'true');
+      expect(coursesButton()).toHaveAttribute('aria-controls', panel.id);
+
+      expect(within(panel).getByRole('heading', { name: 'Courses' })).toBeInTheDocument();
+      expect(within(panel).getByRole('heading', { name: 'Upcoming' })).toBeInTheDocument();
+      expect(within(panel).getByRole('heading', { name: 'Current' })).toBeInTheDocument();
+
+      // Code only, the same as the expanded sidebar shows; the course title is not
+      // repeated underneath it.
+      const current = within(panel).getByRole('link', { name: 'CS101' });
+      expect(current).toHaveAttribute('href', '/dashboard/courses/cur-1');
+      expect(within(panel).queryByText('Computing Theory')).toBeNull();
+
+      // Every group folds, starting the way the expanded sidebar has it: open, except
+      // Past Courses.
+      expect(within(panel).getByRole('button', { name: /Upcoming/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      expect(within(panel).getByRole('button', { name: /Current/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      const past = within(panel).getByRole('button', { name: /Past Courses/ });
+      expect(past).toHaveAttribute('aria-expanded', 'false');
+      // Hidden rather than unmounted, so aria-controls keeps pointing at a real element,
+      // but out of the accessibility tree until it is opened.
+      expect(within(panel).queryByRole('link', { name: /CS001/ })).toBeNull();
+
+      await user.click(past);
+      expect(past).toHaveAttribute('aria-expanded', 'true');
+      expect(within(panel).getByRole('link', { name: /CS001/ })).toBeVisible();
+    });
+
+    it('folds a group, and remembers it the way the expanded sidebar does', async () => {
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      const panel = await openCoursesFlyout(user);
+      await user.click(within(panel).getByRole('button', { name: /Current/ }));
+
+      expect(within(panel).queryByRole('link', { name: 'CS101' })).toBeNull();
+      // The two views share one stored state, so a group closed here is closed in the
+      // expanded sidebar too.
+      expect(JSON.parse(localStorage.getItem('afct.sidebarSections') ?? '{}')).toMatchObject({
+        current: false,
+      });
+    });
+
+    it('omits a group with no courses', async () => {
+      setNavCourses([BUCKETED_COURSES[1]]);
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      const panel = await openCoursesFlyout(user);
+      expect(within(panel).getByRole('heading', { name: 'Current' })).toBeInTheDocument();
+      expect(within(panel).queryByRole('heading', { name: 'Upcoming' })).toBeNull();
+      expect(within(panel).queryByRole('button', { name: /Past Courses/ })).toBeNull();
+    });
+
+    it('marks the course being viewed, and the button that now stands for it', async () => {
+      usePathnameMock.mockReturnValue('/dashboard/courses/cur-1');
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      // The rail no longer shows the course itself, so the button has to carry the fact
+      // that a course page is open.
+      expect(await screen.findByRole('button', { name: 'Courses' })).toHaveAttribute(
+        'data-active',
+        'true',
+      );
+
+      const panel = await openCoursesFlyout(user);
+      expect(within(panel).getByRole('link', { name: /CS101/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      expect(within(panel).getByRole('link', { name: /CS900/ })).not.toHaveAttribute(
+        'aria-current',
+      );
+    });
+
+    it('opens Past Courses when the course being viewed is in it', async () => {
+      usePathnameMock.mockReturnValue('/dashboard/courses/past-1');
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      const panel = await openCoursesFlyout(user);
+      expect(within(panel).getByRole('button', { name: /Past Courses/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      expect(within(panel).getByRole('link', { name: /CS001/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    });
+
+    it('closes when a course is chosen', async () => {
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      const panel = await openCoursesFlyout(user);
+      fireEvent.click(within(panel).getByRole('link', { name: /CS101/ }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Courses' })).toBeNull());
+    });
+
+    it('closes on Escape and puts focus back on the Courses button', async () => {
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      const panel = await openCoursesFlyout(user);
+      // Focus moves into the panel when it opens, so keyboard users land on the courses
+      // rather than having to tab the whole rail.
+      await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true));
+
+      await user.keyboard('{Escape}');
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Courses' })).toBeNull());
+      expect(coursesButton()).toHaveFocus();
+    });
+
+    it('closes when the user clicks outside it', async () => {
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      await openCoursesFlyout(user);
+      await user.click(screen.getByRole('link', { name: 'AFCT Dashboard' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Courses' })).toBeNull());
+    });
+
+    it('stays open while the Past Courses toggle inside it is used', async () => {
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      const panel = await openCoursesFlyout(user);
+      await user.click(within(panel).getByRole('button', { name: /Past Courses/ }));
+
+      expect(screen.getByRole('dialog', { name: 'Courses' })).toBeInTheDocument();
+    });
+
+    it('closes when the sidebar is expanded', async () => {
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      await openCoursesFlyout(user);
+      await user.click(screen.getByRole('button', { name: 'Open sidebar' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Courses' })).toBeNull());
+      expect(screen.getByRole('link', { name: /CS101/ })).toBeInTheDocument();
     });
   });
 
