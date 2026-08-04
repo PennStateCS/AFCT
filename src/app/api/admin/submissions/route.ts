@@ -8,13 +8,18 @@ import { readJson } from '@/lib/api/request';
 const ListSubmissionsBody = z.object({ problemIds: z.array(z.string()).default([]) });
 
 /**
- * Returns every submission across a set of problems, flattened for the admin
- * grading view: student, course, assignment/problem titles, status, and the
+ * Returns every autograded submission across a set of problems, flattened for the
+ * admin grading view: student, course, assignment/problem titles, status, and the
  * recorded grade (joined from AssignmentProblemGrade). System administrators only.
  * Takes the problem ids in the body rather than the query string since the list
  * can be long.
+ *
+ * Problems with the autograder switched off are left out: this feeds the Autograder
+ * page, and a submission the autograder never touches has no queue state and no
+ * per-attempt score to show there. Those submissions still appear on the course's
+ * own submissions tab.
  * @openapi
- * summary: List submissions for problems (admin)
+ * summary: List autograded submissions for problems (admin)
  * requestBody:
  *   required: true
  *   content:
@@ -26,7 +31,7 @@ const ListSubmissionsBody = z.object({ problemIds: z.array(z.string()).default([
  *           problemIds: { type: array, items: { type: string } }
  * responses:
  *   200:
- *     description: Flattened submissions, newest first.
+ *     description: Flattened autograded submissions, newest first.
  *     content:
  *       application/json:
  *         schema: { type: array, items: { type: object } }
@@ -49,6 +54,7 @@ export const POST = withAdminAuth(
       const submissions = await prisma.submission.findMany({
         where: {
           problemId: { in: problemIds },
+          assignmentProblem: { autograderEnabled: true },
         },
         orderBy: {
           submittedAt: 'desc',

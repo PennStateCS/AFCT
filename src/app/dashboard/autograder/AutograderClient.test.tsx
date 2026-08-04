@@ -4,7 +4,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import AutograderQueueClient from './AutograderQueueClient';
+import AutograderClient from './AutograderClient';
 
 // Fresh QueryClient per test (retry off, no lingering cache) so the submissions
 // query starts clean each time.
@@ -89,8 +89,12 @@ vi.mock('@/components/ui/SearchableMultiSelect', () => ({
   ),
 }));
 
+// Props are surfaced as attributes so a test can assert the viewer was opened, and on
+// which file, without pulling in cytoscape.
 vi.mock('@/components/JffViewerDialog', () => ({
-  default: () => <div data-testid="jff-viewer" />,
+  default: ({ open, src, title }: { open: boolean; src?: string; title?: string }) => (
+    <div data-testid="jff-viewer" data-open={String(open)} data-src={src} data-title={title} />
+  ),
 }));
 
 vi.mock('@/components/dialogs/FeedbackDialog', () => ({
@@ -114,7 +118,7 @@ const PROBLEMS = [
     id: 'prob-1',
     title: 'Problem One',
     description: null,
-    type: 'DFA',
+    type: 'FA',
     maxPoints: 10,
     maxStates: null,
     isDeterministic: true,
@@ -179,11 +183,11 @@ const submissionsPostCalls = (fetchMock: FetchMock) =>
       url === '/api/admin/submissions' && (init as RequestInit | undefined)?.method === 'POST',
   );
 
-describe('AutograderQueueClient', () => {
+describe('AutograderClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
-    // AutograderQueueClient.tsx does not import React, and the test transform uses
+    // AutograderClient.tsx does not import React, and the test transform uses
     // the classic JSX runtime, so its compiled `React.createElement` calls
     // resolve `React` from the global scope. Provide it without touching the
     // component. (This test file itself uses the same classic transform.)
@@ -199,7 +203,7 @@ describe('AutograderQueueClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<AutograderQueueClient />);
+    renderWithClient(<AutograderClient />);
 
     // Nothing selected -> fetchSubmissions short-circuits to [] with no network call.
     await waitFor(() => {
@@ -214,7 +218,7 @@ describe('AutograderQueueClient', () => {
       capturedInit = init;
     });
 
-    renderWithClient(<AutograderQueueClient />);
+    renderWithClient(<AutograderClient />);
 
     // The submitted student row renders once the cascade completes.
     await waitFor(() => {
@@ -241,7 +245,7 @@ describe('AutograderQueueClient', () => {
       id,
       title,
       description: null,
-      type: 'DFA',
+      type: 'FA',
       maxPoints: 10,
       maxStates: null,
       isDeterministic: true,
@@ -274,7 +278,7 @@ describe('AutograderQueueClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<AutograderQueueClient />);
+    renderWithClient(<AutograderClient />);
 
     // Wait until the row renders (the submissions POST resolved).
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
@@ -304,7 +308,7 @@ describe('AutograderQueueClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<AutograderQueueClient />);
+    renderWithClient(<AutograderClient />);
 
     // While the POST is pending, the table shows the loading placeholder.
     await waitFor(() => {
@@ -321,7 +325,7 @@ describe('AutograderQueueClient', () => {
 
   it('opens with nothing filtered, so every submission is on screen', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderQueueClient />);
+    renderWithClient(<AutograderClient />);
 
     // The fixture row is graded, and it shows: the queue no longer opens narrowed to
     // outstanding work, so what is on screen is everything the pickers allow through.
@@ -332,7 +336,7 @@ describe('AutograderQueueClient', () => {
 
   it('offers the row actions in a manage menu, including a link into submission review', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderQueueClient />);
+    renderWithClient(<AutograderClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // One Manage control per row, named after the student so screen reader users can
@@ -358,7 +362,7 @@ describe('AutograderQueueClient', () => {
 
   it('shows the grading result as a badge in its own Status column', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderQueueClient />);
+    renderWithClient(<AutograderClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // Scoped to the grid, because the same words label the checkboxes in the Filters
@@ -379,9 +383,71 @@ describe('AutograderQueueClient', () => {
     );
   });
 
+  it('lists the submitted file, opening the viewer from its name and downloading from the icon', async () => {
+    installFetchRouter();
+    renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    const table = screen.getByRole('table');
+    const download = within(table).getByRole('link', { name: 'Download sub-1.jff' });
+    expect(download).toHaveAttribute('href', '/api/files/submissions/sub-1.jff');
+    expect(download).toHaveAttribute('download', 'sub-1.jff');
+
+    // The viewer picks itself by problem type, which is only known once a row is chosen,
+    // so nothing is mounted until the name is clicked.
+    expect(screen.queryByTestId('jff-viewer')).toBeNull();
+    fireEvent.click(within(table).getByRole('button', { name: 'sub-1.jff' }));
+    await waitFor(() => {
+      const viewer = screen.getByTestId('jff-viewer');
+      expect(viewer).toHaveAttribute('data-open', 'true');
+      expect(viewer).toHaveAttribute('data-src', '/api/files/submissions/sub-1.jff');
+    });
+  });
+
+  it('grades each row on its own result rather than the student recorded grade', async () => {
+    // The fixture is a correct attempt on a 10 point problem whose recorded grade is 8,
+    // so the two numbers cannot be confused for one another.
+    installFetchRouter();
+    renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('10 / 10')).toBeInTheDocument();
+    // Recorded grade is a column of its own and starts hidden, so the standing 8 is not
+    // repeated down every attempt.
+    expect(within(table).queryByText('8 / 10')).toBeNull();
+    expect(
+      within(table).queryByRole('columnheader', { name: 'Recorded grade' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('scores an incorrect attempt zero and leaves an ungraded one blank', async () => {
+    installFetchRouter([
+      { ...SUBMISSIONS[0], id: 'sub-2', correct: false },
+      {
+        ...SUBMISSIONS[0],
+        id: 'sub-3',
+        studentEmail: 'grace@example.com',
+        studentFirstName: 'Grace',
+        studentLastName: 'Hopper',
+        status: 'pending',
+        correct: null,
+      },
+    ]);
+    renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('0 / 10')).toBeInTheDocument();
+    // Nothing has been evaluated for the pending row, so it shows a dash instead of a
+    // zero that would read as a failed attempt.
+    expect(within(table).queryByText('10 / 10')).toBeNull();
+    expect(within(table).getAllByText('-').length).toBeGreaterThanOrEqual(1);
+  });
+
   it('ticking a Status value in the table filter narrows the rows', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderQueueClient />);
+    renderWithClient(<AutograderClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // The single row is correct, so filtering to Incorrect hides it.

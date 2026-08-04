@@ -92,6 +92,18 @@ function formatStudentName(submission: {
   return last || first || null;
 }
 
+/**
+ * Points this one attempt earned, or null while it has no result.
+ *
+ * Mirrors what the submission worker writes when it grades: a correct attempt earns the
+ * problem's full points and an incorrect one earns zero. Kept in step with
+ * `submission-worker.ts` if that ever stops being all-or-nothing.
+ */
+function attemptPointsFor(submission: SubmissionItem): number | null {
+  if (submission.correct == null) return null;
+  return submission.correct ? (submission.maxPoints ?? 0) : 0;
+}
+
 const fetchCourseList = async (): Promise<CourseItem[]> => {
   const response = await fetch(apiPaths.myCourses());
   if (!response.ok) {
@@ -196,7 +208,7 @@ const EMPTY_COURSES: CourseItem[] = [];
 const EMPTY_ASSIGNMENTS: AssignmentItem[] = [];
 const EMPTY_PROBLEMS: ProblemItem[] = [];
 
-export default function AutograderQueueClient() {
+export default function AutograderClient() {
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedProblems, setSelectedProblems] = useState<string[]>([]);
@@ -521,6 +533,48 @@ export default function AutograderQueueClient() {
         meta: { priority: 2 },
       },
       {
+        /*
+         * The submitted file, laid out the way a course page lists a problem's solution:
+         * the name opens the viewer, the icon beside it downloads. Both actions are also
+         * in the row's Manage menu; having them on the file itself saves opening the menu
+         * when working down a queue, which is most of what this page is for.
+         */
+        id: 'file',
+        header: 'File',
+        accessorFn: (s) => s.originalFileName ?? s.fileName ?? '',
+        cell: ({ row }) => {
+          const submission = row.original;
+          // fileName is what the server stores it under; originalFileName is what the
+          // student called it. Without the stored name there is nothing to fetch.
+          const name = submission.originalFileName || submission.fileName;
+          if (!submission.fileName || !name) {
+            return <span className="text-muted-foreground text-sm">-</span>;
+          }
+          return (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleViewSubmission(submission)}
+                className="text-primary text-sm break-all hover:underline"
+                title={`View ${name}`}
+              >
+                {name}
+              </button>
+              <a
+                href={apiPaths.files.submission(encodeURIComponent(submission.fileName))}
+                download={name}
+                title={`Download ${name}`}
+                aria-label={`Download ${name}`}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </div>
+          );
+        },
+        meta: { priority: 3 },
+      },
+      {
         id: 'due',
         header: 'Due',
         accessorFn: (s) => dueDateFor(s)?.getTime() ?? 0,
@@ -528,8 +582,35 @@ export default function AutograderQueueClient() {
         meta: { priority: 3 },
       },
       {
-        id: 'grade',
+        /*
+         * What THIS attempt earned, not what the student ends up with. The autograder
+         * scores an attempt all-or-nothing (correct earns the problem's points, incorrect
+         * earns zero), and nothing per-submission is stored, so it is derived from the
+         * row's own result. A row still waiting, processing or failed has no result yet
+         * and shows a dash rather than a misleading zero.
+         *
+         * This is the column that differs per row. The recorded grade below is one value
+         * per student and problem, so it repeats down every attempt.
+         */
+        id: 'attemptGrade',
         header: 'Grade',
+        accessorFn: (s) => attemptPointsFor(s) ?? -1,
+        cell: ({ row }) => {
+          const points = attemptPointsFor(row.original);
+          const { maxPoints } = row.original;
+          const text =
+            points == null ? '-' : maxPoints != null ? `${points} / ${maxPoints}` : String(points);
+          return <span className="text-foreground text-sm whitespace-nowrap">{text}</span>;
+        },
+        meta: { priority: 2 },
+      },
+      {
+        // The student's standing grade for the problem, from AssignmentProblemGrade. Off by
+        // default because it is the same number on every one of that student's attempts;
+        // it is worth turning on to spot a hand-entered grade that the latest attempt does
+        // not explain.
+        id: 'grade',
+        header: 'Recorded grade',
         accessorFn: (s) => s.grade ?? -1,
         cell: ({ row }) => {
           const { grade, maxPoints } = row.original;
@@ -541,7 +622,7 @@ export default function AutograderQueueClient() {
                 : '-';
           return <span className="text-foreground text-sm whitespace-nowrap">{text}</span>;
         },
-        meta: { priority: 2 },
+        meta: { priority: 3 },
       },
       {
         id: 'status',
@@ -673,8 +754,11 @@ export default function AutograderQueueClient() {
         },
       },
     ],
+    // `problems` is a dependency because the cells' view handler reads it to decide which
+    // viewer a file needs. It arrives after `assignments`, so leaving it out froze the
+    // handler around an empty list and opening a submission rendered no viewer at all.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [assignments, timezone],
+    [assignments, problems, timezone],
   );
 
   return (
@@ -683,7 +767,7 @@ export default function AutograderQueueClient() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <CardTitle role="heading" aria-level={1} className="text-2xl">
-              Autograder Queue
+              Autograder
             </CardTitle>
           </div>
           {/* No bulk rerun here. It re-ran whatever the page's own selection held, which
@@ -762,14 +846,17 @@ export default function AutograderQueueClient() {
           data={visibleSubmissions}
           loading={loadingCourses || loadingAssignments || loadingSubmissions}
           loadingMessage="Loading submissions, please wait..."
-          // Suffixed because the column set changed: a saved layout wins over these
-          // defaults, so browsers holding the old one would keep hiding Timing and Status.
-          storageKey="autograder-queue-columns-v2"
-          tableLabel="Autograder queue"
+          // Suffixed each time the column set changes: a saved layout wins over these
+          // defaults, so a browser holding the old one would keep showing the recorded
+          // grade in place of the per-attempt one.
+          storageKey="autograder-columns-v3"
+          tableLabel="Autograder"
           // Due is off by default: the deadline matters far less than arrival order when
-          // you are working a queue, and the Timing column already flags late work. The
-          // Columns menu turns it back on, and that choice is remembered per browser.
-          defaultColumnVisibility={{ due: false }}
+          // you are working a queue, and the Timing column already flags late work.
+          // Recorded grade is off because it repeats the same number down every attempt
+          // by one student; the Grade column shows what each attempt itself earned. The
+          // Columns menu turns either back on, remembered per browser.
+          defaultColumnVisibility={{ due: false, grade: false }}
           emptyIcon={FileCode2}
           {...(submissions.length === 0
             ? {
