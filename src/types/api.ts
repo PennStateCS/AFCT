@@ -512,8 +512,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * List submissions for problems (admin)
-         * @description Returns every submission across a set of problems, flattened for the admin  grading view: student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.
+         * List autograded submissions for problems (admin)
+         * @description Returns every autograded submission across a set of problems, flattened for the  admin grading view: student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.   Problems with the autograder switched off are left out: this feeds the Autograder  page, and a submission the autograder never touches has no queue state and no  per-attempt score to show there. Those submissions still appear on the course's  own submissions tab.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/submissions/route.ts)
          */
@@ -3856,7 +3856,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Flattened submissions, newest first. */
+            /** @description Flattened autograded submissions, newest first. */
             200: {
                 headers: {
                     [name: string]: unknown;

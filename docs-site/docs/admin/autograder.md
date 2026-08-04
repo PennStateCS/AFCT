@@ -1,6 +1,8 @@
-# Autograder Queue
+# Autograder
 
-The **Autograder Queue** page shows submissions across the AFCT installation, including what is still waiting to be graded and what is being graded now. It is useful when an administrator needs to investigate an evaluator problem that is not limited to one course.
+The **Autograder** page shows autograded submissions across the AFCT installation, including what is still waiting to be graded and what is being graded now. It is useful when an administrator needs to investigate an evaluator problem that is not limited to one course.
+
+Problems with the autograder switched off are not listed here, since the evaluator never sees them. Review those on the assignment's own [Submissions](../faculty/submissions.md) page.
 
 ## Choose the scope
 
@@ -14,7 +16,13 @@ Use **Select All** to select the available courses, assignments, and problems. U
 
 ## Read the table
 
-Each row is one submission, and shows when it arrived, whether it was on time, who submitted it, the course, assignment and problem, the grade, and the grading status. Course, assignment, and problem names link back to the related review pages.
+Each row is one submission, and shows when it arrived, whether it was on time, who submitted it, the course, assignment and problem, the submitted file, the grade, and the grading status. Course, assignment, and problem names link back to the related review pages.
+
+**File** is the student's own file name. Click it to open the submission in the viewer for that problem type, or use the download icon beside it to save the original file. This works the same way as the solution file on a course's problem list.
+
+**Grade** is what that one attempt earned: the problem's full points if the evaluator found it correct, zero if it did not, and a dash while the submission is still pending, processing or failed. A student's several attempts therefore show different grades.
+
+**Recorded grade** is the student's standing grade for the problem, the number the gradebook carries. It is the same on every attempt by that student, so it is off by default; turn it on from **Columns** to spot a grade that was entered by hand and no longer matches the latest attempt.
 
 Two columns carry a coloured badge:
 
@@ -27,7 +35,7 @@ The page opens showing everything in scope. To narrow it:
 
 - **Search** matches across the table, or one column if you pick one in the box beside it.
 - **Filters** holds Timing, Status and Submission as separate lists. Ticking several values in one list widens (any of them), while picking from two different lists narrows (both must be true), so Timing **Late** plus Submission **Incorrect** finds late wrong answers.
-- **Columns** turns columns on and off, including **Due**, which is off by default. That choice is remembered in your browser.
+- **Columns** turns columns on and off, including **Due** and **Recorded grade**, which are off by default. That choice is remembered in your browser.
 - Sort by any column heading, including Timing and Status.
 - **Export** downloads the visible rows as CSV.
 

@@ -99,6 +99,23 @@ describe('POST /api/admin/submissions', () => {
     });
   });
 
+  it('leaves out problems whose autograder is switched off', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
+    prismaMock.submission.findMany.mockResolvedValue([]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+
+    await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
+
+    expect(prismaMock.submission.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          problemId: { in: ['p1'] },
+          assignmentProblem: { autograderEnabled: true },
+        },
+      }),
+    );
+  });
+
   it('defaults grade to null when no grade row exists', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.submission.findMany.mockResolvedValue([submissionRow]);
