@@ -14,6 +14,7 @@ import { queryKeys } from '@/lib/query-keys';
 import dynamic from 'next/dynamic';
 import { safeSignOut } from '@/lib/safe-signout';
 import { getCourseDateBucket } from '@/lib/course-status';
+import CollapsedCoursesFlyout from '@/components/CollapsedCoursesFlyout';
 
 /**
  * On demand, for the same reason as the navbar's copies: the sidebar is in the dashboard
@@ -92,10 +93,12 @@ type Course = {
 // Past Courses (they are finished too), which also carries the Archived Courses page
 // link. A section is hidden when it has nothing to show, and courses within a section are
 // alphabetized by code.
+// `flyoutLabel` is the shorter heading used in the collapsed rail's Courses flyout, where
+// the panel is already titled Courses and repeating the word in every group reads as noise.
 const COURSE_SECTIONS = [
-  { bucket: 'upcoming', label: 'Upcoming Courses' },
-  { bucket: 'current', label: 'Current Courses' },
-  { bucket: 'past', label: 'Past Courses' },
+  { bucket: 'upcoming', label: 'Upcoming Courses', flyoutLabel: 'Upcoming' },
+  { bucket: 'current', label: 'Current Courses', flyoutLabel: 'Current' },
+  { bucket: 'past', label: 'Past Courses', flyoutLabel: 'Past Courses' },
 ] as const;
 
 // Static admin menu items (kept alphabetical by title)
@@ -516,6 +519,31 @@ export default function DashboardSidebarMenu() {
                         </div>
                       </SidebarMenuItem>
                     )}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )
+          : collapsed ? (
+              // In the icon rail the per-course items collapse into one Courses button:
+              // every course otherwise showed the same book icon, so they could only be
+              // told apart by hovering each in turn.
+              <SidebarGroup>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <CollapsedCoursesFlyout
+                      sections={courseSections.map((section) => ({
+                        bucket: section.bucket,
+                        label: section.flyoutLabel,
+                        courses: section.courses,
+                      }))}
+                      activeCourseId={activeCourseId}
+                      pathname={pathname}
+                      showArchivedCoursesLink={showArchivedCoursesLink}
+                      // Same rule as the expanded sidebar: closed by default, but open
+                      // when the course you are on lives in it.
+                      pastOpen={isOpen('past') || activeSectionBucket === 'past'}
+                      onTogglePast={() => toggle('past')}
+                    />
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
