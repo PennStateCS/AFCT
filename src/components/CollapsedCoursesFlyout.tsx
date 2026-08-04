@@ -12,7 +12,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 export type FlyoutCourse = {
   id: string;
   code: string;
-  name: string;
 };
 
 export type FlyoutSection = {
@@ -26,17 +25,15 @@ export type FlyoutSection = {
 const linkStyles =
   'focus-visible:ring-sidebar-ring hover:bg-brand-teal block rounded-md border-l-2 border-transparent px-2 py-1.5 focus-visible:ring-2 focus-visible:outline-none';
 
-/** One course: code on top, full title underneath when the course has one. */
+/** One course, listed by its code exactly as the expanded sidebar lists it. */
 function CourseLink({
   href,
   code,
-  name,
   active,
   onNavigate,
 }: {
   href: string;
   code: string;
-  name?: string;
   active: boolean;
   onNavigate: () => void;
 }) {
@@ -48,14 +45,14 @@ function CourseLink({
         aria-current={active ? 'page' : undefined}
         className={cn(
           linkStyles,
+          'text-sm',
           // The active course is marked three ways, since colour alone would leave it
           // indistinguishable to anyone who cannot see the highlight: a left bar, a
           // heavier code, and aria-current for screen readers.
           active && 'border-sidebar-foreground bg-brand-teal font-semibold text-white',
         )}
       >
-        <span className="block truncate text-sm">{code}</span>
-        {name ? <span className="block truncate text-xs opacity-80">{name}</span> : null}
+        <span className="block truncate">{code}</span>
       </Link>
     </li>
   );
@@ -77,21 +74,20 @@ export default function CollapsedCoursesFlyout({
   activeCourseId,
   pathname,
   showArchivedCoursesLink,
-  pastOpen,
-  onTogglePast,
+  isSectionOpen,
+  onToggleSection,
 }: {
   sections: FlyoutSection[];
   /** Course whose page is being viewed, or null. */
   activeCourseId: string | null;
   pathname: string;
   showArchivedCoursesLink: boolean;
-  /** Past Courses starts collapsed; this is the sidebar's own persisted state for it. */
-  pastOpen: boolean;
-  onTogglePast: () => void;
+  /** The sidebar's own open/closed state for a bucket, so both views agree. */
+  isSectionOpen: (bucket: string) => boolean;
+  onToggleSection: (bucket: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const groupIdPrefix = useId();
-  const pastListId = useId();
+  const headingId = useId();
 
   // Any navigation the flyout did not start (a link elsewhere on the page, the back
   // button) leaves it hanging over a page it no longer describes.
@@ -110,7 +106,6 @@ export default function CollapsedCoursesFlyout({
         key={course.id}
         href={`/dashboard/courses/${course.id}`}
         code={course.code}
-        name={course.name}
         active={course.id === activeCourseId}
         onNavigate={() => setOpen(false)}
       />
@@ -154,72 +149,63 @@ export default function CollapsedCoursesFlyout({
           // Keeps the panel inside the viewport, and bounded if a user somehow has enough
           // courses to run past it.
           collisionPadding={8}
-          // Named rather than titled: the button that opens it already says Courses, so a
-          // heading on top would repeat it, but the panel still needs a name to announce.
-          aria-label="Courses"
+          aria-labelledby={headingId}
           className="bg-sidebar text-sidebar-foreground max-h-[70vh] w-64 overflow-y-auto p-2"
         >
-          {sections.map((section) => {
-            const groupHeadingId = `${groupIdPrefix}-${section.bucket}`;
-            // Past Courses is the one group that folds, matching the expanded sidebar,
-            // where it also starts closed. Upcoming and Current are short enough to show
-            // outright.
-            if (section.bucket === 'past') {
-              return (
-                <div key={section.bucket}>
-                  <h3>
-                    <button
-                      type="button"
-                      onClick={onTogglePast}
-                      aria-expanded={pastOpen}
-                      aria-controls={pastListId}
-                      className="text-sidebar-foreground/70 hover:bg-brand-teal focus-visible:ring-sidebar-ring flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none"
-                    >
-                      {section.label}
-                      <ChevronDown
-                        aria-hidden="true"
-                        className={cn(
-                          'ml-auto h-3 w-3 shrink-0 transition-transform',
-                          pastOpen ? '' : '-rotate-90',
-                        )}
-                      />
-                    </button>
-                  </h3>
-                  {/* Kept mounted and hidden so aria-controls always points at a real
-                      element, the same way the expanded sidebar's sections work. */}
-                  <ul id={pastListId} hidden={!pastOpen} className="mt-1 mb-2 space-y-0.5">
-                    {renderCourses(section.courses)}
-                    {showArchivedCoursesLink && (
-                      <li>
-                        <Link
-                          href="/dashboard/archived-courses"
-                          onClick={() => setOpen(false)}
-                          aria-current={archivedActive ? 'page' : undefined}
-                          className={cn(
-                            linkStyles,
-                            'text-sm',
-                            archivedActive &&
-                              'border-sidebar-foreground bg-brand-teal font-semibold text-white',
-                          )}
-                        >
-                          Archived Courses
-                        </Link>
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              );
-            }
+          <h2 id={headingId} className="px-2 pt-1 pb-2 text-sm font-semibold">
+            Courses
+          </h2>
 
+          {/* Every group folds, and each one starts however the expanded sidebar has it,
+              since they share the same stored state: open unless the user closed it, with
+              Past Courses closed by default. */}
+          {sections.map((section) => {
+            const listId = `${headingId}-${section.bucket}`;
+            const sectionOpen = isSectionOpen(section.bucket);
             return (
-              <div key={section.bucket} role="group" aria-labelledby={groupHeadingId}>
-                <h3
-                  id={groupHeadingId}
-                  className="text-sidebar-foreground/70 px-2 py-1 text-xs font-medium"
-                >
-                  {section.label}
+              <div key={section.bucket}>
+                <h3>
+                  <button
+                    type="button"
+                    onClick={() => onToggleSection(section.bucket)}
+                    aria-expanded={sectionOpen}
+                    aria-controls={listId}
+                    className="text-sidebar-foreground/70 hover:bg-brand-teal focus-visible:ring-sidebar-ring flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none"
+                  >
+                    {section.label}
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={cn(
+                        'ml-auto h-3 w-3 shrink-0 transition-transform',
+                        sectionOpen ? '' : '-rotate-90',
+                      )}
+                    />
+                  </button>
                 </h3>
-                <ul className="mt-1 mb-2 space-y-0.5">{renderCourses(section.courses)}</ul>
+                {/* Kept mounted and hidden so aria-controls always points at a real
+                    element, the same way the expanded sidebar's sections work. */}
+                <ul id={listId} hidden={!sectionOpen} className="mt-1 mb-2 space-y-0.5">
+                  {renderCourses(section.courses)}
+                  {/* The archived list belongs with the past courses, as it does in the
+                      expanded sidebar. */}
+                  {section.bucket === 'past' && showArchivedCoursesLink && (
+                    <li>
+                      <Link
+                        href="/dashboard/archived-courses"
+                        onClick={() => setOpen(false)}
+                        aria-current={archivedActive ? 'page' : undefined}
+                        className={cn(
+                          linkStyles,
+                          'text-sm',
+                          archivedActive &&
+                            'border-sidebar-foreground bg-brand-teal font-semibold text-white',
+                        )}
+                      >
+                        Archived Courses
+                      </Link>
+                    </li>
+                  )}
+                </ul>
               </div>
             );
           })}

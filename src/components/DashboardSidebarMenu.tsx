@@ -539,10 +539,11 @@ export default function DashboardSidebarMenu() {
                       activeCourseId={activeCourseId}
                       pathname={pathname}
                       showArchivedCoursesLink={showArchivedCoursesLink}
-                      // Same rule as the expanded sidebar: closed by default, but open
-                      // when the course you are on lives in it.
-                      pastOpen={isOpen('past') || activeSectionBucket === 'past'}
-                      onTogglePast={() => toggle('past')}
+                      // The expanded sidebar's own rule and its own stored state, so a
+                      // group is folded the same way in both views: open unless closed by
+                      // the user, and always open when it holds the course you are on.
+                      isSectionOpen={(bucket) => isOpen(bucket) || bucket === activeSectionBucket}
+                      onToggleSection={toggle}
                     />
                   </SidebarMenu>
                 </SidebarGroupContent>

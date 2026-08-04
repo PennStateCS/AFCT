@@ -77,8 +77,8 @@ const renderSidebar = ({ open = true }: { open?: boolean } = {}) => {
   );
 };
 
-// One course per bucket, each with a title so the flyout's second line has something to
-// show.
+// One course per bucket. The titles are here so a test can prove the flyout lists codes
+// only, the way the expanded sidebar does.
 const BUCKETED_COURSES = [
   {
     id: 'up-1',
@@ -288,7 +288,7 @@ describe('dashboard sidebar (real primitives)', () => {
       expect(within(drawer).queryByRole('button', { name: 'Courses' })).toBeNull();
     });
 
-    it('groups the courses it lists and shows each code with its title', async () => {
+    it('titles the panel and lists each course by its code, grouped', async () => {
       const user = userEvent.setup();
       renderSidebar({ open: false });
 
@@ -296,13 +296,26 @@ describe('dashboard sidebar (real primitives)', () => {
       expect(coursesButton()).toHaveAttribute('aria-expanded', 'true');
       expect(coursesButton()).toHaveAttribute('aria-controls', panel.id);
 
+      expect(within(panel).getByRole('heading', { name: 'Courses' })).toBeInTheDocument();
       expect(within(panel).getByRole('heading', { name: 'Upcoming' })).toBeInTheDocument();
       expect(within(panel).getByRole('heading', { name: 'Current' })).toBeInTheDocument();
-      const current = within(panel).getByRole('link', { name: /CS101/ });
-      expect(current).toHaveAttribute('href', '/dashboard/courses/cur-1');
-      expect(current).toHaveTextContent('Computing Theory');
 
-      // Past Courses folds, and starts closed, as it does in the expanded sidebar.
+      // Code only, the same as the expanded sidebar shows; the course title is not
+      // repeated underneath it.
+      const current = within(panel).getByRole('link', { name: 'CS101' });
+      expect(current).toHaveAttribute('href', '/dashboard/courses/cur-1');
+      expect(within(panel).queryByText('Computing Theory')).toBeNull();
+
+      // Every group folds, starting the way the expanded sidebar has it: open, except
+      // Past Courses.
+      expect(within(panel).getByRole('button', { name: /Upcoming/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      expect(within(panel).getByRole('button', { name: /Current/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
       const past = within(panel).getByRole('button', { name: /Past Courses/ });
       expect(past).toHaveAttribute('aria-expanded', 'false');
       // Hidden rather than unmounted, so aria-controls keeps pointing at a real element,
@@ -312,6 +325,21 @@ describe('dashboard sidebar (real primitives)', () => {
       await user.click(past);
       expect(past).toHaveAttribute('aria-expanded', 'true');
       expect(within(panel).getByRole('link', { name: /CS001/ })).toBeVisible();
+    });
+
+    it('folds a group, and remembers it the way the expanded sidebar does', async () => {
+      const user = userEvent.setup();
+      renderSidebar({ open: false });
+
+      const panel = await openCoursesFlyout(user);
+      await user.click(within(panel).getByRole('button', { name: /Current/ }));
+
+      expect(within(panel).queryByRole('link', { name: 'CS101' })).toBeNull();
+      // The two views share one stored state, so a group closed here is closed in the
+      // expanded sidebar too.
+      expect(JSON.parse(localStorage.getItem('afct.sidebarSections') ?? '{}')).toMatchObject({
+        current: false,
+      });
     });
 
     it('omits a group with no courses', async () => {
