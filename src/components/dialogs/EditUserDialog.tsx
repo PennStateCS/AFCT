@@ -271,7 +271,7 @@ export function EditUserDialog({
                   cropY={avatarCrop.cropY}
                   zoom={avatarCrop.zoom}
                 />
-                <AvatarFallback className="bg-secondary text-secondary-foreground">
+                <AvatarFallback>
                   {(watch('firstName') || user.firstName || '?').charAt(0)}
                   {(watch('lastName') || user.lastName || '?').charAt(0)}
                 </AvatarFallback>

@@ -51,6 +51,11 @@
      stays the same in both themes: --secondary itself flips to a dark neutral in
      dark mode, which would make anything drawn in it vanish on a dark background. */
   --color-brand-teal: oklch(0.6794 0.0938 203.328);
+  /* A darker brand teal for solid swatches that carry WHITE text, such as the initials
+     shown when a user has no profile photo. --brand-teal itself is only 2.78:1 against
+     white, under the 4.5:1 AA floor; this one is 5.3:1. Same hue, and pinned as a
+     literal for the same reason --brand-teal is: it must not flip in dark mode. */
+  --color-brand-teal-dark: oklch(0.52 0.09 203.328);
   --color-badge-success: var(--badge-success);
   --color-badge-success-bg: var(--badge-success-bg);
   --color-badge-success-border: var(--badge-success-border);

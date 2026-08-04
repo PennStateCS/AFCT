@@ -236,7 +236,7 @@ export function EditRoleDialog({
                     cropY={roster.user.cropY ?? 0.5}
                     zoom={roster.user.zoom ?? 1}
                   />
-                  <AvatarFallback className="bg-secondary text-secondary-foreground">
+                  <AvatarFallback>
                     {getInitials(
                       roster.user.firstName,
                       roster.user.lastName,

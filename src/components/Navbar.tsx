@@ -216,7 +216,7 @@ const Navbar: React.FC = () => {
                     cropY={user.cropY ?? 0.5}
                     zoom={user.zoom ?? 1}
                   />
-                  <AvatarFallback className="text-sm text-white">
+                  <AvatarFallback className="text-sm">
                     {getInitials(user.firstName, user.lastName, user.email)}
                   </AvatarFallback>
                 </Avatar>

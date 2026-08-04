@@ -370,7 +370,7 @@ export const userColumns = (
               cropY={user.cropY ?? 0.5}
               zoom={user.zoom ?? 1}
             />
-            <AvatarFallback className="bg-brand-teal text-white">
+            <AvatarFallback>
               {getInitials(user.firstName, user.lastName, user.email)}
             </AvatarFallback>
           </Avatar>
