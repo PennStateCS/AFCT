@@ -1,22 +1,71 @@
 import { promises as fs } from 'fs';
 import { createHash } from 'crypto';
-import { XMLParser } from 'fast-xml-parser';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+import type { JflapSimilarityData } from './types';
 
-export interface JflapSimilarityData {
-  fileHashEmail: string | undefined;
-  fileHashData: string | undefined;
-  calcHash: string;
+function extractCommentTagValue(xml: string, tagName: string): string | undefined {
+  const regex = new RegExp(
+    `<!--\\s*(?:<${tagName}>([^<]*)<\\/${tagName}>|${tagName}:\\s*([^<]*))\\s*-->`,
+    'gi',
+  );
+  let match: RegExpExecArray | null;
+  let value: string | undefined;
+
+  while ((match = regex.exec(xml)) !== null) {
+    value = (match[1] ?? match[2])?.trim();
+  }
+
+  return value;
 }
 
-// Shape of the parsed JFLAP file before the appended hash comments.
-interface ParsedJflapFile {
-  structure?: unknown;
+function canonicalizeXmlNode(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeXmlNode);
+  }
+
+  const normalized: Record<string, unknown> = {};
+  for (const key of Object.keys(value).sort()) {
+    normalized[key] = canonicalizeXmlNode((value as Record<string, unknown>)[key]);
+  }
+  return normalized;
 }
 
-function extractCommentTagValue(line: string, tagName: string): string | undefined {
-  const regex = new RegExp(`^\s*<!--\s*<${tagName}>([^<]*)<\/${tagName}>\s*-->\s*$`);
-  const match = line.match(regex);
-  return match?.[1]?.trim();
+function serializeStructureNode(xml: string): string | null {
+  try {
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      parseAttributeValue: false,
+      parseTagValue: false,
+      trimValues: true,
+    });
+    const parsed = parser.parse(xml) as Record<string, unknown>;
+    const structure = parsed?.structure;
+
+    if (!structure || typeof structure !== 'object') {
+      return null;
+    }
+
+    const builder = new XMLBuilder({
+      ignoreAttributes: false,
+      format: false,
+      suppressEmptyNode: false,
+    });
+
+    return builder.build({ structure: canonicalizeXmlNode(structure) });
+  } catch {
+    return null;
+  }
+}
+
+function hashStructureElement(xml: string): string | undefined {
+  const serialized = serializeStructureNode(xml);
+  if (!serialized) return undefined;
+
+  return createHash('sha256').update(serialized).digest('hex');
 }
 
 export async function jflapSimilarityParser(filePath: string): Promise<JflapSimilarityData | null> {
@@ -30,18 +79,13 @@ export async function jflapSimilarityParser(filePath: string): Promise<JflapSimi
       throw new Error('JFLAP file is empty.');
     }
 
-    const parser = new XMLParser();
-    const parsed = parser.parse(fileContents) as ParsedJflapFile;
-
     const lines = fileContents.trimEnd().split(/\r?\n/);
-    const fileHashEmail = extractCommentTagValue(lines[lines.length - 2] ?? '', 'hashE');
-    const fileHashData = extractCommentTagValue(lines[lines.length - 1] ?? '', 'hashD');
+    const [secondLastLine, lastLine] = [lines[lines.length - 2] ?? '', lines[lines.length - 1] ?? ''];
+    const fileHashEmail = extractCommentTagValue(secondLastLine, 'hashE');
+    const fileHashData = extractCommentTagValue(lastLine, 'hashD');
+    const calcHashData = hashStructureElement(fileContents);
 
-    const calcHash = createHash('sha256')
-      .update(JSON.stringify(parsed.structure))
-      .digest('hex');
-
-    return { fileHashEmail, fileHashData, calcHash };
+    return { fileHashEmail, fileHashData, calcHashData };
   } catch (error) {
     console.error('Failed to read JFLAP file:', error);
     return null;

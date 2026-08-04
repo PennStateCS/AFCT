@@ -19,6 +19,8 @@ const activityLogMock = vi.hoisted(() => vi.fn());
 const existsSyncMock = vi.hoisted(() => vi.fn());
 const execSyncMock = vi.hoisted(() => vi.fn());
 const platformMock = vi.hoisted(() => vi.fn());
+const checkFileStatusMock = vi.hoisted(() => vi.fn());
+const jflapSimilarityParserMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('../../lib/java-runner', () => ({
@@ -31,6 +33,8 @@ vi.mock('./eval-config', () => ({
   getQueueSettings: getQueueSettingsMock,
 }));
 vi.mock('./activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+vi.mock('./simulatiry_report/check_file_status', () => ({ check_file_status: checkFileStatusMock }));
+vi.mock('./simulatiry_report/jflap_simulatiry_parser', () => ({ jflapSimilarityParser: jflapSimilarityParserMock }));
 vi.mock('fs', () => ({ default: { existsSync: existsSyncMock }, existsSync: existsSyncMock }));
 vi.mock('child_process', () => ({ execSync: execSyncMock }));
 vi.mock('os', () => ({ default: { platform: platformMock }, platform: platformMock }));
@@ -71,6 +75,12 @@ beforeEach(() => {
   executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"ok"}', stderr: '' });
   activityLogMock.mockResolvedValue(undefined);
   getEvaluatorConfigMock.mockResolvedValue(CONFIG);
+  jflapSimilarityParserMock.mockResolvedValue({
+    fileHashEmail: 'user@example.com',
+    fileHashData: 'file-hash-value',
+    calcHashData: 'content-hash-value',
+  });
+  checkFileStatusMock.mockResolvedValue({ status: 'ok' });
   delete process.env.CFGANALYZER_BINARY;
 });
 
@@ -119,7 +129,13 @@ describe('runJavaEvaluator — evaluator execution', () => {
   it('parses a successful evaluation and reports correctness + feedback', async () => {
     executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"Nice work"}', stderr: '' });
     const result = await runJavaEvaluator(makeSubmission(), CONFIG);
-    expect(result).toMatchObject({ status: 'COMPLETED', correct: true, feedback: 'Nice work' });
+    expect(result).toMatchObject({
+      status: 'COMPLETED',
+      correct: true,
+      feedback: 'Nice work',
+      fileHashData: 'file-hash-value',
+      calcHashData: 'content-hash-value',
+    });
     expect(result.evaluationRaw).toEqual({ correct: true, feedback: 'Nice work' });
     expect(loggedActions()).toContain('SUBMISSION_EVALUATION_SUCCESS');
   });
@@ -205,7 +221,14 @@ describe('evaluateSubmission', () => {
     await evaluateSubmission('sub-1');
 
     expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ correct: true, status: 'COMPLETED' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          correct: true,
+          status: 'COMPLETED',
+          contentHash: 'content-hash-value',
+          fileHash: 'file-hash-value',
+        }),
+      }),
     );
     // Autograde only touches a non-manual row, and creates a non-manual row.
     expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(

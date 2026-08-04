@@ -80,7 +80,8 @@ interface SubmissionEvaluationResult {
   correct?: boolean;
   evaluationRaw: unknown | null;
   status: SubmissionEvaluationStatus;
-  contentHash?: string;
+  fileHashData?: string | null;
+  calcHashData?: string | null;
   similarityReportJson?: FileStatusReturn;
 }
 
@@ -382,7 +383,8 @@ async function evaluateSubmission(id: string) {
           ? Prisma.JsonNull
           : (evaluation.evaluationRaw as Prisma.InputJsonValue),
       status: evaluation.status,
-      contentHash: evaluation.contentHash,
+      fileHashData: evaluation.fileHashData,
+      calcHashData: evaluation.calcHashData,
       similarityReportJson: evaluation.similarityReportJson,
     });
 
@@ -678,11 +680,12 @@ async function evaluateWithJar(
 
       // Run simularity report
       const similarityData = await jflapSimilarityParser(uploadedFilePath);
-      const fileUserId = similarityData?.fileHashEmail ?? undefined;
-      const fileHash = similarityData?.fileHashData ?? undefined;
-      const contentHash = similarityData?.calcHash ?? undefined;
 
-      const similarityReportJson = await check_file_status(fileHash, contentHash, fileUserId, submission.studentId);
+      const fileHashData = similarityData?.fileHashData ?? undefined;
+      const calcHashData = similarityData?.calcHashData ?? undefined;
+      const fileHashEmail = similarityData?.fileHashEmail ?? undefined;
+
+      const similarityReportJson = await check_file_status(fileHashData, calcHashData, fileHashEmail, submission.studentId);
 
       const correct = typeof evaluation.correct === 'boolean' ? evaluation.correct : undefined;
       let feedback: string;
@@ -700,7 +703,15 @@ async function evaluateWithJar(
         evaluation,
       });
 
-      return { feedback, correct, evaluationRaw: evaluation, status: 'COMPLETED', contentHash, similarityReportJson };
+      return {
+        feedback,
+        correct,
+        evaluationRaw: evaluation,
+        status: 'COMPLETED',
+        similarityReportJson,
+        fileHashData: fileHashData ?? null,
+        calcHashData: calcHashData ?? null,
+      };
     } catch (parseErr) {
       const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
       await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
