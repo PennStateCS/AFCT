@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import { createHash } from 'crypto';
-import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import type { JflapSimilarityData } from './types';
 
 function extractCommentTagValue(xml: string, tagName: string): string | undefined {
@@ -18,54 +18,40 @@ function extractCommentTagValue(xml: string, tagName: string): string | undefine
   return value;
 }
 
-function canonicalizeXmlNode(value: unknown): unknown {
-  if (value === null || typeof value !== 'object') {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(canonicalizeXmlNode);
-  }
-
-  const normalized: Record<string, unknown> = {};
-  for (const key of Object.keys(value).sort()) {
-    normalized[key] = canonicalizeXmlNode((value as Record<string, unknown>)[key]);
-  }
-  return normalized;
-}
-
 function serializeStructureNode(xml: string): string | null {
-  try {
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      parseAttributeValue: false,
-      parseTagValue: false,
-      trimValues: true,
-    });
-    const parsed = parser.parse(xml) as Record<string, unknown>;
-    const structure = parsed?.structure;
+  if (!xml) return null;
 
-    if (!structure || typeof structure !== 'object') {
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    const structures = doc.getElementsByTagName('structure');
+
+    if (!structures || structures.length === 0) {
       return null;
     }
 
-    const builder = new XMLBuilder({
-      ignoreAttributes: false,
-      format: false,
-      suppressEmptyNode: false,
-    });
+    const structureNode = structures.item(0);
+    if (!structureNode) return null;
 
-    return builder.build({ structure: canonicalizeXmlNode(structure) });
-  } catch {
+    // 1. Serialize DOM node back to string using @xmldom
+    let serializedXml = new XMLSerializer().serializeToString(structureNode);
+
+    // 2. Convert standard CR/LF line breaks (\r\n or \r) into explicit '&#13;\n' entities
+    // to match Java's literal entity output
+    serializedXml = serializedXml.replace(/\r\n/g, '&#13;\n').replace(/\r/g, '&#13;');
+
+    // 3. Trim outer leading/trailing whitespace
+    return serializedXml.trim();
+  } catch (ex) {
     return null;
   }
 }
 
 function hashStructureElement(xml: string): string | undefined {
   const serialized = serializeStructureNode(xml);
+  console.log("SERIALIZED STRUCTURE NODE: [" + serialized + "]");
   if (!serialized) return undefined;
 
-  return createHash('sha256').update(serialized).digest('hex');
+  return createHash('sha256').update(serialized, 'utf8').digest('hex');
 }
 
 export async function jflapSimilarityParser(filePath: string): Promise<JflapSimilarityData | null> {
