@@ -17,8 +17,8 @@ const ACTIVITY_ORDER_BY: Record<
   action: (dir) => [{ action: dir }],
   category: (dir) => [{ category: dir }],
   ipAddress: (dir) => [{ ipAddress: dir }],
-  'user.lastName': (dir) => [{ user: { lastName: dir } }],
-  'user.firstName': (dir) => [{ user: { firstName: dir } }],
+  userLastName: (dir) => [{ user: { lastName: dir } }],
+  userFirstName: (dir) => [{ user: { firstName: dir } }],
 };
 
 const SEARCH_FIELDS = ['all', 'action', 'category', 'user'] as const;
@@ -53,7 +53,7 @@ const SEARCH_FIELDS = ['all', 'action', 'category', 'user'] as const;
  *   - { name: category, in: query, description: "Repeatable", schema: { type: array, items: { type: string } } }
  *   - { name: assignmentId, in: query, description: "Repeatable", schema: { type: array, items: { type: string } } }
  *   - { name: problemId, in: query, description: "Repeatable", schema: { type: array, items: { type: string } } }
- *   - { name: sortBy, in: query, schema: { type: string, enum: [timestamp, action, category, ipAddress, user.lastName, user.firstName] } }
+ *   - { name: sortBy, in: query, schema: { type: string, enum: [timestamp, action, category, ipAddress, userLastName, userFirstName] } }
  *   - { name: sortDir, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
  * responses:
  *   200:

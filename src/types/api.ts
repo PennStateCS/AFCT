@@ -5035,7 +5035,7 @@ export interface operations {
                 assignmentId?: string[];
                 /** @description Repeatable */
                 problemId?: string[];
-                sortBy?: "timestamp" | "action" | "category" | "ipAddress" | "user.lastName" | "user.firstName";
+                sortBy?: "timestamp" | "action" | "category" | "ipAddress" | "userLastName" | "userFirstName";
                 sortDir?: "asc" | "desc";
             };
             header?: never;

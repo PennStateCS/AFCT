@@ -275,6 +275,9 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     },
   },
   {
+    // Explicit id: TanStack would otherwise derive `user_firstName` from the dotted
+    // accessorKey, which is not what the server's sort allow-list is keyed by.
+    id: 'userFirstName',
     accessorKey: 'user.firstName',
     header: 'First Name',
     meta: { priority: 2 },
@@ -284,6 +287,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     },
   },
   {
+    id: 'userLastName',
     accessorKey: 'user.lastName',
     header: 'Last Name',
     meta: { priority: 3 },

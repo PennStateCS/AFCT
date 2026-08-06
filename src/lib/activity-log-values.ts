@@ -34,3 +34,21 @@ export function pickLogValues<T extends readonly string[]>(raw: string[], allowe
   const wanted = new Set(raw.map((v) => v.trim().toUpperCase()));
   return allowed.filter((a) => wanted.has(a));
 }
+
+/**
+ * The column ids the course Activity feed can be ordered by, server-side.
+ *
+ * These must be the ids the table's columns actually carry. TanStack derives a column's id
+ * from its `accessorKey` by replacing dots with underscores, so `accessorKey: 'user.lastName'`
+ * yields `user_lastName`, not `user.lastName`. Getting that wrong is silent: the header
+ * shows a sort indicator while the server quietly falls back to its default order.
+ * `activity-columns.test.tsx` asserts the columns' sortable ids match this list exactly.
+ */
+export const ACTIVITY_SORT_KEYS = [
+  'timestamp',
+  'action',
+  'category',
+  'ipAddress',
+  'userFirstName',
+  'userLastName',
+] as const;

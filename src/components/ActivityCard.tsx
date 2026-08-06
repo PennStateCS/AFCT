@@ -15,6 +15,7 @@ import { RefreshCw, Activity } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 import { LOG_CATEGORIES } from '@/lib/activity-log-values';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -81,7 +82,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
   // The course's assignments and problems, so the filter menus can offer every one of them
   // rather than only those appearing in the rows on screen.
   const { data: filterOptions } = useQuery({
-    queryKey: ['course', courseId, 'activity', 'filters'],
+    queryKey: queryKeys.course.activityFilters(courseId),
     queryFn: async () => {
       const res = await fetch(apiPaths.courseActivityFilters(courseId));
       if (!res.ok) throw new Error('Failed to load activity filters');
@@ -105,7 +106,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
   };
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
-    queryKey: ['course', courseId, 'activity', 'page', params],
+    queryKey: queryKeys.course.activityPage(courseId, params),
     queryFn: async () => {
       const res = await fetch(apiPaths.courseActivity(courseId, params), { cache: 'no-store' });
       if (!res.ok) {

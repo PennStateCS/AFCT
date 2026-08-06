@@ -6,6 +6,7 @@ import { render, screen } from '@testing-library/react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { getActivityColumns, type ActivityLog } from './activity-columns';
+import { ACTIVITY_SORT_KEYS } from '@/lib/activity-log-values';
 
 /**
  * The columns are fed straight from `GET /api/courses/[id]/activity`, so this pins what
@@ -92,6 +93,25 @@ describe('activity columns', () => {
       // ordering it silently could not deliver.
       expect(sortableOf('assignment')).toBe(false);
       expect(sortableOf('problem')).toBe(false);
+    });
+
+    it('offers sorting on exactly the columns the server can order by', () => {
+      /*
+       * The bug this guards: TanStack derives a column id from `accessorKey` by replacing
+       * dots with underscores, so `user.lastName` becomes `user_lastName`. When the sort
+       * allow-list was keyed by the dotted spelling, clicking Last Name sent an id the
+       * server did not recognise and it silently fell back to timestamp order while the
+       * header still showed a sort indicator.
+       */
+      const sortableIds = columns()
+        .filter((c) => {
+          const hasAccessor =
+            'accessorKey' in c || typeof (c as { accessorFn?: unknown }).accessorFn === 'function';
+          return hasAccessor && c.enableSorting !== false;
+        })
+        .map((c) => c.id ?? (c as { accessorKey?: string }).accessorKey);
+
+      expect([...sortableIds].sort()).toEqual([...ACTIVITY_SORT_KEYS].sort());
     });
 
     it('exposes no client-side faceted filters', () => {
