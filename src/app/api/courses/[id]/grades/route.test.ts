@@ -2,40 +2,47 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  roster: { findMany: vi.fn(), findFirst: vi.fn() },
-  user: { findMany: vi.fn() },
-  assignment: { findMany: vi.fn() },
-  assignmentProblemGrade: { groupBy: vi.fn() },
-  groupMembership: { findMany: vi.fn() },
+  roster: { findFirst: vi.fn() },
   activityLog: { findFirst: vi.fn() },
   course: { findUnique: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
+const getPageMock = vi.hoisted(() => vi.fn());
+const getColumnsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+vi.mock('@/lib/course-grades', () => ({
+  getCourseGradePage: getPageMock,
+  getCourseGradeColumns: getColumnsMock,
+}));
 
 import { GET } from './route';
 
+const req = (query = '') => new NextRequest(`http://localhost/api/courses/c1/grades${query}`);
+const ctx = { params: Promise.resolve({ id: 'c1' }) };
+const staff = () => prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
 beforeEach(() => {
   vi.clearAllMocks();
+  authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
-  prismaMock.groupMembership.findMany.mockResolvedValue([]);
   // No recent view logged → the throttled read-audit proceeds to createEnhancedActivityLog.
   prismaMock.activityLog.findFirst.mockResolvedValue(null);
   activityLogMock.mockResolvedValue(undefined);
+  getPageMock.mockResolvedValue({ rows: [], total: 0 });
+  getColumnsMock.mockResolvedValue({ assignments: [], totalStudents: 0 });
 });
 
 describe('GET /api/courses/[id]/grades', () => {
   it('returns 400 when course ID missing', async () => {
-    // Admin passes the auth gate; the wrapper then rejects the empty course id.
     authMock.mockResolvedValue({ user: { id: 'a1', isAdmin: true } });
-    const req = new NextRequest('http://localhost/api/courses//grades');
-    const res = await GET(req, { params: Promise.resolve({ id: '' }) });
+
+    const res = await GET(req(), { params: Promise.resolve({ id: '' }) });
 
     expect(res.status).toBe(400);
   });
@@ -43,201 +50,156 @@ describe('GET /api/courses/[id]/grades', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+    const res = await GET(req(), ctx);
 
     expect(res.status).toBe(401);
   });
 
-  it('returns 403 when role is not allowed', async () => {
+  it('returns 403 when the caller is not course staff', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+    const res = await GET(req(), ctx);
 
     expect(res.status).toBe(403);
-    expect(prismaMock.roster.findMany).not.toHaveBeenCalled();
+    expect(getPageMock).not.toHaveBeenCalled();
   });
 
-  it('returns grade matrix for staff', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
-    prismaMock.user.findMany.mockResolvedValue([
-      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
-    ]);
-    prismaMock.assignment.findMany.mockResolvedValue([
-      { id: 'a1', title: 'A1', dueDate: '2025-01-01', problems: [{ maxPoints: 10 }] },
-    ]);
-    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
-      { studentId: 's1', assignmentId: 'a1', _sum: { grade: 95 } },
-    ]);
+  describe('?part=columns', () => {
+    it('returns the assignment columns and the student total', async () => {
+      staff();
+      getColumnsMock.mockResolvedValue({
+        assignments: [{ id: 'a1', title: 'A1', dueDate: null, maxPoints: 10 }],
+        totalStudents: 1200,
+      });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+      const res = await GET(req('?part=columns'), ctx);
 
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.students).toEqual([
-      {
-        id: 's1',
-        firstName: 'A',
-        lastName: 'B',
-        email: 's1@example.com',
-        avatar: null,
-        enrollmentStatus: 'ENROLLED',
-      },
-    ]);
-    expect(body.assignments).toEqual([
-      { id: 'a1', title: 'A1', maxPoints: 10, dueDate: '2025-01-01' },
-    ]);
-    expect(body.grades).toEqual({ s1: { a1: 95 } });
-  });
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        assignments: [{ id: 'a1', title: 'A1', dueDate: null, maxPoints: 10 }],
+        totalStudents: 1200,
+      });
+      expect(getPageMock).not.toHaveBeenCalled();
+    });
 
-  it('fills nulls when no gradeRows exist', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.roster.findMany.mockResolvedValue([
-      { userId: 's1', role: 'STUDENT' },
-      { userId: 's2', role: 'STUDENT' },
-    ]);
-    prismaMock.user.findMany.mockResolvedValue([
-      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
-      { id: 's2', firstName: 'C', lastName: 'D', email: 's2@example.com', avatar: null },
-    ]);
-    prismaMock.assignment.findMany.mockResolvedValue([
-      { id: 'a1', title: 'A1', dueDate: '2025-01-01', problems: [{ maxPoints: 10 }] },
-      { id: 'a2', title: 'A2', dueDate: '2025-02-01', problems: [{ maxPoints: 20 }] },
-    ]);
-    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
+    it('does not audit a columns read, which carries no grades', async () => {
+      staff();
 
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+      await GET(req('?part=columns'), ctx);
 
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.grades).toEqual({
-      s1: { a1: null, a2: null },
-      s2: { a1: null, a2: null },
+      expect(activityLogMock).not.toHaveBeenCalled();
     });
   });
 
-  it('returns empty grade matrix without groupBy when no assignments exist', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
-    prismaMock.user.findMany.mockResolvedValue([
-      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
-    ]);
-    prismaMock.assignment.findMany.mockResolvedValue([]);
+  describe('paged students', () => {
+    it('returns the page envelope', async () => {
+      staff();
+      getPageMock.mockResolvedValue({ rows: [{ id: 's1' }], total: 23 });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+      const res = await GET(req('?page=2&pageSize=5'), ctx);
 
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.students).toHaveLength(1);
-    expect(body.assignments).toEqual([]);
-    expect(body.grades).toEqual({ s1: {} });
-    expect(prismaMock.assignmentProblemGrade.groupBy).not.toHaveBeenCalled();
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        rows: [{ id: 's1' }],
+        total: 23,
+        page: 2,
+        pageSize: 5,
+        totalPages: 5,
+      });
+    });
+
+    it('turns page and pageSize into skip and take', async () => {
+      staff();
+
+      await GET(req('?page=3&pageSize=20'), ctx);
+
+      expect(getPageMock).toHaveBeenCalledWith(
+        expect.objectContaining({ courseId: 'c1', skip: 40, take: 20 }),
+      );
+    });
+
+    it('clamps an oversized pageSize', async () => {
+      staff();
+
+      await GET(req('?pageSize=99999'), ctx);
+
+      expect(getPageMock).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
+    });
+
+    it('passes search and sort through, including an assignment id as the sort key', async () => {
+      staff();
+
+      await GET(req('?q=lovelace&sortBy=a1&sortDir=desc'), ctx);
+
+      expect(getPageMock).toHaveBeenCalledWith(
+        expect.objectContaining({ q: 'lovelace', sortBy: 'a1', sortDir: 'desc' }),
+      );
+    });
   });
 
-  it('returns an empty matrix and skips the user lookup when the roster is empty', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.roster.findMany.mockResolvedValue([]);
-    prismaMock.assignment.findMany.mockResolvedValue([
-      { id: 'a1', title: 'A1', dueDate: '2025-01-01', problems: [{ maxPoints: 10 }] },
-    ]);
+  describe('read audit', () => {
+    it('records the COURSE total, not the page length', async () => {
+      staff();
+      getPageMock.mockResolvedValue({ rows: [{ id: 's1' }], total: 1200 });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+      await GET(req('?pageSize=1'), ctx);
 
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.students).toEqual([]);
-    expect(body.grades).toEqual({});
-    expect(prismaMock.user.findMany).not.toHaveBeenCalled();
-    expect(prismaMock.assignmentProblemGrade.groupBy).not.toHaveBeenCalled();
+      // The log is research data: this used to be the size of the whole matrix, and
+      // paginating must not quietly redefine it as "rows on one page".
+      expect(activityLogMock).toHaveBeenCalledWith(
+        prismaMock,
+        expect.anything(),
+        expect.objectContaining({
+          action: 'COURSE_GRADES_VIEWED',
+          severity: 'INFO',
+          category: 'GRADE',
+          metadata: { studentCount: 1200 },
+        }),
+      );
+    });
+
+    it('stays silent while a recent view is still inside the throttle window', async () => {
+      staff();
+      prismaMock.activityLog.findFirst.mockResolvedValue({ id: 'log-1' });
+
+      await GET(req(), ctx);
+
+      expect(activityLogMock).not.toHaveBeenCalled();
+    });
+
+    it('still returns the page when the audit write fails', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      staff();
+      activityLogMock.mockRejectedValue(new Error('log down'));
+
+      const res = await GET(req(), ctx);
+
+      expect(res.status).toBe(200);
+      consoleSpy.mockRestore();
+    });
   });
 
-  it('coerces null summed grades to 0 and ignores rows for unknown students', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
-    prismaMock.user.findMany.mockResolvedValue([
-      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
-    ]);
-    prismaMock.assignment.findMany.mockResolvedValue([
-      { id: 'a1', title: 'A1', dueDate: '2025-01-01', problems: [{ maxPoints: 10 }] },
-    ]);
-    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
-      { studentId: 's1', assignmentId: 'a1', _sum: { grade: null } },
-      { studentId: 'ghost', assignmentId: 'a1', _sum: { grade: 5 } },
-    ]);
-
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.grades).toEqual({ s1: { a1: 0 } });
-  });
-
-  it('treats null problem maxPoints as 0 when summing assignment points', async () => {
-    // Branch 157: `Number(p.maxPoints ?? 0)`, a problem with null maxPoints.
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
-    prismaMock.user.findMany.mockResolvedValue([
-      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
-    ]);
-    prismaMock.assignment.findMany.mockResolvedValue([
-      {
-        id: 'a1',
-        title: 'A1',
-        dueDate: '2025-01-01',
-        problems: [{ maxPoints: null }, { maxPoints: 5 }],
-      },
-    ]);
-    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
-
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.assignments[0].maxPoints).toBe(5);
-  });
-
-  it('returns 500 when a query fails', async () => {
+  it('returns 500 when the query fails', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.roster.findMany.mockRejectedValue(new Error('db down'));
+    staff();
+    getPageMock.mockRejectedValue(new Error('db down'));
 
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+    const res = await GET(req(), ctx);
 
     expect(res.status).toBe(500);
     consoleSpy.mockRestore();
   });
 
   it('returns 500 with dev detail from a non-Error thrown value', async () => {
-    // Branch 197: `error instanceof Error ? error.message : String(error)`.
-    // Branch 201: NODE_ENV === 'development' includes the detail.
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.stubEnv('NODE_ENV', 'development');
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.roster.findMany.mockRejectedValue('kaboom');
+    staff();
+    getPageMock.mockRejectedValue('kaboom');
 
-    const req = new NextRequest('http://localhost/api/courses/c1/grades');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+    const res = await GET(req(), ctx);
 
     expect(res.status).toBe(500);
-    const body = await res.json();
-    expect(body.detail).toBe('kaboom');
-
+    await expect(res.json()).resolves.toMatchObject({ detail: 'kaboom' });
     consoleSpy.mockRestore();
   });
 });

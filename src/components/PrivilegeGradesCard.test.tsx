@@ -5,6 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PrivilegeGradesCard } from './PrivilegeGradesCard';
+import type { GradePageRow } from '@/lib/course-grades';
 
 // Fresh QueryClient per test (retry off, no lingering cache) so each grades
 // query starts cold.
@@ -73,16 +74,56 @@ vi.mock('@/components/ui/data-table', () => ({
   ),
 }));
 
-const gradesPayload = {
-  students: [
-    { id: 's1', email: 'ada@x.io', firstName: 'Ada', lastName: 'Lovelace' },
-    { id: 's2', email: 'alan@x.io', firstName: 'Alan', lastName: 'Turing' },
-  ],
+// The two payloads the gradebook now fetches: columns once, then a page of students
+// whose rows already carry their own assigned flags and grades.
+const columnsPayload = {
   assignments: [{ id: 'a1', title: 'Homework 1', maxPoints: 10 }],
-  grades: {
-    s1: { a1: 8 },
-    s2: { a1: null },
-  },
+  totalStudents: 2,
+};
+
+/*
+ * Typed as the server's own row so a field rename in `lib/course-grades` breaks this test
+ * at compile time rather than silently rendering blank cells. The roster shipped exactly
+ * that bug: the server spelled a field one way and the columns read another.
+ */
+const row = (over: Partial<GradePageRow> = {}): GradePageRow => ({
+  id: 's1',
+  email: 'ada@x.io',
+  firstName: 'Ada',
+  lastName: 'Lovelace',
+  avatar: null,
+  cropX: null,
+  cropY: null,
+  zoom: null,
+  enrollmentStatus: 'ENROLLED',
+  assigned: { a1: true },
+  grades: { a1: 8 },
+  ...over,
+});
+
+const pagePayload = {
+  rows: [
+    row(),
+    row({
+      id: 's2',
+      email: 'alan@x.io',
+      firstName: 'Alan',
+      lastName: 'Turing',
+      grades: { a1: null },
+    }),
+  ],
+  total: 2,
+};
+
+/** Serve the columns request and the page request from one fetch mock. */
+const installFetch = (page: unknown = pagePayload, columns: unknown = columnsPayload) => {
+  const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+  fetchMock.mockImplementation(async (url: string) =>
+    String(url).includes('part=columns')
+      ? { ok: true, json: async () => columns }
+      : { ok: true, json: async () => page },
+  );
+  return fetchMock;
 };
 
 describe('PrivilegeGradesCard', () => {
@@ -91,20 +132,19 @@ describe('PrivilegeGradesCard', () => {
     vi.stubGlobal('fetch', vi.fn());
   });
 
-  it('fetches the grades matrix on mount and renders it', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => gradesPayload,
-    });
+  it('fetches the columns and one page of students, and renders them', async () => {
+    const fetchMock = installFetch();
 
     renderWithClient(<PrivilegeGradesCard courseId="c1" />);
 
     await waitFor(() => {
-      // The gradebook loads its structure and grade values in two requests.
-      expect(global.fetch).toHaveBeenCalledWith('/api/courses/c1/grades?part=structure');
-      expect(global.fetch).toHaveBeenCalledWith('/api/courses/c1/grades?part=values');
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/grades?part=columns');
       expect(screen.getByTestId('table-rows').textContent).toBe('2');
     });
+
+    // The rows come from a paged request, not a whole-course matrix.
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(urls.some((u) => u.includes('page=1') && u.includes('pageSize=10'))).toBe(true);
 
     // Student names and the graded cell come from the derived matrix. Cells show only
     // the earned grade, formatted to two decimals (the points live in the header).
@@ -135,7 +175,7 @@ describe('PrivilegeGradesCard', () => {
     expect(screen.getByTestId('table-loading').textContent).toBe('true');
     expect(screen.getByTestId('table-rows').textContent).toBe('0');
 
-    resolveFetch({ ok: true, json: async () => gradesPayload });
+    resolveFetch({ ok: true, json: async () => pagePayload });
 
     await waitFor(() => {
       expect(screen.getByTestId('table-loading').textContent).toBe('false');
@@ -143,16 +183,13 @@ describe('PrivilegeGradesCard', () => {
   });
 
   it('renders "N/A" for unassigned cells and a normal grade otherwise', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        ...gradesPayload,
+    installFetch({
+      rows: [
         // s1 is assigned a1 (normal cell); s2 is not assigned (N/A).
-        assigned: {
-          s1: { a1: true },
-          s2: { a1: false },
-        },
-      }),
+        row(),
+        row({ id: 's2', email: 'alan@x.io', assigned: { a1: false }, grades: { a1: null } }),
+      ],
+      total: 2,
     });
 
     renderWithClient(<PrivilegeGradesCard courseId="c1" />);
@@ -166,19 +203,19 @@ describe('PrivilegeGradesCard', () => {
     expect(screen.getByText('8.00')).toBeInTheDocument();
   });
 
-  it('orders the assignment columns by due date, earliest first', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        students: [{ id: 's1', email: 'ada@x.io', firstName: 'Ada', lastName: 'Lovelace' }],
+  it('renders one column per assignment, in the order the server sent them', async () => {
+    installFetch(
+      { rows: [row({ assigned: {}, grades: {} })], total: 1 },
+      {
+        // The server orders by due date; the client no longer re-sorts.
         assignments: [
-          { id: 'late', title: 'Late', maxPoints: 10, dueDate: '2026-03-01T00:00:00Z' },
           { id: 'early', title: 'Early', maxPoints: 10, dueDate: '2026-01-01T00:00:00Z' },
+          { id: 'late', title: 'Late', maxPoints: 10, dueDate: '2026-03-01T00:00:00Z' },
           { id: 'nodue', title: 'No due date', maxPoints: 10 },
         ],
-        grades: { s1: {} },
-      }),
-    });
+        totalStudents: 1,
+      },
+    );
 
     renderWithClient(<PrivilegeGradesCard courseId="c1" />);
     await waitFor(() => expect(screen.getByTestId('table-rows').textContent).toBe('1'));
@@ -186,7 +223,6 @@ describe('PrivilegeGradesCard', () => {
     const assignmentCols = Array.from(document.querySelectorAll('[data-col]'))
       .map((el) => el.getAttribute('data-col'))
       .filter((c) => c === 'early' || c === 'late' || c === 'nodue');
-    // Earliest due date first; the assignment with no due date sorts to the end.
     expect(assignmentCols).toEqual(['early', 'late', 'nodue']);
   });
 

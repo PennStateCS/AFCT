@@ -29,8 +29,20 @@ export const apiPaths = {
     `/api/courses/${id}/activity${qs({ limit: opts?.limit, offset: opts?.offset })}`,
   courseStudents: (id: string, opts?: { includeDropped?: boolean }) =>
     `/api/courses/${id}/students${opts?.includeDropped ? '?includeDropped=1' : ''}`,
-  courseGrades: (id: string, part?: 'structure' | 'values') =>
-    `/api/courses/${id}/grades${part ? `?part=${part}` : ''}`,
+  /** The gradebook's assignment columns and student total. */
+  courseGradeColumns: (id: string) => `/api/courses/${id}/grades?part=columns`,
+  /** One page of the gradebook: students with their assigned flags and grades. */
+  courseGradePage: (
+    id: string,
+    opts: { page?: number; pageSize?: number; q?: string; sortBy?: string; sortDir?: string },
+  ) =>
+    `/api/courses/${id}/grades${qs({
+      page: opts.page,
+      pageSize: opts.pageSize,
+      q: opts.q || undefined,
+      sortBy: opts.sortBy,
+      sortDir: opts.sortDir,
+    })}`,
   courseGradesExport: (id: string) => `/api/courses/${id}/grades/export`,
   courseStudentGrades: (id: string) => `/api/courses/${id}/student-grades`,
   courseRoster: (id: string) => `/api/courses/${id}/roster`,

@@ -1524,8 +1524,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get the course grade matrix
-         * @description Returns the full gradebook matrix for a course: students x assignments with each cell  holding the student's summed assignment grade (problem grades collapsed into one  total). Course staff (faculty or TAs) or a system admin. Reading the whole gradebook  is a FERPA-relevant access, so it's recorded (throttled) in the audit log.
+         * Get a page of the course gradebook
+         * @description The gradebook, one page of students at a time.   `?part=columns` returns the assignment columns and the course's student total, which the  table caches for the course. Without `part` it returns one page of students, each row  carrying that student's assigned flags and their summed assignment grades.   The whole students x assignments matrix used to be returned in one go (as `structure`  plus `values`), which does not survive a course with a thousand students. The full matrix  still exists for the LMS export, which builds it server-side in its own route.   Course staff (faculty or TAs) or a system admin. Reading grade values is a FERPA-relevant  access, so it is recorded (throttled) in the audit log.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
@@ -7444,8 +7444,15 @@ export interface operations {
     getCoursesByIdGrades: {
         parameters: {
             query?: {
-                /** @description `structure` returns students + assignments; `values` returns just the grades map; omitted returns the full matrix. */
-                part?: "structure" | "values";
+                /** @description `columns` returns the assignment columns and the student total; omitted returns one page of students with their grades. */
+                part?: "columns";
+                page?: number;
+                pageSize?: number;
+                /** @description Match on the student's name or email */
+                q?: string;
+                /** @description lastName, firstName, email, totalGrade, or an assignment id */
+                sortBy?: string;
+                sortDir?: "asc" | "desc";
             };
             header?: never;
             path: {
@@ -7455,16 +7462,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Students, assignments, and a nested grades map (grades[studentId][assignmentId]). */
+            /** @description Either the columns payload or one page of student rows. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        students?: Record<string, never>[];
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
                         assignments?: Record<string, never>[];
-                        grades?: Record<string, never>;
+                        totalStudents?: number;
                     };
                 };
             };

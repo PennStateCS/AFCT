@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { getInitials } from '@/app/utils/initials';
 import { DataTable } from '@/components/ui/data-table';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { Table, Download, RefreshCw, GraduationCap } from 'lucide-react';
@@ -39,15 +39,21 @@ function useMountedOnce(open: boolean): boolean {
   return mounted || open;
 }
 
+// One row as the server sends it: the student, plus their assigned flags and grades keyed
+// by assignment id. `assigned` is what lets a cell tell "not assigned" apart from
+// "assigned but ungraded".
 type StudentRow = {
   id: string;
   email: string;
   firstName?: string;
   lastName?: string;
+  avatar?: string;
   cropX?: number;
   cropY?: number;
   zoom?: number;
   enrollmentStatus?: string;
+  assigned: Record<string, boolean>;
+  grades: Record<string, number | null>;
   [key: string]: unknown;
 };
 
@@ -58,30 +64,10 @@ type Assignment = {
   maxPoints?: number;
 };
 
-type ApiStudent = {
-  id: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  avatar?: string;
-  cropX?: number;
-  cropY?: number;
-  zoom?: number;
-  enrollmentStatus?: string;
-};
-
-// Per-row key holding the student's assignment-assigned flags, so the cell renderer can
-// tell "not assigned" apart from "assigned but ungraded".
-const ASSIGNED_KEY = '__assigned';
-
 const EMPTY_STUDENTS: StudentRow[] = [];
 const EMPTY_ASSIGNMENTS: Assignment[] = [];
 
-// Placeholder shown in a grade/average cell while the grade values are still loading,
-// after the table's columns and rows have already painted from the structure request.
-const GradeCellSkeleton = () => (
-  <span aria-hidden="true" className="bg-muted mx-auto block h-4 w-10 animate-pulse rounded" />
-);
+const DEFAULT_PAGE_SIZE = 10;
 
 export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const VISIBILITY_REFRESH_MS = 60_000;
@@ -92,95 +78,91 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const exportMounted = useMountedOnce(exportDialogOpen);
   const canExport = Boolean(session?.user?.isAdmin);
 
-  // The gradebook loads in two halves so the table paints its columns and rows while the
-  // grade cells are still loading. `structure` (students + assignments + assigned) is the
-  // fast part and drives the table; `values` (the grades map) is the slower aggregation
-  // and fills the cells when it arrives. Both are invalidated together on refresh.
-  const structureQuery = useQuery({
-    queryKey: ['course', courseId, 'grades', 'structure'],
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  // searchInput is what the user is typing; search is the committed (debounced) query.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'lastName', desc: false }]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPageIndex(0);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // The assignment columns are the same for every page, so they are fetched once per
+  // course. The server already orders them by due date.
+  const columnsQuery = useQuery({
+    queryKey: ['course', courseId, 'grades', 'columns'],
     queryFn: async () => {
-      const res = await fetch(apiPaths.courseGrades(courseId, 'structure'));
+      const res = await fetch(apiPaths.courseGradeColumns(courseId));
       if (!res.ok)
         throw new Error(
           (await res.json())?.error || 'Could not load grades. Refresh the page to try again.',
         );
-      const body = (await res.json()) as {
-        students: ApiStudent[];
-        assignments: Assignment[];
-        assigned?: Record<string, Record<string, boolean>>;
-      };
+      return (await res.json()) as { assignments: Assignment[]; totalStudents: number };
+    },
+    staleTime: 30_000,
+  });
 
-      // Order the columns left-to-right by due date (earliest first); assignments with
-      // no due date sort to the end. maxPoints comes from the API.
-      const dueTime = (asg: Assignment) => {
-        const t = asg.dueDate ? Date.parse(asg.dueDate) : NaN;
-        return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
-      };
-      const assignmentsWithPoints: Assignment[] = body.assignments
-        .map((asg) => ({
-          ...asg,
-          maxPoints: (asg as Assignment & { maxPoints?: number }).maxPoints ?? 0,
-        }))
-        .sort((x, y) => dueTime(x) - dueTime(y));
+  const sort = sorting[0];
+  const pageParams = {
+    page: pageIndex + 1,
+    pageSize,
+    q: search || undefined,
+    sortBy: sort?.id,
+    sortDir: sort?.desc ? 'desc' : 'asc',
+  };
 
-      const rows: StudentRow[] = body.students.map((stu) => {
-        const row: StudentRow = {
-          id: stu.id,
-          email: stu.email,
-          avatar: stu.avatar,
-          firstName: stu.firstName,
-          lastName: stu.lastName,
-          cropX: stu.cropX,
-          cropY: stu.cropY,
-          zoom: stu.zoom,
-          enrollmentStatus: stu.enrollmentStatus,
-        };
-        const assignedFlags: Record<string, boolean> = {};
-        for (const asg of body.assignments) {
-          // Default to assigned when the flag is absent (older payloads / safety).
-          assignedFlags[asg.id] = body.assigned?.[stu.id]?.[asg.id] !== false;
-        }
-        row[ASSIGNED_KEY] = assignedFlags;
-        return row;
+  // One page of students, each row carrying its own grades. keepPreviousData holds the
+  // current page on screen while the next one loads.
+  const pageQuery = useQuery({
+    queryKey: ['course', courseId, 'grades', 'page', pageParams],
+    queryFn: async () => {
+      const res = await fetch(apiPaths.courseGradePage(courseId, pageParams), {
+        cache: 'no-store',
       });
-
-      return { students: rows, assignments: assignmentsWithPoints };
-    },
-    staleTime: 30_000,
-  });
-
-  const valuesQuery = useQuery({
-    queryKey: ['course', courseId, 'grades', 'values'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.courseGrades(courseId, 'values'));
       if (!res.ok)
         throw new Error(
           (await res.json())?.error || 'Could not load grades. Refresh the page to try again.',
         );
-      const body = (await res.json()) as {
-        grades: Record<string, Record<string, number | null>>;
-      };
-      return { grades: body.grades, fetchedAt: Date.now() };
+      const body = (await res.json()) as { rows: StudentRow[]; total: number };
+      return { ...body, fetchedAt: Date.now() };
     },
+    placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
 
-  const students = structureQuery.data?.students ?? EMPTY_STUDENTS;
-  const assignments = structureQuery.data?.assignments ?? EMPTY_ASSIGNMENTS;
-  const gradesMap = valuesQuery.data?.grades;
-  // Cells show a skeleton only on the first values load; a background refresh keeps the
-  // previous grades visible instead of flashing skeletons.
-  const valuesLoading = valuesQuery.isPending;
+  const students = pageQuery.data?.rows ?? EMPTY_STUDENTS;
+  const assignments = columnsQuery.data?.assignments ?? EMPTY_ASSIGNMENTS;
+  const total = pageQuery.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   // Drives the refresh/export button state (disabled + spinner) during any fetch.
   const loading =
-    structureQuery.isPending ||
-    structureQuery.isFetching ||
-    valuesQuery.isPending ||
-    valuesQuery.isFetching;
+    columnsQuery.isPending ||
+    columnsQuery.isFetching ||
+    pageQuery.isPending ||
+    pageQuery.isFetching;
   const lastUpdated = useMemo(
-    () => (valuesQuery.data ? new Date(valuesQuery.data.fetchedAt) : null),
-    [valuesQuery.data],
+    () => (pageQuery.data ? new Date(pageQuery.data.fetchedAt) : null),
+    [pageQuery.data],
   );
+
+  const handlePaginationChange: OnChangeFn<PaginationState> = (updater) => {
+    const next = typeof updater === 'function' ? updater({ pageIndex, pageSize }) : updater;
+    setPageIndex(next.pageIndex);
+    setPageSize(next.pageSize);
+  };
+
+  // Sorting is server-side; changing it resets to the first page.
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    const next = typeof updater === 'function' ? updater(sorting) : updater;
+    setSorting(next);
+    setPageIndex(0);
+  };
 
   const refreshGrades = useCallback(
     () => queryClient.invalidateQueries({ queryKey: ['course', courseId, 'grades'] }),
@@ -188,16 +170,16 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   );
 
   // Surface fetch failures as a toast, preserving the prior behavior.
-  const gradesError = structureQuery.isError || valuesQuery.isError;
+  const gradesError = columnsQuery.isError || pageQuery.isError;
   useEffect(() => {
     if (gradesError) {
-      console.error('Fetch grades error:', structureQuery.error ?? valuesQuery.error);
+      console.error('Fetch grades error:', columnsQuery.error ?? pageQuery.error);
       showToast.error('Could not load grades. Refresh the page to try again.');
     }
-  }, [gradesError, structureQuery.error, valuesQuery.error]);
+  }, [gradesError, columnsQuery.error, pageQuery.error]);
 
-  // Refresh data when the tab becomes visible again and the cached matrix is stale.
-  const valuesFetchedAt = valuesQuery.data?.fetchedAt;
+  // Refresh data when the tab becomes visible again and the cached page is stale.
+  const valuesFetchedAt = pageQuery.data?.fetchedAt;
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -266,16 +248,17 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     const computeAverage = (
       row: StudentRow,
     ): { pct: number; earned: number; available: number } | undefined => {
-      const assignedFlags = row[ASSIGNED_KEY] as Record<string, boolean> | undefined;
       let earned = 0;
       let available = 0;
       let gradeCount = 0;
       for (const a of assignments) {
         // Points available counts only assignments assigned to this student, so a
         // student who isn't assigned everything isn't measured against the full total.
-        if (assignedFlags?.[a.id] === false) continue;
+        // `averagePct` in lib/course-grades is the server-side twin of this, used to
+        // order the whole roster when the Average column is sorted; keep them in step.
+        if (row.assigned?.[a.id] === false) continue;
         available += a.maxPoints ?? 0;
-        const val = gradesMap?.[row.id]?.[a.id];
+        const val = row.grades?.[a.id];
         if (val !== null && val !== undefined) {
           earned += Number(val);
           gradeCount++;
@@ -340,9 +323,10 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     for (const a of assignments) {
       cols.push({
         id: a.id,
-        // Sort by this assignment's grade (from the values map); ungraded sorts last.
-        accessorFn: (row) => gradesMap?.[row.id]?.[a.id] ?? undefined,
-        sortUndefined: 'last',
+        // Sorting is the server's: it orders every student by this assignment's grade,
+        // not just the page on screen. The accessor still reads the row so the toolbar's
+        // search and the mobile cards have a value to show.
+        accessorFn: (row) => row.grades?.[a.id] ?? undefined,
         // Two-line header: the assignment title, with the points it's worth beneath it
         // (the cells now show only the earned grade). filterLabel keeps the sort
         // button's accessible name as the title even though the header is JSX.
@@ -356,8 +340,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         ),
         cell: ({ row }) => {
           const user = row.original;
-          const assignedFlags = user[ASSIGNED_KEY] as Record<string, boolean> | undefined;
-          const isAssigned = assignedFlags?.[a.id] !== false;
+          const isAssigned = user.assigned?.[a.id] !== false;
 
           // Not assigned to this student: show a muted "N/A" so it's clearly distinct
           // from an assigned-but-ungraded cell (which shows a plain "-"). role="img"
@@ -376,9 +359,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
             );
           }
 
-          // Grades still loading: skeleton (the column/row already painted).
-          if (valuesLoading) return <GradeCellSkeleton />;
-          const val = gradesMap?.[user.id]?.[a.id];
+          const val = user.grades?.[a.id];
 
           const handleClick = () => {
             setSelectedStudent({ id: user.id, name: `${user.firstName} ${user.lastName}` });
@@ -407,11 +388,9 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     cols.push({
       id: 'totalGrade',
       header: 'Average',
-      // Sortable via the derived average; students with no graded work sort to the end.
+      // Sorted server-side across the whole roster; see `averagePct` in lib/course-grades.
       accessorFn: (row) => computeAverage(row)?.pct,
-      sortUndefined: 'last',
       cell: ({ row }) => {
-        if (valuesLoading) return <GradeCellSkeleton />;
         const avg = computeAverage(row.original);
         if (avg === undefined) return <span className="text-muted-foreground">-</span>;
         // Percentage over the points earned / points available (assigned assignments).
@@ -428,7 +407,9 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     });
 
     return cols;
-  }, [assignments, gradesMap, valuesLoading]);
+    // Only the columns matter now: every value a cell renders comes off its own row, so a
+    // new page of grades no longer rebuilds the column definitions.
+  }, [assignments]);
 
   return (
     <div className="space-y-6">
@@ -455,10 +436,13 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         <DataTable
           columns={columns}
           data={students}
-          loading={structureQuery.isPending}
+          loading={pageQuery.isPending}
           tableLabel="Course grades table"
           bordered
-          defaultSorting={[{ id: 'lastName', desc: false }]}
+          // Its own entry: without a key it shared the default one with every other
+          // unnamed table, so hiding a column here hid it on unrelated pages.
+          storageKey="course-grades-columns-v1"
+          // The LMS export replaces it, and it covers every student rather than the page.
           showExportButton={false}
           emptyTitle="No grades to show"
           emptyDescription="Grades appear once students are enrolled and have submitted work."
@@ -488,6 +472,17 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               ) : null}
             </>
           }
+          manualPagination
+          pageCount={pageCount}
+          rowCount={total}
+          pagination={{ pageIndex, pageSize }}
+          onPaginationChange={handlePaginationChange}
+          manualFiltering
+          globalFilter={searchInput}
+          onGlobalFilterChange={setSearchInput}
+          manualSorting
+          sorting={sorting}
+          onSortingChange={handleSortingChange}
         />
       </div>
 

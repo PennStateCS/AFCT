@@ -606,6 +606,10 @@ model AssignmentProblemGrade {
   @@index([assignmentId, problemId])
   @@index([assignmentId])
   @@index([studentId])
+  // The gradebook reads one page of students at a time, so its grade lookup filters
+  // studentId IN (the page) AND assignmentId IN (the course). The indexes above all lead
+  // with assignmentId or stop at studentId, which leaves that pair unserved.
+  @@index([studentId, assignmentId])
 }
 
 model Comment {
