@@ -380,6 +380,26 @@ describe('DataTable', () => {
    * and silently get wrong: counting, slicing, and re-sorting the rows on screen.
    */
   describe('manual (server-driven) mode', () => {
+    it('groups a large total so it can be read at a glance', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={120440}
+          rowCount={1204393}
+          pagination={{ pageIndex: 0, pageSize: 10 }}
+          onPaginationChange={vi.fn()}
+        />,
+      );
+
+      // Expectation built with the same call the component uses, so this holds wherever
+      // the suite runs instead of hard-coding a comma. On any grouping locale (which is
+      // to say, in practice) it fails if the label goes back to raw digits.
+      const grouped = (1204393).toLocaleString();
+      expect(screen.getAllByText(new RegExp(`${grouped} total`)).length).toBeGreaterThan(0);
+    });
+
     it('counts pages from pageCount/rowCount rather than the rows it holds', () => {
       render(
         <DataTable
