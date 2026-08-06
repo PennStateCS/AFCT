@@ -21,6 +21,10 @@ const SEARCH_FIELDS: UsersSearchField[] = ['all', 'firstName', 'lastName', 'emai
  *
  * Inactive accounts are left out because the enroll endpoint refuses them anyway, so
  * offering one could only produce a 409.
+ *
+ * Each row carries only the name and email the dialog displays. Course staff are not
+ * administrators, and this route reaches accounts outside their course, so it must not
+ * hand back the admin user list's shape.
  * @openapi
  * summary: Search accounts that can be enrolled in a course
  * parameters:
@@ -37,7 +41,15 @@ const SEARCH_FIELDS: UsersSearchField[] = ['all', 'firstName', 'lastName', 'emai
  *         schema:
  *           type: object
  *           properties:
- *             rows: { type: array, items: { type: object } }
+ *             rows:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id: { type: string }
+ *                   firstName: { type: string, nullable: true }
+ *                   lastName: { type: string, nullable: true }
+ *                   email: { type: string }
  *             total: { type: integer }
  *             page: { type: integer }
  *             pageSize: { type: integer }
@@ -72,8 +84,22 @@ export const GET = withCourseAuth(
         sortDir: 'asc',
       });
 
+      /*
+       * Narrowed to what the Enroll dialog shows. `getUsersPage` is the ADMIN user list's
+       * query, so its rows carry isAdmin, temporaryPassword, lockedUntil, lastLogin and
+       * inactive. This route is open to faculty and TAs, and it spans accounts across the
+       * whole installation rather than one course, so handing that shape over would let
+       * any course staff member enumerate every account's admin status and login state.
+       */
+      const enrollable = rows.map((u) => ({
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        email: u.email,
+      }));
+
       return NextResponse.json({
-        rows,
+        rows: enrollable,
         total,
         page,
         pageSize,

@@ -1503,7 +1503,7 @@ export interface paths {
         };
         /**
          * Search accounts that can be enrolled in a course
-         * @description Accounts that could be enrolled in this course: active users who are not already on its  roster, searched server-side. Course staff (faculty or TAs) or a system admin.   Backs the Enroll User dialog, which used to fetch every account in the installation and  subtract the course's roster in the browser. That stopped being correct once the roster  itself was paginated (a partial roster would have offered people who are already members)  and it never scaled to a large user table.   Inactive accounts are left out because the enroll endpoint refuses them anyway, so  offering one could only produce a 409.
+         * @description Accounts that could be enrolled in this course: active users who are not already on its  roster, searched server-side. Course staff (faculty or TAs) or a system admin.   Backs the Enroll User dialog, which used to fetch every account in the installation and  subtract the course's roster in the browser. That stopped being correct once the roster  itself was paginated (a partial roster would have offered people who are already members)  and it never scaled to a large user table.   Inactive accounts are left out because the enroll endpoint refuses them anyway, so  offering one could only produce a 409.   Each row carries only the name and email the dialog displays. Course staff are not  administrators, and this route reaches accounts outside their course, so it must not  hand back the admin user list's shape.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/enrollable-users/route.ts)
          */
@@ -7433,7 +7433,12 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        rows?: Record<string, never>[];
+                        rows?: {
+                            id?: string;
+                            firstName?: string | null;
+                            lastName?: string | null;
+                            email?: string;
+                        }[];
                         total?: number;
                         page?: number;
                         pageSize?: number;

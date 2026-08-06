@@ -183,17 +183,25 @@ export function EnrollUserDialog({
             autoFocus
             onKeyDown={handleSearchKeyDown}
           />
-          {/* Say so rather than truncating in silence: the list shows one page of matches,
-              and without this a name that is genuinely enrollable can look absent. */}
-          {hiddenMatches > 0 ? (
-            <p className="text-muted-foreground text-sm" role="status">
-              Showing the first {visibleCount} of {total} matches. Keep typing to narrow the
-              search.
-            </p>
-          ) : null}
+          {/*
+            One live region for the whole list, so a screen reader hears the result of a
+            search that now resolves on the server a moment after typing stops. It also
+            says when the list is truncated rather than cutting off in silence, without
+            which a name that is genuinely enrollable can look absent.
+          */}
+          <p className="text-muted-foreground min-h-5 text-sm" role="status">
+            {filteredUsers.length === 0
+              ? 'No users found.'
+              : hiddenMatches > 0
+                ? `Showing the first ${visibleCount} of ${total} matches. Keep typing to narrow the search.`
+                : ''}
+          </p>
           <div className="h-80 overflow-auto rounded-md border">
             {filteredUsers.length === 0 ? (
-              <div className="text-muted-foreground p-3 text-center text-sm">No users found.</div>
+              // Announced by the live region above; hidden here so it is not read twice.
+              <div aria-hidden="true" className="text-muted-foreground p-3 text-center text-sm">
+                No users found.
+              </div>
             ) : (
               <ul>
                 {filteredUsers.slice(0, 50).map((user, idx) => (

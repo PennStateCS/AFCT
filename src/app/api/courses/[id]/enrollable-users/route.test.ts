@@ -69,18 +69,52 @@ describe('GET /api/courses/[id]/enrollable-users', () => {
 
   it('returns the page envelope', async () => {
     staff();
-    getUsersPageMock.mockResolvedValue({ rows: [{ id: 'u2' }], total: 312 });
+    getUsersPageMock.mockResolvedValue({
+      rows: [{ id: 'u2', firstName: 'Alan', lastName: 'Turing', email: 't@x.edu' }],
+      total: 312,
+    });
 
     const res = await GET(req('?pageSize=50'), ctx);
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      rows: [{ id: 'u2' }],
+      rows: [{ id: 'u2', firstName: 'Alan', lastName: 'Turing', email: 't@x.edu' }],
       total: 312,
       page: 1,
       pageSize: 50,
       totalPages: 7,
     });
+  });
+
+  it('returns only the name and email, never the admin user-list fields', async () => {
+    staff();
+    // getUsersPage is the admin list's query, so its rows carry account state. Faculty and
+    // TAs are not administrators and this route spans the whole installation, so none of
+    // it may reach them.
+    getUsersPageMock.mockResolvedValue({
+      rows: [
+        {
+          id: 'u2',
+          firstName: 'Alan',
+          lastName: 'Turing',
+          email: 't@x.edu',
+          isAdmin: true,
+          temporaryPassword: true,
+          lockedUntil: new Date(),
+          lastLogin: new Date(),
+          inactive: false,
+          timezone: 'UTC',
+        },
+      ],
+      total: 1,
+    });
+
+    const body = await (await GET(req(), ctx)).json();
+
+    expect(Object.keys(body.rows[0]).sort()).toEqual(['email', 'firstName', 'id', 'lastName']);
+    expect(JSON.stringify(body)).not.toContain('isAdmin');
+    expect(JSON.stringify(body)).not.toContain('temporaryPassword');
+    expect(JSON.stringify(body)).not.toContain('lockedUntil');
   });
 
   it('clamps an oversized pageSize', async () => {
