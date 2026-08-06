@@ -242,13 +242,25 @@ export function DataTableFilterPopover<TData>({
 export interface FilterMenuGroup {
   key: string;
   label: string;
-  options: FacetOption[];
+  /** The group's values. Ignored when `sections` is given. */
+  options?: FacetOption[];
+  /**
+   * Split the group's values across several headings while keeping them ONE filter, the
+   * controlled twin of a column's `meta.filterSections`. Use it when the values are
+   * mutually exclusive but read as two questions: separate groups would AND on the server,
+   * so any cross-heading pick could only ever return nothing, and the active-filter count
+   * would double.
+   */
+  sections?: { label: string; options: FacetOption[] }[];
   selected: string[];
   onChange: (values: string[]) => void;
 }
 
+// Server-driven menus have no faceted row model, so there are no per-value match counts.
+// A shared empty map keeps FilterBlock's count rendering switched off.
+const NO_COUNTS = new Map<string, number>();
+
 function ControlledFilterSection({ group }: { group: FilterMenuGroup }) {
-  const labelId = React.useId();
   const selected = new Set(group.selected);
   const toggle = (value: string) => {
     const next = new Set(selected);
@@ -256,32 +268,20 @@ function ControlledFilterSection({ group }: { group: FilterMenuGroup }) {
     else next.add(value);
     group.onChange(Array.from(next));
   };
+  const sections = group.sections ?? [{ label: group.label, options: group.options ?? [] }];
   return (
-    <div className="w-44 space-y-1.5">
-      {/* Same heading treatment as FilterSection above, so server-driven pages and
-          client tables present their filter groups identically. */}
-      <p
-        id={labelId}
-        className="text-foreground border-b pb-1 text-xs font-semibold tracking-wide uppercase"
-      >
-        {group.label}
-      </p>
-      <div role="group" aria-labelledby={labelId} className="space-y-0.5">
-        {group.options.map((option) => (
-          <label
-            key={option.value}
-            className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
-          >
-            <Checkbox
-              checked={selected.has(option.value)}
-              onCheckedChange={() => toggle(option.value)}
-              aria-label={option.label}
-            />
-            <span>{option.label}</span>
-          </label>
-        ))}
-      </div>
-    </div>
+    <>
+      {sections.map((section) => (
+        <FilterBlock
+          key={section.label}
+          label={section.label}
+          options={section.options}
+          counts={NO_COUNTS}
+          selected={selected}
+          onToggle={toggle}
+        />
+      ))}
+    </>
   );
 }
 
