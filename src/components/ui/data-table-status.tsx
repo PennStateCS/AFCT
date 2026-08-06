@@ -25,7 +25,10 @@ export function DataTableLoading({ message, className }: { message: string; clas
       <span aria-hidden="true" className="text-brand-teal">
         <PulseLoader color="currentColor" size={8} margin={3} speedMultiplier={0.65} />
       </span>
-      <span>{message}</span>
+      {/* Centered for the same reason as the empty state's description: on a narrow
+          screen the message wraps, and left-aligned lines under a centered spinner
+          read as a misalignment. */}
+      <span className="px-4 text-center">{message}</span>
     </div>
   );
 }
