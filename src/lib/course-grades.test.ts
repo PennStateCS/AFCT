@@ -23,7 +23,7 @@ beforeEach(() => {
   prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
 });
 
-describe('getCourseGradeMatrix — assigned map', () => {
+describe('getCourseGradeMatrix: assigned map', () => {
   it('marks students assigned via everyone, individual override, and group override', async () => {
     prismaMock.assignment.findMany.mockResolvedValue([
       // Assigned to everyone: both students assigned.
@@ -71,7 +71,7 @@ describe('getCourseGradeMatrix — assigned map', () => {
  * pin the value-side behaviour that the export depends on. They used to live in the grades
  * route test, which no longer returns a matrix.
  */
-describe('getCourseGradeMatrix — values', () => {
+describe('getCourseGradeMatrix: values', () => {
   const oneAssignment = () =>
     prismaMock.assignment.findMany.mockResolvedValue([
       {
