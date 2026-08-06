@@ -146,7 +146,7 @@ export default function DiscussionPanel({
                               cropY={comment.author.cropY ?? 0.5}
                               zoom={comment.author.zoom ?? 1}
                             />
-                            <AvatarFallback className="bg-brand-teal text-white">
+                            <AvatarFallback>
                               {initials(comment.author.firstName, comment.author.lastName)}
                             </AvatarFallback>
                           </Avatar>

@@ -303,7 +303,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
                   cropY={user.cropY ?? 0.5}
                   zoom={user.zoom ?? 1}
                 />
-                <AvatarFallback className="bg-secondary text-secondary-foreground">
+                <AvatarFallback>
                   {getInitials(user.firstName, user.lastName, user.email)}
                 </AvatarFallback>
               </Avatar>

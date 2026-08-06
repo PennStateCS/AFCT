@@ -267,7 +267,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
             cropY={activity.user?.cropY ?? 0.5}
             zoom={activity.user?.zoom ?? 1}
           />
-          <AvatarFallback className="bg-brand-teal text-xs text-white">
+          <AvatarFallback className="text-xs">
             {getInitials(activity.user?.firstName, activity.user?.lastName, activity.user?.email)}
           </AvatarFallback>
         </Avatar>
