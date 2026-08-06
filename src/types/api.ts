@@ -930,8 +930,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a course's activity feed
-         * @description Returns a paginated activity feed for one course: course/assignment/problem/  submission activity plus member logins. Course-content activity by admins (even if  not enrolled) and enrolled staff (Faculty/TA) shows any time (so an admin creating  or editing a problem before the term is included), while other members' content and  all member logins are clipped to the course's start/end dates. Admin logins are never  shown (only their course edits). Staff-only to read (see access gate below).
+         * Get a page of a course's activity feed
+         * @description One page of a course's activity feed: course/assignment/problem/submission activity plus  member logins. Course-content activity by admins (even if not enrolled) and enrolled  staff (Faculty/TA) shows any time (so an admin creating or editing a problem before the  term is included), while other members' content and all member logins are clipped to the  course's start/end dates. Admin logins are never shown (only their course edits).  Staff-only to read (see the access gate below).   Search, filters, sort and pagination all run in the database. They used to run in the  browser over whatever "Load More" had fetched, which meant searching an audit trail could  return nothing for an event that existed.   `?part=filters` returns the course's assignments and problems so the filter menus can  offer every one of them, not just those present in the rows on screen.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/activity/route.ts)
          */
@@ -5022,8 +5022,21 @@ export interface operations {
     getCoursesByIdActivity: {
         parameters: {
             query?: {
-                limit?: number;
-                offset?: number;
+                /** @description `filters` returns the course's assignments and problems for the filter menus. */
+                part?: "filters";
+                page?: number;
+                pageSize?: number;
+                /** @description Match on action, category, or the actor's name/email */
+                q?: string;
+                field?: "all" | "action" | "category" | "user";
+                /** @description Repeatable */
+                category?: string[];
+                /** @description Repeatable */
+                assignmentId?: string[];
+                /** @description Repeatable */
+                problemId?: string[];
+                sortBy?: "timestamp" | "action" | "category" | "ipAddress" | "user.lastName" | "user.firstName";
+                sortDir?: "asc" | "desc";
             };
             header?: never;
             path: {
@@ -5033,16 +5046,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A page of activity entries with a total count. */
+            /** @description One page of activity entries, or the filter option lists. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        activities?: Record<string, never>[];
-                        totalCount?: number;
-                        hasMore?: boolean;
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                        assignments?: Record<string, never>[];
+                        problems?: Record<string, never>[];
                     };
                 };
             };
@@ -5055,7 +5072,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not enrolled in the course and not a system admin. */
+            /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;

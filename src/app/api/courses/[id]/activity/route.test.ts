@@ -5,6 +5,8 @@ const prismaMock = vi.hoisted(() => ({
   course: { findFirst: vi.fn() },
   activityLog: { findMany: vi.fn(), count: vi.fn() },
   roster: { findFirst: vi.fn(), findMany: vi.fn() },
+  assignment: { findMany: vi.fn() },
+  problem: { findMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -14,12 +16,25 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 
 import { GET } from './route';
 
+const req = (query = '') => new NextRequest(`http://localhost/api/courses/c1/activity${query}`);
+const ctx = { params: Promise.resolve({ id: 'c1' }) };
+/** Authorize the caller as course staff. */
+const staff = () => {
+  authMock.mockResolvedValue({ user: { id: 'u1' } });
+  prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
+  authMock.mockResolvedValue({ user: { id: 'u1' } });
   // Default: caller not enrolled (denied); authorized tests grant a course role.
   prismaMock.roster.findFirst.mockResolvedValue(null);
-  // Roster ids for the login-activity filter (empty by default).
   prismaMock.roster.findMany.mockResolvedValue([]);
+  prismaMock.course.findFirst.mockResolvedValue({ id: 'c1', startDate: null, endDate: null });
+  prismaMock.activityLog.findMany.mockResolvedValue([]);
+  prismaMock.activityLog.count.mockResolvedValue(0);
+  prismaMock.assignment.findMany.mockResolvedValue([]);
+  prismaMock.problem.findMany.mockResolvedValue([]);
 });
 
 describe('GET /api/courses/[id]/activity', () => {
@@ -67,87 +82,193 @@ describe('GET /api/courses/[id]/activity', () => {
     expect(res.status).toBe(403);
   });
 
-  it('allows staff and returns default pagination payload', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1' } });
-    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+  it('returns the page envelope', async () => {
+    staff();
     prismaMock.activityLog.findMany.mockResolvedValue([{ id: 'log1' }]);
     prismaMock.activityLog.count.mockResolvedValue(80);
 
-    const req = new NextRequest('http://localhost/api/courses/c1/activity');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+    const res = await GET(req('?page=2&pageSize=5'), ctx);
 
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.hasMore).toBe(true);
+    await expect(res.json()).resolves.toEqual({
+      rows: [{ id: 'log1' }],
+      total: 80,
+      page: 2,
+      pageSize: 5,
+      totalPages: 16,
+    });
   });
 
-  it('returns activity logs', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1' } });
-    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.activityLog.findMany.mockResolvedValue([{ id: 'log1' }]);
-    prismaMock.activityLog.count.mockResolvedValue(1);
+  it('turns page and pageSize into skip and take', async () => {
+    staff();
 
-    const req = new NextRequest('http://localhost/api/courses/c1/activity?limit=10&offset=0');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+    await GET(req('?page=3&pageSize=20'), ctx);
 
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.activities).toHaveLength(1);
-    expect(body.totalCount).toBe(1);
+    const call = prismaMock.activityLog.findMany.mock.calls[0][0];
+    expect(call.skip).toBe(40);
+    expect(call.take).toBe(20);
   });
 
-  it('shows admin + staff course-content any time (incl. non-enrolled admins); clips others', async () => {
+  it('clamps an oversized pageSize', async () => {
+    staff();
+
+    await GET(req('?pageSize=99999'), ctx);
+
+    expect(prismaMock.activityLog.findMany.mock.calls[0][0].take).toBe(200);
+  });
+
+  it('never reads the whole roster to decide visibility', async () => {
+    staff();
+
+    await GET(req(), ctx);
+
+    // Membership is a relation filter now. Loading every roster row per request is what
+    // this replaced; `roster.findFirst` (the auth gate) is expected, `findMany` is not.
+    expect(prismaMock.roster.findMany).not.toHaveBeenCalled();
+  });
+
+  /*
+   * The visibility rule is the one thing this route must not get wrong, and the rewrite to
+   * relation filters is exactly the kind of change that could widen it. These assert the
+   * rule as clauses that must be present, so a filter can narrow the feed but never
+   * loosen who appears in it.
+   */
+  describe('visibility', () => {
     const startDate = new Date('2026-01-01');
     const endDate = new Date('2026-05-01');
-    authMock.mockResolvedValue({ user: { id: 'u1' } });
-    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1', startDate, endDate });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.roster.findMany.mockResolvedValue([
-      { userId: 'fac', role: 'FACULTY' },
-      { userId: 'stu', role: 'STUDENT' },
-    ]);
-    prismaMock.activityLog.findMany.mockResolvedValue([]);
-    prismaMock.activityLog.count.mockResolvedValue(0);
-
-    const req = new NextRequest('http://localhost/api/courses/c1/activity');
-    await GET(req, { params: Promise.resolve({ id: 'c1' }) });
-
-    const whereArg = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+    const isMember = { user: { rosterEntries: { some: { courseId: 'c1' } } } };
+    const isStaff = {
+      user: { rosterEntries: { some: { courseId: 'c1', role: { in: ['FACULTY', 'TA'] } } } },
+    };
     const inDates = { timestamp: { gte: startDate, lte: endDate } };
-    const actorClause = whereArg.OR[0].AND[1];
 
-    // Any admin — enrolled or not — on course content, any time (covers create/edit/delete).
-    expect(actorClause.OR).toContainEqual({ user: { isAdmin: true } });
-    // Enrolled Faculty/TA, any time.
-    expect(actorClause.OR).toContainEqual({ userId: { in: ['fac'] } });
-    // Other enrolled members, only within the course dates.
-    expect(actorClause.OR).toContainEqual({ AND: [{ userId: { in: ['fac', 'stu'] } }, inDates] });
+    const visibilityOf = () => {
+      const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+      // Caller filters AND on top of the visibility clause, which is always first.
+      return where.AND[0];
+    };
+
+    beforeEach(() => {
+      staff();
+      prismaMock.course.findFirst.mockResolvedValue({ id: 'c1', startDate, endDate });
+    });
+
+    it('shows admin and staff course-content any time, and clips other members', async () => {
+      await GET(req(), ctx);
+
+      const actorClause = visibilityOf().OR[0].AND[1];
+      // Any admin — enrolled or not — on course content, any time.
+      expect(actorClause.OR).toContainEqual({ user: { isAdmin: true } });
+      // Enrolled Faculty/TA, any time.
+      expect(actorClause.OR).toContainEqual(isStaff);
+      // Other enrolled members, only within the course dates.
+      expect(actorClause.OR).toContainEqual({ AND: [isMember, inDates] });
+    });
+
+    it('shows member (non-admin) logins only within the course dates', async () => {
+      await GET(req(), ctx);
+
+      const loginBranch = visibilityOf().OR[1];
+      expect(loginBranch.AND).toContainEqual({ action: { contains: 'LOGIN' } });
+      expect(loginBranch.AND).toContainEqual(isMember);
+      // Admin logins are excluded (only their course edits are relevant).
+      expect(loginBranch.AND).toContainEqual({ user: { isAdmin: false } });
+      expect(loginBranch.AND).toContainEqual(inDates);
+    });
+
+    it('keeps the visibility clause intact when a caller filter is applied', async () => {
+      await GET(req('?category=COURSE&q=grade'), ctx);
+
+      const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+      // Filters are siblings of the visibility clause, never merged into its OR.
+      expect(where.AND[0].OR).toHaveLength(2);
+      expect(where.AND).toContainEqual({ category: { in: ['COURSE'] } });
+    });
   });
 
-  it('shows member (non-admin) logins only within the course dates', async () => {
-    const startDate = new Date('2026-01-01');
-    const endDate = new Date('2026-05-01');
-    authMock.mockResolvedValue({ user: { id: 'u1' } });
-    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1', startDate, endDate });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.roster.findMany.mockResolvedValue([
-      { userId: 'fac', role: 'FACULTY' },
-      { userId: 'stu', role: 'STUDENT' },
-    ]);
-    prismaMock.activityLog.findMany.mockResolvedValue([]);
-    prismaMock.activityLog.count.mockResolvedValue(0);
+  describe('filters, search and sort', () => {
+    beforeEach(() => staff());
 
-    const req = new NextRequest('http://localhost/api/courses/c1/activity');
-    await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+    const clauses = () => prismaMock.activityLog.findMany.mock.calls[0][0].where.AND;
 
-    const loginBranch = prismaMock.activityLog.findMany.mock.calls[0][0].where.OR[1];
-    expect(loginBranch.AND).toContainEqual({ action: { contains: 'LOGIN' } });
-    expect(loginBranch.AND).toContainEqual({ userId: { in: ['fac', 'stu'] } });
-    // Admin logins are excluded (only their course edits are relevant).
-    expect(loginBranch.AND).toContainEqual({ user: { isAdmin: false } });
-    expect(loginBranch.AND).toContainEqual({ timestamp: { gte: startDate, lte: endDate } });
+    it('filters by category, dropping unknown tokens', async () => {
+      await GET(req('?category=COURSE&category=BANANA'), ctx);
+
+      expect(clauses()).toContainEqual({ category: { in: ['COURSE'] } });
+    });
+
+    it('filters by assignment and problem', async () => {
+      await GET(req('?assignmentId=a1&assignmentId=a2&problemId=p1'), ctx);
+
+      expect(clauses()).toContainEqual({ assignmentId: { in: ['a1', 'a2'] } });
+      expect(clauses()).toContainEqual({ problemId: { in: ['p1'] } });
+    });
+
+    it('searches action, category and the actor by default', async () => {
+      await GET(req('?q=grade'), ctx);
+
+      const like = { contains: 'grade', mode: 'insensitive' };
+      // slice(1) skips the visibility clause, which is itself an OR.
+      const or = clauses()
+        .slice(1)
+        .find((c: { OR?: unknown[] }) => c.OR)?.OR;
+      expect(or).toContainEqual({ action: like });
+      expect(or).toContainEqual({ category: like });
+      expect(or).toContainEqual({ user: { email: like } });
+    });
+
+    it('narrows the search to one field when a scope is picked', async () => {
+      await GET(req('?q=grade&field=action'), ctx);
+
+      expect(clauses()).toContainEqual({
+        OR: [{ action: { contains: 'grade', mode: 'insensitive' } }],
+      });
+    });
+
+    it('defaults to newest first with a stable tiebreaker', async () => {
+      await GET(req(), ctx);
+
+      expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual([
+        { timestamp: 'desc' },
+        { id: 'asc' },
+      ]);
+    });
+
+    it('sorts by an allowed column', async () => {
+      await GET(req('?sortBy=action&sortDir=asc'), ctx);
+
+      expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual([
+        { action: 'asc' },
+        { id: 'asc' },
+      ]);
+    });
+
+    it('falls back to timestamp for a column that is not sortable', async () => {
+      await GET(req('?sortBy=assignment'), ctx);
+
+      expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual([
+        { timestamp: 'desc' },
+        { id: 'asc' },
+      ]);
+    });
+  });
+
+  describe('?part=filters', () => {
+    it('returns the course assignments and problems', async () => {
+      staff();
+      prismaMock.assignment.findMany.mockResolvedValue([{ id: 'a1', title: 'A1' }]);
+      prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1', title: 'P1' }]);
+
+      const res = await GET(req('?part=filters'), ctx);
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        assignments: [{ id: 'a1', title: 'A1' }],
+        problems: [{ id: 'p1', title: 'P1' }],
+      });
+      // No page query for the options request.
+      expect(prismaMock.activityLog.findMany).not.toHaveBeenCalled();
+    });
   });
 
   it('returns 500 when activity query fails', async () => {
@@ -155,8 +276,7 @@ describe('GET /api/courses/[id]/activity', () => {
     prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
     prismaMock.activityLog.findMany.mockRejectedValue(new Error('boom'));
 
-    const req = new NextRequest('http://localhost/api/courses/c1/activity?limit=10&offset=0');
-    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+    const res = await GET(req('?page=1&pageSize=10'), ctx);
 
     expect(res.status).toBe(500);
   });

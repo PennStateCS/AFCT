@@ -676,6 +676,10 @@ model ActivityLog {
   @@index([problemId])
   @@index([submissionId])
   @@index([courseId, action])
+  // The course Activity tab pages newest-first within one course. Its where is an OR
+  // across four relations, so this serves the common courseId branch plus the sort
+  // rather than the whole query.
+  @@index([courseId, timestamp])
   @@index([assignmentId, action])
   @@index([userId, courseId])
   @@index([timestamp, category])
