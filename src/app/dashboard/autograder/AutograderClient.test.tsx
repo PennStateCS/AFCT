@@ -101,7 +101,8 @@ vi.mock('@/components/dialogs/FeedbackDialog', () => ({
   FeedbackDialog: () => <div data-testid="feedback-dialog" />,
 }));
 
-// Endpoint payloads for the selection chain.
+// Endpoint payloads. Only courses and the submissions page are fetched on load now: the
+// assignment and problem lists stay unfetched until the admin narrows to a course.
 const COURSES = [{ id: 'course-1', name: 'Automata Theory', code: 'CS500' }];
 
 const ASSIGNMENTS = [
@@ -139,13 +140,15 @@ const SUBMISSIONS = [
     studentEmail: 'ada@example.com',
     courseName: 'Automata Theory',
     assignmentTitle: 'Assignment One',
+    // Both ride along on the row now, rather than being looked up in the picker lists.
+    dueDate: '2026-02-01T00:00:00.000Z',
+    problemType: 'FA',
     submittedAt: '2026-01-15T00:00:00.000Z',
-    status: 'graded',
+    status: 'COMPLETED',
     grade: 8,
     correct: true,
     maxPoints: 10,
     problemTitle: 'Problem One',
-    avatar: null,
     fileName: 'sub-1.jff',
     originalFileName: 'sub-1.jff',
     feedback: 'Nice work',
@@ -156,11 +159,12 @@ const jsonResponse = (data: unknown) => ({ ok: true, json: async () => data });
 
 type FetchMock = ReturnType<typeof vi.fn>;
 
-// Route each request by URL (and method) to the matching payload. This lets the
-// component's fetch-courses -> fetch-assignments -> fetch-problems -> POST
-// submissions cascade run to completion without guessing which call is next.
+/** The paginated envelope the route returns. */
+const page = (rows: unknown[]) => ({ rows, total: rows.length });
+
+// Route each request by URL (and method) to the matching payload.
 const installFetchRouter = (
-  submissions: unknown = SUBMISSIONS,
+  submissions: unknown[] = SUBMISSIONS,
   onSubmissionsCall?: (init?: RequestInit) => void,
 ) => {
   const fetchMock = global.fetch as FetchMock;
@@ -170,7 +174,7 @@ const installFetchRouter = (
     if (url === '/api/assignments/assign-1/problems') return jsonResponse(PROBLEMS);
     if (url === '/api/admin/submissions' && init?.method === 'POST') {
       onSubmissionsCall?.(init);
-      return jsonResponse(submissions);
+      return jsonResponse(page(submissions));
     }
     throw new Error(`Unexpected fetch: ${String(url)}`);
   });
@@ -183,6 +187,12 @@ const submissionsPostCalls = (fetchMock: FetchMock) =>
       url === '/api/admin/submissions' && (init as RequestInit | undefined)?.method === 'POST',
   );
 
+/** The body of the most recent submissions POST. */
+const lastQuery = (fetchMock: FetchMock) => {
+  const calls = submissionsPostCalls(fetchMock);
+  return JSON.parse(String((calls[calls.length - 1][1] as RequestInit).body));
+};
+
 describe('AutograderClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -194,100 +204,84 @@ describe('AutograderClient', () => {
     vi.stubGlobal('React', React);
   });
 
-  it('renders the idle empty state without POSTing submissions before anything is selected', async () => {
-    // Courses endpoint never resolves, so no course is selected and the chain
-    // never reaches the submissions POST.
-    const fetchMock = global.fetch as FetchMock;
-    fetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/me/courses') return new Promise(() => {}); // pending forever
-      throw new Error(`Unexpected fetch: ${String(url)}`);
-    });
+  it('asks for the first page with an empty scope, without fanning out over courses', async () => {
+    const fetchMock = installFetchRouter();
 
     renderWithClient(<AutograderClient />);
 
-    // Nothing selected -> fetchSubmissions short-circuits to [] with no network call.
-    await waitFor(() => {
-      expect(screen.getByText('Loading submissions, please wait...')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    // Exactly one submissions request, and the scope lists are empty: "everything" is said
+    // by sending nothing, not by enumerating every id in the installation.
+    expect(submissionsPostCalls(fetchMock)).toHaveLength(1);
+    expect(lastQuery(fetchMock)).toMatchObject({
+      courseIds: [],
+      assignmentIds: [],
+      problemIds: [],
+      page: 1,
+      pageSize: 10,
+      sortBy: 'submittedAt',
+      sortDir: 'desc',
     });
-    expect(submissionsPostCalls(fetchMock)).toHaveLength(0);
+
+    // The per-course and per-assignment lists are what used to make this page issue
+    // hundreds of requests before it could render. Nothing is selected, so neither is
+    // fetched at all.
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls).not.toContain('/api/courses/course-1/assignments');
+    expect(urls).not.toContain('/api/assignments/assign-1/problems');
   });
 
-  it('drives the selection chain and POSTs the selected problemIds, rendering the returned rows', async () => {
+  it('sends the whole request as JSON', async () => {
     let capturedInit: RequestInit | undefined;
-    const fetchMock = installFetchRouter(SUBMISSIONS, (init) => {
+    installFetchRouter(SUBMISSIONS, (init) => {
       capturedInit = init;
     });
 
     renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
-    // The submitted student row renders once the cascade completes.
-    await waitFor(() => {
-      expect(screen.getByText('ada@example.com')).toBeInTheDocument();
-    });
-
-    const posts = submissionsPostCalls(fetchMock);
-    expect(posts.length).toBeGreaterThanOrEqual(1);
-
-    // The final POST carries the auto-selected problem ids as JSON.
     expect(capturedInit?.method).toBe('POST');
     expect(capturedInit?.headers).toMatchObject({ 'Content-Type': 'application/json' });
-    const body = JSON.parse(String(capturedInit?.body));
-    expect(body).toEqual({ problemIds: ['prob-1'] });
   });
 
-  it('seeds selectedProblems only from the loaded problem list (single POST on load)', async () => {
-    // The assignment lists its problems in one order; the problems endpoint returns
-    // them in another. Previously the assignments effect ALSO seeded selectedProblems
-    // (from the assignment's problem ids), so on load the query key was written twice
-    // with different orders and the submissions POST fired twice. Now only the problems
-    // effect seeds it, so exactly one POST goes out and its ids follow the problem list.
-    const problem = (id: string, title: string) => ({
-      id,
-      title,
-      description: null,
-      type: 'FA',
-      maxPoints: 10,
-      maxStates: null,
-      isDeterministic: true,
-      solved: false,
-      grade: null,
-    });
-    const capturedBodies: string[] = [];
+  it('reports the server total rather than the number of rows on screen', async () => {
     const fetchMock = global.fetch as FetchMock;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/me/courses') return jsonResponse(COURSES);
-      if (url === '/api/courses/course-1/assignments')
-        return jsonResponse([
-          {
-            id: 'assign-1',
-            title: 'Assignment One',
-            dueDate: '2026-02-01T00:00:00.000Z',
-            problems: [
-              { problemId: 'prob-1', maxPoints: 10 },
-              { problemId: 'prob-2', maxPoints: 10 },
-            ],
-          },
-        ]);
-      if (url === '/api/assignments/assign-1/problems')
-        // Reverse order relative to the assignment's problem list.
-        return jsonResponse([problem('prob-2', 'Problem Two'), problem('prob-1', 'Problem One')]);
       if (url === '/api/admin/submissions' && init?.method === 'POST') {
-        capturedBodies.push(String(init?.body));
-        return jsonResponse(SUBMISSIONS);
+        // One row on this page, 42 matching overall.
+        return jsonResponse({ rows: SUBMISSIONS, total: 42 });
       }
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
     renderWithClient(<AutograderClient />);
-
-    // Wait until the row renders (the submissions POST resolved).
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
-    const posts = submissionsPostCalls(fetchMock);
-    expect(posts).toHaveLength(1);
-    // The one POST follows the problem list's order, not the assignment's — proof it
-    // was seeded by the problems effect alone.
-    expect(JSON.parse(capturedBodies[0])).toEqual({ problemIds: ['prob-2', 'prob-1'] });
+    // 42 rows at 10 per page is 5 pages, and the footer counts the whole result set rather
+    // than the single row the browser is holding. (The text appears twice: once visibly and
+    // once in the table's live region.)
+    expect(screen.getAllByText(/Page 1 of 5/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/42 total/).length).toBeGreaterThan(0);
+  });
+
+  it('asks the server for the next page instead of slicing the rows it holds', async () => {
+    const fetchMock = global.fetch as FetchMock;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/courses') return jsonResponse(COURSES);
+      if (url === '/api/admin/submissions' && init?.method === 'POST') {
+        return jsonResponse({ rows: SUBMISSIONS, total: 42 });
+      }
+      throw new Error(`Unexpected fetch: ${String(url)}`);
+    });
+
+    renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+
+    await waitFor(() => expect(lastQuery(fetchMock).page).toBe(2));
   });
 
   it('shows the loading text while the submissions query is in flight', async () => {
@@ -303,7 +297,7 @@ describe('AutograderClient', () => {
       if (url === '/api/assignments/assign-1/problems') return jsonResponse(PROBLEMS);
       if (url === '/api/admin/submissions' && init?.method === 'POST') {
         await submissionsGate; // hold the query in flight
-        return jsonResponse(SUBMISSIONS);
+        return jsonResponse(page(SUBMISSIONS));
       }
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
@@ -332,6 +326,18 @@ describe('AutograderClient', () => {
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
     const pending = await screen.findByRole('checkbox', { name: /^Pending/ });
     expect(pending).toHaveAttribute('data-state', 'unchecked');
+  });
+
+  it('keeps Status and Submission as one filter under two headings', async () => {
+    installFetchRouter();
+    renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    // Two headings, so "where has it got to" and "how did it turn out" read as separate
+    // questions, but ticking one from each still widens rather than returning nothing.
+    for (const name of ['Pending', 'Processing', 'Failed', 'Correct', 'Incorrect', 'On time', 'Late']) {
+      expect(screen.getByRole('checkbox', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+    }
   });
 
   it('offers the row actions in a manage menu, including a link into submission review', async () => {
@@ -371,15 +377,44 @@ describe('AutograderClient', () => {
     expect(within(table).getByText('Correct').closest('[data-slot="badge"]')).not.toBeNull();
     expect(within(table).getByText('On time').closest('[data-slot="badge"]')).not.toBeNull();
 
-    // Each has a column of its own, and both sort. aria-sort is only set on a sortable
-    // header, so its presence is the assertion.
+    // Status has a column of its own and sorts server-side. aria-sort is only set on a
+    // sortable header, so its presence is the assertion.
     expect(within(table).getByRole('columnheader', { name: 'Status' })).toHaveAttribute(
       'aria-sort',
       'none',
     );
-    expect(within(table).getByRole('columnheader', { name: 'Timing' })).toHaveAttribute(
+    // Timing does not: it compares submittedAt against the assignment's due date rather
+    // than reading a column, so the server cannot order the whole queue by it and a
+    // client sort would silently reorder only the page on screen.
+    expect(within(table).getByRole('columnheader', { name: 'Timing' })).not.toHaveAttribute(
       'aria-sort',
-      'none',
+    );
+  });
+
+  it('sorts through the server and returns to the first page', async () => {
+    const fetchMock = installFetchRouter();
+    renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    // Scoped to the grid: "Student" also names an option in the search-scope picker.
+    const table = screen.getByRole('table');
+    fireEvent.click(within(table).getByRole('button', { name: /^Student/ }));
+
+    await waitFor(() => {
+      expect(lastQuery(fetchMock)).toMatchObject({ sortBy: 'student', page: 1 });
+    });
+  });
+
+  it('leaves the derived grade columns unsortable', async () => {
+    installFetchRouter();
+    renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    // Grade is derived from `correct` and the problem's points, so there is no column to
+    // order the whole result set by.
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('columnheader', { name: 'Grade' })).not.toHaveAttribute(
+      'aria-sort',
     );
   });
 
@@ -445,19 +480,44 @@ describe('AutograderClient', () => {
     expect(within(table).getAllByText('-').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('ticking a Status value in the table filter narrows the rows', async () => {
-    installFetchRouter();
+  it('ticking a Status value asks the server for it and returns to the first page', async () => {
+    const fetchMock = global.fetch as FetchMock;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/courses') return jsonResponse(COURSES);
+      if (url === '/api/admin/submissions' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body));
+        // The one fixture row is correct, so the server returns nothing for Incorrect.
+        return jsonResponse(body.status.includes('incorrect') ? page([]) : page(SUBMISSIONS));
+      }
+      throw new Error(`Unexpected fetch: ${String(url)}`);
+    });
+
     renderWithClient(<AutograderClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
-    // The single row is correct, so filtering to Incorrect hides it.
     fireEvent.click(screen.getByRole('checkbox', { name: /^Incorrect/ }));
 
+    await waitFor(() => {
+      expect(lastQuery(fetchMock)).toMatchObject({ status: ['incorrect'], page: 1 });
+    });
     await waitFor(() => {
       expect(screen.queryByText('ada@example.com')).toBeNull();
       // DataTable's own empty state takes over, and says the filters are the reason
       // rather than leaving the table silently blank.
       expect(screen.getByText('No submissions match your filters')).toBeInTheDocument();
+    });
+  });
+
+  it('sends the timing filter as its own dimension, so it ANDs with Status', async () => {
+    const fetchMock = installFetchRouter();
+    renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Late/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Failed/ }));
+
+    await waitFor(() => {
+      expect(lastQuery(fetchMock)).toMatchObject({ timing: ['late'], status: ['failed'] });
     });
   });
 });

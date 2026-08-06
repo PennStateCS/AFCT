@@ -12,7 +12,7 @@ The pickers at the top build on one another:
 2. Select assignments from those courses.
 3. Select problems from those assignments.
 
-Use **Select All** to select the available courses, assignments, and problems. Use **Clear Filters** to start over.
+Leaving a picker empty means **all of them**, which is why the page opens showing everything. Narrow from the top down: choose courses to unlock the assignment picker, then assignments to unlock the problem picker. Use **Clear Filters** to start over.
 
 ## Read the table
 
@@ -31,13 +31,16 @@ Two columns carry a coloured badge:
 
 **Failed** and **Incorrect** are different problems. Incorrect is an ordinary result, a student answer that did not match. Failed means the evaluator did not produce a verdict at all, which is worth investigating.
 
-The page opens showing everything in scope. To narrow it:
+The page opens showing everything in scope. It loads one page of submissions at a time, so searching, filtering and sorting all apply to the whole queue rather than to the rows currently on screen, and the count beside the pager is the total number of matches.
 
-- **Search** matches across the table, or one column if you pick one in the box beside it.
+To narrow it:
+
+- **Search** matches across the table, or one field if you pick one in the box beside it.
 - **Filters** holds Timing, Status and Submission as separate lists. Ticking several values in one list widens (any of them), while picking from two different lists narrows (both must be true), so Timing **Late** plus Submission **Incorrect** finds late wrong answers.
 - **Columns** turns columns on and off, including **Due** and **Recorded grade**, which are off by default. That choice is remembered in your browser.
-- Sort by any column heading, including Timing and Status.
-- **Export** downloads the visible rows as CSV.
+- Sort by most column headings, including Status. **Timing**, **Grade** and **Recorded grade** cannot be sorted: none of them is a stored value (Timing is a comparison against the due date, Grade is worked out from the result, and Recorded grade is kept with the gradebook), so there is nothing to order the whole queue by. Filter by Timing instead.
+
+There is no CSV export here. The page holds one page of results at a time, so an export would have written whatever was on screen rather than everything matching your filters. To get grades out of AFCT, use the [grade export](../faculty/grades.md#export-grades) on a course instead.
 
 ## Inspect a submission
 

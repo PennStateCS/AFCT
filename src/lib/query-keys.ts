@@ -105,9 +105,8 @@ export const queryKeys = {
     settingsTls: () => ['admin', 'settings', 'tls'] as const,
     logs: <T>(params: T) => ['admin', 'logs', params] as const,
     logsFields: () => ['admin', 'logs', 'fields'] as const,
-    /** Submissions for a set of problems; ids are sorted so key order is stable. */
-    submissions: (problemIds: readonly string[]) =>
-      ['admin', 'submissions', sortedIds(problemIds)] as const,
+    /** One page of the Autograder table; the key is the whole server-side query. */
+    submissions: <T>(params: T) => ['admin', 'submissions', params] as const,
     /** Cascading filter lists behind the submissions log (courses → assignments → problems). */
     submissionFilters: {
       courses: () => ['admin', 'submission-filters', 'courses'] as const,
