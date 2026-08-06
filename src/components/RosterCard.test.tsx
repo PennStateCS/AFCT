@@ -41,7 +41,7 @@ const MEMBERS = [
     cropX: null,
     cropY: null,
     zoom: null,
-    courseRole: 'STUDENT',
+    role: 'STUDENT',
     enrollmentStatus: 'ENROLLED',
     hasSubmissions: false,
   },

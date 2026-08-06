@@ -110,8 +110,72 @@ function renderManageCell(
 const manageButton = () => screen.getByRole('button', { name: /^Manage / });
 const item = (name: RegExp) => screen.getByRole('button', { name });
 
+/** Render one non-Manage column's cell for a row, to check what it reads off the row. */
+function renderCell(columnId: string, row: Record<string, unknown>) {
+  const columns = userColumns(vi.fn(), 'c1', false, 'FACULTY', false) as ColumnDef<User>[];
+  const target = columns.find(
+    (c) => c.id === columnId || (c as { accessorKey?: string }).accessorKey === columnId,
+  );
+  if (!target) throw new Error(`No ${columnId} column`);
+  const Cell = target.cell as (ctx: unknown) => React.ReactElement;
+  return render(<>{Cell({ row: { original: row } })}</>);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+/*
+ * The columns are fed straight from GET /api/courses/[id]/roster, so this block pins the
+ * field names they read off a row. A server row that spelled the course role `courseRole`
+ * rendered an empty Role badge and a dash in every Status cell, and no test caught it
+ * because RosterCard's own tests use stub columns.
+ */
+describe('roster columns against a server row', () => {
+  const serverRow = {
+    rosterId: 'r1',
+    id: 'u1',
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    email: 'ada@x.edu',
+    avatar: null,
+    cropX: null,
+    cropY: null,
+    zoom: null,
+    role: 'STUDENT',
+    enrollmentStatus: 'ENROLLED',
+    hasSubmissions: false,
+  };
+
+  it('names the role in the Role badge', () => {
+    renderCell('role', serverRow);
+
+    expect(screen.getByText('Student')).toBeInTheDocument();
+  });
+
+  it('shows the role for staff too', () => {
+    renderCell('role', { ...serverRow, role: 'FACULTY' });
+
+    expect(screen.getByText('Faculty')).toBeInTheDocument();
+  });
+
+  it('reads a student standing in the Status cell', () => {
+    renderCell('enrollmentStatus', serverRow);
+
+    expect(screen.getByText('Enrolled')).toBeInTheDocument();
+  });
+
+  it('badges a dropped student', () => {
+    renderCell('enrollmentStatus', { ...serverRow, enrollmentStatus: 'DROPPED' });
+
+    expect(screen.getByText('Dropped')).toBeInTheDocument();
+  });
+
+  it('leaves Status blank for staff, who have no enrollment standing', () => {
+    renderCell('enrollmentStatus', { ...serverRow, role: 'TA' });
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
 });
 
 describe('roster Manage menu', () => {

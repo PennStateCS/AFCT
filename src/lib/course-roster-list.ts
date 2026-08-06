@@ -28,7 +28,12 @@ export type RosterMemberRow = {
   cropX: number | null;
   cropY: number | null;
   zoom: number | null;
-  courseRole: CourseRole;
+  /**
+   * The member's COURSE role, named `role` because that is what the roster table's columns
+   * read (see RosterUser in user-columns). The Role badge and the Status cell both key off
+   * it, so a row that spells it `courseRole` renders a blank badge and a dash.
+   */
+  role: CourseRole;
   enrollmentStatus: EnrollmentStatus;
   /** Whether this student has work in the course; staff may not remove someone who has. */
   hasSubmissions: boolean;
@@ -185,7 +190,7 @@ export async function getCourseRosterPage(
     cropX: r.user.cropX,
     cropY: r.user.cropY,
     zoom: r.user.zoom,
-    courseRole: r.role,
+    role: r.role,
     enrollmentStatus: r.status,
     hasSubmissions: r.role === 'STUDENT' && submitted.has(r.user.id),
   }));

@@ -176,7 +176,7 @@ describe('getCourseRosterPage', () => {
         cropX: 10,
         cropY: 20,
         zoom: 2,
-        courseRole: 'STUDENT',
+        role: 'STUDENT',
         enrollmentStatus: 'ENROLLED',
       });
     });
