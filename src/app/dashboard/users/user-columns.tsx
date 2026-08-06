@@ -102,7 +102,9 @@ export function getUserColumns(
     {
       id: 'avatar',
       header: 'Avatar',
-      meta: { priority: 4 },
+      // The card view spells the row out in full, where "Avatar" beside a photo reads
+      // as jargon; the table header stays short because it sits over the column.
+      meta: { priority: 4, filterLabel: 'Profile Image' },
       cell: ({ row }) => {
         const user = row.original;
         return (
