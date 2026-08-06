@@ -147,7 +147,7 @@ export const GET = withCourseAuth(
       const visibility: Prisma.ActivityLogWhereInput = {
         OR: [
           // Course-content activity. Admins (even if not enrolled) and enrolled staff
-          // show any time; other enrolled members only within the course dates — this is
+          // show any time; other enrolled members only within the course dates. That is
           // what surfaces "an admin edited this assignment/problem before the term".
           {
             AND: [
@@ -155,8 +155,8 @@ export const GET = withCourseAuth(
               { OR: [{ user: { isAdmin: true } }, isStaff, { AND: [isMember, inCourseDates] }] },
             ],
           },
-          // Logins: enrolled members within the dates, but never admins — their logins
-          // are noise here, only their course edits are relevant.
+          // Logins: enrolled members within the dates, but never admins, whose logins are
+          // noise here; only their course edits are relevant.
           {
             AND: [
               { action: { contains: 'LOGIN' } },

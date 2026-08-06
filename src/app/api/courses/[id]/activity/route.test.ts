@@ -157,7 +157,7 @@ describe('GET /api/courses/[id]/activity', () => {
       await GET(req(), ctx);
 
       const actorClause = visibilityOf().OR[0].AND[1];
-      // Any admin — enrolled or not — on course content, any time.
+      // Any admin, enrolled or not, on course content, any time.
       expect(actorClause.OR).toContainEqual({ user: { isAdmin: true } });
       // Enrolled Faculty/TA, any time.
       expect(actorClause.OR).toContainEqual(isStaff);

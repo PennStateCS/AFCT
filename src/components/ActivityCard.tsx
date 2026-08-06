@@ -192,8 +192,8 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
           // Its own entry: without a key it shared the default one with every other unnamed
           // table, so hiding a column here hid it on unrelated pages.
           storageKey="course-activity-columns-v1"
-          // The browser holds one page, so an export from here would have written that page
-          // and called it the audit trail.
+          // The browser holds one page, so an export from here would silently write that
+          // page and call it the audit trail.
           showExportButton={false}
           loadingMessage="Loading activity, please wait..."
           emptyTitle={anyFilterActive ? 'No activity matches your filters' : 'No activity yet'}
