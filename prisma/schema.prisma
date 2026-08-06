@@ -122,6 +122,10 @@ model User {
   @@index([isAdmin])
   @@index([inactive])
   @@index([createdAt])
+  // Rosters and the admin user list are both read surname-first. Ordering a course roster
+  // is a join order (the names live here, not on Roster), so this cannot make that plan
+  // index-only; it does keep the sort side off a full scan as courses reach the thousands.
+  @@index([lastName, firstName])
 }
 
 // Bearer token for the native submission client (the Java app). Cookie/NextAuth is
@@ -580,6 +584,12 @@ model Submission {
   // Hot path for the submission queue worker's claim query
   @@index([status, submittedAt])
   @@index([status])
+  // The Autograder page pages through submissions newest-first, narrowed by problem or
+  // course. Each of these covers one scope level plus the sort, so a page is an index
+  // scan rather than a sort of the whole table.
+  @@index([problemId, submittedAt])
+  @@index([courseId, submittedAt])
+  @@index([submittedAt])
 }
 
 model AssignmentProblemGrade {
@@ -606,6 +616,10 @@ model AssignmentProblemGrade {
   @@index([assignmentId, problemId])
   @@index([assignmentId])
   @@index([studentId])
+  // The gradebook reads one page of students at a time, so its grade lookup filters
+  // studentId IN (the page) AND assignmentId IN (the course). The indexes above all lead
+  // with assignmentId or stop at studentId, which leaves that pair unserved.
+  @@index([studentId, assignmentId])
 }
 
 model Comment {
@@ -676,6 +690,10 @@ model ActivityLog {
   @@index([problemId])
   @@index([submissionId])
   @@index([courseId, action])
+  // The course Activity tab pages newest-first within one course. Its where is an OR
+  // across four relations, so this serves the common courseId branch plus the sort
+  // rather than the whole query.
+  @@index([courseId, timestamp])
   @@index([assignmentId, action])
   @@index([userId, courseId])
   @@index([timestamp, category])

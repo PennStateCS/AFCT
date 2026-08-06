@@ -64,6 +64,10 @@ export type UsersPageParams = {
   inactive?: boolean[]; // Status (Active = false, Inactive = true)
   temporaryPassword?: boolean[]; // Password Status
   lock?: ('locked' | 'unlocked')[];
+  // Leave out anyone already on this course's roster. Backs the course Enroll dialog, which
+  // must not offer someone who is already a member; asking the database keeps that correct
+  // now that the client no longer holds the whole roster to subtract.
+  excludeCourseId?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
   // Injectable so a caller (or test) can pin "now" for the lock comparison.
@@ -122,6 +126,13 @@ export async function getUsersPage(
         ? { lockedUntil: { gt: now } }
         : { OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }] },
     );
+  }
+
+  // Any roster row in that course disqualifies the user, dropped included: a dropped
+  // student is still a member, and re-enrolling them is the Manage menu's job, not the
+  // Enroll dialog's.
+  if (params.excludeCourseId) {
+    and.push({ NOT: { rosterEntries: { some: { courseId: params.excludeCourseId } } } });
   }
 
   const where: Prisma.UserWhereInput = and.length ? { AND: and } : {};

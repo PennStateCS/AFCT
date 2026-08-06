@@ -32,16 +32,37 @@ vi.mock('@/components/ui/data-table', () => ({
     data,
     loading,
     loadingMessage,
+    rowCount,
+    showExportButton,
+    onPaginationChange,
+    pagination,
   }: {
     data: ActivityLog[];
     loading?: boolean;
     loadingMessage?: string;
+    rowCount?: number;
+    showExportButton?: boolean;
+    onPaginationChange?: (u: { pageIndex: number; pageSize: number }) => void;
+    pagination?: { pageIndex: number; pageSize: number };
   }) =>
     loading ? (
       <div>{loadingMessage}</div>
     ) : (
       <div>
         <div data-testid="table-rows">{data.length}</div>
+        <div data-testid="row-count">{String(rowCount)}</div>
+        <div data-testid="export-shown">{String(showExportButton !== false)}</div>
+        <button
+          type="button"
+          onClick={() =>
+            onPaginationChange?.({
+              pageIndex: (pagination?.pageIndex ?? 0) + 1,
+              pageSize: pagination?.pageSize ?? 50,
+            })
+          }
+        >
+          next page
+        </button>
         <ul>
           {data.map((a) => (
             <li key={a.id}>{a.action}</li>
@@ -58,6 +79,24 @@ const activity = (id: string, action: string): ActivityLog =>
 
 const jsonResponse = (body: unknown) => ({ ok: true, json: async () => body });
 
+/** Serve the filter-options request and the page request from one fetch mock. */
+const installFetch = (page: { rows: ActivityLog[]; total: number }) => {
+  const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+  fetchMock.mockImplementation(async (url: string) =>
+    String(url).includes('part=filters')
+      ? jsonResponse({ assignments: [], problems: [] })
+      : jsonResponse(page),
+  );
+  return fetchMock;
+};
+
+/** The URL of the most recent page (non-filters) request. */
+const lastPageUrl = (fetchMock: ReturnType<typeof vi.fn>) =>
+  fetchMock.mock.calls
+    .map(([u]) => String(u))
+    .filter((u) => !u.includes('part=filters'))
+    .pop() ?? '';
+
 describe('ActivityCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -65,13 +104,10 @@ describe('ActivityCard', () => {
   });
 
   it('fetches the first page on mount and renders its rows', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      jsonResponse({
-        activities: [activity('a1', 'ENROLLED'), activity('a2', 'GRADED')],
-        totalCount: 2,
-        hasMore: false,
-      }),
-    );
+    const fetchMock = installFetch({
+      rows: [activity('a1', 'ENROLLED'), activity('a2', 'GRADED')],
+      total: 2,
+    });
 
     renderWithClient(<ActivityCard courseId="course-1" />);
 
@@ -79,9 +115,28 @@ describe('ActivityCard', () => {
       expect(screen.getByTestId('table-rows').textContent).toBe('2');
     });
 
-    expect(global.fetch).toHaveBeenCalledWith('/api/courses/course-1/activity?limit=50&offset=0');
+    expect(lastPageUrl(fetchMock)).toContain('page=1');
+    expect(lastPageUrl(fetchMock)).toContain('pageSize=50');
     expect(screen.getByText('ENROLLED')).toBeInTheDocument();
     expect(screen.getByText('GRADED')).toBeInTheDocument();
+  });
+
+  it('reports the server total rather than the rows on screen', async () => {
+    installFetch({ rows: [activity('a1', 'ENROLLED')], total: 1200 });
+
+    renderWithClient(<ActivityCard courseId="course-1" />);
+
+    await waitFor(() => expect(screen.getByTestId('row-count').textContent).toBe('1200'));
+    // The heading badge counts the whole log, not the one row on screen.
+    expect(screen.getByRole('heading', { name: /Activity/ })).toHaveTextContent('1200');
+  });
+
+  it('offers no CSV export, because the browser only holds one page', async () => {
+    installFetch({ rows: [activity('a1', 'ENROLLED')], total: 1 });
+
+    renderWithClient(<ActivityCard courseId="course-1" />);
+
+    await waitFor(() => expect(screen.getByTestId('export-shown').textContent).toBe('false'));
   });
 
   it('shows the loading state before the first page resolves', () => {
@@ -93,42 +148,64 @@ describe('ActivityCard', () => {
     expect(screen.getByText('Loading activity, please wait...')).toBeInTheDocument();
   });
 
-  it('loads the next page from the accumulated offset when Load More is clicked', async () => {
+  it('asks the server for the next page instead of accumulating', async () => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse({
-          activities: [activity('a1', 'FIRST'), activity('a2', 'SECOND')],
-          totalCount: 3,
-          hasMore: true,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          activities: [activity('a3', 'THIRD')],
-          totalCount: 3,
-          hasMore: false,
-        }),
-      );
+    fetchMock.mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u.includes('part=filters')) return jsonResponse({ assignments: [], problems: [] });
+      return jsonResponse({
+        rows: u.includes('page=2') ? [activity('a3', 'THIRD')] : [activity('a1', 'FIRST')],
+        total: 3,
+      });
+    });
 
     renderWithClient(<ActivityCard courseId="course-1" />);
+    await waitFor(() => expect(screen.getByText('FIRST')).toBeInTheDocument());
 
-    await waitFor(() => {
-      expect(screen.getByText('FIRST')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'next page' }));
+
+    await waitFor(() => expect(screen.getByText('THIRD')).toBeInTheDocument());
+    // The page replaces rather than accumulating: one page is held at a time.
+    expect(screen.getByTestId('table-rows').textContent).toBe('1');
+    expect(screen.queryByText('FIRST')).toBeNull();
+    expect(lastPageUrl(fetchMock)).toContain('page=2');
+  });
+
+  it('keeps the current page on screen while the next one loads', async () => {
+    // keepPreviousData is only worth having if the table is not told it is loading on
+    // every page change; driving `loading` from isFetching would undo it.
+    const fetchMock = installFetch({ rows: [activity('a1', 'FIRST')], total: 100 });
+
+    renderWithClient(<ActivityCard courseId="course-1" />);
+    await waitFor(() => expect(screen.getByText('FIRST')).toBeInTheDocument());
+
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('part=filters'))
+        return jsonResponse({ assignments: [], problems: [] });
+      await gate;
+      return jsonResponse({ rows: [activity('a2', 'SECOND')], total: 100 });
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Load More' }));
+    fireEvent.click(screen.getByRole('button', { name: 'next page' }));
 
-    await waitFor(() => {
-      expect(screen.getByText('THIRD')).toBeInTheDocument();
-    });
+    // The previous page's row stays put rather than being replaced by the placeholder.
+    await waitFor(() => expect(lastPageUrl(fetchMock)).toContain('page=2'));
+    expect(screen.getByText('FIRST')).toBeInTheDocument();
+    expect(screen.queryByText('Loading activity, please wait...')).toBeNull();
 
-    // Second page requests offset = number of rows already loaded (2).
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      '/api/courses/course-1/activity?limit=50&offset=2',
-    );
-    // Rows accumulate across pages rather than replacing.
-    expect(screen.getByTestId('table-rows').textContent).toBe('3');
+    release?.();
+  });
+
+  it('has no Load More button', async () => {
+    installFetch({ rows: [activity('a1', 'FIRST')], total: 100 });
+
+    renderWithClient(<ActivityCard courseId="course-1" />);
+    await waitFor(() => expect(screen.getByText('FIRST')).toBeInTheDocument());
+
+    expect(screen.queryByRole('button', { name: 'Load More' })).not.toBeInTheDocument();
   });
 });

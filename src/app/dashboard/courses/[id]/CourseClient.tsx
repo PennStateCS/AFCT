@@ -45,7 +45,8 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
     !course?.viewerIsAdmin && course?.viewerRole !== 'FACULTY' && course?.viewerRole !== 'TA';
   const { tab, handleTabChange } = useTabNavigation();
   const dialogStates = useDialogStates();
-  const { allUsers, fetchAvailableUsers, handleEnrollUser } = useEnrollment(course);
+  const { allUsers, enrollableTotal, fetchAvailableUsers, handleEnrollUser } =
+    useEnrollment(course);
   const handlers = useCourseHandlers(course, setCourse);
   const [bulkEnrollOpen, setBulkEnrollOpen] = useState(false);
   const { timezone } = useEffectiveTimezone();
@@ -55,6 +56,14 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
     dialogStates.setAllUsers(users);
     dialogStates.setEnrollOpen(true);
   }, [fetchAvailableUsers, dialogStates]);
+
+  // The dialog searches server-side, so each debounced term is a fresh (cached) request.
+  const handleEnrollSearchChange = useCallback(
+    (q: string) => {
+      void fetchAvailableUsers(q);
+    },
+    [fetchAvailableUsers],
+  );
 
   const openBulkEnrollDialog = useCallback(() => {
     setBulkEnrollOpen(true);
@@ -174,7 +183,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           tab={tab}
           isAssignmentsLoading={tab === 'assignments' && !isStudent && loadingSections.assignments}
           isProblemsLoading={tab === 'problems' && !isStudent && loadingSections.problems}
-          isRosterLoading={tab === 'roster' && !isStudent && loadingSections.roster}
           onTabChange={(value) => {
             handleTabChange(value);
           }}
@@ -218,6 +226,8 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           enrollOpen={dialogStates.enrollOpen}
           setEnrollOpen={dialogStates.setEnrollOpen}
           allUsers={allUsers}
+          enrollableTotal={enrollableTotal}
+          onEnrollSearchChange={handleEnrollSearchChange}
           onEnrollUser={handleEnrollUserWrapper}
           bulkEnrollOpen={bulkEnrollOpen}
           setBulkEnrollOpen={setBulkEnrollOpen}

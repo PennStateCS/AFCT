@@ -25,15 +25,86 @@ export const apiPaths = {
   courseDuplicate: (id: string) => `/api/courses/${id}/duplicate`,
   coursePublish: (id: string) => `/api/courses/${id}/publish`,
   courseArchive: (id: string) => `/api/courses/${id}/archive`,
-  courseActivity: (id: string, opts?: { limit?: number; offset?: number }) =>
-    `/api/courses/${id}/activity${qs({ limit: opts?.limit, offset: opts?.offset })}`,
+  /** One page of a course's activity feed. Repeatable filters are appended, not set. */
+  courseActivity: (
+    id: string,
+    opts: {
+      page?: number;
+      pageSize?: number;
+      q?: string;
+      field?: string;
+      category?: string[];
+      assignmentId?: string[];
+      problemId?: string[];
+      sortBy?: string;
+      sortDir?: string;
+    },
+  ) => {
+    const sp = new URLSearchParams();
+    if (opts.page) sp.set('page', String(opts.page));
+    if (opts.pageSize) sp.set('pageSize', String(opts.pageSize));
+    if (opts.q) sp.set('q', opts.q);
+    if (opts.field && opts.field !== 'all') sp.set('field', opts.field);
+    opts.category?.forEach((v) => sp.append('category', v));
+    opts.assignmentId?.forEach((v) => sp.append('assignmentId', v));
+    opts.problemId?.forEach((v) => sp.append('problemId', v));
+    if (opts.sortBy) sp.set('sortBy', opts.sortBy);
+    if (opts.sortDir) sp.set('sortDir', opts.sortDir);
+    const s = sp.toString();
+    return `/api/courses/${id}/activity${s ? `?${s}` : ''}`;
+  },
+  /** The course's assignments and problems, for the activity filter menus. */
+  courseActivityFilters: (id: string) => `/api/courses/${id}/activity?part=filters`,
   courseStudents: (id: string, opts?: { includeDropped?: boolean }) =>
     `/api/courses/${id}/students${opts?.includeDropped ? '?includeDropped=1' : ''}`,
-  courseGrades: (id: string, part?: 'structure' | 'values') =>
-    `/api/courses/${id}/grades${part ? `?part=${part}` : ''}`,
+  /** The gradebook's assignment columns and student total. */
+  courseGradeColumns: (id: string) => `/api/courses/${id}/grades?part=columns`,
+  /** One page of the gradebook: students with their assigned flags and grades. */
+  courseGradePage: (
+    id: string,
+    opts: { page?: number; pageSize?: number; q?: string; sortBy?: string; sortDir?: string },
+  ) =>
+    `/api/courses/${id}/grades${qs({
+      page: opts.page,
+      pageSize: opts.pageSize,
+      q: opts.q || undefined,
+      sortBy: opts.sortBy,
+      sortDir: opts.sortDir,
+    })}`,
   courseGradesExport: (id: string) => `/api/courses/${id}/grades/export`,
   courseStudentGrades: (id: string) => `/api/courses/${id}/student-grades`,
   courseRoster: (id: string) => `/api/courses/${id}/roster`,
+  /** One page of a course's roster. Params mirror the admin user list. */
+  courseRosterList: (
+    id: string,
+    opts: {
+      page?: number;
+      pageSize?: number;
+      q?: string;
+      field?: string;
+      role?: string[];
+      status?: string[];
+      sortBy?: string;
+      sortDir?: string;
+    },
+  ) => {
+    const sp = new URLSearchParams();
+    if (opts.page) sp.set('page', String(opts.page));
+    if (opts.pageSize) sp.set('pageSize', String(opts.pageSize));
+    if (opts.q) sp.set('q', opts.q);
+    if (opts.field && opts.field !== 'all') sp.set('field', opts.field);
+    opts.role?.forEach((v) => sp.append('role', v));
+    opts.status?.forEach((v) => sp.append('status', v));
+    if (opts.sortBy) sp.set('sortBy', opts.sortBy);
+    if (opts.sortDir) sp.set('sortDir', opts.sortDir);
+    const s = sp.toString();
+    return `/api/courses/${id}/roster${s ? `?${s}` : ''}`;
+  },
+  courseEnrollableUsers: (id: string, opts?: { q?: string; pageSize?: number }) =>
+    `/api/courses/${id}/enrollable-users${qs({
+      q: opts?.q || undefined,
+      pageSize: opts?.pageSize,
+    })}`,
   courseRosterBulk: (id: string) => `/api/courses/${id}/roster/bulk`,
   courseLookupUsers: (id: string) => `/api/courses/${id}/lookup-users`,
   // Group sets (redesigned group management)

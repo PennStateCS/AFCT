@@ -35,17 +35,34 @@ export const queryKeys = {
     roster: (courseId: string) => ['course', courseId, 'roster'] as const,
     rosterEntry: (courseId: string, userId: string) =>
       ['course', courseId, 'roster', userId] as const,
+    /** One page of the roster table; the key is the whole server-side query. */
+    rosterPage: <T>(courseId: string, params: T) =>
+      ['course', courseId, 'roster-page', params] as const,
+    /** Enrollable accounts matching a search, for the Enroll dialog. */
+    enrollableUsers: (courseId: string, q: string) =>
+      ['course', courseId, 'enrollable-users', q] as const,
     // Group sets (redesigned group management). All nest under the course prefix
     // so invalidateQueries(['course', courseId]) cascades.
     groupSets: (courseId: string) => ['course', courseId, 'group-sets'] as const,
     groupSet: (courseId: string, setId: string) =>
       ['course', courseId, 'group-set', setId] as const,
+    /** Prefix for the gradebook; use to invalidate both entries below. */
     grades: (courseId: string) => ['course', courseId, 'grades'] as const,
+    /** The gradebook's assignment columns and student total (cached per course). */
+    gradeColumns: (courseId: string) => ['course', courseId, 'grades', 'columns'] as const,
+    /** One page of the gradebook; the key is the whole server-side query. */
+    gradePage: <T>(courseId: string, params: T) =>
+      ['course', courseId, 'grades', 'page', params] as const,
     studentGrades: (courseId: string) => ['course', courseId, 'student-grades'] as const,
     problems: (courseId: string) => ['course', courseId, 'problems'] as const,
     assignmentsList: (courseId: string) => ['course', courseId, 'assignments-list'] as const,
-    activity: (courseId: string, opts: { limit: number }) =>
-      ['course', courseId, 'activity', opts] as const,
+    /** Prefix for the course activity feed; use to invalidate both entries below. */
+    activity: (courseId: string) => ['course', courseId, 'activity'] as const,
+    /** One page of the activity feed; the key is the whole server-side query. */
+    activityPage: <T>(courseId: string, params: T) =>
+      ['course', courseId, 'activity', 'page', params] as const,
+    /** The course's assignments and problems, for the activity filter menus. */
+    activityFilters: (courseId: string) => ['course', courseId, 'activity', 'filters'] as const,
   },
 
   // --- Assignments (all nested under their course so course-level invalidation
@@ -105,9 +122,8 @@ export const queryKeys = {
     settingsTls: () => ['admin', 'settings', 'tls'] as const,
     logs: <T>(params: T) => ['admin', 'logs', params] as const,
     logsFields: () => ['admin', 'logs', 'fields'] as const,
-    /** Submissions for a set of problems; ids are sorted so key order is stable. */
-    submissions: (problemIds: readonly string[]) =>
-      ['admin', 'submissions', sortedIds(problemIds)] as const,
+    /** One page of the Autograder table; the key is the whole server-side query. */
+    submissions: <T>(params: T) => ['admin', 'submissions', params] as const,
     /** Cascading filter lists behind the submissions log (courses → assignments → problems). */
     submissionFilters: {
       courses: () => ['admin', 'submission-filters', 'courses'] as const,

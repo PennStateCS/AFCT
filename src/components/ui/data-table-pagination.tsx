@@ -31,13 +31,18 @@ export function PaginationControls<TData>({
   // a search or filter is narrowing the rows we show "12 of 240" so it's obvious how much
   // is being hidden. In server mode without a rowCount there is nothing honest to show --
   // the core row model is only the current page, so counting it would claim "10 total".
+  //
+  // Grouped in the viewer's locale, like the dates elsewhere in the app: a bare "1204393"
+  // has to be counted digit by digit before it means anything.
+  const count = (n: number) => n.toLocaleString();
   let totalLabel: string | null = null;
   if (typeof rowCount === 'number') {
-    totalLabel = `${rowCount} total`;
+    totalLabel = `${count(rowCount)} total`;
   } else if (!manualPagination) {
     const filtered = table.getFilteredRowModel().rows.length;
     const total = table.getCoreRowModel().rows.length;
-    totalLabel = filtered === total ? `${total} total` : `${filtered} of ${total}`;
+    totalLabel =
+      filtered === total ? `${count(total)} total` : `${count(filtered)} of ${count(total)}`;
   }
 
   return (

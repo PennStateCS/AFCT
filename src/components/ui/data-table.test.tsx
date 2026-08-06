@@ -372,4 +372,128 @@ describe('DataTable', () => {
     // Each card labels its values with the column header (one per row).
     expect(screen.getAllByText('Role').length).toBeGreaterThan(1);
   });
+
+  /*
+   * Server-driven ("manual") mode, used by the Users, System Logs and Autograder pages.
+   * The table holds one page and the parent owns pagination, sorting and filtering, so the
+   * things asserted here are the ones a client-side table would otherwise do for itself
+   * and silently get wrong: counting, slicing, and re-sorting the rows on screen.
+   */
+  describe('manual (server-driven) mode', () => {
+    it('groups a large total so it can be read at a glance', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={120440}
+          rowCount={1204393}
+          pagination={{ pageIndex: 0, pageSize: 10 }}
+          onPaginationChange={vi.fn()}
+        />,
+      );
+
+      // Expectation built with the same call the component uses, so this holds wherever
+      // the suite runs instead of hard-coding a comma. On any grouping locale (which is
+      // to say, in practice) it fails if the label goes back to raw digits.
+      const grouped = (1204393).toLocaleString();
+      expect(screen.getAllByText(new RegExp(`${grouped} total`)).length).toBeGreaterThan(0);
+    });
+
+    it('counts pages from pageCount/rowCount rather than the rows it holds', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={5}
+          rowCount={42}
+          pagination={{ pageIndex: 0, pageSize: 10 }}
+          onPaginationChange={vi.fn()}
+        />,
+      );
+
+      // Three rows on screen, 42 in the result set.
+      expect(screen.getAllByText(/Page 1 of 5/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/42 total/).length).toBeGreaterThan(0);
+    });
+
+    it('reports a page change to the parent instead of paging itself', () => {
+      const onPaginationChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={5}
+          rowCount={42}
+          pagination={{ pageIndex: 0, pageSize: 10 }}
+          onPaginationChange={onPaginationChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+
+      expect(onPaginationChange).toHaveBeenCalled();
+    });
+
+    it('shows every row it was given, without slicing to the page size', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={3}
+          rowCount={3}
+          pagination={{ pageIndex: 0, pageSize: 1 }}
+          onPaginationChange={vi.fn()}
+        />,
+      );
+
+      // pageSize 1, but the server already sliced: all three rows must render.
+      expect(screen.getByText('Alice')).toBeInTheDocument();
+      expect(screen.getByText('Bob')).toBeInTheDocument();
+      expect(screen.getByText('Carol')).toBeInTheDocument();
+    });
+
+    it('reports a sort change without reordering the rows on screen', () => {
+      const onSortingChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualSorting
+          sorting={[]}
+          onSortingChange={onSortingChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /^Name/ }));
+
+      expect(onSortingChange).toHaveBeenCalled();
+      // Still server order: a client sort here would only reorder this page and claim to
+      // have ordered the whole result set.
+      const cells = screen.getAllByRole('cell').map((c) => c.textContent);
+      expect(cells.slice(0, 2)).toEqual(['Alice', 'Admin']);
+    });
+
+    it('hands the search box to the parent and does not filter rows itself', () => {
+      const onGlobalFilterChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualFiltering
+          globalFilter=""
+          onGlobalFilterChange={onGlobalFilterChange}
+        />,
+      );
+
+      fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'Alice' } });
+
+      expect(onGlobalFilterChange).toHaveBeenCalledWith('Alice');
+      // Bob is still on screen: only the server can decide what matches.
+      expect(screen.getByText('Bob')).toBeInTheDocument();
+    });
+  });
 });

@@ -512,8 +512,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * List autograded submissions for problems (admin)
-         * @description Returns every autograded submission across a set of problems, flattened for the  admin grading view: student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.   Problems with the autograder switched off are left out: this feeds the Autograder  page, and a submission the autograder never touches has no queue state and no  per-attempt score to show there. Those submissions still appear on the course's  own submissions tab.
+         * List autograded submissions (admin, paginated)
+         * @description One page of autograded submissions for the admin Autograder page: student, course,  assignment/problem titles, queue status, and the recorded grade (joined from  AssignmentProblemGrade). Search, filters, sort and pagination all run in the database.  System administrators only.   A POST with a JSON body rather than the GET + query string the other paginated routes  use, because the scope can carry hundreds of problem ids. Empty scope lists mean "no  constraint", so the common case (everything) sends nothing at all.   Problems with the autograder switched off are left out: this feeds the Autograder page,  and a submission the autograder never touches has no queue state and no per-attempt score  to show there. Those submissions still appear on the course's own submissions tab.   Deliberately does not log the read. It never has, and paginating turns one read into one  log per page the admin flips through, which would distort ActivityLog as research data.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/submissions/route.ts)
          */
@@ -930,8 +930,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a course's activity feed
-         * @description Returns a paginated activity feed for one course: course/assignment/problem/  submission activity plus member logins. Course-content activity by admins (even if  not enrolled) and enrolled staff (Faculty/TA) shows any time (so an admin creating  or editing a problem before the term is included), while other members' content and  all member logins are clipped to the course's start/end dates. Admin logins are never  shown (only their course edits). Staff-only to read (see access gate below).
+         * Get a page of a course's activity feed
+         * @description One page of a course's activity feed: course/assignment/problem/submission activity plus  member logins. Course-content activity by admins (even if not enrolled) and enrolled  staff (Faculty/TA) shows any time (so an admin creating or editing a problem before the  term is included), while other members' content and all member logins are clipped to the  course's start/end dates. Admin logins are never shown (only their course edits).  Staff-only to read (see the access gate below).   Search, filters, sort and pagination all run in the database. They used to run in the  browser over whatever "Load More" had fetched, which meant searching an audit trail could  return nothing for an event that existed.   `?part=filters` returns the course's assignments and problems so the filter menus can  offer every one of them, not just those present in the rows on screen.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/activity/route.ts)
          */
@@ -1494,6 +1494,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/enrollable-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search accounts that can be enrolled in a course
+         * @description Accounts that could be enrolled in this course: active users who are not already on its  roster, searched server-side. Course staff (faculty or TAs) or a system admin.   Backs the Enroll User dialog, which used to fetch every account in the installation and  subtract the course's roster in the browser. That stopped being correct once the roster  itself was paginated (a partial roster would have offered people who are already members)  and it never scaled to a large user table.   Inactive accounts are left out because the enroll endpoint refuses them anyway, so  offering one could only produce a 409.   Each row carries only the name and email the dialog displays. Course staff are not  administrators, and this route reaches accounts outside their course, so it must not  hand back the admin user list's shape.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/enrollable-users/route.ts)
+         */
+        get: operations["getCoursesByIdEnrollableUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/grades/export": {
         parameters: {
             query?: never;
@@ -1524,8 +1546,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get the course grade matrix
-         * @description Returns the full gradebook matrix for a course: students x assignments with each cell  holding the student's summed assignment grade (problem grades collapsed into one  total). Course staff (faculty or TAs) or a system admin. Reading the whole gradebook  is a FERPA-relevant access, so it's recorded (throttled) in the audit log.
+         * Get a page of the course gradebook
+         * @description The gradebook, one page of students at a time.   `?part=columns` returns the assignment columns and the course's student total, which the  table caches for the course. Without `part` it returns one page of students, each row  carrying that student's assigned flags and their summed assignment grades.   The whole students x assignments matrix used to be returned in one go (as `structure`  plus `values`), which does not survive a course with a thousand students. The full matrix  still exists for the LMS export, which builds it server-side in its own route.   Course staff (faculty or TAs) or a system admin. Reading grade values is a FERPA-relevant  access, so it is recorded (throttled) in the audit log.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
@@ -1967,7 +1989,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List a course's roster (paginated)
+         * @description One page of a course's roster, with search, filters, sort and pagination all applied in  the database. Course staff (faculty or TAs) or a system admin.   A staff surface, so dropped students are included and badged rather than hidden. Students  never reach this route; their course payload carries staff names only and no peer rows.   Deliberately does not log the read. Staff reading their own course's roster is routine,  and paginating would turn one read into one log per page flipped through, which would  distort ActivityLog as research data. See docs/logging-policy.md section 3.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/route.ts)
+         */
+        get: operations["getCoursesByIdRoster"];
         put?: never;
         /**
          * Enroll a user in a course
@@ -3851,21 +3879,52 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    problemIds: string[];
+                    /** @description Empty means every course */
+                    courseIds?: string[];
+                    /** @description Empty means every assignment */
+                    assignmentIds?: string[];
+                    /** @description Empty means every problem */
+                    problemIds?: string[];
+                    /** @description Match on student, course, assignment, problem, or file name */
+                    q?: string;
+                    /**
+                     * @default all
+                     * @enum {string}
+                     */
+                    field?: "all" | "student" | "course" | "assignment" | "problem" | "file";
+                    timing?: ("ontime" | "late")[];
+                    status?: ("pending" | "processing" | "failed" | "correct" | "incorrect")[];
+                    /** @default 1 */
+                    page?: number;
+                    /** @default 10 */
+                    pageSize?: number;
+                    /** @enum {string} */
+                    sortBy?: "submittedAt" | "student" | "course" | "assignment" | "problem" | "file" | "due" | "status";
+                    /**
+                     * @default desc
+                     * @enum {string}
+                     */
+                    sortDir?: "asc" | "desc";
                 };
             };
         };
         responses: {
-            /** @description Flattened autograded submissions, newest first. */
+            /** @description One page of autograded submissions. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": {
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
                 };
             };
-            /** @description problemIds missing or empty. */
+            /** @description Malformed body. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5022,8 +5081,21 @@ export interface operations {
     getCoursesByIdActivity: {
         parameters: {
             query?: {
-                limit?: number;
-                offset?: number;
+                /** @description `filters` returns the course's assignments and problems for the filter menus. */
+                part?: "filters";
+                page?: number;
+                pageSize?: number;
+                /** @description Match on action, category, or the actor's name/email */
+                q?: string;
+                field?: "all" | "action" | "category" | "user";
+                /** @description Repeatable */
+                category?: string[];
+                /** @description Repeatable */
+                assignmentId?: string[];
+                /** @description Repeatable */
+                problemId?: string[];
+                sortBy?: "timestamp" | "action" | "category" | "ipAddress" | "userLastName" | "userFirstName";
+                sortDir?: "asc" | "desc";
             };
             header?: never;
             path: {
@@ -5033,16 +5105,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A page of activity entries with a total count. */
+            /** @description One page of activity entries, or the filter option lists. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        activities?: Record<string, never>[];
-                        totalCount?: number;
-                        hasMore?: boolean;
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                        assignments?: Record<string, never>[];
+                        problems?: Record<string, never>[];
                     };
                 };
             };
@@ -5055,7 +5131,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not enrolled in the course and not a system admin. */
+            /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7381,6 +7457,81 @@ export interface operations {
             };
         };
     };
+    getCoursesByIdEnrollableUsers: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Match on first name, last name, or email */
+                q?: string;
+                field?: "all" | "firstName" | "lastName" | "email";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of enrollable accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows?: {
+                            id?: string;
+                            firstName?: string | null;
+                            lastName?: string | null;
+                            email?: string;
+                        }[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff (faculty or TAs) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getCoursesByIdGradesExport: {
         parameters: {
             query?: {
@@ -7444,8 +7595,15 @@ export interface operations {
     getCoursesByIdGrades: {
         parameters: {
             query?: {
-                /** @description `structure` returns students + assignments; `values` returns just the grades map; omitted returns the full matrix. */
-                part?: "structure" | "values";
+                /** @description `columns` returns the assignment columns and the student total; omitted returns one page of students with their grades. */
+                part?: "columns";
+                page?: number;
+                pageSize?: number;
+                /** @description Match on the student's name or email */
+                q?: string;
+                /** @description lastName, firstName, email, totalGrade, or an assignment id */
+                sortBy?: string;
+                sortDir?: "asc" | "desc";
             };
             header?: never;
             path: {
@@ -7455,16 +7613,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Students, assignments, and a nested grades map (grades[studentId][assignmentId]). */
+            /** @description Either the columns payload or one page of student rows. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        students?: Record<string, never>[];
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
                         assignments?: Record<string, never>[];
-                        grades?: Record<string, never>;
+                        totalStudents?: number;
                     };
                 };
             };
@@ -9256,6 +9418,82 @@ export interface operations {
             };
             /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdRoster: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Match on name or email */
+                q?: string;
+                field?: "all" | "name" | "email";
+                /** @description Repeatable */
+                role?: ("FACULTY" | "TA" | "STUDENT")[];
+                /** @description Repeatable */
+                status?: ("ENROLLED" | "DROPPED")[];
+                sortBy?: "lastName" | "firstName" | "email" | "role" | "enrollmentStatus";
+                sortDir?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of roster members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff (faculty or TAs) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

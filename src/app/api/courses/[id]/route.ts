@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { CourseRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
@@ -14,11 +15,7 @@ import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/cours
 import { assignedToStudentWhere, overridesForStudentWhere } from '@/lib/assignment-visibility';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import { CourseUpdateApiSchema } from '@/schemas/course';
-import {
-  countByAssignment,
-  studentsWithSubmissions,
-  type OptionalCountDelegate,
-} from '@/lib/course-aggregates';
+import { countByAssignment, type OptionalCountDelegate } from '@/lib/course-aggregates';
 import { diffFacultyRoster } from '@/lib/course-faculty';
 import { serializeAssignment, type AssignmentRow } from '@/lib/course-serialize';
 
@@ -77,9 +74,15 @@ export const GET = withCourseAuth(
               roster: true,
             },
           },
+          // Course STAFF only, never the students. The course payload is read on every tab
+          // and by several components, and a 1,000-student roster embedded in it does not
+          // survive; the Roster tab pages through GET /api/courses/[id]/roster instead.
+          // `lib/courses-list.ts` narrows the course LIST the same way, for the same reason.
+          // The student count callers need is `rosterTotal` below.
           ...(includeRoster
             ? {
                 roster: {
+                  where: { role: { in: ['FACULTY', 'TA'] as CourseRole[] } },
                   select: {
                     role: true,
                     status: true,
@@ -185,41 +188,30 @@ export const GET = withCourseAuth(
 
       const assignmentIds = includeAssignments ? assignmentRows.map((a) => String(a.id)) : [];
 
-      let enrolled: Array<Record<string, unknown>> = [];
+      /*
+       * The course's staff (FACULTY/TA), which is what every consumer of this field
+       * actually wanted: the header's instructor and TA names, the Settings faculty
+       * picker, and the duplicate-course wizard. The query above already restricts the
+       * roster to those two roles, so there are no students to filter out here.
+       *
+       * `hasSubmissions` is gone from this route. It only ever answered "may this row be
+       * removed", which is a roster-table question, and computing it here crossed every
+       * student in the course with every assignment on a payload read that happens on
+       * every tab. It now lives in `lib/course-roster-list`, scoped to one page.
+       */
+      let staff: Array<Record<string, unknown>> = [];
       if (includeRoster && isStaff) {
-        const studentIds = rosterRows
-          .filter((r) => r.role === 'STUDENT')
-          .map((r) => String(r.user.id));
-
-        const submittedStudentIds = await studentsWithSubmissions(
-          submissionDelegate,
-          studentIds,
-          assignmentIds,
-          (studentId) =>
-            prisma.submission
-              .findFirst({
-                where: { studentId, assignmentId: { in: assignmentIds } },
-                select: { studentId: true },
-              })
-              .then(Boolean),
-        );
-
-        enrolled = rosterRows.map((r) => ({
+        staff = rosterRows.map((r) => ({
           ...r.user,
           courseRole: r.role,
-          // Enrollment standing, so the roster can badge dropped students (staff view only;
-          // students never receive peer roster rows). Only meaningful for STUDENT rows.
           enrollmentStatus: r.status,
-          hasSubmissions: r.role === 'STUDENT' ? submittedStudentIds.has(String(r.user.id)) : false,
         }));
       } else if (includeRoster) {
-        // Non-staff (students) get a privacy-safe roster: course staff keep their
-        // names (the UI labels the course with them) but not their email, and
-        // every classmate collapses to a count-only placeholder: no peer id,
-        // name, or email is ever sent to a student.
-        enrolled = toStudentSafeEnrolled(
-          rosterRows.map((r) => ({ ...r.user, courseRole: r.role })),
-        );
+        // A student sees who teaches the course and nothing more: staff keep their names
+        // (the UI labels the course with them) but not their email, and no peer row of any
+        // kind is sent. Classmates are not in `rosterRows` at all now, so the count a
+        // student sees comes from `rosterTotal`.
+        staff = toStudentSafeEnrolled(rosterRows.map((r) => ({ ...r.user, courseRole: r.role })));
       }
 
       let assignmentsWithProblemCount: Array<Record<string, unknown>> = [];
@@ -292,8 +284,9 @@ export const GET = withCourseAuth(
         timezone: course.timezone,
         createdAt: course.createdAt,
         updatedAt: course.updatedAt,
-        // Only include a single enrolled array (user objects with courseRole)
-        enrolled: includeRoster ? enrolled : [],
+        // Course staff only (user objects with courseRole). The roster tab pages through
+        // GET /api/courses/[id]/roster; `rosterTotal` below is the whole-roster count.
+        staff: includeRoster ? staff : [],
         problems: includeProblems ? problemsWithLink : [],
         assignments: includeAssignments ? assignmentsWithProblemCount : [],
         // For non-staff the counts must reflect only what they can see (published

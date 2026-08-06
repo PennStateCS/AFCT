@@ -2,41 +2,58 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
-import {
-  getCourseGradeMatrix,
-  getCourseGradeStructure,
-  getCourseGradeValues,
-} from '@/lib/course-grades';
+import { parsePageParams } from '@/lib/api/request';
+import { getCourseGradeColumns, getCourseGradePage } from '@/lib/course-grades';
 
 // The grades tab refetches on focus and on an interval; only record a view once per
 // user / course / window so a background refetch doesn't flood the audit log.
 const GRADES_VIEW_THROTTLE_MS = 10 * 60 * 1000;
 
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 100;
+
 /**
- * Returns the full gradebook matrix for a course: students x assignments with each cell
- * holding the student's summed assignment grade (problem grades collapsed into one
- * total). Course staff (faculty or TAs) or a system admin. Reading the whole gradebook
- * is a FERPA-relevant access, so it's recorded (throttled) in the audit log.
+ * The gradebook, one page of students at a time.
+ *
+ * `?part=columns` returns the assignment columns and the course's student total, which the
+ * table caches for the course. Without `part` it returns one page of students, each row
+ * carrying that student's assigned flags and their summed assignment grades.
+ *
+ * The whole students x assignments matrix used to be returned in one go (as `structure`
+ * plus `values`), which does not survive a course with a thousand students. The full matrix
+ * still exists for the LMS export, which builds it server-side in its own route.
+ *
+ * Course staff (faculty or TAs) or a system admin. Reading grade values is a FERPA-relevant
+ * access, so it is recorded (throttled) in the audit log.
  * @openapi
- * summary: Get the course grade matrix
+ * summary: Get a page of the course gradebook
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
  *   - name: part
  *     in: query
  *     required: false
- *     description: "`structure` returns students + assignments; `values` returns just the grades map; omitted returns the full matrix."
- *     schema: { type: string, enum: [structure, values] }
+ *     description: "`columns` returns the assignment columns and the student total; omitted returns one page of students with their grades."
+ *     schema: { type: string, enum: [columns] }
+ *   - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+ *   - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+ *   - { name: q, in: query, description: "Match on the student's name or email", schema: { type: string } }
+ *   - { name: sortBy, in: query, description: "lastName, firstName, email, totalGrade, or an assignment id", schema: { type: string } }
+ *   - { name: sortDir, in: query, schema: { type: string, enum: [asc, desc], default: asc } }
  * responses:
  *   200:
- *     description: Students, assignments, and a nested grades map (grades[studentId][assignmentId]).
+ *     description: Either the columns payload or one page of student rows.
  *     content:
  *       application/json:
  *         schema:
  *           type: object
  *           properties:
- *             students: { type: array, items: { type: object } }
+ *             rows: { type: array, items: { type: object } }
+ *             total: { type: integer }
+ *             page: { type: integer }
+ *             pageSize: { type: integer }
+ *             totalPages: { type: integer }
  *             assignments: { type: array, items: { type: object } }
- *             grades: { type: object }
+ *             totalStudents: { type: integer }
  *   401: { description: Not signed in. }
  *   403: { description: Not course staff (faculty or TAs) or a system admin. }
  *   500: { description: Server error. }
@@ -44,18 +61,29 @@ const GRADES_VIEW_THROTTLE_MS = 10 * 60 * 1000;
 export const GET = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      // The gradebook loads in two parts so the table can paint its columns while the
-      // grade cells are still loading: `?part=structure` returns students + assignments
-      // (fast); `?part=values` returns just the grades (the slower aggregation). No part
-      // returns the full matrix (used by the LMS export path). The grade *values* are
-      // the FERPA-relevant read, so that's what the throttled audit records.
-      const part = new URL(req.url).searchParams.get('part');
+      const url = new URL(req.url);
 
-      if (part === 'structure') {
-        return NextResponse.json(await getCourseGradeStructure(courseId));
+      // Columns carry no grade values, so they are not the FERPA-relevant read and are not
+      // audited, matching what `?part=structure` did before.
+      if (url.searchParams.get('part') === 'columns') {
+        return NextResponse.json(await getCourseGradeColumns(courseId));
       }
 
-      const payload = part === 'values' ? await getCourseGradeValues(courseId) : await getCourseGradeMatrix(courseId);
+      const { page, pageSize, skip, take } = parsePageParams(url.searchParams, {
+        defaultSize: DEFAULT_PAGE_SIZE,
+        maxSize: MAX_PAGE_SIZE,
+      });
+      const q = (url.searchParams.get('q') ?? '').trim();
+      const sortDir: 'asc' | 'desc' = url.searchParams.get('sortDir') === 'desc' ? 'desc' : 'asc';
+
+      const { rows, total } = await getCourseGradePage({
+        courseId,
+        skip,
+        take,
+        q: q || undefined,
+        sortBy: url.searchParams.get('sortBy') ?? undefined,
+        sortDir,
+      });
 
       // Best-effort, throttled read audit — never block the response on it.
       try {
@@ -75,14 +103,24 @@ export const GET = withCourseAuth(
             severity: 'INFO',
             category: 'GRADE',
             courseId,
-            metadata: { studentCount: Object.keys(payload.grades).length },
+            // The COURSE's student count, not the page's. This used to be the size of the
+            // whole matrix, and paginating must not quietly redefine it as "rows on one
+            // page": the log is research data and its meaning has to stay stable across
+            // years. The throttle above already keeps paging from multiplying entries.
+            metadata: { studentCount: total },
           });
         }
       } catch (logErr) {
         console.error('Failed to log grades view:', logErr);
       }
 
-      return NextResponse.json(payload);
+      return NextResponse.json({
+        rows,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      });
     } catch (error) {
       console.error('GET /api/courses/[id]/grades error:', error);
       const detail = error instanceof Error ? error.message : String(error);

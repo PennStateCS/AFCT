@@ -53,7 +53,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { roleSortingFn } from '@/lib/roles';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { useEffect, useState } from 'react';
@@ -401,25 +400,20 @@ export const userColumns = (
       },
     },
     {
+      // `role` here is the COURSE role, which the server sends on every roster row.
       accessorKey: 'role',
       header: 'Role',
-      meta: {
-        priority: 2,
-        filterVariant: 'multiselect',
-        filterLabel: 'Role',
-        filterOptions: [
-          { label: 'Faculty', value: 'FACULTY' },
-          { label: 'TA', value: 'TA' },
-          { label: 'Student', value: 'STUDENT' },
-        ],
-      },
+      // No filterVariant: the table shows one server-ordered page, so its faceted filter
+      // could only narrow the rows already on screen. Role and Status are filtered through
+      // the toolbar's Filters menu in RosterCard instead. Same reason there is no
+      // sortingFn: ordering is the server's, over the whole roster.
+      meta: { priority: 2 },
       cell: ({ row }) => (
         <Badge
           userRole={(row.original as RosterUser).role as 'FACULTY' | 'TA' | 'STUDENT' | undefined}
           className="w-20"
         />
       ),
-      sortingFn: roleSortingFn,
     },
     {
       id: 'enrollmentStatus',
@@ -428,15 +422,8 @@ export const userColumns = (
       // them and only "Dropped" isolates dropped students. (Student rows always carry a
       // real status from the server.)
       accessorFn: (row) => (row as RosterUser).enrollmentStatus ?? 'ENROLLED',
-      meta: {
-        priority: 2,
-        filterVariant: 'multiselect',
-        filterLabel: 'Status',
-        filterOptions: [
-          { label: 'Enrolled', value: 'ENROLLED' },
-          { label: 'Dropped', value: 'DROPPED' },
-        ],
-      },
+      // Filtered from the toolbar's Filters menu, not here; see the Role column above.
+      meta: { priority: 2 },
       cell: ({ row }) => {
         const r = row.original as RosterUser;
         // Status only applies to students; staff show a dash.

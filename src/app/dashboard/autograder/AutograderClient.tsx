@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { ColumnDef } from '@tanstack/react-table';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import type { ColumnDef, OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
 import { ChevronDown, Download, ExternalLink, Eye, File, FileCode2, RotateCcw } from 'lucide-react';
 import type { Course } from '@prisma/client';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { FeedbackDialog } from '@/components/dialogs/FeedbackDialog';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import Link from 'next/link';
 import { DataTable } from '@/components/ui/data-table';
+import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +43,10 @@ type AssignmentItem = {
   problems: string[];
 };
 
+// Shape returned by POST /api/admin/submissions (one page of rows). `dueDate` and
+// `problemType` come from the server so a row is self-describing: the table no longer has
+// to look its assignment or problem up in the picker lists, which held only the current
+// selection and quietly returned nothing for anything outside it.
 type SubmissionItem = {
   id: string;
   studentId: string;
@@ -53,6 +58,8 @@ type SubmissionItem = {
   studentEmail: string;
   courseName: string;
   assignmentTitle: string;
+  dueDate: string;
+  problemType: string | null;
   submittedAt: string;
   status: SubmissionStatusFilter;
   grade?: number | null;
@@ -61,7 +68,22 @@ type SubmissionItem = {
   problemTitle?: string | null;
   fileName?: string | null;
   originalFileName?: string | null;
-  feedback: string;
+  feedback: string | null;
+};
+
+/** The server-side query: sent as the request body and used as the react-query key. */
+type SubmissionsQuery = {
+  courseIds: string[];
+  assignmentIds: string[];
+  problemIds: string[];
+  q?: string;
+  field: string;
+  timing: string[];
+  status: string[];
+  page: number;
+  pageSize: number;
+  sortBy?: string;
+  sortDir: 'asc' | 'desc';
 };
 
 type ProblemItem = {
@@ -170,22 +192,23 @@ const fetchProblemsForAssignment = async (assignmentId: string): Promise<Problem
   }));
 };
 
-const fetchSubmissions = async (problemIds: string[]): Promise<SubmissionItem[]> => {
-  if (problemIds.length === 0) return [];
-
+const fetchSubmissions = async (
+  query: SubmissionsQuery,
+): Promise<{ rows: SubmissionItem[]; total: number }> => {
   const response = await fetch(apiPaths.admin.submissions(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ problemIds }),
+    body: JSON.stringify(query),
+    cache: 'no-store',
   });
 
   if (!response.ok) {
     throw new Error('Failed to load submissions');
   }
 
-  return (await response.json()) as SubmissionItem[];
+  return (await response.json()) as { rows: SubmissionItem[]; total: number };
 };
 
 // Fan out across the selected courses / assignments for the filter lists.
@@ -201,17 +224,48 @@ const fetchProblemsForAssignments = async (assignmentIds: string[]): Promise<Pro
   return Array.from(new Map(flat.map((problem) => [problem.id, problem])).values());
 };
 
-// Stable empty arrays so `data ?? EMPTY` keeps a constant identity between
-// renders: the selection-cascade effects depend on `[data]`, and a fresh `[]`
-// each render would retrigger them endlessly.
+// Stable empty arrays so `data ?? EMPTY` keeps a constant identity between renders, which
+// keeps the option memos below from rebuilding on every render.
 const EMPTY_COURSES: CourseItem[] = [];
 const EMPTY_ASSIGNMENTS: AssignmentItem[] = [];
 const EMPTY_PROBLEMS: ProblemItem[] = [];
+const EMPTY_ROWS: SubmissionItem[] = [];
+
+const DEFAULT_PAGE_SIZE = 10;
+
+// Search scope (server-side): restrict the text search to one field.
+const SEARCH_FIELDS = [
+  { value: 'all', label: 'All fields' },
+  { value: 'student', label: 'Student' },
+  { value: 'course', label: 'Course' },
+  { value: 'assignment', label: 'Assignment' },
+  { value: 'problem', label: 'Problem' },
+  { value: 'file', label: 'File' },
+];
 
 export default function AutograderClient() {
+  // Scope. Empty means "everything", so the page opens unfiltered without enumerating every
+  // id in the installation, and the assignment/problem lists are only fetched once the admin
+  // actually narrows. Selecting all of them used to fan out one request per course and then
+  // one per assignment before the table could show anything.
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedProblems, setSelectedProblems] = useState<string[]>([]);
+
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+
+  // searchInput is what the user is typing; search is the committed (debounced) query.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [searchField, setSearchField] = useState('all');
+
+  // Server-side multi-selects. Values match the API's query tokens.
+  const [timing, setTiming] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+
+  // Newest first: a queue is read from the most recent arrival down.
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'submittedAt', desc: true }]);
   // Only the setter is used: `rerunSubmission` flips a per-row flag while it works, and
   // nothing on this page reads it now that the bulk rerun button is gone.
   const [, setRerunning] = useState<Record<string, boolean>>({});
@@ -265,29 +319,16 @@ export default function AutograderClient() {
     staleTime: Infinity,
   });
 
-  // Selection cascade: each level auto-selects everything it just loaded, so the
-  // page opens with all submissions in view and the user narrows from there.
-  const allCoursesSelected = useRef(false);
+  // Narrowing a level clears the levels below it, so a stale assignment or problem id
+  // cannot outlive the course that offered it and silently keep filtering the table.
   useEffect(() => {
-    if (courses.length > 0 && !allCoursesSelected.current) {
-      allCoursesSelected.current = true;
-      setSelectedCourses(courses.map((course) => course.id));
-    }
-  }, [courses]);
-
-  // When a new assignment list loads (the course selection changed), select all of
-  // them. Seeding selectedProblems is deliberately left to the problems effect below:
-  // doing it here as well meant both effects wrote selectedProblems (the submissions
-  // query key) on load, firing the submissions POST twice.
-  useEffect(() => {
-    setSelectedAssignments(assignments.map((assignment) => assignment.id));
+    setSelectedAssignments((prev) =>
+      prev.filter((id) => assignments.some((assignment) => assignment.id === id)),
+    );
   }, [assignments]);
 
-  // Sole seeder of selectedProblems — the deduped, canonical problem list for the
-  // current assignment set (the same list the problem filter shows). Being the only
-  // writer keeps the submissions query keyed on selectedProblems firing exactly once.
   useEffect(() => {
-    setSelectedProblems(problems.map((problem) => problem.id));
+    setSelectedProblems((prev) => prev.filter((id) => problems.some((p) => p.id === id)));
   }, [problems]);
 
   useEffect(() => {
@@ -303,19 +344,70 @@ export default function AutograderClient() {
     if (problemsError) showToast.error('Could not load problems. Refresh the page to try again.');
   }, [problemsError]);
 
-  // Cached submissions list keyed by the selected problem set. The query varies
-  // with `selectedProblems`, so changing any course/assignment/problem filter
-  // (which cascades into `selectedProblems`) refetches automatically and dedupes
-  // identical requests. An empty selection resolves to [] without a network call.
+  // Debounce typing, and jump back to the first page when the query changes.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPageIndex(0);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const sort = sorting[0];
+  // One serializable object, used as both the react-query key and the request body, so the
+  // cache can never disagree with what was actually asked for.
+  const submissionsQuery: SubmissionsQuery = {
+    courseIds: selectedCourses,
+    assignmentIds: selectedAssignments,
+    problemIds: selectedProblems,
+    q: search || undefined,
+    field: searchField,
+    timing,
+    status: statusFilter,
+    page: pageIndex + 1,
+    pageSize,
+    sortBy: sort?.id,
+    sortDir: sort?.desc === false ? 'asc' : 'desc',
+  };
+
+  // One page of submissions. keepPreviousData holds the current page on screen while the
+  // next one loads, so paging does not flash an empty table.
   const {
-    data: submissions = [],
-    isFetching: loadingSubmissions,
+    data,
+    // The blocking placeholder is for the cold first load only. Using `isFetching` here
+    // would render it on every page, search and sort change, which is exactly what
+    // keepPreviousData exists to avoid.
+    isLoading: loadingSubmissions,
     isError: submissionsError,
     refetch: refetchSubmissions,
   } = useQuery({
-    queryKey: queryKeys.admin.submissions(selectedProblems),
-    queryFn: () => fetchSubmissions(selectedProblems),
+    queryKey: queryKeys.admin.submissions(submissionsQuery),
+    queryFn: () => fetchSubmissions(submissionsQuery),
+    placeholderData: keepPreviousData,
   });
+
+  const submissions = data?.rows ?? EMPTY_ROWS;
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+
+  const handlePaginationChange: OnChangeFn<PaginationState> = (updater) => {
+    const next = typeof updater === 'function' ? updater({ pageIndex, pageSize }) : updater;
+    setPageIndex(next.pageIndex);
+    setPageSize(next.pageSize);
+  };
+
+  // Sorting is server-side; changing it resets to the first page.
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    const next = typeof updater === 'function' ? updater(sorting) : updater;
+    setSorting(next);
+    setPageIndex(0);
+  };
+
+  // A filter change resets to the first page (the result set shifts under you).
+  const onFilter = (setter: (v: string[]) => void) => (v: string[]) => {
+    setter(v);
+    setPageIndex(0);
+  };
 
   useEffect(() => {
     if (submissionsError) {
@@ -341,8 +433,9 @@ export default function AutograderClient() {
     // A submission's file is only a JFLAP machine for FA/PDA/TM; RE and CFG answers need
     // their own viewers. This page sent every one of them to the JFLAP viewer, so opening
     // a grammar or a regular expression produced a parse error instead of the answer.
-    // The problem list is already loaded for the filter above, so read the type from it.
-    setViewerProblemType(problems.find((p) => p.id === submission.problemId)?.type ?? null);
+    // The type rides along on the row, so it is right even for a problem the picker has
+    // never loaded.
+    setViewerProblemType(submission.problemType);
     setJffViewerOpen(true);
   };
 
@@ -378,40 +471,23 @@ export default function AutograderClient() {
     [problems],
   );
 
-  /*
-   * Rows the course / assignment / problem pickers allow through.
-   *
-   * Status filtering is NOT done here any more: the table owns it, through the `timing`
-   * and `status` columns and the toolbar's Filters button. Note the consequence for the
-   * header's Rerun button below, which reruns what this list holds and therefore ignores
-   * a status filter set inside the table.
-   */
-  const visibleSubmissions = useMemo(
-    () =>
-      submissions.filter((submission) => {
-        const matchesCourse =
-          selectedCourses.length === 0 || selectedCourses.includes(submission.courseId);
-        const matchesAssignment =
-          selectedAssignments.length === 0 || selectedAssignments.includes(submission.assignmentId);
-        const matchesProblem =
-          selectedProblems.length === 0 || selectedProblems.includes(submission.problemId);
-
-        return matchesCourse && matchesAssignment && matchesProblem;
-      }),
-    [selectedAssignments, selectedCourses, selectedProblems, submissions],
-  );
-
-  const handleSelectAll = () => {
-    setSelectedCourses(courses.map((course) => course.id));
-    setSelectedAssignments(assignments.map((assignment) => assignment.id));
-    setSelectedProblems(problems.map((problem) => problem.id));
-  };
-
   const handleClearFilters = () => {
     setSelectedCourses([]);
     setSelectedAssignments([]);
     setSelectedProblems([]);
+    setTiming([]);
+    setStatusFilter([]);
+    setSearchInput('');
+    setPageIndex(0);
   };
+
+  const anyFilterActive =
+    selectedCourses.length > 0 ||
+    selectedAssignments.length > 0 ||
+    selectedProblems.length > 0 ||
+    timing.length > 0 ||
+    statusFilter.length > 0 ||
+    searchInput.length > 0;
 
   const handleRerunSubmission = async (submission: SubmissionItem) => {
     await rerunSubmission({
@@ -421,10 +497,15 @@ export default function AutograderClient() {
     });
   };
 
-  /** The assignment's due date for a row, or null when it has none or it is unparseable. */
+  /**
+   * The assignment's due date for a row, or null when it is unparseable.
+   *
+   * Comes with the row now. It used to be looked up in the loaded assignment list, which
+   * held only the current selection, so any row outside it got no due date and was labelled
+   * "On time" whatever its timestamp said.
+   */
   const dueDateFor = (submission: SubmissionItem): Date | null => {
-    const assignment = assignments.find((a) => a.id === submission.assignmentId);
-    const due = assignment?.dueDate ? new Date(assignment.dueDate) : null;
+    const due = submission.dueDate ? new Date(submission.dueDate) : null;
     return due && !Number.isNaN(due.getTime()) ? due : null;
   };
 
@@ -448,11 +529,14 @@ export default function AutograderClient() {
       {
         id: 'timing',
         header: 'Timing',
-        // Next to the timestamp it is a judgement about. Like Status, the accessor is the
-        // chip's own label, so search, export and the mobile cards read "On time" rather
-        // than a code, a row with no due date filters as the On time the grid already
-        // calls it, and sorting is the plain A to Z of what the badge says (Late, then
-        // On time) rather than an invented order a user would have to learn.
+        // Next to the timestamp it is a judgement about. The accessor is the chip's own
+        // label so the mobile cards read "On time" rather than a code.
+        //
+        // Not sortable: Timing compares two columns (submittedAt against the assignment's
+        // due date) rather than reading one, and the rows on screen are one page of a
+        // server-ordered result, so a client sort here would only reorder the page and
+        // claim to have ordered the whole queue. Filter by it instead.
+        enableSorting: false,
         accessorFn: (s) => {
           const due = dueDateFor(s);
           return getTimingStatusChip(s as ProblemSubmission, !!due, due).label;
@@ -463,15 +547,7 @@ export default function AutograderClient() {
             <StatusBadge chip={getTimingStatusChip(row.original as ProblemSubmission, !!due, due)} />
           );
         },
-        meta: {
-          priority: 2,
-          filterVariant: 'multiselect',
-          filterLabel: 'Timing',
-          filterOptions: [
-            { label: 'On time', value: 'On time' },
-            { label: 'Late', value: 'Late' },
-          ],
-        },
+        meta: { priority: 2 },
       },
       {
         id: 'student',
@@ -594,6 +670,9 @@ export default function AutograderClient() {
          */
         id: 'attemptGrade',
         header: 'Grade',
+        // Not sortable: it is derived from `correct` and the problem's points rather than
+        // stored, so the server has no column to order the whole queue by.
+        enableSorting: false,
         accessorFn: (s) => attemptPointsFor(s) ?? -1,
         cell: ({ row }) => {
           const points = attemptPointsFor(row.original);
@@ -611,6 +690,9 @@ export default function AutograderClient() {
         // not explain.
         id: 'grade',
         header: 'Recorded grade',
+        // Not sortable: it lives in AssignmentProblemGrade, which Submission has no relation
+        // to, so it is joined per page rather than ordered by.
+        enableSorting: false,
         accessorFn: (s) => s.grade ?? -1,
         cell: ({ row }) => {
           const { grade, maxPoints } = row.original;
@@ -628,49 +710,22 @@ export default function AutograderClient() {
         id: 'status',
         header: 'Status',
         /*
-         * The grading result, next to the grade it explains. Accessor, sorting and filter
-         * follow the Timing column above for the same reasons.
+         * The grading result, next to the grade it explains. The accessor is the chip's own
+         * label so the mobile cards read words rather than codes.
          *
-         * Timing and Status stay separate columns on purpose: a submission has a timing
-         * (was it late) AND a result (was it graded, and was it right), and those are
-         * independent, so "late" and "correct" can describe the same row. Filters AND
-         * across columns, which is what makes picking one of each narrow rather than
-         * widen. Same reasoning the user table uses for keeping Lock apart from
-         * Active/Inactive.
+         * Sorting is server-side and orders by the stored queue state and then `correct`,
+         * which is not the alphabetical order of the badge text. It is the order the data
+         * actually has; the five labels are two columns wearing one badge.
+         *
+         * The filter for this column, and Timing's, now live in the toolbar's Filters menu
+         * rather than on the column: the table shows one server-ordered page, so a
+         * client-side faceted filter could only ever narrow the rows already on screen.
          */
         accessorFn: (s) => getReviewStatusChip(s as ProblemSubmission).label,
         cell: ({ row }) => (
           <StatusBadge chip={getReviewStatusChip(row.original as ProblemSubmission)} />
         ),
-        meta: {
-          priority: 1,
-          filterVariant: 'multiselect',
-          /*
-           * One column, shown as two headings. Where it is up to (Pending / Processing /
-           * Failed) and how it turned out (Correct / Incorrect) are different questions,
-           * so they get their own lists. They stay one column because a submission has
-           * exactly one of these five values: as separate columns the popover would AND
-           * them, and any cross-heading pick (say Failed plus Correct) could only ever
-           * return nothing. Sharing the column keeps that pick meaning "either".
-           */
-          filterSections: [
-            {
-              label: 'Status',
-              options: [
-                { label: 'Pending', value: 'Pending' },
-                { label: 'Processing', value: 'Processing' },
-                { label: 'Failed', value: 'Failed' },
-              ],
-            },
-            {
-              label: 'Submission',
-              options: [
-                { label: 'Correct', value: 'Correct' },
-                { label: 'Incorrect', value: 'Incorrect' },
-              ],
-            },
-          ],
-        },
+        meta: { priority: 1 },
       },
       {
         id: 'actions',
@@ -754,11 +809,11 @@ export default function AutograderClient() {
         },
       },
     ],
-    // `problems` is a dependency because the cells' view handler reads it to decide which
-    // viewer a file needs. It arrives after `assignments`, so leaving it out froze the
-    // handler around an empty list and opening a submission rendered no viewer at all.
+    // The cells no longer read the picker lists: a row carries its own due date and problem
+    // type, so `assignments` and `problems` are gone from here and the columns stop being
+    // rebuilt every time a filter list loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [assignments, problems, timezone],
+    [timezone],
   );
 
   return (
@@ -776,27 +831,16 @@ export default function AutograderClient() {
               Rerunning one submission lives in its row's Manage menu. */}
         </div>
 
+        {/* No "Select All" any more. An empty picker now means every course, assignment and
+            problem, so selecting all of them would have been the same view by a longer
+            route, and it was the thing that made the page enumerate every id on load. */}
         <div className="mt-3 flex gap-2">
           <Button
             type="button"
             size="sm"
             variant="secondary"
-            onClick={handleSelectAll}
-            disabled={courses.length === 0}
-          >
-            Select All
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
             onClick={handleClearFilters}
-            disabled={
-              selectedCourses.length === 0 &&
-              selectedAssignments.length === 0 &&
-              selectedProblems.length === 0
-            }
+            disabled={!anyFilterActive}
           >
             Clear Filters
           </Button>
@@ -809,12 +853,14 @@ export default function AutograderClient() {
             side only from `lg`. Each track is `minmax(0,1fr)` so a long selection truncates
             inside its column instead of widening it. */}
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          {/* Each picker reads "All ..." while empty, because empty is not "nothing
+              selected, so nothing shown" here: it is the unfiltered view the page opens on. */}
           <SearchableMultiSelect
             label="Course filter"
             items={courseOptions}
             value={selectedCourses}
-            onChange={setSelectedCourses}
-            placeholder={loadingCourses ? 'Loading courses…' : 'No selected courses'}
+            onChange={onFilter(setSelectedCourses)}
+            placeholder={loadingCourses ? 'Loading courses…' : 'All courses'}
             searchPlaceholder="Search courses"
             emptyStateText={loadingCourses ? 'Loading courses…' : 'No courses found.'}
             disabled={loadingCourses}
@@ -823,8 +869,8 @@ export default function AutograderClient() {
             label="Assignment filter"
             items={assignmentOptions}
             value={selectedAssignments}
-            onChange={setSelectedAssignments}
-            placeholder={loadingAssignments ? 'Loading assignments…' : 'No selected assignments'}
+            onChange={onFilter(setSelectedAssignments)}
+            placeholder={loadingAssignments ? 'Loading assignments…' : 'All assignments'}
             searchPlaceholder="Search assignments"
             emptyStateText={loadingAssignments ? 'Loading assignments…' : 'No assignments found.'}
             disabled={loadingAssignments || selectedCourses.length === 0}
@@ -833,8 +879,8 @@ export default function AutograderClient() {
             label="Problem filter"
             items={problemOptions}
             value={selectedProblems}
-            onChange={setSelectedProblems}
-            placeholder={loadingProblems ? 'Loading problems…' : 'No selected problems'}
+            onChange={onFilter(setSelectedProblems)}
+            placeholder={loadingProblems ? 'Loading problems…' : 'All problems'}
             searchPlaceholder="Search problems"
             emptyStateText={loadingProblems ? 'Loading problems…' : 'No problems found.'}
             disabled={loadingProblems || selectedAssignments.length === 0}
@@ -843,14 +889,18 @@ export default function AutograderClient() {
 
         <DataTable
           columns={columns}
-          data={visibleSubmissions}
-          loading={loadingCourses || loadingAssignments || loadingSubmissions}
+          data={submissions}
+          loading={loadingSubmissions}
           loadingMessage="Loading submissions, please wait..."
           // Suffixed each time the column set changes: a saved layout wins over these
           // defaults, so a browser holding the old one would keep showing the recorded
           // grade in place of the per-attempt one.
           storageKey="autograder-columns-v3"
           tableLabel="Autograder"
+          // The browser holds one page, so an export from here would silently write that
+          // page and call it the table. Dropped rather than left to mislead, matching the
+          // other server-paginated tables.
+          showExportButton={false}
           // Due is off by default: the deadline matters far less than arrival order when
           // you are working a queue, and the Timing column already flags late work.
           // Recorded grade is off because it repeats the same number down every attempt
@@ -858,19 +908,85 @@ export default function AutograderClient() {
           // Columns menu turns either back on, remembered per browser.
           defaultColumnVisibility={{ due: false, grade: false }}
           emptyIcon={FileCode2}
-          {...(submissions.length === 0
+          {...(anyFilterActive
             ? {
-                emptyTitle: 'No submissions yet',
-                emptyDescription: 'Work submitted for a problem will show up here.',
-              }
-            : {
                 // Distinguish "nothing has been submitted" from "your filters hide
                 // everything": the fix for the second is a filter change, not more work.
                 emptyTitle: 'No submissions match your filters',
                 emptyDescription: 'Try clearing a course, assignment, problem or status filter.',
+              }
+            : {
+                emptyTitle: 'No submissions yet',
+                emptyDescription: 'Work submitted for a problem will show up here.',
               })}
-          // Newest first: a queue is read from the most recent arrival down.
-          defaultSorting={[{ id: 'submittedAt', desc: true }]}
+          actionButtons={
+            <DataTableFilterMenu
+              groups={[
+                {
+                  key: 'timing',
+                  label: 'Timing',
+                  options: [
+                    { label: 'On time', value: 'ontime' },
+                    { label: 'Late', value: 'late' },
+                  ],
+                  selected: timing,
+                  onChange: onFilter(setTiming),
+                },
+                {
+                  /*
+                   * One group, shown as two headings. Where a submission has got to
+                   * (Pending / Processing / Failed) and how it turned out (Correct /
+                   * Incorrect) are different questions, so they get their own lists. They
+                   * stay one group because a row has exactly one of these five values: as
+                   * two groups the server would AND them, and any cross-heading pick (say
+                   * Failed plus Correct) could only ever return nothing. Sharing the group
+                   * keeps that pick meaning "either".
+                   *
+                   * Timing IS its own group, because timing and result are independent and
+                   * should AND: Late plus Incorrect finds late wrong answers.
+                   */
+                  key: 'status',
+                  label: 'Status',
+                  sections: [
+                    {
+                      label: 'Status',
+                      options: [
+                        { label: 'Pending', value: 'pending' },
+                        { label: 'Processing', value: 'processing' },
+                        { label: 'Failed', value: 'failed' },
+                      ],
+                    },
+                    {
+                      label: 'Submission',
+                      options: [
+                        { label: 'Correct', value: 'correct' },
+                        { label: 'Incorrect', value: 'incorrect' },
+                      ],
+                    },
+                  ],
+                  selected: statusFilter,
+                  onChange: onFilter(setStatusFilter),
+                },
+              ]}
+            />
+          }
+          manualPagination
+          pageCount={pageCount}
+          rowCount={total}
+          pagination={{ pageIndex, pageSize }}
+          onPaginationChange={handlePaginationChange}
+          manualFiltering
+          globalFilter={searchInput}
+          onGlobalFilterChange={setSearchInput}
+          searchScopeOptions={SEARCH_FIELDS}
+          searchScope={searchField}
+          onSearchScopeChange={(v) => {
+            setSearchField(v);
+            setPageIndex(0);
+          }}
+          manualSorting
+          sorting={sorting}
+          onSortingChange={handleSortingChange}
         />
         <SubmissionViewerDialog
           open={jffViewerOpen}

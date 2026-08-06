@@ -27,6 +27,7 @@ function useMountedOnce(open: boolean): boolean {
   return mounted || open;
 }
 import { apiPaths } from '@/lib/api-paths';
+import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
 
@@ -47,16 +48,8 @@ type LogRow = {
 
 const DEFAULT_PAGE_SIZE = 10;
 
-const SEVERITIES: Severity[] = ['INFO', 'WARNING', 'ERROR', 'SECURITY'];
-const CATEGORIES = [
-  'SYSTEM',
-  'USER',
-  'COURSE',
-  'ASSIGNMENT',
-  'PROBLEM',
-  'SUBMISSION',
-  'GRADE',
-] as const;
+const SEVERITIES: readonly Severity[] = LOG_SEVERITIES;
+const CATEGORIES = LOG_CATEGORIES;
 
 // Search scope options (server-side): restrict the text search to one field.
 const SEARCH_FIELDS = [

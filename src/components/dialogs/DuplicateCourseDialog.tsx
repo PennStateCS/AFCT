@@ -120,14 +120,22 @@ export default function DuplicateCourseDialog({
   type CourseRosterRow = { role: string; user: User };
 
   const courseRosterQuery = useQuery<CourseRosterRow[]>({
-    queryKey: ['course', course?.id, 'roster'],
+    /*
+     * Its own key. This used to be ['course', id, 'roster'], byte-identical to the key
+     * `useCourseData` stores a whole FullCourse object under, so opening this dialog on a
+     * course whose Roster tab had been visited handed it the wrong shape entirely.
+     *
+     * Only faculty and TAs are wanted here (the wizard copies course staff), which is
+     * exactly what the course payload now carries.
+     */
+    queryKey: ['course', course?.id, 'duplicate-staff'],
     queryFn: async () => {
       if (!course?.id) return [];
       const res = await fetch(apiPaths.course(course.id, { view: 'roster' }));
       if (!res.ok) throw new Error('Failed to load current course roster');
       const data = await res.json();
-      const enrolled = Array.isArray(data?.enrolled) ? data.enrolled : [];
-      return enrolled.map((row: Record<string, unknown>) => ({
+      const staff = Array.isArray(data?.staff) ? data.staff : [];
+      return staff.map((row: Record<string, unknown>) => ({
         role: String(row.courseRole ?? row.role ?? ''),
         user: {
           id: String(row.id),
