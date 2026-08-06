@@ -171,6 +171,35 @@ describe('ActivityCard', () => {
     expect(lastPageUrl(fetchMock)).toContain('page=2');
   });
 
+  it('keeps the current page on screen while the next one loads', async () => {
+    // keepPreviousData is only worth having if the table is not told it is loading on
+    // every page change; driving `loading` from isFetching would undo it.
+    const fetchMock = installFetch({ rows: [activity('a1', 'FIRST')], total: 100 });
+
+    renderWithClient(<ActivityCard courseId="course-1" />);
+    await waitFor(() => expect(screen.getByText('FIRST')).toBeInTheDocument());
+
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('part=filters'))
+        return jsonResponse({ assignments: [], problems: [] });
+      await gate;
+      return jsonResponse({ rows: [activity('a2', 'SECOND')], total: 100 });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'next page' }));
+
+    // The previous page's row stays put rather than being replaced by the placeholder.
+    await waitFor(() => expect(lastPageUrl(fetchMock)).toContain('page=2'));
+    expect(screen.getByText('FIRST')).toBeInTheDocument();
+    expect(screen.queryByText('Loading activity, please wait...')).toBeNull();
+
+    release?.();
+  });
+
   it('has no Load More button', async () => {
     installFetch({ rows: [activity('a1', 'FIRST')], total: 100 });
 
