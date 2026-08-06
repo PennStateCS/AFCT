@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { parsePageParams } from '@/lib/api/request';
+import { LOG_CATEGORIES, LOG_SEVERITIES, pickLogValues } from '@/lib/activity-log-values';
 import type { Prisma } from '@prisma/client';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -64,22 +65,8 @@ export const GET = withAdminAuth(
 
       // Severity and category are multi-select (repeated query params). Keep only the
       // known values, in canonical order.
-      const SEVERITIES = ['INFO', 'WARNING', 'ERROR', 'SECURITY'] as const;
-      const CATEGORIES = [
-        'SYSTEM',
-        'USER',
-        'COURSE',
-        'ASSIGNMENT',
-        'PROBLEM',
-        'SUBMISSION',
-        'GRADE',
-      ] as const;
-      const pickValues = <T extends readonly string[]>(raw: string[], allowed: T): T[number][] => {
-        const wanted = new Set(raw.map((v) => v.trim().toUpperCase()));
-        return allowed.filter((a) => wanted.has(a));
-      };
-      const severities = pickValues(url.searchParams.getAll('severity'), SEVERITIES);
-      const categories = pickValues(url.searchParams.getAll('category'), CATEGORIES);
+      const severities = pickLogValues(url.searchParams.getAll('severity'), LOG_SEVERITIES);
+      const categories = pickLogValues(url.searchParams.getAll('category'), LOG_CATEGORIES);
 
       // Combine the (optional, scoped) text search and the filters.
       const conditions: Prisma.ActivityLogWhereInput[] = [];

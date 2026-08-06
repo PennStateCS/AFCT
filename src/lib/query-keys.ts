@@ -56,8 +56,13 @@ export const queryKeys = {
     studentGrades: (courseId: string) => ['course', courseId, 'student-grades'] as const,
     problems: (courseId: string) => ['course', courseId, 'problems'] as const,
     assignmentsList: (courseId: string) => ['course', courseId, 'assignments-list'] as const,
-    activity: (courseId: string, opts: { limit: number }) =>
-      ['course', courseId, 'activity', opts] as const,
+    /** Prefix for the course activity feed; use to invalidate both entries below. */
+    activity: (courseId: string) => ['course', courseId, 'activity'] as const,
+    /** One page of the activity feed; the key is the whole server-side query. */
+    activityPage: <T>(courseId: string, params: T) =>
+      ['course', courseId, 'activity', 'page', params] as const,
+    /** The course's assignments and problems, for the activity filter menus. */
+    activityFilters: (courseId: string) => ['course', courseId, 'activity', 'filters'] as const,
   },
 
   // --- Assignments (all nested under their course so course-level invalidation
