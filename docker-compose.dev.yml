@@ -31,24 +31,18 @@ services:
       # (Under `next dev --webpack` instrumentation is skipped anyway, but set it
       # explicitly so a Turbopack/native run wouldn't spawn an in-app worker either.)
       RUN_SUBMISSION_WORKER: 'false'
-      # Poll for file changes; native FS events don't cross the bind mount on
-      # Docker Desktop. These env vars only work under webpack (see `command`
-      # below); Turbopack ignores them, and its own polling knob
-      # (next.config watchOptions.pollIntervalMs) proved unreliable over the
-      # Windows bind mount, which is why dev-in-Docker runs webpack.
-      CHOKIDAR_USEPOLLING: 'true'
-      CHOKIDAR_INTERVAL: '1000'
-      # Milliseconds, not a boolean. Watchpack reads this as
-      # `${+value} === value ? +value : !!value`, so 'true' meant "poll at chokidar's
-      # default", which is 100ms, and CHOKIDAR_INTERVAL above was never consulted on this
-      # path at all. Ten polls a second across a bind mount where a single file walk takes
-      # over a minute is how the compiler ended up starved. 1000 matches the interval this
-      # file always meant to set.
-      WATCHPACK_POLLING: '1000'
-      # Node serves every filesystem call from libuv's thread pool, which defaults to FOUR
-      # threads. Over 9p each call is a round trip to the Windows host, so four threads is
-      # the ceiling on the whole dev server's file I/O: during the stall all four sat in
-      # p9_client_rpc while webpack waited. Raising it costs idle threads and nothing else.
+      # No polling. The watcher used to poll every second because the checkout lived on
+      # the Windows filesystem and file events did not survive the 9p transport into the
+      # container. The checkout is on ext4 inside WSL now, so inotify works and polling
+      # only costs memory: walking the tree once a second is what kept pushing the dev
+      # server into Next's "approaching the used memory threshold, restarting" recycle.
+      # Put CHOKIDAR_USEPOLLING/WATCHPACK_POLLING back if the source ever moves back to a
+      # /mnt/c path (or someone runs this from Docker Desktop on Windows directly), since
+      # hot reload will not fire there without it.
+      #
+      # Node serves every filesystem call from libuv's thread pool, which defaults to four
+      # threads. That was the ceiling on file I/O when each call was a round trip to the
+      # Windows host; it is cheap to keep, and idle threads cost nothing.
       UV_THREADPOOL_SIZE: '32'
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
       DB_HOST: postgres
@@ -59,9 +53,9 @@ services:
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'true'
 
-    # Webpack (not Turbopack) inside Docker: hot reload over the bind mount needs
-    # polling, and only webpack's watcher honors the polling env vars above.
-    # Native (non-Docker) `npm run dev` keeps Turbopack.
+    # Webpack (not Turbopack) inside Docker. This was originally about the polling above,
+    # which is gone; it stays for now because nobody has retested Turbopack's watcher in
+    # this container. Native (non-Docker) `npm run dev` keeps Turbopack.
     command: ['npm', 'run', 'dev', '--', '--webpack']
 
     depends_on:
