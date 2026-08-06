@@ -153,6 +153,11 @@ export type PageParams = { page: number; pageSize: number; skip: number; take: n
  * Parse `page`/`pageSize` for offset pagination. A missing param falls back to the
  * default (guarding the `Number(null) === 0` trap); `pageSize` is clamped to
  * `[1, maxSize]` and `page` to `>= 1`. Also returns Prisma-ready `skip`/`take`.
+ *
+ * The one pagination convention in the app: every paged endpoint takes `page`/`pageSize`
+ * and answers with `{ rows, total, page, pageSize, totalPages }`. There was a second
+ * `limit`/`offset` parser for the course activity feed's old "Load More" button; it went
+ * when that became a pager, so there is one shape for a client to learn.
  */
 export function parsePageParams(
   searchParams: URLSearchParams,
@@ -165,26 +170,6 @@ export function parsePageParams(
     ? clampInt(Number(sizeRaw), 1, opts.maxSize, opts.defaultSize)
     : opts.defaultSize;
   return { page, pageSize, skip: (page - 1) * pageSize, take: pageSize };
-}
-
-export type LimitOffset = { limit: number; offset: number };
-
-/**
- * Parse `limit`/`offset` pagination, clamping `limit` to `[1, maxLimit]` and
- * `offset` to `>= 0`. A missing or non-numeric value falls back to the default
- * (unlike a bare `parseInt`, which would yield `NaN`).
- */
-export function parseLimitOffset(
-  searchParams: URLSearchParams,
-  opts: { defaultLimit: number; maxLimit: number },
-): LimitOffset {
-  const limitRaw = searchParams.get('limit');
-  const offsetRaw = searchParams.get('offset');
-  const limit = limitRaw
-    ? clampInt(Number(limitRaw), 1, opts.maxLimit, opts.defaultLimit)
-    : opts.defaultLimit;
-  const offset = offsetRaw ? clampInt(Number(offsetRaw), 0, Number.MAX_SAFE_INTEGER, 0) : 0;
-  return { limit, offset };
 }
 
 /** Read a multipart-form field as a boolean (`"true"` → true, anything else → false). */

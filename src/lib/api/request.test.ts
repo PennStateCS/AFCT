@@ -3,7 +3,6 @@ import { z } from 'zod';
 import {
   clampInt,
   parsePageParams,
-  parseLimitOffset,
   formBool,
   formBoolOptional,
   readJson,
@@ -50,23 +49,6 @@ describe('parsePageParams', () => {
   });
   it('treats a non-numeric page as the default (not the Number(null)=0 trap)', () => {
     expect(parsePageParams(params('page=abc'), opts).page).toBe(1);
-  });
-});
-
-describe('parseLimitOffset', () => {
-  const opts = { defaultLimit: 50, maxLimit: 100 };
-  it('defaults when absent', () => {
-    expect(parseLimitOffset(params(''), opts)).toEqual({ limit: 50, offset: 0 });
-  });
-  it('clamps limit and floors offset at 0', () => {
-    expect(parseLimitOffset(params('limit=500&offset=20'), opts)).toEqual({
-      limit: 100,
-      offset: 20,
-    });
-    expect(parseLimitOffset(params('offset=-5'), opts).offset).toBe(0);
-  });
-  it('falls back on a non-numeric limit instead of yielding NaN', () => {
-    expect(parseLimitOffset(params('limit=xyz'), opts).limit).toBe(50);
   });
 });
 
