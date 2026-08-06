@@ -497,6 +497,11 @@ export default function AssignmentDashboardPage({
                       // you on the same view (e.g. staying on Submissions or Statistics).
                       const tabQuery = `?tab=${encodeURIComponent(tab)}`;
                       if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
+                      // Without the course id there is no absolute path to push, so this
+                      // falls back to a RELATIVE navigation resolved against the current
+                      // URL. next/navigation's router has no relative form, which is what
+                      // the lint rule below cannot express.
+                      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
                       else window.location.href = `${assignmentId}${tabQuery}`;
                     });
                   }}
