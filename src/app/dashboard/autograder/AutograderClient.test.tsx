@@ -266,6 +266,39 @@ describe('AutograderClient', () => {
     expect(screen.getAllByText(/42 total/).length).toBeGreaterThan(0);
   });
 
+  it('keeps the current page on screen while the next one loads', async () => {
+    // keepPreviousData is only worth having if the table is not told it is loading on
+    // every page change. Driving `loading` from isFetching instead of isLoading would
+    // replace the rows with the loading placeholder each time.
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = global.fetch as FetchMock;
+    let call = 0;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/courses') return jsonResponse(COURSES);
+      if (url === '/api/admin/submissions' && init?.method === 'POST') {
+        call += 1;
+        if (call > 1) await gate; // hold the second page in flight
+        return jsonResponse({ rows: SUBMISSIONS, total: 42 });
+      }
+      throw new Error(`Unexpected fetch: ${String(url)}`);
+    });
+
+    renderWithClient(<AutograderClient />);
+    await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+
+    // Still showing the previous page's rows, not the loading placeholder.
+    await waitFor(() => expect(submissionsPostCalls(fetchMock).length).toBe(2));
+    expect(screen.getByText('ada@example.com')).toBeInTheDocument();
+    expect(screen.queryByText('Loading submissions, please wait...')).toBeNull();
+
+    release?.();
+  });
+
   it('asks the server for the next page instead of slicing the rows it holds', async () => {
     const fetchMock = global.fetch as FetchMock;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {

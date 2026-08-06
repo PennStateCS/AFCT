@@ -374,7 +374,10 @@ export default function AutograderClient() {
   // next one loads, so paging does not flash an empty table.
   const {
     data,
-    isFetching: loadingSubmissions,
+    // The blocking placeholder is for the cold first load only. Using `isFetching` here
+    // would render it on every page, search and sort change, which is exactly what
+    // keepPreviousData exists to avoid.
+    isLoading: loadingSubmissions,
     isError: submissionsError,
     refetch: refetchSubmissions,
   } = useQuery({
