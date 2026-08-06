@@ -21,7 +21,12 @@ type EnrollUserDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   courseIsArchived: boolean;
-  users: EnrollableUser[]; // NOT already in the course
+  /** One page of accounts that are NOT already in the course, matching the search. */
+  users: EnrollableUser[];
+  /** How many accounts match in total, which may exceed the page above. */
+  total?: number;
+  /** Debounced search term, for the caller to fetch against. */
+  onSearchChange?: (q: string) => void;
   onEnroll: (user: EnrollableUser) => void;
 };
 
@@ -30,25 +35,33 @@ export function EnrollUserDialog({
   setOpen,
   courseIsArchived,
   users,
+  total,
+  onSearchChange,
   onEnroll,
 }: EnrollUserDialogProps) {
   const [search, setSearch] = React.useState('');
   const [selectedIdx, setSelectedIdx] = React.useState<number>(-1);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
-  const filteredUsers = React.useMemo(() => {
-    const q = search.toLowerCase();
-    return users.filter(
-      (u) =>
-        (u.firstName && u.firstName.toLowerCase().includes(q)) ||
-        (u.lastName && u.lastName.toLowerCase().includes(q)) ||
-        u.email.toLowerCase().includes(q),
-    );
-  }, [users, search]);
+  /*
+   * The server decides who matches. It also decides who is eligible at all, which is why
+   * there is no client-side filter here any more: this list used to be every account in
+   * the installation minus the course's roster, narrowed in the browser, and neither of
+   * those lists is small enough to hold once a course has a thousand students.
+   */
+  const filteredUsers = users;
 
-  // Only the first 50 matches are rendered, so keyboard navigation must wrap at that
-  // bound rather than at filteredUsers.length (which could point at a missing row).
+  // Debounce typing so a keystroke is not a request.
+  React.useEffect(() => {
+    if (!onSearchChange) return;
+    const t = setTimeout(() => onSearchChange(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search, onSearchChange]);
+
+  // Only the first page is rendered, so keyboard navigation must wrap at that bound
+  // rather than at a length that could point past the rows on screen.
   const visibleCount = Math.min(filteredUsers.length, 50);
+  const hiddenMatches = Math.max(0, (total ?? filteredUsers.length) - visibleCount);
 
   // --- Refs for scrollIntoView + roving focus ---
   const itemRefs = React.useRef<(HTMLLIElement | null)[]>([]);
@@ -170,6 +183,14 @@ export function EnrollUserDialog({
             autoFocus
             onKeyDown={handleSearchKeyDown}
           />
+          {/* Say so rather than truncating in silence: the list shows one page of matches,
+              and without this a name that is genuinely enrollable can look absent. */}
+          {hiddenMatches > 0 ? (
+            <p className="text-muted-foreground text-sm" role="status">
+              Showing the first {visibleCount} of {total} matches. Keep typing to narrow the
+              search.
+            </p>
+          ) : null}
           <div className="h-80 overflow-auto rounded-md border">
             {filteredUsers.length === 0 ? (
               <div className="text-muted-foreground p-3 text-center text-sm">No users found.</div>

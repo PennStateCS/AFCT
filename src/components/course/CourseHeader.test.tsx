@@ -46,20 +46,15 @@ const mockCourse: FullCourse = {
   updatedAt: new Date('2025-06-01T13:00:00Z'),
   problems: [],
   assignments: [],
-  enrolled: [
+  // Course staff only. Students never reach this payload: the roster tab pages through
+  // GET /api/courses/[id]/roster.
+  staff: [
     {
       id: 'faculty-1',
       firstName: 'Ada',
       lastName: 'Lovelace',
       role: 'FACULTY',
       courseRole: 'FACULTY',
-    },
-    {
-      id: 'student-1',
-      firstName: 'Grace',
-      lastName: 'Hopper',
-      role: 'STUDENT',
-      courseRole: 'STUDENT',
     },
   ],
 };
@@ -94,8 +89,8 @@ describe('CourseHeader', () => {
   it('lists TAs when the course has some', () => {
     const withTa: FullCourse = {
       ...mockCourse,
-      enrolled: [
-        ...(mockCourse.enrolled ?? []),
+      staff: [
+        ...(mockCourse.staff ?? []),
         { id: 'ta-1', firstName: 'Alan', lastName: 'Turing', role: 'STUDENT', courseRole: 'TA' },
       ],
     };

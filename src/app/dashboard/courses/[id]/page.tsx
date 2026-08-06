@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { CourseRole } from '@prisma/client';
 import { notFound } from 'next/navigation';
 import CourseClient from './CourseClient';
 import { auth } from '@/lib/auth';
@@ -45,7 +46,12 @@ export default async function AdminCoursePage({ params }: Props) {
           roster: true,
         },
       },
+      // Course STAFF only. Students are not seeded with the page: the roster tab pages
+      // through GET /api/courses/[id]/roster, so a 1,000-student course no longer inlines
+      // its whole roster into the server-rendered HTML. `_count.roster` still carries the
+      // total for the tab label.
       roster: {
+        where: { role: { in: ['FACULTY', 'TA'] as CourseRole[] } },
         select: {
           role: true,
           user: {
@@ -77,10 +83,9 @@ export default async function AdminCoursePage({ params }: Props) {
     notFound();
   }
 
-  const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
-  const enrolled = isStaff
-    ? enrolledMembers.map((member) => ({ ...member, hasSubmissions: false }))
-    : toStudentSafeEnrolled(enrolledMembers);
+  const staffMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
+  // A student still gets staff names without emails; there are no peer rows to strip now.
+  const staff = isStaff ? staffMembers : toStudentSafeEnrolled(staffMembers);
 
   const initialCourse = {
     id: course.id,
@@ -101,7 +106,7 @@ export default async function AdminCoursePage({ params }: Props) {
     emptyStringNotation: course.emptyStringNotation,
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
-    enrolled,
+    staff,
     assignments: [],
     problems: [],
     assignmentTotal: course._count.assignments,

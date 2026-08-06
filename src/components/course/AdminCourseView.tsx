@@ -80,7 +80,6 @@ interface AdminCourseViewProps {
   tab: TabType;
   isAssignmentsLoading?: boolean;
   isProblemsLoading?: boolean;
-  isRosterLoading?: boolean;
   onTabChange: (value: string) => void;
   onCreateAssignment: () => void;
   onCreateProblem: () => void;
@@ -100,7 +99,6 @@ export function AdminCourseView({
   tab,
   isAssignmentsLoading = false,
   isProblemsLoading = false,
-  isRosterLoading = false,
   onTabChange,
   onCreateAssignment,
   onCreateProblem,
@@ -115,10 +113,11 @@ export function AdminCourseView({
   onPublishToggle,
 }: AdminCourseViewProps) {
   const { timezone } = useEffectiveTimezone();
-  const enrolled = course.enrolled ?? [];
   const assignmentCount = course.assignmentTotal ?? course.assignments.length;
   const problemCount = course.problemTotal ?? course.problems.length;
-  const rosterCount = course.rosterTotal ?? enrolled.length;
+  // The whole roster's size, staff and students together. There is no local array to fall
+  // back to any more: the payload carries staff only and the tab pages the rest.
+  const rosterCount = course.rosterTotal ?? 0;
 
   // The assignment being duplicated (opens the wizard); null when closed.
   const [duplicateTarget, setDuplicateTarget] = useState<DuplicateSourceAssignment | null>(null);
@@ -221,12 +220,11 @@ export function AdminCourseView({
 
           <CourseTabPanel value="roster" active={tab === 'roster'}>
             <RosterCard
+              courseId={course.id}
               courseIsArchived={course.isArchived}
-              enrolled={enrolled}
               userColumns={rosterColumns}
               onEnrollUser={onEnrollUser}
               onBulkEnroll={onBulkEnroll}
-              loading={isRosterLoading}
             />
           </CourseTabPanel>
 

@@ -28,8 +28,13 @@ export type AssignmentWithProblemCount = Assignment & {
 };
 
 export type FullCourse = Course & {
-  // enrolled is a list of course members as User objects augmented with their course role and flags
-  enrolled?: Array<{
+  /**
+   * The course's FACULTY and TA members, as User objects augmented with their course role.
+   * Deliberately NOT the whole roster: a course can carry a thousand students, so the
+   * roster tab pages through `GET /api/courses/[id]/roster` and this payload stays bounded.
+   * `rosterTotal` below is the count of every member, staff and students together.
+   */
+  staff?: Array<{
     id: string;
     firstName?: string | null;
     lastName?: string | null;
@@ -37,7 +42,6 @@ export type FullCourse = Course & {
     avatar?: string | null;
     role?: string;
     courseRole?: string;
-    hasSubmissions?: boolean;
   }>;
   assignments: AssignmentWithProblemCount[];
   problems: Problem[];

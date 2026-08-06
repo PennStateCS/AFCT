@@ -89,6 +89,10 @@ interface CourseDialogsProps {
   enrollOpen: boolean;
   setEnrollOpen: (open: boolean) => void;
   allUsers: EnrollableUser[];
+  /** How many accounts match the current search, which may exceed the page above. */
+  enrollableTotal?: number;
+  /** Debounced search term from the dialog, so the caller can refetch. */
+  onEnrollSearchChange?: (q: string) => void;
   onEnrollUser: (user: EnrollableUser) => void;
   // Bulk enroll
   bulkEnrollOpen?: boolean;
@@ -125,6 +129,8 @@ export function CourseDialogs({
   enrollOpen,
   setEnrollOpen,
   allUsers,
+  enrollableTotal,
+  onEnrollSearchChange,
   onEnrollUser,
   bulkEnrollOpen,
   setBulkEnrollOpen,
@@ -206,6 +212,8 @@ export function CourseDialogs({
           setOpen={setEnrollOpen}
           courseIsArchived={course.isArchived}
           users={allUsers}
+          total={enrollableTotal}
+          onSearchChange={onEnrollSearchChange}
           onEnroll={onEnrollUser}
         />
       )}

@@ -2,11 +2,21 @@
 
 The **Roster** page lists everyone enrolled in the course and their course role. The available roles are Faculty, TA, and Student.
 
+The roster loads a page at a time, so a course with a thousand students opens as quickly as a small one. Searching, filtering and sorting all apply to the whole roster rather than to the people currently on screen, and the number beside the pager is the total who match.
+
+To find someone:
+
+- **Search** matches on name and email, or on one of them if you pick a field in the box beside it.
+- **Filters** holds Role and Status as separate lists. Ticking several values in one list widens (any of them), while picking from two different lists narrows (both must be true), so Role **Student** plus Status **Dropped** finds dropped students.
+- Sort by any column heading.
+
 ## Enroll one person
 
 1. Select **Enroll User**.
-2. Search for an existing AFCT account that is not already in the course.
+2. Start typing a name or email. The search runs as you type and only offers accounts that are not already in the course, so anyone already on the roster (including a dropped student) will not appear. To bring a dropped student back, use **Re-enroll** on their Manage menu instead.
 3. Select the person and confirm the enrollment.
+
+When a search matches more people than fit in the list, AFCT says so above it; keep typing to narrow.
 
 Enrollment always adds the person as a **Student**. To give someone a staff role, enroll them first, then change their role with the edit action (see [Manage roles and membership](#manage-roles-and-membership)). Direct enrollment is useful for adding another staff member or helping a student who cannot use self-registration.
 
