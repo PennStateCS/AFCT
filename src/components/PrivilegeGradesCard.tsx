@@ -15,6 +15,7 @@ import { formatTimeInTimeZone } from '@/lib/date-format';
 import { findCanvasReservedTitleConflicts, type LmsPlatform } from '@/lib/lms-grade-export';
 import { useSession } from 'next-auth/react';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 
 /**
  * On demand: the breakdown dialog carries the form stack and was the last thing putting zod on
@@ -96,7 +97,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   // The assignment columns are the same for every page, so they are fetched once per
   // course. The server already orders them by due date.
   const columnsQuery = useQuery({
-    queryKey: ['course', courseId, 'grades', 'columns'],
+    queryKey: queryKeys.course.gradeColumns(courseId),
     queryFn: async () => {
       const res = await fetch(apiPaths.courseGradeColumns(courseId));
       if (!res.ok)
@@ -120,7 +121,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   // One page of students, each row carrying its own grades. keepPreviousData holds the
   // current page on screen while the next one loads.
   const pageQuery = useQuery({
-    queryKey: ['course', courseId, 'grades', 'page', pageParams],
+    queryKey: queryKeys.course.gradePage(courseId, pageParams),
     queryFn: async () => {
       const res = await fetch(apiPaths.courseGradePage(courseId, pageParams), {
         cache: 'no-store',
@@ -165,7 +166,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   };
 
   const refreshGrades = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ['course', courseId, 'grades'] }),
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.course.grades(courseId) }),
     [queryClient, courseId],
   );
 
@@ -436,7 +437,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         <DataTable
           columns={columns}
           data={students}
-          loading={pageQuery.isPending}
+          loading={pageQuery.isLoading}
           tableLabel="Course grades table"
           bordered
           // Its own entry: without a key it shared the default one with every other

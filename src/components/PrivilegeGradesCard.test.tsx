@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PrivilegeGradesCard } from './PrivilegeGradesCard';
@@ -46,6 +46,9 @@ vi.mock('@/components/ui/data-table', () => ({
     columns,
     data,
     loading,
+    onGlobalFilterChange,
+    onPaginationChange,
+    pagination,
   }: {
     columns: Array<{
       id?: string;
@@ -55,10 +58,28 @@ vi.mock('@/components/ui/data-table', () => ({
     }>;
     data: Array<Record<string, unknown>>;
     loading?: boolean;
+    onGlobalFilterChange?: (v: string) => void;
+    onPaginationChange?: (u: { pageIndex: number; pageSize: number }) => void;
+    pagination?: { pageIndex: number; pageSize: number };
   }) => (
     <div>
       <div data-testid="table-loading">{String(!!loading)}</div>
       <div data-testid="table-rows">{data.length}</div>
+      <input
+        data-testid="global-filter"
+        onChange={(e) => onGlobalFilterChange?.(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={() =>
+          onPaginationChange?.({
+            pageIndex: (pagination?.pageIndex ?? 0) + 1,
+            pageSize: pagination?.pageSize ?? 10,
+          })
+        }
+      >
+        next page
+      </button>
       <ul>
         {data.map((row, i) => (
           <li key={String(row.id ?? i)}>
@@ -159,6 +180,35 @@ describe('PrivilegeGradesCard', () => {
       .filter((c) => c === 'avatar' || c === 'lastName' || c === 'firstName')
       .slice(0, 3);
     expect(leadCols).toEqual(['avatar', 'lastName', 'firstName']);
+  });
+
+  it('keeps the current page on screen while the next one loads', async () => {
+    // keepPreviousData is only worth having if the table is not told it is loading on
+    // every page change; driving `loading` from isFetching would undo it.
+    const fetchMock = installFetch();
+
+    renderWithClient(<PrivilegeGradesCard courseId="c1" />);
+    await waitFor(() => expect(screen.getByTestId('table-rows').textContent).toBe('2'));
+
+    // Hold the next page in flight.
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('part=columns'))
+        return { ok: true, json: async () => columnsPayload };
+      await gate;
+      return { ok: true, json: async () => pagePayload };
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'next page' }));
+
+    // The previous page's rows stay put, and the table is not put into its loading state.
+    await waitFor(() => expect(screen.getByTestId('table-loading').textContent).toBe('false'));
+    expect(screen.getByTestId('table-rows').textContent).toBe('2');
+
+    release?.();
   });
 
   it('shows the loading state before the fetch resolves', async () => {
