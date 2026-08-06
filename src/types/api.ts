@@ -1494,6 +1494,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/enrollable-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search accounts that can be enrolled in a course
+         * @description Accounts that could be enrolled in this course: active users who are not already on its  roster, searched server-side. Course staff (faculty or TAs) or a system admin.   Backs the Enroll User dialog, which used to fetch every account in the installation and  subtract the course's roster in the browser. That stopped being correct once the roster  itself was paginated (a partial roster would have offered people who are already members)  and it never scaled to a large user table.   Inactive accounts are left out because the enroll endpoint refuses them anyway, so  offering one could only produce a 409.   Each row carries only the name and email the dialog displays. Course staff are not  administrators, and this route reaches accounts outside their course, so it must not  hand back the admin user list's shape.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/enrollable-users/route.ts)
+         */
+        get: operations["getCoursesByIdEnrollableUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/grades/export": {
         parameters: {
             query?: never;
@@ -1967,7 +1989,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List a course's roster (paginated)
+         * @description One page of a course's roster, with search, filters, sort and pagination all applied in  the database. Course staff (faculty or TAs) or a system admin.   A staff surface, so dropped students are included and badged rather than hidden. Students  never reach this route; their course payload carries staff names only and no peer rows.   Deliberately does not log the read. Staff reading their own course's roster is routine,  and paginating would turn one read into one log per page flipped through, which would  distort ActivityLog as research data. See docs/logging-policy.md section 3.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/route.ts)
+         */
+        get: operations["getCoursesByIdRoster"];
         put?: never;
         /**
          * Enroll a user in a course
@@ -7412,6 +7440,81 @@ export interface operations {
             };
         };
     };
+    getCoursesByIdEnrollableUsers: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Match on first name, last name, or email */
+                q?: string;
+                field?: "all" | "firstName" | "lastName" | "email";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of enrollable accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows?: {
+                            id?: string;
+                            firstName?: string | null;
+                            lastName?: string | null;
+                            email?: string;
+                        }[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff (faculty or TAs) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getCoursesByIdGradesExport: {
         parameters: {
             query?: {
@@ -9287,6 +9390,82 @@ export interface operations {
             };
             /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdRoster: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Match on name or email */
+                q?: string;
+                field?: "all" | "name" | "email";
+                /** @description Repeatable */
+                role?: ("FACULTY" | "TA" | "STUDENT")[];
+                /** @description Repeatable */
+                status?: ("ENROLLED" | "DROPPED")[];
+                sortBy?: "lastName" | "firstName" | "email" | "role" | "enrollmentStatus";
+                sortDir?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of roster members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff (faculty or TAs) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

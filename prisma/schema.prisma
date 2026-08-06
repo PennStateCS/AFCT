@@ -122,6 +122,10 @@ model User {
   @@index([isAdmin])
   @@index([inactive])
   @@index([createdAt])
+  // Rosters and the admin user list are both read surname-first. Ordering a course roster
+  // is a join order (the names live here, not on Roster), so this cannot make that plan
+  // index-only; it does keep the sort side off a full scan as courses reach the thousands.
+  @@index([lastName, firstName])
 }
 
 // Bearer token for the native submission client (the Java app). Cookie/NextAuth is

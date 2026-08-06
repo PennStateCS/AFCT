@@ -35,6 +35,12 @@ export const queryKeys = {
     roster: (courseId: string) => ['course', courseId, 'roster'] as const,
     rosterEntry: (courseId: string, userId: string) =>
       ['course', courseId, 'roster', userId] as const,
+    /** One page of the roster table; the key is the whole server-side query. */
+    rosterPage: <T>(courseId: string, params: T) =>
+      ['course', courseId, 'roster-page', params] as const,
+    /** Enrollable accounts matching a search, for the Enroll dialog. */
+    enrollableUsers: (courseId: string, q: string) =>
+      ['course', courseId, 'enrollable-users', q] as const,
     // Group sets (redesigned group management). All nest under the course prefix
     // so invalidateQueries(['course', courseId]) cascades.
     groupSets: (courseId: string) => ['course', courseId, 'group-sets'] as const,

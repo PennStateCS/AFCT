@@ -34,6 +34,37 @@ export const apiPaths = {
   courseGradesExport: (id: string) => `/api/courses/${id}/grades/export`,
   courseStudentGrades: (id: string) => `/api/courses/${id}/student-grades`,
   courseRoster: (id: string) => `/api/courses/${id}/roster`,
+  /** One page of a course's roster. Params mirror the admin user list. */
+  courseRosterList: (
+    id: string,
+    opts: {
+      page?: number;
+      pageSize?: number;
+      q?: string;
+      field?: string;
+      role?: string[];
+      status?: string[];
+      sortBy?: string;
+      sortDir?: string;
+    },
+  ) => {
+    const sp = new URLSearchParams();
+    if (opts.page) sp.set('page', String(opts.page));
+    if (opts.pageSize) sp.set('pageSize', String(opts.pageSize));
+    if (opts.q) sp.set('q', opts.q);
+    if (opts.field && opts.field !== 'all') sp.set('field', opts.field);
+    opts.role?.forEach((v) => sp.append('role', v));
+    opts.status?.forEach((v) => sp.append('status', v));
+    if (opts.sortBy) sp.set('sortBy', opts.sortBy);
+    if (opts.sortDir) sp.set('sortDir', opts.sortDir);
+    const s = sp.toString();
+    return `/api/courses/${id}/roster${s ? `?${s}` : ''}`;
+  },
+  courseEnrollableUsers: (id: string, opts?: { q?: string; pageSize?: number }) =>
+    `/api/courses/${id}/enrollable-users${qs({
+      q: opts?.q || undefined,
+      pageSize: opts?.pageSize,
+    })}`,
   courseRosterBulk: (id: string) => `/api/courses/${id}/roster/bulk`,
   courseLookupUsers: (id: string) => `/api/courses/${id}/lookup-users`,
   // Group sets (redesigned group management)

@@ -220,6 +220,68 @@ describe('GET /api/courses/[id]', () => {
     expect(include.problems).toBe(true);
   });
 
+  it('asks the database for course staff only, never the students', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      isPublished: true,
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      _count: { assignments: 0, problems: 0, roster: 1200 },
+      assignments: [],
+      roster: [],
+    });
+
+    await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    // The whole point of the change: a 1,200-student course must not inline its roster
+    // into a payload that is read on every tab. Students come from the paginated
+    // GET /api/courses/[id]/roster instead.
+    // Pick the handler's fetch (the one with `include`), not the wrapper's soft-delete probe.
+    const include = prismaMock.course.findUnique.mock.calls.find((c) => c[0]?.include)?.[0].include;
+    expect(include.roster.where).toEqual({ role: { in: ['FACULTY', 'TA'] } });
+  });
+
+  it('reports the whole roster size even though it only returns staff', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      isPublished: true,
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      _count: { assignments: 0, problems: 0, roster: 1200 },
+      assignments: [],
+      roster: [
+        {
+          role: 'FACULTY',
+          status: 'ENROLLED',
+          user: { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@x.edu' },
+        },
+      ],
+    });
+
+    const body = await (
+      await GET(new Request('http://localhost/api/courses/1'), {
+        params: Promise.resolve({ id: 'course-1' }),
+      })
+    ).json();
+
+    // One staff row on the payload, 1,200 members in the course. The tab count reads the
+    // second number, so it must not be derived from the array.
+    expect(body.staff).toHaveLength(1);
+    expect(body.rosterTotal).toBe(1200);
+  });
+
   it('gives a student a privacy-safe roster (staff names only, no classmate email)', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
@@ -253,14 +315,16 @@ describe('GET /api/courses/[id]', () => {
     ).json();
 
     expect(body.regCode).toBeNull(); // reg code is staff-only
-    const serialized = JSON.stringify(body.enrolled);
+    // The mock returns a student row deliberately, ignoring the query's where clause, so
+    // this proves the student-facing reduction still strips peers even if a classmate row
+    // ever reached it.
+    const serialized = JSON.stringify(body.staff);
     expect(serialized).not.toContain('@x.edu'); // no emails
     expect(serialized).not.toContain('Alan'); // no classmate (student) name
     expect(serialized).not.toContain('u2'); // no classmate id
-    expect(body.enrolled).toContainEqual(
+    expect(body.staff).toContainEqual(
       expect.objectContaining({ firstName: 'Ada', courseRole: 'FACULTY' }),
     );
-    expect(body.enrolled).toContainEqual({ id: '', courseRole: 'STUDENT' });
   });
 
   it('returns 404 when course is not found', async () => {
@@ -274,7 +338,7 @@ describe('GET /api/courses/[id]', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns course with enrolled roster and flags', async () => {
+  it('returns course with its staff and assignment flags', async () => {
     prismaMock.course.findUnique.mockResolvedValue({
       id: 'course-1',
       name: 'Course 1',
@@ -288,14 +352,17 @@ describe('GET /api/courses/[id]', () => {
       isArchived: false,
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      // Staff only: the query's where clause keeps students out of this payload.
       roster: [
         {
           role: 'FACULTY',
+          status: 'ENROLLED',
           user: { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', role: 'FACULTY' },
         },
         {
-          role: 'STUDENT',
-          user: { id: 'u2', firstName: 'Alan', lastName: 'Turing', role: 'STUDENT' },
+          role: 'TA',
+          status: 'ENROLLED',
+          user: { id: 'u3', firstName: 'Grace', lastName: 'Hopper', role: 'TA' },
         },
       ],
       problems: [{ id: 'p1', title: 'P1' }],
@@ -330,12 +397,15 @@ describe('GET /api/courses/[id]', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.enrolled).toEqual(
+    expect(body.staff).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'u1', courseRole: 'FACULTY' }),
-        expect.objectContaining({ id: 'u2', courseRole: 'STUDENT', hasSubmissions: true }),
+        expect.objectContaining({ id: 'u3', courseRole: 'TA' }),
       ]),
     );
+    // hasSubmissions is gone from this payload: it only ever answered "may this roster row
+    // be removed", and computing it here crossed every student with every assignment.
+    expect(body.staff[0]).not.toHaveProperty('hasSubmissions');
     expect(body.assignments[0]).toEqual(
       expect.objectContaining({
         maxPoints: 100,

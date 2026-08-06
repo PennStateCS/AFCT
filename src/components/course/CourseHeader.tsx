@@ -114,7 +114,9 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
     return { label: 'Open', theme: badgeTheme.open };
   })();
 
-  const enrolled = course.enrolled ?? [];
+  // Staff only, and complete: the header names every faculty member and TA, and the course
+  // payload carries exactly those two roles.
+  const staff: EnrolledUser[] = course.staff ?? [];
   const formatAllNames = (users: EnrolledUser[]) => {
     if (!Array.isArray(users) || users.length === 0) return 'None assigned';
     return users
@@ -122,8 +124,8 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
       .filter(Boolean)
       .join(', ');
   };
-  const facultyNames = formatAllNames(getInstructors(enrolled));
-  const tas = enrolled.filter((u) => u.courseRole === 'TA');
+  const facultyNames = formatAllNames(getInstructors(staff));
+  const tas = staff.filter((u) => u.courseRole === 'TA');
   const registrationCode = (course.regCode ?? '').toUpperCase();
 
   // -- render ---------------------------------------------------------------

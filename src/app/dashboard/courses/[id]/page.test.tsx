@@ -32,7 +32,7 @@ import AdminCoursePage from './page';
 
 // AdminCoursePage returns `<CourseClient initialCourse={...} />` without rendering
 // it, so read the payload straight off the element props.
-type CourseClientEl = { props: { initialCourse: { enrolled: Array<Record<string, unknown>> } } };
+type CourseClientEl = { props: { initialCourse: { staff: Array<Record<string, unknown>> } } };
 const initialCourseOf = (el: unknown) => (el as CourseClientEl).props.initialCourse;
 
 const faculty = {
@@ -94,18 +94,21 @@ describe('AdminCoursePage access control', () => {
     expect(notFoundMock).toHaveBeenCalled();
   });
 
-  it('gives staff the full roster (including classmate emails)', async () => {
+  it('seeds staff only, never the students', async () => {
     authMock.mockResolvedValue({ user: { id: 'fac', isAdmin: false } });
     getCourseRoleMock.mockResolvedValue('FACULTY');
-    prismaMock.course.findFirst.mockResolvedValue(courseWith([faculty, student]));
+    prismaMock.course.findFirst.mockResolvedValue(courseWith([faculty]));
 
     const result = await AdminCoursePage({ params: Promise.resolve({ id: 'c1' }) });
 
-    // Staff view: email/select is requested and the student's real identity is present.
     const include = prismaMock.course.findFirst.mock.calls[0][0].include;
+    // Staff view still selects emails, but the query never asks for student rows: a
+    // 1,000-student course must not inline its roster into the server-rendered HTML.
     expect(include.roster.select.user.select.email).toBe(true);
-    const enrolled = initialCourseOf(result).enrolled;
-    expect(enrolled).toContainEqual(expect.objectContaining({ id: 'stu2', email: 'sam@x.edu' }));
+    expect(include.roster.where).toEqual({ role: { in: ['FACULTY', 'TA'] } });
+
+    const staff = initialCourseOf(result).staff;
+    expect(staff).toContainEqual(expect.objectContaining({ id: 'fac', courseRole: 'FACULTY' }));
   });
 
   it('gives a student a privacy-safe roster: staff names only, no classmate identity or email', async () => {
@@ -119,16 +122,16 @@ describe('AdminCoursePage access control', () => {
     const include = prismaMock.course.findFirst.mock.calls[0][0].include;
     expect(include.roster.select.user.select.email).toBe(false);
 
-    const enrolled = initialCourseOf(result).enrolled;
-    // No email anywhere, and no classmate (student) name/id leaks.
-    expect(JSON.stringify(enrolled)).not.toContain('@x.edu');
-    expect(JSON.stringify(enrolled)).not.toContain('Sam');
-    expect(JSON.stringify(enrolled)).not.toContain('stu2');
-    // Faculty name survives (the UI labels the course with it); students collapse
-    // to count-only placeholders.
-    expect(enrolled).toContainEqual(
+    const staff = initialCourseOf(result).staff;
+    // No email anywhere, and no classmate (student) name/id leaks. The mock returns a
+    // student row deliberately, ignoring the query's where, so this still proves the
+    // student-facing reduction strips peers if one ever reached it.
+    expect(JSON.stringify(staff)).not.toContain('@x.edu');
+    expect(JSON.stringify(staff)).not.toContain('Sam');
+    expect(JSON.stringify(staff)).not.toContain('stu2');
+    // Faculty name survives: the UI labels the course with it.
+    expect(staff).toContainEqual(
       expect.objectContaining({ firstName: 'Fay', courseRole: 'FACULTY' }),
     );
-    expect(enrolled).toContainEqual({ id: '', courseRole: 'STUDENT' });
   });
 });
