@@ -580,6 +580,12 @@ model Submission {
   // Hot path for the submission queue worker's claim query
   @@index([status, submittedAt])
   @@index([status])
+  // The Autograder page pages through submissions newest-first, narrowed by problem or
+  // course. Each of these covers one scope level plus the sort, so a page is an index
+  // scan rather than a sort of the whole table.
+  @@index([problemId, submittedAt])
+  @@index([courseId, submittedAt])
+  @@index([submittedAt])
 }
 
 model AssignmentProblemGrade {
