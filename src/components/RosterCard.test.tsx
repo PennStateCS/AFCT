@@ -101,6 +101,33 @@ describe('RosterCard', () => {
     expect(screen.getAllByText(/Page 1 of 120/).length).toBeGreaterThan(0);
   });
 
+  it('keeps the current page on screen while the next one loads', async () => {
+    // keepPreviousData is only worth having if the table is not told it is loading on
+    // every page change; driving `loading` from isFetching would undo it.
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = global.fetch as FetchMock;
+    let call = 0;
+    fetchMock.mockImplementation(async () => {
+      call += 1;
+      if (call > 1) await gate; // hold the second page in flight
+      return page(MEMBERS, 1200);
+    });
+
+    renderCard();
+    await waitFor(() => expect(screen.getByText('ada@x.edu')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBe(2));
+    expect(screen.getByText('ada@x.edu')).toBeInTheDocument();
+    expect(screen.queryByText('Loading roster, please wait...')).toBeNull();
+
+    release?.();
+  });
+
   it('asks the server for the next page instead of slicing what it holds', async () => {
     const fetchMock = install(MEMBERS, 1200);
 

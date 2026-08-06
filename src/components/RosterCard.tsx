@@ -80,7 +80,7 @@ export function RosterCard({
     sortDir: sort?.desc ? 'desc' : 'asc',
   };
 
-  const { data, isFetching, isError, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.course.rosterPage(courseId, query),
     queryFn: async () => {
       const res = await fetch(apiPaths.courseRosterList(courseId, query), { cache: 'no-store' });
@@ -88,7 +88,9 @@ export function RosterCard({
       return (await res.json()) as { rows: RosterMemberRow[]; total: number };
     },
     // Holds the current page on screen while the next one loads, so paging does not flash
-    // an empty table.
+    // an empty table. The table's `loading` is driven by isLoading (the cold first load)
+    // rather than isFetching for the same reason: telling it "loading" on every page
+    // change would replace those rows with the placeholder anyway.
     placeholderData: keepPreviousData,
   });
 
@@ -150,7 +152,7 @@ export function RosterCard({
       <DataTable
         columns={userColumns as ColumnDef<User>[]}
         data={rows as unknown as User[]}
-        loading={isFetching}
+        loading={isLoading}
         tableLabel="Course roster table"
         // Its own entry: without a key it shared the default one with every other unnamed
         // table in the app, so hiding a column here hid it on unrelated pages.
