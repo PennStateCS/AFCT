@@ -90,9 +90,9 @@ type Course = {
 };
 
 // The dated sidebar course sections, in display order. Archived courses are folded into
-// Past Courses (they are finished too), which also carries the Archived Courses page
-// link. A section is hidden when it has nothing to show, and courses within a section are
-// alphabetized by code.
+// Past Courses (they are finished too); the Archived Courses page has its own top-level
+// link instead. A section is hidden when it has nothing to show, and courses within a
+// section are alphabetized by code.
 // `flyoutLabel` is the shorter heading used in the collapsed rail's Courses flyout, where
 // the panel is already titled Courses and repeating the word in every group reads as noise.
 const COURSE_SECTIONS = [
@@ -401,23 +401,15 @@ export default function DashboardSidebarMenu() {
     courses: (coursesByBucket[section.bucket] ?? [])
       .slice()
       .sort((a, b) => a.code.localeCompare(b.code)),
-  })).filter(
-    (section) =>
-      // Past Courses also hosts the Archived Courses link, so it stays visible whenever
-      // that link does (always for admins) even with no past courses of its own.
-      section.courses.length > 0 || (section.bucket === 'past' && showArchivedCoursesLink),
-  );
+  })).filter((section) => section.courses.length > 0);
   // The section holding the page you are actually on must be open, whatever the stored
   // preference says. Past Courses defaults to collapsed, so navigating straight to a past
-  // course (or the archived list) would otherwise hide the very item you are viewing.
+  // course would otherwise hide the very item you are viewing.
   const activeCourseId = pathname.startsWith('/dashboard/courses/')
     ? (pathname.split('/')[3] ?? null)
     : null;
   const activeSectionBucket: string | null =
-    pathname === '/dashboard/archived-courses'
-      ? 'past'
-      : (courseSections.find((s) => s.courses.some((c) => c.id === activeCourseId))?.bucket ??
-        null);
+    courseSections.find((s) => s.courses.some((c) => c.id === activeCourseId))?.bucket ?? null;
 
   const isDev = process.env.NODE_ENV !== 'production';
   const resolvedAdminMenu = (
@@ -462,9 +454,7 @@ export default function DashboardSidebarMenu() {
 
         {/* Course sections: bucketed by date; an empty section is omitted.
             The query status is checked BEFORE the section list, not only when it is
-            empty: an admin always has a Past Courses section (it carries the Archived
-            Courses link), so a length check alone meant admins never saw the loading
-            skeleton or the retry on failure. */}
+            empty, so loading and failure never read as "you have no courses". */}
         {coursesPending || coursesFailed || courseSections.length === 0
           ? !collapsed && (
               <SidebarGroup>
@@ -538,7 +528,6 @@ export default function DashboardSidebarMenu() {
                       }))}
                       activeCourseId={activeCourseId}
                       pathname={pathname}
-                      showArchivedCoursesLink={showArchivedCoursesLink}
                       // The expanded sidebar's own rule and its own stored state, so a
                       // group is folded the same way in both views: open unless closed by
                       // the user, and always open when it holds the course you are on.
@@ -570,24 +559,14 @@ export default function DashboardSidebarMenu() {
                       collapsed={collapsed}
                     />
                   ))}
-
-                  {/* The archived-courses page lives with the past courses. Always for
-                      admins; others only when they're in an archived course. */}
-                  {section.bucket === 'past' && showArchivedCoursesLink && (
-                    <SidebarNavItem
-                      href="/dashboard/archived-courses"
-                      label="Archived Courses"
-                      icon={Library}
-                      active={pathname === '/dashboard/archived-courses'}
-                      collapsed={collapsed}
-                    />
-                  )}
                 </SidebarMenu>
               </CollapsibleSidebarGroup>
             ))}
 
-        {/* Calendar is a single destination, so it is a plain top-level link rather than
-            a collapsible section wrapping one item. */}
+        {/* Calendar and the archived-courses list are each a single destination, so they
+            are plain top-level links rather than collapsible sections wrapping one item.
+            Archived Courses shows always for admins; for everyone else only when they're
+            in an archived course. */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -598,6 +577,15 @@ export default function DashboardSidebarMenu() {
                 active={pathname === '/dashboard/calendar'}
                 collapsed={collapsed}
               />
+              {showArchivedCoursesLink && (
+                <SidebarNavItem
+                  href="/dashboard/archived-courses"
+                  label="Archived Courses"
+                  icon={Library}
+                  active={pathname === '/dashboard/archived-courses'}
+                  collapsed={collapsed}
+                />
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

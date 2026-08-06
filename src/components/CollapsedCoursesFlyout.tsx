@@ -73,7 +73,6 @@ export default function CollapsedCoursesFlyout({
   sections,
   activeCourseId,
   pathname,
-  showArchivedCoursesLink,
   isSectionOpen,
   onToggleSection,
 }: {
@@ -81,7 +80,6 @@ export default function CollapsedCoursesFlyout({
   /** Course whose page is being viewed, or null. */
   activeCourseId: string | null;
   pathname: string;
-  showArchivedCoursesLink: boolean;
   /** The sidebar's own open/closed state for a bucket, so both views agree. */
   isSectionOpen: (bucket: string) => boolean;
   onToggleSection: (bucket: string) => void;
@@ -95,10 +93,9 @@ export default function CollapsedCoursesFlyout({
     setOpen(false);
   }, [pathname]);
 
-  const archivedActive = pathname === '/dashboard/archived-courses';
   // The rail shows no course icons any more, so the button itself has to say that the
   // page being viewed is one of them.
-  const anyCourseActive = activeCourseId !== null || archivedActive;
+  const anyCourseActive = activeCourseId !== null;
 
   const renderCourses = (courses: FlyoutCourse[]) =>
     courses.map((course) => (
@@ -186,25 +183,6 @@ export default function CollapsedCoursesFlyout({
                     element, the same way the expanded sidebar's sections work. */}
                 <ul id={listId} hidden={!sectionOpen} className="mt-1 mb-2 space-y-0.5">
                   {renderCourses(section.courses)}
-                  {/* The archived list belongs with the past courses, as it does in the
-                      expanded sidebar. */}
-                  {section.bucket === 'past' && showArchivedCoursesLink && (
-                    <li>
-                      <Link
-                        href="/dashboard/archived-courses"
-                        onClick={() => setOpen(false)}
-                        aria-current={archivedActive ? 'page' : undefined}
-                        className={cn(
-                          linkStyles,
-                          'text-sm',
-                          archivedActive &&
-                            'border-sidebar-foreground bg-brand-teal font-semibold text-white',
-                        )}
-                      >
-                        Archived Courses
-                      </Link>
-                    </li>
-                  )}
                 </ul>
               </div>
             );
