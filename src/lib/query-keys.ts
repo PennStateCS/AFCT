@@ -46,7 +46,13 @@ export const queryKeys = {
     groupSets: (courseId: string) => ['course', courseId, 'group-sets'] as const,
     groupSet: (courseId: string, setId: string) =>
       ['course', courseId, 'group-set', setId] as const,
+    /** Prefix for the gradebook; use to invalidate both entries below. */
     grades: (courseId: string) => ['course', courseId, 'grades'] as const,
+    /** The gradebook's assignment columns and student total (cached per course). */
+    gradeColumns: (courseId: string) => ['course', courseId, 'grades', 'columns'] as const,
+    /** One page of the gradebook; the key is the whole server-side query. */
+    gradePage: <T>(courseId: string, params: T) =>
+      ['course', courseId, 'grades', 'page', params] as const,
     studentGrades: (courseId: string) => ['course', courseId, 'student-grades'] as const,
     problems: (courseId: string) => ['course', courseId, 'problems'] as const,
     assignmentsList: (courseId: string) => ['course', courseId, 'assignments-list'] as const,
