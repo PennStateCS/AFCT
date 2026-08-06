@@ -512,8 +512,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * List autograded submissions for problems (admin)
-         * @description Returns every autograded submission across a set of problems, flattened for the  admin grading view: student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.   Problems with the autograder switched off are left out: this feeds the Autograder  page, and a submission the autograder never touches has no queue state and no  per-attempt score to show there. Those submissions still appear on the course's  own submissions tab.
+         * List autograded submissions (admin, paginated)
+         * @description One page of autograded submissions for the admin Autograder page: student, course,  assignment/problem titles, queue status, and the recorded grade (joined from  AssignmentProblemGrade). Search, filters, sort and pagination all run in the database.  System administrators only.   A POST with a JSON body rather than the GET + query string the other paginated routes  use, because the scope can carry hundreds of problem ids. Empty scope lists mean "no  constraint", so the common case (everything) sends nothing at all.   Problems with the autograder switched off are left out: this feeds the Autograder page,  and a submission the autograder never touches has no queue state and no per-attempt score  to show there. Those submissions still appear on the course's own submissions tab.   Deliberately does not log the read. It never has, and paginating turns one read into one  log per page the admin flips through, which would distort ActivityLog as research data.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/submissions/route.ts)
          */
@@ -3851,21 +3851,52 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    problemIds: string[];
+                    /** @description Empty means every course */
+                    courseIds?: string[];
+                    /** @description Empty means every assignment */
+                    assignmentIds?: string[];
+                    /** @description Empty means every problem */
+                    problemIds?: string[];
+                    /** @description Match on student, course, assignment, problem, or file name */
+                    q?: string;
+                    /**
+                     * @default all
+                     * @enum {string}
+                     */
+                    field?: "all" | "student" | "course" | "assignment" | "problem" | "file";
+                    timing?: ("ontime" | "late")[];
+                    status?: ("pending" | "processing" | "failed" | "correct" | "incorrect")[];
+                    /** @default 1 */
+                    page?: number;
+                    /** @default 10 */
+                    pageSize?: number;
+                    /** @enum {string} */
+                    sortBy?: "submittedAt" | "student" | "course" | "assignment" | "problem" | "file" | "due" | "status";
+                    /**
+                     * @default desc
+                     * @enum {string}
+                     */
+                    sortDir?: "asc" | "desc";
                 };
             };
         };
         responses: {
-            /** @description Flattened autograded submissions, newest first. */
+            /** @description One page of autograded submissions. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": {
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
                 };
             };
-            /** @description problemIds missing or empty. */
+            /** @description Malformed body. */
             400: {
                 headers: {
                     [name: string]: unknown;
