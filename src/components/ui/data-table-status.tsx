@@ -13,16 +13,13 @@ import { cn } from '@/lib/utils';
  */
 
 /** Spinner + status text. Its own live region, so the message is announced. */
-export function DataTableLoading({
-  message,
-  className,
-}: {
-  message: string;
-  className?: string;
-}) {
+export function DataTableLoading({ message, className }: { message: string; className?: string }) {
   return (
     <div
-      className={cn('flex flex-col items-center justify-center gap-2 text-muted-foreground', className)}
+      className={cn(
+        'text-muted-foreground flex flex-col items-center justify-center gap-2',
+        className,
+      )}
       role="status"
     >
       <span aria-hidden="true" className="text-brand-teal">
@@ -55,9 +52,12 @@ export function DataTableEmptyState({
       className={cn('text-muted-foreground flex flex-col items-center', className)}
       role="status"
     >
-      <Icon className="mb-2 h-10 w-10 text-muted-foreground" aria-hidden={true} />
-      <p className="font-medium">{title}</p>
-      <p className="text-sm">{description}</p>
+      <Icon className="text-muted-foreground mb-2 h-10 w-10" aria-hidden={true} />
+      <p className="text-center font-medium">{title}</p>
+      {/* Centered text, not just a centered block: on a phone the description wraps over
+          several lines, and left-aligned text under a centered icon and title read as a
+          misalignment. max-w keeps it from running edge to edge on a wide screen. */}
+      <p className="max-w-prose px-4 text-center text-sm">{description}</p>
       {action ? <div className="mt-3">{action}</div> : null}
     </div>
   );
