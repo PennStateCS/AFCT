@@ -74,7 +74,13 @@ export default function SessionsTab({
         accessorKey: 'userAgent',
         header: 'User Agent',
         cell: ({ row }) => (
-          <div className="max-w-[50ch] truncate" title={row.original.userAgent ?? ''}>
+          // Truncated in the table, where the column has to stay a sane width and the
+          // title attribute gives the rest. Below sm the row is a card with no hover to
+          // reveal a title, so let it wrap and show the whole string.
+          <div
+            className="max-w-[50ch] truncate max-sm:break-words max-sm:whitespace-normal"
+            title={row.original.userAgent ?? ''}
+          >
             {row.original.userAgent ?? '—'}
           </div>
         ),
