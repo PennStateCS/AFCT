@@ -62,7 +62,14 @@ export function DataTableCards<TData>({
           <li key={row.id} className="rounded-md border bg-[var(--table-background)] p-4">
             <dl className="grid gap-2">
               {bodyCells.map((cell) => (
-                <div key={cell.id} className="flex items-start justify-between gap-4 text-sm">
+                // min-w-0: a grid item refuses to shrink below its content's min-content
+                // width by default, so one wide value (a nowrap cell, a long address)
+                // pushed the whole row past the edge of the card. Allowing the row to
+                // shrink lets the value wrap or truncate inside the card instead.
+                <div
+                  key={cell.id}
+                  className="flex min-w-0 items-start justify-between gap-4 text-sm"
+                >
                   <dt className="text-muted-foreground font-medium">
                     {getColumnLabel(cell.column)}
                   </dt>

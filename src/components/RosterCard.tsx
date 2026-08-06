@@ -33,12 +33,15 @@ export function RosterCard({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-row items-center justify-between">
+      {/* Stacked below sm, side by side above it: the two buttons plus the heading do not
+          fit on a phone, and a single row pushed them off the edge. Same shape as the
+          User Accounts header. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="flex items-center gap-2 text-2xl font-semibold">
           <GraduationCap className="h-5 w-5" />
           Roster
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="default" onClick={onEnrollUser} hidden={courseIsArchived}>
             <Plus />
             Enroll User

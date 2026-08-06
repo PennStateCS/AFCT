@@ -296,9 +296,6 @@ describe('DashboardSidebarMenu', () => {
     setNavCourses([{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: true }]);
     renderWithClient(<DashboardSidebarMenu />);
 
-    // The link now lives under Past Courses, which starts collapsed.
-    fireEvent.click(await screen.findByRole('button', { name: /Past Courses/ }));
-
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Archived Courses' })).toHaveAttribute(
         'href',
@@ -321,19 +318,20 @@ describe('DashboardSidebarMenu', () => {
     expect(screen.queryByRole('link', { name: 'Archived Courses' })).toBeNull();
   });
 
-  it('always shows Past Courses with the Archived Courses link for admins, even with none', async () => {
+  it('always shows the Archived Courses link for admins, even with none', async () => {
     // Default session is an admin; no past or archived courses in the nav list.
     renderWithClient(<DashboardSidebarMenu />);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/me/courses?view=nav');
     });
-    // Admins always have access to archived courses, so the section stays available.
-    fireEvent.click(await screen.findByRole('button', { name: /Past Courses/ }));
-    expect(screen.getByRole('link', { name: 'Archived Courses' })).toHaveAttribute(
+    // Admins always have access to archived courses, so the top-level link stays.
+    expect(await screen.findByRole('link', { name: 'Archived Courses' })).toHaveAttribute(
       'href',
       '/dashboard/archived-courses',
     );
+    // It is its own destination now, not part of a course section.
+    expect(screen.queryByText('Past Courses')).toBeNull();
   });
 
   it('renders a placeholder message once an empty course list resolves', async () => {
@@ -352,8 +350,8 @@ describe('DashboardSidebarMenu', () => {
   });
 
   it('shows the loading and error states to admins too', async () => {
-    // Admins always have a Past Courses section (it carries the Archived Courses link),
-    // so a "no sections" check alone hid these states from them entirely.
+    // The query status is checked before the section list, so a failure reads as a
+    // failure rather than as an empty course list.
     // Default session in beforeEach is an admin.
     (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('offline'));
 
@@ -389,14 +387,19 @@ describe('DashboardSidebarMenu', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('force-opens Past Courses on the archived-courses page', async () => {
+  it('marks the Archived Courses link as the current page', async () => {
     usePathnameMock.mockReturnValue('/dashboard/archived-courses');
     setNavCourses([]);
 
     renderWithClient(<DashboardSidebarMenu />);
 
-    const toggle = await screen.findByRole('button', { name: /Past Courses/ });
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // The next/link mock above drops aria-current, so read the active state off the
+    // menu button wrapping the link.
+    const link = await screen.findByRole('link', { name: 'Archived Courses' });
+    expect(link.closest('[data-testid="sidebar-menu-button"]')).toHaveAttribute(
+      'data-active',
+      'true',
+    );
   });
 
   it('offers a retry instead of "No courses" when the nav request fails', async () => {
