@@ -33,10 +33,14 @@ function safeSize(p: string): number | null {
 }
 
 /** Backups in the backup directory, newest first. */
+// The turbopackIgnore markers below tell the bundler not to follow these paths.
+// They point at runtime mounts and host binaries supplied by the environment, never
+// at anything bundled, so static analysis would otherwise pull the whole project into
+// the traced output while trying to resolve them.
 export function listBackups(): Backup[] {
   let entries: string[];
   try {
-    entries = fs.readdirSync(BACKUP_DIR);
+    entries = fs.readdirSync(/* turbopackIgnore: true */ BACKUP_DIR);
   } catch {
     return []; // dir not mounted (e.g. local dev) → nothing to list
   }
@@ -48,7 +52,7 @@ export function listBackups(): Backup[] {
     backups.push({
       timestamp: match[1],
       file: name,
-      size: safeSize(path.join(BACKUP_DIR, name)),
+      size: safeSize(path.join(/* turbopackIgnore: true */ BACKUP_DIR, name)),
       encrypted: Boolean(match[2]),
     });
   }
