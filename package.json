@@ -197,6 +197,9 @@
     },
     "@auth/prisma-adapter": {
       "@auth/core": "0.41.3"
+    },
+    "@redocly/openapi-core": {
+      "js-yaml": "4.3.1"
     }
   }
 }
