@@ -231,7 +231,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             <Badge variant="secondary" className="w-fit font-mono">
               {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
             </Badge>
-            {upgradeInfo?.status && (
+            {upgradeInfo?.status?.phase && (
               <Badge
                 variant={
                   upgradeInfo.status.phase === 'healthy'
