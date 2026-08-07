@@ -37,15 +37,15 @@
     "e2e:report": "playwright show-report e2e-report",
     "docs:api": "node scripts/generate-openapi.mjs",
     "docs:types": "openapi-typescript docs-dist/openapi.json -o src/types/api.ts",
-    "docs": "npm run docs:api && npm run docs:types",
-    "postinstall": "node -e \"if(process.env.SKIP_PRISMA_GENERATE){console.log('skip prisma generate');process.exit(0)} require('child_process').execSync('prisma generate',{stdio:'inherit'})\"",
+    "docs": "npm run docs:api && npm run docs:types && npm run docs:erd",
+    "postinstall": "node -e \"if(process.env.SKIP_PRISMA_GENERATE){console.log('skip prisma generate');process.exit(0)} require('child_process').execSync('prisma generate --generator client',{stdio:'inherit'})\"",
     "seed": "prisma db seed",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force --skip-generate",
-    "db:erd": "npx prisma generate --schema=prisma/schema.prisma",
+    "db:erd": "npm run docs:erd",
     "vendor:katex": "node scripts/vendor-katex.mjs",
     "docker:dev": "docker compose -f docker-compose.dev.yml up --build --attach app --no-attach nginx --no-attach postgres",
     "docker:dev:detached": "docker compose -f docker-compose.dev.yml up --build -d",
@@ -75,7 +75,8 @@
     "docker:prod:exec:app": "docker compose exec app sh",
     "docker:prod:exec:db": "docker compose exec postgres psql -U afct_user -d afct",
     "docker:prod:migrate": "docker compose exec app npx prisma migrate deploy",
-    "docker:prod:seed": "docker compose exec app npx prisma db seed"
+    "docker:prod:seed": "docker compose exec app npx prisma db seed",
+    "docs:erd": "prisma generate --generator erd"
   },
   "dependencies": {
     "@auth/core": "0.41.3",

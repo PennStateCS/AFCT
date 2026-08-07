@@ -89,12 +89,27 @@ fi
 # volume's client in sync with the bind-mounted schema. In prod the baked client is
 # authoritative and node_modules isn't a mounted volume, so only generate if missing.
 if [ "${ENSURE_PRISMA_CLIENT:-true}" = "true" ]; then
+  # `--generator client` on purpose: the schema also declares a docs generator that
+  # writes an ERD, and neither the image nor a running container has any use for it.
+  # Scoping it here also keeps generation off /app/prisma, which the runtime user
+  # cannot write to.
+  #
+  # A failure is fatal rather than ignored. This used to end in `|| true`, which meant
+  # a failed generate left a stale client in dev (the "Unknown field ... for select
+  # statement" crash the note above describes) or no client at all in prod, and the
+  # app then failed later with something that looked unrelated.
   if [ "${NODE_ENV:-}" = "development" ]; then
     log "regenerating Prisma client (dev; schema may have changed)"
-    npx prisma generate || true
+    if ! npx prisma generate --generator client; then
+      log "ERROR: prisma generate failed; the client would be stale against the schema"
+      exit 1
+    fi
   elif [ ! -d node_modules/@prisma/client ] || [ ! -f node_modules/.prisma/client/index.js ]; then
     log "Prisma client missing; generating"
-    npx prisma generate || true
+    if ! npx prisma generate --generator client; then
+      log "ERROR: prisma generate failed and no client is present; refusing to start"
+      exit 1
+    fi
   fi
 fi
 
