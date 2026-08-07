@@ -35,11 +35,14 @@ test.beforeAll(async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   await signIn(page, 'faculty2');
-  const course = (await (await page.request.get(`/api/courses/${COURSE}`)).json()) as {
-    enrolled: Array<{ id: string; email: string; courseRole: string }>;
-  };
-  const other = course.enrolled.find(
-    (m) => m.courseRole === 'STUDENT' && m.email !== USERS.student.email,
+  // The course payload carries staff only, so peers come from the paginated roster
+  // endpoint. Reading `enrolled` off the course silently yielded undefined once the roster
+  // moved server-side, and nothing noticed because this suite was not run by CI.
+  const roster = (await (
+    await page.request.get(`/api/courses/${COURSE}/roster?role=STUDENT&pageSize=50`)
+  ).json()) as { rows: Array<{ id: string; email: string; role: string }> };
+  const other = roster.rows.find(
+    (m) => m.role === 'STUDENT' && m.email !== USERS.student.email,
   );
   // The fixture course starts with one student, which is all the other specs need. The
   // "assigned to someone else" case needs a second, so fall back to the faculty's own id
@@ -68,12 +71,17 @@ async function createAssignment(
   return { id: ((await res.json()) as Created).id, title };
 }
 
-/** The id of an enrolled member of the fixture course, by email. */
+/**
+ * The id of an enrolled member of the fixture course, by email.
+ *
+ * From the roster endpoint, not the course payload: the latter carries staff only since the
+ * roster moved server-side, so reading a student off it yields undefined.
+ */
 async function enrolledStudentId(facultyPage: Page, email: string): Promise<string> {
-  const course = (await (await facultyPage.request.get(`/api/courses/${COURSE}`)).json()) as {
-    enrolled: Array<{ id: string; email: string }>;
-  };
-  const found = course.enrolled.find((m) => m.email === email);
+  const roster = (await (
+    await facultyPage.request.get(`/api/courses/${COURSE}/roster?pageSize=100`)
+  ).json()) as { rows: Array<{ id: string; email: string }> };
+  const found = roster.rows.find((m) => m.email === email);
   if (!found) throw new Error(`${email} is not on the fixture course roster`);
   return found.id;
 }
