@@ -7,7 +7,7 @@ import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
 import { GroupNameBodySchema } from '@/schemas/group-set';
 import { normalizeName, GroupSetLockedError } from '@/lib/group-sets';
-import { assertGroupSetUnlocked } from '@/lib/group-set-service';
+import { assertGroupSetUnlocked, deleteGroupIfSetUnlocked } from '@/lib/group-set-service';
 
 /** Loads a group and confirms it belongs to the given set and course. */
 function findGroupInSet(courseId: string, setId: string, groupId: string) {
@@ -124,18 +124,11 @@ export const DELETE = withCourseAuth(
     try {
       const group = await findGroupInSet(courseId, setId, groupId);
       if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+      // Answers early with a clear 409 in the common case. The delete below does not
+      // rely on it: it re-checks under the set's row lock, because anything read out
+      // here can be stale by the time the delete runs.
       await assertGroupSetUnlocked(setId);
-
-      // Re-check the lock inside the delete transaction so a submission/grade that lands
-      // concurrently can't be raced past the guard.
-      await prisma.$transaction(async (tx) => {
-        const set = await tx.groupSet.findUnique({
-          where: { id: setId },
-          select: { lockedAt: true },
-        });
-        if (set?.lockedAt) throw new GroupSetLockedError();
-        await tx.studentGroup.delete({ where: { id: groupId } });
-      });
+      await deleteGroupIfSetUnlocked(setId, groupId);
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

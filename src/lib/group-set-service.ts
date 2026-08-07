@@ -41,6 +41,31 @@ export async function assertGroupSetUnlocked(setId: string): Promise<void> {
 }
 
 /**
+ * Delete a group, refusing if its set is locked, as one atomic step.
+ *
+ * Reading `lockedAt` and then deleting is a check-then-act, and re-reading inside the
+ * transaction does not close it: the delete runs at READ COMMITTED, so a submission or
+ * grade that commits after that read is invisible to it and the group goes anyway. The
+ * submission path being SERIALIZABLE does not help, because Postgres only applies those
+ * guarantees between serializable transactions.
+ *
+ * `FOR UPDATE` takes the set's row lock first, which is the same row `lockGroupSetIfUsed`
+ * updates. Whichever transaction arrives first wins and the other waits, so the two orders
+ * are the only outcomes: the lock lands first and this refuses, or the delete commits first
+ * and the lock lands against a set that no longer has the group. Both are consistent; the
+ * interleaving that deleted a group out of a locked set is not reachable.
+ */
+export async function deleteGroupIfSetUnlocked(setId: string, groupId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ lockedAt: Date | null }>>`
+      SELECT "lockedAt" FROM "GroupSet" WHERE "id" = ${setId} FOR UPDATE
+    `;
+    if (rows[0]?.lockedAt) throw new GroupSetLockedError();
+    await tx.studentGroup.delete({ where: { id: groupId } });
+  });
+}
+
+/**
  * Reasons a group set cannot be deleted: it is locked (has submissions or grades), or an
  * assignment references it. Empty means deletion is allowed.
  */
