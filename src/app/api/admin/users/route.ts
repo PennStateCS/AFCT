@@ -110,7 +110,11 @@ export const POST = withAdminAuth(
         return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
       }
 
-      const systemSettings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+      // Only the fallback timezone for the new account is needed here.
+      const systemSettings = await prisma.systemSettings.findUnique({
+        where: { id: 1 },
+        select: { timezone: true },
+      });
 
       const newUser = await prisma.user.create({
         data: {

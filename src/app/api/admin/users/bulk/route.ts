@@ -93,7 +93,10 @@ export const POST = withAdminAuth(
       const created: CreatedRow[] = [];
       const failed: FailedRow[] = [];
 
-      const systemSettings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+      const systemSettings = await prisma.systemSettings.findUnique({
+        where: { id: 1 },
+        select: { timezone: true },
+      });
       const defaultTimezone = systemSettings?.timezone || 'UTC';
 
       const seenInBatch = new Set<string>();

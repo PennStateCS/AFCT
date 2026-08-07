@@ -17,7 +17,10 @@ export async function resolveCourseTimezone(courseId?: string | null): Promise<s
     if (course?.timezone) return course.timezone;
   }
 
-  const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+  const system = await prisma.systemSettings.findUnique({
+    where: { id: 1 },
+    select: { timezone: true },
+  });
   return system?.timezone || DEFAULT_TIMEZONE;
 }
 
@@ -26,6 +29,9 @@ export async function resolveCourseTimezone(courseId?: string | null): Promise<s
  * (System setting, then the built-in default.)
  */
 export async function resolveSystemTimezone(): Promise<string> {
-  const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+  const system = await prisma.systemSettings.findUnique({
+    where: { id: 1 },
+    select: { timezone: true },
+  });
   return system?.timezone || DEFAULT_TIMEZONE;
 }

@@ -18,6 +18,9 @@ export async function resolveUserTimezone(userId?: string | null): Promise<strin
   });
   if (user?.timezone) return user.timezone;
 
-  const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+  const system = await prisma.systemSettings.findUnique({
+    where: { id: 1 },
+    select: { timezone: true },
+  });
   return system?.timezone || DEFAULT_TIMEZONE;
 }
