@@ -12,7 +12,7 @@ import { claimSubmission, writeIfStillOwned } from './submission-worker';
  * double-claim regression through.
  *
  * These run against the throwaway `afct_test` database (see
- * vitest.integration.config.ts) and are excluded from the default unit run.
+ * vitest.db.config.ts) and are excluded from the default unit run.
  */
 
 const SUFFIX = 'wrkint';
