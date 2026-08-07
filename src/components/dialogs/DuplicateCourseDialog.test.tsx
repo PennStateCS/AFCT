@@ -10,6 +10,11 @@ import DuplicateCourseDialog from './DuplicateCourseDialog';
 
 import { toastMock } from '@/test/mocks/toast';
 
+const pushMock = vi.hoisted(() => vi.fn());
+// The dialog navigates to the new course with the app router when no onSuccess handler
+// is supplied, and useRouter throws without a mounted router.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
+
 vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 const toastErrorMock = toastMock.error;
 
@@ -208,6 +213,8 @@ describe('DuplicateCourseDialog', () => {
 
     expect(onSuccess).toHaveBeenCalledWith('new-course-id');
     expect(setOpen).toHaveBeenCalledWith(false);
+    // The caller handled it, so the dialog does not navigate as well.
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
   it('does not submit when course id is missing', async () => {

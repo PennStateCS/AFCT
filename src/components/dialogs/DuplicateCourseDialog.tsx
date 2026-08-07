@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
@@ -69,6 +70,7 @@ export default function DuplicateCourseDialog({
   timeZone,
   onSuccess,
 }: Props) {
+  const router = useRouter();
   // Render (and later re-interpret) the copied dates in the SOURCE course's timezone so
   // the duplicate's schedule matches the original. Falls back to the passed-in display
   // zone if the course row doesn't carry a timezone.
@@ -289,7 +291,7 @@ export default function DuplicateCourseDialog({
       if (onSuccess) {
         onSuccess(data.id);
       } else {
-        window.location.href = `/dashboard/courses/${data.id}`;
+        router.push(`/dashboard/courses/${data.id}`);
       }
     } catch (e) {
       showToast.error(e instanceof ApiError ? e.message : 'Failed to duplicate course');
