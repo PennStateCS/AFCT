@@ -19,12 +19,16 @@ const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const logErrorMock = vi.hoisted(() => vi.fn());
 const assertUnlockedMock = vi.hoisted(() => vi.fn());
+const deleteGroupMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/api/activity', () => ({ logError: logErrorMock }));
-vi.mock('@/lib/group-set-service', () => ({ assertGroupSetUnlocked: assertUnlockedMock }));
+vi.mock('@/lib/group-set-service', () => ({
+  assertGroupSetUnlocked: assertUnlockedMock,
+  deleteGroupIfSetUnlocked: deleteGroupMock,
+}));
 
 import { PATCH, DELETE } from './route';
 import { GroupSetLockedError } from '@/lib/group-sets';
@@ -57,6 +61,7 @@ beforeEach(() => {
   txMock.groupSet.findUnique.mockResolvedValue({ lockedAt: null });
   txMock.studentGroup.delete.mockResolvedValue({ id: 'g1' });
   assertUnlockedMock.mockResolvedValue(undefined);
+  deleteGroupMock.mockResolvedValue(undefined);
   activityLogMock.mockResolvedValue(undefined);
   logErrorMock.mockResolvedValue(undefined);
 });
@@ -194,14 +199,14 @@ describe('DELETE /api/courses/[id]/group-sets/[setId]/groups/[groupId]', () => {
     authMock.mockResolvedValue(null);
 
     expect((await DELETE(deleteReq(), ctx)).status).toBe(401);
-    expect(txMock.studentGroup.delete).not.toHaveBeenCalled();
+    expect(deleteGroupMock).not.toHaveBeenCalled();
   });
 
   it('403s for a student', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
 
     expect((await DELETE(deleteReq(), ctx)).status).toBe(403);
-    expect(txMock.studentGroup.delete).not.toHaveBeenCalled();
+    expect(deleteGroupMock).not.toHaveBeenCalled();
   });
 
   it('refuses to delete anything in an archived course', async () => {
@@ -209,7 +214,7 @@ describe('DELETE /api/courses/[id]/group-sets/[setId]/groups/[groupId]', () => {
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
 
     expect((await DELETE(deleteReq(), ctx)).status).toBe(409);
-    expect(txMock.studentGroup.delete).not.toHaveBeenCalled();
+    expect(deleteGroupMock).not.toHaveBeenCalled();
   });
 
   it('404s when the group is not in this set and course', async () => {
@@ -227,19 +232,20 @@ describe('DELETE /api/courses/[id]/group-sets/[setId]/groups/[groupId]', () => {
     const res = await DELETE(deleteReq(), ctx);
 
     expect(res.status).toBe(409);
-    expect(txMock.studentGroup.delete).not.toHaveBeenCalled();
+    expect(deleteGroupMock).not.toHaveBeenCalled();
   });
 
-  it('re-checks the lock inside the transaction, so a concurrent submission cannot be raced past', async () => {
-    // The guard above passes, then work lands against the set before the delete commits.
-    // Without the in-transaction re-check this would silently delete a locked group.
+  it('reports a lock discovered during the delete as a refusal, not a server error', async () => {
+    // The early check passes and work lands before the delete commits. Closing that race
+    // is the service's job, under the set's row lock; what matters here is that the route
+    // turns its refusal into a 409. The race itself is covered in group-set-lock.db.test.ts,
+    // which needs a real database to mean anything.
     staff();
-    txMock.groupSet.findUnique.mockResolvedValue({ lockedAt: new Date('2026-03-01') });
+    deleteGroupMock.mockRejectedValue(new GroupSetLockedError());
 
     const res = await DELETE(deleteReq(), ctx);
 
     expect(res.status).toBe(409);
-    expect(txMock.studentGroup.delete).not.toHaveBeenCalled();
   });
 
   it('deletes the group and records the name it had', async () => {
@@ -249,7 +255,7 @@ describe('DELETE /api/courses/[id]/group-sets/[setId]/groups/[groupId]', () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true });
-    expect(txMock.studentGroup.delete).toHaveBeenCalledWith({ where: { id: 'g1' } });
+    expect(deleteGroupMock).toHaveBeenCalledWith('s1', 'g1');
     expect(activityLogMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
@@ -262,7 +268,7 @@ describe('DELETE /api/courses/[id]/group-sets/[setId]/groups/[groupId]', () => {
 
   it('500s without leaking the underlying error', async () => {
     staff();
-    prismaMock.$transaction.mockRejectedValue(new Error('deadlock detected'));
+    deleteGroupMock.mockRejectedValue(new Error('deadlock detected'));
 
     const res = await DELETE(deleteReq(), ctx);
 
