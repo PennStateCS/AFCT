@@ -42,6 +42,11 @@ export default defineConfig({
 
   reporter: [['list'], ['html', { outputFolder: 'e2e-report', open: 'never' }]],
 
+  // Compiles the sign-in path before the first spec. Under `next dev` the first hit on the
+  // credentials route is slow enough that NextAuth reports it as a bad password, which made
+  // the first sign-in of a run fail on slower machines. See the file for the detail.
+  globalSetup: './e2e/global-setup.ts',
+
   use: {
     baseURL,
     // Artifacts only for failures: enough to diagnose without filling the disk.

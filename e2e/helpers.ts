@@ -25,14 +25,35 @@ export type Role = keyof typeof USERS;
 export async function signIn(page: Page, role: Role) {
   const { email, password } = USERS[role];
 
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(email);
-  await page.getByLabel('Password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Sign In' }).click();
+  // Two attempts, and the second one is not papering over a product bug.
+  //
+  // On a loaded CI runner a sign-in occasionally comes back as "Email or password is
+  // incorrect" for a seeded account that has already signed in successfully earlier in the
+  // same run. The rate limiter is not the cause: the form's own `login-check` peek reports
+  // `ok`, and a real block or challenge has its own distinct message. What is left is the
+  // credentials callback not completing in time under contention (bcrypt against a `next
+  // dev` server on a small runner), which NextAuth reports exactly like a bad password.
+  //
+  // Retrying HERE, in the fixture, is different from `retries` in the config, which stays 0
+  // on the grounds that flake in a smoke suite is itself the bug. This is setup, not the
+  // thing under test, and a genuinely wrong password still fails both attempts and fails the
+  // run. What it does hide is a login that is reliably slow, so if this starts retrying often
+  // that is worth looking at rather than tolerating.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await page.goto('/login');
+    await page.getByLabel('Email', { exact: true }).fill(email);
+    await page.getByLabel('Password', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'Sign In' }).click();
 
-  // The redirect target differs by role, so assert on leaving /login rather than on a
-  // specific destination. Individual specs assert what they actually expect to see.
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
+    // The redirect target differs by role, so wait on leaving /login rather than on a
+    // specific destination. Individual specs assert what they actually expect to see.
+    try {
+      await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
+      return;
+    } catch (failure) {
+      if (attempt === 2) throw failure;
+    }
+  }
 }
 
 /**
