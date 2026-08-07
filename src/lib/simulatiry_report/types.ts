@@ -6,7 +6,7 @@ export type CodeAndUsers = {
     }
 };
 
-export type FileStatusReturn = {
+export type SimilarityReportJsonData = {
     file_hash_code: number | null; // 0-2 (null if no file hash is provided)
     calc_hash_code: number | null; // 0-2 (technically cannot be null, but marked for type consistency for no errors)
 
@@ -29,4 +29,10 @@ export interface JflapSimilarityData {
   fileHashEmail: string | undefined;
   fileHashData: string | undefined;
   calcHashData: string | undefined;
+}
+
+export interface SuspeciousCheckResult {
+  isSuspicious: boolean | null;
+  isSuspiciousOverride: boolean | null;
+  isSuspiciousReason: string | null;
 }

@@ -1,4 +1,4 @@
-import type { CodeAndUsers, FileStatusReturn } from "./types";
+import type { CodeAndUsers, SimilarityReportJsonData } from "./types";
 import { createHash } from "crypto";
 import { get_info_from_hash } from "./get_info_from_hash";
 import { prisma } from "../prisma";
@@ -23,7 +23,7 @@ Checks the plagiarism status of a file based on the given file hash and the calc
         file_hash_submission_ids: string[] (list of submission IDs that submitted the file with the same hash)
         calc_hash_submission_ids: string[] (list of submission IDs that submitted the file with the same calculated hash)
 */
-export async function check_file_status(fileHashData: string | undefined, calcHashData: string | undefined, fileHashEmail: string | undefined, user_id: string): Promise<FileStatusReturn> {
+export async function check_file_status(fileHashData: string | undefined, calcHashData: string | undefined, fileHashEmail: string | undefined, user_id: string): Promise<SimilarityReportJsonData> {
     if (calcHashData === undefined) {
         throw new Error('Calculated hash is undefined. Cannot check file status without a calculated hash.');
     }

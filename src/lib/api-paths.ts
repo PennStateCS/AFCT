@@ -165,6 +165,8 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/problem-grades/summary`,
   assignmentStatistics: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/statistics`,
+  assignmentSimilarity: (courseId: string, aid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/similarity`,
   assignmentReviewData: (courseId: string, aid: string, studentId: string) =>
     `/api/courses/${courseId}/assignments/${aid}/review-data/${studentId}`,
   assignmentSubmissions: (courseId: string, aid: string, sid: string) =>

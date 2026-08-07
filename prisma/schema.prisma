@@ -471,6 +471,7 @@ model Problem {
   assignments  AssignmentProblem[]
   comments     Comment[]
   activityLogs ActivityLog[]
+  submissions  Submission[]
 
   @@index([courseId])
   @@index([type])
@@ -696,6 +697,10 @@ model Submission {
   fileHashData         String?
   calcHashData         String?
   similarityReportJson Json?
+  
+  isSuspicious Boolean?
+  isSuspiciousOverride Boolean?
+  isSuspiciousReason String?
 
   /// When this record was created.
   createdAt DateTime @default(now())
@@ -708,6 +713,8 @@ model Submission {
   assignmentId String
   /// The problem attempted.
   problemId    String
+  
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   // For individual submissions this is the submitting student
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)

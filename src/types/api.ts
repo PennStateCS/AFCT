@@ -1312,6 +1312,26 @@ export interface paths {
         patch: operations["patchCoursesByIdAssignmentsByAid"];
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/similarity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/courses/{id}/assignments/{aid}/similarity
+         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/similarity/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidSimilarity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/statistics": {
         parameters: {
             query?: never;
@@ -6828,6 +6848,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Error"];
                 };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidSimilarity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

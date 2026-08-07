@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import type { SubmissionStatus } from '@prisma/client';
-import type { FileStatusReturn } from './simulatiry_report/types';
+import type { SimilarityReportJsonData } from './simulatiry_report/types';
+import type { SuspeciousCheckResult } from './simulatiry_report/types';
 
 import fs from 'fs';
 import path from 'path';
@@ -18,6 +19,7 @@ import {
 } from './system-settings';
 import { check_file_status } from './simulatiry_report/check_file_status';
 import { jflapSimilarityParser } from './simulatiry_report/jflap_simulatiry_parser';
+import { suspeciousCheck } from './simulatiry_report/suspecious_check';
 
 // The activity logger accepts either a Request or an explicit {ipAddress, userAgent}
 // context. The worker has no HTTP request behind it, so it logs a "system" origin
@@ -111,7 +113,10 @@ interface SubmissionEvaluationResult {
   status: SubmissionEvaluationStatus;
   fileHashData?: string | null;
   calcHashData?: string | null;
-  similarityReportJson?: FileStatusReturn;
+  similarityReportJson?: SimilarityReportJsonData;
+  isSuspicious?: boolean | null;
+  isSuspiciousOverride?: boolean | null;
+  isSuspiciousReason?: string | null;
 }
 
 async function logSubmissionActivity(
@@ -728,6 +733,8 @@ async function evaluateWithJar(
 
       const similarityReportJson = await check_file_status(fileHashData, calcHashData, fileHashEmail, submission.studentId);
 
+      const { isSuspicious, isSuspiciousOverride, isSuspiciousReason }: SuspeciousCheckResult = suspeciousCheck(similarityReportJson);
+
       const correct = typeof evaluation.correct === 'boolean' ? evaluation.correct : undefined;
       let feedback: string;
       if (typeof evaluation.feedback === 'string') {
@@ -752,6 +759,9 @@ async function evaluateWithJar(
         similarityReportJson,
         fileHashData: fileHashData ?? null,
         calcHashData: calcHashData ?? null,
+        isSuspicious: isSuspicious ?? null,
+        isSuspiciousOverride: isSuspiciousOverride ?? null,
+        isSuspiciousReason: isSuspiciousReason ?? null,
       };
     } catch (parseErr) {
       const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
