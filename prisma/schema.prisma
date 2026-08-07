@@ -65,45 +65,58 @@ enum DescriptionFormat {
   TIPTAP_JSON
 }
 
+/// A person with an account: student, teaching assistant, faculty member or system
+/// administrator. One account is used across every course; what a person may do in a given
+/// course comes from their Roster row, not from this record.
+///
+/// @namespace Identity
 model User {
+  /// Unique identifier.
   id                String  @id @default(cuid())
+  /// Sign-in address, and the identifier the institution's systems recognise.
   email             String  @unique
+  /// Given name.
   firstName         String?
+  /// Family name.
   lastName          String?
+  /// Hashed password. The plain password is never stored.
   password          String
+  /// Whether the current password was issued by an administrator and must be changed at next sign-in.
   temporaryPassword Boolean @default(false)
-  // Global system-admin grant. Course-level abilities live on Roster.role; this
-  // flag is the only global privilege.
+  /// Whether this account administers the installation. What a person may do inside a particular
+  /// course comes from their Roster row instead; this is the only privilege that is global.
   isAdmin           Boolean @default(false)
+  /// Uploaded profile image, if any.
   avatar            String?
-  // Avatar framing (0..1 for x/y, zoom multiplier). The original image is stored and
-  // these are applied as a CSS transform at render, so re-cropping needs no re-upload.
-  // Nullable to match the existing columns (migration 20260713155236_avatar_info);
-  // callers fall back to 0.5/0.5/1 when null.
+  /// How the avatar is framed. The uploaded image is stored unchanged and the framing is applied
+  /// when it is displayed, so re-cropping never needs a re-upload.
   cropX             Float?
+  /// Vertical framing of the avatar.
   cropY             Float?
+  /// Zoom level applied to the avatar.
   zoom              Float?
+  /// Preferred timezone for displaying times. Falls back to the installation default.
   timezone          String?
+  /// Whether the account has been disabled. An inactive account cannot sign in but its records remain.
   inactive          Boolean @default(false)
 
-  // Stamped on every password change/reset. A JWT issued before this instant is
-  // rejected in the session callback, so a reset actually terminates existing
-  // sessions (e.g. an attacker's) rather than leaving them valid until expiry.
+  /// When the password was last changed. Sessions issued before this moment stop being accepted,
+  /// so a password reset ends any session an intruder already had rather than leaving it valid
+  /// until it expires.
   passwordChangedAt DateTime?
 
-  // Last successful sign-in. Stored (not derived from ActivityLog) so it survives
-  // log purges; stamped in the NextAuth signIn event.
+  /// Last successful sign-in. Stored on the account rather than derived from the activity log, so
+  /// it survives log pruning.
   lastLogin DateTime?
 
-  // Auto-expiring account lockout. Set to a future instant when repeated failed
-  // logins trip the per-account limit; the login gate rejects until it passes, then
-  // it clears itself (no sweeper needed). Persisted here rather than in the in-memory
-  // rate limiter so the lock survives a restart/deploy and is global across instances.
-  // Only the lock DECISION lives here; the per-attempt counting stays in the rate
-  // limiter. An admin can clear it early. Null = not locked.
+  /// When a temporary lockout ends, after too many failed sign-in attempts. The lock clears
+  /// itself once the time passes, and an administrator can lift it early. Empty means the account
+  /// is not locked.
   lockedUntil DateTime?
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   rosterEntries       Roster[]
@@ -128,58 +141,83 @@ model User {
   @@index([lastName, firstName])
 }
 
-// Bearer token for the native submission client (the Java app). Cookie/NextAuth is
-// for the browser; native clients authenticate with one of these instead. Only the
-// SHA-256 hash of the token is stored; the plaintext is shown once at issue time.
-// Tokens are revocable (revokedAt) and expire (expiresAt), so a lost device or a
-// stale client can be cut off without touching the user's password.
+/// Bearer token for the native submission client. The browser signs in with a session cookie;
+/// the desktop client authenticates with one of these instead. Only a hash of the token is
+/// stored, and the plaintext is shown once when it is issued. Tokens can be revoked and can
+/// expire, so a lost machine or an outdated client can be cut off without changing the owner's
+/// password.
+///
+/// @namespace Identity
 model ClientApiToken {
+  /// Unique identifier.
   id        String @id @default(cuid())
+  /// Hash of the token. The token itself is shown once when issued and never stored.
   tokenHash String @unique // sha256(token), never the plaintext
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The account the token acts as.
   userId String
 
-  // Optional client-supplied device label, for the user/admin to tell tokens apart.
+  /// Optional name for the token, so its owner can tell devices apart.
   label String?
 
+  /// When this record was created.
   createdAt  DateTime  @default(now())
+  /// When the token was last used, so unused tokens can be spotted.
   lastUsedAt DateTime?
+  /// When the token stops working. Empty means it does not expire on its own.
   expiresAt  DateTime?
+  /// When the token was withdrawn. Once set, the token is refused.
   revokedAt  DateTime?
 
   @@index([userId])
 }
 
+/// A single offering of a course: one section, in one term, with its own roster, assignments
+/// and grades. Deadlines are anchored to the course timezone so a due date means the same
+/// instant for everyone enrolled.
+///
+/// @namespace Courses
 model Course {
+  /// Unique identifier.
   id                  String    @id @default(cuid())
+  /// Course title as students see it.
   name                String
+  /// Course code, for example "CMPSC 464".
   code                String
+  /// Self-registration code students enter to join, if self-registration is offered.
   regCode             String?   @unique
+  /// Term the course runs in, for example "Fall 2026".
   semester            String
+  /// Credit hours.
   credits             Int
+  /// First day of the course.
   startDate           DateTime
+  /// Last day of the course.
   endDate             DateTime
+  /// When self-registration opens. Empty means it is open as soon as the course is published.
   registrationOpenAt  DateTime?
+  /// When self-registration closes. Empty means it stays open.
   registrationCloseAt DateTime?
+  /// Whether students can see the course. Unpublished courses are visible to staff only.
   isPublished         Boolean   @default(false)
+  /// Whether the course has been retired. Archived courses are read-only.
   isArchived          Boolean   @default(false)
 
-  // Soft delete: when set, the course is retained for recovery but hidden from all
-  // non-admin views and inaccessible through the app. Deletion requires the course to
-  // already be archived, so a deleted course is always archived too.
+  /// When the course was deleted. A deleted course is kept so it can be recovered, but is hidden
+  /// from everyone except administrators. A course must be archived before it can be deleted.
   deletedAt DateTime?
 
-  // The canonical IANA timezone that anchors this course's deadlines. Staff-entered
-  // wall-times (due dates, late cutoffs) are interpreted in this zone and stored as
-  // UTC, so a deadline means the same instant for every student. Defaults to the
-  // system timezone at creation.
+  /// The timezone that anchors this course's deadlines. Times entered by staff are interpreted
+  /// here, so a due date falls at the same moment for every student regardless of where they are.
   timezone String @default("UTC")
 
-  // How the empty string is displayed in automata/languages for this course.
+  /// Which symbol this course uses for the empty string when displaying automata and languages.
   emptyStringNotation EmptyStringNotation @default(EPSILON)
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   roster       Roster[] // Users in the course with roles
@@ -196,24 +234,35 @@ model Course {
   @@index([deletedAt])
 }
 
+/// One person's place in one course. This is where a role lives: the same account can be a
+/// student in one course and a teaching assistant in another. It also carries the student's
+/// standing, so a student who drops keeps their record and can be restored.
+///
+/// @namespace Courses
 model Roster {
+  /// Unique identifier.
   id   String     @id @default(cuid())
+  /// What this person does in the course: student, teaching assistant or faculty.
   role CourseRole
 
-  // Student standing in the course. Only meaningful for STUDENT rows; FACULTY/TA stay
-  // ENROLLED. A DROPPED student is treated as a non-member by the access gate but keeps
-  // this row (and all their work) so a re-enroll is a clean restore. droppedAt records
-  // when the drop happened, for the retained record and the research/activity log.
+  /// A student's standing in the course. Applies to students only; staff remain enrolled. A
+  /// student who drops loses access but keeps this record and all their work, so re-enrolling
+  /// restores everything.
   status    EnrollmentStatus @default(ENROLLED)
+  /// When the student dropped, if they did.
   droppedAt DateTime?
 
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  /// The course.
   courseId String
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The person.
   userId String
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   comments         Comment[]
@@ -227,43 +276,56 @@ model Roster {
   @@index([courseId, role, status])
 }
 
+/// A piece of work given to a course, made up of one or more problems. It carries the dates
+/// that apply to the class as a whole; exceptions for individual students or groups are
+/// recorded separately as overrides. An assignment is a group assignment exactly when it names
+/// a group set.
+///
+/// @namespace Assignments
 model Assignment {
-  id                 String    @id @default(cuid())
+  /// Unique identifier.
+  id                 String            @id @default(cuid())
+  /// Assignment name as students see it.
   title              String
   // Legacy plain-text description. Stays the source of truth for PLAIN_TEXT rows and holds
   // derived plain text for TIPTAP_JSON rows, so legacy clients keep getting plain text.
+  /// Instructions shown to students, as plain text.
   description        String?
+  /// Whether the instructions are plain text or formatted.
   descriptionFormat  DescriptionFormat @default(PLAIN_TEXT)
+  /// Formatted instructions, when the assignment uses rich text.
   descriptionJson    Json?
+  /// When the work is due, in the course timezone.
   dueDate            DateTime
-  // "Available from" for the whole class. Null means available immediately. Per-student
-  // extensions can override this via AssignmentOverride; the effective value is resolved
-  // in lib/effective-deadline. Interpreted in the course timezone like dueDate.
+  /// When the assignment becomes available to the class. Empty means it is available immediately.
+  /// Individual students or groups can be given a different date through an override.
   unlockAt           DateTime?
-  // When true the assignment is assigned to everyone (every student for an individual
-  // assignment; every group in the set for a group assignment). When false it is assigned
-  // only to the targets named in AssignmentAssignee. A student is "assigned" iff
-  // assignedToEveryone OR an assignee row names them / a group they belong to. See
-  // lib/assignment-visibility for the single definition.
-  assignedToEveryone Boolean   @default(true)
-  isPublished        Boolean   @default(false)
+  /// Whether the assignment goes to the whole class. When false, it goes only to the students or
+  /// groups named as assignees.
+  assignedToEveryone Boolean           @default(true)
+  /// Whether students can see the assignment.
+  isPublished        Boolean           @default(false)
 
   // Individual vs group is the single fact groupSetId carries: null = individual
   // assignment; set = group assignment tied to that one group set (students are assigned
   // via their group in the set and submit as a group). No mixing sets on one assignment.
   // The Individual/Group label shown on the course page is derived from this, not stored.
   groupSet   GroupSet? @relation(fields: [groupSetId], references: [id], onDelete: SetNull)
+  /// The group set used, when this is a group assignment. Empty means students work individually.
   groupSetId String?
 
-  // Late submission controls. Defaults to false to match the app (the create form
-  // and API both default this off; the value is always sent explicitly).
+  /// Whether work is accepted after the due date. Off unless it is turned on.
   allowLateSubmissions Boolean   @default(false)
+  /// Latest moment late work is still accepted. Empty means there is no cutoff.
   lateCutoff           DateTime?
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  /// The course this assignment belongs to.
   courseId String
 
   problems     AssignmentProblem[]
@@ -280,27 +342,32 @@ model Assignment {
   @@index([groupSetId])
 }
 
-// Assignment audience membership (Canvas "assign to specific students / groups"). Rows
-// exist only when Assignment.assignedToEveryone is false; each names one assigned STUDENT
-// or one assigned GROUP (a StudentGroup in the assignment's group set). Rows carry NO
-// dates -- date/late exceptions are AssignmentOverride rows, an independent concern, so
-// changing who is assigned and changing someone's dates never interfere. A student is
-// "assigned" iff assignedToEveryone, a STUDENT row names them, or a GROUP row names a
-// group they belong to (lib/assignment-visibility).
+/// Who an assignment is for, when it is not for the whole class. Each row names one student or
+/// one group. Rows carry no dates: changing who is assigned and changing someone's deadline are
+/// separate concerns, so one never disturbs the other.
+///
+/// @namespace Assignments
 model AssignmentAssignee {
+  /// Unique identifier.
   id         String             @id @default(cuid())
+  /// Whether this row names a student or a group.
   targetType OverrideTargetType
 
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  /// The assignment.
   assignmentId String
 
   user   User?   @relation("AssigneeTarget", fields: [userId], references: [id], onDelete: Cascade)
+  /// The assigned student, when the target is a student.
   userId String?
 
   studentGroup StudentGroup? @relation("AssigneeGroupTarget", fields: [groupId], references: [id], onDelete: Cascade)
+  /// The assigned group, when the target is a group.
   groupId      String?
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   @@unique([assignmentId, userId]) // at most one assignee row per (assignment, student)
@@ -309,41 +376,48 @@ model AssignmentAssignee {
   @@index([groupId])
 }
 
-// A per-target date/late EXCEPTION for one assignment (Canvas "Assign To" dates). This is
-// strictly about WHEN, never WHO: membership lives in AssignmentAssignee. A row supersedes
-// the assignment's base dueDate/unlockAt/lateCutoff/allowLateSubmissions for one target;
-// every field is nullable and null means "inherit the assignment's value", so an override
-// can move only the due date and keep the base late policy. At least one field must be
-// set (a no-op override is meaningless -- enforced by the AssignmentOverride_has_change
-// CHECK). Resolution + the inherit rule live in lib/effective-deadline.
-//
-// A target is either a STUDENT (userId set) or a GROUP (groupId set, a StudentGroup within
-// the assignment's groupSet); it must already be assigned (validated on write).
+/// A date or late-policy exception for one student or one group on one assignment. This is only
+/// ever about when, never about who. Any field left empty inherits the assignment's own value,
+/// so an override can move a due date and leave the late policy alone.
+///
+/// @namespace Assignments
 model AssignmentOverride {
+  /// Unique identifier.
   id         String             @id @default(cuid())
+  /// Whether this exception applies to a student or a group.
   targetType OverrideTargetType
 
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  /// The assignment being excepted.
   assignmentId String
 
-  user    User?   @relation("OverrideTarget", fields: [userId], references: [id], onDelete: Cascade)
-  userId  String?
+  user   User?   @relation("OverrideTarget", fields: [userId], references: [id], onDelete: Cascade)
+  /// The student the exception is for, when the target is a student.
+  userId String?
 
   // GROUP target: the StudentGroup this override applies to (all its members).
   studentGroup StudentGroup? @relation("OverrideGroupTarget", fields: [groupId], references: [id], onDelete: Cascade)
+  /// The group the exception is for, when the target is a group.
   groupId      String?
 
+  /// Replacement availability date. Empty inherits the assignment's.
   unlockAt             DateTime?
+  /// Replacement due date. Empty inherits the assignment's.
   dueDate              DateTime?
+  /// Replacement late cutoff. Empty inherits the assignment's.
   lateCutoff           DateTime?
+  /// Replacement late policy. Empty inherits the assignment's.
   allowLateSubmissions Boolean?
 
   // Nullable + SetNull so deleting the staff account that created an override does not
   // block user deletion (same pattern as ActivityLog). The durable actor identity is in
   // the activity log, not this column.
   createdBy   User?    @relation("OverrideCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  /// The staff member who granted the exception.
   createdById String?
+  /// When this record was created.
   createdAt   DateTime @default(now())
+  /// When this record was last changed.
   updatedAt   DateTime @updatedAt
 
   @@unique([assignmentId, userId]) // at most one override per (assignment, student)
@@ -352,28 +426,46 @@ model AssignmentOverride {
   @@index([groupId])
 }
 
+/// A single exercise a student solves: a finite automaton, regular expression, grammar,
+/// pushdown automaton or Turing machine. Problems belong to a course and can be reused across
+/// its assignments.
+///
+/// @namespace Assignments
 model Problem {
-  id                String       @id @default(cuid())
+  /// Unique identifier.
+  id                String            @id @default(cuid())
+  /// Problem name as students see it.
   title             String
   // Legacy plain-text description. Stays the source of truth for PLAIN_TEXT rows and holds
   // derived plain text for TIPTAP_JSON rows, so legacy clients keep getting plain text.
+  /// The problem statement, as plain text.
   description       String?
+  /// Whether the statement is plain text or formatted.
   descriptionFormat DescriptionFormat @default(PLAIN_TEXT)
+  /// Formatted statement, when the problem uses rich text.
   descriptionJson   Json?
+  /// Stored reference solution file.
   fileName          String?
+  /// Name of the reference file as uploaded, for display.
   originalFileName  String?
+  /// What kind of problem this is: finite automaton, regular expression, grammar, pushdown automaton or Turing machine.
   type              ProblemType?
   // FA/PDA state cap and FA determinism are intrinsic to the problem definition.
+  /// Largest number of states a solution may use. Empty means no limit.
   maxStates         Int?
+  /// Whether the solution must be deterministic.
   isDeterministic   Boolean?
   // NOTE: maxPoints / maxSubmissions / autograderEnabled are per-assignment and live on
   // AssignmentProblem (a problem can be worth different points, allow a different number
   // of submissions, or be autograded in one assignment but not another). They are NOT here.
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  /// The course this problem belongs to.
   courseId String
 
   assignments  AssignmentProblem[]
@@ -385,15 +477,25 @@ model Problem {
   @@index([createdAt])
 }
 
+/// The appearance of one problem on one assignment, with the settings that apply there: how
+/// much it is worth and how many attempts are allowed. The same problem can appear on more than
+/// one assignment with different settings.
+///
+/// @namespace Assignments
 model AssignmentProblem {
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  /// The assignment.
   assignmentId String
   problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  /// The problem appearing on it.
   problemId    String
 
   // Per-assignment configuration
+  /// What this problem is worth on this assignment.
   maxPoints         Float   @default(0)
+  /// How many attempts a student gets. Zero or less means unlimited.
   maxSubmissions    Int     @default(1)
+  /// Whether attempts are graded automatically.
   autograderEnabled Boolean @default(true)
 
   submissions Submission[]
@@ -404,39 +506,48 @@ model AssignmentProblem {
   @@index([assignmentId])
 }
 
-// Extra submissions granted to ONE student or ONE group on ONE assignment problem, on top
-// of the problem's shared maxSubmissions (e.g. they submitted the wrong file and staff want
-// to give them another try). Additive and per-target, so the shared cap never moves for
-// everyone else; a grant on an unlimited problem (maxSubmissions <= 0) changes nothing.
-// Kept as its own row (never by mutating maxSubmissions) because submission limits are a
-// research variable: the record of who granted how many to whom must survive.
-// Resolved through lib/submission-limits, which both enforcement and display use.
+/// Extra attempts given to one student or one group on one problem, over and above the limit
+/// everyone else has. Recorded as its own entry rather than by raising the shared limit, so the
+/// shared limit stays put and there is a lasting record of who granted what to whom.
+///
+/// @namespace Assignments
 model SubmissionGrant {
+  /// Unique identifier.
   id         String             @id @default(cuid())
+  /// Whether the extra attempts go to a student or a group.
   targetType OverrideTargetType
 
   assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade)
+  /// The assignment.
   assignmentId      String
+  /// The problem the extra attempts apply to.
   problemId         String
 
   // STUDENT target: the student this grant applies to.
   user   User?   @relation("SubmissionGrantTarget", fields: [userId], references: [id], onDelete: Cascade)
+  /// The student receiving them, when the target is a student.
   userId String?
 
   // GROUP target: the StudentGroup this grant applies to (its shared submission set).
   studentGroup StudentGroup? @relation("SubmissionGrantGroupTarget", fields: [groupId], references: [id], onDelete: Cascade)
+  /// The group receiving them, when the target is a group.
   groupId      String?
 
-  // Always positive (DB CHECK); repeat grants to the same target add onto this row.
+  /// How many additional attempts were granted. Always positive; granting again to the same
+  /// target adds to this number.
   extraSubmissions Int
+  /// Why the extra attempts were granted, for the record.
   reason           String?
 
   // Nullable + SetNull so deleting the staff account that granted does not block user
   // deletion (same pattern as AssignmentOverride). The durable actor identity is in the
   // activity log, not this column.
   createdBy   User?    @relation("SubmissionGrantCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  /// The staff member who granted them.
   createdById String?
+  /// When this record was created.
   createdAt   DateTime @default(now())
+  /// When this record was last changed.
   updatedAt   DateTime @updatedAt
 
   @@unique([assignmentId, problemId, userId]) // at most one grant row per (problem, student)
@@ -452,20 +563,30 @@ model SubmissionGrant {
 // a set (see Assignment.groupSetId) for group submissions.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// A named way of dividing a course into groups, for example "Project teams" or "Lab partners".
+/// A course can have several, and an assignment chooses at most one. Once work has been
+/// submitted or graded against a set, its groups are frozen so that changing them cannot alter
+/// records after the fact.
+///
+/// @namespace Courses
 model GroupSet {
+  /// Unique identifier.
   id   String @id @default(cuid())
+  /// Name of the set, for example "Project teams".
   name String
 
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  /// The course the set belongs to.
   courseId String
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
-  // Sticky lock: stamped the first time a submission or grade is created for an
-  // assignment using this set, and never cleared. Once set, the set's groups and
-  // memberships are frozen (renaming and duplication stay allowed) so changing them
-  // can't retroactively alter academic records. Read via lib/group-set-service.
+  /// When this set's groups were frozen. Set automatically the first time work is submitted or
+  /// graded against an assignment using the set, and never cleared, so group changes cannot alter
+  /// records after the fact. Renaming and duplicating remain allowed.
   lockedAt DateTime?
 
   groups      StudentGroup[]
@@ -477,14 +598,23 @@ model GroupSet {
   @@index([courseId])
 }
 
+/// One group inside a group set. Members submit and are graded together on any assignment that
+/// uses the set.
+///
+/// @namespace Courses
 model StudentGroup {
+  /// Unique identifier.
   id   String @id @default(cuid())
+  /// Group name as members see it.
   name String
 
   groupSet   GroupSet @relation(fields: [groupSetId], references: [id], onDelete: Cascade)
+  /// The set this group belongs to.
   groupSetId String
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   memberships         GroupMembership[]
@@ -502,14 +632,21 @@ model StudentGroup {
   @@index([groupSetId])
 }
 
+/// A student's place in one group. A student belongs to at most one group per set, so their
+/// group is unambiguous for any assignment using it.
+///
+/// @namespace Courses
 model GroupMembership {
+  /// Unique identifier.
   id String @id @default(cuid())
 
+  /// The set the group belongs to.
   groupSetId String
 
   // The group is bound to its set through a composite reference, so the database
   // rejects any membership whose group lives in a different set.
   group   StudentGroup @relation(fields: [groupId, groupSetId], references: [id, groupSetId], onDelete: Cascade)
+  /// The group joined.
   groupId String
 
   // The member must be a roster row in the course (the service layer always sets
@@ -518,10 +655,14 @@ model GroupMembership {
   // database-level "has a roster row here" guard; note it does NOT enforce status, so
   // a dropped student keeps their membership row until re-enrolled (by design).
   roster   Roster @relation(fields: [courseId, userId], references: [courseId, userId], onDelete: Cascade)
+  /// The course, carried here so membership can be checked per course.
   courseId String
+  /// The student.
   userId   String
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   // The concurrency-critical guarantee: a student can hold at most one group per
@@ -532,40 +673,61 @@ model GroupMembership {
   @@index([userId])
 }
 
+/// One attempt at one problem: the file the student sent, its progress through the grading
+/// queue, and the result. Submissions are kept rather than replaced, so earlier attempts remain
+/// available.
+///
+/// @namespace Submissions
 model Submission {
+  /// Unique identifier.
   id            String   @id @default(cuid())
+  /// Feedback produced for this attempt.
   feedback      String?
+  /// Whether the attempt was judged correct. Empty until grading finishes.
   correct       Boolean?
+  /// Full grader output, kept for diagnosis.
   evaluationRaw Json?
 
+  /// Stored submitted file.
   fileName         String?
+  /// Name of the file as the student sent it.
   originalFileName String?
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade)
 
+  /// The assignment.
   assignmentId String
+  /// The problem attempted.
   problemId    String
 
   // For individual submissions this is the submitting student
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  /// The student who submitted.
   studentId String
 
   // Course reference
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  /// The course, carried here so a student's work can be found per course.
   courseId String
 
   // Set for a group submission: the StudentGroup that owns this submission set. Any
   // member's submit writes the group here; individual submissions leave it null. The
   // submitting member is still recorded in studentId.
   studentGroup   StudentGroup? @relation(fields: [studentGroupId], references: [id], onDelete: SetNull)
+  /// The group the work counts for, on a group assignment.
   studentGroupId String?
 
   // Queue
+  /// Where the attempt is: waiting, being graded, finished or failed.
   status      SubmissionStatus @default(PENDING)
+  /// When the student sent the attempt.
   submittedAt DateTime         @default(now())
+  /// How many times grading has been tried for this attempt.
   attempts    Int              @default(0) // Number of times the worker has claimed this submission
 
   // Logs
@@ -592,24 +754,35 @@ model Submission {
   @@index([submittedAt])
 }
 
+/// A student's grade on one problem of one assignment. A grade set by hand by a staff member is
+/// marked as such, and automatic grading will not overwrite it.
+///
+/// @namespace Submissions
 model AssignmentProblemGrade {
+  /// Unique identifier.
   id       String  @id @default(cuid())
+  /// Points awarded.
   grade    Float
+  /// Comment recorded with the grade.
   feedback String?
 
-  // True when a staff member set this grade by hand. The autograder refuses to
-  // overwrite a manually-graded row, so a later (or reran) evaluation can't clobber
-  // a TA's grade.
+  /// Whether a staff member set this grade by hand. Automatic grading will not overwrite a grade
+  /// that was, so re-running the grader cannot undo a person's decision.
   gradedManually Boolean @default(false)
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
   assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade, onUpdate: Cascade)
+  /// The assignment.
   assignmentId      String
+  /// The problem graded.
   problemId         String
 
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  /// The student graded.
   studentId String
 
   @@unique([assignmentId, problemId, studentId])
@@ -622,15 +795,23 @@ model AssignmentProblemGrade {
   @@index([studentId, assignmentId])
 }
 
+/// Feedback attached to a student's work, written by staff or by the student.
+///
+/// @namespace Submissions
 model Comment {
+  /// Unique identifier.
   id        String   @id @default(cuid())
+  /// The comment text.
   content   String
+  /// When this record was created.
   createdAt DateTime @default(now())
 
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  /// The assignment the comment is about.
   assignmentId String
 
   problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  /// The problem the comment is about.
   problemId String
 
   // The author is always a User. `roster` is only the author's role WITHIN this
@@ -638,12 +819,15 @@ model Comment {
   // system admin commenting on a course they aren't enrolled in). We never fabricate a
   // roster row just to attribute a comment.
   author   User   @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  /// Who wrote it.
   authorId String
 
   roster   Roster? @relation(fields: [rosterId], references: [id], onDelete: SetNull)
+  /// The commenter's place in the course, recording the role they wrote in.
   rosterId String?
 
   aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Cascade)
+  /// The student the comment concerns, when staff comment on someone's work.
   aboutStudentId String?
 
   @@index([assignmentId])
@@ -656,27 +840,46 @@ model Comment {
   @@index([createdAt])
 }
 
+/// The record of what happened in the system: who signed in, who changed a grade, who looked at
+/// a student's work, and when. It serves both as an audit trail and, because AFCT is used in a
+/// multi-institution study, as research data. Entries are kept for a configurable period and
+/// then removed.
+///
+/// @namespace System
 model ActivityLog {
+  /// Unique identifier.
   id        String   @id @default(cuid())
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Who performed the action. Empty for actions with no signed-in person, such as a failed sign-in.
   userId    String?
+  /// What happened.
   action    String
+  /// When it happened.
   timestamp DateTime @default(now())
+  /// Extra detail about the action.
   metadata  Json?
 
+  /// The course involved, if any.
   courseId     String?
   course       Course?     @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  /// The assignment involved, if any.
   assignmentId String?
   assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  /// The problem involved, if any.
   problemId    String?
   problem      Problem?    @relation(fields: [problemId], references: [id], onDelete: SetNull)
+  /// The submission involved, if any.
   submissionId String?
   submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
 
   // Additional categorization
+  /// Broad grouping the action falls under.
   category  String? // SYSTEM, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION, USER
+  /// How significant the entry is.
   severity  LogSeverity @default(INFO)
+  /// Address the request came from.
   ipAddress String?
+  /// Client that made the request.
   userAgent String?
 
   // Index strategy for a high-write, admin-read log table. Composites serve
@@ -700,51 +903,66 @@ model ActivityLog {
   @@index([ipAddress, timestamp]) // "what has this address done", System Status + investigations
 }
 
+/// Installation-wide settings, held as a single row: the default timezone, sign-up rules,
+/// upload and login limits, backup schedule, and grading queue tuning.
+///
+/// @namespace System
 model SystemSettings {
-  /// Singleton row (id=1)
+  /// Always 1. Settings are held in a single row.
   id                    Int     @id @default(1)
+  /// Default timezone for the installation. New courses start with this.
   timezone              String  @default("UTC")
+  /// Largest file a student may upload, in megabytes.
   maxUploadSizeMb       Int     @default(25)
+  /// Whether people may create their own accounts. When off, only an administrator can add users.
   allowSignup           Boolean @default(true)
-  // Canonical comma-separated allow-list of email domains permitted to self-register
-  // (e.g. "psu.edu,example.edu"). Blank = no restriction (any domain may sign up).
+  /// Comma-separated list of email domains allowed to self-register, for example
+  /// "psu.edu,example.edu". Blank allows any domain.
   signupAllowedDomains  String  @default("")
+  /// How long a session may sit idle before the person is signed out.
   sessionTimeoutMinutes Int     @default(60)
 
-  // App-wide date/time display preference. When true, times render on a 24-hour clock
-  // (e.g. 23:59); otherwise 12-hour with AM/PM. Display-only, never affects stored
-  // UTC instants or deadline enforcement.
+  /// Whether times are shown on a 24-hour clock rather than with AM and PM. Affects display only,
+  /// never stored times or deadline enforcement.
   clock24Hour Boolean @default(false)
 
-  // Login lockout policy (per-account): how many failed attempts before the
-  // account is temporarily locked, and for how long.
+  /// How many failed sign-in attempts an account may accumulate before it is temporarily locked.
   loginMaxAttempts    Int @default(10)
+  /// How long an account stays locked after too many failed sign-in attempts.
   loginLockoutMinutes Int @default(10)
 
-  // Database backups (run by the db-backup container). backupHour is the
-  // server-time (UTC) hour to run the daily dump; retention is days of dumps kept.
+  /// Whether the nightly database backup runs.
   backupEnabled       Boolean @default(true)
+  /// Hour of the day, in UTC, at which the nightly backup runs.
   backupHour          Int     @default(2)
+  /// How many days of backups to keep before the oldest are removed.
   backupRetentionDays Int     @default(14)
 
-  // How long to keep audit-log rows before the pruner deletes them.
+  /// How long activity log entries are kept before they are removed.
   activityLogRetentionDays Int @default(365)
 
-  // Submission queue tunables (time values stored in ms)
+  /// How long a single submission may be graded before it is abandoned, in milliseconds.
   submissionEvalTimeoutMs      Int @default(30000)
+  /// Memory ceiling for grading one submission, in megabytes.
   submissionEvalMaxMemoryMb    Int @default(256)
+  /// How long a student must wait between attempts at the same problem, in milliseconds.
   submissionResubmitCooldownMs Int @default(10000)
+  /// How many submissions may be graded at the same time.
   submissionMaxConcurrent      Int @default(5)
+  /// How many times grading is retried before a submission is reported as failed.
   submissionMaxAttempts        Int @default(3)
-  // Exploration bound passed to the cfganalyzer evaluator (CFGANALYZER_LIMIT).
+  /// Exploration bound given to the grammar analyzer when comparing languages.
   submissionAnalyzerLimit      Int @default(15)
 
-  // hCaptcha keys (null = fall back to env, then disabled). Secret is never
-  // returned to the client.
+  /// Public hCaptcha key used on the sign-in page. Empty falls back to the value supplied by the
+  /// environment, and then to having no captcha.
   hcaptchaSiteKey   String?
+  /// Private hCaptcha key. Never sent to the browser.
   hcaptchaSecretKey String?
 
+  /// When this record was created.
   createdAt DateTime @default(now())
+  /// When this record was last changed.
   updatedAt DateTime @updatedAt
 }
 
