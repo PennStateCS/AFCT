@@ -136,15 +136,16 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Doc generation only needs js-yaml + the validators; skip Prisma client gen.
+      # Doc generation needs js-yaml + the validators and the ERD generator, but not
+      # the Prisma client itself.
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
         env:
           SKIP_PRISMA_GENERATE: '1'
 
       # `docs` validates the spec (failing on a malformed @openapi block or an
-      # invalid document) and regenerates the typed client.
-      - name: Generate and validate spec + types
+      # invalid document), regenerates the typed client, and redraws the ERD.
+      - name: Generate and validate spec + types + ERD
         run: npm run docs
 
       - name: Ensure generated API types are committed and in sync
@@ -152,6 +153,14 @@ jobs:
           if ! git diff --quiet -- src/types/api.ts; then
             echo "::error::src/types/api.ts is out of date. Run 'npm run docs' and commit the result."
             git --no-pager diff -- src/types/api.ts
+            exit 1
+          fi
+
+      - name: Ensure the published ERD matches the schema
+        run: |
+          if ! git diff --quiet -- docs-site/docs/reference/database-schema.md; then
+            echo "::error::The published ERD is out of date. Run 'npm run docs' and commit the result."
+            git --no-pager diff -- docs-site/docs/reference/database-schema.md
             exit 1
           fi
 

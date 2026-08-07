@@ -52,7 +52,7 @@ RUN if [ -f /app/bin/cfganalyzer ]; then chmod +x /app/bin/cfganalyzer; fi
 # Baked-in source. The dev bind mount overlays this; it exists so the image also
 # works on its own (e.g. the prisma-studio service).
 COPY --chown=node:node . .
-RUN npx prisma generate
+RUN npx prisma generate --generator client
 
 # Fail the build now if the copied JRE can't run.
 RUN java -version

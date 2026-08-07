@@ -105,6 +105,7 @@ const sidebars: SidebarsConfig = {
             'reference/windows-wsl-setup',
             'reference/development-troubleshooting',
             'reference/conventions',
+            'reference/database-schema',
             'reference/login-protection',
             'reference/rich-descriptions',
             'reference/roles-and-permissions',

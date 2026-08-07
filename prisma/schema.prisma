@@ -748,15 +748,20 @@ model SystemSettings {
   updatedAt DateTime @updatedAt
 }
 
-// Entity-relationship diagram, emitted as Mermaid inside Markdown.
+// Entity-relationship diagram, emitted as Mermaid inside Markdown and published on
+// the docs site, which renders Mermaid natively.
 //
 // Deliberately NOT prisma-erd-generator: that renders to SVG through mermaid-cli,
-// which drags in puppeteer and a ~150MB Chromium purely to rasterise a picture. The
-// entrypoint runs `prisma generate` on container start, so every image and workflow
-// then needed DISABLE_ERD set to stop it launching a browser that isn't installed.
-// This one has a single dependency and writes text, so it is safe to run anywhere.
+// which drags in puppeteer and a ~150MB Chromium purely to rasterise a picture.
+// This one has a single dependency and writes text.
+//
+// The output is COMMITTED and CI checks it for drift, the same arrangement as
+// src/types/api.ts. Regenerate with `npm run docs`. This generator is not part of the
+// app's runtime: postinstall, both images and the container entrypoint all run
+// `prisma generate --generator client`, so nothing outside a developer machine or CI
+// does documentation work.
 generator erd {
   provider = "prisma-markdown"
-  output   = "ERD.md"
-  title    = "AFCT schema"
+  output   = "../docs-site/docs/reference/database-schema.md"
+  title    = "Database schema"
 }
