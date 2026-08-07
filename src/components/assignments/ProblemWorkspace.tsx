@@ -142,7 +142,9 @@ export default function ProblemWorkspace({
   const handleDownload = (submission: ProblemSubmission) => {
     if (!submission.fileName) return;
 
-    const url = apiPaths.files.submission(encodeURIComponent(submission.fileName));
+    const url = apiPaths.files.submission(encodeURIComponent(submission.fileName), {
+      download: true,
+    });
     const link = document.createElement('a');
     link.href = url;
     link.download = submission.originalFileName || 'Download';

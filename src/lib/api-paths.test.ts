@@ -50,6 +50,9 @@ describe('apiPaths', () => {
   it('builds served-file paths', () => {
     expect(apiPaths.files.pfp('a.png')).toBe('/api/files/pfps/a.png');
     expect(apiPaths.files.submission('s.jff')).toBe('/api/files/submissions/s.jff');
+    expect(apiPaths.files.submission('s.jff', { download: true })).toBe(
+      '/api/files/submissions/s.jff?download=1',
+    );
     expect(apiPaths.files.problem('p.jff')).toBe('/api/files/problems/p.jff');
     expect(apiPaths.files.solution('x.jff')).toBe('/api/files/solutions/x.jff');
     expect(apiPaths.files.solution('x.jff', { download: true })).toBe(

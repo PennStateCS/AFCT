@@ -107,9 +107,10 @@ describe('GET /api/files/submissions/[file]', () => {
     });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
-    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
-      params: Promise.resolve({ file: 'file.txt' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/files/submissions/file.txt?download=1'),
+      { params: Promise.resolve({ file: 'file.txt' }) },
+    );
 
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Disposition')).toContain('solution.txt');
@@ -119,6 +120,36 @@ describe('GET /api/files/submissions/[file]', () => {
       expect.objectContaining({
         action: 'DOWNLOAD_SUBMISSION_FILE',
         courseId: 'course-1',
+      }),
+    );
+  });
+
+  // Opening a submission in the viewer fetches the same bytes without ?download=1. It is
+  // still a disclosure and still logged, but as a view: the audit log is the FERPA record
+  // of who saw a student's work, so it has to say what actually happened.
+  it('logs an inline view rather than a download when ?download=1 is absent', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
+    prismaMock.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      originalFileName: 'solution.txt',
+      studentId: 'user-2',
+      assignmentId: 'assignment-1',
+      courseId: 'course-1',
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
+      params: Promise.resolve({ file: 'file.txt' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'VIEW_SUBMISSION_FILE',
+        courseId: 'course-1',
+        submissionId: 'sub-1',
       }),
     );
   });

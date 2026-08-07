@@ -7,13 +7,19 @@ import { logDenial, logError } from '@/lib/api/activity';
 import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
 
 /**
- * Serves a submission's uploaded file as a download. Restricted to the submitting
- * student, course staff (faculty or TAs), or a system admin. The download is audited,
- * and traversal filenames are rejected.
+ * Serves a submission's uploaded file. Restricted to the submitting student, course
+ * staff (faculty or TAs), or a system admin. Every successful serve is audited, as a
+ * view by default and as a download when `?download=1` is set. Traversal filenames are
+ * rejected.
  * @openapi
  * summary: Get a submission file
  * parameters:
  *   - { name: file, in: path, required: true, schema: { type: string } }
+ *   - name: download
+ *     in: query
+ *     required: false
+ *     description: Set to `1` to audit the serve as a download rather than an inline view.
+ *     schema: { type: string, enum: ['1'] }
  * responses:
  *   200:
  *     description: The file bytes (as an attachment).
@@ -72,13 +78,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       });
     }
 
+    // Distinguish an inline view (the in-app viewer fetches the bytes to render the
+    // automaton) from an explicit ?download=1 download. Both are disclosures of a
+    // student's work and both are logged, but they are different access events, and
+    // recording every view as a download misstates what the reader actually did.
+    const isDownload = new URL(req.url).searchParams.get('download') === '1';
+
     return await serveUploadedFile(file, 'submissions', {
       disposition: 'attachment',
       downloadName: submission.originalFileName ?? file,
       onServe: () =>
         createEnhancedActivityLog(prisma, req, {
           userId: session.user.id,
-          action: 'DOWNLOAD_SUBMISSION_FILE',
+          action: isDownload ? 'DOWNLOAD_SUBMISSION_FILE' : 'VIEW_SUBMISSION_FILE',
           severity: 'INFO',
           category: 'SUBMISSION',
           courseId: submission.courseId,
