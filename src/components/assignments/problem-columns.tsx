@@ -198,12 +198,12 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
           : null;
         const fileName = row.original.originalFileName || 'solution';
         return fileUrl ? (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex w-full items-center justify-between gap-2">
             {/* Click the name to open the viewer; the icon downloads. */}
             <button
               type="button"
               onClick={() => openRenderViewer(row.original)}
-              className="text-primary break-all hover:underline"
+              className="text-primary text-xs break-all hover:underline"
               title={`View ${fileName}`}
             >
               {fileName}
@@ -222,8 +222,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
           <span className="text-muted-foreground">No file</span>
         );
       },
-      // Right-aligned so the download icons line up down the column.
-      meta: { priority: 2, align: 'right' as const },
+      meta: { priority: 2 },
       enableSorting: false,
     },
     {

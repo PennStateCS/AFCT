@@ -107,20 +107,17 @@ export const useProblemColumns = ({
     {
       accessorKey: 'originalFileName',
       header: 'Solution',
-      // Right-aligned so every download icon lands in the same place down the column;
-      // trailing the file name leaves them ragged, and they are the thing being aimed at.
-      meta: { align: 'right' },
       cell: ({ row }) => {
         const file = row.original.originalFileName;
         const fileName = row.original.fileName;
         if (!file || !fileName) return '—';
         return (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex w-full items-center justify-between gap-2">
             {/* Click the name to open the viewer; the icon downloads. */}
             <button
               type="button"
               onClick={() => setOpenDialog({ open: true, problem: row.original })}
-              className="text-primary text-sm break-all hover:underline"
+              className="text-primary text-xs break-all hover:underline"
               title={`View ${file}`}
             >
               {file}

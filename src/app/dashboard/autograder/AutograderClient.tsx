@@ -626,12 +626,15 @@ export default function AutograderClient() {
           if (!submission.fileName || !name) {
             return <span className="text-muted-foreground text-sm">-</span>;
           }
+          // Name left, download pinned right: the icons line up down the column without
+          // right-aligning the names, which read badly ragged when file names differ in
+          // length. `w-full` is what lets justify-between reach the column edge.
           return (
-            <div className="flex items-center justify-end gap-2">
+            <div className="flex w-full items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={() => handleViewSubmission(submission)}
-                className="text-primary text-sm break-all hover:underline"
+                className="text-primary text-xs break-all hover:underline"
                 title={`View ${name}`}
               >
                 {name}
@@ -648,8 +651,7 @@ export default function AutograderClient() {
             </div>
           );
         },
-        // Right-aligned so the download icons line up down the column.
-        meta: { priority: 3, align: 'right' },
+        meta: { priority: 3 },
       },
       {
         id: 'due',
