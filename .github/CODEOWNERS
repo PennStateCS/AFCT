@@ -1,0 +1,11 @@
+# Who reviews changes here.
+#
+# Every pull request needs an approving review from someone on this list, and only these
+# accounts may push to main, so this file is the single place that decides who merges.
+#
+# Listed as individuals rather than a team because the repo has no team with access yet.
+# When one exists, replace the line below with the team and nothing else has to change:
+#
+#   * @PennStateCS/afct-maintainers
+
+* @jdc308 @Arieadite @jb4411
