@@ -133,6 +133,8 @@ jobs:
           ignore-unfixed: true
           exit-code: '0'
 
+      # Pushed with RELEASE_TOKEN when configured; see the checkout step above for why
+      # GITHUB_TOKEN cannot be used once main requires pull requests.
       # Pin docker-compose.yml to the exact digest just published, and commit it
       # back to main. The push uses GITHUB_TOKEN, which does NOT re-trigger
       # workflows (no loop); the `[skip ci]` marker is a further safeguard.
