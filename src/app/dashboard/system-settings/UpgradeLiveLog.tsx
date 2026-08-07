@@ -23,9 +23,16 @@ export function UpgradeLiveLog({ active }: { active: boolean }) {
     const es = new EventSource('/api/admin/settings/upgrade/stream');
     es.addEventListener('log', (e) => {
       try {
-        const { lines: incoming } = JSON.parse((e as MessageEvent).data) as { lines: string[] };
+        const { lines: incoming, reset } = JSON.parse((e as MessageEvent).data) as {
+          lines: string[];
+          reset?: boolean;
+        };
         setLines((prev) => {
-          const next = [...prev, ...incoming];
+          // A new run truncated the log, so whatever is on screen belongs to the previous
+          // one. Replace rather than append: starting an upgrade while a self-update was
+          // still displayed used to leave the old run's lines above the new run's, and the
+          // effect below cannot catch it because `active` never flips between the two.
+          const next = reset ? [...incoming] : [...prev, ...incoming];
           // Bound memory/DOM, but keep enough that a whole run stays scrollable rather
           // than dropping its early lines. (The updater also trims progress.log itself,
           // so this cap is only a backstop for an unusually chatty run.)
