@@ -222,9 +222,32 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
       <div className="max-w-2xl space-y-5 xl:max-w-4xl">
         <div className="space-y-2">
           <h2 className="text-sm font-medium">Current version</h2>
-          <Badge variant="secondary" className="w-fit font-mono">
-            {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
-          </Badge>
+          {/* Same card as Update status below, so the two read as one pair rather than a
+              bare badge above a panel. The health badge repeats the phase deliberately:
+              this line answers "what am I running and is it well", which is the question
+              asked on arriving at the tab, while the panel below carries the detail and
+              the live progress of a run. */}
+          <div className="bg-muted flex w-full max-w-xl flex-wrap items-center gap-2 rounded-md border p-3 text-sm xl:max-w-3xl">
+            <Badge variant="secondary" className="w-fit font-mono">
+              {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
+            </Badge>
+            {upgradeInfo?.status && (
+              <Badge
+                variant={
+                  upgradeInfo.status.phase === 'healthy'
+                    ? 'success'
+                    : upgradeInfo.status.phase === 'failed'
+                      ? 'destructive'
+                      : upgradeInfo.status.phase === 'rolled_back'
+                        ? 'warning'
+                        : 'secondary'
+                }
+                className="w-fit"
+              >
+                {upgradePhaseLabel(upgradeInfo.status.phase)}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Separate from the version check below, and deliberately above it: an updater

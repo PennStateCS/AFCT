@@ -135,7 +135,14 @@ export function readStatus(): UpdateStatus | null {
 /** A slice of the live progress log: new lines past a cursor, and the cursor to
  *  send next. `since` is a line count (not a byte offset), so a truncate/rotate of
  *  the log resets cleanly (fewer lines than `since` -> start over from the top). */
-export type ProgressSlice = { lines: string[]; nextCursor: number };
+/**
+ * `reset` means these lines REPLACE whatever the reader already has rather than being
+ * appended to it: the log got shorter than the cursor, so a new run truncated it and this
+ * slice starts from the top. Without that signal a reader appends, and the previous run's
+ * output stays on screen above the new run's - which is what the Updates tab did when an
+ * upgrade was started while a self-update was still showing.
+ */
+export type ProgressSlice = { lines: string[]; nextCursor: number; reset: boolean };
 
 /** Pure splitter, extracted so it can be unit-tested without the filesystem. */
 export function sliceProgress(content: string, since: number): ProgressSlice {
@@ -143,8 +150,9 @@ export function sliceProgress(content: string, since: number): ProgressSlice {
   // A trailing newline yields a final empty element; drop it so it isn't a "line".
   if (all.length > 0 && all[all.length - 1] === '') all.pop();
   // The file was truncated/rotated (now shorter than the cursor): resend from 0.
-  const from = since >= 0 && since <= all.length ? since : 0;
-  return { lines: all.slice(from), nextCursor: all.length };
+  const truncated = !(since >= 0 && since <= all.length);
+  const from = truncated ? 0 : since;
+  return { lines: all.slice(from), nextCursor: all.length, reset: truncated };
 }
 
 /** New progress-log lines past `since`, or an empty slice if the log isn't there. */
@@ -152,7 +160,7 @@ export function readProgress(since = 0): ProgressSlice {
   try {
     return sliceProgress(fs.readFileSync(UPDATE_PROGRESS_FILE, 'utf8'), since);
   } catch {
-    return { lines: [], nextCursor: since };
+    return { lines: [], nextCursor: since, reset: false };
   }
 }
 

@@ -42,9 +42,11 @@ export const GET = withAdminAuth(
 
         const tick = () => {
           try {
-            const { lines, nextCursor } = readProgress(cursor);
+            const { lines, nextCursor, reset } = readProgress(cursor);
             cursor = nextCursor;
-            if (lines.length > 0) send('log', { lines });
+            // `reset` tells the client to replace what it has rather than append: a new run
+            // truncated the log, so anything it still shows belongs to the previous one.
+            if (lines.length > 0) send('log', { lines, reset });
             const status = readStatus();
             if (status) send('status', status);
             const settled = TERMINAL.has(status?.phase ?? '');
