@@ -40,6 +40,17 @@ jobs:
       - name: Checkout (tagged commit)
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
+          # The two commits CI makes to main (this one and the image pin) are pushed with
+          # these persisted credentials. Once main requires pull requests, GITHUB_TOKEN is
+          # refused: it is not an org app, so it cannot be granted a ruleset bypass. A token
+          # belonging to an admin can push, because admins bypass.
+          #
+          # Falls back to GITHUB_TOKEN, so this changes nothing until RELEASE_TOKEN exists.
+          # Note the tradeoff recorded in publish-ghcr.yml: a PAT DOES re-trigger workflows
+          # where GITHUB_TOKEN does not, so the `[skip ci]` marker on both commits stops the
+          # loop and is now load-bearing rather than a safeguard.
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+        with:
           # Full history + tags so the manifest step can diff this tag against the
           # previous release to decide whether a host-side installer run is needed.
           fetch-depth: 0
