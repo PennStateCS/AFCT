@@ -748,8 +748,15 @@ model SystemSettings {
   updatedAt DateTime @updatedAt
 }
 
+// Entity-relationship diagram, emitted as Mermaid inside Markdown.
+//
+// Deliberately NOT prisma-erd-generator: that renders to SVG through mermaid-cli,
+// which drags in puppeteer and a ~150MB Chromium purely to rasterise a picture. The
+// entrypoint runs `prisma generate` on container start, so every image and workflow
+// then needed DISABLE_ERD set to stop it launching a browser that isn't installed.
+// This one has a single dependency and writes text, so it is safe to run anywhere.
 generator erd {
-  provider = "prisma-erd-generator"
-  output   = "ERD.svg"
-  disabled = env("DISABLE_ERD")
+  provider = "prisma-markdown"
+  output   = "ERD.md"
+  title    = "AFCT schema"
 }

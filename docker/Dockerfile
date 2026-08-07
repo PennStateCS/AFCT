@@ -11,13 +11,8 @@
 FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS builder
 WORKDIR /app
 
-# The ERD generator and lint are dev-only; skip them during the image build.
-ENV DISABLE_ERD=true
 ENV SKIP_PRISMA_GENERATE=1
 ENV NEXTJS_IGNORE_ESLINT=1
-# The ERD generator pulls in puppeteer (via mermaid-cli), whose install would
-# otherwise download a ~150MB Chromium we never use; the ERD step is disabled here.
-ENV PUPPETEER_SKIP_DOWNLOAD=1
 
 # python3/make/g++ compile native npm modules (bcrypt). No Java here; the build
 # never runs the evaluator JAR, so a JRE would just be dead weight.
@@ -59,10 +54,10 @@ COPY --from=eclipse-temurin:21-jre@sha256:d2b9f8f12212cadcfdf889461531784e8fd097
 ENV NPM_CONFIG_CACHE=/tmp/.npm
 
 # Runtime env (mirrors the dev image). NODE_ENV/telemetry are set here so the
-# image behaves correctly even when run without compose; DISABLE_ERD keeps the
-# ERD generator from running if the entrypoint ever regenerates the client.
+# image behaves correctly even when run without compose. The entrypoint may run
+# `prisma generate` when the client is missing; every generator in the schema
+# writes text, so that needs nothing installed beyond node_modules.
 ENV NODE_ENV=production
-ENV DISABLE_ERD=true
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PATH="/app/bin:${PATH}"
 
