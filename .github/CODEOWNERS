@@ -1,7 +1,12 @@
 # Who reviews changes here.
 #
-# Every pull request needs an approving review from this team, and only its members may
-# push to main, so this file is the single place that decides who merges. Change the team's
-# membership rather than this file.
+# Every pull request needs an approving review from someone on this list, and only these
+# accounts may push to main, so this file decides who merges.
+#
+# Individuals rather than @PennStateCS/afct-maintainers because most of these accounts are
+# outside collaborators, and a team can only contain organization members. Once they have
+# accepted the org invitation, this whole list becomes:
+#
+#   * @PennStateCS/afct-maintainers
 
-* @PennStateCS/afct-maintainers
+* @jdc308 @Arieadite @jb4411 @EdwinKimsal @Adam-Manowski
