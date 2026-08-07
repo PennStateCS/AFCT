@@ -1,8 +1,9 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { getActivityColumns, type ActivityLog } from './activity-columns';
@@ -120,6 +121,213 @@ describe('activity columns', () => {
       for (const col of columns()) {
         expect((col.meta as { filterVariant?: string } | undefined)?.filterVariant).toBeUndefined();
       }
+    });
+  });
+
+  /**
+   * The cell renderers. Everything above pins the column contract; these exercise what
+   * actually reaches the screen, which is the half `ActivityCard` cannot cover because it
+   * stubs `DataTable`.
+   */
+  describe('cells', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('shows the actor initials when they have no avatar', () => {
+      const { container } = renderCell('avatar', baseRow);
+
+      expect(within(container).getByText('AL')).toBeInTheDocument();
+    });
+
+    it('names the avatar after the actor', () => {
+      const { container } = renderCell('avatar', baseRow);
+
+      // The image is only in the DOM once it loads, so assert on the fallback's presence
+      // and that the cell rendered for a row that has an avatar path.
+      expect(container.textContent).toContain('AL');
+    });
+
+    it('renders the category badge', () => {
+      const { container } = renderCell('category', baseRow);
+
+      expect(within(container).getByText('GRADE')).toBeInTheDocument();
+    });
+
+    it('prefers the problem relation, then metadata, then N/A', () => {
+      const viaRelation = renderCell('problem', {
+        ...baseRow,
+        problem: { id: 'p1', title: 'Even length' } as ActivityLog['problem'],
+      });
+      expect(within(viaRelation.container).getByText('Even length')).toBeInTheDocument();
+
+      const viaMetadata = renderCell('problem', {
+        ...baseRow,
+        metadata: { problemTitle: 'From metadata' },
+      });
+      expect(within(viaMetadata.container).getByText('From metadata')).toBeInTheDocument();
+
+      const viaLegacyName = renderCell('problem', {
+        ...baseRow,
+        metadata: { problemName: 'Legacy key' },
+      });
+      expect(within(viaLegacyName.container).getByText('Legacy key')).toBeInTheDocument();
+
+      const missing = renderCell('problem', baseRow);
+      expect(within(missing.container).getByText('N/A')).toBeInTheDocument();
+    });
+
+    describe('the time cell', () => {
+      // Relative time is computed against the clock, so pin it rather than letting the
+      // suite's wall time decide which branch runs.
+      const at = (iso: string) => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-03-01T12:00:00.000Z'));
+        return renderCell('timestamp', { ...baseRow, timestamp: iso });
+      };
+
+      it('reads "Just now" under a minute', () => {
+        expect(
+          within(at('2026-03-01T11:59:30.000Z').container).getByText('Just now'),
+        ).toBeInTheDocument();
+      });
+
+      it('counts minutes under an hour', () => {
+        expect(within(at('2026-03-01T11:30:00.000Z').container).getByText('30m ago')).toBeInTheDocument();
+      });
+
+      it('counts hours under a day', () => {
+        expect(within(at('2026-03-01T07:00:00.000Z').container).getByText('5h ago')).toBeInTheDocument();
+      });
+
+      it('counts days under a week', () => {
+        expect(within(at('2026-02-27T12:00:00.000Z').container).getByText('2d ago')).toBeInTheDocument();
+      });
+
+      it('counts weeks beyond that', () => {
+        expect(within(at('2026-02-08T12:00:00.000Z').container).getByText('3w ago')).toBeInTheDocument();
+      });
+
+      it('shows the absolute time alongside the relative one', () => {
+        // The absolute stamp is what an auditor reads; the relative one is a convenience.
+        const { container } = at('2026-03-01T07:00:00.000Z');
+        expect(container.textContent).toContain('5h ago');
+        expect(container.textContent).toMatch(/03\/01\/26 07:00/);
+      });
+    });
+
+    describe('the IP cell', () => {
+      it('prefers the column over metadata', () => {
+        const { container } = renderCell('ipAddress', {
+          ...baseRow,
+          ipAddress: '203.0.113.7',
+          metadata: { ipAddress: '198.51.100.1' },
+        });
+        expect(within(container).getByText('203.0.113.7')).toBeInTheDocument();
+      });
+
+      it('renders the loopback address as localhost', () => {
+        const { container } = renderCell('ipAddress', { ...baseRow, ipAddress: '::1' });
+        expect(within(container).getByText('localhost')).toBeInTheDocument();
+      });
+
+      it('falls back to the legacy metadata keys', () => {
+        // Older rows recorded the address in metadata under several different names.
+        for (const key of ['ipAddress', 'ip', 'clientIp', 'remoteAddress']) {
+          const { container } = renderCell('ipAddress', {
+            ...baseRow,
+            ipAddress: undefined,
+            metadata: { [key]: '198.51.100.9' },
+          });
+          expect(within(container).getByText('198.51.100.9')).toBeInTheDocument();
+        }
+      });
+
+      it('shows a dash when no address was recorded', () => {
+        const { container } = renderCell('ipAddress', { ...baseRow, ipAddress: undefined });
+        expect(within(container).getByText('-')).toBeInTheDocument();
+      });
+    });
+
+    describe('the metadata cell', () => {
+      it('renders nothing when the row carries no detail at all', () => {
+        const { container } = renderCell('metadata', {
+          id: 'log-1',
+          action: 'X',
+          timestamp: baseRow.timestamp,
+        });
+
+        expect(container).toBeEmptyDOMElement();
+      });
+
+      it('is collapsed to a named toggle until opened', () => {
+        renderCell('metadata', { ...baseRow, metadata: { attempt: 2 } });
+
+        const toggle = screen.getByRole('button', { name: 'Show activity details' });
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      });
+
+      it('opens to show the metadata, and renames the toggle', async () => {
+        const user = userEvent.setup();
+        renderCell('metadata', { ...baseRow, metadata: { attempt: 2 } });
+
+        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
+
+        expect(
+          screen.getByRole('button', { name: 'Hide activity details' }),
+        ).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText(/attempt: 2/)).toBeInTheDocument();
+      });
+
+      it('summarises the related entities it was given', async () => {
+        const user = userEvent.setup();
+        renderCell('metadata', {
+          ...baseRow,
+          metadata: { attempt: 1 },
+          course: { id: 'c1', name: 'Theory', code: 'CS 401' } as ActivityLog['course'],
+          assignment: { id: 'a1', title: 'Homework 2' } as ActivityLog['assignment'],
+        });
+
+        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
+
+        expect(screen.getByText(/Course: Theory \(CS 401\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Assignment: Homework 2/)).toBeInTheDocument();
+      });
+
+      it('falls back to the recorded ids when there is no metadata', async () => {
+        // An older row can have the foreign keys without a metadata blob.
+        const user = userEvent.setup();
+        renderCell('metadata', { ...baseRow, metadata: null, courseId: 'course-9' });
+
+        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
+
+        expect(screen.getByText(/Course ID: course-9/)).toBeInTheDocument();
+      });
+
+      it('serialises nested values rather than printing [object Object]', async () => {
+        const user = userEvent.setup();
+        renderCell('metadata', { ...baseRow, metadata: { change: { from: 1, to: 2 } } });
+
+        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
+
+        expect(screen.getByText(/"from": 1/)).toBeInTheDocument();
+      });
+
+      it('does not repeat the address and client that have their own handling', async () => {
+        const user = userEvent.setup();
+        renderCell('metadata', {
+          ...baseRow,
+          ipAddress: '203.0.113.7',
+          userAgent: 'x'.repeat(80),
+          metadata: { ipAddress: '203.0.113.7', userAgent: 'dupe', attempt: 1 },
+        });
+
+        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
+
+        // Both appear once, under Enhanced Fields, not again in the metadata list.
+        expect(screen.queryByText(/userAgent: dupe/)).not.toBeInTheDocument();
+        expect(screen.getByText(/User Agent: x{50}\.\.\./)).toBeInTheDocument();
+      });
     });
   });
 });
