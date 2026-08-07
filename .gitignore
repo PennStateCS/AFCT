@@ -48,7 +48,7 @@ yarn-error.log*
 
 # Prisma
 src/generated/prisma
-prisma/ERD.svg
+prisma/ERD.md
 
 # Testing
 coverage/
