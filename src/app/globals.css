@@ -359,6 +359,20 @@
        system font. */
     @apply bg-background text-foreground font-sans;
   }
+  /* Anything clickable gets the hand.
+
+     Tailwind's preflight leaves buttons on the default arrow, and the shared Button component
+     sets `cursor-pointer` itself. That is fine until a raw <button> is styled as a link - a
+     "View description" or a file name in a table - which then looks clickable and does not
+     behave like it under the mouse. Setting it here covers those, and every button written
+     later, rather than depending on each author remembering the class.
+
+     Disabled controls keep the default arrow: the pointer would promise something that will
+     not happen. */
+  button:not(:disabled):not([aria-disabled='true']),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
 }
 
 html,

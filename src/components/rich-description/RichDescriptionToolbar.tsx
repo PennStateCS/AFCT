@@ -691,7 +691,11 @@ export function RichDescriptionToolbar({
         </ToggleGroup>
       </Group>
 
-      <GroupDivider />
+      {/* Hidden exactly where the alignment group above it is gone but the divider before that
+          group is still shown (40rem to 44rem): otherwise those two dividers end up adjacent
+          with nothing between them. Below 40rem the earlier divider hides instead, so this one
+          is what separates the last always-visible group from the More menu. */}
+      <GroupDivider className="@max-[44rem]/toolbar:@min-[40rem]/toolbar:hidden" />
 
       {/* Structure. Below the tier these five collapse into the More menu, which is the whole
           reason the commands are described as data: the buttons and the menu items come from the

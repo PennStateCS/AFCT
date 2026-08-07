@@ -198,7 +198,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
           : null;
         const fileName = row.original.originalFileName || 'solution';
         return fileUrl ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             {/* Click the name to open the viewer; the icon downloads. */}
             <button
               type="button"
@@ -222,7 +222,8 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
           <span className="text-muted-foreground">No file</span>
         );
       },
-      meta: { priority: 2 },
+      // Right-aligned so the download icons line up down the column.
+      meta: { priority: 2, align: 'right' as const },
       enableSorting: false,
     },
     {

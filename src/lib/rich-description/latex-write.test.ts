@@ -118,6 +118,24 @@ describe('write path still accepts real coursework', () => {
     expect(out.description).toContain(latex);
   });
 
+  it('accepts a display-only construct in a block equation', () => {
+    // `\begin{align}` and `\tag` parse in display mode and throw in inline mode. Validating
+    // every node as inline made them unsavable in a block equation, which is where a course
+    // would actually use them.
+    expect(() =>
+      buildDescriptionWrite({
+        descriptionJson: mathDoc('\\begin{align} a &= b \\end{align}', 'blockMath'),
+      }),
+    ).not.toThrow();
+  });
+
+  it('still refuses a display-only construct in an inline equation', () => {
+    // The mode is honoured both ways: inline is genuinely validated as inline.
+    expect(() =>
+      buildDescriptionWrite({ descriptionJson: mathDoc('\\tag{1} x=y', 'inlineMath') }),
+    ).toThrow(InvalidRichDescriptionError);
+  });
+
   it('accepts a source just under the length cap', () => {
     // Padding with a no-op group keeps it parseable while pushing it near the limit.
     const padding = '{x}'.repeat(Math.floor((MAX_LATEX_LENGTH - 20) / 3));
