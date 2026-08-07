@@ -12,8 +12,9 @@ import path from 'path';
  * Keep this suite small and about database behavior specifically. Anything provable
  * with a mock belongs in the unit suite, which needs no infrastructure.
  *
- * Run with `npm run test:db`. These are excluded from the default `vitest run`, so
- * CI stays database-free.
+ * Run with `npm run test:db`. These are excluded from the default `vitest run`, so the
+ * unit suite needs no infrastructure; CI runs them in their own `test-db` job, against a
+ * Postgres pinned to the same image as production with the committed migrations applied.
  */
 export default defineConfig({
   test: {
