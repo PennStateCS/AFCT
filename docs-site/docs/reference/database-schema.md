@@ -485,6 +485,9 @@ erDiagram
   Json evaluationRaw "nullable"
   String fileName "nullable"
   String originalFileName "nullable"
+  String fileHashData "nullable"
+  String calcHashData "nullable"
+  Json similarityReportJson "nullable"
   DateTime createdAt
   DateTime updatedAt
   String assignmentId FK
@@ -533,6 +536,15 @@ Properties as follows:
 - `evaluationRaw`: Full grader output, kept for diagnosis.
 - `fileName`: Stored submitted file.
 - `originalFileName`: Name of the file as the student sent it.
+- `fileHashData`
+  > Hash carried inside the uploaded file itself, written by the client that saved it.
+  > Empty for a file that carries no such marker.
+- `calcHashData`
+  > Hash computed here from the file's own contents. Comparing the two shows whether the
+  > file still matches what the client wrote.
+- `similarityReportJson`
+  > Similarity findings for this submission, used to spot the same file submitted more
+  > than once.
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
 - `assignmentId`: The assignment.

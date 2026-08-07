@@ -693,8 +693,16 @@ model Submission {
   /// Name of the file as the student sent it.
   originalFileName String?
 
-  fileHashData         String?
-  calcHashData         String?
+  /// Hash carried inside the uploaded file itself, written by the client that saved it.
+  /// Empty for a file that carries no such marker.
+  fileHashData String?
+
+  /// Hash computed here from the file's own contents. Comparing the two shows whether the
+  /// file still matches what the client wrote.
+  calcHashData String?
+
+  /// Similarity findings for this submission, used to spot the same file submitted more
+  /// than once.
   similarityReportJson Json?
 
   /// When this record was created.
