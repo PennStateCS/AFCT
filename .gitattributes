@@ -5,4 +5,23 @@
 # The installer test harness: extensionless shell mocks (invoked via a #!/bin/sh
 # shebang on Linux CI) and bats files must also stay LF, or CRLF would break them.
 deploy/test/mocks/* text eol=lf
+deploy/test/mocks-service/* text eol=lf
 *.bats text eol=lf
+
+# ShellCheck reads its config as-is; a CRLF copy (from a Windows checkout or
+# `git archive` export) makes every directive fail with SC1017.
+.shellcheckrc text eol=lf
+
+# The deployment controller has no extension, so `*.sh` does not cover it; pin it to
+# LF too, or a Windows checkout would give it CRLF and break its shebang on Linux.
+deploy/unix/bin/afctctl text eol=lf
+
+# `npm run docs` (and the pre-commit hook) regenerate this file with LF. Pin it so a
+# Windows checkout doesn't flip it to CRLF and produce an endless EOL-only diff that
+# CI's docs-check then fails on.
+src/types/api.ts text eol=lf
+
+# Vendored KaTeX (see scripts/vendor-katex.mjs). The point of that script is a copy that
+# matches the installed package byte for byte, so nothing here may be line-ending normalized.
+# The fonts are binary; the stylesheet ships with LF.
+public/katex/** -text

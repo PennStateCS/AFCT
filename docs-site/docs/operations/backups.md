@@ -12,7 +12,7 @@ and contains:
 - `db/database.dump`, a custom-format PostgreSQL dump
 - the public and private upload volumes (omitted when no uploads are mounted)
 
-Archives are stored in the `db_backups` Docker volume. Each one is verified immediately after it is written — read back, decrypted, and checked for the database dump — and discarded if that fails, so a corrupt archive is never left looking like a good backup.
+Archives are stored in the `db_backups` Docker volume. Each one is verified immediately after it is written (read back, decrypted, and checked for the database dump) and discarded if that fails, so a corrupt archive is never left looking like a good backup.
 
 ## Encrypt backups
 
@@ -25,7 +25,7 @@ openssl rand -base64 48
 ```
 
 :::danger Store the passphrase off this server
-Without the passphrase the backups **cannot be restored** — not by you, not by anyone. Keep it in a password manager or another system, not only on the AFCT host, and not only in `.env.production` (which is on the same disk as the backups it protects).
+Without the passphrase the backups **cannot be restored**, not by you, not by anyone. Keep it in a password manager or another system, not only on the AFCT host, and not only in `.env.production` (which is on the same disk as the backups it protects).
 :::
 
 If the variable is unset, backups are still written, but unencrypted, and the service logs a warning on every run. The Backups tab shows each archive's encryption state.
@@ -92,7 +92,9 @@ The current interface does not provide a general full-backup restore button. A f
 5. Copy the upload directories from the same archive into the public and private upload volumes.
 6. Start the stack, wait for health checks, and verify accounts, courses, submissions, grades, and downloadable files.
 
-Practice this procedure on a separate recovery deployment first, including the decryption step — a passphrase you cannot produce under pressure is the same as no backup. Restoring only the database can leave missing or mismatched files. Restoring only the uploads can leave files that the database does not reference.
+Practice this procedure on a separate recovery deployment first, including the decryption step. A passphrase you cannot produce under pressure is the same as no backup.
+
+Restore both parts from the same archive. Restoring only the database can leave missing or mismatched files, and restoring only the uploads can leave files that the database does not reference.
 
 The updater's downgrade workflow is different. It restores the selected database restore point but deliberately leaves uploaded files in place.
 

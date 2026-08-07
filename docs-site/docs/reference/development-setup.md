@@ -28,6 +28,14 @@ docker compose version
 docker info
 ```
 
+:::tip Put the checkout inside WSL
+
+Clone the repository into the WSL filesystem rather than onto `C:`. A checkout on `C:` is read by the container across the Windows boundary, which took a measured 105 seconds for the first page load against 1.4 seconds from WSL.
+
+Follow [Windows: keep the checkout inside WSL](./windows-wsl-setup.md) instead of the generic steps below. It covers the same ground with the Windows specifics filled in.
+
+:::
+
 ### macOS
 
 Install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/).
@@ -118,13 +126,13 @@ npm run docker:dev:detached
 
 ## Development addresses
 
-| Service | Address or port |
-|---|---|
-| Next.js application | `http://localhost:3000` |
-| Prisma Studio | `http://localhost:5555` |
-| PostgreSQL | Port `5432` |
-| nginx HTTP | `http://localhost:8080` |
-| nginx HTTPS | `https://localhost:8443` |
+| Service             | Address or port          |
+| ------------------- | ------------------------ |
+| Next.js application | `http://localhost:3000`  |
+| Prisma Studio       | `http://localhost:5555`  |
+| PostgreSQL          | Port `5432`              |
+| nginx HTTP          | `http://localhost:8080`  |
+| nginx HTTPS         | `https://localhost:8443` |
 
 nginx uses a self-signed certificate in development. The browser warning at `https://localhost:8443` is expected.
 
@@ -151,14 +159,14 @@ npm run docker:dev:nuke
 
 ### Data impact
 
-| Command | Effect |
-|---|---|
-| `docker:dev:down` | Stops containers and keeps volumes |
-| `docker:dev:clean` | Stops the stack and prunes unused Docker resources |
-| `docker:dev:emptydb` | Removes table data but keeps the schema |
-| `docker:dev:down:volumes` | Removes development volumes |
-| `docker:dev:resetdb` | Removes the development database |
-| `docker:dev:nuke` | Removes containers, volumes, database data, and uploads |
+| Command                   | Effect                                                  |
+| ------------------------- | ------------------------------------------------------- |
+| `docker:dev:down`         | Stops containers and keeps volumes                      |
+| `docker:dev:clean`        | Stops the stack and prunes unused Docker resources      |
+| `docker:dev:emptydb`      | Removes table data but keeps the schema                 |
+| `docker:dev:down:volumes` | Removes development volumes                             |
+| `docker:dev:resetdb`      | Removes the development database                        |
+| `docker:dev:nuke`         | Removes containers, volumes, database data, and uploads |
 
 Read destructive commands before running them. Local seed data and uploads may not be recoverable.
 

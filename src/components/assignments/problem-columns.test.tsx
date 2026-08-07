@@ -49,7 +49,6 @@ describe('buildProblemColumns', () => {
     expect(ids).toEqual([
       'number',
       'title',
-      'description_col',
       'type',
       'maxStates',
       'assignmentMaxPoints',
@@ -102,16 +101,23 @@ describe('buildProblemColumns', () => {
     expect(subs.sortingFn(rowWith(2), rowWith(5), 'x')).toBe(-1);
   });
 
-  it('renders a description button that calls openDescription, or a dash when empty', () => {
+  it('renders the title with a "View description" link that calls openDescription', () => {
     const openDescription = vi.fn();
-    const desc = find(cols({ openDescription }), 'description_col');
+    const title = find(cols({ openDescription }), 'title');
 
-    const { rerender } = render(<>{desc.cell(arg(problem({ description: 'Hello there' })))}</>);
-    fireEvent.click(screen.getByText('View Description'));
-    expect(openDescription).toHaveBeenCalledWith('Hello there');
+    const { rerender } = render(
+      <>{title.cell(arg(problem({ title: 'Prob', description: 'Hello there' })))}</>,
+    );
+    // The title always renders; the link only when there's a description.
+    expect(screen.getByText('Prob')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('View description'));
+    // The whole problem is handed over now, so the dialog can render either description form.
+    expect(openDescription).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Prob', description: 'Hello there' }),
+    );
 
-    rerender(<>{desc.cell(arg(problem({ description: null })))}</>);
-    expect(screen.queryByText('View Description')).not.toBeInTheDocument();
+    rerender(<>{title.cell(arg(problem({ title: 'Prob', description: null })))}</>);
+    expect(screen.queryByText('View description')).not.toBeInTheDocument();
   });
 
   it('answer-file cell: the file name opens the viewer, with a download link, else "No file"', () => {

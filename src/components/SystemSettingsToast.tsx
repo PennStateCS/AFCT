@@ -13,7 +13,7 @@ export default function SystemSettingsToast() {
     const saved = searchParams.get('saved');
     if (saved !== '1') return;
 
-    showToast.success('System settings updated successfully.');
+    showToast.updated('System settings');
 
     const params = new URLSearchParams(searchParams);
     params.delete('saved');

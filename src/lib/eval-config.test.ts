@@ -41,11 +41,11 @@ describe('eval-config', () => {
   });
 
   it('clamps values outside the allowed range', async () => {
-    process.env.SUBMISSION_EVAL_TIMEOUT_MS = '999999999'; // above the 10m ceiling
+    process.env.SUBMISSION_EVAL_TIMEOUT_MS = '999999999'; // above the 15m ceiling
     process.env.SUBMISSION_EVAL_MAX_MEMORY_MB = '1'; // below the 64MB floor
 
     const config = await getEvaluatorConfig();
-    expect(config.timeoutMs).toBe(600_000);
+    expect(config.timeoutMs).toBe(900_000);
     expect(config.maxMemoryMb).toBe(64);
   });
 

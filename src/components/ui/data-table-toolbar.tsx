@@ -119,6 +119,7 @@ export function DataTableToolbar<TData>({
               column: col,
               label: getColumnLabel(col),
               options: col.columnDef.meta?.filterOptions,
+              sections: col.columnDef.meta?.filterSections,
             }))}
           />
         )}
@@ -147,7 +148,7 @@ export function DataTableToolbar<TData>({
                 </DropdownMenuCheckboxItem>
               ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onResetColumns} className="text-red-600 hover:text-red-700">
+            <DropdownMenuItem onClick={onResetColumns} className="text-destructive">
               Reset Columns
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -22,6 +22,11 @@ export default defineConfig({
     // load. They are slow because userEvent yields to the event loop per keystroke, not
     // because anything is wrong, so give them room rather than chasing phantom bugs.
     testTimeout: 20_000,
+    // Hooks get the same allowance, and for a worse reason than tests do: Vitest reports a
+    // timed-out beforeAll by marking that file's tests SKIPPED, and a skip reads as green in the
+    // summary line. A hook under contention therefore removes coverage silently. The default here
+    // is 5s, which contradicts the 20s above the moment a hook does real work.
+    hookTimeout: 20_000,
     // Auto-restore env vars stubbed with vi.stubEnv between tests, so those stubs
     // need no manual teardown. (Globals are intentionally NOT auto-unstubbed:
     // some suites set a module-level vi.stubGlobal that must persist.)

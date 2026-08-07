@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import { ClipboardList, Loader2 } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
@@ -29,6 +30,7 @@ type Row = {
   title: string;
   maxPoints: number;
   grade: number | null;
+  autograded: boolean;
 };
 
 interface GradeBreakdownDialogProps {
@@ -63,7 +65,11 @@ export function GradeBreakdownDialog({
     queryKey: queryKeys.assignment.gradeBreakdown(courseId, assignmentId),
     queryFn: () =>
       fetchJson<{
-        problems?: Array<{ problem: { id: string; title?: string | null }; maxPoints: number }>;
+        problems?: Array<{
+          problem: { id: string; title?: string | null };
+          maxPoints: number;
+          autograderEnabled: boolean;
+        }>;
       }>(apiPaths.assignment(courseId, assignmentId)),
     enabled: open,
     staleTime: 30_000,
@@ -88,7 +94,9 @@ export function GradeBreakdownDialog({
   // Surface a load failure the same way the imperative fetch did.
   useEffect(() => {
     if (loadFailed) {
-      showToast.error('Failed to load grade breakdown');
+      showToast.error(
+        'Could not load the grade breakdown. Close and reopen this dialog to try again.',
+      );
     }
   }, [loadFailed]);
 
@@ -106,6 +114,7 @@ export function GradeBreakdownDialog({
       title: link.problem.title ?? 'Untitled',
       maxPoints: link.maxPoints,
       grade: grades[link.problem.id]?.grade ?? null,
+      autograded: link.autograderEnabled,
     }));
     setRows(newRows);
     setOriginalRows(newRows);
@@ -146,13 +155,13 @@ export function GradeBreakdownDialog({
       await queryClient.invalidateQueries({
         queryKey: queryKeys.assignment.problemGrades(courseId, assignmentId, studentId),
       });
-      showToast.success('Grades saved');
+      showToast.saved('Grades');
       onSaved?.();
       setOpen(false);
     },
     onError: (err) => {
       console.error('save error', err);
-      showToast.error('Failed to save grades');
+      showToast.error('Could not save the grades. Check your connection and try again.');
     },
   });
 
@@ -191,6 +200,17 @@ export function GradeBreakdownDialog({
         meta: { priority: 1 },
       },
       {
+        id: 'Grading',
+        header: 'Grading',
+        cell: ({ row }) =>
+          row.original.autograded ? (
+            <Badge variant="secondary">Autograded</Badge>
+          ) : (
+            <Badge variant="outline">Manual</Badge>
+          ),
+        meta: { priority: 2 },
+      },
+      {
         accessorKey: 'Max Points',
         header: 'Max',
         cell: ({ row }) => <div>{row.original.maxPoints}</div>,
@@ -226,7 +246,7 @@ export function GradeBreakdownDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {/* widen the content for better data table fit */}
       {/* expanded max width to accommodate more content without wrapping */}
-      <DialogContent className="bg-card sm:max-w-3xl lg:max-w-4xl">
+      <DialogContent className="sm:max-w-3xl lg:max-w-4xl">
         <DialogHeader>
           <DialogTitle>
             {studentName} &ndash; {assignmentTitle}

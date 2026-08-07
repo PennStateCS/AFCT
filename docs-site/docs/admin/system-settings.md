@@ -23,7 +23,9 @@ The configured URL cannot be edited in the browser. On an installed server, use 
 
 **Public signup** is self-service account creation: when **Allow user signup** is on, anyone who can reach the site can create their own AFCT account from the sign-in page. When it is off, only an administrator can add accounts, from [User Accounts](user-accounts.md) (individually or by bulk import).
 
-Turn it **on** for open, self-service deployments where you want people to register themselves. Turn it **off** for a controlled installation where every account is provisioned by an administrator. When it is on, use **Allowed signup email domains** to limit who can register — for example, restrict signup to your institution's domain — and leave it blank to allow any domain.
+Turn it **on** for open, self-service deployments where you want people to register themselves. Turn it **off** for a controlled installation where every account is provisioned by an administrator.
+
+When public signup is on, use **Allowed signup email domains** to limit who can register, for example restricting signup to your institution's domain. Leave it blank to allow any domain.
 
 Public signup only creates an account; it does not place anyone in a course. Enrolling in a course is separate and uses a course **registration code**, which Faculty manage per course (see [Roster](../faculty/roster.md) and [Settings](../faculty/settings.md)). The two controls are independent: an account is how someone signs in, and a registration code is how an existing account joins a specific course.
 
@@ -40,7 +42,7 @@ These settings control submission processing:
 | **Max retry attempts**           |       3 |     1 to 10 | Sets the attempts before a failed evaluation stays failed.                        |
 | **Analyzer exploration limit**   |      15 |    1 to 100 | Controls the depth of the context-free grammar equivalence check.                 |
 
-Increase concurrency, memory, or exploration limits only when the server has enough capacity. After changing evaluator settings, watch [Submission Logs](submission-logs.md) and [System Status](system-status.md).
+Increase concurrency, memory, or exploration limits only when the server has enough capacity. After changing evaluator settings, watch [Autograder](autograder.md) and [System Status](system-status.md).
 
 ## Backups
 
@@ -119,4 +121,10 @@ While an upgrade runs, the tab shows a step checklist and a **Live progress** pa
 
 The update service (the component that performs upgrades) is versioned alongside the application but is recreated separately, so it can briefly lag after an upgrade. When it does, the tab shows an **Update the update service** action that brings it up to date, so this no longer requires the server console.
 
-Restoring a previous version also restores its database backup. This permanently discards submissions, grades, accounts, and other database records created since that backup. Uploaded files remain and can become unreferenced. Read [Update AFCT](../operations/updates.md) and confirm that you accept the result before restoring an older version.
+Restoring a previous version also restores its database backup.
+
+:::danger
+Restoring permanently discards submissions, grades, accounts, and other database records created since that backup. Uploaded files remain but can become unreferenced.
+:::
+
+Read [Update AFCT](../operations/updates.md) and confirm that you accept the result before restoring an older version.

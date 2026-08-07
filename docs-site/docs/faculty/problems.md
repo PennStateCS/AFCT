@@ -36,11 +36,26 @@ Open **Manage** to:
 
 - **View Answer** using the viewer for that problem type
 - **Edit Problem** details and replace the answer file
+- **Duplicate Problem** to create a copy in the same bank
 - **Delete Problem** when the problem is not used by an assignment
 
 Editing a problem from the problem bank uses the same wizard and changes the definition only: title, description, type, state limit, deterministic requirement, and answer file. If you change the problem type, you must upload a new answer file of the matching type.
 
 Points, the accepted-submission limit, and automatic grading belong to each assignment, not to the bank problem. Set them when you add the problem to an assignment, or change them later from the assignment's **Problems** tab (**Manage** the problem and open its settings). The same problem can carry different values in different assignments.
+
+## Duplicate a problem
+
+**Duplicate Problem** creates a fresh copy of an existing problem in the same bank. Edit the copy's title and description in the dialog; the type, state limit, deterministic requirement, and the answer file are copied from the original. The copy gets its own answer file, so replacing it later never touches the original. Once the copy is created you can edit any of the remaining details from **Edit Problem**.
+
+## Import a problem from another course
+
+**Import Problem** (next to Create Problem) copies a problem out of a different course you teach or assist into this one's bank. It is a short wizard:
+
+1. **Source** - pick a course, then a problem. The course list shows every course where you are faculty or a TA (administrators see all courses), including archived courses.
+2. **Details** - the title and description start as the source problem's; edit them or leave them as is.
+3. **Review** - a summary before you import.
+
+The type, state limit, deterministic requirement, and the answer file are copied from the source into a new problem here, with its own answer file, so the original in the other course is never affected. Edit the remaining details from **Edit Problem** afterward. To copy a problem *within* the same course, use Duplicate instead.
 
 ## Before publishing
 

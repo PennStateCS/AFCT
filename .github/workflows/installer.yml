@@ -29,6 +29,17 @@ jobs:
       - name: Syntax check
         run: |
           sh -n deploy/install.sh
+          sh -n deploy/ci-base-version.sh
+          sh -n deploy/ci-version-check.sh
+          sh -n deploy/unix/bin/afctctl
+          for f in deploy/unix/lib/*.sh; do sh -n "$f"; done
+          sh -n deploy/linux/install.sh
+          sh -n deploy/linux/build-bundle.sh
+          for f in deploy/linux/lib/*.sh; do sh -n "$f"; done
+          sh -n deploy/macos/install.sh
+          sh -n deploy/macos/build-bundle.sh
+          for f in deploy/macos/lib/*.sh; do sh -n "$f"; done
+          sh -n deploy/test/compose-config.sh
           sh -n docker/updater/updater.sh
           sh -n docker/backup/backup.sh
 
@@ -38,24 +49,156 @@ jobs:
         shell: pwsh
         run: |
           $tokens = $null; $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/deploy/install.ps1", [ref]$tokens, [ref]$errors) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Host "PARSE ERROR: $($_.Message) (line $($_.Extent.StartLineNumber))" }
-            exit 1
+          $bad = $false
+          foreach ($f in @("$PWD/deploy/install.ps1", "$PWD/deploy/ci-windows-version.ps1")) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $bad = $true
+              $errors | ForEach-Object { Write-Host "PARSE ERROR in ${f}: $($_.Message) (line $($_.Extent.StartLineNumber))" }
+            }
           }
-          Write-Host 'install.ps1 parses cleanly.'
+          if ($bad) { exit 1 }
+          Write-Host 'legacy install.ps1 and ci-windows-version.ps1 parse cleanly.'
 
-      # Advisory for now (the scripts predate shellcheck); surfaces issues without
-      # blocking. Tighten to a hard gate once the existing findings are cleared.
+      # The new Linux tooling (deploy/linux/) is written clean, so gate on it. The
+      # .shellcheckrc in that directory documents the two shared-globals suppressions.
+      - name: Shellcheck the deployment tooling
+        run: |
+          # Run from deploy/ so the shared .shellcheckrc (globals suppressions) applies to
+          # the unix/, linux/, and macos/ trees alike.
+          cd deploy
+          shellcheck -s sh \
+            ci-base-version.sh \
+            unix/bin/afctctl unix/lib/*.sh \
+            linux/install.sh linux/build-bundle.sh linux/lib/*.sh \
+            macos/install.sh macos/build-bundle.sh macos/lib/*.sh
+
+      # The legacy compat shim still ships; keep it advisory alongside the sidecars.
       - name: Shellcheck (advisory)
         run: |
           shellcheck -s sh deploy/install.sh || true
           shellcheck -s sh docker/updater/updater.sh || true
 
       # Run in the bats container as root: the dedicated-service-account tests are
-      # root-only by design (they create a system user), so running as the non-root
-      # runner would skip them. This mirrors the documented local command.
-      - name: Run installer + updater tests
+      # root-only by design (they create a system user), and the bundle/extraction tests
+      # are happiest as root. curl + python3 back the mocked-HTTP release-resolution tests.
+      # This mirrors the documented local command.
+      - name: Run deployment + updater tests
         run: |
           docker run --rm -v "$PWD:/code" -w /code --entrypoint sh bats/bats:latest -c \
-            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache jq >/dev/null 2>&1; bats deploy/test/install.bats deploy/test/updater.bats"
+            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache git jq tar curl python3 util-linux shadow >/dev/null 2>&1; bats deploy/test/afctctl.bats deploy/test/linux-deploy.bats deploy/test/deploy-fixes.bats deploy/test/deploy-remote.bats deploy/test/deploy-hardening.bats deploy/test/updater.bats deploy/test/ci-version-fallback.bats deploy/test/macos-deploy.bats deploy/test/macos-bootstrap.bats"
+
+      # A real `docker compose config` against the actual installed layout (versioned
+      # Compose file in a release directory, .env.production under shared), NOT a mock that
+      # ignores paths. The ubuntu runner ships the compose plugin; config needs no daemon.
+      - name: Real docker compose config (split release/shared layout)
+        run: sh deploy/test/compose-config.sh
+
+      # The deployment-tool version is unified across Linux, macOS, and Windows: the Unix
+      # controller (deploy/unix/bin/afctctl) and the Windows controller
+      # (deploy/windows/bin/afctctl.ps1) must always name the same version. Enforced on every
+      # build so a mismatch never merges.
+      - name: Verify Unix and Windows deployment-tool versions agree
+        run: sh deploy/ci-version-check.sh
+
+      # Cross-check the sed-based reader used above against the canonical PowerShell reader,
+      # so the two parsers can never silently diverge.
+      - name: Cross-check the Windows version reader (PowerShell)
+        shell: pwsh
+        run: |
+          $win = (& "$PWD/deploy/ci-windows-version.ps1").Trim()
+          $unix = (Select-String -Path "$PWD/deploy/unix/bin/afctctl" -Pattern '^INSTALLER_VERSION="([^"]+)"').Matches.Groups[1].Value
+          if ($win -ne $unix) { Write-Host "::error::Windows ($win) and Unix ($unix) deployment-tool versions differ."; exit 1 }
+          Write-Host "unified deployment-tool version: $win"
+
+      # A version's bytes are fixed: if any file that goes into ANY platform's deployment
+      # bundle changed versus the base branch (now including deploy/windows), the unified
+      # deployment-tool version must change too. This enforces the content-addressed release
+      # identity at the source. Skipped when the base has no bundle yet (the tree is brand
+      # new). See deploy/ci-version-check.sh (which also re-verifies the platform agreement).
+      - name: Enforce a deployment-version bump on bundle-source changes
+        if: github.event_name == 'pull_request'
+        run: |
+          set -eu
+          git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+          BASE=$(git merge-base FETCH_HEAD HEAD 2>/dev/null || echo FETCH_HEAD)
+          sh deploy/ci-version-check.sh "$BASE"
+
+  # The macOS installer runs on a real macOS runner: BSD tools, no sha256sum, Darwin
+  # uname. Docker is NOT available on GitHub-hosted macOS runners, so the tests use a
+  # mocked/absent Docker and exercise the bundle build, manifest, version consistency,
+  # command dispatch, and the Docker Desktop state messages, but no real containers.
+  macos-tests:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Install bats + shellcheck + jq (Homebrew)
+        run: brew install bats-core shellcheck jq
+
+      - name: Syntax check (shared + macOS)
+        run: |
+          sh -n deploy/unix/bin/afctctl
+          for f in deploy/unix/lib/*.sh; do sh -n "$f"; done
+          sh -n deploy/macos/install.sh
+          sh -n deploy/macos/build-bundle.sh
+          for f in deploy/macos/lib/*.sh; do sh -n "$f"; done
+
+      - name: Shellcheck the shared + macOS tooling
+        run: |
+          cd deploy
+          shellcheck -s sh \
+            unix/bin/afctctl unix/lib/*.sh \
+            macos/install.sh macos/build-bundle.sh macos/lib/*.sh
+
+      - name: Run the macOS deployment tests (Docker mocked/absent)
+        run: bats deploy/test/macos-deploy.bats deploy/test/macos-bootstrap.bats
+
+  # The Windows controller runs on a real Windows runner: Windows PowerShell 5.1 semantics,
+  # NTFS, .NET ZIP handling. Docker Desktop is NOT available on GitHub-hosted Windows
+  # runners, so the Pester suite exercises the bundle build, SHA-256 verification, ZIP-entry
+  # safety, immutable-release publish, controller-failure rollback, uninstall safety, and the
+  # pure operational modules (validation, environment, config, diagnostics), but no real
+  # containers. Windows is for testing/evaluation/development/demos; Linux is production.
+  windows-tests:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Parse check (bootstrap, bundle builder, controller, modules)
+        shell: powershell
+        run: |
+          $bad = $false
+          $files = @('deploy\windows\install.ps1', 'deploy\windows\build-bundle.ps1',
+                     'deploy\windows\bin\afctctl.ps1') + (Get-ChildItem 'deploy\windows\lib\*.ps1').FullName
+          foreach ($f in $files) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $bad = $true
+              $errors | ForEach-Object { Write-Host "PARSE ERROR in ${f}: $($_.Message) (line $($_.Extent.StartLineNumber))" }
+            } else { Write-Host "OK ${f}" }
+          }
+          if ($bad) { exit 1 }
+
+      - name: Install Pester 5
+        shell: powershell
+        run: |
+          Install-Module Pester -MinimumVersion 5.3.0 -Force -SkipPublisherCheck -Scope CurrentUser
+          Import-Module Pester -MinimumVersion 5.3.0
+
+      # Windows PowerShell 5.1 is the supported floor, so run the suite under powershell.exe
+      # (5.1), not pwsh (7+), to catch 5.1-only regressions.
+      - name: Run the Windows deployment tests (Docker absent)
+        shell: powershell
+        run: |
+          $cfg = New-PesterConfiguration
+          $cfg.Run.Path = 'deploy\test\windows'
+          $cfg.Run.Exit = $true
+          $cfg.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $cfg

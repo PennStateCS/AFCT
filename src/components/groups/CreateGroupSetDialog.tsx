@@ -63,7 +63,7 @@ export function CreateGroupSetDialog({
         name: trimmed,
         initialGroupCount,
       });
-      showToast.success('Group set created');
+      showToast.created('Group set');
       setOpen(false);
       onCreated(created.id);
     } catch (err) {
@@ -75,7 +75,7 @@ export function CreateGroupSetDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Create Group Set</DialogTitle>
           <DialogDescription className="sr-only">
@@ -121,7 +121,7 @@ export function CreateGroupSetDialog({
           </div>
 
           {error && (
-            <p id={errorId} role="alert" className="text-xs text-red-600">
+            <p id={errorId} role="alert" className="text-destructive text-xs">
               {error}
             </p>
           )}

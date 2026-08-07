@@ -1,0 +1,16 @@
+# ShellCheck config for the AFCT Linux deployment tooling.
+#
+# afctctl and its lib/*.sh modules deliberately share a set of globals: afctctl defines
+# them and the sourced modules read/assign them. ShellCheck analyzes each file in
+# isolation (dynamic `. "$LIB_DIR/..."` sources can't be followed), so it reports these
+# shared globals as unused (SC2034) or unassigned (SC2154). Both are false positives for
+# this architecture, so they are disabled here rather than with noise on every line.
+disable=SC2154
+disable=SC2034
+# The tooling uses the best-effort idiom `[ test ] && cmd 2>/dev/null || true` throughout,
+# so a guarded, non-critical action never aborts the script under `set -e`. SC2015 flags
+# this shape ("A && B || C is not if-then-else"), but here the `|| true` deliberately makes
+# the whole expression always succeed regardless of the guard, which is the intent. Newer
+# ShellCheck exits non-zero on this info-level note, so disable it rather than rewrite every
+# guarded best-effort line into an if/fi block.
+disable=SC2015

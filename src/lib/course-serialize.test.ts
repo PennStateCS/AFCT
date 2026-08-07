@@ -70,13 +70,45 @@ describe('serializeAssignment: content lock', () => {
   const locked = { unlockAt: new Date(NOW.getTime() + 24 * HOUR) };
   const opened = { unlockAt: new Date(NOW.getTime() - 24 * HOUR) };
 
+  // A rich document, carried alongside the plain text. Masking one but not the other would
+  // either leak the locked prompt or leave staff without the formatted form.
+  const richJson = {
+    version: 1,
+    document: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Build an RE.' }] }],
+    },
+  };
+
   it('withholds the prompt from a student before the unlock time', () => {
-    const out = serializeAssignment(row(locked), ctx());
+    const out = serializeAssignment(row({ ...locked, descriptionJson: richJson }), ctx());
     expect(out.locked).toBe(true);
     expect(out.description).toBeNull();
+    // Both forms, or the lock leaks through the rich copy.
+    expect(out.descriptionJson).toBeNull();
+    expect(JSON.stringify(out)).not.toContain('Build an RE.');
     // The assignment's existence and opening time are still disclosed.
     expect(out.title).toBe('Regular expressions');
     expect(out.unlockAt).toEqual(locked.unlockAt);
+  });
+
+  it('releases both forms of the prompt once unlocked', () => {
+    const out = serializeAssignment(row({ ...opened, descriptionJson: richJson }), ctx());
+    expect(out.locked).toBe(false);
+    expect(out.descriptionJson).toEqual(richJson);
+  });
+
+  it('sends the rich form to staff regardless of the unlock time', () => {
+    const out = serializeAssignment(
+      row({ ...locked, descriptionJson: richJson }),
+      ctx({ isStaff: true }),
+    );
+    expect(out.descriptionJson).toEqual(richJson);
+  });
+
+  it('reports a null rich document when the assignment has none', () => {
+    const out = serializeAssignment(row(opened), ctx());
+    expect(out.descriptionJson).toBeNull();
   });
 
   it('releases the prompt once the unlock time has passed', () => {

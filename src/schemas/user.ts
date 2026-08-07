@@ -2,16 +2,25 @@
 import { z } from 'zod';
 import { formBoolean, formBooleanOptional } from './fields';
 import { passwordRules, PASSWORD_MAX_LENGTH } from '@/lib/password-policy';
+import { COURSE_ROLE_VALUES } from '@/lib/course-roles';
 
 // App-level role set (no Prisma counterpart; the global User.role was dropped).
 export const RoleEnum = z.enum(['ADMIN', 'FACULTY', 'TA', 'STUDENT']);
-// Keep in sync with the Prisma `CourseRole` enum. Kept as string literals (not
-// z.nativeEnum) so this schema stays importable from client components without
-// pulling @prisma/client into the browser bundle.
-export const CourseRoleEnum = z.enum(['FACULTY', 'TA', 'STUDENT']);
+// Built from the plain literal in lib/course-roles rather than z.nativeEnum, so this schema
+// stays importable from client components without pulling @prisma/client into the browser
+// bundle. The list lives over there, not here, so that the roster tables can read it without
+// importing this module and dragging zod along with it.
+export const CourseRoleEnum = z.enum(COURSE_ROLE_VALUES);
 
 /** Body for changing a user's course role (CourseEditUserDialog ↔ roster/[userId] PATCH). */
 export const CourseRoleChangeSchema = z.object({ role: CourseRoleEnum });
+
+// Keep in sync with the Prisma `EnrollmentStatus` enum. String literals (not
+// z.nativeEnum) so this stays importable from client components.
+export const EnrollmentStatusEnum = z.enum(['ENROLLED', 'DROPPED']);
+
+/** Body for dropping / re-enrolling a student (roster/[userId]/status PATCH). */
+export const EnrollmentStatusChangeSchema = z.object({ status: EnrollmentStatusEnum });
 
 /**
  * Strong password: capped at the bcrypt 72-byte limit and checked against the
@@ -83,7 +92,6 @@ export const UpdateUserSchema = z.object({
   cropY: z.number().min(0).max(1).default(0.5),
   zoom: z.number().min(0.6).max(2.6).default(1),
   deleteAvatar: z.boolean().default(false),
-  inactive: z.boolean(),
   timezone: z.string().trim().optional(),
 });
 
@@ -106,6 +114,15 @@ export const UserUpdateJsonApiSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   inactive: z.boolean().optional(),
+  // Admin-only email change (Change Email dialog). Normalized + uniqueness-checked
+  // in the route; the transform keeps it lowercase to match the stored form.
+  email: z
+    .string()
+    .trim()
+    .email('Enter a valid email.')
+    .max(254, 'Email is too long.')
+    .transform((v) => v.toLowerCase())
+    .optional(),
   timezone: z.string().optional(),
   isAdmin: z.boolean().optional(),
   cropX: z.number().min(0).max(1).optional(),

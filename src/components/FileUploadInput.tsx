@@ -119,14 +119,14 @@ export default function FileUploadInput({
         onDrop={handleDrop}
         className={`relative rounded-lg border-2 border-dashed transition-colors ${
           disabled
-            ? 'bg-muted/5 border-border cursor-not-allowed'
+            ? 'bg-muted border-border cursor-not-allowed'
             : isDragging
               ? 'border-primary bg-primary/5'
               : value
-                ? 'border-green-300 bg-green-50'
+                ? 'border-status-success-border bg-status-success-bg'
                 : hasError
                   ? 'border-destructive bg-destructive/5'
-                  : 'border-border bg-muted/15 hover:border-primary/50'
+                  : 'border-border bg-muted hover:border-primary/50'
         }`}
       >
         <input
@@ -152,7 +152,7 @@ export default function FileUploadInput({
                 <div className="text-left">
                   <p className="text-foreground text-sm font-medium">
                     <span className="inline-flex items-center gap-2">
-                      <Upload className="h-3 w-3 text-green-600" aria-hidden="true" />
+                      <Upload className="h-3 w-3 text-green-600 dark:text-green-400" aria-hidden="true" />
                       <span className="truncate" title={value.name}>
                         {value.name}
                       </span>

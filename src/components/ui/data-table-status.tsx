@@ -13,22 +13,22 @@ import { cn } from '@/lib/utils';
  */
 
 /** Spinner + status text. Its own live region, so the message is announced. */
-export function DataTableLoading({
-  message,
-  className,
-}: {
-  message: string;
-  className?: string;
-}) {
+export function DataTableLoading({ message, className }: { message: string; className?: string }) {
   return (
     <div
-      className={cn('flex flex-col items-center justify-center gap-2 text-gray-500', className)}
+      className={cn(
+        'text-muted-foreground flex flex-col items-center justify-center gap-2',
+        className,
+      )}
       role="status"
     >
       <span aria-hidden="true" className="text-brand-teal">
         <PulseLoader color="currentColor" size={8} margin={3} speedMultiplier={0.65} />
       </span>
-      <span>{message}</span>
+      {/* Centered for the same reason as the empty state's description: on a narrow
+          screen the message wraps, and left-aligned lines under a centered spinner
+          read as a misalignment. */}
+      <span className="px-4 text-center">{message}</span>
     </div>
   );
 }
@@ -48,10 +48,19 @@ export function DataTableEmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn('text-muted-foreground flex flex-col items-center', className)}>
-      <Icon className="mb-2 h-10 w-10 text-gray-400" aria-hidden={true} />
-      <p className="font-medium">{title}</p>
-      <p className="text-sm">{description}</p>
+    // role="status" so a filter/search that narrows the rows to zero announces the
+    // empty message instead of leaving the table silently blank. (Live regions do not
+    // announce their initial content, so this stays quiet on a first-load empty table.)
+    <div
+      className={cn('text-muted-foreground flex flex-col items-center', className)}
+      role="status"
+    >
+      <Icon className="text-muted-foreground mb-2 h-10 w-10" aria-hidden={true} />
+      <p className="text-center font-medium">{title}</p>
+      {/* Centered text, not just a centered block: on a phone the description wraps over
+          several lines, and left-aligned text under a centered icon and title read as a
+          misalignment. max-w keeps it from running edge to edge on a wide screen. */}
+      <p className="max-w-prose px-4 text-center text-sm">{description}</p>
       {action ? <div className="mt-3">{action}</div> : null}
     </div>
   );

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  roster: { findFirst: vi.fn(), createMany: vi.fn() },
+  roster: { findFirst: vi.fn(), createMany: vi.fn(), updateMany: vi.fn() },
   course: { findUnique: vi.fn() },
 }));
 
@@ -22,6 +22,7 @@ beforeEach(() => {
   // Default: course is not archived; archived-block tests override.
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   prismaMock.roster.createMany.mockResolvedValue({ count: 0 });
+  prismaMock.roster.updateMany.mockResolvedValue({ count: 0 });
 });
 
 describe('POST /api/courses/[id]/roster/bulk', () => {
@@ -118,6 +119,30 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     // Additive only: skipDuplicates leaves existing members alone, so no existing
     // FACULTY/TA is demoted to STUDENT by a bulk-enroll.
     expect(prismaMock.roster.createMany.mock.calls[0][0].skipDuplicates).toBe(true);
+  });
+
+  it('re-enrolls previously dropped students, scoped to STUDENT rows only', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.roster.updateMany.mockResolvedValue({ count: 2 });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ userIds: ['u1', 'u2'] }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    // The re-enroll flips only DROPPED student rows, never a FACULTY/TA row or a role.
+    expect(prismaMock.roster.updateMany).toHaveBeenCalledWith({
+      where: { courseId: 'c1', userId: { in: ['u1', 'u2'] }, role: 'STUDENT', status: 'DROPPED' },
+      data: { status: 'ENROLLED', droppedAt: null },
+    });
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ metadata: expect.objectContaining({ reEnrolledCount: 2 }) }),
+    );
   });
 
   it('returns 400 when userIds is missing entirely (defaults to [])', async () => {

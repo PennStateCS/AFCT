@@ -18,9 +18,17 @@ Select the information button in the **Metadata** column to see the related IDs 
 
 ## Find an event
 
-Use the table search, sorting, and column filters to narrow the list. The category, assignment, and problem columns support filtering. Activity is shown newest first by default.
+The log loads a page at a time, and searching, sorting and filtering all cover the **whole** log rather than the page on screen. The count beside the **Activity** heading is the total number of matching events.
 
-The first 50 events load when you open the page. Select **Load More** to retrieve older events. Select the refresh button near the **Activity** heading to check for new events.
+- **Search** matches the activity name, the category, or the person who performed it. Pick a field in the box beside it to search just one of those.
+- **Filters** holds Category, Assignment and Problem as separate lists. Ticking several values in one list widens (any of them), while picking from two different lists narrows (both must be true). The Assignment and Problem lists show everything in the course, including items that have no activity yet.
+- Sort by most column headings. **Assignment** and **Problem** cannot be sorted, because what they display is assembled from several sources rather than stored as one value; filter by them instead.
+
+Activity is shown newest first by default. Select the refresh button near the **Activity** heading to check for new events.
+
+:::note Older events
+An event that recorded only an assignment or problem *name*, rather than a link to it, still shows that name in the table but will not be matched by the Assignment or Problem filter. Search for it instead.
+:::
 
 ## Common uses
 

@@ -10,12 +10,14 @@ The **Admin Menu** contains the platform-wide tools:
 | -------------------------------------------------- | -------------------------------------------------------------------------------- |
 | [Courses](../admin/courses.md)                     | Create, duplicate, archive, restore, and delete courses.                         |
 | [Development Tests](../admin/development-tests.md) | Check interface components that are available only in development builds.        |
-| [Submission Logs](../admin/submission-logs.md)     | Review and rerun submissions across courses.                                     |
+| [Autograder](../admin/autograder.md)               | Review and rerun submissions across courses.                                     |
 | [System Logs](../admin/system-logs.md)             | Search the system audit trail and export records.                                |
 | [System Settings](../admin/system-settings.md)     | Configure accounts, uploads, the evaluator, backups, security, TLS, and updates. |
 | [System Status](../admin/system-status.md)         | Check the server, database, Docker, network, sessions, and uploaded files.       |
 | [User Accounts](../admin/user-accounts.md)         | Create, import, edit, disable, and delete accounts.                              |
 
+:::warning
 Administrator actions affect the entire AFCT installation. Review the target and confirmation message carefully before deleting a course, deleting an account, removing an abandoned file, or restoring an older application version.
+:::
 
 See [Roles and permissions](../reference/roles-and-permissions.md) for the authorization model. Deployment and command-line maintenance remain under **Operations**.

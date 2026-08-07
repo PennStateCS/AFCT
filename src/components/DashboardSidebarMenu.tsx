@@ -6,16 +6,32 @@ import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { useChangePassword } from '@/hooks/use-change-password';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import dynamic from 'next/dynamic';
 import { safeSignOut } from '@/lib/safe-signout';
 import { getCourseDateBucket } from '@/lib/course-status';
+import CollapsedCoursesFlyout from '@/components/CollapsedCoursesFlyout';
 
-import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
-import { EditProfileDialog } from './dialogs/EditProfileDialog';
+/**
+ * On demand, for the same reason as the navbar's copies: the sidebar is in the dashboard
+ * layout, so a static import here puts zod and react-hook-form in the chunk every dashboard
+ * route shares. Both entry points have to be dynamic or the shared chunk keeps them anyway.
+ *
+ * The mount flags below are load-bearing: `next/dynamic` fetches as soon as the component
+ * renders, so rendering these with `open={false}` would defeat it.
+ */
+const ChangePasswordDialog = dynamic(
+  () => import('./dialogs/ChangePasswordDialog').then((m) => m.ChangePasswordDialog),
+  { ssr: false },
+);
+const EditProfileDialog = dynamic(
+  () => import('./dialogs/EditProfileDialog').then((m) => m.EditProfileDialog),
+  { ssr: false },
+);
 
 import {
   SidebarContent,
@@ -47,7 +63,7 @@ import {
   Book,
   Users,
   UserRound,
-  Layers,
+  CircleCheckBig,
   LogOut,
   Logs,
   LockKeyhole,
@@ -61,7 +77,7 @@ import {
 import { getInitials } from '@/app/utils/initials';
 
 const menuButtonStyles =
-  'text-sidebar-foreground hover:bg-secondary focus-visible:bg-secondary active:bg-secondary data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground';
+  'text-sidebar-foreground hover:bg-brand-teal focus-visible:bg-brand-teal active:bg-brand-teal data-[active=true]:bg-brand-teal data-[active=true]:text-white';
 
 type Course = {
   id: string;
@@ -74,19 +90,21 @@ type Course = {
 };
 
 // The dated sidebar course sections, in display order. Archived courses are folded into
-// Past Courses (they are finished too), which also carries the Archived Courses page
-// link. A section is hidden when it has nothing to show, and courses within a section are
-// alphabetized by code.
+// Past Courses (they are finished too); the Archived Courses page has its own top-level
+// link instead. A section is hidden when it has nothing to show, and courses within a
+// section are alphabetized by code.
+// `flyoutLabel` is the shorter heading used in the collapsed rail's Courses flyout, where
+// the panel is already titled Courses and repeating the word in every group reads as noise.
 const COURSE_SECTIONS = [
-  { bucket: 'upcoming', label: 'Upcoming Courses' },
-  { bucket: 'current', label: 'Current Courses' },
-  { bucket: 'past', label: 'Past Courses' },
+  { bucket: 'upcoming', label: 'Upcoming Courses', flyoutLabel: 'Upcoming' },
+  { bucket: 'current', label: 'Current Courses', flyoutLabel: 'Current' },
+  { bucket: 'past', label: 'Past Courses', flyoutLabel: 'Past Courses' },
 ] as const;
 
 // Static admin menu items (kept alphabetical by title)
 const adminMenu = [
+  { title: 'Autograder', url: '/dashboard/autograder', icon: CircleCheckBig },
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
-  { title: 'Submission Logs', url: '/dashboard/submissions', icon: Layers },
   { title: 'System Logs', url: '/dashboard/system-logs', icon: Logs },
   { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
   { title: 'System Status', url: '/dashboard/system-status', icon: Activity },
@@ -195,7 +213,7 @@ function CollapsibleSidebarGroup({
             onClick={onToggle}
             aria-expanded={open}
             aria-controls={contentId}
-            className="hover:bg-secondary flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap"
+            className="hover:bg-brand-teal flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap"
           >
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
             <ChevronDown
@@ -283,8 +301,20 @@ function SidebarNavItem({
 export default function DashboardSidebarMenu() {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const changePassword = useChangePassword();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  // Set on first open and never cleared: see the dynamic imports above.
+  const [changePasswordMounted, setChangePasswordMounted] = useState(false);
+  const [editProfileMounted, setEditProfileMounted] = useState(false);
+  const openChangePassword = () => {
+    setChangePasswordMounted(true);
+    setChangePasswordOpen(true);
+  };
+  const openEditProfile = () => {
+    setEditProfileMounted(true);
+    setEditProfileOpen(true);
+  };
 
   // Cached courses list for sidebar nav, fetched client-side and revalidated.
   const {
@@ -302,8 +332,11 @@ export default function DashboardSidebarMenu() {
     staleTime: 30_000,
   });
 
-  const { state } = useSidebar();
-  const collapsed = state === 'collapsed';
+  const { state, isMobile } = useSidebar();
+  // The mobile drawer is a full-width sheet, not the icon rail, so it must always show
+  // full labels. Only treat the sidebar as collapsed on desktop, regardless of the saved
+  // (desktop) collapse preference.
+  const collapsed = state === 'collapsed' && !isMobile;
   const { isOpen, toggle } = useSidebarSections();
 
   if (!session?.user) return null;
@@ -368,23 +401,15 @@ export default function DashboardSidebarMenu() {
     courses: (coursesByBucket[section.bucket] ?? [])
       .slice()
       .sort((a, b) => a.code.localeCompare(b.code)),
-  })).filter(
-    (section) =>
-      // Past Courses also hosts the Archived Courses link, so it stays visible whenever
-      // that link does (always for admins) even with no past courses of its own.
-      section.courses.length > 0 || (section.bucket === 'past' && showArchivedCoursesLink),
-  );
+  })).filter((section) => section.courses.length > 0);
   // The section holding the page you are actually on must be open, whatever the stored
   // preference says. Past Courses defaults to collapsed, so navigating straight to a past
-  // course (or the archived list) would otherwise hide the very item you are viewing.
+  // course would otherwise hide the very item you are viewing.
   const activeCourseId = pathname.startsWith('/dashboard/courses/')
     ? (pathname.split('/')[3] ?? null)
     : null;
   const activeSectionBucket: string | null =
-    pathname === '/dashboard/archived-courses'
-      ? 'past'
-      : (courseSections.find((s) => s.courses.some((c) => c.id === activeCourseId))?.bucket ??
-        null);
+    courseSections.find((s) => s.courses.some((c) => c.id === activeCourseId))?.bucket ?? null;
 
   const isDev = process.env.NODE_ENV !== 'production';
   const resolvedAdminMenu = (
@@ -429,9 +454,7 @@ export default function DashboardSidebarMenu() {
 
         {/* Course sections: bucketed by date; an empty section is omitted.
             The query status is checked BEFORE the section list, not only when it is
-            empty: an admin always has a Past Courses section (it carries the Archived
-            Courses link), so a length check alone meant admins never saw the loading
-            skeleton or the retry on failure. */}
+            empty, so loading and failure never read as "you have no courses". */}
         {coursesPending || coursesFailed || courseSections.length === 0
           ? !collapsed && (
               <SidebarGroup>
@@ -458,7 +481,10 @@ export default function DashboardSidebarMenu() {
                       </SidebarMenuItem>
                     ) : coursesFailed ? (
                       <SidebarMenuItem>
-                        <div role="alert" className="flex w-full flex-col items-start gap-1 px-2 py-1.5">
+                        <div
+                          role="alert"
+                          className="flex w-full flex-col items-start gap-1 px-2 py-1.5"
+                        >
                           <span className="text-sidebar-foreground/70 text-sm">
                             Could not load courses.
                           </span>
@@ -487,6 +513,31 @@ export default function DashboardSidebarMenu() {
                 </SidebarGroupContent>
               </SidebarGroup>
             )
+          : collapsed ? (
+              // In the icon rail the per-course items collapse into one Courses button:
+              // every course otherwise showed the same book icon, so they could only be
+              // told apart by hovering each in turn.
+              <SidebarGroup>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <CollapsedCoursesFlyout
+                      sections={courseSections.map((section) => ({
+                        bucket: section.bucket,
+                        label: section.flyoutLabel,
+                        courses: section.courses,
+                      }))}
+                      activeCourseId={activeCourseId}
+                      pathname={pathname}
+                      // The expanded sidebar's own rule and its own stored state, so a
+                      // group is folded the same way in both views: open unless closed by
+                      // the user, and always open when it holds the course you are on.
+                      isSectionOpen={(bucket) => isOpen(bucket) || bucket === activeSectionBucket}
+                      onToggleSection={toggle}
+                    />
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )
           : courseSections.map((section) => (
               <CollapsibleSidebarGroup
                 key={section.bucket}
@@ -508,24 +559,14 @@ export default function DashboardSidebarMenu() {
                       collapsed={collapsed}
                     />
                   ))}
-
-                  {/* The archived-courses page lives with the past courses. Always for
-                      admins; others only when they're in an archived course. */}
-                  {section.bucket === 'past' && showArchivedCoursesLink && (
-                    <SidebarNavItem
-                      href="/dashboard/archived-courses"
-                      label="Archived Courses"
-                      icon={Library}
-                      active={pathname === '/dashboard/archived-courses'}
-                      collapsed={collapsed}
-                    />
-                  )}
                 </SidebarMenu>
               </CollapsibleSidebarGroup>
             ))}
 
-        {/* Calendar is a single destination, so it is a plain top-level link rather than
-            a collapsible section wrapping one item. */}
+        {/* Calendar and the archived-courses list are each a single destination, so they
+            are plain top-level links rather than collapsible sections wrapping one item.
+            Archived Courses shows always for admins; for everyone else only when they're
+            in an archived course. */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -536,6 +577,15 @@ export default function DashboardSidebarMenu() {
                 active={pathname === '/dashboard/calendar'}
                 collapsed={collapsed}
               />
+              {showArchivedCoursesLink && (
+                <SidebarNavItem
+                  href="/dashboard/archived-courses"
+                  label="Archived Courses"
+                  icon={Library}
+                  active={pathname === '/dashboard/archived-courses'}
+                  collapsed={collapsed}
+                />
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -552,7 +602,7 @@ export default function DashboardSidebarMenu() {
                   // plus the visible span) and never said what activating it does.
                   aria-label={`Open account menu for ${user.name}`}
                   className={cn(
-                    'hover:bg-secondary data-[state=open]:bg-secondary/70 data-[state=open]:text-secondary-foreground h-14 bg-[#525252] px-3 py-3 transition-colors',
+                    'hover:bg-brand-teal data-[state=open]:bg-brand-teal/70 bg-sidebar-foreground/10 h-14 px-3 py-3 transition-colors data-[state=open]:text-white',
                     // In the icon rail the button shrinks to 32px; drop the padding and
                     // center so the 32px avatar fills the tile as a clean circle instead
                     // of overflowing an 8px-padded 16px box behind the (hidden) name.
@@ -569,7 +619,7 @@ export default function DashboardSidebarMenu() {
                       cropY={user.cropY ?? 0.5}
                       zoom={user.zoom ?? 1}
                     />
-                    <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                    <AvatarFallback className="text-xs">
                       {getInitials(user.firstName, user.lastName, user.email)}
                     </AvatarFallback>
                   </Avatar>
@@ -590,24 +640,18 @@ export default function DashboardSidebarMenu() {
               >
                 {/* Section header, not an action. A Label keeps it out of the menu's
                     focus/arrow-key order; overrides preserve the exact resting look. */}
-                <DropdownMenuLabel className="font-normal [&_svg:not([class*='text-'])]:text-muted-foreground">
+                <DropdownMenuLabel className="[&_svg:not([class*='text-'])]:text-muted-foreground font-normal">
                   <span className="flex w-full items-center gap-2 text-left">
                     <UserRound className="h-4 w-4" />
                     User Account
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => setEditProfileOpen(true)}
-                >
+                <DropdownMenuItem className="cursor-pointer" onClick={openEditProfile}>
                   <UserPen className="h-4 w-4" />
                   Edit Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => setChangePasswordOpen(true)}
-                >
+                <DropdownMenuItem className="cursor-pointer" onClick={openChangePassword}>
                   <LockKeyhole className="h-4 w-4" />
                   Change Password
                 </DropdownMenuItem>
@@ -625,26 +669,19 @@ export default function DashboardSidebarMenu() {
         </SidebarMenu>
       </SidebarFooter>
 
-      {/* Modals */}
-      <ChangePasswordDialog
-        open={changePasswordOpen}
-        setOpen={setChangePasswordOpen}
-        onChangePassword={async (oldPassword, newPassword) => {
-          const res = await fetch(apiPaths.myPassword(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ oldPassword, newPassword }),
-          });
-          if (!res.ok) {
-            const { error } = await res.json();
-            toast.error(error || 'Failed to change password');
-            throw new Error(error || 'Failed to change password');
-          }
-          toast.success('Password changed!');
-        }}
-      />
+      {/* Modals, mounted on first use. Rendering them unconditionally would fetch their chunk
+          on every page load and undo the point of the dynamic import above. */}
+      {changePasswordMounted && (
+        <ChangePasswordDialog
+          open={changePasswordOpen}
+          setOpen={setChangePasswordOpen}
+          onChangePassword={changePassword}
+        />
+      )}
 
-      <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
+      {editProfileMounted && (
+        <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
+      )}
     </>
   );
 }

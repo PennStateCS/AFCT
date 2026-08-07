@@ -27,6 +27,141 @@
   overflow-wrap: anywhere;
 }
 
+/* ============================================================================
+   Long-form documentation readability.
+
+   All rules are scoped to .theme-doc-markdown, the standard prose column. The
+   generated API reference renders through @theme/ApiItem in its own narrower,
+   multi-column layout made mostly of tables and code, so these prose-oriented
+   rules have little visible effect there. Colors come from Infima theme
+   variables so light and dark mode both stay correct.
+   ============================================================================ */
+
+/* Slightly larger body text and a more open line height for sustained reading. */
+.theme-doc-markdown {
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+/* Cap the reading measure so lines stay in a comfortable range on wide monitors.
+   Only text-carrying blocks are constrained; code blocks, tables, diagrams,
+   tabs, and images are left free below to use the full column width. The limit
+   is set in rem, so on phones and narrow tablets it is wider than the viewport
+   and effectively does nothing, letting prose fill the screen.
+
+   The doc layout renders through @theme/ApiItem, which wraps the body in a
+   .row > .col.markdown grid, so the real body blocks are direct children of that
+   inner .markdown column rather than of .theme-doc-markdown itself. Both forms
+   are listed so the cap holds whether or not that wrapper is present, and the
+   direct-child combinator keeps text nested inside admonitions, tables, and tabs
+   free to use the full width. */
+.theme-doc-markdown > p,
+.theme-doc-markdown > ul,
+.theme-doc-markdown > ol,
+.theme-doc-markdown > dl,
+.theme-doc-markdown > blockquote,
+.theme-doc-markdown > .theme-admonition,
+.theme-doc-markdown > h1,
+.theme-doc-markdown > h2,
+.theme-doc-markdown > h3,
+.theme-doc-markdown > h4,
+.theme-doc-markdown > h5,
+.theme-doc-markdown > h6,
+.theme-doc-markdown .markdown > p,
+.theme-doc-markdown .markdown > ul,
+.theme-doc-markdown .markdown > ol,
+.theme-doc-markdown .markdown > dl,
+.theme-doc-markdown .markdown > blockquote,
+.theme-doc-markdown .markdown > .theme-admonition,
+.theme-doc-markdown .markdown > h1,
+.theme-doc-markdown .markdown > h2,
+.theme-doc-markdown .markdown > h3,
+.theme-doc-markdown .markdown > h4,
+.theme-doc-markdown .markdown > h5,
+.theme-doc-markdown .markdown > h6 {
+  max-width: 46rem;
+}
+
+/* Breathing room between paragraphs. */
+.theme-doc-markdown p {
+  margin-bottom: 1.2rem;
+}
+
+/* Looser list spacing, with a little more room when a list item holds a full
+   paragraph rather than a short phrase. */
+.theme-doc-markdown li {
+  margin-bottom: 0.4rem;
+}
+.theme-doc-markdown li > p {
+  margin-bottom: 0.6rem;
+}
+
+/* Clearer section breaks. A larger gap above a heading than below it visually
+   ties the heading to the content it introduces. */
+.theme-doc-markdown h2 {
+  margin-top: 2.75rem;
+  margin-bottom: 1rem;
+}
+.theme-doc-markdown h3 {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+.theme-doc-markdown h4 {
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Consistent spacing around admonitions and diagrams. */
+.theme-doc-markdown .theme-admonition {
+  margin: 1.5rem 0;
+}
+.theme-doc-markdown .docusaurus-mermaid-container {
+  margin: 1.5rem 0;
+}
+
+/* Make inline code less visually dominant: no border, a soft theme-tinted
+   background, and slightly smaller. Scoped with :not(pre) so fenced code blocks
+   keep their full styling. emphasis-200 is used rather than emphasis-100 because
+   in dark mode emphasis-100 collapses onto the page background and the chip
+   disappears; emphasis-200 stays a subtle, visible tint in both themes while
+   keeping high text contrast. */
+.theme-doc-markdown :not(pre) > code {
+  padding: 0.1em 0.35em;
+  border: none;
+  border-radius: 0.25rem;
+  background: var(--ifm-color-emphasis-200);
+  font-size: 0.9em;
+  font-weight: 400;
+}
+
+/* Keep bold text emphatic without letting it turn into a heavy block. */
+.theme-doc-markdown strong {
+  font-weight: 600;
+}
+
+/* Wide tables scroll inside their own box instead of pushing the page sideways,
+   while ordinary tables still size to their content. */
+.theme-doc-markdown table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Tighten the vertical rhythm on small screens, where large heading gaps waste
+   scroll height. */
+@media (max-width: 768px) {
+  .theme-doc-markdown {
+    font-size: 1rem;
+  }
+  .theme-doc-markdown h2 {
+    margin-top: 2rem;
+  }
+  .theme-doc-markdown h3 {
+    margin-top: 1.5rem;
+  }
+}
+
 /* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
   --ifm-color-primary: #25c2a0;

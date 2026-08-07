@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+/* KaTeX's stylesheet is deliberately NOT imported here. It is self-hosted from public/katex and
+   linked in the root layout, which keeps its 60 font files out of the bundler entirely. See
+   scripts/vendor-katex.mjs. */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -47,7 +50,12 @@
   /* The navbar's green/teal (--secondary in light mode), pinned as a literal so it
      stays the same in both themes: --secondary itself flips to a dark neutral in
      dark mode, which would make anything drawn in it vanish on a dark background. */
-  --color-brand-teal: #43a9b2;
+  --color-brand-teal: oklch(0.6794 0.0938 203.328);
+  /* A darker brand teal for solid swatches that carry WHITE text, such as the initials
+     shown when a user has no profile photo. --brand-teal itself is only 2.78:1 against
+     white, under the 4.5:1 AA floor; this one is 5.3:1. Same hue, and pinned as a
+     literal for the same reason --brand-teal is: it must not flip in dark mode. */
+  --color-brand-teal-dark: oklch(0.52 0.09 203.328);
   --color-badge-success: var(--badge-success);
   --color-badge-success-bg: var(--badge-success-bg);
   --color-badge-success-border: var(--badge-success-border);
@@ -63,6 +71,29 @@
   --color-badge-neutral: var(--badge-neutral);
   --color-badge-neutral-bg: var(--badge-neutral-bg);
   --color-badge-neutral-border: var(--badge-neutral-border);
+  /* Semantic status/feedback family (foreground / soft -bg / -border) for inline status
+     text, alert callouts, and toasts. Badges consume the same values via --badge-* above.
+     Usage: text-status-warning, bg-status-warning-bg, border-status-warning-border. */
+  --color-status-success: var(--status-success);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-border: var(--status-warning-border);
+  --color-status-danger: var(--status-danger);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-border: var(--status-danger-border);
+  --color-status-info: var(--status-info);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-border: var(--status-info-border);
+  --color-status-success-solid: var(--status-success-solid);
+  --color-status-warning-solid: var(--status-warning-solid);
+  --color-status-danger-solid: var(--status-danger-solid);
+  --color-status-info-solid: var(--status-info-solid);
+  --color-status-neutral-solid: var(--status-neutral-solid);
+  /* Active-tab brand accent. Usage: text-tab-active, border-tab-active, bg-tab-active-bg. */
+  --color-tab-active: var(--tab-active);
+  --color-tab-active-bg: var(--tab-active-bg);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -70,62 +101,105 @@
 }
 :root {
   --radius: 0.65rem;
-  --background: #ebebeb;
-  --foreground: #000000;
-  --card: #ffffff;
-  --card-foreground: oklch(0% 0 0);
+  --background: oklch(0.9401 0 0);
+  --foreground: oklch(0 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: #193b7f;
-  --primary-foreground: oklch(100% 0.00011 271.152);
-  --secondary: #43a9b2;
-  --secondary-foreground: oklch(100% 0.00011 271.152);
-  --tertiary: #ae501b;
-  --tertiary-foreground: #ffffff;
-  --muted: oklch(56.241% 0.00006 271.152);
-  --muted-foreground: #353535;
-  --accent: #e2e2e2;
+  --primary: oklch(0.37 0.1221 262.228);
+  --primary-foreground: oklch(1 0.0001 271.152);
+  --secondary: oklch(0.6794 0.0938 203.328);
+  --secondary-foreground: oklch(1 0.0001 271.152);
+  --tertiary: oklch(0.5424 0.1381 45.828);
+  --tertiary-foreground: oklch(1 0 0);
+  /* A muted SURFACE, so it sits just off the page background. It used to be a 56%-lightness
+     mid grey, which is a foreground value, not a surface one: anything painted with it solid
+     (the keyboard-shortcut keys, the equation hover) came out darker than the toolbar, and
+     every subtle panel in the app had to dilute it with an opacity fraction to look right.
+     This is the conventional light-theme value, and --muted-foreground stays dark so text on
+     it keeps its contrast. */
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.329 0 0);
+  --accent: oklch(0.9128 0 0);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.92 0.004 286.32);
-  --input: oklch(75.402% 0.00009 271.152);
-  --ring: #2096f7;
+  --input: oklch(0.754 0.0001 271.152);
+  --ring: oklch(0.6604 0.1739 249.672);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: #464545;
-  --sidebar-foreground: oklch(100% 0.00011 271.152);
-  --sidebar-primary: oklch(94.148% 0.0081 254.087);
+  --sidebar: oklch(0.3914 0.0013 17.215);
+  --sidebar-foreground: oklch(1 0.0001 271.152);
+  --sidebar-primary: oklch(0.9415 0.0081 254.087);
   --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
   --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: #ffffff;
+  --sidebar-accent-foreground: oklch(1 0 0);
   --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(94.845% 0.00467 258.626);
-  --table-header: #e0e0e0;
-  --table-header-foreground: #000000;
-  --table-highlight: #ececec;
-  --table-background: #ffffff;
-  --node-color: #fff59d;
-  --grid-color: #edeff2;
-  --success: #2d6a1e;
-  /* Badge colors: derived from brand palette (--primary, --tertiary, --destructive, --success) */
-  --badge-success: #2d5a1b;        /* tint of --success */
-  --badge-success-bg: #e8f0e0;
-  --badge-success-border: #b8d49a;
-  --badge-warning: #ae501b;        /* = --tertiary */
-  --badge-warning-bg: #f5ece5;
-  --badge-warning-border: #ddb08a;
-  --badge-danger: #991b1b;         /* tint of --destructive */
-  --badge-danger-bg: #fde8e8;
-  --badge-danger-border: #f5b8b8;
-  --badge-info: #193b7f;           /* = --primary */
-  --badge-info-bg: #e8eef8;
-  --badge-info-border: #b5c8ef;
-  --badge-neutral: #444444;        /* tint of --muted-foreground */
-  --badge-neutral-bg: #f0f0f0;
-  --badge-neutral-border: #d4d4d4;
+  --sidebar-ring: oklch(0.9485 0.0047 258.626);
+  --table-header: oklch(0.9067 0 0);
+  --table-header-foreground: oklch(0 0 0);
+  --table-highlight: oklch(0.9431 0 0);
+  --table-background: oklch(1 0 0);
+  --node-color: oklch(0.9588 0.1093 102.632);
+  --grid-color: oklch(0.9515 0.0046 258.325);
+  --success: oklch(0.4669 0.1258 140.003);
+  /* Semantic status/feedback colors: the single source of truth for the four states
+     (success, warning, danger, info) used by badges, inline status text, alert callouts,
+     and toasts. Each is a triad -- a foreground that reads on the page and as a solid
+     label, a soft -bg surface, and a matching -border -- so a state can be recolored in
+     one place for a UI refresh or a high-contrast theme. `neutral` stays badge-scoped
+     below because a general neutral is already covered by --muted / --accent. */
+  --status-success: oklch(0.4204 0.1055 138.019);       /* tint of --success */
+  --status-success-bg: oklch(0.9447 0.0228 128.733);
+  --status-success-border: oklch(0.8347 0.0835 129.018);
+  --status-warning: oklch(0.5424 0.1381 45.828);       /* = --tertiary */
+  --status-warning-bg: oklch(0.9482 0.0135 60.567);
+  --status-warning-border: oklch(0.7886 0.0733 61.632);
+  --status-danger: oklch(0.4437 0.1613 26.899);        /* tint of --destructive */
+  --status-danger-bg: oklch(0.9478 0.023 17.565);
+  --status-danger-border: oklch(0.8383 0.071 18.674);
+  --status-info: oklch(0.37 0.1221 262.228);          /* = --primary */
+  --status-info-bg: oklch(0.9475 0.0149 260.73);
+  --status-info-border: oklch(0.8314 0.0587 264.656);
+
+  /* Solid, saturated fills for the same four states, for elements that put WHITE content
+     on a filled swatch (e.g. a toast's icon strip). Unlike the status foregrounds above,
+     these must stay a mid, white-legible shade in BOTH themes, so they are not derived
+     from --status-*. neutral covers the untyped/loading case. */
+  --status-success-solid: oklch(0.6271 0.1699 149.214);   /* green-600, chosen so the white glyph clears 3:1 */
+  --status-warning-solid: oklch(0.6658 0.1574 58.318);   /* amber-600, same */
+  --status-danger-solid: oklch(0.6368 0.2078 25.331);
+  --status-info-solid: oklch(0.6231 0.188 259.815);
+  --status-neutral-solid: oklch(0.551 0.0234 264.364);
+
+  /* Active-tab accent (brand teal). A darker teal in light so 14px active-tab labels
+     clear WCAG AA 4.5:1 on the card; a lighter teal in dark. -bg is the soft fill behind
+     a tab's count pill. Interim brand accent until the visual redesign. */
+  --tab-active: oklch(0.5109 0.0861 186.391);           /* teal-700 */
+  --tab-active-bg: oklch(0.9527 0.0498 180.801);        /* teal-100 */
+
+  /* Badge tokens derive from the status family (values unchanged), so badges and the
+     other status surfaces can never drift apart. Dark mode overrides only --status-*
+     (see .dark); these aliases resolve to the dark values automatically. */
+  --badge-success: var(--status-success);
+  --badge-success-bg: var(--status-success-bg);
+  --badge-success-border: var(--status-success-border);
+  --badge-warning: var(--status-warning);
+  --badge-warning-bg: var(--status-warning-bg);
+  --badge-warning-border: var(--status-warning-border);
+  --badge-danger: var(--status-danger);
+  --badge-danger-bg: var(--status-danger-bg);
+  --badge-danger-border: var(--status-danger-border);
+  --badge-info: var(--status-info);
+  --badge-info-bg: var(--status-info-bg);
+  --badge-info-border: var(--status-info-border);
+  --badge-neutral: oklch(0.3867 0 0);        /* tint of --muted-foreground */
+  --badge-neutral-bg: oklch(0.9551 0 0);
+  --badge-neutral-border: oklch(0.8699 0 0);
 }
 
 /* Cytoscape + ELK JFLAP viewer: tooltip styles (tippy.js) */
@@ -206,20 +280,23 @@
 
 .dark {
   --background: oklch(0.141 0.005 285.823);
-  --foreground: #fafafa;
+  --foreground: oklch(0.9851 0 0);
   --card: oklch(0.21 0.006 285.885);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
+  /* Dark surfaces climb an elevation ladder so layered states read apart:
+     background < card < popover < muted < accent (hover) < secondary (selected).
+     In light mode these are already distinct hues, so only the dark values ladder. */
+  --popover: oklch(0.24 0.006 285.885);
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.546 0.245 262.881);
   --primary-foreground: oklch(0.379 0.146 265.522);
-  --secondary: oklch(0.274 0.006 286.033);
+  --secondary: oklch(0.35 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
-  --tertiary: #003439;
-  --tertiary-foreground: #ffffff;
+  --tertiary: oklch(0.2966 0.0507 205.135);
+  --tertiary-foreground: oklch(1 0 0);
   --muted: oklch(0.274 0.006 286.033);
   --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
+  --accent: oklch(0.31 0.006 286.033);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
@@ -238,29 +315,37 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.488 0.243 264.376);
-  --table-header: #111827;
-  --table-header-foreground: #f8fafc;
-  --table-highlight: #1e293b;
-  --table-background: #0f172a;
-  --node-color: #caa22b;
-  --grid-color: #1a1814;
-  --success: #86c95a;
-  /* Badge dark mode overrides: explicit tints (cannot use brand vars; --tertiary changes to teal in dark) */
-  --badge-success: #86c95a;
-  --badge-success-bg: rgba(45, 90, 27, 0.25);
-  --badge-success-border: rgba(134, 201, 90, 0.35);
-  --badge-warning: #d4895a;
-  --badge-warning-bg: rgba(174, 80, 27, 0.25);
-  --badge-warning-border: rgba(212, 137, 90, 0.35);
-  --badge-danger: #f87171;
-  --badge-danger-bg: rgba(153, 27, 27, 0.3);
-  --badge-danger-border: rgba(248, 113, 113, 0.35);
-  --badge-info: #93b4e8;
-  --badge-info-bg: rgba(25, 59, 127, 0.3);
-  --badge-info-border: rgba(147, 180, 232, 0.4);
-  --badge-neutral: #9e9e9e;
-  --badge-neutral-bg: rgba(53, 53, 53, 0.35);
-  --badge-neutral-border: rgba(158, 158, 158, 0.3);
+  --table-header: oklch(0.2101 0.0318 264.665);
+  --table-header-foreground: oklch(0.9842 0.0034 247.858);
+  --table-highlight: oklch(0.2795 0.0368 260.031);
+  --table-background: oklch(0.2077 0.0398 265.755);
+  --node-color: oklch(0.7293 0.1363 88.887);
+  --grid-color: oklch(0.2098 0.0083 84.585);
+  --success: oklch(0.7669 0.1597 134.58);
+  /* Status dark values (explicit tints; can't reuse brand vars, since --tertiary flips to
+     teal in dark). Badges/alerts/toasts inherit these through the aliases defined in
+     :root, so only the status family is overridden here. */
+  --status-success: oklch(0.7669 0.1597 134.58);
+  --status-success-bg: oklch(0.4204 0.1055 138.019 / 25%);
+  --status-success-border: oklch(0.7669 0.1597 134.58 / 35%);
+  --status-warning: oklch(0.6974 0.1112 52.078);
+  --status-warning-bg: oklch(0.5424 0.1381 45.828 / 25%);
+  --status-warning-border: oklch(0.6974 0.1112 52.078 / 35%);
+  --status-danger: oklch(0.7106 0.1661 22.216);
+  --status-danger-bg: oklch(0.4437 0.1613 26.899 / 30%);
+  --status-danger-border: oklch(0.7106 0.1661 22.216 / 35%);
+  --status-info: oklch(0.7646 0.0834 259.348);
+  --status-info-bg: oklch(0.37 0.1221 262.228 / 30%);
+  --status-info-border: oklch(0.7646 0.0834 259.348 / 40%);
+  /* Solid fills carry a white glyph, so they keep the same mid shade in dark (a lighter
+     fill would drop below 3:1 against white); only the grey neutral is lightened here. */
+  --status-neutral-solid: oklch(0.7107 0.0351 256.788);
+  --tab-active: oklch(0.7845 0.1325 181.912);                    /* teal-400 */
+  --tab-active-bg: oklch(0.3861 0.059 188.416 / 40%);   /* teal-900 / 40% */
+  /* Neutral badge stays badge-scoped. */
+  --badge-neutral: oklch(0.6993 0 0);
+  --badge-neutral-bg: oklch(0.329 0 0 / 35%);
+  --badge-neutral-border: oklch(0.6993 0 0 / 30%);
 }
 
 @layer base {
@@ -327,70 +412,8 @@ html {
 
 /* Custom Toast Styles */
 @layer components {
-  .toast-custom {
-    @apply transform transition-all duration-300 ease-out;
-  }
-
-  .toast-custom[data-type='success'] {
-    @apply border-green-200 bg-green-50 text-green-900;
-  }
-
-  .toast-custom[data-type='error'] {
-    @apply border-red-200 bg-red-50 text-red-900;
-  }
-
-  .toast-custom[data-type='warning'] {
-    @apply border-yellow-200 bg-yellow-50 text-yellow-900;
-  }
-
-  .toast-custom[data-type='info'] {
-    @apply border-blue-200 bg-blue-50 text-blue-900;
-  }
-
-  .toast-custom[data-type='loading'] {
-    @apply border-gray-200 bg-gray-50 text-gray-900;
-  }
-
-  /* Dark mode variants */
-  .dark .toast-custom[data-type='success'] {
-    @apply border-green-800 bg-green-900/20 text-green-100;
-  }
-
-  .dark .toast-custom[data-type='error'] {
-    @apply border-red-800 bg-red-900/20 text-red-100;
-  }
-
-  .dark .toast-custom[data-type='warning'] {
-    @apply border-yellow-800 bg-yellow-900/20 text-yellow-100;
-  }
-
-  .dark .toast-custom[data-type='info'] {
-    @apply border-blue-800 bg-blue-900/20 text-blue-100;
-  }
-
-  .dark .toast-custom[data-type='loading'] {
-    @apply border-gray-700 bg-gray-800/20 text-gray-100;
-  }
-
-  /* Toast description styling */
-  .toast-custom [data-description] {
-    @apply mt-1 text-sm leading-relaxed opacity-80;
-  }
-
-  /* Toast title styling */
-  .toast-custom [data-title] {
-    @apply text-base leading-tight font-semibold;
-  }
-
-  /* Toast icon styling */
-  .toast-custom [data-icon] {
-    @apply mr-2 flex-shrink-0 text-lg;
-  }
-
-  /* Action button hover effects */
-  .toast-custom button[data-button] {
-    @apply hover:opacity-80 focus:ring-2 focus:ring-offset-1 focus:outline-none active:scale-95;
-  }
+  /* The live toasts are styled by .custom-toast below; the old .toast-custom variant set
+     was unused and has been removed. */
 
   /* Entrance animation */
   .custom-toast[data-mounted] {
@@ -418,7 +441,7 @@ html {
   .custom-toast[data-type='error'] [data-description],
   .custom-toast[data-type='warning'] [data-description],
   .custom-toast[data-type='info'] [data-description] {
-    color: #4b5563 !important;
+    color: var(--muted-foreground) !important;
     opacity: 0.9 !important;
     letter-spacing: 0 !important;
     text-rendering: geometricPrecision;
@@ -469,16 +492,14 @@ html {
 
   /* Toast visual refresh */
   .custom-toast {
-    --toast-border: #e5e7eb;
-    --toast-accent: #f4f8f7;
-    --toast-icon-fill: #6b7280;
-    --toast-text: #1f2937;
-    --toast-muted: #4b5563;
-    background: #ffffff !important;
-    border: 1px solid var(--toast-border) !important;
-    border-left-color: var(--toast-icon-fill) !important;
-    border-top-color: var(--toast-icon-fill) !important;
-    border-bottom-color: var(--toast-icon-fill) !important;
+    /* Colour comes from two tokens, overridden per type below. The icon strip is a filled
+       swatch with a white glyph, so it uses the -solid fill; the same fill frames all four
+       sides evenly (the previous rule left the right edge on a paler colour, so it read as
+       a thinner border), and the text uses the status foreground. */
+    --toast-icon-fill: var(--status-neutral-solid);
+    --toast-text: var(--foreground);
+    background: var(--card) !important;
+    border: 1px solid var(--toast-icon-fill) !important;
     border-radius: 3px !important;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22) !important;
     color: var(--toast-text) !important;
@@ -494,93 +515,29 @@ html {
   }
 
   .custom-toast[data-type='success'] {
-    --toast-border: #c7f4dd;
-    --toast-accent: #e9f9f0;
-    --toast-icon-fill: #22c55e;
-    --toast-text: #0f5132;
-    --toast-muted: #1b7a4b;
+    --toast-icon-fill: var(--status-success-solid);
+    --toast-text: var(--status-success);
   }
 
   .custom-toast[data-type='warning'] {
-    --toast-border: #ffe7c2;
-    --toast-accent: #fff7ec;
-    --toast-icon-fill: #f59e0b;
-    --toast-text: #7c2d12;
-    --toast-muted: #b45309;
+    --toast-icon-fill: var(--status-warning-solid);
+    --toast-text: var(--status-warning);
   }
 
   .custom-toast[data-type='error'] {
-    --toast-border: #ffd1d7;
-    --toast-accent: #fff1f1;
-    --toast-icon-fill: #ef4444;
-    --toast-text: #7f1d1d;
-    --toast-muted: #b91c1c;
+    --toast-icon-fill: var(--status-danger-solid);
+    --toast-text: var(--status-danger);
   }
 
   .custom-toast[data-type='info'] {
-    --toast-border: #e2e8f0;
-    --toast-accent: #f6f7fb;
-    --toast-icon-fill: #3b82f6;
-    --toast-text: #1e293b;
-    --toast-muted: #475569;
+    --toast-icon-fill: var(--status-info-solid);
+    --toast-text: var(--status-info);
   }
 
+  /* Loading is untyped/neutral: a plain frame and grey icon strip. */
   .custom-toast[data-type='loading'] {
-    --toast-border: #e0e7ff;
-    --toast-accent: #eef2ff;
-    --toast-icon-fill: #4f46e5;
-    --toast-text: #1e1b4b;
-    --toast-muted: #4338ca;
-  }
-
-  .dark .custom-toast {
-    --toast-border: rgba(255, 255, 255, 0.08);
-    --toast-accent: rgba(255, 255, 255, 0.04);
-    --toast-icon-fill: #94a3b8;
-    --toast-text: #f8fafc;
-    --toast-muted: #cbd5f5;
-    background: #0f172a !important;
-    box-shadow: 0 20px 45px rgba(2, 6, 23, 0.65) !important;
-  }
-
-  .dark .custom-toast[data-type='success'] {
-    --toast-border: rgba(34, 197, 94, 0.55);
-    --toast-accent: rgba(16, 185, 129, 0.12);
-    --toast-icon-fill: #22c55e;
-    --toast-text: #d1fae5;
-    --toast-muted: #6ee7b7;
-  }
-
-  .dark .custom-toast[data-type='warning'] {
-    --toast-border: rgba(245, 158, 11, 0.5);
-    --toast-accent: rgba(251, 191, 36, 0.12);
-    --toast-icon-fill: #fbbf24;
-    --toast-text: #fde68a;
-    --toast-muted: #fcd34d;
-  }
-
-  .dark .custom-toast[data-type='error'] {
-    --toast-border: rgba(248, 113, 113, 0.55);
-    --toast-accent: rgba(239, 68, 68, 0.12);
-    --toast-icon-fill: #ef4444;
-    --toast-text: #fecaca;
-    --toast-muted: #f87171;
-  }
-
-  .dark .custom-toast[data-type='info'] {
-    --toast-border: rgba(59, 130, 246, 0.45);
-    --toast-accent: rgba(59, 130, 246, 0.12);
-    --toast-icon-fill: #3b82f6;
-    --toast-text: #bfdbfe;
-    --toast-muted: #93c5fd;
-  }
-
-  .dark .custom-toast[data-type='loading'] {
-    --toast-border: rgba(79, 70, 229, 0.45);
-    --toast-accent: rgba(79, 70, 229, 0.12);
-    --toast-icon-fill: #8b5cf6;
-    --toast-text: #ddd6fe;
-    --toast-muted: #c4b5fd;
+    --toast-icon-fill: var(--status-neutral-solid);
+    --toast-text: var(--foreground);
   }
 
   .custom-toast [data-icon] {
@@ -651,4 +608,159 @@ input[type='week'] {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Rich-description content (the Tiptap editor and, later, the read-only renderer).
+   AFCT has no typography plugin, so the supported nodes get explicit styles here,
+   scoped to .afct-rich-text so nothing leaks into the rest of the app. Uses the
+   semantic color tokens, so dark mode follows automatically. */
+.afct-rich-text :where(p) {
+  margin: 0 0 0.5rem;
+}
+.afct-rich-text :where(p):last-child {
+  margin-bottom: 0;
+}
+.afct-rich-text :where(h2) {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+  line-height: 1.3;
+}
+.afct-rich-text :where(h3) {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0.875rem 0 0.5rem;
+}
+.afct-rich-text :where(h4) {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.5rem;
+}
+.afct-rich-text :where(h2, h3, h4):first-child {
+  margin-top: 0;
+}
+.afct-rich-text :where(ul, ol) {
+  margin: 0 0 0.5rem;
+  padding-left: 1.5rem;
+}
+.afct-rich-text :where(ul) {
+  list-style: disc;
+}
+.afct-rich-text :where(ol) {
+  list-style: decimal;
+}
+.afct-rich-text :where(li) {
+  margin: 0.125rem 0;
+}
+.afct-rich-text :where(li) :where(p) {
+  margin: 0;
+}
+.afct-rich-text :where(blockquote) {
+  border-left: 3px solid var(--color-border);
+  color: var(--color-muted-foreground);
+  margin: 0 0 0.5rem;
+  padding-left: 0.75rem;
+}
+.afct-rich-text :where(code) {
+  background: var(--color-muted);
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+  padding: 0.125rem 0.25rem;
+}
+/* Code blocks may scroll internally rather than widening the page. */
+.afct-rich-text :where(pre) {
+  background: var(--color-muted);
+  border-radius: 0.375rem;
+  margin: 0 0 0.5rem;
+  overflow-x: auto;
+  padding: 0.75rem;
+}
+.afct-rich-text :where(pre) :where(code) {
+  background: none;
+  padding: 0;
+}
+.afct-rich-text :where(hr) {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 1rem 0;
+}
+
+/* Alignment. The editor stores left/center/right in the Tiptap JSON and renders it as
+   data-align (never an inline style), so only these three values can ever take effect;
+   anything else simply does not match. Left is the default and carries no attribute. */
+.afct-rich-text :where([data-align='center']) {
+  text-align: center;
+}
+.afct-rich-text :where([data-align='right']) {
+  text-align: right;
+}
+
+/* Links inside rich descriptions. Keyboard-focusable by default (real anchors), with a
+   visible focus ring from the shared token so tabbing through a description is followable. */
+.afct-rich-text :where(a) {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.afct-rich-text :where(a):hover {
+  opacity: 0.85;
+}
+.afct-rich-text :where(a):focus-visible {
+  border-radius: 0.125rem;
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* A description never needs trailing space below its last block: the container that holds it
+   owns that spacing. Without this, every card and dialog gains a stray half-line. */
+.afct-rich-text > :last-child {
+  margin-bottom: 0;
+}
+
+/* Compact density for read surfaces where a description sits inside something small: cards,
+   list rows, problem headers. Same semantics and same styles, tighter rhythm. Preferred over
+   one-off spacing classes at each call site, which drift apart. */
+.afct-rich-text--compact :where(p, ul, ol, blockquote, pre) {
+  margin-bottom: 0.25rem;
+}
+.afct-rich-text--compact :where(h2, h3, h4) {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 1rem;
+}
+.afct-rich-text--compact :where(h2, h3, h4):first-child {
+  margin-top: 0;
+}
+.afct-rich-text--compact :where(hr) {
+  margin: 0.5rem 0;
+}
+.afct-rich-text--compact :where([data-type='block-math']) {
+  margin: 0.375rem 0;
+}
+
+/* Equations. KaTeX brings its own typography; these rules only place the nodes. Display
+   equations are always centred: the upstream block-math node is an atom carrying just the
+   LaTeX source, so there is nowhere to store a per-equation alignment. */
+.afct-rich-text :where([data-type='block-math']) {
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  text-align: center;
+}
+.afct-rich-text :where([data-type='inline-math']) {
+  /* A long inline expression must not push the column sideways. */
+  max-width: 100%;
+}
+/* While editing, equations read as clickable, because clicking one opens the edit dialog. */
+.afct-rich-text :where(.tiptap-mathematics-render--editable) {
+  border-radius: 0.25rem;
+  cursor: pointer;
+  padding: 0 0.125rem;
+}
+.afct-rich-text :where(.tiptap-mathematics-render--editable):hover {
+  background: var(--color-muted);
+}
+/* KaTeX renders a malformed expression in its own error colour; make that legible on both
+   themes and keep the source visible so the author can see what they typed. */
+.afct-rich-text :where(.katex-error) {
+  color: var(--color-destructive);
+  font-family: var(--font-mono, monospace);
 }

@@ -20,8 +20,8 @@ export function ThemeToggler() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon" className="group">
-          <Sun className="group-hover:text-accent h-[1.2rem] w-[1.2rem] scale-100 rotate-0 text-black transition-all dark:scale-0 dark:-rotate-90" />
-          <Moon className="group-hover:text-accent absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 text-black transition-all dark:scale-100 dark:rotate-0" />
+          <Sun className="group-hover:text-accent h-[1.2rem] w-[1.2rem] scale-100 rotate-0 text-foreground transition-all dark:scale-0 dark:-rotate-90" />
+          <Moon className="group-hover:text-accent absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 text-foreground transition-all dark:scale-100 dark:rotate-0" />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>

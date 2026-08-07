@@ -16,7 +16,7 @@ type SubmissionViewerDialogProps = {
   /** URL of the file to view (submission or solution). */
   src: string;
   title?: string;
-  /** Empty-string symbol for the JFLAP viewer. */
+  /** Empty-string symbol (ε / λ) for the JFLAP and grammar viewers. */
   epsSymbol?: string;
   width?: string;
   height?: string;
@@ -62,7 +62,16 @@ export function SubmissionViewerDialog({
   }
 
   if (type === 'CFG') {
-    return <CfgViewerDialog open={open} onOpenChange={onOpenChange} src={src} title={title} />;
+    // Grammars show epsilon too, so they follow the course's notation like the others do.
+    return (
+      <CfgViewerDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        src={src}
+        title={title}
+        epsSymbol={epsSymbol}
+      />
+    );
   }
 
   return null;

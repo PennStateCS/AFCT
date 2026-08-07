@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ACTIVE_STUDENT_ROSTER } from '@/lib/roster-status';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
@@ -7,6 +8,7 @@ import { readJson } from '@/lib/api/request';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-convert';
 import { resolveUnlockAt } from '@/lib/assignment-late-window';
+import { descriptionWriteData } from '@/lib/description-write';
 import { AssignmentCreateApiSchema } from '@/schemas/assignment';
 
 /**
@@ -58,6 +60,9 @@ export const GET = withCourseAuth(
           title: true,
           dueDate: true,
           description: true,
+          // Individual vs group is carried by groupSetId (null = individual); surfaced as
+          // an isGroup flag below so callers don't have to know the column.
+          groupSetId: true,
           problems: {
             select: {
               problemId: true,
@@ -74,10 +79,16 @@ export const GET = withCourseAuth(
         },
       });
 
-      const result = assignments.map(({ problems, ...assignment }) => {
+      const result = assignments.map(({ problems, groupSetId, ...assignment }) => {
         const maxGrade = problems.reduce((sum, p) => sum + p.maxPoints, 0);
         const totalGrade = problems.reduce((sum, p) => sum + (p.grades[0]?.grade ?? 0), 0);
-        return { ...assignment, totalGrade, maxGrade };
+        return {
+          ...assignment,
+          totalGrade,
+          maxGrade,
+          problemCount: problems.length,
+          isGroup: groupSetId != null,
+        };
       });
 
       return NextResponse.json(result);
@@ -227,7 +238,8 @@ export const POST = withCourseAuth(
             );
           }
           const found = await prisma.roster.findMany({
-            where: { courseId, userId: { in: userIds }, role: 'STUDENT' },
+            // Active students only: a dropped student can't be a new assignment target.
+            where: { courseId, userId: { in: userIds }, ...ACTIVE_STUDENT_ROSTER },
             select: { userId: true },
           });
           const ok = new Set(found.map((r) => r.userId));
@@ -241,11 +253,12 @@ export const POST = withCourseAuth(
         }
       }
 
+      const descFields = descriptionWriteData(data);
       const created = await prisma.$transaction(async (tx) => {
         const assignment = await tx.assignment.create({
           data: {
             title: data.title,
-            description: data.description,
+            ...descFields,
             dueDate,
             unlockAt: unlockState.unlockAt,
             assignedToEveryone,

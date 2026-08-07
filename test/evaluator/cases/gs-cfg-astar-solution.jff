@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<!-- Unambiguous grammar for a* (S -> aS | epsilon). Same language as the ambiguous one. -->
+<structure>
+	<type>grammar</type>
+	<production><left>S</left><right>aS</right></production>
+	<production><left>S</left><right></right></production>
+</structure>

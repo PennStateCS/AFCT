@@ -267,7 +267,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
             cropY={activity.user?.cropY ?? 0.5}
             zoom={activity.user?.zoom ?? 1}
           />
-          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+          <AvatarFallback className="text-xs">
             {getInitials(activity.user?.firstName, activity.user?.lastName, activity.user?.email)}
           </AvatarFallback>
         </Avatar>
@@ -275,6 +275,9 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     },
   },
   {
+    // Explicit id: TanStack would otherwise derive `user_firstName` from the dotted
+    // accessorKey, which is not what the server's sort allow-list is keyed by.
+    id: 'userFirstName',
     accessorKey: 'user.firstName',
     header: 'First Name',
     meta: { priority: 2 },
@@ -284,6 +287,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     },
   },
   {
+    id: 'userLastName',
     accessorKey: 'user.lastName',
     header: 'Last Name',
     meta: { priority: 3 },
@@ -304,7 +308,10 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'category',
-    meta: { priority: 3, filterVariant: 'multiselect', filterLabel: 'Category' },
+    // No filterVariant: the table shows one server-ordered page, so a faceted filter here
+    // could only narrow the rows on screen. Category, Assignment and Problem are filtered
+    // through the toolbar's Filters menu in ActivityCard instead.
+    meta: { priority: 3 },
     header: 'Category',
     enableSorting: true,
     accessorFn: (row) => row.category || '',
@@ -312,9 +319,11 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'assignment',
-    meta: { priority: 2, filterVariant: 'multiselect', filterLabel: 'Assignment' },
+    meta: { priority: 2 },
     header: 'Assignment',
-    enableSorting: true,
+    // Not sortable: the displayed title comes from a relation with metadata fallbacks, so
+    // there is no single column the server can order the whole log by. Filter by it instead.
+    enableSorting: false,
     accessorFn: (row) => {
       const assignmentTitle =
         row.assignment?.title ||
@@ -336,7 +345,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <div className="text-sm">
           {assignmentTitle ? (
-            <span className="font-medium text-purple-700">{assignmentTitle}</span>
+            <span className="font-medium text-purple-700 dark:text-purple-300">{assignmentTitle}</span>
           ) : (
             <span className="text-muted-foreground italic">N/A</span>
           )}
@@ -346,9 +355,10 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
   },
   {
     id: 'problem',
-    meta: { priority: 3, filterVariant: 'multiselect', filterLabel: 'Problem' },
+    meta: { priority: 3 },
     header: 'Problem',
-    enableSorting: true,
+    // Not sortable, for the same reason as Assignment above.
+    enableSorting: false,
     accessorFn: (row) => {
       const problemTitle =
         row.problem?.title ||
@@ -367,7 +377,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <div className="text-sm">
           {problemTitle ? (
-            <span className="font-medium text-green-700">{problemTitle}</span>
+            <span className="font-medium text-green-700 dark:text-green-400">{problemTitle}</span>
           ) : (
             <span className="text-muted-foreground italic">N/A</span>
           )}

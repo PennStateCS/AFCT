@@ -72,10 +72,14 @@ export function AssignmentTypeCard({
       await apiClient.put(apiPaths.assignmentType(courseId, assignmentId), {
         groupSetId: isGroup ? selectedSetId : null,
       });
-      showToast.success('Assignment type changed');
+      showToast.updated('Assignment type');
       onChanged?.();
     } catch (err) {
-      showToast.error(err instanceof ApiError ? err.message : 'Failed to change type');
+      showToast.error(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not change the assignment type. Check your connection and try again.',
+      );
     } finally {
       setSaving(false);
       setConfirmOpen(false);
@@ -84,13 +88,13 @@ export function AssignmentTypeCard({
 
   return (
     <div className="space-y-4">
-      <h2 role="heading" aria-level={2} className="flex items-center gap-2 text-2xl font-semibold">
+      <h2 className="flex items-center gap-2 text-2xl font-semibold">
         <Shapes className="h-6 w-6" />
         Type
       </h2>
       <p className="text-muted-foreground max-w-3xl text-sm">
-        Whether students work individually or together as a group. Changing the type resets who
-        the assignment is assigned to and clears any date exceptions.
+        Whether students work individually or together as a group. Changing the type resets who the
+        assignment is assigned to and clears any date exceptions.
       </p>
 
       <fieldset className="grid max-w-3xl gap-3 sm:grid-cols-2" aria-label="Assignment type">
@@ -100,7 +104,7 @@ export function AssignmentTypeCard({
             <label
               key={opt.label}
               className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
-                checked ? 'border-primary bg-primary/5 ring-primary/30 ring-1' : 'hover:bg-muted/40'
+                checked ? 'border-primary bg-primary/5 ring-primary/30 ring-1' : 'hover:bg-muted'
               } ${courseIsArchived ? 'cursor-not-allowed opacity-60' : ''}`}
             >
               <input
@@ -141,7 +145,7 @@ export function AssignmentTypeCard({
               value={selectedSetId ?? undefined}
               onValueChange={(v) => setSelectedSetId(v)}
               disabled={courseIsArchived}
-              triggerClassName="bg-card border-black"
+              triggerClassName="bg-card border-input"
               options={groupSets.map((gs) => ({
                 value: gs.id,
                 label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,
@@ -159,10 +163,11 @@ export function AssignmentTypeCard({
 
       <ConfirmDialog
         open={confirmOpen}
+        busy={saving}
         title="Change assignment type?"
         description="Switching between individual and group resets who this assignment is assigned to back to everyone and removes any date exceptions. You can set the new audience and exceptions on the Assign To tab afterward."
         confirmText="Change type"
-        onConfirm={() => void applyChange()}
+        onConfirm={applyChange}
         onCancel={() => setConfirmOpen(false)}
       />
     </div>

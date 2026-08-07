@@ -11,7 +11,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import InputGroup from '@/components/ui/InputGroup';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
@@ -102,7 +102,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
     } else {
       const text = JSON.parse(await res.text().catch(() => '{"error":"Unexpected Error"}'));
       console.error('Failed to create user:', text);
-      toast.error(text.error);
+      showToast.error(text.error);
     }
   };
 
@@ -116,7 +116,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card max-w-2xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create New User</DialogTitle>
           <DialogDescription>Fill out the fields to create a user account.</DialogDescription>
@@ -130,6 +130,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="First Name"
+                requiredMark
                 name="firstName"
                 fieldProps={field}
                 error={errors.firstName?.message}
@@ -144,6 +145,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="Last Name"
+                requiredMark
                 name="lastName"
                 fieldProps={field}
                 error={errors.lastName?.message}
@@ -158,6 +160,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="Email"
+                requiredMark
                 name="email"
                 type="email"
                 fieldProps={field}
@@ -175,6 +178,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="Password"
+                requiredMark
                 name="password"
                 type="password"
                 showEye
@@ -193,6 +197,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="Confirm Password"
+                requiredMark
                 name="confirmPassword"
                 type="password"
                 showEye
@@ -213,7 +218,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
                 return (
                   <li
                     key={rule.label}
-                    className={ok ? 'text-xs text-green-600' : 'text-xs text-red-500'}
+                    className={ok ? 'text-status-success text-xs' : 'text-destructive text-xs'}
                   >
                     {rule.label}
                   </li>

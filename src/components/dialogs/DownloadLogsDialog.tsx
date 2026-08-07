@@ -107,7 +107,9 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
   // Surface a fetch failure the same way the original init() did.
   useEffect(() => {
     if (fieldsError) {
-      showToast.error('Failed to get log fields');
+      showToast.error(
+        'Could not load the list of log fields. Close and reopen this dialog to try again.',
+      );
     }
   }, [fieldsError]);
 
@@ -168,8 +170,8 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
       onOpenChange(false);
       showToast.success('Downloaded log file');
     } else {
-      showToast.error('Failed to download logs');
-      console.error('Failed to download logs');
+      showToast.error('Could not download the logs. Check your connection and try again.');
+      console.error('Could not download the logs. Check your connection and try again.');
     }
   };
 
@@ -180,7 +182,7 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           {/* Title */}
           <DialogTitle>Download Logs</DialogTitle>

@@ -67,7 +67,7 @@ export function DuplicateGroupSetDialog({
         apiPaths.courseGroupSetDuplicate(courseId, sourceSetId),
         { name: trimmed, includeMemberships },
       );
-      showToast.success('Group set duplicated');
+      showToast.duplicated('Group set');
       setOpen(false);
       onDuplicated(created.id);
     } catch (err) {
@@ -79,7 +79,7 @@ export function DuplicateGroupSetDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Duplicate Group Set</DialogTitle>
           <DialogDescription className="sr-only">
@@ -142,7 +142,7 @@ export function DuplicateGroupSetDialog({
           </fieldset>
 
           {error && (
-            <p id={errorId} role="alert" className="text-xs text-red-600">
+            <p id={errorId} role="alert" className="text-destructive text-xs">
               {error}
             </p>
           )}

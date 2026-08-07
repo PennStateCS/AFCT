@@ -5,10 +5,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { describeMachine, type MachineType } from '@/lib/jflap-parse';
+import { cn } from '@/lib/utils';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import {
   Grid,
-  Waypoints,
   Download,
   ImageDown,
   Copy,
@@ -30,6 +31,7 @@ export function JffCytoscapeViewer({
   src,
   title,
   height = '72vh',
+  fill = false,
   epsSymbol = DEFAULT_EPS,
   darkMode = false,
   showGridDefault = false,
@@ -38,6 +40,8 @@ export function JffCytoscapeViewer({
   src: string;
   title?: string;
   height?: number | string;
+  /** Fill the parent instead of using `height`, for a viewer inside a sized container. */
+  fill?: boolean;
   epsSymbol?: string;
   darkMode?: boolean;
   showGridDefault?: boolean;
@@ -91,12 +95,12 @@ export function JffCytoscapeViewer({
             : 'Unknown';
     const cls =
       t === 'fa'
-        ? 'bg-orange-100 text-orange-800'
+        ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200'
         : t === 'pda'
-          ? 'bg-purple-100 text-purple-800'
+          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
           : t === 'tm'
-            ? 'bg-sky-100 text-sky-800'
-            : 'bg-gray-100 text-gray-800';
+            ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'
+            : 'bg-muted text-muted-foreground';
     return (
       <Badge variant="outline" className={cls}>
         {label}
@@ -108,9 +112,14 @@ export function JffCytoscapeViewer({
   const controlBtnClass = 'bg-card';
 
   return (
-    <div className="bg-card w-full overflow-hidden rounded-md border">
+    <div
+      className={cn(
+        'bg-card w-full overflow-hidden rounded-md border',
+        fill && 'flex h-full flex-col',
+      )}
+    >
       {/* Toolbar: muted gray so it reads as a distinct control strip above the white body */}
-      <div className="bg-background flex items-center justify-between gap-2 overflow-x-auto border-b p-2">
+      <div className="bg-background flex shrink-0 items-center justify-between gap-2 overflow-x-auto border-b p-2">
         <div className="flex min-w-0 items-center gap-2">
           {/* Title is shown in the dialog header above; only the type label lives here. */}
           <TypeBadge t={type} />
@@ -129,18 +138,24 @@ export function JffCytoscapeViewer({
             >
               <Grid className="mr-2 h-4 w-4" /> Grid
             </Button>
-            <Button
-              size="sm"
-              variant={honorPositions ? 'default' : 'outline'}
-              className={honorPositions ? undefined : controlBtnClass}
-              onClick={toggleHonorPositions}
-              title="Original Positions"
-              aria-label="Original positions"
-              aria-pressed={honorPositions}
-            >
-              <Waypoints className="mr-2 h-4 w-4" />
-              Original Positions
-            </Button>
+            {/* Both choices are named and on screen. This was one button labelled
+                "Original Positions", which named only the state it was in: with it
+                un-pressed there was nothing to say what you were looking at instead, and
+                "positions" described the node coordinates rather than anything the reader
+                of a diagram thinks about. */}
+            <span className="text-muted-foreground ml-1 text-sm whitespace-nowrap">Layout</span>
+            <SegmentedControl
+              name="jff-layout"
+              ariaLabel="Layout"
+              value={honorPositions ? 'as-drawn' : 'auto'}
+              onValueChange={(next) => {
+                if ((next === 'as-drawn') !== honorPositions) toggleHonorPositions();
+              }}
+              options={[
+                { value: 'as-drawn', label: 'As drawn' },
+                { value: 'auto', label: 'Auto-arranged' },
+              ]}
+            />
             <Button
               size="sm"
               variant="outline"
@@ -216,17 +231,20 @@ export function JffCytoscapeViewer({
           wandering into cytoscape's internals while still conveying what it shows. */}
       <div
         ref={containerRef}
-        style={{ height, ...backgroundStyle }}
-        className="bg-card relative overflow-hidden"
+        // In fill mode the flex track supplies the height; an inline one would fight it.
+        style={fill ? backgroundStyle : { height, ...backgroundStyle }}
+        className={cn('bg-card relative overflow-hidden', fill && 'min-h-0 flex-1')}
         role="img"
         aria-label={title ? `Diagram of ${title}` : 'Automaton diagram'}
         aria-describedby={description ? summaryId : undefined}
       >
-        {error ? <div className="p-4 text-sm text-red-600">{error}</div> : null}
+        {error ? <div className="text-destructive p-4 text-sm">{error}</div> : null}
       </div>
 
       {description ? (
-        <div className="border-t px-3 py-2">
+        // Capped and scrollable on its own: the expanded transition listing can be long,
+        // and it must not steal height from the graph or grow the dialog.
+        <div className="max-h-40 shrink-0 overflow-y-auto border-t px-3 py-2">
           <p id={summaryId} className="text-muted-foreground text-xs">
             {description.summary}
           </p>
@@ -256,7 +274,9 @@ export function JffCytoscapeViewer({
                 <dd>{description.initialState ?? 'Not set'}</dd>
 
                 <dt className="text-muted-foreground">Final states</dt>
-                <dd>{description.finalStates.length ? description.finalStates.join(', ') : 'None'}</dd>
+                <dd>
+                  {description.finalStates.length ? description.finalStates.join(', ') : 'None'}
+                </dd>
 
                 <dt className="text-muted-foreground">Transitions</dt>
                 <dd>
@@ -306,18 +326,34 @@ export default function JffViewerDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* A column bounded by the viewport, so the graph takes whatever is left after the
+          header and never pushes the dialog past the screen. It used to be a fixed 85vh
+          canvas inside an `overflow-auto` box that was itself capped at the viewport, so
+          the two scrollbars were guaranteed: the parts simply added up to more than the
+          screen. Nothing here scrolls now; the graph pans and zooms instead. */}
       <DialogContent
-        className="bg-card max-h-[calc(100vh-2rem)] !max-w-none overflow-auto p-0"
+        className="flex h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] !max-w-none flex-col overflow-hidden p-0"
         style={{ width }}
       >
-        <DialogHeader className="px-4 pt-4">
-          <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
+        <DialogHeader className="shrink-0 px-4 pt-4">
+          {/* Wraps to a second line rather than truncating. These titles are a file name
+              followed by the problem's own title, so the ellipsis landed mid-name and cut
+              off the part that identifies the file. Two lines, then it clips.
+
+              `leading-snug` overrides the shared title's `leading-none`: a line-height of
+              exactly 1 leaves no room below the baseline, and clamping adds the
+              `overflow: hidden` that turns that into a visible cut, beheading the
+              descender of the j in every `.jff`. */}
+          <DialogTitle className="line-clamp-2 leading-snug break-words">
+            {title ?? 'JFLAP Viewer'}
+          </DialogTitle>
         </DialogHeader>
-        <div className="h-full p-4 pt-2">
+        <div className="min-h-0 flex-1 p-4 pt-2">
           {open ? (
             <JffCytoscapeViewer
               src={src}
               title={title}
+              fill
               height={height}
               epsSymbol={epsSymbol}
               darkMode={darkMode}

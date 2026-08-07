@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 
 export type StudentOption = {
@@ -13,7 +13,9 @@ export type StudentOption = {
 /** Full display name for a student, falling back to email. */
 export function getStudentName(student: StudentOption): string {
   return (
-    `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || student.email || 'Unknown student'
+    `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() ||
+    student.email ||
+    'Unknown student'
   );
 }
 
@@ -36,7 +38,8 @@ export function useRosterStudentOptions(courseId: string, open: boolean): Studen
   });
 
   useEffect(() => {
-    if (query.isError) toast.error('Failed to load the student list.');
+    if (query.isError)
+      showToast.error('Could not load the student list. Refresh the page to try again.');
   }, [query.isError]);
 
   return query.data ?? [];

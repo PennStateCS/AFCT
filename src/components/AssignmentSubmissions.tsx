@@ -19,9 +19,21 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
+import dynamic from 'next/dynamic';
+
+// On demand: the grant dialog carries the form stack and was the last thing putting zod on the
+// assignment route. Staff open it rarely, and never on arrival.
+const GrantExtraSubmissionsDialog = dynamic(
+  () =>
+    import('@/components/dialogs/GrantExtraSubmissionsDialog').then(
+      (m) => m.GrantExtraSubmissionsDialog,
+    ),
+  { ssr: false },
+);
+import { Button } from '@/components/ui/button';
 import { useReviewData, type ReviewDataResponse } from './useReviewData';
 
-type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
+type Person = Pick<User, 'firstName' | 'lastName' | 'id'> & { enrollmentStatus?: string | null };
 
 type Problem = {
   id: string;
@@ -96,6 +108,12 @@ export default function AssignmentSubmissions({
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  const [grantDialogOpen, setGrantDialogOpen] = useState(false);
+  // Set on first open and never cleared, so the dynamic import above stays deferred.
+  const [grantMounted, setGrantMounted] = useState(false);
+  useEffect(() => {
+    if (grantDialogOpen) setGrantMounted(true);
+  }, [grantDialogOpen]);
 
   // Grade editing state (robust, GradesCard style)
   const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
@@ -109,12 +127,18 @@ export default function AssignmentSubmissions({
     submission: Submission | ProblemSubmission | null;
   }>({ open: false, submission: null });
 
-  // Students: cached read shared with GroupsCard via the same query key.
+  // Students for review: includes DROPPED students (labeled), since staff still review
+  // their submitted work. Its own query key ('students', 'all') so it doesn't collide
+  // with the active-only list GroupsCard/audience pickers share.
   const studentsQuery = useQuery({
-    queryKey: ['course', courseId, 'students'],
+    queryKey: ['course', courseId, 'students', 'all'],
     queryFn: async () => {
-      const res = await fetch(apiPaths.courseStudents(courseId));
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
+      const res = await fetch(apiPaths.courseStudents(courseId, { includeDropped: true }));
+      if (!res.ok)
+        throw new Error(
+          (await res.json())?.error ||
+            'Could not load the student list. Refresh the page to try again.',
+        );
       return (await res.json()) as Person[];
     },
     staleTime: 30_000,
@@ -141,7 +165,7 @@ export default function AssignmentSubmissions({
   useEffect(() => {
     if (studentsQueryIsError) {
       console.error('Fetch students error:', studentsQuery.error);
-      showToast.error('Failed to load students');
+      showToast.error('Could not load the student list. Refresh the page to try again.');
     }
   }, [studentsQueryIsError, studentsQuery.error]);
 
@@ -340,6 +364,15 @@ export default function AssignmentSubmissions({
     [visibleProblems, limitText, problemGrades, submissions],
   );
 
+  // The problem whose submissions are on screen; also the target of a grant action.
+  const selectedProblem = useMemo(
+    () =>
+      selectedProblemId
+        ? (visibleProblems.find((p) => p.id === selectedProblemId) ?? null)
+        : (visibleProblems[0] ?? null),
+    [selectedProblemId, visibleProblems],
+  );
+
   // Seed the local editable GRADE state from the cached review data. Submissions and
   // comments are derived above; only the editable grade fields still live in state.
   // When there is no selected student, clear it (the old null-branch behavior).
@@ -353,7 +386,7 @@ export default function AssignmentSubmissions({
 
     if (reviewQueryIsError) {
       console.error('Fetch review data error:', reviewError);
-      showToast.error('Failed to load review data');
+      showToast.error('Could not load this submission. Refresh the page to try again.');
       setProblemGrades({});
       setGradeInputs({});
       return;
@@ -421,7 +454,7 @@ export default function AssignmentSubmissions({
         void queryClient.invalidateQueries({
           queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
         });
-        showToast.success('Comment saved successfully');
+        showToast.saved('Comment');
       } catch (err) {
         console.error('Save comment error:', err);
         showToast.error(errMessage(err, 'Failed to save comment'));
@@ -453,7 +486,7 @@ export default function AssignmentSubmissions({
             selectedStudentId ?? '',
           ),
         });
-        showToast.success('Comment deleted successfully');
+        showToast.deleted('Comment');
       } catch (err) {
         console.error('Delete comment error:', err);
         showToast.error(errMessage(err, 'Failed to delete comment'));
@@ -473,7 +506,9 @@ export default function AssignmentSubmissions({
     async (problemId: string) => {
       if (!selectedStudent) return;
       if (courseIsArchived) {
-        showToast.error('Course is archived; grades cannot be edited.');
+        showToast.error(
+          'This course is archived, so grades cannot be edited. Unarchive the course to make changes.',
+        );
         return;
       }
 
@@ -485,20 +520,18 @@ export default function AssignmentSubmissions({
       const trimmed = rawValue.trim();
       const numericValue = trimmed === '' ? null : Number(trimmed);
 
+      // Each of these shows the same sentence twice on purpose: inline next to the field, so it
+      // stays put while the grader fixes it, and as a toast, because the field can be scrolled
+      // out of view in a long problem list.
       if (numericValue !== null) {
-        if (Number.isNaN(numericValue)) {
-          setProblemGradeErrors((prev) => ({ ...prev, [problemId]: 'Grade must be a number' }));
-          showToast.error('Grade must be a number');
-          return;
-        }
-        if (numericValue < 0) {
-          const message = 'Grade must be at least 0';
-          setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
-          showToast.error(message);
-          return;
-        }
-        if (hasUpperBound && rawMaxPoints !== null && numericValue > rawMaxPoints) {
-          const message = `Grade must be between 0 and ${rawMaxPoints}`;
+        const message = Number.isNaN(numericValue)
+          ? 'Enter the grade as a number.'
+          : numericValue < 0
+            ? 'Enter a grade of at least 0.'
+            : hasUpperBound && rawMaxPoints !== null && numericValue > rawMaxPoints
+              ? `Enter a grade between 0 and ${rawMaxPoints}.`
+              : null;
+        if (message) {
           setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
           showToast.error(message);
           return;
@@ -611,8 +644,7 @@ export default function AssignmentSubmissions({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [students.length]);
 
-  const isStudentDataLoading =
-    loadingSubmissions || loadingComments || loadingProblemGrades;
+  const isStudentDataLoading = loadingSubmissions || loadingComments || loadingProblemGrades;
 
   useEffect(() => {
     if (isStudentDataLoading) {
@@ -632,11 +664,7 @@ export default function AssignmentSubmissions({
       {selectedStudent && (
         <div className="space-y-4">
           <div>
-            <h2
-              role="heading"
-              aria-level={2}
-              className="flex items-center gap-2 text-2xl font-semibold"
-            >
+            <h2 className="flex items-center gap-2 text-2xl font-semibold">
               <FileText className="h-6 w-6" /> Submissions
             </h2>
 
@@ -679,13 +707,25 @@ export default function AssignmentSubmissions({
               </div>
             ) : (
               (() => {
-                const selectedProblem = selectedProblemId
-                  ? visibleProblems.find((p) => p.id === selectedProblemId) || null
-                  : visibleProblems[0] || null;
                 const selectedSubs = selectedProblem
                   ? extractSubs(submissions[selectedProblem.id])
                   : [];
                 const selectedComments = selectedProblem ? comments[selectedProblem.id] || [] : [];
+
+                // Staff can hand the selected student (or their group) extra attempts on
+                // the selected problem, on top of the shared cap.
+                const grantAction = selectedProblem ? (
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setGrantDialogOpen(true)}
+                      disabled={courseIsArchived}
+                    >
+                      Grant extra submissions
+                    </Button>
+                  </div>
+                ) : null;
 
                 const listCard = (
                   <ProblemListCard
@@ -704,7 +744,18 @@ export default function AssignmentSubmissions({
 
                 const workspace = (
                   <ProblemWorkspace
-                    problem={selectedProblem}
+                    // The header shows the cap the SELECTED student is working against
+                    // (base plus any grants), not just the shared base value.
+                    problem={
+                      selectedProblem
+                        ? {
+                            ...selectedProblem,
+                            maxSubmissions:
+                              reviewData?.problemLimits?.[selectedProblem.id]?.max ??
+                              selectedProblem.maxSubmissions,
+                          }
+                        : null
+                    }
                     submissions={selectedSubs}
                     assignmentDueDate={assignmentDueDate}
                     showSubmitter={reviewIsGroup}
@@ -754,6 +805,7 @@ export default function AssignmentSubmissions({
                 if (isMobile) {
                   return (
                     <div className="flex flex-col gap-4">
+                      {grantAction}
                       {listCard}
                       <div className="print:col-span-2">{workspace}</div>
                     </div>
@@ -761,15 +813,37 @@ export default function AssignmentSubmissions({
                 }
 
                 return (
-                  <div className="grid grid-cols-[280px_minmax(0,1fr)] items-stretch gap-6 print:block">
-                    <div className="min-w-0">{listCard}</div>
-                    <div className="min-w-0 print:col-span-2">{workspace}</div>
+                  <div className="space-y-3">
+                    {grantAction}
+                    <div className="grid grid-cols-[280px_minmax(0,1fr)] items-stretch gap-6 print:block">
+                      <div className="min-w-0">{listCard}</div>
+                      <div className="min-w-0 print:col-span-2">{workspace}</div>
+                    </div>
                   </div>
                 );
               })()
             )}
           </div>
         </div>
+      )}
+
+      {selectedStudent && selectedProblem && grantMounted && (
+        <GrantExtraSubmissionsDialog
+          open={grantDialogOpen}
+          setOpen={setGrantDialogOpen}
+          courseId={courseId}
+          assignmentId={assignmentId}
+          problemId={selectedProblem.id}
+          problemTitle={selectedProblem.title ?? null}
+          student={{
+            id: selectedStudent.id,
+            name:
+              `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+              'this student',
+          }}
+          groupId={reviewData?.groupId ?? null}
+          onGranted={refreshReview}
+        />
       )}
 
       {openDialog.submission && (

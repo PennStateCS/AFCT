@@ -17,7 +17,6 @@ import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { AssignmentWizardFormSchema } from '@/schemas/assignment';
 import { toDateTimeLocalInTimeZone } from '@/lib/date-convert';
 
-
 type AssigneeApi = {
   id: string;
   targetType: 'STUDENT' | 'GROUP';
@@ -40,7 +39,9 @@ type OverrideApi = {
   studentGroup?: { id: string; name: string; _count?: { memberships: number } } | null;
 };
 
-function personName(u: { firstName: string | null; lastName: string | null; email: string } | null | undefined): string {
+function personName(
+  u: { firstName: string | null; lastName: string | null; email: string } | null | undefined,
+): string {
   return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim() || u?.email || 'Student';
 }
 
@@ -211,7 +212,9 @@ export function AssignmentSettingsCard({
         assignedToEveryone: raw.assignedToEveryone,
         assignees: raw.assignedToEveryone
           ? []
-          : (raw.overrides ?? []).map((o) => (o.groupId ? { groupId: o.groupId } : { userId: o.userId })),
+          : (raw.overrides ?? []).map((o) =>
+              o.groupId ? { groupId: o.groupId } : { userId: o.userId },
+            ),
       });
       // 3. Date overrides: diff against the loaded rows (create / patch / delete). Only
       // touch targets that are still assigned -- overrides for targets dropped from the
@@ -219,11 +222,7 @@ export function AssignmentSettingsCard({
       // here would just produce spurious 404/400s.
       const assignedKeys = raw.assignedToEveryone
         ? null // everyone -> every target is assigned
-        : new Set(
-            (raw.overrides ?? [])
-              .map((o) => targetKey(o))
-              .filter((k): k is string => !!k),
-          );
+        : new Set((raw.overrides ?? []).map((o) => targetKey(o)).filter((k): k is string => !!k));
       const isAssigned = (k: string) => assignedKeys === null || assignedKeys.has(k);
 
       const origByKey = new Map<string, OverrideApi>();
@@ -253,7 +252,9 @@ export function AssignmentSettingsCard({
         };
         const orig = origByKey.get(k);
         if (orig) {
-          ops.push(apiClient.patch(apiPaths.assignmentOverride(courseId, assignment.id, orig.id), body));
+          ops.push(
+            apiClient.patch(apiPaths.assignmentOverride(courseId, assignment.id, orig.id), body),
+          );
         } else {
           ops.push(
             apiClient.post(apiPaths.assignmentOverrides(courseId, assignment.id), {
@@ -266,14 +267,21 @@ export function AssignmentSettingsCard({
       const failed = (await Promise.allSettled(ops)).filter((r) => r.status === 'rejected').length;
 
       if (failed > 0) {
-        showToast.warning(`Saved, but ${failed} date override(s) could not be saved.`);
+        showToast.warning(
+          `Saved, but ${failed} date ${failed === 1 ? 'exception' : 'exceptions'} could not be saved`,
+          { description: 'Check the exception rows below and save again.' },
+        );
       } else {
-        showToast.success('Assign To saved');
+        showToast.saved('Assign To');
       }
       onSaved?.(updated);
       await Promise.all([assigneesQuery.refetch(), overridesQuery.refetch()]);
     } catch (err) {
-      showToast.error(err instanceof ApiError ? err.message : 'Failed to save');
+      showToast.error(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not save these settings. Check your connection and try again.',
+      );
     } finally {
       setSaving(false);
     }
@@ -281,7 +289,7 @@ export function AssignmentSettingsCard({
 
   return (
     <div className="space-y-4">
-      <h2 role="heading" aria-level={2} className="flex items-center gap-2 text-2xl font-semibold">
+      <h2 className="flex items-center gap-2 text-2xl font-semibold">
         <Users className="h-6 w-6" />
         Assign To
       </h2>
@@ -295,13 +303,13 @@ export function AssignmentSettingsCard({
           Loading the assignment&apos;s audience…
         </p>
       ) : assigneesQuery.isError || overridesQuery.isError ? (
-        <div role="alert" className="text-sm text-red-600">
+        <div role="alert" className="text-destructive text-sm">
           The assignment&apos;s audience could not be loaded. It is hidden so an accidental save
           cannot clear it.{' '}
           <Button
             type="button"
             variant="link"
-            className="h-auto p-0 text-red-600 underline"
+            className="text-destructive h-auto p-0 underline"
             onClick={() => {
               void assigneesQuery.refetch();
               void overridesQuery.refetch();
@@ -311,39 +319,39 @@ export function AssignmentSettingsCard({
           </Button>
         </div>
       ) : (
-      <form
-        className="max-w-5xl space-y-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void handleSubmit(doSave)(e);
-        }}
-      >
-        <div className="max-w-3xl">
-          <AssignToFields
-            control={control}
-            errors={errors}
-            courseId={courseId}
-            active
-            hideOverridesHint
-          />
-        </div>
+        <form
+          className="max-w-5xl space-y-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSubmit(doSave)(e);
+          }}
+        >
+          <div className="max-w-3xl">
+            <AssignToFields
+              control={control}
+              errors={errors}
+              courseId={courseId}
+              active
+              hideOverridesHint
+            />
+          </div>
 
-        <DateOverridesEditor control={control} courseId={courseId} active />
+          <DateOverridesEditor control={control} courseId={courseId} active />
 
-        <div className="flex max-w-3xl justify-end gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => reset(defaultValues)}
-            disabled={!isDirty || saving}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={!isDirty || !isValid || saving || courseIsArchived}>
-            {saving ? 'Saving…' : 'Save changes'}
-          </Button>
-        </div>
-      </form>
+          <div className="flex max-w-3xl justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => reset(defaultValues)}
+              disabled={!isDirty || saving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!isDirty || !isValid || saving || courseIsArchived}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        </form>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 # User Accounts
 
-The **User Accounts** page lists every AFCT account. Administrators can create and import accounts, update account details, grant administrator access, reset passwords, disable accounts, and delete inactive accounts.
+The **User Accounts** page lists every AFCT account. Administrators can create and import accounts, update account details, grant administrator access, reset passwords, change login emails, deactivate and reactivate accounts, and delete inactive accounts.
 
 ## Create one account
 
@@ -24,19 +24,32 @@ The import processes valid rows and reports failed rows separately. Fix only the
 
 The table shows the user's name, email, administrator flag, active status, password status, creation date, and last sign-in. Use sorting, search, filters, and column controls to narrow the list.
 
+The table shows only **active** accounts by default. To include deactivated accounts, open the **Status** filter and add **Inactive** (or clear the filter).
+
 Open **Manage** for account actions.
 
 ## Edit an account
 
-Select **Edit User Profile** to update the person's name, timezone, profile photo, administrator access, or active status. The email address is read-only because AFCT uses it as the permanent account identifier.
+Select **Edit User Profile** to update the person's name, timezone, profile photo, or administrator access.
 
 AFCT protects a few account changes:
 
 - You cannot remove the final active administrator.
-- A user in an active, published course cannot be made inactive.
+- A user in an active, published course cannot be deactivated.
 - Inactive accounts cannot sign in.
 
-If an email address is wrong, create a new account with the correct address and update the relevant course rosters.
+## Deactivate or reactivate an account
+
+Account status controls whether a person can sign in. It has its own confirmed action so the change is deliberate.
+
+- **Deactivate.** Open **Manage** and select **Deactivate Account**, then confirm. The account can no longer sign in to AFCT (or the submission client), but its records are kept. You cannot deactivate the last active administrator, or a user still on an active, published course.
+- **Reactivate.** For a deactivated account, open **Manage** and select **Reactivate Account**, then confirm. The person can sign in again.
+
+Only one of the two actions shows at a time, depending on the account's current status.
+
+## Change the login email
+
+Select **Change Email Address** to move an account to a new email. This changes the address the person signs in with. AFCT checks that the new address is not already in use before saving; the field will not accept an address that belongs to another account.
 
 ## Reset a password
 
@@ -57,4 +70,8 @@ The number of failed attempts before a lockout and how long a lock lasts are set
 
 The **Delete Inactive User** action is enabled in the interface only after the account has been made inactive. You cannot delete your own signed-in administrator account.
 
-Account deletion is permanent and database relationships can remove course-linked records owned by that user. Activity log entries are retained without the deleted user link. Prefer inactive status for a real account, and delete only accounts created by mistake or used for testing after confirming that their data is not needed.
+:::danger
+Account deletion is permanent. Deleting an account can also remove course-linked records owned by that user through database relationships. Activity log entries are kept, but without the link to the deleted user.
+:::
+
+Prefer inactive status for a real account. Delete only accounts created by mistake or used for testing, and confirm their data is not needed first.

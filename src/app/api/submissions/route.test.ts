@@ -14,6 +14,7 @@ const prismaMock = vi.hoisted(() => ({
   // existing tests are unaffected unless they opt into an archived course.
   course: { findUnique: vi.fn() },
   submission: { create: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
+  submissionGrant: { findMany: vi.fn() },
   roster: { findFirst: vi.fn() },
   // The submit route wraps its cap re-check + create in a serializable transaction;
   // run the callback against the same mock so tx.submission.* hits these mocks.
@@ -83,6 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fsMock.existsSync.mockReturnValue(true);
   authMock.mockResolvedValue({ user: { id: 'user-1' } });
+  prismaMock.submissionGrant.findMany.mockResolvedValue([]);
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
   queueSettingsMock.mockResolvedValue({ resubmitCooldownMs: 10_000 });
   validateStructureXMLMock.mockReturnValue({ isValid: true });

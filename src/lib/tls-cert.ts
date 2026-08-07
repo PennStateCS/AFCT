@@ -17,6 +17,10 @@ const KEY_PATH = path.join(CERT_DIR, 'server.key');
 // Key generated alongside a CSR, held until the signed cert comes back.
 const PENDING_KEY = path.join(CERT_DIR, 'pending.key');
 const PENDING_CSR = path.join(CERT_DIR, 'pending.csr');
+// The turbopackIgnore markers below tell the bundler not to follow these paths.
+// They point at runtime mounts and host binaries supplied by the environment, never
+// at anything bundled, so static analysis would otherwise pull the whole project into
+// the traced output while trying to resolve them.
 const OPENSSL = process.env.OPENSSL_BIN || 'openssl';
 
 export type CertInfo = {
@@ -186,7 +190,7 @@ export function generateCsr(fields: CsrFields): { csr: string } {
   fs.mkdirSync(CERT_DIR, { recursive: true });
 
   execFileSync(
-    OPENSSL,
+    /* turbopackIgnore: true */ OPENSSL,
     [
       'req', '-new', '-newkey', 'rsa:2048', '-nodes',
       '-keyout', PENDING_KEY,
@@ -230,7 +234,7 @@ export function generateSelfSigned(fields: CsrFields): CertInfo {
   const tmpCrt = path.join(CERT_DIR, '.selfsigned.crt');
   try {
     execFileSync(
-      OPENSSL,
+      /* turbopackIgnore: true */ OPENSSL,
       [
         'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
         '-keyout', tmpKey,

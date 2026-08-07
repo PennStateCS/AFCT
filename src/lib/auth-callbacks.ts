@@ -19,6 +19,21 @@ import { getServerIdleTimeoutMs } from '@/lib/session-timeout.server';
 import { passwordChangedSinceToken } from '@/lib/session-password';
 
 /**
+ * The client's `update(data)` payload can ask this callback to re-sync the
+ * credential fields from the database. A user who just changed their own password
+ * holds a token snapshotted *before* the change, and the session callback revokes
+ * exactly that (its `pwChangedAt` no longer matches). Refreshing here keeps the
+ * active session alive while any *other* stale token still gets revoked.
+ */
+function isCredentialRefresh(session: unknown): boolean {
+  return (
+    typeof session === 'object' &&
+    session !== null &&
+    (session as { refreshCredentials?: unknown }).refreshCredentials === true
+  );
+}
+
+/**
  * Build the JWT. Runs at sign-in (when `user` is present), on an explicit client
  * activity heartbeat (`trigger === 'update'`), and on ordinary token reads.
  */
@@ -26,10 +41,13 @@ export async function buildJwtToken({
   token,
   user,
   trigger,
+  session,
 }: {
   token: JWT;
   user?: User | null;
   trigger?: 'signIn' | 'signUp' | 'update';
+  // The data passed to the client-side `update(data)` call, forwarded by NextAuth.
+  session?: unknown;
 }): Promise<JWT> {
   // Sign-in only. This is the one place the database is read here; ordinary reads of an
   // existing token do no query at all.
@@ -64,6 +82,21 @@ export async function buildJwtToken({
     if (!isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, now)) {
       token.lastActivity = now;
       token.idleTimeoutMs = await getServerIdleTimeoutMs(now);
+    }
+
+    // Re-sync the credential snapshot after the user changed their own password, so the
+    // session that made the change survives instead of being revoked on the next request
+    // (see isCredentialRefresh). Gated on the explicit marker so an ordinary idle
+    // heartbeat never pays for this database read.
+    if (isCredentialRefresh(session) && typeof token.id === 'string') {
+      const fresh = await prisma.user.findUnique({
+        where: { id: token.id },
+        select: { temporaryPassword: true, passwordChangedAt: true },
+      });
+      if (fresh) {
+        token.mustChangePassword = fresh.temporaryPassword;
+        token.pwChangedAt = fresh.passwordChangedAt ? fresh.passwordChangedAt.getTime() : null;
+      }
     }
   }
 

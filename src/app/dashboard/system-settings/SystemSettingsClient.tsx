@@ -133,7 +133,8 @@ export default function SystemSettingsClient() {
 
   // Surface a load failure the same way the imperative fetch did.
   useEffect(() => {
-    if (settingsError) showToast.error('Failed to load system settings.');
+    if (settingsError)
+      showToast.error('Could not load system settings. Refresh the page to try again.');
   }, [settingsError]);
 
   // Restore the last-viewed tab on load, and remember it on change.
@@ -303,7 +304,7 @@ export default function SystemSettingsClient() {
             }
           : prev,
       );
-      showToast.success('System settings updated successfully.');
+      showToast.updated('System settings');
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Failed to save settings.');
     } finally {
@@ -345,6 +346,12 @@ export default function SystemSettingsClient() {
     { value: 'tls', label: 'TLS Certificate', Icon: Lock },
     { value: 'updates', label: 'Updates', Icon: RefreshCw },
   ] as const;
+
+  // The TLS and Updates tabs have no fields covered by the shared Save; they drive
+  // their own actions (issue a certificate, run an upgrade). Hiding the Save/Reset row
+  // there keeps it from looking like those tabs have unsaved settings. Every other tab,
+  // Backups included (its schedule is part of the form), needs it.
+  const showSave = tab !== 'tls' && tab !== 'updates';
 
   return (
     <div className="space-y-4 pb-8">
@@ -415,24 +422,33 @@ export default function SystemSettingsClient() {
             </TabsContent>
           </Tabs>
 
-          {/* Save action, bottom-right of the card. */}
-          <div className="mt-6 flex items-center justify-start gap-3 border-t pt-4">
-            <Button
-              type="submit"
-              form="system-settings-form"
-              size="sm"
-              aria-label="Save system settings"
-              disabled={disabled}
-            >
-              {saving ? 'Saving…' : 'Save changes'}
-            </Button>
-            {isDirty && (
-              <Button type="button" variant="outline" size="sm" onClick={resetForm} disabled={saving}>
-                Reset
+          {/* Save action, bottom-left of the card. Hidden on tabs with no savable
+              fields (TLS, Updates), which run their own actions instead. */}
+          {showSave && (
+            <div className="mt-6 flex items-center justify-start gap-3 border-t pt-4">
+              <Button
+                type="submit"
+                form="system-settings-form"
+                size="sm"
+                aria-label="Save system settings"
+                disabled={disabled}
+              >
+                {saving ? 'Saving…' : 'Save changes'}
               </Button>
-            )}
-            {isDirty && <span className="text-muted-foreground text-sm">Unsaved changes</span>}
-          </div>
+              {isDirty && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={resetForm}
+                  disabled={saving}
+                >
+                  Reset
+                </Button>
+              )}
+              {isDirty && <span className="text-muted-foreground text-sm">Unsaved changes</span>}
+            </div>
+          )}
         </CardContent>
       </Card>
 

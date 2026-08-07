@@ -137,6 +137,37 @@ describe('buildJwtToken', () => {
     expect(token.lastActivity).toBe(expired);
   });
 
+  it('re-syncs the credential snapshot when the update asks for it', async () => {
+    // After a user changes their own password, the client calls update({ refreshCredentials
+    // }); the token must pick up the new passwordChangedAt and cleared temporaryPassword,
+    // or the session callback would revoke the very session that made the change.
+    const changedAt = new Date('2026-03-01T00:00:00Z');
+    prismaMock.user.findUnique.mockResolvedValue({
+      temporaryPassword: false,
+      passwordChangedAt: changedAt,
+    });
+
+    const token = await buildJwtToken({
+      token: makeToken({ pwChangedAt: null, mustChangePassword: true }),
+      trigger: 'update',
+      session: { refreshCredentials: true },
+    });
+
+    expect(token.pwChangedAt).toBe(changedAt.getTime());
+    expect(token.mustChangePassword).toBe(false);
+  });
+
+  it('does not read the database on an ordinary heartbeat update', async () => {
+    // The refresh is gated on the explicit marker; the frequent idle heartbeat must stay
+    // query-free.
+    await buildJwtToken({
+      token: makeToken(),
+      trigger: 'update',
+      session: { activity: Date.now() },
+    });
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+  });
+
   it('backfills a legacy token that predates idle tracking instead of expiring it', async () => {
     // A deploy must not sign everyone out because their tokens lack the new fields.
     const token = await buildJwtToken({

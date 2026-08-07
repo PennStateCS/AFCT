@@ -36,7 +36,7 @@ export function SegmentedControl({
       role="radiogroup"
       aria-label={ariaLabel}
       className={cn(
-        'bg-card inline-flex rounded-md border border-black p-0.5',
+        'bg-card inline-flex rounded-md border border-input p-0.5',
         disabled && 'opacity-50',
         className,
       )}
@@ -51,7 +51,7 @@ export function SegmentedControl({
               'has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-offset-1',
               checked
                 ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-foreground hover:bg-muted/30',
+                : 'text-foreground hover:bg-muted',
               disabled && 'pointer-events-none',
             )}
           >

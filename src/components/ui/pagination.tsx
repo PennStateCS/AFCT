@@ -38,6 +38,9 @@ type PaginationLinkProps = {
 
 function PaginationLink({ className, isActive, size = 'icon', ...props }: PaginationLinkProps) {
   return (
+    // Primitive: callers supply the content (page number, or an icon plus sr-only text)
+    // via children, so the static content check cannot see it here.
+    // eslint-disable-next-line jsx-a11y/anchor-has-content
     <a
       aria-current={isActive ? 'page' : undefined}
       data-slot="pagination-link"

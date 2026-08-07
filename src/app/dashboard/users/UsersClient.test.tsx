@@ -104,6 +104,20 @@ describe('UsersClient', () => {
     });
   });
 
+  it('defaults to showing only active users', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(pageResponse(1));
+
+    renderWithClient(<UsersClient />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('table-loading').textContent).toBe('false');
+    });
+
+    const url = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(url).toContain('status=active');
+    expect(url).not.toContain('status=inactive');
+  });
+
   it('shows error banner and retries successfully', async () => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
@@ -125,12 +139,13 @@ describe('UsersClient', () => {
     });
   });
 
-  it('opens dialog from query string and clears query on close', () => {
+  it('opens dialog from query string and clears query on close', async () => {
     searchState.create = 'open';
 
     renderWithClient(<UsersClient />);
 
-    expect(screen.getByTestId('create-dialog-state')).toHaveTextContent('open');
+    // The dialog is loaded on demand, so it arrives a tick after the render that opens it.
+    expect(await screen.findByTestId('create-dialog-state')).toHaveTextContent('open');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Dialog' }));
 
@@ -157,7 +172,8 @@ describe('UsersClient', () => {
   it('opens import users dialog from button click', async () => {
     renderWithClient(<UsersClient />);
 
-    expect(screen.getByTestId('bulk-dialog-state')).toHaveTextContent('closed');
+    // Loaded on demand: it does not exist at all until the button is used, which is the point.
+    expect(screen.queryByTestId('bulk-dialog-state')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Import Users' }));
 

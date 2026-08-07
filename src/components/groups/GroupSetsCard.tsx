@@ -97,7 +97,7 @@ export function GroupSetsCard({
         <LoadingSpinner label="Loading group sets" fullScreen={false} className="min-h-40" />
       ) : sets.length === 0 ? (
         <div className="text-muted-foreground rounded-md border border-dashed p-8 text-center">
-          <Layers className="mx-auto mb-2 h-8 w-8 text-gray-400" aria-hidden="true" />
+          <Layers className="mx-auto mb-2 h-8 w-8 text-muted-foreground" aria-hidden="true" />
           <p className="font-medium">No group sets yet</p>
           <p className="text-sm">
             A group set is one arrangement of students, such as Project 1 or Lab Partners.
@@ -120,8 +120,7 @@ export function GroupSetsCard({
             >
               {sets.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} ({s.groupCount} group{s.groupCount === 1 ? '' : 's'}, {s.assignedCount}{' '}
-                  assigned)
+                  {s.name}
                 </option>
               ))}
             </select>

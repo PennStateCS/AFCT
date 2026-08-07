@@ -14,10 +14,10 @@ import { showToast } from '@/lib/toast';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Trash2, BookOpen, ChevronDown, Copy, Archive, ArchiveRestore, Settings } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { Course } from '@prisma/client';
-import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
+import dynamic from 'next/dynamic';
 import { getInstructors, type EnrolledUser } from '@/lib/course-roster';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { CompactDate } from '@/components/ui/CompactDate';
@@ -25,6 +25,24 @@ import { formatRegistrationCode } from '@/lib/format-registration-code';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, mutateWithToast } from '@/lib/api/fetch-client';
 import { truncate } from '@/lib/truncate';
+
+/**
+ * On demand, and rendered per row: the duplicate wizard carries the form stack, and a course
+ * list used to mount one per course. This is the only zod path on the courses and
+ * archived-courses pages, which share these columns.
+ */
+const DuplicateCourseDialog = dynamic(() => import('@/components/dialogs/DuplicateCourseDialog'), {
+  ssr: false,
+});
+
+/** True once `open` has first been true. See the dynamic import above. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 
 type CourseWithFaculty = Course & {
   // Enrolled list (user objects with courseRole and flags)
@@ -108,7 +126,7 @@ export const columns = (
       return (
         <Link
           href={`/dashboard/courses/${course.id}`}
-          className="text-blue-600 hover:underline"
+          className="text-primary hover:underline"
           title={course.name}
           aria-label={course.name}
         >
@@ -221,6 +239,7 @@ function CourseActionsCell({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const duplicateMounted = useMountedOnce(duplicateOpen);
 
   // Archive (active -> archived) or restore (archived -> active). Both move the
   // course off the current list, so refresh once the change lands. Un-archiving is
@@ -263,25 +282,26 @@ function CourseActionsCell({
         open={confirmOpen}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={handleDelete}
-        title="Delete Course"
-        description={`Delete "${course.name}"? If it has no assignments, problems, or students, it is removed permanently. Otherwise it is hidden and its data is retained.`}
-        confirmText="Delete"
+        variant="destructive"
+        title="Delete course?"
+        description={`If "${course.name}" has no assignments, problems, or students, it is removed permanently. Otherwise it is hidden and its data is retained.`}
+        confirmText="Delete course"
       />
 
       <ConfirmDialog
         open={archiveConfirmOpen}
         onCancel={() => setArchiveConfirmOpen(false)}
-        onConfirm={() => void handleArchiveToggle()}
-        title={course.isArchived ? 'Restore Course' : 'Archive Course'}
+        onConfirm={handleArchiveToggle}
+        title={course.isArchived ? 'Restore course?' : 'Archive course?'}
         description={
           course.isArchived
-            ? `Restore "${course.name}"? It becomes editable again and returns to the active courses list.`
-            : `Archive "${course.name}"? It becomes read-only for everyone and moves to the Archived Courses page.`
+            ? `"${course.name}" becomes editable again and returns to the active courses list.`
+            : `"${course.name}" becomes read-only for everyone and moves to the Archived Courses page.`
         }
-        confirmText={course.isArchived ? 'Restore' : 'Archive'}
+        confirmText={course.isArchived ? 'Restore course' : 'Archive course'}
       />
 
-      {isAdmin && (
+      {isAdmin && duplicateMounted && (
         <DuplicateCourseDialog
           open={duplicateOpen}
           setOpen={setDuplicateOpen}
@@ -349,7 +369,7 @@ function CourseActionsCell({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setConfirmOpen(true)}
-                className="hover:bg-secondary flex items-center gap-2 text-red-600 focus:text-red-600"
+                className="hover:bg-secondary flex items-center gap-2 text-destructive focus:text-destructive"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Course

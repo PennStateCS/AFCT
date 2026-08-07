@@ -22,10 +22,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# The ERD generator (disabled in CI) pulls in puppeteer, whose install would
-# otherwise download a ~150MB Chromium none of these jobs use.
-env:
-  PUPPETEER_SKIP_DOWNLOAD: '1'
 
 jobs:
   lint:
@@ -67,12 +63,10 @@ jobs:
           cache: npm
 
       # `postinstall` generates the Prisma client (tests import enums/types from
-      # @prisma/client). DISABLE_ERD skips the ERD generator, not needed for
+      # @prisma/client).
       # tests. No database is required; the tests mock Prisma at runtime.
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-        env:
-          DISABLE_ERD: 'true'
 
       - name: Run tests
         run: npm test
@@ -120,8 +114,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-        env:
-          DISABLE_ERD: 'true'
 
       # `migrate deploy`, not `db push`: it applies the committed migration files, so a
       # migration that is broken or missing fails here rather than in production.
@@ -144,15 +136,16 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Doc generation only needs js-yaml + the validators; skip Prisma client gen.
+      # Doc generation needs js-yaml + the validators and the ERD generator, but not
+      # the Prisma client itself.
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
         env:
           SKIP_PRISMA_GENERATE: '1'
 
       # `docs` validates the spec (failing on a malformed @openapi block or an
-      # invalid document) and regenerates the typed client.
-      - name: Generate and validate spec + types
+      # invalid document), regenerates the typed client, and redraws the ERD.
+      - name: Generate and validate spec + types + ERD
         run: npm run docs
 
       - name: Ensure generated API types are committed and in sync
@@ -160,6 +153,14 @@ jobs:
           if ! git diff --quiet -- src/types/api.ts; then
             echo "::error::src/types/api.ts is out of date. Run 'npm run docs' and commit the result."
             git --no-pager diff -- src/types/api.ts
+            exit 1
+          fi
+
+      - name: Ensure the published ERD matches the schema
+        run: |
+          if ! git diff --quiet -- docs-site/docs/reference/database-schema.md; then
+            echo "::error::The published ERD is out of date. Run 'npm run docs' and commit the result."
+            git --no-pager diff -- docs-site/docs/reference/database-schema.md
             exit 1
           fi
 
@@ -176,11 +177,9 @@ jobs:
           node-version: 22
           cache: npm
 
-      # DISABLE_ERD lets postinstall generate the Prisma client (tsc needs its types).
+      # postinstall generates the Prisma client (tsc needs its types).
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-        env:
-          DISABLE_ERD: 'true'
 
       - name: Typecheck (app + tests)
         run: npm run typecheck:all
@@ -200,8 +199,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-        env:
-          DISABLE_ERD: 'true'
 
       # Same build the prod image runs; ESLint is skipped here (the lint job covers
       # it). No DB or secrets are needed at build time.

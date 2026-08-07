@@ -13,15 +13,13 @@ import {
   Users,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Switch } from '@/components/ui/switch';
-import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
-import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import {
   Dialog,
   DialogContent,
@@ -31,24 +29,74 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { showToast } from '@/lib/toast';
-import { AssignmentSettingsCard } from '@/components/assignments/AssignmentSettingsCard';
 import { AssignmentTypeCard } from '@/components/assignments/AssignmentTypeCard';
 import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsForm';
-import { AssignmentProblemSettingsDialog } from '@/components/dialogs/AssignmentProblemSettingsDialog';
 import { AssignmentStatisticsPanel } from '@/components/assignments/AssignmentStatisticsPanel';
 import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSimilarityPanel';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar } from '@/components/course/course-tabs';
+import { useConfirmIfDirty } from '@/components/unsaved-changes/UnsavedChangesProvider';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
-import type { Problem } from '@prisma/client';
+import type { Prisma, Problem } from '@prisma/client';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { AssignmentWithDetails } from '@/lib/assignment-details';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { queryKeys } from '@/lib/query-keys';
+import { asRichDescription } from '@/lib/rich-description';
+import { RichDescription } from '@/components/rich-description/RichDescription';
 import { buildProblemColumns } from './problem-columns';
+
+/**
+ * The dialogs and the settings tab load on demand. Between them they were the only things
+ * putting the form stack on this route, and none of them is on screen when the page opens: the
+ * viewer needs a submission chosen, the settings card needs its tab selected, and the rest need
+ * a menu item clicked.
+ *
+ * `ConfirmDialog` stays a normal import; it is small, has no form machinery, and is shared
+ * app-wide, so splitting it would add a request without removing bytes.
+ */
+const AssociateProblemsDialog = dynamic(
+  () =>
+    import('@/components/dialogs/AssociateProblemsDialog').then((m) => m.AssociateProblemsDialog),
+  { ssr: false },
+);
+const CreateProblemDialog = dynamic(
+  () => import('@/components/dialogs/CreateProblemDialog').then((m) => m.CreateProblemDialog),
+  { ssr: false },
+);
+const SubmissionViewerDialog = dynamic(
+  () => import('@/components/dialogs/SubmissionViewerDialog').then((m) => m.SubmissionViewerDialog),
+  { ssr: false },
+);
+const AssignmentProblemSettingsDialog = dynamic(
+  () =>
+    import('@/components/dialogs/AssignmentProblemSettingsDialog').then(
+      (m) => m.AssignmentProblemSettingsDialog,
+    ),
+  { ssr: false },
+);
+const AssignmentSettingsCard = dynamic(
+  () =>
+    import('@/components/assignments/AssignmentSettingsCard').then((m) => m.AssignmentSettingsCard),
+  {
+    ssr: false,
+    // This one fills the panel the author is looking at rather than appearing over it, so an
+    // empty panel would read as a bug. Same reasoning as the course settings form.
+    loading: () => <p className="text-muted-foreground text-sm">Loading assignment settings…</p>,
+  },
+);
+
+/** True once `open` has first been true, so a dynamic import stays deferred until first use. */
+function useMountedOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  return mounted || open;
+}
 
 type ProblemLinkSettings = {
   problemId: string;
@@ -89,8 +137,12 @@ export default function AssignmentDashboardPage({
 
   const queryClient = useQueryClient();
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
+  // Holds the requested publish state while the confirmation dialog is open.
+  const [publishTarget, setPublishTarget] = useState<boolean | null>(null);
   const [addProblemDialogOpen, setAddProblemDialogOpen] = useState(false);
   const [createProblemOpen, setCreateProblemOpen] = useState(false);
+  const associateMounted = useMountedOnce(addProblemDialogOpen);
+  const createProblemMounted = useMountedOnce(createProblemOpen);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
   const [tab, setTab] = useState(searchParams.get('tab') || 'description');
@@ -137,6 +189,10 @@ export default function AssignmentDashboardPage({
       ...assignment,
       groupSetId: assignment.groupSetId ?? null,
       description: assignment.description ?? null,
+      // Settings card edits dates/audience only, so the description fields are just carried
+      // through to satisfy the Assignment type.
+      descriptionFormat: assignment.descriptionFormat ?? ('PLAIN_TEXT' as const),
+      descriptionJson: (assignment.descriptionJson ?? null) as Prisma.JsonValue,
       createdAt: assignment.createdAt ?? new Date(),
       updatedAt: assignment.updatedAt ?? new Date(),
       dueDate: toDate(assignment.dueDate) ?? new Date(),
@@ -148,7 +204,12 @@ export default function AssignmentDashboardPage({
   }, [assignment]);
 
   const [descOpen, setDescOpen] = useState(false);
-  const [descText, setDescText] = useState<string | null>(null);
+  // Both forms of the problem's description, so the dialog can render the rich one and fall
+  // back to the plain text exactly like every other read surface.
+  const [descTarget, setDescTarget] = useState<{
+    description: string | null;
+    descriptionJson: unknown;
+  }>({ description: null, descriptionJson: null });
   // This privileged view is only rendered for course staff (admin or the course's
   // FACULTY/TA), so problem-management actions are gated only on the archived state.
   const courseIsArchived = assignment?.course?.isArchived ?? false;
@@ -168,7 +229,7 @@ export default function AssignmentDashboardPage({
     const fileName = p.fileName ?? null;
     const original = p.originalFileName ?? null;
     if (!fileName) {
-      showToast.error('No file available to render');
+      showToast.error('This problem has no file to preview.');
       return;
     }
     const src = apiPaths.files.solution(encodeURIComponent(fileName));
@@ -178,19 +239,30 @@ export default function AssignmentDashboardPage({
     setJffType(problem.type);
   }, []);
 
-  const openDescription = useCallback((text: string | null) => {
-    setDescText(text);
+  const openDescription = useCallback((problem: Problem) => {
+    setDescTarget({
+      description: problem.description ?? null,
+      descriptionJson: (problem as { descriptionJson?: unknown }).descriptionJson ?? null,
+    });
     setDescOpen(true);
   }, []);
 
+  // Tab switches flip local state BEFORE the URL changes, unmounting the current tab's
+  // content, so a router-level guard would fire too late: the edits are already gone. Ask
+  // first. `confirmIfDirty` resolves true immediately when nothing is dirty, so the pristine
+  // path is unchanged.
+  const confirmIfDirty = useConfirmIfDirty();
   const handleTabChange = useCallback(
     (value: string) => {
-      setTab(value);
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('tab', value);
-      router.replace(`?${params.toString()}`);
+      void confirmIfDirty().then((proceed) => {
+        if (!proceed) return;
+        setTab(value);
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('tab', value);
+        router.replace(`?${params.toString()}`);
+      });
     },
-    [searchParams, router],
+    [confirmIfDirty, searchParams, router],
   );
 
   // Read 1: all course problems (used by the problems tab and the add/create
@@ -256,9 +328,11 @@ export default function AssignmentDashboardPage({
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
-      showToast.success('Problem Added');
+      showToast.added(problemIds.length === 1 ? 'Problem' : `${problemIds.length} problems`);
     } catch {
-      showToast.error('Failed to add problems');
+      showToast.error(
+        `Could not add the ${problemIds.length === 1 ? 'problem' : 'problems'} to this assignment. Check your connection and try again.`,
+      );
     }
     await invalidateAssignment();
   }
@@ -272,9 +346,11 @@ export default function AssignmentDashboardPage({
         body: JSON.stringify({ problemId: problemToRemove.id }),
       });
       if (!res.ok) throw new Error();
-      showToast.success(`"${problemToRemove.title}" removed from assignment`);
+      showToast.removed('Problem', { name: problemToRemove.title });
     } catch {
-      showToast.error(`Failed to remove "${problemToRemove.title}"`);
+      showToast.error(
+        'Could not remove the problem from this assignment. Check your connection and try again.',
+      );
     }
     await invalidateAssignment();
     setProblemToRemove(null);
@@ -355,7 +431,7 @@ export default function AssignmentDashboardPage({
   }
 
   if (loading) return <LoadingSpinner label="Loading" />;
-  if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
+  if (!assignment) return <div className="text-destructive p-6">Assignment not found.</div>;
 
   const assignmentProblemForDialog = problemToEdit
     ? ((assignment.problems ?? []).find((ap) => ap.problem.id === problemToEdit.id) ?? null)
@@ -403,7 +479,7 @@ export default function AssignmentDashboardPage({
                 <Switch
                   aria-label="Published"
                   checked={!!assignment.isPublished}
-                  onCheckedChange={(checked) => void handlePublishChange(!!checked)}
+                  onCheckedChange={(checked) => setPublishTarget(!!checked)}
                   disabled={courseIsArchived}
                 />
                 Published
@@ -413,11 +489,21 @@ export default function AssignmentDashboardPage({
                 <SearchableSelect
                   items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
                   onSelect={(assignmentId) => {
-                    // Carry the current tab across the jump so switching assignments keeps
-                    // you on the same view (e.g. staying on Submissions or Statistics).
-                    const tabQuery = `?tab=${encodeURIComponent(tab)}`;
-                    if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
-                    else window.location.href = `${assignmentId}${tabQuery}`;
+                    // Switching assignments unmounts every form on this page; ask first when
+                    // one of them holds pending edits.
+                    void confirmIfDirty().then((proceed) => {
+                      if (!proceed) return;
+                      // Carry the current tab across the jump so switching assignments keeps
+                      // you on the same view (e.g. staying on Submissions or Statistics).
+                      const tabQuery = `?tab=${encodeURIComponent(tab)}`;
+                      if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
+                      // Without the course id there is no absolute path to push, so this
+                      // falls back to a RELATIVE navigation resolved against the current
+                      // URL. next/navigation's router has no relative form, which is what
+                      // the lint rule below cannot express.
+                      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                      else window.location.href = `${assignmentId}${tabQuery}`;
+                    });
                   }}
                   placeholder={assignmentsLoading ? 'Loading…' : 'Switch assignment'}
                   searchPlaceholder="Search assignments..."
@@ -430,7 +516,7 @@ export default function AssignmentDashboardPage({
               {/* Show course name/code as a link to the course page (fallback to courseId) */}
               <Link
                 href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                className="max-w-full break-all text-blue-700 hover:underline"
+                className="text-primary max-w-full break-all hover:underline"
               >
                 {assignment.course?.name || assignment.courseName || assignment.courseId}
                 {assignment.course?.code
@@ -452,11 +538,7 @@ export default function AssignmentDashboardPage({
             />
             <TabsContent value="description">
               <div className="space-y-4">
-                <h2
-                  role="heading"
-                  aria-level={2}
-                  className="flex items-center gap-2 text-2xl font-semibold"
-                >
+                <h2 className="flex items-center gap-2 text-2xl font-semibold">
                   <AlignLeft className="h-6 w-6" />
                   Details
                 </h2>
@@ -465,6 +547,7 @@ export default function AssignmentDashboardPage({
                   assignmentId={assignment.id}
                   initialTitle={assignment.title}
                   initialDescription={assignment.description ?? ''}
+                  initialDescriptionJson={asRichDescription(assignment.descriptionJson)}
                   courseIsArchived={courseIsArchived}
                   onSaved={() => void invalidateAssignment()}
                 />
@@ -485,11 +568,7 @@ export default function AssignmentDashboardPage({
             >
               <div className="space-y-4">
                 <div className="flex w-full items-center justify-between">
-                  <h2
-                    role="heading"
-                    aria-level={2}
-                    className="flex items-center gap-2 text-2xl font-semibold"
-                  >
+                  <h2 className="flex items-center gap-2 text-2xl font-semibold">
                     <FileText className="h-6 w-6" />
                     Problems
                   </h2>
@@ -587,53 +666,92 @@ export default function AssignmentDashboardPage({
       )}
       {/* Description dialog */}
       <Dialog open={descOpen} onOpenChange={(v) => setDescOpen(v)}>
-        <DialogContent className="bg-white">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Problem Description</DialogTitle>
           </DialogHeader>
-          <DialogDescription>{descText ?? 'No description.'}</DialogDescription>
+          {/* asChild swaps the default <p> for a div, because a rich description can contain
+              headings, lists, and rules, which are invalid inside a paragraph. Radix keeps the
+              generated id and the dialog's aria-describedby pointing at this element either
+              way, so the dialog stays described. */}
+          <DialogDescription asChild>
+            <div>
+              {descTarget.description || descTarget.descriptionJson ? (
+                <RichDescription
+                  // Heading base: dialog title is an h2, so the description starts one level below it.
+                  headingBaseLevel={3}
+                  description={descTarget.description}
+                  descriptionJson={descTarget.descriptionJson}
+                />
+              ) : (
+                'No description.'
+              )}
+            </div>
+          </DialogDescription>
           <DialogClose asChild>
             <Button variant="secondary">Close</Button>
           </DialogClose>
         </DialogContent>
       </Dialog>
-      <AssociateProblemsDialog
-        open={addProblemDialogOpen}
-        onClose={() => setAddProblemDialogOpen(false)}
-        courseId={id}
-        assignmentId={aid}
-        courseIsArchived={courseIsArchived}
-        allProblems={allProblems.map(normalizeProblem)}
-        usedProblems={usedProblems}
-        onAddProblems={(selectedProblemIds, problemSettings) => {
-          return handleAddProblems(selectedProblemIds, problemSettings);
-        }}
-      />
-      <CreateProblemDialog
-        open={createProblemOpen}
-        setOpen={setCreateProblemOpen}
-        courseId={id}
-        courseIsArchived={courseIsArchived}
-        assignmentId={aid}
-        onCreated={async (created) => {
-          await queryClient.invalidateQueries({ queryKey: ['course', id, 'problems'] });
-          if (created?.id && !aid) {
-            await handleAddProblems([created.id]);
-          }
-        }}
-      />
+      {associateMounted && (
+        <AssociateProblemsDialog
+          open={addProblemDialogOpen}
+          onClose={() => setAddProblemDialogOpen(false)}
+          courseId={id}
+          assignmentId={aid}
+          courseIsArchived={courseIsArchived}
+          allProblems={allProblems.map(normalizeProblem)}
+          usedProblems={usedProblems}
+          onAddProblems={(selectedProblemIds, problemSettings) => {
+            return handleAddProblems(selectedProblemIds, problemSettings);
+          }}
+        />
+      )}
+      {createProblemMounted && (
+        <CreateProblemDialog
+          open={createProblemOpen}
+          setOpen={setCreateProblemOpen}
+          courseId={id}
+          courseIsArchived={courseIsArchived}
+          assignmentId={aid}
+          onCreated={async (created) => {
+            await queryClient.invalidateQueries({ queryKey: ['course', id, 'problems'] });
+            if (created?.id && !aid) {
+              await handleAddProblems([created.id]);
+            }
+          }}
+        />
+      )}
       <ConfirmDialog
         open={!!problemToRemove}
-        title="Remove Problem from Assignment"
+        variant="destructive"
+        title="Remove problem from assignment?"
         description={
           problemToRemove
-            ? `Are you sure you want to remove "${problemToRemove.title}" from this assignment?`
+            ? `"${problemToRemove.title}" is removed from this assignment. The problem itself stays in the course problem bank.`
             : undefined
         }
-        confirmText="Remove"
-        cancelText="Cancel"
+        confirmText="Remove problem"
         onConfirm={handleConfirmRemoveProblem}
         onCancel={() => setProblemToRemove(null)}
+      />
+
+      <ConfirmDialog
+        open={publishTarget !== null}
+        title={publishTarget ? 'Publish assignment?' : 'Unpublish assignment?'}
+        description={
+          publishTarget
+            ? 'This assignment becomes visible to the students it is assigned to.'
+            : 'Students will no longer see this assignment.'
+        }
+        confirmText={publishTarget ? 'Publish' : 'Unpublish'}
+        onConfirm={async () => {
+          const next = publishTarget;
+          if (next === null) return;
+          await handlePublishChange(next);
+          setPublishTarget(null);
+        }}
+        onCancel={() => setPublishTarget(null)}
       />
       {problemToEdit && assignmentSettingsForDialog && (
         <AssignmentProblemSettingsDialog

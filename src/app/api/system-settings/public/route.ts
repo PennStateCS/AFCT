@@ -29,7 +29,19 @@ import { getHcaptchaSiteKey } from '@/lib/hcaptcha';
  */
 export async function GET() {
   try {
-    const settings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+    // Select the four public columns rather than the whole row. This handler is
+    // unauthenticated, and the settings row also holds the hCaptcha SECRET; narrowing
+    // the read means the secret is never in memory here, so it cannot be returned by a
+    // later edit that widens the response.
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 1 },
+      select: {
+        timezone: true,
+        allowSignup: true,
+        sessionTimeoutMinutes: true,
+        clock24Hour: true,
+      },
+    });
     return NextResponse.json({
       timezone: settings?.timezone ?? DEFAULT_SYSTEM_TIMEZONE,
       allowSignup: settings?.allowSignup ?? DEFAULT_ALLOW_SIGNUP,

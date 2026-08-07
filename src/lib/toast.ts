@@ -1,5 +1,25 @@
 // /src/lib/toast.ts
 import { toast as sonnerToast } from 'sonner';
+import { truncate } from '@/lib/truncate';
+
+/**
+ * The name of the specific thing that changed, when the caller knows it.
+ *
+ * A blank or missing name falls back to the plain noun, so a record with no title never
+ * produces a message like `"" deleted`.
+ */
+type NamedItem = { name?: string | null };
+
+// Long enough for a real assignment or course title, short enough that a toast stays one or
+// two lines. A cut title still beats a message that cannot say which item it meant.
+const MAX_NAME_LENGTH = 40;
+
+/** `"Pumping Lemma" deleted`, or `Assignment deleted` when there is no usable name. */
+function outcome(item: string, verb: string, options?: NamedItem) {
+  const name = options?.name?.trim();
+  const subject = name ? `"${truncate(name, MAX_NAME_LENGTH)}"` : item;
+  return showToast.success(`${subject} ${verb}`);
+}
 
 interface ToastOptions {
   description?: string;
@@ -68,18 +88,33 @@ export const showToast = {
     });
   },
 
-  // Convenience methods for common use cases
-  created: (itemName: string) => {
-    return showToast.success(`${itemName} created successfully`);
-  },
-
-  updated: (itemName: string) => {
-    return showToast.success(`${itemName} updated successfully`);
-  },
-
-  deleted: (itemName: string) => {
-    return showToast.success(`${itemName} deleted successfully`);
-  },
+  /**
+   * Outcome messages for the ordinary add / edit / delete actions.
+   *
+   * These own the WORDING so it cannot drift: pass the kind of thing that changed and, when
+   * you have it, the thing's own name. Call sites keep the noun (so the code still reads
+   * plainly) while the verb, the casing and the punctuation live here. Before this, the same
+   * operation said "Problem created!" in one place and "Problem updated." in another, and
+   * three flows disagreed about whether to shout.
+   *
+   * House style, applied by `outcome` below:
+   *   - sentence case, no trailing punctuation, and no "successfully" (a success toast
+   *     already says that by being a success toast)
+   *   - name the item when it is known, quoted and truncated, because "Assignment deleted"
+   *     cannot tell you WHICH one when you are working through a list
+   *
+   *   showToast.created('Problem')                        -> Problem created
+   *   showToast.deleted('Assignment', { name: title })    -> "Pumping Lemma" deleted
+   */
+  created: (item: string, options?: NamedItem) => outcome(item, 'created', options),
+  updated: (item: string, options?: NamedItem) => outcome(item, 'updated', options),
+  deleted: (item: string, options?: NamedItem) => outcome(item, 'deleted', options),
+  /** Attached something that already existed, e.g. an existing problem onto an assignment. */
+  added: (item: string, options?: NamedItem) => outcome(item, 'added', options),
+  /** Unlinked from something, but not destroyed. Deliberately distinct from `deleted`. */
+  removed: (item: string, options?: NamedItem) => outcome(item, 'removed', options),
+  duplicated: (item: string, options?: NamedItem) => outcome(item, 'duplicated', options),
+  imported: (item: string, options?: NamedItem) => outcome(item, 'imported', options),
 
   saved: (itemName?: string) => {
     return showToast.success(itemName ? `${itemName} saved` : 'Changes saved', {

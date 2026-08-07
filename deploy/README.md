@@ -107,6 +107,9 @@ redacted**. Send that file to your administrator so they can help.
 - **Updating:** `sh install.sh update` pulls, recreates, verifies health, and
   rolls back automatically on failure. The manual equivalent is
   `docker compose pull && docker compose up -d`.
+- **Legacy flat installs:** the automatic import of a pre-`afctctl` single-folder
+  install was removed in deployment tool 2.3.0. If you still have one, run a
+  `2.2.4` (or earlier) release's installer once to migrate it, then upgrade.
 
 ## Everyday commands
 

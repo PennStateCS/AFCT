@@ -14,7 +14,13 @@ import {
   MAX_BACKUP_RETENTION_DAYS,
 } from '@/lib/system-settings';
 import { useBackups } from './useBackups';
-import { formatBackupTs, formatBytes, type FormSnapshot, type SetField } from './system-settings-shared';
+import {
+  formatBackupTs,
+  formatBackupTsLocal,
+  formatBytes,
+  type FormSnapshot,
+  type SetField,
+} from './system-settings-shared';
 
 /** Backups tab: schedule settings plus the available-backups list and "Back up now". */
 export function BackupsTab({
@@ -33,9 +39,16 @@ export function BackupsTab({
     () => [
       {
         accessorKey: 'timestamp',
-        header: 'Taken (server time)',
+        header: 'Taken (local time)',
+        // Shown in the viewer's timezone; the raw server (UTC) time is in the tooltip
+        // for correlating with server logs.
         cell: ({ row }) => (
-          <span className="whitespace-nowrap">{formatBackupTs(row.original.timestamp)}</span>
+          <span
+            className="whitespace-nowrap"
+            title={`${formatBackupTs(row.original.timestamp)} UTC`}
+          >
+            {formatBackupTsLocal(row.original.timestamp)}
+          </span>
         ),
         meta: { priority: 1 },
       },
@@ -45,7 +58,7 @@ export function BackupsTab({
         enableSorting: false,
         cell: ({ row }) => (
           <a
-            className="text-sky-600 underline"
+            className="text-primary underline"
             href={apiPaths.admin.backupDownload({ file: row.original.file })}
           >
             Download ({formatBytes(row.original.size)})
@@ -61,7 +74,7 @@ export function BackupsTab({
           row.original.encrypted ? (
             <span className="whitespace-nowrap">Encrypted</span>
           ) : (
-            <span className="whitespace-nowrap text-amber-600">Not encrypted</span>
+            <span className="whitespace-nowrap text-status-warning">Not encrypted</span>
           ),
         meta: { priority: 2 },
       },
@@ -85,7 +98,7 @@ export function BackupsTab({
           disabled={disabled}
           descriptionPlacement="inline"
           description="When off, no scheduled dumps are taken."
-          boxClassName="border-black"
+          boxClassName="border-input"
         />
         <InputGroup
           label="Daily backup time (hour)"
@@ -98,7 +111,7 @@ export function BackupsTab({
           value={form.backupHour === '' ? '' : String(form.backupHour)}
           setValue={(val) => setField('backupHour', val === '' ? '' : Number(val))}
           disabled={disabled || !form.backupEnabled}
-          description={`24-hour clock, server time (UTC). ${MIN_BACKUP_HOUR}–${MAX_BACKUP_HOUR}. e.g. 2 = 2:00 AM.`}
+          description={`24-hour clock, server time (UTC). ${MIN_BACKUP_HOUR}-${MAX_BACKUP_HOUR}. e.g. 2 = 2:00 AM.`}
         />
         <InputGroup
           label="Retention (days)"
@@ -111,7 +124,7 @@ export function BackupsTab({
           value={form.backupRetentionDays === '' ? '' : String(form.backupRetentionDays)}
           setValue={(val) => setField('backupRetentionDays', val === '' ? '' : Number(val))}
           disabled={disabled || !form.backupEnabled}
-          description={`Older dumps are deleted. ${MIN_BACKUP_RETENTION_DAYS}–${MAX_BACKUP_RETENTION_DAYS} days.`}
+          description={`Older dumps are deleted. ${MIN_BACKUP_RETENTION_DAYS}-${MAX_BACKUP_RETENTION_DAYS} days.`}
         />
       </div>
       <p className="text-muted-foreground mt-3 text-xs">
@@ -120,7 +133,7 @@ export function BackupsTab({
       </p>
 
       <div className="mt-6 space-y-3">
-        <h3 className="text-sm font-medium">Available backups</h3>
+        <h2 className="text-sm font-medium">Available backups</h2>
         <Button
           type="button"
           size="sm"

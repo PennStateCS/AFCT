@@ -12,6 +12,8 @@ const buttonVariants = cva(
         default: 'bg-primary text-secondary-foreground shadow-xs hover:bg-primary/90',
         destructive:
           'bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
+        success:
+          'bg-status-success-solid text-white shadow-xs hover:bg-status-success-solid/90 focus-visible:ring-status-success-solid/30',
         outline:
           'border bg-table-header shadow-xs hover:bg-table-header/60 hover:text-accent-foreground',
         menu: 'bg-tertiary/90 text-tertiary-foreground shadow-xs hover:bg-tertiary/80',

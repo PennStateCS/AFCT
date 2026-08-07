@@ -70,7 +70,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
     <tfoot
       data-slot="table-footer"
       className={cn(
-        "bg-muted/50 border-t font-medium [&>tr]:last:border-b-0",
+        "bg-muted border-t font-medium [&>tr]:last:border-b-0",
         className
       )}
       {...props}
@@ -83,7 +83,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors",
+        "hover:bg-muted data-[state=selected]:bg-muted border-b transition-colors",
         className
       )}
       {...props}
@@ -109,16 +109,26 @@ function TableHead({ className, scope = "col", ...props }: React.ComponentProps<
 // instead of forcing the whole table into a horizontal scroll. Pass `nowrap` for
 // values that must stay on one line (dates, counts, short codes). A `whitespace-*`
 // class in `className` still wins over both, via tailwind-merge.
+// `as="th"` (with a `scope`) renders a row/column header that still looks like a body
+// cell: used for a matrix's identity column so screen readers associate each data cell
+// with its row header. Defaults to a plain <td>, so existing callers are unaffected.
 function TableCell({
   className,
   nowrap = false,
+  as: Tag = "td",
+  scope,
   ...props
-}: React.ComponentProps<"td"> & { nowrap?: boolean }) {
+}: React.ComponentProps<"td"> & {
+  nowrap?: boolean
+  as?: "td" | "th"
+  scope?: "row" | "col"
+}) {
   return (
-    <td
+    <Tag
       data-slot="table-cell"
+      scope={Tag === "th" ? scope : undefined}
       className={cn(
-        "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "p-2 text-left align-middle font-normal [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         nowrap && "whitespace-nowrap",
         className
       )}

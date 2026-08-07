@@ -31,7 +31,12 @@ The available copy modes are:
 
 The new course gets a new registration code, selected Faculty and TA roster entries, and no student enrollments. It starts unpublished.
 
-Duplication intentionally resets several assignment-level values. Copied assignments start unpublished and do not retain group mode or late-work settings. When problems are copied with assignments, the links use default points, attempt limits, and automatic-grading settings rather than the source assignment's overrides. Review every copied assignment, problem link, deadline, and answer file before publishing the new course.
+Duplication intentionally resets several assignment-level values:
+
+- Copied assignments start unpublished and do not retain group mode or late-work settings.
+- When problems are copied with assignments, the links use default points, attempt limits, and automatic-grading settings rather than the source assignment's overrides.
+
+Review every copied assignment, problem link, deadline, and answer file before publishing the new course.
 
 ## Archive and restore
 

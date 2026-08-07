@@ -14,11 +14,81 @@ export interface FacetOption {
   value: string;
 }
 
+export interface FacetSection {
+  label: string;
+  options: FacetOption[];
+}
+
 export interface FilterableColumn<TData> {
   column: Column<TData, unknown>;
   label: string;
   /** Fixed, friendly options; falls back to the distinct values in the data. */
   options?: FacetOption[];
+  /** Show this column's options under several headings instead of one. They still
+   *  belong to a single column filter, so ticking across headings ORs as usual. */
+  sections?: FacetSection[];
+}
+
+/** One heading plus its checkboxes. Several of these can share a column. */
+function FilterBlock({
+  label,
+  options,
+  counts,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: FacetOption[];
+  counts: Map<string, number>;
+  selected: Set<string>;
+  onToggle: (value: string) => void;
+}) {
+  const labelId = React.useId();
+  return (
+    <div className="w-44 space-y-1.5">
+      {/* Heading rule + full-strength text: without it the sections read as one
+          undivided list of checkboxes, so e.g. On time / Late looks like part of the
+          group above it rather than a filter of its own. */}
+      <p
+        id={labelId}
+        className="text-foreground border-b pb-1 text-xs font-semibold tracking-wide uppercase"
+      >
+        {label}
+      </p>
+      {/* Group the checkboxes under the section label so a screen reader announces
+          e.g. "Registration group" when entering it. */}
+      <div role="group" aria-labelledby={labelId} className="space-y-0.5">
+        {options.map((option) => {
+          const count = counts.get(option.value);
+          return (
+            <label
+              key={option.value}
+              className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
+            >
+              <Checkbox
+                checked={selected.has(option.value)}
+                onCheckedChange={() => onToggle(option.value)}
+                // Fold the match count into the name so it isn't read as a stray
+                // number, but screen-reader users still get it.
+                aria-label={
+                  count !== undefined ? `${option.label}, ${count} matching` : option.label
+                }
+              />
+              <span>{option.label}</span>
+              {count !== undefined && (
+                <span
+                  aria-hidden="true"
+                  className="text-muted-foreground ml-auto font-mono text-xs"
+                >
+                  {count}
+                </span>
+              )}
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -27,8 +97,11 @@ export interface FilterableColumn<TData> {
  * selection is stored as a string[] on the column filter and matched by the table's
  * multiselect filterFn. Values are compared as strings, so boolean/coded columns
  * work once given friendly `options`.
+ *
+ * A column may split its options across several headings via `sections`; they remain
+ * one filter, so the OR still holds across the headings.
  */
-function FilterSection<TData>({ column, label, options }: FilterableColumn<TData>) {
+function FilterSection<TData>({ column, label, options, sections }: FilterableColumn<TData>) {
   const facets = column.getFacetedUniqueValues();
   const selected = new Set((column.getFilterValue() as string[] | undefined) ?? []);
 
@@ -42,13 +115,15 @@ function FilterSection<TData>({ column, label, options }: FilterableColumn<TData
     return map;
   }, [facets]);
 
-  const resolvedOptions: FacetOption[] = React.useMemo(() => {
-    if (options && options.length > 0) return options;
-    return Array.from(counts.keys())
+  const resolvedSections: FacetSection[] = React.useMemo(() => {
+    if (sections && sections.length > 0) return sections;
+    if (options && options.length > 0) return [{ label, options }];
+    const derived = Array.from(counts.keys())
       .filter((v) => v !== 'null' && v !== 'undefined' && v !== '')
       .sort((a, b) => a.localeCompare(b))
       .map((v) => ({ label: v, value: v }));
-  }, [options, counts]);
+    return [{ label, options: derived }];
+  }, [sections, options, label, counts]);
 
   const toggle = (value: string) => {
     const next = new Set(selected);
@@ -57,46 +132,21 @@ function FilterSection<TData>({ column, label, options }: FilterableColumn<TData
     column.setFilterValue(next.size ? Array.from(next) : undefined);
   };
 
-  const labelId = React.useId();
-
-  if (resolvedOptions.length === 0) return null;
+  if (resolvedSections.every((s) => s.options.length === 0)) return null;
 
   return (
-    <div className="w-44 space-y-1.5">
-      <p
-        id={labelId}
-        className="text-muted-foreground text-xs font-medium tracking-wide uppercase"
-      >
-        {label}
-      </p>
-      {/* Group the checkboxes under the section label so a screen reader announces
-          e.g. "Registration group" when entering it. */}
-      <div role="group" aria-labelledby={labelId} className="space-y-0.5">
-        {resolvedOptions.map((option) => {
-          const count = counts.get(option.value);
-          return (
-            <label
-              key={option.value}
-              className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
-            >
-              <Checkbox
-                checked={selected.has(option.value)}
-                onCheckedChange={() => toggle(option.value)}
-                // Fold the match count into the name so it isn't read as a stray
-                // number, but screen-reader users still get it.
-                aria-label={count !== undefined ? `${option.label}, ${count} matching` : option.label}
-              />
-              <span>{option.label}</span>
-              {count !== undefined && (
-                <span aria-hidden="true" className="text-muted-foreground ml-auto font-mono text-xs">
-                  {count}
-                </span>
-              )}
-            </label>
-          );
-        })}
-      </div>
-    </div>
+    <>
+      {resolvedSections.map((section) => (
+        <FilterBlock
+          key={section.label}
+          label={section.label}
+          options={section.options}
+          counts={counts}
+          selected={selected}
+          onToggle={toggle}
+        />
+      ))}
+    </>
   );
 }
 
@@ -150,7 +200,7 @@ function FilterPopoverShell({
         {/* Column-direction wrap: sections stack vertically until they hit the popover's
             (viewport-bounded) height, then flow into another column, widening up to the
             available width before any scrollbar appears. */}
-        <div className="flex min-h-0 flex-1 flex-col flex-wrap content-start gap-x-6 gap-y-3 overflow-auto p-3">
+        <div className="flex min-h-0 flex-1 flex-col flex-wrap content-start gap-x-6 gap-y-5 overflow-auto p-3">
           {children}
         </div>
       </PopoverContent>
@@ -175,7 +225,13 @@ export function DataTableFilterPopover<TData>({
   return (
     <FilterPopoverShell activeCount={activeCount} onClearAll={onClearAll}>
       {columns.map((c) => (
-        <FilterSection key={c.column.id} column={c.column} label={c.label} options={c.options} />
+        <FilterSection
+          key={c.column.id}
+          column={c.column}
+          label={c.label}
+          options={c.options}
+          sections={c.sections}
+        />
       ))}
     </FilterPopoverShell>
   );
@@ -186,13 +242,25 @@ export function DataTableFilterPopover<TData>({
 export interface FilterMenuGroup {
   key: string;
   label: string;
-  options: FacetOption[];
+  /** The group's values. Ignored when `sections` is given. */
+  options?: FacetOption[];
+  /**
+   * Split the group's values across several headings while keeping them ONE filter, the
+   * controlled twin of a column's `meta.filterSections`. Use it when the values are
+   * mutually exclusive but read as two questions: separate groups would AND on the server,
+   * so any cross-heading pick could only ever return nothing, and the active-filter count
+   * would double.
+   */
+  sections?: { label: string; options: FacetOption[] }[];
   selected: string[];
   onChange: (values: string[]) => void;
 }
 
+// Server-driven menus have no faceted row model, so there are no per-value match counts.
+// A shared empty map keeps FilterBlock's count rendering switched off.
+const NO_COUNTS = new Map<string, number>();
+
 function ControlledFilterSection({ group }: { group: FilterMenuGroup }) {
-  const labelId = React.useId();
   const selected = new Set(group.selected);
   const toggle = (value: string) => {
     const next = new Set(selected);
@@ -200,27 +268,20 @@ function ControlledFilterSection({ group }: { group: FilterMenuGroup }) {
     else next.add(value);
     group.onChange(Array.from(next));
   };
+  const sections = group.sections ?? [{ label: group.label, options: group.options ?? [] }];
   return (
-    <div className="w-44 space-y-1.5">
-      <p id={labelId} className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-        {group.label}
-      </p>
-      <div role="group" aria-labelledby={labelId} className="space-y-0.5">
-        {group.options.map((option) => (
-          <label
-            key={option.value}
-            className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
-          >
-            <Checkbox
-              checked={selected.has(option.value)}
-              onCheckedChange={() => toggle(option.value)}
-              aria-label={option.label}
-            />
-            <span>{option.label}</span>
-          </label>
-        ))}
-      </div>
-    </div>
+    <>
+      {sections.map((section) => (
+        <FilterBlock
+          key={section.label}
+          label={section.label}
+          options={section.options}
+          counts={NO_COUNTS}
+          selected={selected}
+          onToggle={toggle}
+        />
+      ))}
+    </>
   );
 }
 

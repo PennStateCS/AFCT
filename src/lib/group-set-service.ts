@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { ACTIVE_STUDENT_ROSTER } from '@/lib/roster-status';
 import { computeMembershipBasis, GroupSetLockedError } from '@/lib/group-sets';
 
 /**
@@ -37,6 +38,31 @@ export async function isGroupSetLocked(setId: string): Promise<boolean> {
 /** Throws GroupSetLockedError when the set is locked. */
 export async function assertGroupSetUnlocked(setId: string): Promise<void> {
   if (await isGroupSetLocked(setId)) throw new GroupSetLockedError();
+}
+
+/**
+ * Delete a group, refusing if its set is locked, as one atomic step.
+ *
+ * Reading `lockedAt` and then deleting is a check-then-act, and re-reading inside the
+ * transaction does not close it: the delete runs at READ COMMITTED, so a submission or
+ * grade that commits after that read is invisible to it and the group goes anyway. The
+ * submission path being SERIALIZABLE does not help, because Postgres only applies those
+ * guarantees between serializable transactions.
+ *
+ * `FOR UPDATE` takes the set's row lock first, which is the same row `lockGroupSetIfUsed`
+ * updates. Whichever transaction arrives first wins and the other waits, so the two orders
+ * are the only outcomes: the lock lands first and this refuses, or the delete commits first
+ * and the lock lands against a set that no longer has the group. Both are consistent; the
+ * interleaving that deleted a group out of a locked set is not reachable.
+ */
+export async function deleteGroupIfSetUnlocked(setId: string, groupId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ lockedAt: Date | null }>>`
+      SELECT "lockedAt" FROM "GroupSet" WHERE "id" = ${setId} FOR UPDATE
+    `;
+    if (rows[0]?.lockedAt) throw new GroupSetLockedError();
+    await tx.studentGroup.delete({ where: { id: groupId } });
+  });
 }
 
 /**
@@ -110,10 +136,15 @@ export type GroupSetDetailDTO = {
   basis: string;
 };
 
-/** The Prisma where-clause for "active STUDENT roster member of this course". */
+/**
+ * The Prisma where-clause for "active STUDENT roster member of this course": role
+ * STUDENT, an active account, and ENROLLED standing. A dropped student is excluded from
+ * eligibility so they are not offered for new group assignments (their existing group
+ * memberships are kept, per the drop design, until they are re-enrolled or removed).
+ */
 export const activeStudentRosterWhere = (courseId: string) => ({
   courseId,
-  role: 'STUDENT' as const,
+  ...ACTIVE_STUDENT_ROSTER,
   user: { inactive: false },
 });
 

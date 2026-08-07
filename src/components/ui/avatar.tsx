@@ -14,7 +14,7 @@ function Avatar({
       data-slot="avatar"
       className={cn(
         // A thin light-gray ring frames every profile photo consistently across the app.
-        "relative flex size-8 shrink-0 overflow-hidden rounded-full border border-gray-300",
+        "relative flex size-8 shrink-0 overflow-hidden rounded-full border border-border",
         className
       )}
       {...props}
@@ -79,7 +79,11 @@ function AvatarFallback({
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
       className={cn(
-        "bg-muted flex size-full items-center justify-center rounded-full",
+        // Initials for users with no photo. The fill lives here rather than at each call
+        // site so every avatar in the app keeps the same look and the same white-on-teal
+        // contrast (5.3:1, clearing WCAG AA); a bare `bg-muted` default was letting call
+        // sites paint white text on a near-white circle.
+        "bg-brand-teal-dark flex size-full items-center justify-center rounded-full text-white",
         className
       )}
       {...props}

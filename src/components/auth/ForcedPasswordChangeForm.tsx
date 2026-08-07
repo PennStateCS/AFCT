@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ import { apiPaths } from '@/lib/api-paths';
 
 export function ForcedPasswordChangeForm() {
   const router = useRouter();
+  const { update } = useSession();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const {
     control,
@@ -52,7 +54,11 @@ export function ForcedPasswordChangeForm() {
       return;
     }
 
-    showToast.success('Password changed successfully.');
+    showToast.success('Password changed');
+    // Re-sync the JWT to the just-changed credentials before navigating. Without this the
+    // token still snapshots the old password instant, so the session callback revokes it
+    // and bounces the user right back to this screen. Then send them to the dashboard.
+    await update({ refreshCredentials: true });
     router.push('/dashboard');
     router.refresh();
   };
@@ -62,7 +68,7 @@ export function ForcedPasswordChangeForm() {
       <div className="fixed inset-0 z-0 bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A]" />
       <div className="fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_70%)]" />
 
-      <div className="relative z-10 mx-4 w-full max-w-[430px]">
+      <main className="relative z-10 mx-4 w-full max-w-[430px]">
         <div className="rounded-2xl bg-white p-8 shadow-[0_25px_60px_rgba(0,0,0,0.25)]">
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-bold text-gray-800">Change Temporary Password</h1>
@@ -82,6 +88,7 @@ export function ForcedPasswordChangeForm() {
                   name="oldPassword"
                   type="password"
                   showEye
+                  autoComplete="current-password"
                   fieldProps={field}
                   error={errors.oldPassword?.message}
                 />
@@ -98,6 +105,7 @@ export function ForcedPasswordChangeForm() {
                   type="password"
                   showEye
                   showStatus
+                  autoComplete="new-password"
                   isValid={!errors.newPassword && !!newPassword}
                   fieldProps={field}
                   error={errors.newPassword?.message}
@@ -116,6 +124,7 @@ export function ForcedPasswordChangeForm() {
                   type="password"
                   showEye
                   showStatus
+                  autoComplete="new-password"
                   isValid={
                     !errors.confirmNewPassword &&
                     !!confirmPassword &&
@@ -129,7 +138,11 @@ export function ForcedPasswordChangeForm() {
 
             <PasswordRulesHelper id={helperId} rules={passwordRuleStatuses} />
 
-            {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
+            {submitError ? (
+              <p role="alert" className="text-destructive text-sm">
+                {submitError}
+              </p>
+            ) : null}
 
             <div className="flex gap-3">
               <Button type="submit" className="flex-1" disabled={isSubmitting}>
@@ -146,7 +159,7 @@ export function ForcedPasswordChangeForm() {
             </div>
           </form>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

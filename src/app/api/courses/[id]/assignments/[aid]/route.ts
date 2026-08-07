@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { descriptionWriteData } from '@/lib/description-write';
 import type { ProblemTypeEnum } from '@/schemas/problem';
 import type { RoleEnum } from '@/schemas/user';
 import { AssignmentUpdateApiSchema } from '@/schemas/assignment';
@@ -23,6 +25,7 @@ interface AssignmentWithProblemsAndCourse {
       id: string;
       title: string;
       description: string | null;
+      descriptionJson: unknown;
       type: z.infer<typeof ProblemTypeEnum> | null;
       maxStates: number | null;
       isDeterministic: boolean | null;
@@ -189,6 +192,7 @@ export const GET = withCourseAuth(
                   id: true,
                   title: true,
                   description: true,
+                  descriptionJson: true,
                   type: true,
                   maxStates: true,
                   isDeterministic: true,
@@ -252,6 +256,7 @@ export const GET = withCourseAuth(
       // opens, but not its description or problems (Canvas-style content lock).
       const av = assignment as unknown as {
         description: string | null;
+        descriptionJson: unknown;
         unlockAt: Date | null;
         dueDate: Date;
         allowLateSubmissions: boolean;
@@ -281,6 +286,10 @@ export const GET = withCourseAuth(
             id: ap.problem.id,
             title: ap.problem.title,
             description: ap.problem.description,
+            // The rich form of the same text. Whole problems are withheld while locked (see
+            // below), so this needs no separate mask, but it must travel with `description` or
+            // the read surfaces silently drop back to plain text.
+            descriptionJson: ap.problem.descriptionJson,
             type: ap.problem.type,
             maxStates: ap.problem.maxStates,
             isDeterministic: ap.problem.isDeterministic,
@@ -308,6 +317,10 @@ export const GET = withCourseAuth(
       return NextResponse.json({
         ...assignmentData,
         description: locked ? null : av.description,
+        // The rich document carries the same content as the plain text, so it has to be
+        // withheld under the same lock. Spreading the row would otherwise hand a student the
+        // description of an assignment that has not opened yet.
+        descriptionJson: locked ? null : av.descriptionJson,
         locked,
         maxPoints: totalProblemPoints,
         problems: locked ? [] : problemsWithRelation,
@@ -426,7 +439,7 @@ export const PUT = withCourseAuth(
         where: { id },
         data: {
           title: data.title,
-          description: data.description,
+          ...descriptionWriteData(data),
           // Use the computed value (keeps the existing due date when none was sent)
           // rather than re-deriving from a possibly-undefined data.dueDate.
           dueDate,
@@ -562,7 +575,9 @@ export const PATCH = withCourseAuth(
       // Build update data object with only provided fields
       const updateData: {
         title?: string;
-        description?: string;
+        description?: string | null;
+        descriptionFormat?: 'PLAIN_TEXT' | 'TIPTAP_JSON';
+        descriptionJson?: Prisma.InputJsonValue | typeof Prisma.DbNull;
         dueDate?: Date;
         unlockAt?: Date | null;
         allowLateSubmissions?: boolean;
@@ -571,7 +586,11 @@ export const PATCH = withCourseAuth(
       } = {};
 
       if (data.title !== undefined) updateData.title = data.title;
-      if (data.description !== undefined) updateData.description = data.description;
+      // A description write means all three columns move together, so the rich JSON and the
+      // derived plain text can never drift. Either field arriving counts as a write.
+      if (data.description !== undefined || data.descriptionJson !== undefined) {
+        Object.assign(updateData, descriptionWriteData(data));
+      }
       if (data.dueDate !== undefined) updateData.dueDate = effectiveDueDate;
       if (unlockState.changed) updateData.unlockAt = unlockState.unlockAt;
       if (data.allowLateSubmissions !== undefined) {

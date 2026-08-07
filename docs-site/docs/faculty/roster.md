@@ -2,11 +2,21 @@
 
 The **Roster** page lists everyone enrolled in the course and their course role. The available roles are Faculty, TA, and Student.
 
+The roster loads a page at a time, so a course with a thousand students opens as quickly as a small one. Searching, filtering and sorting all apply to the whole roster rather than to the people currently on screen, and the number beside the pager is the total who match.
+
+To find someone:
+
+- **Search** matches on name and email, or on one of them if you pick a field in the box beside it.
+- **Filters** holds Role and Status as separate lists. Ticking several values in one list widens (any of them), while picking from two different lists narrows (both must be true), so Role **Student** plus Status **Dropped** finds dropped students.
+- Sort by any column heading.
+
 ## Enroll one person
 
 1. Select **Enroll User**.
-2. Search for an existing AFCT account that is not already in the course.
+2. Start typing a name or email. The search runs as you type and only offers accounts that are not already in the course, so anyone already on the roster (including a dropped student) will not appear. To bring a dropped student back, use **Re-enroll** on their Manage menu instead.
 3. Select the person and confirm the enrollment.
+
+When a search matches more people than fit in the list, AFCT says so above it; keep typing to narrow.
 
 Enrollment always adds the person as a **Student**. To give someone a staff role, enroll them first, then change their role with the edit action (see [Manage roles and membership](#manage-roles-and-membership)). Direct enrollment is useful for adding another staff member or helping a student who cannot use self-registration.
 
@@ -36,11 +46,26 @@ Faculty and TAs can still enroll an existing account directly when self-registra
 
 Faculty can use the edit action beside a roster member to change that person's course role. A course must always have at least one Faculty member, so AFCT will not allow the only Faculty member to be demoted.
 
-Faculty can remove a TA or student who has no submissions in the course. Faculty cannot remove another Faculty member. TAs can view the roster and enroll users, but roster role changes and removals are reserved for Faculty and site administrators.
+Faculty can remove a TA or student who has no submissions in the course. Faculty cannot remove another Faculty member. TAs can view the roster and enroll users, but roster role changes, removals, and enrollment changes are reserved for Faculty and site administrators.
 
-AFCT blocks removal when the person has submitted work. This keeps every submission attached to a current course member. Contact a site administrator if you need help resolving a roster entry that the interface will not let you change.
+**Remove** deletes the person from the roster entirely. AFCT allows it only when the person has no submitted work, so removal is really for someone added by mistake. When a student has submissions, remove is disabled; **drop** them instead (see below), which keeps their work attached to the course.
 
 Archived courses are read-only, so enrollment and roster changes are unavailable until an administrator restores the course.
+
+## Drop or re-enroll a student
+
+Dropping a student is the way to end their participation in a course while keeping everything they have done. Use it when a student withdraws mid-term, or any time you want to revoke access without erasing their record.
+
+From a student's **Manage** menu on the roster, Faculty (and site administrators) can:
+
+- **Drop From Course**: the student keeps their roster entry, submissions, grades, and group membership, but immediately loses access. The course disappears from their dashboard, sidebar, and calendar, and they can no longer open it or submit, including from the desktop client. The roster marks them with a **Dropped** badge.
+- **Re-enroll**: restores a dropped student to full access. Everything they had is exactly as they left it.
+
+A dropped student stays visible to staff. They still appear, labeled **Dropped**, on the roster, in the gradebook (where you can still view and edit their grades), and in the submissions review view. They are left out of the active class everywhere it would be misleading to include them: new assignment audiences, group eligibility for new groups, assignment statistics, and student counts.
+
+Re-enrollment is a staff action. A dropped student cannot rejoin with the registration code; if one tries, they are told to contact their instructor. Re-adding a dropped student through **Enroll User** or **Bulk Enroll** also re-enrolls them.
+
+Every drop and re-enroll is recorded in the course [activity log](./activity.md).
 
 ## Reset a student's password
 

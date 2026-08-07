@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCoursesListForUser } from '@/lib/courses-list';
 import { isAdmin } from '@/lib/permissions';
+import { activeMemberOf } from '@/lib/roster-status';
 
 /**
  * Lists the courses visible to the signed-in user, in one of two shapes selected by
@@ -44,7 +45,8 @@ export async function GET(req: Request) {
       // staff (FACULTY/TA) in it, or if they are a global admin.
       const courses = await prisma.course.findMany({
         where: {
-          roster: { some: { userId } },
+          // A course the viewer was dropped from (as a student) leaves their sidebar.
+          roster: { some: activeMemberOf(userId) },
           // A soft-deleted course never appears in anyone's navigation.
           deletedAt: null,
           ...(isAdmin(session.user)
@@ -60,6 +62,7 @@ export async function GET(req: Request) {
           id: true,
           name: true,
           code: true,
+          semester: true,
           isPublished: true,
           isArchived: true,
           startDate: true,

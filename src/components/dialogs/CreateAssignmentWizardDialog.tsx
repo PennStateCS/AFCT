@@ -11,15 +11,16 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Stepper } from '@/components/ui/stepper';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
-import { Textarea } from '@/components/ui/textarea';
+import { RichDescriptionField } from '@/components/rich-description/RichDescriptionField';
+import type { RichDescriptionEnvelope } from '@/lib/rich-description';
 import { AssignToFields } from '@/components/assignments/AssignToFields';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 
 import { useForm, Controller, type FieldPath } from 'react-hook-form';
+import { useDiscardGuard } from '@/components/unsaved-changes/useDiscardGuard';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import type { z } from 'zod';
@@ -34,11 +35,18 @@ import { formatDateTimeLocal } from '@/lib/date-convert';
 type FormValues = z.input<typeof AssignmentWizardFormSchema>;
 
 const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> = [
-  { title: 'Details', fields: ['title', 'description'] },
+  { title: 'Details', fields: ['title', 'descriptionJson'] },
   { title: 'Type', fields: ['isGroup', 'groupSetId'] },
   {
     title: 'Assign To',
-    fields: ['assignedToEveryone', 'unlockAt', 'dueDate', 'allowLateSubmissions', 'lateCutoff', 'overrides'],
+    fields: [
+      'assignedToEveryone',
+      'unlockAt',
+      'dueDate',
+      'allowLateSubmissions',
+      'lateCutoff',
+      'overrides',
+    ],
   },
   { title: 'Review', fields: [] },
 ];
@@ -64,7 +72,6 @@ function defaultDueLocalString(timeZone: string): string {
   const l = Object.fromEntries(parts.map((p) => [p.type, p.value]));
   return `${l.year ?? '0000'}-${l.month ?? '01'}-${l.day ?? '01'}T23:59`;
 }
-
 
 /**
  * A full, human-readable window ("Available … · Due … · Late until …" / "· No late") from
@@ -102,6 +109,7 @@ export function CreateAssignmentWizardDialog({
     () => ({
       title: '',
       description: '',
+      descriptionJson: null,
       unlockAt: undefined,
       dueDate: defaultDueLocalString(timeZone),
       assignedToEveryone: true,
@@ -124,7 +132,7 @@ export function CreateAssignmentWizardDialog({
     trigger,
     getValues,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(AssignmentWizardFormSchema),
     defaultValues: defaults,
@@ -164,11 +172,18 @@ export function CreateAssignmentWizardDialog({
     // the create route validates them and writes the AssignmentAssignee rows.
     const assignees = raw.assignedToEveryone
       ? undefined
-      : (raw.overrides ?? []).map((o) => (o.groupId ? { groupId: o.groupId } : { userId: o.userId }));
+      : (raw.overrides ?? []).map((o) =>
+          o.groupId ? { groupId: o.groupId } : { userId: o.userId },
+        );
 
     const basePayload = {
       title: raw.title,
-      description: raw.description || undefined,
+      // The rich document is authoritative when the author wrote one: the server derives the
+      // plain-text description from it. An untouched editor sends neither field, so the new
+      // assignment stays PLAIN_TEXT with an empty description, exactly as before.
+      ...(raw.descriptionJson
+        ? { descriptionJson: raw.descriptionJson }
+        : { description: raw.description || undefined }),
       dueDate: raw.dueDate,
       unlockAt: raw.unlockAt || undefined,
       assignedToEveryone: raw.assignedToEveryone,
@@ -185,12 +200,18 @@ export function CreateAssignmentWizardDialog({
     try {
       created = await apiClient.post<Assignment>(apiPaths.courseAssignments(courseId), basePayload);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Failed to create assignment');
+      showToast.error(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not create the assignment. Check your connection and try again.',
+      );
       return; // stay open so the user can retry without duplicating anything
     }
 
-    // Date overrides are added later on the assignment's page.
-    toast.success('Assignment created');
+    // This dialog performed the write, so it reports the outcome: `onCreate` updates the caller's
+    // state and nothing more. Toasting in both places is what produced two messages for one
+    // assignment. Date overrides are added later on the assignment's page.
+    showToast.created('Assignment', { name: created.title });
     onCreate?.(created);
     resetForm();
     setOpen(false);
@@ -209,256 +230,281 @@ export function CreateAssignmentWizardDialog({
         .filter(Boolean)
         .join(', ') || (isGroup ? 'No groups selected' : 'No students selected');
 
+  // Every wizard field lives on the form, so isDirty covers all four steps. Escape or the X
+  // on a dirty wizard asks before discarding; a successful create closes via setOpen(false)
+  // directly and is never asked.
+  const { requestClose, discardConfirm } = useDiscardGuard({
+    dirty: open && isDirty,
+    onDiscard: () => {
+      setOpen(false);
+      resetForm();
+    },
+  });
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(val) => {
-        setOpen(val);
-        if (!val) resetForm();
-      }}
-    >
-      <DialogContent className="bg-card sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle>Create Assignment</DialogTitle>
-          <DialogDescription className="sr-only">
-            Create an assignment in four steps: details, individual or group type, who it is
-            assigned to and when it is due, then review.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(val) => {
+          if (!val) {
+            requestClose();
+            return;
+          }
+          setOpen(val);
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Create Assignment</DialogTitle>
+            <DialogDescription className="sr-only">
+              Create an assignment in four steps: details, individual or group type, who it is
+              assigned to and when it is due, then review.
+            </DialogDescription>
+          </DialogHeader>
 
-        <Stepper
-          steps={STEPS.map((s) => s.title)}
-          current={step}
-          onStepClick={(index) => setStep(index)}
-          className="mb-2"
-        />
+          <Stepper
+            steps={STEPS.map((s) => s.title)}
+            current={step}
+            onStepClick={(index) => setStep(index)}
+            className="mb-2"
+          />
 
-        {/* Announce step changes to screen readers (the Stepper is visual). */}
-        <div className="sr-only" role="status" aria-live="polite">
-          {`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]?.title ?? ''}`}
-        </div>
-
-        <form
-          onSubmit={step === LAST_STEP ? handleSubmit(onSubmit) : (e) => e.preventDefault()}
-          className="space-y-4"
-          onKeyDown={(e) => {
-            // Enter advances only from a single-line text input; every other control
-            // (select, file, radio, combobox, textarea) keeps its native Enter behavior.
-            if (e.key !== 'Enter' || step >= LAST_STEP) return;
-            if (!shouldEnterAdvanceStep(e.target)) return;
-            e.preventDefault();
-            void next();
-          }}
-        >
-          <div className="min-h-[320px] space-y-4">
-            {step === 0 && (
-              <>
-                <Controller
-                  control={control}
-                  name="title"
-                  render={({ field }) => (
-                    <InputGroup
-                      label="Title"
-                      name="title"
-                      fieldProps={field}
-                      error={errors.title?.message}
-                      showStatus
-                      isValid={!errors.title && !!field.value}
-                    />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="description"
-                  render={({ field }) => (
-                    <div>
-                      <Label htmlFor="assignment-description" className="mb-2 block">
-                        Description
-                      </Label>
-                      <Textarea
-                        {...field}
-                        id="assignment-description"
-                        value={field.value ?? ''}
-                        placeholder="Enter assignment description"
-                        className="min-h-[120px]"
-                      />
-                      {errors.description && (
-                        <p className="mt-1 text-xs text-red-600" role="alert">
-                          {errors.description.message}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                />
-              </>
-            )}
-
-            {step === 1 && (
-              <div className="space-y-5">
-              <Controller
-                control={control}
-                name="isGroup"
-                render={({ field }) => (
-                  <fieldset className="space-y-3">
-                    <legend className="text-sm font-medium">Assignment type</legend>
-                    <p className="text-muted-foreground text-sm">
-                      Choose whether students complete this assignment on their own or together as a
-                      group.
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {(
-                        [
-                          {
-                            value: false,
-                            label: 'Individual',
-                            desc: 'Each student submits and is graded on their own.',
-                          },
-                          {
-                            value: true,
-                            label: 'Group',
-                            desc: 'Students submit and are graded together as a group. A faculty member or TA can override an individual member’s grade.',
-                          },
-                        ] as const
-                      ).map((opt) => {
-                        const selected = !!field.value === opt.value;
-                        return (
-                          <label
-                            key={opt.label}
-                            className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
-                              selected
-                                ? 'border-primary bg-primary/5 ring-primary/30 ring-1'
-                                : 'hover:bg-muted/40'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="isGroup"
-                              className="accent-primary mt-1"
-                              checked={selected}
-                              onChange={() => {
-                                field.onChange(opt.value);
-                                // The audience is type-specific (students vs groups), so reset
-                                // it to "everyone" on any type switch to avoid carrying
-                                // cross-type rows into the create payload.
-                                setValue('assignedToEveryone', true, { shouldValidate: true });
-                                setValue('overrides', [], { shouldValidate: true });
-                                // Switching back to Individual drops any chosen group set.
-                                if (!opt.value) setValue('groupSetId', null, { shouldValidate: true });
-                              }}
-                            />
-                            <span>
-                              <span className="block text-sm font-medium">{opt.label}</span>
-                              <span className="text-muted-foreground block text-xs">{opt.desc}</span>
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
-                )}
-              />
-
-              {/* Group assignments pick which group set they run in. Not stored on the
-                  assignment itself; the Assign-To step (3) uses this selection. */}
-              {isGroup && (
-                <Controller
-                  control={control}
-                  name="groupSetId"
-                  render={({ field }) => (
-                    <div className="space-y-1">
-                      {groupSetsQuery.isPending ? (
-                        <p className="text-muted-foreground text-sm">Loading group sets…</p>
-                      ) : groupSets.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">
-                          This course has no group sets yet. Create one on the course&apos;s Groups
-                          tab first.
-                        </p>
-                      ) : (
-                        <SelectField
-                          label="Group set"
-                          name="groupSetId"
-                          placeholder="Choose a group set"
-                          description="Students submit and are graded as their group in the chosen set."
-                          value={field.value ?? undefined}
-                          onValueChange={(v) => field.onChange(v)}
-                          triggerClassName="bg-card border-black"
-                          options={groupSets.map((gs) => ({
-                            value: gs.id,
-                            label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,
-                          }))}
-                        />
-                      )}
-                      {errors.groupSetId && (
-                        <p className="text-xs text-red-600" role="alert">
-                          {errors.groupSetId.message}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                />
-              )}
-              </div>
-            )}
-
-            {step === 2 && (
-              <AssignToFields control={control} errors={errors} courseId={courseId} active={open} />
-            )}
-
-            {step === LAST_STEP && review && (
-              <div className="space-y-3">
-                <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words">
-                  <dt className="text-muted-foreground">Title</dt>
-                  <dd className="font-medium">{review.title}</dd>
-                  <dt className="text-muted-foreground">Type</dt>
-                  <dd>
-                    {review.isGroup
-                      ? `Group${reviewGroupSetName ? ` · ${reviewGroupSetName}` : ''}`
-                      : 'Individual'}
-                  </dd>
-                  <dt className="text-muted-foreground">Assign to</dt>
-                  <dd>{assignToSummary}</dd>
-                  <dt className="text-muted-foreground">Schedule</dt>
-                  <dd>
-                    {formatWindow({
-                      unlockAt: review.unlockAt,
-                      dueDate: review.dueDate,
-                      allowLate: review.allowLateSubmissions,
-                      lateCutoff: review.lateCutoff,
-                    })}
-                  </dd>
-                </dl>
-                <p className="text-muted-foreground text-xs">
-                  Created unpublished. Add problems and publish it after creating it.
-                </p>
-              </div>
-            )}
+          {/* Announce step changes to screen readers (the Stepper is visual). */}
+          <div className="sr-only" role="status" aria-live="polite">
+            {`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]?.title ?? ''}`}
           </div>
 
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="ghost" onClick={resetForm}>
-                Cancel
-              </Button>
-            </DialogClose>
+          {/* The form owns an onKeyDown that scopes Enter to single-line text inputs so it
+            advances the wizard instead of submitting early. That is deliberate keyboard
+            management on the form element, not an interactive-role gap. */}
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+          <form
+            onSubmit={step === LAST_STEP ? handleSubmit(onSubmit) : (e) => e.preventDefault()}
+            className="space-y-4"
+            onKeyDown={(e) => {
+              // Enter advances only from a single-line text input; every other control
+              // (select, file, radio, combobox, textarea) keeps its native Enter behavior.
+              if (e.key !== 'Enter' || step >= LAST_STEP) return;
+              if (!shouldEnterAdvanceStep(e.target)) return;
+              e.preventDefault();
+              void next();
+            }}
+          >
+            <div className="min-h-[320px] space-y-4">
+              {step === 0 && (
+                <>
+                  <Controller
+                    control={control}
+                    name="title"
+                    render={({ field }) => (
+                      <InputGroup
+                        label="Title"
+                        name="title"
+                        fieldProps={field}
+                        error={errors.title?.message}
+                        showStatus
+                        isValid={!errors.title && !!field.value}
+                      />
+                    )}
+                  />
+                  <Controller
+                    control={control}
+                    name="descriptionJson"
+                    render={({ field }) => (
+                      <RichDescriptionField
+                        // The schema's input type is structurally looser than the envelope type
+                        // (Zod widens the recursive node), so narrow it at this boundary.
+                        value={(field.value as RichDescriptionEnvelope | null | undefined) ?? null}
+                        onChange={field.onChange}
+                        error={errors.descriptionJson?.message}
+                        placeholder="Enter assignment description"
+                        minHeightClassName="min-h-32"
+                      />
+                    )}
+                  />
+                </>
+              )}
 
-            {step > 0 && (
-              <Button type="button" variant="secondary" onClick={back}>
-                Back
-              </Button>
-            )}
+              {step === 1 && (
+                <div className="space-y-5">
+                  <Controller
+                    control={control}
+                    name="isGroup"
+                    render={({ field }) => (
+                      <fieldset className="space-y-3">
+                        <legend className="text-sm font-medium">Assignment type</legend>
+                        <p className="text-muted-foreground text-sm">
+                          Choose whether students complete this assignment on their own or together
+                          as a group.
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {(
+                            [
+                              {
+                                value: false,
+                                label: 'Individual',
+                                desc: 'Each student submits and is graded on their own.',
+                              },
+                              {
+                                value: true,
+                                label: 'Group',
+                                desc: 'Students submit and are graded together as a group. A faculty member or TA can override an individual member’s grade.',
+                              },
+                            ] as const
+                          ).map((opt) => {
+                            const selected = !!field.value === opt.value;
+                            return (
+                              <label
+                                key={opt.label}
+                                className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
+                                  selected
+                                    ? 'border-primary bg-primary/5 ring-primary/30 ring-1'
+                                    : 'hover:bg-muted'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="isGroup"
+                                  className="accent-primary mt-1"
+                                  checked={selected}
+                                  onChange={() => {
+                                    field.onChange(opt.value);
+                                    // The audience is type-specific (students vs groups), so reset
+                                    // it to "everyone" on any type switch to avoid carrying
+                                    // cross-type rows into the create payload.
+                                    setValue('assignedToEveryone', true, { shouldValidate: true });
+                                    setValue('overrides', [], { shouldValidate: true });
+                                    // Switching back to Individual drops any chosen group set.
+                                    if (!opt.value)
+                                      setValue('groupSetId', null, { shouldValidate: true });
+                                  }}
+                                />
+                                <span>
+                                  <span className="block text-sm font-medium">{opt.label}</span>
+                                  <span className="text-muted-foreground block text-xs">
+                                    {opt.desc}
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </fieldset>
+                    )}
+                  />
 
-            {step < LAST_STEP ? (
-              <Button key="wizard-next" type="button" onClick={() => void next()}>
-                Next
-              </Button>
-            ) : (
-              <Button key="wizard-create" type="submit" disabled={isSubmitting || courseIsArchived}>
-                {isSubmitting ? 'Creating…' : 'Create Assignment'}
-              </Button>
-            )}
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+                  {/* Group assignments pick which group set they run in. Not stored on the
+                  assignment itself; the Assign-To step (3) uses this selection. */}
+                  {isGroup && (
+                    <Controller
+                      control={control}
+                      name="groupSetId"
+                      render={({ field }) => (
+                        <div className="space-y-1">
+                          {groupSetsQuery.isPending ? (
+                            <p className="text-muted-foreground text-sm">Loading group sets…</p>
+                          ) : groupSets.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                              This course has no group sets yet. Create one on the course&apos;s
+                              Groups tab first.
+                            </p>
+                          ) : (
+                            <SelectField
+                              label="Group set"
+                              name="groupSetId"
+                              placeholder="Choose a group set"
+                              description="Students submit and are graded as their group in the chosen set."
+                              value={field.value ?? undefined}
+                              onValueChange={(v) => field.onChange(v)}
+                              triggerClassName="bg-card border-input"
+                              options={groupSets.map((gs) => ({
+                                value: gs.id,
+                                label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,
+                              }))}
+                            />
+                          )}
+                          {errors.groupSetId && (
+                            <p className="text-destructive text-xs" role="alert">
+                              {errors.groupSetId.message}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    />
+                  )}
+                </div>
+              )}
+
+              {step === 2 && (
+                <AssignToFields
+                  control={control}
+                  errors={errors}
+                  courseId={courseId}
+                  active={open}
+                />
+              )}
+
+              {step === LAST_STEP && review && (
+                <div className="space-y-3">
+                  <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words">
+                    <dt className="text-muted-foreground">Title</dt>
+                    <dd className="font-medium">{review.title}</dd>
+                    <dt className="text-muted-foreground">Type</dt>
+                    <dd>
+                      {review.isGroup
+                        ? `Group${reviewGroupSetName ? ` · ${reviewGroupSetName}` : ''}`
+                        : 'Individual'}
+                    </dd>
+                    <dt className="text-muted-foreground">Assign to</dt>
+                    <dd>{assignToSummary}</dd>
+                    <dt className="text-muted-foreground">Schedule</dt>
+                    <dd>
+                      {formatWindow({
+                        unlockAt: review.unlockAt,
+                        dueDate: review.dueDate,
+                        allowLate: review.allowLateSubmissions,
+                        lateCutoff: review.lateCutoff,
+                      })}
+                    </dd>
+                  </dl>
+                  <p className="text-muted-foreground text-xs">
+                    Created unpublished. Add problems and publish it after creating it.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="ghost" onClick={resetForm}>
+                  Cancel
+                </Button>
+              </DialogClose>
+
+              {step > 0 && (
+                <Button type="button" variant="secondary" onClick={back}>
+                  Back
+                </Button>
+              )}
+
+              {step < LAST_STEP ? (
+                <Button key="wizard-next" type="button" onClick={() => void next()}>
+                  Next
+                </Button>
+              ) : (
+                <Button
+                  key="wizard-create"
+                  type="submit"
+                  disabled={isSubmitting || courseIsArchived}
+                >
+                  {isSubmitting ? 'Creating…' : 'Create Assignment'}
+                </Button>
+              )}
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {discardConfirm}
+    </>
   );
 }

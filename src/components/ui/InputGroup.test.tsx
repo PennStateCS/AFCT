@@ -124,6 +124,6 @@ describe('InputGroup', () => {
     rerender(<InputGroup label="Handle" name="handle" value="demo" showStatus isValid />);
 
     expect(screen.queryByText('Checking')).not.toBeInTheDocument();
-    expect(document.querySelector('svg.text-green-500')).toBeTruthy();
+    expect(document.querySelector('svg.text-status-success')).toBeTruthy();
   });
 });

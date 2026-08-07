@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import {
   InputOTP,
   InputOTPGroup,
@@ -25,7 +25,7 @@ export function JoinCourseModule() {
   const joinWithCode = useCallback(async (rawCode: string) => {
     const clean = cleanCode(rawCode);
     if (clean.length !== CODE_LENGTH) {
-      toast.error(`Please enter a valid ${CODE_LENGTH}-character registration code.`);
+      showToast.error(`Please enter a valid ${CODE_LENGTH}-character registration code.`);
       return;
     }
 
@@ -40,10 +40,10 @@ export function JoinCourseModule() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to join course');
 
-      toast.success(`You have joined ${data.course.name}`);
+      showToast.success(`You have joined ${data.course.name}`);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Unable to join course';
-      toast.error(errorMessage);
+      showToast.error(errorMessage);
     } finally {
       setLoading(false);
       setCode(''); // Always clear the boxes after an attempt.

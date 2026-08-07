@@ -14,12 +14,10 @@ const renderWithClient = (ui: React.ReactElement) => {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-const toastSuccess = vi.hoisted(() => vi.fn());
-const toastError = vi.hoisted(() => vi.fn());
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccess, error: toastError },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastError = toastMock.error;
 
 vi.mock('next-auth/react', () => ({
   useSession: () => ({
@@ -202,7 +200,7 @@ describe('StudentAssignmentPage', () => {
 
     // Invalidation refetches student-context (a second call).
     await waitFor(() => expect(contextCalls).toBe(2));
-    expect(toastSuccess).toHaveBeenCalledWith('Comment added successfully!');
+    expect(toastMock.created).toHaveBeenCalledWith('Comment');
   });
 
   it('surfaces a toast when the student-context fetch fails', async () => {
@@ -214,7 +212,9 @@ describe('StudentAssignmentPage', () => {
     renderWithClient(<StudentAssignmentPage initialAssignment={buildAssignment()} />);
 
     await waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith('Failed to load assignment context');
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not load the assignment. Refresh the page to try again.',
+      );
     });
   });
 });

@@ -11,10 +11,21 @@ export type StatusTone =
   | 'lime'
   | 'pink';
 
+/**
+ * Which of the Badge component's tinted colour pairs a chip wears when it is rendered as
+ * a badge (see StatusBadge). These are the app's contrast-checked tokens, so there are
+ * only five: the mapping below spends them so the values that share a column stay
+ * distinct. Failed is the only red in the grading column, because it means the autograder
+ * itself broke and needs staff; a merely Incorrect answer is an ordinary student outcome
+ * and would be overstated in the same colour.
+ */
+export type StatusBadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+
 export type StatusChip = {
   label: string;
   tone: StatusTone;
   title: string;
+  variant: StatusBadgeVariant;
 };
 
 export const statusToneClass: Record<StatusTone, string> = {
@@ -44,6 +55,7 @@ export const getTimingStatusChip = (
       label: 'Late',
       tone: 'amber',
       title: 'Submitted after due date',
+      variant: 'warning',
     };
   }
 
@@ -51,6 +63,7 @@ export const getTimingStatusChip = (
     label: 'On time',
     tone: 'green',
     title: 'Submitted before due date',
+    variant: 'success',
   };
 };
 
@@ -61,6 +74,7 @@ export const getReviewStatusChip = (submission: ProblemSubmission): StatusChip =
       label: 'Pending',
       tone: 'violet',
       title: 'Submission analysis is pending',
+      variant: 'neutral',
     };
   }
 
@@ -69,6 +83,7 @@ export const getReviewStatusChip = (submission: ProblemSubmission): StatusChip =
       label: 'Processing',
       tone: 'yellow',
       title: 'Submission is being processed',
+      variant: 'info',
     };
   }
 
@@ -77,14 +92,16 @@ export const getReviewStatusChip = (submission: ProblemSubmission): StatusChip =
       label: 'Failed',
       tone: 'pink',
       title: 'Submission analysis failed',
+      variant: 'danger',
     };
   }
-  
+
   if (submission.correct == true) {
     return {
       label: 'Correct',
       tone: 'blue',
       title: 'Submission is correct',
+      variant: 'success',
     };
   }
 
@@ -92,5 +109,6 @@ export const getReviewStatusChip = (submission: ProblemSubmission): StatusChip =
     label: 'Incorrect',
     tone: 'red',
     title: 'Submission is incorrect',
+    variant: 'warning',
   }
 };

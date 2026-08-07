@@ -8,17 +8,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { CreateCourseDialog } from './CreateCourseDialog';
 
-const { toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
-  toastSuccessMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-}));
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('sonner', () => ({
-  toast: {
-    success: toastSuccessMock,
-    error: toastErrorMock,
-  },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccessMock = toastMock.success;
+const toastErrorMock = toastMock.error;
 
 vi.mock('@/components/ui/InputGroup', () => ({
   __esModule: true,
@@ -282,14 +276,18 @@ describe('CreateCourseDialog', () => {
       taIds: ['ta-1'],
     });
 
-    expect(toastSuccessMock).toHaveBeenCalledWith('Course created successfully');
+    expect(toastMock.created).toHaveBeenCalledWith('Course');
     expect(setOpen).toHaveBeenCalledWith(false);
     expect(onSuccess).toHaveBeenCalled();
   });
 
   it('shows an error toast when the API returns an error response', async () => {
     const user = userEvent.setup();
-    createResp = () => ({ ok: false, status: 500, json: async () => ({ error: 'Server exploded' }) });
+    createResp = () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'Server exploded' }),
+    });
 
     renderDialog();
 
@@ -337,7 +335,9 @@ describe('CreateCourseDialog', () => {
     renderDialog();
 
     await waitFor(() =>
-      expect(toastErrorMock).toHaveBeenCalledWith('Failed to load faculty list.'),
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        'Could not load the faculty list. Refresh the page to try again.',
+      ),
     );
   });
 
@@ -345,6 +345,10 @@ describe('CreateCourseDialog', () => {
     taResp = () => ({ ok: false, status: 500, json: async () => ({}) });
     renderDialog();
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Failed to load TA list.'));
+    await waitFor(() =>
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        'Could not load the TA list. Refresh the page to try again.',
+      ),
+    );
   });
 });

@@ -42,7 +42,7 @@ export function GeneralTab({
             setting. Shown for reference with instructions to change it. */}
         <div className="space-y-1">
           <p className="text-sm font-medium">Configured URL</p>
-          <p className="bg-muted/10 rounded-md border px-3 py-2 font-mono text-sm break-all">
+          <p className="bg-muted rounded-md border px-3 py-2 font-mono text-sm break-all">
             {loading ? 'Loading…' : configuredUrl ? configuredUrl : 'Not set'}
           </p>
           <p className="text-muted-foreground text-xs">
@@ -66,7 +66,7 @@ export function GeneralTab({
           disabled={disabled}
           description="Default timezone for the server. Users can override this in their profile."
           options={timezoneOptions}
-          triggerClassName="border-black"
+          triggerClassName="border-input"
         />
         <InputGroup
           label="Max upload size (MB)"
@@ -142,7 +142,7 @@ export function GeneralTab({
           disabled={disabled}
           descriptionPlacement="inline"
           description="When enabled, the Sign up option appears on the login page."
-          boxClassName="border-black"
+          boxClassName="border-input"
         />
         <InputGroup
           label="Allowed signup email domains"
@@ -162,7 +162,7 @@ export function GeneralTab({
           disabled={disabled}
           descriptionPlacement="inline"
           description="Display times on a 24-hour clock (e.g. 23:59) instead of 12-hour AM/PM, app-wide."
-          boxClassName="border-black"
+          boxClassName="border-input"
         />
       </div>
     </>

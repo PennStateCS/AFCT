@@ -18,17 +18,19 @@ Students cannot remove themselves from a course. Contact the course staff if you
 
 The dashboard and calendar show published assignments from courses you can access. Unpublished assignments are hidden.
 
+On the calendar, the **Courses** box on the right lists your courses with a checkbox each. They all start checked; uncheck a course to hide its assignments from the calendar and the Upcoming Assignments list, and check it again to bring them back. Your choice is remembered on this device the next time you open the calendar.
+
 Assignment pages show deadlines in your effective timezone. When the course uses a different timezone, AFCT shows the course time as well. This is useful when you travel or take a course hosted in another region.
 
 ## Submit work
 
 Open an assignment, choose a problem, and upload the requested file.
 
-A problem can allow unlimited attempts or set a maximum. Each accepted upload counts as an attempt. Submitted attempts cannot be edited or deleted, so check the file before uploading it. To correct your work, submit another attempt if the problem still allows one.
+A few rules the server enforces:
 
-After the due date, AFCT accepts work only when late submissions are enabled and any late cutoff has not passed. The server enforces deadlines, so changing a device clock or timezone does not change the result.
-
-AFCT may also require a short cooldown between attempts on the same problem. The page tells you when to try again.
+- A problem can allow unlimited attempts or set a maximum, and each accepted upload counts as an attempt. Submitted attempts cannot be edited or deleted, so check the file before uploading it. To correct your work, submit another attempt if the problem still allows one.
+- After the due date, AFCT accepts work only when late submissions are enabled and any late cutoff has not passed. The server enforces deadlines, so changing a device clock or timezone does not change the result.
+- AFCT may also require a short cooldown between attempts on the same problem. The page tells you when to try again.
 
 ## Review results and comments
 

@@ -179,7 +179,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                     </div>
                   </CardHeader>
 
-                  <CollapsibleContent className="border-border border-t bg-slate-50 px-2 py-2">
+                  <CollapsibleContent className="border-border bg-muted border-t px-2 py-2">
                     <div className="space-y-1">
                       {assignment.problems.map((problem, index) => (
                         <button
@@ -189,7 +189,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                             event.stopPropagation();
                             openProblem(assignment.id, problem.id);
                           }}
-                          className="group border-border hover:border-primary hover:bg-primary/5 flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-2 py-2 text-left text-sm transition"
+                          className="group border-border hover:border-primary hover:bg-primary/5 bg-card flex w-full items-center justify-between gap-2 rounded-lg border px-2 py-2 text-left text-sm transition"
                         >
                           <div className="flex min-w-0 items-center gap-2">
                             <p className="text-foreground truncate text-sm font-medium">
@@ -220,13 +220,13 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="border-border rounded-full border px-2 py-1 text-xs font-semibold text-slate-700">
+                            <span className="border-border rounded-full border px-2 py-1 text-xs font-semibold text-foreground">
                               {problem.grade === null
                                 ? `-/${problem.maxPoints}`
                                 : `${problem.grade}/${problem.maxPoints}`}{' '}
                               pts
                             </span>
-                            <ChevronRight className="h-4 w-4 text-slate-400" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </div>
                         </button>
                       ))}

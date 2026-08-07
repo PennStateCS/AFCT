@@ -1,0 +1,281 @@
+import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
+import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
+import { withAssignmentAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { descriptionWriteData, descriptionCopyData } from '@/lib/description-write';
+import { AssignmentDuplicateApiSchema } from '@/schemas/assignment';
+
+type RouteCtx = { params: Promise<{ id: string; aid: string }> };
+
+// Solution files live here (same as the problem upload / course-duplicate paths).
+const solutionsDir = path.join('/private', 'uploads', 'solutions');
+
+/**
+ * Duplicate an assignment within the same course. The title/description come from the
+ * request; the type (groupSetId), audience (AssignmentAssignee), schedule, and date
+ * exceptions (AssignmentOverride) are copied verbatim from the source and are editable
+ * afterward. The copy is always created unpublished. Submissions and grades are never
+ * copied.
+ *
+ * Problems are handled by `problemMode`:
+ *   - none      : the copy has no problems.
+ *   - link      : the copy shares the source's Problem records (editing one edits both).
+ *   - duplicate : each problem is copied to a new Problem (with its own solution file).
+ *
+ * @openapi
+ * summary: Duplicate an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [title, problemMode]
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string, nullable: true }
+ *           problemMode: { type: string, enum: [none, link, duplicate] }
+ * responses:
+ *   201: { description: The newly created (unpublished) assignment. }
+ *   400: { description: Invalid body. }
+ *   403: { description: Not course staff or a system admin. }
+ *   404: { description: Source assignment not found in this course. }
+ *   500: { description: Server error. }
+ */
+export const POST = withAssignmentAuth(
+  async (req, _ctx: RouteCtx, { user, courseId, assignment }) => {
+    // Solution files copied for `duplicate` mode, tracked so a later failure can unlink
+    // them (the DB transaction below never runs partial). Populated before the tx.
+    const copiedSolutionFiles: string[] = [];
+
+    try {
+      const parsed = await readJson(req, AssignmentDuplicateApiSchema);
+      if (!parsed.ok) return parsed.response;
+      const { title, description, descriptionJson, problemMode } = parsed.data;
+
+      // The wrapper already confirmed this assignment belongs to `courseId`.
+      const source = await prisma.assignment.findFirst({
+        where: { id: assignment.id, courseId },
+        select: {
+          id: true,
+          dueDate: true,
+          unlockAt: true,
+          assignedToEveryone: true,
+          allowLateSubmissions: true,
+          lateCutoff: true,
+          groupSetId: true,
+          assignees: { select: { targetType: true, userId: true, groupId: true } },
+          overrides: {
+            select: {
+              targetType: true,
+              userId: true,
+              groupId: true,
+              unlockAt: true,
+              dueDate: true,
+              lateCutoff: true,
+              allowLateSubmissions: true,
+            },
+          },
+          problems: {
+            select: {
+              problemId: true,
+              maxPoints: true,
+              maxSubmissions: true,
+              autograderEnabled: true,
+              problem: {
+                select: {
+                  id: true,
+                  title: true,
+                  description: true,
+                  descriptionFormat: true,
+                  descriptionJson: true,
+                  type: true,
+                  maxStates: true,
+                  isDeterministic: true,
+                  fileName: true,
+                  originalFileName: true,
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!source) {
+        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      // Copy each problem's solution file to a fresh name BEFORE the DB transaction, so
+      // the transaction is pure DB writes and a failure can unlink what was copied.
+      // Keyed by source problem id -> the {fileName, originalFileName} for the new Problem.
+      const solutionByProblemId = new Map<
+        string,
+        { fileName: string | null; originalFileName: string | null }
+      >();
+      if (problemMode === 'duplicate') {
+        for (const link of source.problems) {
+          const p = link.problem;
+          const originalFileName = p.originalFileName ?? null;
+          // No stored file, or the source file is missing on disk: copy nothing and leave
+          // the new problem without a solution rather than a dangling pointer.
+          if (!p.fileName) {
+            solutionByProblemId.set(p.id, { fileName: null, originalFileName });
+            continue;
+          }
+          const src = resolveInsideDir(solutionsDir, p.fileName);
+          if (!fs.existsSync(src)) {
+            solutionByProblemId.set(p.id, { fileName: null, originalFileName });
+            continue;
+          }
+          const newName = safeStoredFilename(p.originalFileName ?? p.fileName);
+          const dest = resolveInsideDir(solutionsDir, newName);
+          await fs.promises.copyFile(src, dest);
+          copiedSolutionFiles.push(dest);
+          solutionByProblemId.set(p.id, { fileName: newName, originalFileName });
+        }
+      }
+
+      const created = await prisma.$transaction(async (tx) => {
+        const dup = await tx.assignment.create({
+          data: {
+            title,
+            // The dialog can edit the title/description, so the request body wins here. When
+            // it sends rich JSON the plain text is derived from it; otherwise this is a
+            // plain-text write. Callers that omit both get the same null as before.
+            ...descriptionWriteData({ description, descriptionJson }),
+            dueDate: source.dueDate,
+            unlockAt: source.unlockAt,
+            assignedToEveryone: source.assignedToEveryone,
+            allowLateSubmissions: source.allowLateSubmissions,
+            lateCutoff: source.lateCutoff,
+            // Always unpublished, regardless of the source's publish state.
+            isPublished: false,
+            groupSetId: source.groupSetId,
+            courseId,
+          },
+        });
+
+        // Audience (WHO): copy the assignee rows as-is (same course, so ids stay valid).
+        if (source.assignees.length > 0) {
+          await tx.assignmentAssignee.createMany({
+            data: source.assignees.map((a) => ({
+              assignmentId: dup.id,
+              targetType: a.targetType,
+              userId: a.userId,
+              groupId: a.groupId,
+            })),
+          });
+        }
+
+        // Date exceptions (WHEN): copy the overrides. The duplicating user is recorded as
+        // their creator.
+        if (source.overrides.length > 0) {
+          await tx.assignmentOverride.createMany({
+            data: source.overrides.map((o) => ({
+              assignmentId: dup.id,
+              targetType: o.targetType,
+              userId: o.userId,
+              groupId: o.groupId,
+              unlockAt: o.unlockAt,
+              dueDate: o.dueDate,
+              lateCutoff: o.lateCutoff,
+              allowLateSubmissions: o.allowLateSubmissions,
+              createdById: user.id,
+            })),
+          });
+        }
+
+        // Problems, per the chosen mode.
+        if (problemMode === 'link' && source.problems.length > 0) {
+          await tx.assignmentProblem.createMany({
+            data: source.problems.map((l) => ({
+              assignmentId: dup.id,
+              problemId: l.problemId,
+              maxPoints: l.maxPoints,
+              maxSubmissions: l.maxSubmissions,
+              autograderEnabled: l.autograderEnabled,
+            })),
+          });
+        } else if (problemMode === 'duplicate') {
+          for (const l of source.problems) {
+            const p = l.problem;
+            const sol = solutionByProblemId.get(p.id) ?? {
+              fileName: null,
+              originalFileName: p.originalFileName ?? null,
+            };
+            const newProblem = await tx.problem.create({
+              data: {
+                title: p.title,
+                // Carry the rich description verbatim so a copy is not silently downgraded.
+                ...descriptionCopyData(p),
+                type: p.type,
+                maxStates: p.maxStates,
+                isDeterministic: p.isDeterministic,
+                fileName: sol.fileName,
+                originalFileName: sol.originalFileName,
+                courseId,
+              },
+            });
+            await tx.assignmentProblem.create({
+              data: {
+                assignmentId: dup.id,
+                problemId: newProblem.id,
+                maxPoints: l.maxPoints,
+                maxSubmissions: l.maxSubmissions,
+                autograderEnabled: l.autograderEnabled,
+              },
+            });
+          }
+        }
+        // 'none': no problem links.
+
+        return dup;
+      });
+
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'DUPLICATE_ASSIGNMENT',
+        severity: 'INFO',
+        category: 'ASSIGNMENT',
+        courseId,
+        assignmentId: created.id,
+        metadata: {
+          userId: user.id,
+          courseId,
+          sourceAssignmentId: source.id,
+          newAssignmentId: created.id,
+          title: created.title,
+          problemMode,
+          problemCount: source.problems.length,
+          assigneeCount: source.assignees.length,
+          overrideCount: source.overrides.length,
+        },
+      });
+
+      return NextResponse.json(created, { status: 201 });
+    } catch (error) {
+      // The transaction is all-or-nothing, so on failure the only side effect to undo is
+      // the solution files copied up front.
+      await Promise.all(
+        copiedSolutionFiles.map((f) => fs.promises.unlink(f).catch(() => undefined)),
+      );
+      console.error('Assignment duplication failed:', error);
+      await logError(req, {
+        userId: user.id,
+        action: 'ASSIGNMENT_DUPLICATE_ERROR',
+        category: 'ASSIGNMENT',
+        courseId,
+        error,
+      });
+      return NextResponse.json({ error: 'Failed to duplicate assignment' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_DUPLICATE_DENIED', blockWhenArchived: true },
+);

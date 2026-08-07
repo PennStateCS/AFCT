@@ -13,6 +13,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* KaTeX, self-hosted from public/katex (see scripts/vendor-katex.mjs). Linked rather
+            than imported, which is exactly what no-css-tags warns about, and is the point: the
+            stylesheet's 60 relative font urls would otherwise become 60 bundler modules in the
+            chunk graph of every route that renders maths, and dev compiles stalled for minutes.
+            It is a static third-party stylesheet that never changes between builds, so Next's
+            CSS pipeline buys nothing here. Same origin, never a CDN. */}
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" href="/katex/katex.min.css" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} flex antialiased`}>
         <RootProviders>{children}</RootProviders>
       </body>

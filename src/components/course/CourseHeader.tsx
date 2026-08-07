@@ -32,7 +32,7 @@ function RegistrationCode({ code }: { code: string }) {
       showToast.success(okMsg);
       window.setTimeout(() => setCopied(null), 1500);
     } catch {
-      showToast.error('Could not copy to the clipboard');
+      showToast.error('Could not copy to the clipboard. Select the code and copy it manually.');
     }
   };
 
@@ -50,11 +50,13 @@ function RegistrationCode({ code }: { code: string }) {
         size="icon"
         className="h-6 w-6"
         onClick={copyCode}
-        aria-label={copied === 'code' ? 'Registration code copied' : `Copy registration code ${formatted}`}
+        aria-label={
+          copied === 'code' ? 'Registration code copied' : `Copy registration code ${formatted}`
+        }
         title="Copy registration code"
       >
         {copied === 'code' ? (
-          <Check className="h-3.5 w-3.5 text-green-600" />
+          <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
         ) : (
           <Copy className="h-3.5 w-3.5" />
         )}
@@ -69,7 +71,7 @@ function RegistrationCode({ code }: { code: string }) {
         title="Copy invite link"
       >
         {copied === 'link' ? (
-          <Check className="h-3.5 w-3.5 text-green-600" />
+          <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
         ) : (
           <LinkIcon className="h-3.5 w-3.5" />
         )}
@@ -112,7 +114,9 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
     return { label: 'Open', theme: badgeTheme.open };
   })();
 
-  const enrolled = course.enrolled ?? [];
+  // Staff only, and complete: the header names every faculty member and TA, and the course
+  // payload carries exactly those two roles.
+  const staff: EnrolledUser[] = course.staff ?? [];
   const formatAllNames = (users: EnrolledUser[]) => {
     if (!Array.isArray(users) || users.length === 0) return 'None assigned';
     return users
@@ -120,8 +124,8 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
       .filter(Boolean)
       .join(', ');
   };
-  const facultyNames = formatAllNames(getInstructors(enrolled));
-  const tas = enrolled.filter((u) => u.courseRole === 'TA');
+  const facultyNames = formatAllNames(getInstructors(staff));
+  const tas = staff.filter((u) => u.courseRole === 'TA');
   const registrationCode = (course.regCode ?? '').toUpperCase();
 
   // -- render ---------------------------------------------------------------

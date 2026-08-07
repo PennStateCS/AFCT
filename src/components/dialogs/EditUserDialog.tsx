@@ -85,7 +85,6 @@ export function EditUserDialog({
       timezone: user.timezone ?? '',
       avatarFile: undefined,
       deleteAvatar: false,
-      inactive: user.inactive ?? false,
     }),
     [user],
   );
@@ -213,7 +212,6 @@ export function EditUserDialog({
     }
     if (avatarToUpload) formData.append('avatar', avatarToUpload);
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
-    formData.append('inactive', parsed.inactive ? 'true' : 'false');
     if (parsed.timezone) formData.append('timezone', parsed.timezone);
     // Only admins can set this, and only from a context allowed to manage it; the backend
     // also ignores it from non-admins and rejects self-demotion.
@@ -238,13 +236,12 @@ export function EditUserDialog({
       cropX: avatarCrop.cropX,
       cropY: avatarCrop.cropY,
       zoom: avatarCrop.zoom,
-      inactive: parsed.inactive,
       timezone: parsed.timezone || undefined,
     });
 
     resetForm();
     setOpen(false);
-    showToast.success('User updated successfully.');
+    showToast.updated('User');
   };
 
   return (
@@ -255,7 +252,7 @@ export function EditUserDialog({
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>Modify the user’s information and profile photo.</DialogDescription>
@@ -274,7 +271,7 @@ export function EditUserDialog({
                   cropY={avatarCrop.cropY}
                   zoom={avatarCrop.zoom}
                 />
-                <AvatarFallback className="bg-secondary text-secondary-foreground">
+                <AvatarFallback>
                   {(watch('firstName') || user.firstName || '?').charAt(0)}
                   {(watch('lastName') || user.lastName || '?').charAt(0)}
                 </AvatarFallback>
@@ -307,7 +304,11 @@ export function EditUserDialog({
                         Upload Avatar
                       </Button>
                       {avatarFileErrorMessage && (
-                        <p id={avatarErrorId} role="alert" className="mt-1 text-xs text-red-600">
+                        <p
+                          id={avatarErrorId}
+                          role="alert"
+                          className="text-destructive mt-1 text-xs"
+                        >
                           {avatarFileErrorMessage}
                         </p>
                       )}
@@ -319,7 +320,7 @@ export function EditUserDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
+                    className="border-destructive text-destructive hover:bg-destructive/10 flex items-center gap-2"
                     onClick={onDeleteAvatar}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -344,33 +345,34 @@ export function EditUserDialog({
             />
           ) : null}
 
-          {/* First name */}
-          <Controller
-            control={control}
-            name="firstName"
-            render={({ field }) => (
-              <InputGroup
-                label="First Name"
-                name="firstName"
-                fieldProps={field}
-                error={errors.firstName?.message}
-              />
-            )}
-          />
+          {/* First + last name share a row to save vertical space (matches Edit Profile). */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Controller
+              control={control}
+              name="firstName"
+              render={({ field }) => (
+                <InputGroup
+                  label="First Name"
+                  name="firstName"
+                  fieldProps={field}
+                  error={errors.firstName?.message}
+                />
+              )}
+            />
 
-          {/* Last name */}
-          <Controller
-            control={control}
-            name="lastName"
-            render={({ field }) => (
-              <InputGroup
-                label="Last Name"
-                name="lastName"
-                fieldProps={field}
-                error={errors.lastName?.message}
-              />
-            )}
-          />
+            <Controller
+              control={control}
+              name="lastName"
+              render={({ field }) => (
+                <InputGroup
+                  label="Last Name"
+                  name="lastName"
+                  fieldProps={field}
+                  error={errors.lastName?.message}
+                />
+              )}
+            />
+          </div>
 
           {/* Timezone */}
           <Controller
@@ -406,7 +408,7 @@ export function EditUserDialog({
               value={user.email}
               readOnly
               aria-readonly="true"
-              className="w-full cursor-not-allowed rounded border bg-gray-200 p-2 text-sm opacity-70"
+              className="bg-muted w-full cursor-not-allowed rounded border p-2 text-sm opacity-70"
             />
           </div>
 
@@ -431,26 +433,6 @@ export function EditUserDialog({
               )}
             />
           )}
-
-          {/* Inactive */}
-          <Controller
-            control={control}
-            name="inactive"
-            render={({ field }) => (
-              <SelectField
-                label="Status"
-                name="inactive"
-                value={field.value ? 'true' : 'false'}
-                onValueChange={(v) => field.onChange(v === 'true')}
-                placeholder="Select activity type"
-                options={[
-                  { value: 'false', label: 'Active' },
-                  { value: 'true', label: 'Inactive' },
-                ]}
-                error={errors.inactive?.message}
-              />
-            )}
-          />
 
           {/* Hidden deleteAvatar flag (driven by Delete button) */}
           <Controller control={control} name="deleteAvatar" render={() => <></>} />

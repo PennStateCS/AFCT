@@ -171,6 +171,8 @@ describe('GET /api/courses/[id]/assignments', () => {
         description: null,
         totalGrade: 10,
         maxGrade: 15,
+        problemCount: 2,
+        isGroup: false,
       },
     ]);
   });
@@ -406,6 +408,77 @@ describe('POST /api/courses/[id]/assignments', () => {
       expect.objectContaining({ data: expect.objectContaining({ courseId: 'c1', title: 'New' }) }),
     );
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('keeps a legacy plain-text create working (PLAIN_TEXT, no rich JSON)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.create.mockResolvedValue({
+      id: 'a1',
+      title: 'New',
+      description: 'plain body',
+      isPublished: false,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      courseId: 'c1',
+    });
+
+    const res = await post({ title: 'New', dueDate: '2026-01-10', description: 'plain body' });
+
+    expect(res.status).toBe(201);
+    const data = prismaMock.assignment.create.mock.calls[0][0].data;
+    expect(data.description).toBe('plain body');
+    expect(data.descriptionFormat).toBe('PLAIN_TEXT');
+  });
+
+  it('derives the plain-text description from rich JSON on create', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.create.mockResolvedValue({
+      id: 'a1',
+      title: 'New',
+      description: 'rich body',
+      isPublished: false,
+      dueDate: new Date('2026-01-10T23:59:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      courseId: 'c1',
+    });
+
+    const res = await post({
+      title: 'New',
+      dueDate: '2026-01-10',
+      // Plain text deliberately disagrees: the JSON must win.
+      description: 'IGNORED',
+      descriptionJson: {
+        version: 1,
+        document: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'rich body' }] }],
+        },
+      },
+    });
+
+    expect(res.status).toBe(201);
+    const data = prismaMock.assignment.create.mock.calls[0][0].data;
+    expect(data.description).toBe('rich body');
+    expect(data.descriptionFormat).toBe('TIPTAP_JSON');
+  });
+
+  it('rejects malformed rich JSON without writing anything', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const res = await post({
+      title: 'New',
+      dueDate: '2026-01-10',
+      // An unsupported node type: schema validation must reject the request.
+      descriptionJson: { version: 1, document: { type: 'doc', content: [{ type: 'image' }] } },
+    });
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.assignment.create).not.toHaveBeenCalled();
   });
 
   it('stores an available-from (unlockAt) date', async () => {

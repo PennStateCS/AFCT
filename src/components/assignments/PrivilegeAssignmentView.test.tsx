@@ -3,14 +3,14 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import PrivilegeAssignmentView from './PrivilegeAssignmentView';
+import { warmRichDescriptionEditor, WARM_TIMEOUT_MS } from '@/test/rich-editor';
 
 /* ─────────────────────────────── hoisted spies ──────────────────────────── */
 
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 // The search params the component reads on mount (drives the initial tab).
 const searchState = vi.hoisted(() => ({ value: '' }));
@@ -22,7 +22,10 @@ const colParams = vi.hoisted(
 
 /* ──────────────────────────────────  mocks  ─────────────────────────────── */
 
-vi.mock('@/lib/toast', () => ({ showToast: toast }));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toast = toastMock;
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'c1', aid: 'a1' }),
@@ -56,7 +59,7 @@ vi.mock('@/components/ui/data-table', () => ({
         return (
           <div key={id} data-testid={`row-${id}`}>
             <span>{String(row.title)}</span>
-            <button type="button" onClick={() => p?.openDescription(row.description)}>
+            <button type="button" onClick={() => p?.openDescription(row)}>
               desc-{id}
             </button>
             <button type="button" onClick={() => p?.openRenderViewer(row)}>
@@ -324,6 +327,8 @@ const renderView = (props: Record<string, unknown> = {}) => {
   );
 };
 
+beforeAll(warmRichDescriptionEditor, WARM_TIMEOUT_MS);
+
 beforeEach(() => {
   vi.clearAllMocks();
   searchState.value = '';
@@ -357,22 +362,32 @@ describe('PrivilegeAssignmentView — header', () => {
     expect(link).toHaveAttribute('href', '/dashboard/courses/c1');
   });
 
-  it('renders the description in the editable form', () => {
+  it('renders the description in the editable form', async () => {
     renderView();
-    // The Assignment tab now shows a title + description form defaulting to the values.
-    expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
+    // The Assignment tab shows a title input plus the rich-description editor, seeded with the
+    // current values. The editor is a contenteditable that mounts on the client, not a textarea.
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Description' }).textContent).toContain(
+        'Do the thing.',
+      ),
+    );
   });
 
-  it('shows an empty description field when the assignment has none', () => {
+  it('shows an empty description field when the assignment has none', async () => {
     renderView({ initialAssignment: makeAssignment({ description: null }) });
-    expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('');
+    const editor = await waitFor(() => screen.getByRole('textbox', { name: 'Description' }));
+    expect(editor.textContent).toBe('');
   });
 });
 
 describe('PrivilegeAssignmentView — tabs', () => {
-  it('defaults to the Assignment tab and shows the description form', () => {
+  it('defaults to the Assignment tab and shows the description form', async () => {
     renderView();
-    expect(screen.getByDisplayValue('Do the thing.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Description' }).textContent).toContain(
+        'Do the thing.',
+      ),
+    );
   });
 
   it('orders the tabs Details, Type, Assign To, Problems, Submissions, Statistics, Similarity', () => {
@@ -486,7 +501,7 @@ describe('PrivilegeAssignmentView — add problems', () => {
         String(u).endsWith('/assignments/a1/problems') && (init as RequestInit)?.method === 'POST',
     );
     expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ problemIds: ['p9'] });
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Problem Added'));
+    await waitFor(() => expect(toast.added).toHaveBeenCalledWith('Problem'));
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/assignments/a1?view=problems'),
     );
@@ -499,7 +514,11 @@ describe('PrivilegeAssignmentView — add problems', () => {
     await waitFor(() => expect(addBtn).toBeEnabled());
     fireEvent.click(addBtn);
     fireEvent.click(await screen.findByRole('button', { name: 'assoc-add' }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to add problems'));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'Could not add the problem to this assignment. Check your connection and try again.',
+      ),
+    );
   });
 });
 
@@ -527,7 +546,7 @@ describe('PrivilegeAssignmentView — remove problem', () => {
     );
     expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ problemId: 'p1' });
     await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('"Problem One" removed from assignment'),
+      expect(toast.removed).toHaveBeenCalledWith('Problem', { name: 'Problem One' }),
     );
   });
 
@@ -540,7 +559,11 @@ describe('PrivilegeAssignmentView — remove problem', () => {
         name: 'confirm-remove',
       }),
     );
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to remove "Problem One"'));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'Could not remove the problem from this assignment. Check your connection and try again.',
+      ),
+    );
   });
 
   it('closes the confirm dialog without deleting on cancel', async () => {
@@ -563,10 +586,11 @@ describe('PrivilegeAssignmentView — render viewer', () => {
     searchState.value = 'tab=problems';
   });
 
-  it('opens the submission viewer with the solution file for a problem that has one', () => {
+  // The viewer is loaded on demand, so it arrives a tick after the click that opens it.
+  it('opens the submission viewer with the solution file for a problem that has one', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'render-p1' }));
-    const viewer = screen.getByTestId('viewer-dialog');
+    const viewer = await screen.findByTestId('viewer-dialog');
     expect(viewer).toHaveAttribute('data-src', '/api/files/solutions/sol1.jff');
     expect(viewer).toHaveAttribute('data-type', 'FA');
     expect(viewer).toHaveTextContent('orig1.jff - Problem One');
@@ -575,7 +599,7 @@ describe('PrivilegeAssignmentView — render viewer', () => {
   it('toasts an error and opens nothing when the problem has no file', () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'render-p2' }));
-    expect(toast.error).toHaveBeenCalledWith('No file available to render');
+    expect(toast.error).toHaveBeenCalledWith('This problem has no file to preview.');
     expect(screen.queryByTestId('viewer-dialog')).not.toBeInTheDocument();
   });
 });
@@ -592,10 +616,10 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     expect(screen.getByText('Desc one')).toBeInTheDocument();
   });
 
-  it('opens the problem-settings dialog with the ids injected', () => {
+  it('opens the problem-settings dialog with the ids injected', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'edit-p1' }));
-    const dialog = screen.getByTestId('problem-settings-dialog');
+    const dialog = await screen.findByTestId('problem-settings-dialog');
     expect(dialog).toHaveAttribute('data-problem-id', 'p1');
     expect(dialog).toHaveAttribute('data-course-id', 'c1');
   });
@@ -611,8 +635,10 @@ describe('PrivilegeAssignmentView — description & edit dialogs', () => {
     renderView();
     const createBtn = screen.getByRole('button', { name: 'Create Problem' });
     await waitFor(() => expect(createBtn).toBeEnabled());
+    // Not in the DOM at all until the button is used: the dialog loads on demand.
+    expect(screen.queryByTestId('create-dialog')).not.toBeInTheDocument();
     fireEvent.click(createBtn);
-    expect(screen.getByTestId('create-dialog')).toBeInTheDocument();
+    expect(await screen.findByTestId('create-dialog')).toBeInTheDocument();
   });
 });
 
@@ -621,6 +647,8 @@ describe('PrivilegeAssignmentView — publish toggle', () => {
     renderView();
     // The header switch reflects the current isPublished (true) and toggles to false.
     fireEvent.click(screen.getByRole('switch', { name: /Published/i }));
+    // Toggling now opens a confirmation before the change is applied.
+    fireEvent.click(screen.getByRole('button', { name: 'confirm-remove' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -645,23 +673,30 @@ describe('PrivilegeAssignmentView — publish toggle', () => {
     // Seed from SSR so the view renders without depending on the failing shell fetch.
     renderView();
     fireEvent.click(screen.getByRole('switch', { name: /Published/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'confirm-remove' }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('nope'));
   });
 });
 
 describe('PrivilegeAssignmentView — assignment switcher', () => {
-  it('navigates to the chosen assignment, carrying the current tab', () => {
+  // The switcher now asks the unsaved-changes guard first, and even the pristine path is a
+  // promise, so navigation lands a microtask after the change event.
+  it('navigates to the chosen assignment, carrying the current tab', async () => {
     renderView();
     // Default tab is Details, so the jump preserves it.
     fireEvent.change(screen.getByLabelText('Switch assignment'), { target: { value: 'a2' } });
-    expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2?tab=description');
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2?tab=description'),
+    );
   });
 
-  it('preserves a non-default tab when switching assignments', () => {
+  it('preserves a non-default tab when switching assignments', async () => {
     // Start on the Submissions tab; the jump should keep the new assignment on it.
     searchState.value = 'tab=submissions';
     renderView();
     fireEvent.change(screen.getByLabelText('Switch assignment'), { target: { value: 'a2' } });
-    expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2?tab=submissions');
+    await waitFor(() =>
+      expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2?tab=submissions'),
+    );
   });
 });

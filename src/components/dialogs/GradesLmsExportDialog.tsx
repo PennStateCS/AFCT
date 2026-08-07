@@ -72,7 +72,7 @@ export function GradesLmsExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card max-w-md">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Export Grades</DialogTitle>
           <DialogDescription>

@@ -35,7 +35,7 @@ export function useCourseHandlers(
     async (updatedAssignment: Assignment) => {
       if (!course) return;
       setCourse(updateCourseAfterAssignmentSave(course, updatedAssignment));
-      showToast.success('Assignment updated!');
+      showToast.updated('Assignment', { name: updatedAssignment.title });
     },
     [course, setCourse],
   );
@@ -47,11 +47,11 @@ export function useCourseHandlers(
       try {
         await updateAssignmentPublishStatus(course.id, assignmentId, newValue);
         setCourse(updateCourseAfterAssignmentPublish(course, assignmentId, newValue));
-        showToast.success(`Assignment ${newValue ? 'published' : 'unpublished'} successfully!`);
+        showToast.success(`Assignment ${newValue ? 'published' : 'unpublished'}`);
       } catch (error) {
         const msg =
           (error instanceof Error && error.message) ||
-          'Unknown Error: Failed to update assignment status';
+          'Could not change whether the assignment is published. Check your connection and try again.';
         showToast.error(msg);
         console.error('Error updating assignment:', error);
       }
@@ -59,11 +59,13 @@ export function useCourseHandlers(
     [course, setCourse],
   );
 
+  // These three take no toast on purpose. The dialog that performed the write already reported
+  // it, and it is the only place that knows whether the write fully succeeded; a second message
+  // here is what produced two toasts for one created assignment. Callbacks update state.
   const handleAssignmentCreate = useCallback(
     (newAssignment: Assignment) => {
       if (!course) return;
       setCourse(updateCourseAfterAssignmentCreate(course, newAssignment));
-      showToast.success('Assignment created!');
     },
     [course, setCourse],
   );
@@ -81,7 +83,6 @@ export function useCourseHandlers(
     (newProblem?: Problem) => {
       if (!course || !newProblem) return;
       setCourse(updateCourseAfterProblemCreate(course, newProblem));
-      showToast.success('Problem created!');
     },
     [course, setCourse],
   );
@@ -90,7 +91,6 @@ export function useCourseHandlers(
     (updatedProblem?: Problem) => {
       if (!course || !updatedProblem) return;
       setCourse(updateCourseAfterProblemSave(course, updatedProblem));
-      showToast.success('Problem updated!');
     },
     [course, setCourse],
   );
@@ -101,11 +101,19 @@ export function useCourseHandlers(
       if (!course) return;
 
       try {
+        // Read the title before the delete removes the row from local state, so the toast can
+        // say which one went. Working down a list, "Problem deleted" alone is not an answer.
+        const name =
+          target.type === 'assignment'
+            ? course.assignments.find((a) => a.id === target.id)?.title
+            : course.problems.find((p) => p.id === target.id)?.title;
         await deleteItem(target, course.id);
         setCourse(updateCourseAfterDelete(course, target));
-        showToast.success(target.type === 'assignment' ? 'Assignment deleted' : 'Problem deleted');
+        showToast.deleted(target.type === 'assignment' ? 'Assignment' : 'Problem', { name });
       } catch (err) {
-        showToast.error('Error deleting item');
+        showToast.error(
+          `Could not delete the ${target.type}. Check your connection and try again.`,
+        );
         console.error(err);
       }
     },
@@ -120,9 +128,9 @@ export function useCourseHandlers(
         const fullCourse = { ...course, ...updatedCourse };
         const updated = await saveCourse(fullCourse);
         setCourse((prev) => (prev ? { ...prev, ...updated } : prev));
-        showToast.success('Course updated!');
+        showToast.updated('Course');
       } catch {
-        showToast.error('Failed to save course');
+        showToast.error('Could not save the course. Check your connection and try again.');
       }
     },
     [course, setCourse],
@@ -141,13 +149,14 @@ export function useCourseHandlers(
         void queryClient.invalidateQueries({ queryKey: ['courses'] });
         showToast.success(isPublished ? 'Course published' : 'Course unpublished');
       } catch (error) {
-        const msg = (error instanceof Error && error.message) || 'Failed to archive course';
+        const msg =
+          (error instanceof Error && error.message) ||
+          'Could not change whether the course is published. Check your connection and try again.';
         showToast.error(msg);
       }
     },
     [course, setCourse, queryClient],
   );
-
 
   return {
     handleAssignmentEditClick,

@@ -23,7 +23,12 @@ export function isAdmin(user: PermissionUser): boolean {
   return Boolean(user?.isAdmin);
 }
 
-/** The caller's role in a specific course, or null if they're not on its roster. */
+/**
+ * The caller's role in a specific course, or null if they're not an active member.
+ * A DROPPED student is treated as a non-member (returns null) so the surfaces that key
+ * off "do they have a role here" (staff-vs-student page routing) exclude them, the same
+ * as if they were never enrolled. FACULTY/TA are unaffected (status applies to students).
+ */
 export async function getCourseRole(
   userId: string | null | undefined,
   courseId: string | null | undefined,
@@ -31,9 +36,13 @@ export async function getCourseRole(
   if (!userId || !courseId) return null;
   const entry = await prisma.roster.findFirst({
     where: { courseId, userId },
-    select: { role: true },
+    select: { role: true, status: true },
   });
-  return entry?.role ?? null;
+  if (!entry) return null;
+  // A student is an active member unless explicitly DROPPED (the column is NOT NULL
+  // DEFAULT ENROLLED, so "not dropped" is the same as ENROLLED for real rows).
+  if (entry.role === 'STUDENT' && entry.status === 'DROPPED') return null;
+  return entry.role;
 }
 
 /**
@@ -60,14 +69,17 @@ export async function canAccessCourse(user: PermissionUser, courseId: string): P
   if (!user?.id) return false;
   const entry = await prisma.roster.findFirst({
     where: { courseId, userId: user.id },
-    select: { role: true, course: { select: { isPublished: true, deletedAt: true } } },
+    select: { role: true, status: true, course: { select: { isPublished: true, deletedAt: true } } },
   });
   if (!entry) return false;
   // A soft-deleted course is inaccessible to non-admins (retained only for recovery).
   if (entry.course?.deletedAt) return false;
   if (entry.role === 'FACULTY' || entry.role === 'TA') return true;
-  // Students (and any non-staff role) only once the course is published.
-  return entry.course.isPublished;
+  // Students only once the course is published AND while not DROPPED. A DROPPED student
+  // keeps their roster row and all their work, but is denied access here (the single
+  // gate), which cascades to every course-scoped route and the native client. (The
+  // status column is NOT NULL DEFAULT ENROLLED, so "not dropped" means enrolled.)
+  return entry.course.isPublished && entry.status !== 'DROPPED';
 }
 
 /**

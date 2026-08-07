@@ -10,17 +10,26 @@ const updatesMock = vi.hoisted(() => ({
   readStatus: vi.fn(() => null),
   updaterAvailable: vi.fn(() => true),
   updaterVersion: vi.fn(() => ''),
-  readRestorePoints: vi.fn((): Array<{ version: string; backup: string; createdAt?: string }> => []),
+  updaterReadiness: vi.fn(() => null),
+  readRestorePoints: vi.fn(
+    (): Array<{ version: string; backup: string; createdAt?: string }> => [],
+  ),
   writeUpdateRequest: vi.fn(),
   writeDowngradeRequest: vi.fn(),
   writeSelfUpdateRequest: vi.fn(),
   writeDeleteRestorePointRequest: vi.fn(),
+  // Pass restore points through unchanged; the join is covered in updates.test.ts.
+  withBackupDetails: vi.fn((points: unknown) => points),
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/updates', () => updatesMock);
+vi.mock('@/lib/backups', () => ({ listBackups: vi.fn(() => []) }));
+// The GET handler reconciles a finished run's outcome into the activity log; that has
+// its own tests (update-audit.test.ts), so stub it out here.
+vi.mock('@/lib/update-audit', () => ({ reconcileUpdateOutcomeLog: vi.fn() }));
 
 import { GET, POST } from './route';
 import { routeCtx } from '@/test/route';
@@ -75,6 +84,23 @@ describe('GET /api/admin/settings/upgrade', () => {
     updatesMock.updaterAvailable.mockReturnValue(false);
     const body = await (await GET(req(), routeCtx())).json();
     expect(body.updaterAvailable).toBe(false);
+  });
+
+  // Running and current is not the same as able to upgrade; the tab needs the difference.
+  it('passes the updater self-report through so the tab can warn about a stale one', async () => {
+    updatesMock.updaterReadiness.mockReturnValue({
+      envFile: '/afct/.env.production',
+      composeFile: '/afct-compose/docker-compose.yml',
+      envFileOk: false,
+      composeFileOk: true,
+    } as never);
+    const body = await (await GET(req(), routeCtx())).json();
+    expect(body.updaterReadiness).toEqual({
+      envFile: '/afct/.env.production',
+      composeFile: '/afct-compose/docker-compose.yml',
+      envFileOk: false,
+      composeFileOk: true,
+    });
   });
 
   it('degrades gracefully when the manifest cannot be fetched', async () => {
@@ -185,7 +211,12 @@ describe('POST downgrade', () => {
     const res = await downgrade({ tag: 'v0.9.0', restorePoint: '20260101-000000' });
     expect(res.status).toBe(202);
     expect(updatesMock.writeDowngradeRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ tag: 'v0.9.0', restorePoint: '20260101-000000', requestedBy: 'a1' }),
+      expect.objectContaining({
+        tag: 'v0.9.0',
+        restorePoint: '20260101-000000',
+        requestedBy: 'a1',
+        force: false,
+      }),
     );
     // A downgrade does NOT go through the release manifest.
     expect(updatesMock.fetchManifest).not.toHaveBeenCalled();
@@ -193,6 +224,27 @@ describe('POST downgrade', () => {
       {},
       expect.anything(),
       expect.objectContaining({ action: 'SYSTEM_DOWNGRADE_REQUESTED', severity: 'WARNING' }),
+    );
+    expect(activityLogMock).toHaveBeenCalledWith(
+      {},
+      expect.anything(),
+      expect.objectContaining({ metadata: expect.objectContaining({ forced: false }) }),
+    );
+  });
+
+  it('passes force through and records it in the audit log when the downgrade is forced', async () => {
+    updatesMock.readRestorePoints.mockReturnValue([
+      { version: 'v0.9.0', backup: '20260101-000000' },
+    ]);
+    const res = await downgrade({ tag: 'v0.9.0', restorePoint: '20260101-000000', force: true });
+    expect(res.status).toBe(202);
+    expect(updatesMock.writeDowngradeRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ tag: 'v0.9.0', force: true }),
+    );
+    expect(activityLogMock).toHaveBeenCalledWith(
+      {},
+      expect.anything(),
+      expect.objectContaining({ metadata: expect.objectContaining({ forced: true }) }),
     );
   });
 
@@ -216,14 +268,18 @@ describe('POST delete-restore-point', () => {
   });
 
   it('rejects a restore point that is not recorded (no arbitrary deletes)', async () => {
-    updatesMock.readRestorePoints.mockReturnValue([{ version: 'v0.9.0', backup: '20260101-000000' }]);
+    updatesMock.readRestorePoints.mockReturnValue([
+      { version: 'v0.9.0', backup: '20260101-000000' },
+    ]);
     const res = await del({ restorePoint: '19990101-000000' });
     expect(res.status).toBe(400);
     expect(updatesMock.writeDeleteRestorePointRequest).not.toHaveBeenCalled();
   });
 
   it('writes a delete request and audit-logs it on a recorded restore point', async () => {
-    updatesMock.readRestorePoints.mockReturnValue([{ version: 'v0.9.0', backup: '20260101-000000' }]);
+    updatesMock.readRestorePoints.mockReturnValue([
+      { version: 'v0.9.0', backup: '20260101-000000' },
+    ]);
     const res = await del({ restorePoint: '20260101-000000' });
     expect(res.status).toBe(202);
     expect(updatesMock.writeDeleteRestorePointRequest).toHaveBeenCalledWith(

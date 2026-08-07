@@ -34,7 +34,7 @@ export default function DashboardSidebarHeader() {
                   asChild
                   isActive={isActive}
                   className={
-                    'text-sidebar-foreground hover:bg-secondary focus-visible:bg-secondary active:bg-secondary data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground'
+                    'text-sidebar-foreground hover:bg-brand-teal focus-visible:bg-brand-teal active:bg-brand-teal data-[active=true]:bg-brand-teal data-[active=true]:text-white'
                   }
                 >
                   {/* aria-current pairs the visual active state with a programmatic one,

@@ -31,18 +31,18 @@ docker exec afct-dev-worker sh -c 'cd /app && npm run test:evaluator'
    ```json
    {
      "name": "Short human-readable description",
-     "type": "FA",                       // FA | RE | CFG | PDA | TM
-     "answer": "my-solution.jff",        // the answer key, relative to cases/
-     "submission": "my-submission.jff",  // the file being graded
-     "maxStates": -1,                    // FA/PDA only; -1 = no limit
-     "deterministic": false,             // FA only; must the FA be a DFA?
-     "expectCorrect": true               // the verdict this jar must return
+     "type": "FA", // FA | RE | CFG | PDA | TM
+     "answer": "my-solution.jff", // the answer key, relative to cases/
+     "submission": "my-submission.jff", // the file being graded
+     "maxStates": -1, // FA/PDA only; -1 = no limit
+     "deterministic": false, // FA only; must the FA be a DFA?
+     "expectCorrect": true // the verdict this jar must return
    }
    ```
 
    Optional: `"expectErrorContains": "unsupported answer type"` additionally requires
    the jar to explain itself in `feedback`/`errors`. Use it for files the evaluator is
-   meant to *refuse*, so a refusal never degrades into a bare "incorrect" that a student
+   meant to _refuse_, so a refusal never degrades into a bare "incorrect" that a student
    would read as a wrong answer.
 
    `maxStates`/`deterministic` map to the same per-type args
@@ -69,3 +69,25 @@ docker exec afct-dev-worker sh -c 'cd /app && npm run test:evaluator'
   weaker assertion than a real wrong-answer pair, but it is the assertion that catches
   a broken parser, a broken cfganalyzer, or a mis-swapped jar for the types the `Hw-*`
   cases never touch.
+- Environment: the runner sets `CFGANALYZER_BINARY`, `CFGANALYZER_LIMIT`,
+  `TIMEOUT_SECONDS`, and `UPGRADED_FEEDBACK`, the same four the production worker sets in
+  `src/lib/submission-worker.ts`, so the smoke test grades identically to production.
+  Without `TIMEOUT_SECONDS`/`UPGRADED_FEEDBACK` the jar prints "not set" warnings and
+  disables early stopping.
+- The `gs-*` fixtures add per-type coverage for small, well-understood languages, with a
+  correct, an incorrect, and an edge submission each, so a non-equivalent submission must
+  be rejected, not just an identical one accepted. RE covers strings ending in b; CFG
+  covers `a^n b^n` (`n >= 1`). PDA covers four languages that span the different ways a
+  stack gets used: `a^n b^n` (`n >= 1`), equal counts (`#a = #b`), balanced parentheses
+  (the Dyck language over `a`/`b`), and marked palindromes (`{ w c w^R }`). Several of
+  these also grade a second, structurally different construction as equivalent and reject a
+  related but distinct language (e.g. balanced-parentheses vs equal-count, which disagree
+  on `ba`), so they exercise real equivalence, not just self-comparison.
+- The PDA fixtures use the **modern `$` convention**: the PDA explicitly pushes the
+  bottom-of-stack marker `$` at the start and pops it to accept, matching JFLAP's active
+  `PDA_STACK_BOTTOM_MARKER` (`gui.environment.Profile`). This is the standard the current
+  client authors PDAs in; the older auto-marked `Z` convention is legacy. Two `Z`-marked
+  example PDAs were removed: under the `$`-based evaluator they convert to an empty
+  grammar, so they only ever compared equal to themselves, which hid a regression rather
+  than catching one. If the evaluator jar is ever swapped, the marker it expects must
+  match the marker the deployed client produces, or every PDA will grade the same way.

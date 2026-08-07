@@ -6,7 +6,12 @@ The **Grades** page gives Faculty and TAs a course-wide view of student scores. 
 
 An assignment cell shows the student's earned points and the assignment's available points. A dash means the assignment does not have a recorded grade for that student.
 
-The **Total** column calculates a percentage from the assignments that have recorded grades. Ungraded assignments are not included in that total, so treat it as a progress summary rather than a final course grade until grading is complete.
+The **Average** column calculates a percentage from the assignments that have recorded grades. Ungraded assignments are not included in that total, so treat it as a progress summary rather than a final course grade until grading is complete. Only assignments a student is actually assigned count toward it, so a student who is not assigned everything is not measured against the full course total.
+
+The gradebook loads a page of students at a time, so a course with a thousand students opens as quickly as a small one. Searching and sorting apply to the whole class rather than to the students currently on screen, and the number beside the pager is the total who match:
+
+- **Search** matches a student's name or email.
+- Sort by any column heading, including an individual assignment and **Average**. Sorting by Average is the quickest way to find who is falling behind, and it orders the whole class, not the page you are looking at.
 
 Select **Refresh** after grading in another tab or when you want to load the latest scores. AFCT also refreshes stale grade data when you return to the page.
 

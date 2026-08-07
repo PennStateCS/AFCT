@@ -21,8 +21,9 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParamsMock,
 }));
 
-const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/lib/toast', () => ({ showToast: toastMock }));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 import {
   useCourseData,
@@ -85,7 +86,7 @@ describe('useCourseData', () => {
   it('fetches the course summary on mount when none is provided', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ id: 'c1', name: 'X', enrolled: [], assignments: [], problems: [] }),
+      json: async () => ({ id: 'c1', name: 'X', staff: [], assignments: [], problems: [] }),
     });
     const { result } = renderHook(() => useCourseData('c1'), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.course).not.toBeNull());
@@ -99,7 +100,7 @@ describe('useCourseData', () => {
       name: 'X',
       assignments: [{}],
       problems: [],
-      enrolled: [],
+      staff: [],
     } as never;
     renderHook(() => useCourseData('c1', { initialCourse }), { wrapper: createWrapper() });
     await Promise.resolve();
@@ -109,7 +110,11 @@ describe('useCourseData', () => {
   it('surfaces a toast when the course fetch fails', async () => {
     fetchMock.mockResolvedValue({ ok: false });
     renderHook(() => useCourseData('c1'), { wrapper: createWrapper() });
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Failed to load course'));
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        'Could not load the course. Refresh the page to try again.',
+      ),
+    );
   });
 
   it('lazily loads the assignments section and merges it into the course', async () => {
@@ -118,7 +123,7 @@ describe('useCourseData', () => {
       name: 'X',
       assignments: [],
       problems: [],
-      enrolled: [],
+      staff: [],
     } as never;
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ assignments: [{ id: 'a1' }] }) });
     const { result } = renderHook(() => useCourseData('c1', { initialCourse }), {
@@ -137,9 +142,9 @@ describe('useCourseData', () => {
       name: 'X',
       assignments: [],
       problems: [],
-      enrolled: [],
+      staff: [],
     } as never;
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ enrolled: [{ id: 'u1' }] }) });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ staff: [{ id: 'u1' }] }) });
     const { result } = renderHook(() => useCourseData('c1', { initialCourse }), {
       wrapper: createWrapper(),
     });
@@ -147,13 +152,13 @@ describe('useCourseData', () => {
       await result.current.loadTabData('roster');
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=roster');
-    expect(result.current.course?.enrolled).toEqual([{ id: 'u1' }]);
+    expect(result.current.course?.staff).toEqual([{ id: 'u1' }]);
   });
 
   it('fetches the full view (not summary) for a student on mount', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ id: 'c1', name: 'X', enrolled: [], assignments: [], problems: [] }),
+      json: async () => ({ id: 'c1', name: 'X', staff: [], assignments: [], problems: [] }),
     });
     renderHook(() => useCourseData('c1', { isStudent: true }), { wrapper: createWrapper() });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=full'));
@@ -165,7 +170,7 @@ describe('useCourseData', () => {
       name: 'X',
       assignments: [{}],
       problems: [],
-      enrolled: [],
+      staff: [],
     } as never;
     const { result } = renderHook(() => useCourseData('c1', { initialCourse, isStudent: true }), {
       wrapper: createWrapper(),
@@ -178,15 +183,24 @@ describe('useCourseData', () => {
 });
 
 describe('useEnrollment', () => {
-  it('filters out users already enrolled in the course', async () => {
-    const course = { enrolled: [{ id: 'u1' }] } as never;
-    fetchMock.mockResolvedValue({ ok: true, json: async () => [{ id: 'u1' }, { id: 'u2' }] });
+  it('asks the server for enrollable accounts rather than subtracting the roster locally', async () => {
+    const course = { id: 'c1' } as never;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ rows: [{ id: 'u2' }], total: 1 }),
+    });
     const { result } = renderHook(() => useEnrollment(course), { wrapper: createWrapper() });
     let available: Array<{ id: string }> = [];
     await act(async () => {
-      available = await result.current.fetchAvailableUsers();
+      available = await result.current.fetchAvailableUsers('tur');
     });
+
+    // The exclusion is a where clause now, so the hook never needs the roster in memory.
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/courses/c1/enrollable-users?q=tur&pageSize=50',
+    );
     expect(available.map((u) => u.id)).toEqual(['u2']);
+    expect(result.current.enrollableTotal).toBe(1);
   });
 
   it('posts an enrollment and refetches on success', async () => {
@@ -200,7 +214,7 @@ describe('useEnrollment', () => {
       '/api/courses/c1/roster',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(toastMock.success).toHaveBeenCalledWith('User enrolled!');
+    expect(toastMock.success).toHaveBeenCalledWith('User enrolled');
     expect(refetch).toHaveBeenCalled();
   });
 
@@ -210,6 +224,8 @@ describe('useEnrollment', () => {
     await act(async () => {
       await result.current.handleEnrollUser({ id: 'u9' } as never, 'c1', vi.fn());
     });
-    expect(toastMock.error).toHaveBeenCalledWith('Error enrolling user');
+    expect(toastMock.error).toHaveBeenCalledWith(
+      'Could not enroll the user. Check your connection and try again.',
+    );
   });
 });

@@ -133,6 +133,25 @@ describe('POST /api/courses/join', () => {
     expect(res.status).toBe(400);
   });
 
+  it('refuses a dropped student with 403 and does not re-enroll them', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
+    prismaMock.course.findUnique.mockResolvedValue(buildCourse());
+    prismaMock.roster.findUnique.mockResolvedValue({ role: 'STUDENT', status: 'DROPPED' });
+
+    const req = new Request('http://localhost/api/courses/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'ABC123' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toMatch(/dropped/i);
+    // Re-enrollment is a staff action; the join code must not restore access.
+    expect(prismaMock.roster.create).not.toHaveBeenCalled();
+  });
+
   it('creates roster entry for student', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
     prismaMock.course.findUnique.mockResolvedValue(buildCourse());

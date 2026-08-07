@@ -224,7 +224,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card flex max-h-[85vh] max-w-3xl flex-col overflow-hidden">
+      <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Import Users</DialogTitle>
           <DialogDescription>
@@ -258,7 +258,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
           {parseError ? (
             <p
               role="alert"
-              className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700"
+              className="rounded border border-status-danger-border bg-status-danger-bg px-3 py-2 text-sm text-status-danger"
             >
               {parseError}
             </p>
@@ -269,7 +269,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
           ) : null}
 
           {rows.length > 0 && invalidRowCount > 0 ? (
-            <p className="text-sm text-amber-700">
+            <p className="text-sm text-status-warning">
               {invalidRowCount} row(s) look invalid (missing fields, invalid email, or weak
               password) and will be skipped.
             </p>

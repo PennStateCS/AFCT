@@ -2,26 +2,44 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { bestStartNodePosition } from '@/lib/jflap-layout';
+import {
+  bestLoopDirection,
+  bestStartMarkerDirection,
+  edgeLabelOffset,
+  loopLabelOffset,
+  startMarkerPolygon,
+  startMarkerPosition,
+  LABEL_LINE_HEIGHT,
+  LOOP_REACH,
+  START_MARKER_SIZE,
+} from '@/lib/jflap-layout';
 import { parseJflap, toElements, type MachineType, type Parsed } from '@/lib/jflap-parse';
 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
 
-const NODE_FILL =
-  typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--node-color').trim() ||
-      '#38bdf8'
-    : '#38bdf8';
-const STROKE =
-  typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() ||
-      '#0f172a'
-    : '#0f172a';
-const TEXT_COLOR =
-  typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() ||
-      '#0f172a'
-    : '#0f172a';
+/*
+ * JFLAP's own palette, read out of the `gui` classes in `jars/afct-evaluator.jar` rather
+ * than eyeballed, so a student sees the same automaton here as in the desktop tool:
+ *
+ *   gui/viewer/StateDrawer.STATE_COLOR      = Color(255, 255, 150)  the state fill
+ *   gui/viewer/StateDrawer.HIGHLIGHT_COLOR  = Color(100, 200, 200)
+ *   gui/Globals.FROM_COLOR                  = Color( 37,  99, 235)  the selection blue
+ *
+ * JFLAP draws the outline and the state's own name in black on that fill, which reads
+ * correctly on either theme because it sits INSIDE the yellow circle.
+ *
+ * These are literals, not `var(--node-color)`. Cytoscape renders to canvas and parses
+ * colours itself; it does not understand the `oklch()` this app's tokens are written in,
+ * so every one of those custom properties was silently rejected and the states fell back
+ * to cytoscape's default grey. That is why they were grey rather than the yellow the
+ * token already specified.
+ */
+const STATE_FILL = '#ffff96';
+const STATE_STROKE = '#000000';
+const STATE_TEXT = '#000000';
+const HIGHLIGHT_COLOR = '#2563eb';
+
+const NODE_FILL = STATE_FILL;
 
 const EDGE_WIDTH = 1.6;
 export const DEFAULT_EPS = 'ε';
@@ -64,6 +82,99 @@ function debounce(fn: () => void, ms: number) {
   };
 }
 
+// Where every transition label has ended up, for the things that have to dodge them.
+// Only meaningful once `updateEdgeLabelMargins` has run.
+function edgeLabelAnchors(cy: any): { x: number; y: number }[] {
+  return cy
+    .edges()
+    .filter((e: any) => e.data('isLoop') !== 1 && String(e.data('label') ?? '') !== '')
+    .map((e: any) => {
+      const mid = e.midpoint();
+      const off = edgeLabelOffset(e.source().position(), e.target().position(), mid);
+      return { x: mid.x + off.x, y: mid.y + off.y };
+    });
+}
+
+// The ground this state's self-loops cover: the far side of each loop and where its label
+// sits. A loop is a wide arc rather than a line, so an angle alone describes it badly and
+// left the initial-state marker grazing one; these are the two points it actually has to
+// keep away from. `selfLoopGeometry` records the direction it chose, so this is only
+// meaningful once that has run.
+function selfLoopObstacles(node: any): { x: number; y: number }[] {
+  const nodePos = node.position();
+  const points: { x: number; y: number }[] = [];
+
+  node
+    .connectedEdges()
+    .filter((e: any) => e.data('isLoop') === 1 && typeof e.data('loopDirection') === 'number')
+    .forEach((e: any) => {
+      const degrees = e.data('loopDirection');
+      const angle = ((degrees - 90) * Math.PI) / 180;
+      const apex = {
+        x: nodePos.x + Math.cos(angle) * LOOP_REACH,
+        y: nodePos.y + Math.sin(angle) * LOOP_REACH,
+      };
+      const lines = String(e.data('label') ?? '').split('\n').length;
+      const labelOffset = loopLabelOffset(degrees, lines);
+      points.push(apex, { x: apex.x + labelOffset.x, y: apex.y + labelOffset.y });
+    });
+
+  return points;
+}
+
+// The screen angles of the transitions at a state, ignoring its own loops: a loop has no
+// direction to speak of, since its two ends are the same point.
+function incidentEdgeAngles(node: any): number[] {
+  const nodePos = node.position();
+  return node
+    .connectedEdges()
+    .filter((e: any) => e.source().id() !== e.target().id())
+    .map((e: any) => {
+      const other = e.source().id() === node.id() ? e.target() : e.source();
+      const p = other.position();
+      return Math.atan2(p.y - nodePos.y, p.x - nodePos.x);
+    });
+}
+
+// Utility: put the initial-state marker beside each initial state, creating it once.
+function repositionStartNodes(cy: any) {
+  const labelAnchors = edgeLabelAnchors(cy);
+
+  cy.nodes()
+    .filter((n: any) => n.data('initial'))
+    .forEach((node: any, idx: number) => {
+      const obstacles = cy
+        .nodes()
+        .filter((n: any) => n.id() !== node.id() && !n.hasClass('start'))
+        .map((n: any) => n.position())
+        .concat(labelAnchors)
+        .concat(selfLoopObstacles(node));
+
+      const angle = bestStartMarkerDirection(node.position(), obstacles, incidentEdgeAngles(node));
+      const pos = startMarkerPosition(node.position(), angle);
+      const startNodeId = `__start${idx}`;
+      let startNode = cy.getElementById(startNodeId);
+
+      if (!startNode || startNode.empty()) {
+        cy.add({
+          group: 'nodes',
+          // An explicit empty label: the node style maps `label` from data, and a node
+          // without the field makes cytoscape warn about a mapping it cannot resolve.
+          // This marker is the initial-state triangle and never shows text.
+          data: { id: startNodeId, label: '' },
+          position: pos,
+          classes: 'start',
+        });
+        startNode = cy.getElementById(startNodeId);
+      } else {
+        startNode.position(pos);
+      }
+      // Turn the triangle to point back at its state, which only matters when the
+      // marker has had to leave the state's left side.
+      startNode.style({ 'shape-polygon-points': startMarkerPolygon(angle) });
+    });
+}
+
 /* ─────────────────────────────── The hook ──────────────────────────────── */
 
 export type UseJffCytoscapeOptions = {
@@ -100,65 +211,16 @@ export function useJffCytoscape({
 
   // Customization variables
   const FIT_PADDING = 80;
+  // Ceiling on the zoom the initial fit may choose. Without one, fitting fills the canvas
+  // whatever is in it, and a two-state machine arrived at roughly 4x. 1:1 turned out to
+  // read as too distant on a large screen, so allow a moderate enlargement and no more.
+  const MAX_INITIAL_ZOOM = 1.5;
+  // How far the self-loop arcs out from the state. The label geometry that goes with it
+  // lives in lib/jflap-layout, which is where LOOP_REACH records what this produces.
+  const LOOP_STEP_SIZE = 48;
 
   // Expose onResize for Fit button
   const onResizeRef = useRef<(() => void) | null>(null);
-
-  // Utility: Reposition start nodes for !honorPositions
-  function repositionStartNodes(cy: any) {
-    // For each initial node, ensure a start node and edge exist, and position the start node
-    cy.nodes()
-      .filter((n: any) => n.data('initial'))
-      .forEach((node: any, idx: number) => {
-        const nodePos = node.position();
-
-        // Exclude both the current node and its corresponding start node from the calculation
-        const startNodeId = `__start${idx}`;
-        const otherNodes = cy
-          .nodes()
-          .filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
-        const otherNodePositions = otherNodes.map((n2: any) => n2.position());
-
-        // Gather incoming edge angles
-        const incomingEdges = node.incomers('edge');
-        const incomingAngles = incomingEdges.map((e: any) => {
-          const src = e.source().position();
-          return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
-        });
-
-        // Pick the least-cluttered direction for the start-node stub.
-        const pos = bestStartNodePosition(nodePos, otherNodePositions, incomingAngles);
-
-        let startNode = cy.getElementById(`__start${idx}`);
-        if (!startNode || startNode.empty()) {
-          // Create the start node if it doesn't exist
-          cy.add({
-            group: 'nodes',
-            data: { id: `__start${idx}` },
-            position: pos,
-            classes: 'start',
-          });
-          startNode = cy.getElementById(`__start${idx}`);
-        } else {
-          startNode.position(pos);
-        }
-        // Ensure the start edge exists
-        const startEdgeId = `__startEdge${idx}`;
-        const startEdge = cy.getElementById(startEdgeId);
-        if (!startEdge || startEdge.empty()) {
-          cy.add({
-            group: 'edges',
-            data: {
-              id: startEdgeId,
-              source: `__start${idx}`,
-              target: node.id(),
-              label: '',
-            },
-            classes: 'startEdge',
-          });
-        }
-      });
-  }
 
   const load = useMemo(
     () => async () => {
@@ -190,6 +252,12 @@ export function useJffCytoscape({
           (typeof window !== 'undefined' && getComputedStyle(document.body).fontFamily) ||
           'ui-sans-serif, system-ui';
 
+        // Edges and their labels sit on the canvas, not inside a state, so unlike the
+        // state fill they cannot be JFLAP's flat black: that is invisible on a dark
+        // background. They follow the theme; everything on the state stays JFLAP's.
+        const STROKE = darkMode ? '#e2e8f0' : '#000000';
+        const TEXT_COLOR = STROKE;
+
         const cy = cytoscape({
           container: containerRef.current!,
           elements,
@@ -201,12 +269,12 @@ export function useJffCytoscape({
               selector: 'node',
               style: {
                 'background-color': NODE_FILL,
-                'border-color': STROKE,
+                'border-color': STATE_STROKE,
                 'border-width': 2,
                 label: 'data(label)',
                 'font-family': uiFontFamily,
                 'font-size': 16,
-                color: TEXT_COLOR,
+                color: STATE_TEXT,
                 'text-valign': 'center',
                 'text-halign': 'center',
                 width: 58,
@@ -214,10 +282,25 @@ export function useJffCytoscape({
                 shape: 'ellipse',
               },
             },
-            { selector: 'node.final', style: { 'border-width': 6 } },
+            // JFLAP marks a final state with a second, inner circle. A double border is
+            // the same picture without a second element per state.
+            { selector: 'node.final', style: { 'border-width': 6, 'border-style': 'double' } },
+            // The initial-state marker, drawn the way JFLAP draws it: an unfilled
+            // triangle on its side with its point against the state. It follows the theme
+            // rather than JFLAP's flat black, for the same reason the edges do: it sits on
+            // the canvas, not inside a state, so black disappears on a dark background.
             {
               selector: 'node.start',
-              style: { width: 4, height: 4, 'background-opacity': 0, 'border-opacity': 0 },
+              style: {
+                shape: 'polygon',
+                'shape-polygon-points': startMarkerPolygon(),
+                width: START_MARKER_SIZE,
+                height: START_MARKER_SIZE,
+                'background-opacity': 0,
+                'border-color': STROKE,
+                'border-width': 2,
+                events: 'no',
+              },
             },
 
             /* edges (default) */
@@ -239,6 +322,10 @@ export function useJffCytoscape({
                 color: TEXT_COLOR,
                 'text-wrap': 'wrap',
                 'text-max-width': 140,
+                // Lay each label along its own edge, as JFLAP does. This was previously
+                // 'none', on the grounds that autorotate rendered a right-to-left edge's
+                // label upside down; on the cytoscape this now ships, it does not, and
+                // keeps every label the right way up whichever way its edge runs.
                 'text-rotation': 'autorotate',
               },
             },
@@ -246,7 +333,11 @@ export function useJffCytoscape({
             {
               selector: 'edge[isLoop = 1]',
               style: {
-                'curve-style': 'loop',
+                // `bezier`, not `loop`. Cytoscape has no `loop` curve-style: it recognises
+                // a self-loop on its own and shapes it from `loop-direction`, `loop-sweep`
+                // and `control-point-step-size` below. Naming one made cytoscape reject
+                // the property and log an error per loop on every single render.
+                'curve-style': 'bezier',
                 'loop-direction': '0deg',
                 'loop-sweep': '50deg',
                 'control-point-step-size': 48,
@@ -258,33 +349,17 @@ export function useJffCytoscape({
               },
             },
 
-            /* initial arrow from hidden start node - make it only node diameter away */
-            {
-              selector: 'edge.startEdge',
-              style: {
-                'curve-style': 'straight',
-                'line-color': STROKE,
-                'target-arrow-color': STROKE,
-                'target-arrow-shape': 'triangle',
-                'arrow-scale': 1.1,
-                width: EDGE_WIDTH,
-                label: '',
-                'source-endpoint': 'outside-to-node',
-                'target-endpoint': 'outside-to-node',
-                'segment-distances': 58, // node diameter
-                'segment-weights': 1,
-              },
-            },
-
-            /* interaction */
+            /* interaction: JFLAP's own selection blue (gui/Globals.FROM_COLOR) */
             {
               selector: '.highlighted',
               style: {
-                'line-color': '#2563eb',
-                'target-arrow-color': '#2563eb',
-                'source-arrow-color': '#2563eb',
-                'border-color': '#2563eb',
-                'background-color': darkMode ? '#0b1220' : NODE_FILL,
+                'line-color': HIGHLIGHT_COLOR,
+                'target-arrow-color': HIGHLIGHT_COLOR,
+                'source-arrow-color': HIGHLIGHT_COLOR,
+                'border-color': HIGHLIGHT_COLOR,
+                // The fill stays JFLAP's yellow so a highlighted state still reads as a
+                // state; only its outline and its edges change.
+                'background-color': NODE_FILL,
               },
             },
             { selector: '.faded', style: { opacity: 0.25 } },
@@ -292,40 +367,60 @@ export function useJffCytoscape({
           layout: { name: 'preset' },
         });
 
-        // Function to set label margins based on edge angle
+        // Function to lay each transition label along its edge and lift it clear of the line.
         async function updateEdgeLabelMargins() {
           cy.edges().forEach((edge: any) => {
-            const src = edge.source().position();
-            const tgt = edge.target().position();
-            const dx = tgt.x - src.x;
-            const dy = tgt.y - src.y;
-            const angle = Math.atan2(dy, dx); // radians
-
-            // Project margin away from the midpoint, perpendicular to the edge
-            const marginDistance = 12;
-            const marginX = Math.round(Math.cos(angle + Math.PI / 2) * marginDistance);
-            const marginY = Math.round(Math.sin(angle + Math.PI / 2) * marginDistance);
-            edge.style({
-              'text-margin-x': marginX,
-              'text-margin-y': marginY,
-            });
+            // Self-loops are handled by `selfLoopGeometry`, which lifts the label past the
+            // loop and leaves it horizontal, as JFLAP does. Source and target coincide, so
+            // there is no edge direction here to work from anyway.
+            if (edge.data('isLoop') === 1) return;
+            const { x, y } = edgeLabelOffset(
+              edge.source().position(),
+              edge.target().position(),
+              edge.midpoint(),
+            );
+            // The angle comes from `text-rotation: autorotate` in the stylesheet. These
+            // margins are in screen space, not the label's own rotated frame, so the
+            // standoff stays perpendicular to the edge whatever angle the label is at.
+            edge.style({ 'text-margin-x': x, 'text-margin-y': y });
           });
         }
 
-        // Function to update the self-loop geometry of the transition label
+        // Function to aim each self-loop and put its label beyond it. Runs after
+        // `updateEdgeLabelMargins`, so where every other transition label sits is already
+        // settled and a loop can be steered clear of them.
         async function selfLoopGeometry() {
+          const labelAnchors = edgeLabelAnchors(cy);
+
           cy.edges('[isLoop = 1]').forEach((e: any) => {
+            const node = e.source();
+            const nodePos = node.position();
+            const obstacles = cy
+              .nodes()
+              .filter((n: any) => n.id() !== node.id() && !n.hasClass('start'))
+              .map((n: any) => n.position())
+              .concat(labelAnchors);
+
+            const direction = bestLoopDirection(nodePos, obstacles, incidentEdgeAngles(node));
+            // Remembered so the initial-state marker, which is placed after this, can be
+            // steered clear of the loop.
+            e.data('loopDirection', direction);
+            const lines = String(e.data('label') ?? '').split('\n').length;
+            const offset = loopLabelOffset(direction, lines);
+
             e.style({
-              'curve-style': 'loop',
-              'loop-direction': '0deg',
+              // See the stylesheet above: cytoscape has no `loop` curve-style.
+              'curve-style': 'bezier',
+              'loop-direction': `${direction}deg`,
               'loop-sweep': '50deg',
-              'control-point-step-size': 48,
+              'control-point-step-size': LOOP_STEP_SIZE,
               'source-arrow-shape': 'triangle',
               'target-arrow-shape': 'none',
               'arrow-scale': 0.95,
               'line-cap': 'round',
               'text-rotation': 'none',
-              'text-margin-y': -12,
+              'text-margin-x': offset.x,
+              'text-margin-y': offset.y,
             });
           });
         }
@@ -343,13 +438,47 @@ export function useJffCytoscape({
                 : `${containerRef.current.clientWidth / containerRef.current.clientHeight}f`;
             let layoutOptions;
             if (!honorPositions) {
+              /*
+               * Give the layout room for the LABELS, not just the states.
+               *
+               * ELK lays out nodes and edges; it knows nothing about the text cytoscape
+               * later draws on an edge. With a flat 50px node spacing that was fine for an
+               * FA whose labels are one character, and hopeless for a PDA or TM, where
+               * `0 → 0, R` or eight stacked stack-operations end up longer than the edge
+               * they sit on. Adjacent labels then landed on top of each other.
+               *
+               * So measure the widest and tallest label actually present and ask for edges
+               * long enough to hold one. A machine of single-character labels keeps a
+               * compact layout; a wordy one spreads out only as much as it has to.
+               */
+              let widestLabel = 0;
+              let tallestLabel = 1;
+              cy.edges().forEach((e: any) => {
+                const lines = String(e.data('label') ?? '').split('\n');
+                tallestLabel = Math.max(tallestLabel, lines.length);
+                for (const line of lines) {
+                  widestLabel = Math.max(widestLabel, line.length);
+                }
+              });
+              // ~8px per character at the 16px edge font, capped so one pathological label
+              // can't push the whole machine apart.
+              const labelWidth = Math.min(widestLabel * 8, 220);
+              const labelHeight = Math.min(tallestLabel * LABEL_LINE_HEIGHT, 220);
+
               layoutOptions = {
                 name: 'elk',
                 nodeDimensionsIncludeLabels: true,
                 elk: {
-                  algorithm: 'force',
+                  // `stress` over `force`: it honours a desired edge length, which is the
+                  // one lever that actually buys space for a label, and it produces a
+                  // stable, symmetric result for the small cyclic graphs automata are.
+                  algorithm: 'stress',
                   'elk.aspectRatio': elkAspectRatio,
-                  'elk.spacing.nodeNode': '50',
+                  'elk.stress.desiredEdgeLength': String(160 + labelWidth),
+                  'elk.spacing.nodeNode': String(60 + labelHeight),
+                  // Deterministic: the same machine should lay out the same way every time
+                  // it is opened, so a student and an instructor discuss the same picture.
+                  'elk.randomSeed': '1',
                 },
               };
             } else {
@@ -376,38 +505,23 @@ export function useJffCytoscape({
             await selfLoopGeometry();
             repositionStartNodes(cy);
 
-            // Fit and center using cy.center(cy.nodes())
-            const nodes = cy.nodes();
-            if (nodes.length === 0) return;
+            if (cy.nodes().length === 0) return;
 
-            // Calculate fit zoom (preserve previous logic for zoom, but use cy.center for center)
-            let minX = Infinity,
-              minY = Infinity,
-              maxX = -Infinity,
-              maxY = -Infinity;
-            nodes.forEach((n: any) => {
-              const pos = n.position();
-              if (pos.x < minX) minX = pos.x;
-              if (pos.y < minY) minY = pos.y;
-              if (pos.x > maxX) maxX = pos.x;
-              if (pos.y > maxY) maxY = pos.y;
-            });
+            // Fit to the real extent of everything, LABELS INCLUDED. The old maths took the
+            // min/max of node CENTRES, so each node's own radius and every edge label lay
+            // outside the box it fitted to, and a tall self-loop label or a wide transition
+            // label was reliably cut off at the edge of the canvas. `fit` measures the
+            // rendered bounding box, which is what the reader actually has to see.
+            cy.fit(cy.elements(), FIT_PADDING);
 
-            // Add padding
-            minX -= FIT_PADDING;
-            minY -= FIT_PADDING;
-            maxX += FIT_PADDING;
-            maxY += FIT_PADDING;
-
-            const fitWidth = maxX - minX;
-            const fitHeight = maxY - minY;
-            const scaleX = cy.width() / fitWidth;
-            const scaleY = cy.height() / fitHeight;
-            const fitZoom = Math.min(scaleX, scaleY, cy.maxZoom ? cy.maxZoom() : 6);
-
-            // Use cy.center(cy.nodes()) to get the center position
-            const center = cy.center(cy.nodes());
-            cy.animate({ zoom: fitZoom, center }, { duration: 120 });
+            // Then back off if that magnified a small machine. Fitting alone fills the
+            // canvas whatever is in it, so a two-state automaton arrived at 4x with states
+            // the size of a fist and no context around them. Above 1:1 there is nothing
+            // more to see, only bigger circles, so cap it and re-centre.
+            if (cy.zoom() > MAX_INITIAL_ZOOM) {
+              cy.zoom(MAX_INITIAL_ZOOM);
+              cy.center(cy.elements());
+            }
           } catch {}
         }
 
@@ -451,43 +565,16 @@ export function useJffCytoscape({
           neighborhood.addClass('highlighted').removeClass('faded');
         });
 
-        // Update self-loop geometry, edge label margins, and start node position when a node is moved
+        // Keep the label and loop geometry, and the initial-state marker, following a
+        // state the reader has dragged. Moving the marker itself fires this too, so skip
+        // it: it has nothing hanging off it, and reacting would only recurse.
         cy.on('position', async (evt: any) => {
-          // Only update if a node was moved
-          if (evt.target && evt.target.isNode && evt.target.isNode()) {
-            await updateEdgeLabelMargins();
-            await selfLoopGeometry();
+          const target = evt.target;
+          if (!target?.isNode?.() || target.hasClass('start')) return;
 
-            // If the moved node is an initial node, update its corresponding __start node position
-            if (evt.target.data('initial')) {
-              // Find the index of this initial node among all initial nodes
-              const initialNodes = cy.nodes().filter((n: any) => n.data('initial'));
-              let idx = -1;
-              initialNodes.forEach((n: any, i: number) => {
-                if (n.id() === evt.target.id()) idx = i;
-              });
-              if (idx !== -1) {
-                // Recompute the best position for the __start node
-                const node = evt.target;
-                const nodePos = node.position();
-                const startNodeId = `__start${idx}`;
-                const otherNodes = cy
-                  .nodes()
-                  .filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
-                const otherNodePositions = otherNodes.map((n2: any) => n2.position());
-                const incomingEdges = node.incomers('edge');
-                const incomingAngles = incomingEdges.map((e: any) => {
-                  const src = e.source().position();
-                  return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
-                });
-                const pos = bestStartNodePosition(nodePos, otherNodePositions, incomingAngles);
-                const startNode = cy.getElementById(startNodeId);
-                if (startNode && !startNode.empty()) {
-                  startNode.position(pos);
-                }
-              }
-            }
-          }
+          await updateEdgeLabelMargins();
+          await selfLoopGeometry();
+          repositionStartNodes(cy);
         });
       } catch (e: any) {
         console.error(e);

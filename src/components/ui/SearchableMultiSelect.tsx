@@ -4,11 +4,7 @@ import React, { useId, useMemo, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -56,13 +52,22 @@ export function SearchableMultiSelect({
     return items.filter((item) => item.label.toLowerCase().includes(query));
   }, [items, search]);
 
+  /**
+   * What the closed control says is selected.
+   *
+   * Past two, the names are summarised rather than listed. A comma-joined list of long
+   * names is wider than any sensible control, so it was truncated to something like
+   * "Computer Science Theory, Automata, Computab…", which reads as the first item plus
+   * noise and hides how many are actually selected. The count is the useful fact; the
+   * names are one click away in the panel, which shows them checked.
+   */
   const selectedLabels = useMemo(() => {
     if (!value?.length) return '';
     const map = new Map(items.map((item) => [item.id, item.label]));
-    return value
-      .map((id) => map.get(id))
-      .filter(Boolean)
-      .join(', ');
+    const labels = value.map((id) => map.get(id)).filter((l): l is string => !!l);
+    if (labels.length === 0) return '';
+    if (labels.length <= 2) return labels.join(', ');
+    return `${labels.length} selected`;
   }, [items, value]);
 
   const toggleSelection = (id: string) => {
@@ -78,7 +83,11 @@ export function SearchableMultiSelect({
   const describedBy = error ? `${triggerId}-error` : undefined;
 
   return (
-    <div className="flex flex-col">
+    // min-w-0 because the trigger's label is `whitespace-nowrap` (it truncates), which makes
+    // this control's min-content width the FULL selected text. As a flex or grid child that
+    // minimum wins over a 1fr track, so a long selection pushed its siblings off screen and
+    // gave the whole page a horizontal scrollbar instead of truncating.
+    <div className="flex min-w-0 flex-col">
       {label ? (
         <Label htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
           {label}
@@ -103,7 +112,7 @@ export function SearchableMultiSelect({
             className={cn(
               'border-input text-foreground focus-visible:border-ring focus-visible:ring-ring/40 flex h-11 w-full items-center justify-between rounded-md border bg-transparent px-3 text-sm shadow-xs transition-all duration-150 focus-visible:ring-[3px] focus-visible:outline-none',
               disabled && 'cursor-not-allowed opacity-60',
-              error && 'border-red-500',
+              error && 'border-destructive',
             )}
           >
             <span
@@ -145,7 +154,7 @@ export function SearchableMultiSelect({
                 return (
                   <label
                     key={item.id}
-                    className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
+                    className="hover:bg-muted flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
                   >
                     <Checkbox
                       // Radix renders a <button role="checkbox">, which takes no name
@@ -163,7 +172,7 @@ export function SearchableMultiSelect({
         </PopoverContent>
       </Popover>
       {error ? (
-        <p id={describedBy} role="alert" className="mt-1 text-xs text-red-600">
+        <p id={describedBy} role="alert" className="text-destructive mt-1 text-xs">
           {error}
         </p>
       ) : null}

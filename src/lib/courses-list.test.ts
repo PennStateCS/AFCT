@@ -35,7 +35,8 @@ describe('getCoursesListForUser — access scoping', () => {
     await getCoursesListForUser('stu-1', 'STUDENT');
     expect(whereArg()).toEqual({
       deletedAt: null,
-      roster: { some: { userId: 'stu-1' } },
+      // A course the viewer was dropped from (as a student) is excluded from their list.
+      roster: { some: { userId: 'stu-1', NOT: { role: 'STUDENT', status: 'DROPPED' } } },
       OR: [
         { isPublished: true },
         { roster: { some: { userId: 'stu-1', role: { in: ['FACULTY', 'TA'] } } } },
@@ -49,7 +50,7 @@ describe('getCoursesListForUser — access scoping', () => {
     await getCoursesListForUser('fac-1', 'STUDENT');
     expect(whereArg()).toEqual({
       deletedAt: null,
-      roster: { some: { userId: 'fac-1' } },
+      roster: { some: { userId: 'fac-1', NOT: { role: 'STUDENT', status: 'DROPPED' } } },
       OR: [
         { isPublished: true },
         { roster: { some: { userId: 'fac-1', role: { in: ['FACULTY', 'TA'] } } } },

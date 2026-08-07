@@ -25,10 +25,7 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 COPY --from=eclipse-temurin:21-jre@sha256:d2b9f8f12212cadcfdf889461531784e8fd097feade954d65b31ee7a71c473ec /opt/java/openjdk /opt/java/openjdk
 
 ENV NODE_ENV=development
-ENV DISABLE_ERD=true
 ENV NEXT_TELEMETRY_DISABLED=1
-# ERD is disabled, so skip puppeteer's ~150MB Chromium download during npm ci.
-ENV PUPPETEER_SKIP_DOWNLOAD=1
 # Put the app's own bin dir (cfganalyzer) on PATH.
 ENV PATH="/app/bin:${PATH}"
 
@@ -55,7 +52,7 @@ RUN if [ -f /app/bin/cfganalyzer ]; then chmod +x /app/bin/cfganalyzer; fi
 # Baked-in source. The dev bind mount overlays this; it exists so the image also
 # works on its own (e.g. the prisma-studio service).
 COPY --chown=node:node . .
-RUN npx prisma generate
+RUN npx prisma generate --generator client
 
 # Fail the build now if the copied JRE can't run.
 RUN java -version

@@ -89,11 +89,69 @@ export const formatBytes = (n: number | null) => {
   return `${v.toFixed(1)} ${units[i]}`;
 };
 
-// Turn the backup filename timestamp (YYYYMMDD-HHMMSS) into a readable date.
+// Turn the backup filename timestamp (YYYYMMDD-HHMMSS) into a readable date, kept as-is
+// (server clock). Used for the tooltip and as the local-time fallback.
 export const formatBackupTs = (ts: string) => {
   const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(ts);
   return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}` : ts;
 };
+
+// Parse a backup filename timestamp into a Date. Backups are written with the server's
+// clock, which AFCT runs in UTC (docker/backup/backup.sh, and the "server time (UTC)"
+// backup-hour setting), so we read the parts as UTC. Null if the string doesn't match.
+export const parseBackupTs = (ts: string): Date | null => {
+  const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(ts);
+  if (!m) return null;
+  return new Date(
+    Date.UTC(
+      Number(m[1]),
+      Number(m[2]) - 1,
+      Number(m[3]),
+      Number(m[4]),
+      Number(m[5]),
+      Number(m[6]),
+    ),
+  );
+};
+
+// A backup timestamp in the viewer's own timezone, with the zone shown so it's
+// unambiguous (e.g. "Jan 15, 2026, 3:02:01 AM EST"). Falls back to the raw server-time
+// string if it can't be parsed.
+export const formatBackupTsLocal = (ts: string): string => {
+  const d = parseBackupTs(ts);
+  if (!d) return formatBackupTs(ts);
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  });
+};
+
+// Parse a release tag like "v0.1.19" or "0.1.19" into [major, minor, patch]. Returns
+// null for anything that isn't a plain three-part version (e.g. "main" in dev, or a
+// commit SHA), so callers can fall back rather than guess an ordering.
+export function parseVersionTag(tag: string): [number, number, number] | null {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(tag.trim());
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+// Whether `tag` is a strictly higher version than `current`. Returns null when either
+// side isn't a parseable version, so the caller keeps its old behaviour instead of
+// hiding versions it can't compare.
+export function isNewerThan(tag: string, current: string): boolean | null {
+  const a = parseVersionTag(tag);
+  const b = parseVersionTag(current);
+  if (!a || !b) return null;
+  const [a0, a1, a2] = a;
+  const [b0, b1, b2] = b;
+  if (a0 !== b0) return a0 > b0;
+  if (a1 !== b1) return a1 > b1;
+  return a2 > b2;
+}
 
 // Human labels for the updater's machine phase strings, both for display and so
 // the status live region doesn't announce "rolled underscore back".
@@ -110,6 +168,16 @@ const UPGRADE_PHASE_LABELS: Record<string, string> = {
 };
 export const upgradePhaseLabel = (phase: string) =>
   UPGRADE_PHASE_LABELS[phase] ?? phase.replace(/_/g, ' ');
+
+// Whether a failed downgrade failed specifically because the updater could not confirm a
+// pre-downgrade safety backup (a refusal it makes BEFORE touching anything, so it is a
+// safe state to offer a forced retry from). Keyed off the updater's refusal message in
+// docker/updater/updater.sh (process_downgrade), which starts "Could not confirm a
+// backup...". If that wording changes, the forced-retry affordance simply stops
+// appearing (the admin can still recover from the server), so this degrades gracefully.
+export function downgradeRefusedForSafetyBackup(message: string | undefined | null): boolean {
+  return !!message && /could not confirm a backup/i.test(message);
+}
 
 // A single step in the visual upgrade/downgrade progress checklist.
 export type UpgradeStepState = 'done' | 'current' | 'pending';

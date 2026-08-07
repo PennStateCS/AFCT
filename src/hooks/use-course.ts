@@ -6,10 +6,10 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import type { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
-import { getEnrolledIds, type EnrolledUser } from '@/lib/course-roster';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
-import type { Assignment, Problem, User } from '@prisma/client';
+import type { Assignment, Problem } from '@prisma/client';
 
 type CourseSectionView = 'summary' | 'full' | 'assignments' | 'problems' | 'roster';
 type SectionKey = 'assignments' | 'problems' | 'roster';
@@ -21,7 +21,7 @@ export const courseQueryKey = (courseId: string, view: CourseSectionView) =>
 /** Ensure the lazily-merged section arrays are always present on a course payload. */
 const normalizeCourse = (data: FullCourse): FullCourse => ({
   ...data,
-  enrolled: data.enrolled || [],
+  staff: data.staff || [],
   assignments: data.assignments || [],
   problems: data.problems || [],
 });
@@ -66,7 +66,7 @@ export function useCourseData(
 
   // Surface the load failure once (Query owns the fetch; there is no onError in v5).
   useEffect(() => {
-    if (isError) showToast.error('Failed to load course');
+    if (isError) showToast.error('Could not load the course. Refresh the page to try again.');
   }, [isError]);
 
   // Optimistic updates write straight to the base cache entry; `useQuery` then
@@ -122,18 +122,18 @@ export function useCourseData(
                 ...(section === 'problems'
                   ? { problems: data.problems ?? prev.problems ?? [] }
                   : {}),
-                ...(section === 'roster' ? { enrolled: data.enrolled ?? prev.enrolled ?? [] } : {}),
+                ...(section === 'roster' ? { staff: data.staff ?? prev.staff ?? [] } : {}),
               }
             : {
                 ...data,
                 assignments: data.assignments ?? [],
                 problems: data.problems ?? [],
-                enrolled: data.enrolled ?? [],
+                staff: data.staff ?? [],
               },
         );
       } catch (error) {
         setLoadingSections((prev) => ({ ...prev, [section]: false }));
-        showToast.error('Failed to load tab data');
+        showToast.error('Could not load this tab. Refresh the page to try again.');
         console.error('Error loading tab data:', error);
       }
     },
@@ -245,37 +245,49 @@ export function useDialogStates() {
   };
 }
 
+/** Matches the dialog's visible cap, so "showing the first N" is the truth. */
+const ENROLLABLE_PAGE_SIZE = 50;
+
 export function useEnrollment(course: FullCourse | null) {
   const queryClient = useQueryClient();
   const [allUsers, setAllUsers] = useState<EnrollableUser[]>([]);
+  const [enrollableTotal, setEnrollableTotal] = useState(0);
 
-  const fetchAvailableUsers = useCallback(async () => {
-    try {
-      // Cached so reopening the enroll dialog doesn't refetch the full user list.
-      const users = await queryClient.fetchQuery({
-        queryKey: ['admin', 'users', 'all'],
-        queryFn: async () => {
-          const res = await fetch(apiPaths.admin.users());
-          if (!res.ok) throw new Error('Failed to fetch users');
-          return (await res.json()) as User[];
-        },
-        staleTime: 30_000,
-      });
-
-      if (course) {
-        const inCourseIds = new Set(getEnrolledIds(course.enrolled as EnrolledUser[]));
-        const available = users.filter((u) => !inCourseIds.has(u.id));
-        setAllUsers(available);
-        return available;
+  /**
+   * Accounts that can be enrolled, matching `search`.
+   *
+   * The server decides who is eligible. This used to fetch every account in the
+   * installation and subtract the course's roster in the browser, which needed the whole
+   * roster in memory to be correct and did not survive either list growing.
+   */
+  const courseId = course?.id;
+  const fetchAvailableUsers = useCallback(
+    async (search = '') => {
+      if (!courseId) return [] as EnrollableUser[];
+      try {
+        const q = search.trim();
+        const data = await queryClient.fetchQuery({
+          queryKey: queryKeys.course.enrollableUsers(courseId, q),
+          queryFn: async () => {
+            const res = await fetch(
+              apiPaths.courseEnrollableUsers(courseId, { q, pageSize: ENROLLABLE_PAGE_SIZE }),
+            );
+            if (!res.ok) throw new Error('Failed to fetch users');
+            return (await res.json()) as { rows: EnrollableUser[]; total: number };
+          },
+          staleTime: 30_000,
+        });
+        setAllUsers(data.rows);
+        setEnrollableTotal(data.total);
+        return data.rows;
+      } catch (error) {
+        showToast.error('Could not load the user list. Refresh the page to try again.');
+        console.error('Error fetching users:', error);
+        return [] as EnrollableUser[];
       }
-      setAllUsers(users as unknown as EnrollableUser[]);
-      return users as unknown as EnrollableUser[];
-    } catch (error) {
-      showToast.error('Failed to load user list');
-      console.error('Error fetching users:', error);
-      return [] as EnrollableUser[];
-    }
-  }, [course, queryClient]);
+    },
+    [courseId, queryClient],
+  );
 
   const handleEnrollUser = useCallback(
     async (user: EnrollableUser, courseId: string, refetchCourse: () => void) => {
@@ -286,10 +298,10 @@ export function useEnrollment(course: FullCourse | null) {
           body: JSON.stringify({ userId: user.id }),
         });
         if (!res.ok) throw new Error('Failed to enroll user');
-        showToast.success('User enrolled!');
+        showToast.success('User enrolled');
         refetchCourse();
       } catch (error) {
-        showToast.error('Error enrolling user');
+        showToast.error('Could not enroll the user. Check your connection and try again.');
         console.error('Error enrolling user:', error);
       }
     },
@@ -298,6 +310,7 @@ export function useEnrollment(course: FullCourse | null) {
 
   return {
     allUsers,
+    enrollableTotal,
     fetchAvailableUsers,
     handleEnrollUser,
   };

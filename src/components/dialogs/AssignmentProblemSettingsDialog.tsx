@@ -90,7 +90,7 @@ export function AssignmentProblemSettingsDialog({
         maxSubmissions: unlimited ? -1 : Math.max(1, Math.floor(submissionsValue)),
         autograderEnabled,
       });
-      showToast.success('Settings updated.');
+      showToast.updated('Problem settings');
       onSaved?.();
       setOpen(false);
     } catch (err) {
@@ -102,7 +102,7 @@ export function AssignmentProblemSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Problem Settings</DialogTitle>
           <DialogDescription>
@@ -132,7 +132,9 @@ export function AssignmentProblemSettingsDialog({
             onValueChange={setMaxSubmissions}
             min={1}
             placeholder="e.g. 5"
-            error={submissionsInvalid ? 'Enter a number of at least 1, or choose Unlimited.' : undefined}
+            error={
+              submissionsInvalid ? 'Enter a number of at least 1, or choose Unlimited.' : undefined
+            }
           />
 
           <SwitchField

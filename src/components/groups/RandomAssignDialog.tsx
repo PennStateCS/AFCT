@@ -136,7 +136,7 @@ export function RandomAssignDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Assign Students Randomly</DialogTitle>
           <DialogDescription>
@@ -182,7 +182,7 @@ export function RandomAssignDialog({
                 const group = assignedGroupByUser.get(s.id);
                 return (
                   <li key={s.id}>
-                    <label className="flex items-center gap-2 rounded p-1 text-sm hover:bg-muted/50">
+                    <label className="flex items-center gap-2 rounded p-1 text-sm hover:bg-muted">
                       <Checkbox
                         checked={selected.has(s.id)}
                         onCheckedChange={() => toggle(s.id)}
@@ -213,7 +213,7 @@ export function RandomAssignDialog({
             </label>
 
             {error && (
-              <p role="alert" className="text-xs text-red-600">
+              <p role="alert" className="text-xs text-destructive">
                 {error}
               </p>
             )}
@@ -257,7 +257,7 @@ export function RandomAssignDialog({
             </div>
 
             {error && (
-              <p role="alert" className="text-xs text-red-600">
+              <p role="alert" className="text-xs text-destructive">
                 {error}
               </p>
             )}

@@ -23,7 +23,7 @@ export const problemTypeLabels: Record<string, string> = {
 export type ProblemColumnsParams = {
   /** Archived courses are read-only: Edit/Remove items are hidden. */
   courseIsArchived: boolean;
-  openDescription: (desc: string) => void;
+  openDescription: (problem: Problem) => void;
   openRenderViewer: (problem: Problem) => void;
   handleEditProblem: (problem: Problem) => void;
   onRemoveProblem: (problem: Problem) => void;
@@ -55,29 +55,32 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
     {
       accessorKey: 'title',
       header: 'Title',
-      cell: ({ row }: { row: { original: Problem } }) => row.original.title,
+      // The title with a "View description" link underneath. The link opens the
+      // description modal; it's omitted when the problem has no description.
+      cell: ({ row }: { row: { original: Problem } }) => {
+        const problem = row.original;
+        // Either form counts as having a description: a rich-only problem still has text to show.
+        const hasDescription =
+          Boolean(problem.description) ||
+          Boolean((problem as { descriptionJson?: unknown }).descriptionJson);
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span>{problem.title}</span>
+            {hasDescription ? (
+              <button
+                type="button"
+                onClick={() => openDescription(problem)}
+                className="text-primary self-start text-xs underline hover:text-primary/80"
+                title="View description"
+              >
+                View description
+              </button>
+            ) : null}
+          </div>
+        );
+      },
       meta: { priority: 1 },
       enableSorting: true,
-    },
-    {
-      id: 'description_col',
-      header: 'Description',
-      cell: ({ row }: { row: { original: Problem } }) => {
-        const desc = row.original.description;
-        // No description: render nothing so the cell reads as empty.
-        return desc ? (
-          <button
-            type="button"
-            onClick={() => openDescription(desc)}
-            className="text-blue-600 underline hover:text-blue-800"
-            title="View description"
-          >
-            View Description
-          </button>
-        ) : null;
-      },
-      meta: { priority: 2 },
-      enableSorting: false,
     },
     {
       accessorKey: 'type',
@@ -200,7 +203,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
             <button
               type="button"
               onClick={() => openRenderViewer(row.original)}
-              className="break-all text-blue-600 hover:underline"
+              className="text-primary break-all hover:underline"
               title={`View ${fileName}`}
             >
               {fileName}
@@ -267,7 +270,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onRemoveProblem(row.original)}
-              className="flex items-center gap-2 text-red-600 focus:text-red-600"
+              className="flex items-center gap-2 text-destructive focus:text-destructive"
               hidden={courseIsArchived}
             >
               <Trash2 className="mr-2 h-4 w-4" /> Remove Problem

@@ -9,14 +9,12 @@ import type { Assignment } from '@prisma/client';
 
 import { AssignmentSettingsCard } from './AssignmentSettingsCard';
 
-const { toastSuccessMock, toastErrorMock, toastWarningMock } = vi.hoisted(() => ({
-  toastSuccessMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-  toastWarningMock: vi.fn(),
-}));
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccessMock, error: toastErrorMock, warning: toastWarningMock },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccessMock = toastMock.success;
+const toastErrorMock = toastMock.error;
+const toastWarningMock = toastMock.warning;
 
 // Drive the allow-late / late-policy switches by role.
 vi.mock('@/components/ui/switch', () => ({
@@ -129,7 +127,8 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   const u = String(url);
   const method = (init?.method ?? 'GET').toUpperCase();
   if (method === 'PUT' && u.includes('/assignees')) return ok({ id: 'a1' }) as unknown as Response;
-  if (method === 'PUT' && u.includes('/assignments/a1')) return ok(baseAssignment) as unknown as Response;
+  if (method === 'PUT' && u.includes('/assignments/a1'))
+    return ok(baseAssignment) as unknown as Response;
   if (u.includes('/overrides')) return ok(overridesData) as unknown as Response; // GET list + POST/PATCH/DELETE
   if (u.includes('/assignees')) return ok(assigneesData) as unknown as Response;
   if (u.includes('/students')) return ok(students) as unknown as Response;
@@ -196,11 +195,16 @@ describe('AssignmentSettingsCard', () => {
     await user.click(save);
 
     await waitFor(() => expect(callsFor('PUT', '/assignments/a1').length).toBeGreaterThan(0));
-    const basePut = callsFor('PUT', '/assignments/a1').find((c) => !String(c[0]).includes('/assignees'));
+    const basePut = callsFor('PUT', '/assignments/a1').find(
+      (c) => !String(c[0]).includes('/assignees'),
+    );
     expect(bodyOf(basePut!)).toMatchObject({ allowLateSubmissions: true });
     await waitFor(() => expect(callsFor('PUT', '/assignees').length).toBe(1));
-    expect(bodyOf(callsFor('PUT', '/assignees')[0])).toEqual({ assignedToEveryone: true, assignees: [] });
-    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Assign To saved'));
+    expect(bodyOf(callsFor('PUT', '/assignees')[0])).toEqual({
+      assignedToEveryone: true,
+      assignees: [],
+    });
+    await waitFor(() => expect(toastMock.saved).toHaveBeenCalledWith('Assign To'));
     expect(onSaved).toHaveBeenCalled();
   });
 
@@ -210,7 +214,9 @@ describe('AssignmentSettingsCard', () => {
 
     // The picker lists the assigned student (everyone -> all students).
     await user.click(await screen.findByRole('button', { name: 'Alice Anderson' }));
-    expect(await screen.findByRole('heading', { name: /date overrides \(1\)/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /date overrides \(1\)/i }),
+    ).toBeInTheDocument();
 
     // Give the override a due date (the base "Due" is labelled "Due"; the override one too,
     // so set "Available from" which is unique to the override row).
@@ -288,7 +294,9 @@ describe('AssignmentSettingsCard', () => {
     renderCard();
 
     await screen.findByRole('button', { name: /edit date override for Alice Anderson/i });
-    await user.click(screen.getByRole('button', { name: /remove date override for Alice Anderson/i }));
+    await user.click(
+      screen.getByRole('button', { name: /remove date override for Alice Anderson/i }),
+    );
     expect(screen.getByRole('heading', { name: /date overrides \(0\)/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /save changes/i }));

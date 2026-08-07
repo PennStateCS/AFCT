@@ -10,18 +10,23 @@ The `afct-evaluator.jar` requires a binary dependency that should be placed in t
 ## Setup Instructions
 
 ### Option 1: Add Your Binary File
+
 1. Place your binary file in this `bin/` directory
 2. Rename it to `cfganalyzer` (or update the environment variable)
 3. Rebuild the Docker container
 
 ### Option 2: Build Binary from Source (if applicable)
+
 If you have source code for the binary:
+
 1. Add build instructions to the Dockerfile
 2. Compile the binary during Docker build
 3. Place it in `/app/bin/`
 
 ### Option 3: Download Binary During Build
+
 If the binary is available for download:
+
 1. Add download commands to the Dockerfile
 2. Extract and place in `/app/bin/`
 
@@ -34,9 +39,10 @@ The following environment variables control the binary:
 
 ## Current Status
 
-⚠️  **Binary Missing**: The `cfganalyzer` binary is not currently installed.
+⚠️ **Binary Missing**: The `cfganalyzer` binary is not currently installed.
 
 The JAR will show warnings about the missing binary until you:
+
 1. Place the binary file in this directory
 2. Rebuild the Docker container
 
@@ -56,16 +62,21 @@ docker exec afct-app-1 java -jar /app/jars/afct-evaluator.jar answer.txt submiss
 ## Troubleshooting
 
 ### Permission Issues
+
 If you get permission errors:
+
 ```bash
 docker exec afct-app-1 chmod +x /app/bin/cfganalyzer
 ```
 
 ### Path Issues
+
 Verify the environment variable:
+
 ```bash
 docker exec afct-app-1 env | grep CFGANALYZER
 ```
 
 ### Binary Compatibility
+
 Ensure the binary is compatible with Alpine Linux (musl libc).

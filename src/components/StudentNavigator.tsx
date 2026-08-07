@@ -22,7 +22,18 @@ export type StudentNavigatorStudent = {
   id: string;
   firstName?: string | null;
   lastName?: string | null;
+  // 'DROPPED' badges the student as no longer enrolled (their work is still reviewable).
+  enrollmentStatus?: string | null;
 };
+
+/** Small "Dropped" badge for a student who is no longer enrolled. */
+function DroppedBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-status-warning-bg px-2 py-0.5 text-xs font-medium text-status-warning">
+      Dropped
+    </span>
+  );
+}
 
 type EffectiveSchedule = {
   unlockAt: string | null;
@@ -225,13 +236,14 @@ export default function StudentNavigator({
               <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                 {selectedStudent ? (
                   <span
-                    className={`h-2.5 w-2.5 rounded-full ${selectedStatus ? 'bg-green-500' : 'bg-red-500'}`}
+                    className={`h-2.5 w-2.5 rounded-full ${selectedStatus ? 'bg-status-success-solid' : 'bg-status-danger-solid'}`}
                     aria-hidden="true"
                   />
                 ) : null}
                 <span className="truncate">
                   {selectedStudent ? (selectedName ?? 'Unnamed student') : 'Select student'}
                 </span>
+                {selectedStudent?.enrollmentStatus === 'DROPPED' ? <DroppedBadge /> : null}
                 {/* Text equivalent for the dot, announced when the trigger is focused. */}
                 {selectedStudent ? (
                   <span className="sr-only">
@@ -283,12 +295,13 @@ export default function StudentNavigator({
                   >
                     <span className="flex items-center gap-2 truncate">
                       <span
-                        className={`h-2.5 w-2.5 rounded-full ${gradeStatuses?.[s.id] ? 'bg-green-500' : 'bg-red-500'}`}
+                        className={`h-2.5 w-2.5 rounded-full ${gradeStatuses?.[s.id] ? 'bg-status-success-solid' : 'bg-status-danger-solid'}`}
                         aria-hidden="true"
                       />
                       <span className="truncate">
                         {s.firstName} {s.lastName}
                       </span>
+                      {s.enrollmentStatus === 'DROPPED' ? <DroppedBadge /> : null}
                       {/* Text equivalent for the color-coded dot (use of color). */}
                       <span className="sr-only">
                         {gradeStatuses?.[s.id] ? 'All problems graded' : 'Missing grades'}

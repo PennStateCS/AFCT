@@ -22,18 +22,28 @@ services:
 
     environment:
       NODE_ENV: development
+      # Give the dev server a larger V8 heap so Next 16's memory watchdog recycles the
+      # worker far less often. Each recycle ("approaching the used memory threshold,
+      # restarting") stalls in-flight requests for tens of seconds over the bind mount.
+      # Docker has ~16 GB here, so 6 GB leaves plenty of headroom.
+      NODE_OPTIONS: '--max-old-space-size=6144'
       # Grading runs in the dedicated `worker` service below; the app never starts one.
       # (Under `next dev --webpack` instrumentation is skipped anyway, but set it
       # explicitly so a Turbopack/native run wouldn't spawn an in-app worker either.)
       RUN_SUBMISSION_WORKER: 'false'
-      # Poll for file changes; native FS events don't cross the bind mount on
-      # Docker Desktop. These env vars only work under webpack (see `command`
-      # below); Turbopack ignores them, and its own polling knob
-      # (next.config watchOptions.pollIntervalMs) proved unreliable over the
-      # Windows bind mount, which is why dev-in-Docker runs webpack.
-      CHOKIDAR_USEPOLLING: 'true'
-      CHOKIDAR_INTERVAL: '1000'
-      WATCHPACK_POLLING: 'true'
+      # No polling. The watcher used to poll every second because the checkout lived on
+      # the Windows filesystem and file events did not survive the 9p transport into the
+      # container. The checkout is on ext4 inside WSL now, so inotify works and polling
+      # only costs memory: walking the tree once a second is what kept pushing the dev
+      # server into Next's "approaching the used memory threshold, restarting" recycle.
+      # Put CHOKIDAR_USEPOLLING/WATCHPACK_POLLING back if the source ever moves back to a
+      # /mnt/c path (or someone runs this from Docker Desktop on Windows directly), since
+      # hot reload will not fire there without it.
+      #
+      # Node serves every filesystem call from libuv's thread pool, which defaults to four
+      # threads. That was the ceiling on file I/O when each call was a round trip to the
+      # Windows host; it is cheap to keep, and idle threads cost nothing.
+      UV_THREADPOOL_SIZE: '32'
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
       DB_HOST: postgres
       DB_PORT: 5432
@@ -43,9 +53,9 @@ services:
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'true'
 
-    # Webpack (not Turbopack) inside Docker: hot reload over the bind mount needs
-    # polling, and only webpack's watcher honors the polling env vars above.
-    # Native (non-Docker) `npm run dev` keeps Turbopack.
+    # Webpack (not Turbopack) inside Docker. This was originally about the polling above,
+    # which is gone; it stays for now because nobody has retested Turbopack's watcher in
+    # this container. Native (non-Docker) `npm run dev` keeps Turbopack.
     command: ['npm', 'run', 'dev', '--', '--webpack']
 
     depends_on:
@@ -61,6 +71,16 @@ services:
       # Container-owned copies so the host doesn't shadow them.
       - afct-dev-node-modules:/app/node_modules
       - afct-dev-next:/app/.next
+      # Keep the docs site off the bind mount. Nothing in the container builds Docusaurus,
+      # but its dependency tree is 64,782 files, and every one of them is reachable through
+      # the Windows bind mount, which Docker Desktop serves over WSL2's 9p transport. A
+      # single walk of that tree from inside the container measured 126 SECONDS (the same
+      # walk over a container volume: 69ms). Webpack's watcher polls here, so those files
+      # were being stat'ed over and over while the compiler queued behind them. Masking
+      # them with empty volumes removes 85% of the files on the slow path.
+      - afct-dev-docs-node-modules:/app/docs-site/node_modules
+      - afct-dev-docs-build:/app/docs-site/build
+      - afct-dev-docs-cache:/app/docs-site/.docusaurus
       # Uploads + admin TLS cert on named volumes.
       - afct-dev-uploads-data:/app/public/uploads
       - afct-dev-private-uploads:/private/uploads
@@ -135,6 +155,11 @@ services:
       app:
         condition: service_started
 
+    environment:
+      # Dev publishes HTTPS on 8443, so the plain-HTTP redirect has to name that port. Without
+      # it nginx sends the browser to https://localhost/ (port 443), where nothing is listening.
+      HTTPS_PORT: '8443'
+
     ports:
       - '8080:80'
       - '8443:443'
@@ -176,7 +201,14 @@ services:
   db-backup:
     # Mirrors the prod backup service so backups work in dev too, daily schedule
     # from System Settings plus the on-demand "back up now" trigger.
-    image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+    #
+    # The BUILT image, not raw postgres: backup.sh needs GNU tar (it repeats -C to put the
+    # dump and the uploads in one archive) and gpg, which the Dockerfile installs. On the raw
+    # image, busybox tar silently wrote archives with no database in them and every backup
+    # failed verification. The bind mount below still shadows the baked-in script, so
+    # backup.sh stays live-editable in dev.
+    build:
+      context: ./docker/backup
     container_name: afct-dev-db-backup
     restart: unless-stopped
     logging: *default-logging
@@ -237,3 +269,8 @@ volumes:
   afct-dev-acme-challenge:
   afct-dev-db-backups:
   afct-dev-backup-triggers:
+  # Empty stand-ins that hide the docs site's build artefacts from the container. See the
+  # note on the app service's volumes.
+  afct-dev-docs-node-modules:
+  afct-dev-docs-build:
+  afct-dev-docs-cache:

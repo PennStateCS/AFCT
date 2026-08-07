@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
@@ -153,12 +153,12 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
     try {
       await apiClient.post(apiPaths.courses(), payload);
-      toast.success('Course created successfully');
+      showToast.created('Course');
       resetForm();
       setOpen(false);
       onSuccess?.();
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Failed to create course');
+      showToast.error(err instanceof ApiError ? err.message : 'Failed to create course');
     }
   };
 
@@ -173,15 +173,11 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
         if (!val) resetForm(); // also reset when closed from outside
       }}
     >
-      <DialogContent
-        className="bg-card sm:max-w-3xl"
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent className="sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Create Course</DialogTitle>
           <DialogDescription className="sr-only">
-            Create a new course in five steps: details, schedule, faculty, options, then
-            review.
+            Create a new course in five steps: details, schedule, faculty, options, then review.
           </DialogDescription>
         </DialogHeader>
 
@@ -192,6 +188,15 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
           className="mb-2"
         />
 
+        {/* Announce step changes to screen readers (the Stepper is visual). */}
+        <div className="sr-only" role="status" aria-live="polite">
+          {`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]?.title ?? ''}`}
+        </div>
+
+        {/* The onKeyDown below scopes Enter to single-line text inputs so it advances
+            the wizard instead of submitting early: deliberate keyboard management on the
+            form element, not an interactive-role gap. */}
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
         <form
           // Only the Review step may submit. Earlier steps swallow any submit that
           // slips through (backstop for the button-swap hazard handled below).
@@ -335,45 +340,45 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
             {step === 2 && (
               <>
-              <Controller
-                control={control}
-                name="instructorIds"
-                render={({ field }) => (
-                  <SearchableMultiSelect
-                    label="Assign Faculty"
-                    items={facultyList.map((faculty) => ({
-                      id: faculty.id,
-                      label: getUserName(faculty),
-                    }))}
-                    value={field.value ?? []}
-                    onChange={(value) => field.onChange(value)}
-                    placeholder="Select faculty"
-                    searchPlaceholder="Search faculty..."
-                    emptyStateText="No faculty found."
-                    error={errors.instructorIds?.message}
-                  />
-                )}
-              />
+                <Controller
+                  control={control}
+                  name="instructorIds"
+                  render={({ field }) => (
+                    <SearchableMultiSelect
+                      label="Assign Faculty"
+                      items={facultyList.map((faculty) => ({
+                        id: faculty.id,
+                        label: getUserName(faculty),
+                      }))}
+                      value={field.value ?? []}
+                      onChange={(value) => field.onChange(value)}
+                      placeholder="Select faculty"
+                      searchPlaceholder="Search faculty..."
+                      emptyStateText="No faculty found."
+                      error={errors.instructorIds?.message}
+                    />
+                  )}
+                />
 
-              <Controller
-                control={control}
-                name="taIds"
-                render={({ field }) => (
-                  <SearchableMultiSelect
-                    label="Assign TAs"
-                    items={taList.map((ta) => ({
-                      id: ta.id,
-                      label: getUserName(ta),
-                    }))}
-                    value={field.value ?? []}
-                    onChange={(value) => field.onChange(value)}
-                    placeholder="Select TAs"
-                    searchPlaceholder="Search TAs..."
-                    emptyStateText="No TAs found."
-                    error={errors.taIds?.message}
-                  />
-                )}
-              />
+                <Controller
+                  control={control}
+                  name="taIds"
+                  render={({ field }) => (
+                    <SearchableMultiSelect
+                      label="Assign TAs"
+                      items={taList.map((ta) => ({
+                        id: ta.id,
+                        label: getUserName(ta),
+                      }))}
+                      value={field.value ?? []}
+                      onChange={(value) => field.onChange(value)}
+                      placeholder="Select TAs"
+                      searchPlaceholder="Search TAs..."
+                      emptyStateText="No TAs found."
+                      error={errors.taIds?.message}
+                    />
+                  )}
+                />
               </>
             )}
 
@@ -449,8 +454,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                 </dl>
 
                 <p className="text-muted-foreground text-xs">
-                  The course is created unpublished. Publish it when it&apos;s ready for
-                  students.
+                  The course is created unpublished. Publish it when it&apos;s ready for students.
                 </p>
               </div>
             )}
@@ -495,5 +499,3 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     </Dialog>
   );
 }
-
-

@@ -87,6 +87,14 @@ describe('GET /api/courses/[id]/[aid]', () => {
       id: 'a1',
       title: 'Assignment',
       description: 'Secret details',
+      descriptionFormat: 'TIPTAP_JSON',
+      descriptionJson: {
+        version: 1,
+        document: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Secret details' }] }],
+        },
+      },
       isPublished: true,
       unlockAt: new Date('2999-01-01T00:00:00.000Z'), // far future -> locked
       dueDate: new Date('2999-01-08T00:00:00.000Z'),
@@ -114,6 +122,8 @@ describe('GET /api/courses/[id]/[aid]', () => {
     const body = await res.json();
     expect(body.locked).toBe(true);
     expect(body.description).toBeNull();
+    // The rich document carries the same content, so the lock has to cover it too.
+    expect(body.descriptionJson).toBeNull();
     expect(body.problems).toEqual([]);
   });
 

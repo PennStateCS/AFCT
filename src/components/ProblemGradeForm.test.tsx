@@ -37,6 +37,22 @@ describe('ProblemGradeForm', () => {
     expect(screen.getByText('Grade must be numeric')).toBeInTheDocument();
   });
 
+  it('shows the points-possible as a static /N suffix and in the input label', () => {
+    render(
+      <ProblemGradeForm
+        value="90"
+        currentGrade={null}
+        maxPoints={100}
+        onChange={() => {}}
+        onSubmit={() => {}}
+      />,
+    );
+
+    // The typed value stays just the earned points; "/100" is separate static text.
+    expect(screen.getByLabelText('Problem grade out of 100')).toHaveValue(90);
+    expect(screen.getByText('/100')).toBeInTheDocument();
+  });
+
   it('handles keyboard shortcuts for Enter and Escape', () => {
     const onSubmit = vi.fn();
     const onChange = vi.fn();

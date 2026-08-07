@@ -102,7 +102,7 @@ export default function BulkEnrollDialog({
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.message || 'Could not enroll the selected users. Please try again.');
       }
-      showToast.success(`Enrolled ${found.length} student${found.length === 1 ? '' : 's'}.`);
+      showToast.success(`Enrolled ${found.length} student${found.length === 1 ? '' : 's'}`);
       setStep(2);
       onComplete?.();
     } catch (err) {
@@ -114,7 +114,7 @@ export default function BulkEnrollDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Bulk Enroll Students</DialogTitle>
           <DialogDescription className="sr-only">
@@ -184,7 +184,7 @@ export default function BulkEnrollDialog({
                 ) : (
                   <ul className="space-y-1 text-sm">
                     {notFound.map((e) => (
-                      <li key={e} className="bg-muted/10 rounded px-2 py-1 break-all">
+                      <li key={e} className="bg-muted rounded px-2 py-1 break-all">
                         {e}
                       </li>
                     ))}

@@ -25,13 +25,86 @@ export const apiPaths = {
   courseDuplicate: (id: string) => `/api/courses/${id}/duplicate`,
   coursePublish: (id: string) => `/api/courses/${id}/publish`,
   courseArchive: (id: string) => `/api/courses/${id}/archive`,
-  courseActivity: (id: string, opts?: { limit?: number; offset?: number }) =>
-    `/api/courses/${id}/activity${qs({ limit: opts?.limit, offset: opts?.offset })}`,
-  courseStudents: (id: string) => `/api/courses/${id}/students`,
-  courseGrades: (id: string) => `/api/courses/${id}/grades`,
+  /** One page of a course's activity feed. Repeatable filters are appended, not set. */
+  courseActivity: (
+    id: string,
+    opts: {
+      page?: number;
+      pageSize?: number;
+      q?: string;
+      field?: string;
+      category?: string[];
+      assignmentId?: string[];
+      problemId?: string[];
+      sortBy?: string;
+      sortDir?: string;
+    },
+  ) => {
+    const sp = new URLSearchParams();
+    if (opts.page) sp.set('page', String(opts.page));
+    if (opts.pageSize) sp.set('pageSize', String(opts.pageSize));
+    if (opts.q) sp.set('q', opts.q);
+    if (opts.field && opts.field !== 'all') sp.set('field', opts.field);
+    opts.category?.forEach((v) => sp.append('category', v));
+    opts.assignmentId?.forEach((v) => sp.append('assignmentId', v));
+    opts.problemId?.forEach((v) => sp.append('problemId', v));
+    if (opts.sortBy) sp.set('sortBy', opts.sortBy);
+    if (opts.sortDir) sp.set('sortDir', opts.sortDir);
+    const s = sp.toString();
+    return `/api/courses/${id}/activity${s ? `?${s}` : ''}`;
+  },
+  /** The course's assignments and problems, for the activity filter menus. */
+  courseActivityFilters: (id: string) => `/api/courses/${id}/activity?part=filters`,
+  courseStudents: (id: string, opts?: { includeDropped?: boolean }) =>
+    `/api/courses/${id}/students${opts?.includeDropped ? '?includeDropped=1' : ''}`,
+  /** The gradebook's assignment columns and student total. */
+  courseGradeColumns: (id: string) => `/api/courses/${id}/grades?part=columns`,
+  /** One page of the gradebook: students with their assigned flags and grades. */
+  courseGradePage: (
+    id: string,
+    opts: { page?: number; pageSize?: number; q?: string; sortBy?: string; sortDir?: string },
+  ) =>
+    `/api/courses/${id}/grades${qs({
+      page: opts.page,
+      pageSize: opts.pageSize,
+      q: opts.q || undefined,
+      sortBy: opts.sortBy,
+      sortDir: opts.sortDir,
+    })}`,
   courseGradesExport: (id: string) => `/api/courses/${id}/grades/export`,
   courseStudentGrades: (id: string) => `/api/courses/${id}/student-grades`,
   courseRoster: (id: string) => `/api/courses/${id}/roster`,
+  /** One page of a course's roster. Params mirror the admin user list. */
+  courseRosterList: (
+    id: string,
+    opts: {
+      page?: number;
+      pageSize?: number;
+      q?: string;
+      field?: string;
+      role?: string[];
+      status?: string[];
+      sortBy?: string;
+      sortDir?: string;
+    },
+  ) => {
+    const sp = new URLSearchParams();
+    if (opts.page) sp.set('page', String(opts.page));
+    if (opts.pageSize) sp.set('pageSize', String(opts.pageSize));
+    if (opts.q) sp.set('q', opts.q);
+    if (opts.field && opts.field !== 'all') sp.set('field', opts.field);
+    opts.role?.forEach((v) => sp.append('role', v));
+    opts.status?.forEach((v) => sp.append('status', v));
+    if (opts.sortBy) sp.set('sortBy', opts.sortBy);
+    if (opts.sortDir) sp.set('sortDir', opts.sortDir);
+    const s = sp.toString();
+    return `/api/courses/${id}/roster${s ? `?${s}` : ''}`;
+  },
+  courseEnrollableUsers: (id: string, opts?: { q?: string; pageSize?: number }) =>
+    `/api/courses/${id}/enrollable-users${qs({
+      q: opts?.q || undefined,
+      pageSize: opts?.pageSize,
+    })}`,
   courseRosterBulk: (id: string) => `/api/courses/${id}/roster/bulk`,
   courseLookupUsers: (id: string) => `/api/courses/${id}/lookup-users`,
   // Group sets (redesigned group management)
@@ -49,7 +122,14 @@ export const apiPaths = {
     `/api/courses/${id}/group-sets/${setId}/random-assign`,
   courseProblems: (id: string) => `/api/courses/${id}/problems`,
   courseProblem: (id: string, pid: string) => `/api/courses/${id}/problems/${pid}`,
+  courseProblemDuplicate: (id: string, pid: string) =>
+    `/api/courses/${id}/problems/${pid}/duplicate`,
+  // Import a problem from another course INTO this (destination) course.
+  courseProblemImport: (id: string) => `/api/courses/${id}/problems/import`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
+  // Drop / re-enroll a student (PATCH { status }).
+  courseRosterStatus: (id: string, userId: string) =>
+    `/api/courses/${id}/roster/${userId}/status`,
   courseRosterResetPassword: (id: string, userId: string) =>
     `/api/courses/${id}/roster/${userId}/reset-password`,
   courseAssignments: (id: string, opts?: { includeUnpublished?: boolean }) =>
@@ -62,10 +142,17 @@ export const apiPaths = {
   myCourses: (opts?: { view?: 'nav' }) => `/api/me/courses${qs({ view: opts?.view })}`,
   myEnrollments: () => '/api/me/enrollments',
   myAssignments: (start?: string, end?: string) => `/api/me/assignments${qs({ start, end })}`,
+  // Courses the caller can manage (faculty/TA, or all for admins), for the import picker.
+  myManageableCourses: (opts?: { excludeCourseId?: string }) =>
+    `/api/me/manageable-courses${qs({ excludeCourseId: opts?.excludeCourseId })}`,
 
   // --- Assignments (course-nested under /assignments/[aid]) ----------------
   assignment: (courseId: string, aid: string, opts?: { view?: string }) =>
     `/api/courses/${courseId}/assignments/${aid}${qs({ view: opts?.view })}`,
+  assignmentDuplicate: (courseId: string, aid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/duplicate`,
+  // Import an assignment from another course INTO this (destination) course.
+  assignmentImport: (courseId: string) => `/api/courses/${courseId}/assignments/import`,
   assignmentProblems: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/problems`,
   assignmentProblem: (courseId: string, aid: string, pid: string) =>
@@ -94,6 +181,10 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/overrides`,
   assignmentOverride: (courseId: string, aid: string, oid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/overrides/${oid}`,
+  problemSubmissionGrants: (courseId: string, aid: string, pid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/problems/${pid}/grants`,
+  problemSubmissionGrant: (courseId: string, aid: string, pid: string, gid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/problems/${pid}/grants/${gid}`,
 
   // --- Global assignment routes -------------------------------------------
   assignmentByIdProblems: (id: string) => `/api/assignments/${id}/problems`,
@@ -110,6 +201,9 @@ export const apiPaths = {
 
   // --- Public / settings ---------------------------------------------------
   systemSettingsPublic: () => '/api/system-settings/public',
+  // Whether an email is already registered (used by signup and the admin
+  // Change Email dialog to warn before submitting).
+  checkEmail: (email: string) => `/api/auth/check-email${qs({ email })}`,
 
   // --- Served files (avatars, uploads, solutions) --------------------------
   // Callers pass the filename already encoded where they previously did so; these

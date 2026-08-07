@@ -3,8 +3,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { showToast } from '@/lib/toast';
 import { FontSamples } from './font-samples';
+import { DesignTokens } from './design-tokens';
+import { RichDescriptionDemo } from './rich-description-demo';
 
 export default function DevelopmentTestsClient() {
   return (
@@ -20,107 +23,160 @@ export default function DevelopmentTestsClient() {
             >
               Development Tests
             </CardTitle>
-            <Badge variant="outline" className="bg-blue-50 text-blue-700">
-              Dev Only
-            </Badge>
+            <Badge variant="info">Dev Only</Badge>
           </div>
           <div className="text-muted-foreground text-sm">
-            Trigger each toast style used across the app.
+            Visual and interaction references used across the app.
           </div>
         </CardHeader>
       </Card>
 
-      <Card aria-labelledby="toast-tests-title">
-        <CardHeader>
-          <CardTitle id="toast-tests-title" role="heading" aria-level={2} className="text-lg">
-            Toast Messages
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            <Button type="button" onClick={() => showToast.success('Success toast')}>
-              Success
-            </Button>
-            <Button type="button" onClick={() => showToast.error('Error toast')}>
-              Error
-            </Button>
-            <Button type="button" onClick={() => showToast.warning('Warning toast')}>
-              Warning
-            </Button>
-            <Button type="button" onClick={() => showToast.info('Info toast')}>
-              Info
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                const id = showToast.loading('Loading toast', {
-                  description: 'Will auto-update to success in 2 seconds.',
-                });
-                window.setTimeout(() => {
-                  showToast.update(id, 'success', 'Loading complete', {
-                    description: 'Update helper works.',
-                  });
-                }, 2000);
-              }}
-            >
-              Loading -&gt; Success Update
-            </Button>
-            <Button
-              type="button"
-              onClick={() =>
-                showToast.success('Success with action', {
-                  action: { label: 'Undo', onClick: () => showToast.info('Undo clicked') },
-                })
-              }
-            >
-              Success With Action
-            </Button>
-            <Button type="button" onClick={() => showToast.created('Course')}>
-              Created
-            </Button>
-            <Button type="button" onClick={() => showToast.updated('Profile')}>
-              Updated
-            </Button>
-            <Button type="button" onClick={() => showToast.deleted('Submission')}>
-              Deleted
-            </Button>
-            <Button type="button" onClick={() => showToast.saved('Settings')}>
-              Saved
-            </Button>
-            <Button
-              type="button"
-              onClick={() =>
-                showToast.validationError('Example: One or more required fields are missing.')
-              }
-            >
-              Validation Error
-            </Button>
-            <Button type="button" onClick={() => showToast.networkError()}>
-              Network Error
-            </Button>
-            <Button type="button" onClick={() => showToast.unauthorized()}>
-              Unauthorized
-            </Button>
-            <Button type="button" onClick={() => showToast.serverError()}>
-              Server Error
-            </Button>
-            <Button type="button" variant="outline" onClick={() => showToast.dismiss()}>
-              Dismiss All Toasts
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="toast" className="gap-4">
+        <TabsList>
+          <TabsTrigger value="toast">Toast Message</TabsTrigger>
+          <TabsTrigger value="tokens">Design Tokens</TabsTrigger>
+          <TabsTrigger value="fonts">Fonts</TabsTrigger>
+          <TabsTrigger value="editor">Rich Description</TabsTrigger>
+        </TabsList>
 
-      <Card aria-labelledby="font-samples-title">
-        <CardHeader>
-          <CardTitle id="font-samples-title" role="heading" aria-level={2} className="text-lg">
-            Font Comparison
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <FontSamples />
-        </CardContent>
-      </Card>
+        <TabsContent value="toast">
+          <Card aria-labelledby="toast-tests-title">
+            <CardHeader>
+              <CardTitle id="toast-tests-title" role="heading" aria-level={2} className="text-lg">
+                Toast Messages
+              </CardTitle>
+              <div className="text-muted-foreground text-sm">
+                Trigger each toast style used across the app.
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <Button type="button" onClick={() => showToast.success('Success toast')}>
+                  Success
+                </Button>
+                <Button type="button" onClick={() => showToast.error('Error toast')}>
+                  Error
+                </Button>
+                <Button type="button" onClick={() => showToast.warning('Warning toast')}>
+                  Warning
+                </Button>
+                <Button type="button" onClick={() => showToast.info('Info toast')}>
+                  Info
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const id = showToast.loading('Loading toast', {
+                      description: 'Will auto-update to success in 2 seconds.',
+                    });
+                    window.setTimeout(() => {
+                      showToast.update(id, 'success', 'Loading complete', {
+                        description: 'Update helper works.',
+                      });
+                    }, 2000);
+                  }}
+                >
+                  Loading -&gt; Success Update
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() =>
+                    showToast.success('Success with action', {
+                      action: { label: 'Undo', onClick: () => showToast.info('Undo clicked') },
+                    })
+                  }
+                >
+                  Success With Action
+                </Button>
+                <Button type="button" onClick={() => showToast.created('Course')}>
+                  Created
+                </Button>
+                <Button type="button" onClick={() => showToast.updated('Profile')}>
+                  Updated
+                </Button>
+                <Button type="button" onClick={() => showToast.deleted('Submission')}>
+                  Deleted
+                </Button>
+                <Button type="button" onClick={() => showToast.saved('Settings')}>
+                  Saved
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() =>
+                    showToast.validationError('Example: One or more required fields are missing.')
+                  }
+                >
+                  Validation Error
+                </Button>
+                <Button type="button" onClick={() => showToast.networkError()}>
+                  Network Error
+                </Button>
+                <Button type="button" onClick={() => showToast.unauthorized()}>
+                  Unauthorized
+                </Button>
+                <Button type="button" onClick={() => showToast.serverError()}>
+                  Server Error
+                </Button>
+                <Button type="button" variant="outline" onClick={() => showToast.dismiss()}>
+                  Dismiss All Toasts
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="tokens">
+          <Card aria-labelledby="design-tokens-title">
+            <CardHeader>
+              <CardTitle id="design-tokens-title" role="heading" aria-level={2} className="text-lg">
+                Design Tokens
+              </CardTitle>
+              <div className="text-muted-foreground text-sm">
+                Live reference for the semantic colour tokens. Toggle the theme to compare light and
+                dark.
+              </div>
+            </CardHeader>
+            <CardContent>
+              <DesignTokens />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="fonts">
+          <Card aria-labelledby="font-samples-title">
+            <CardHeader>
+              <CardTitle id="font-samples-title" role="heading" aria-level={2} className="text-lg">
+                Font Comparison
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FontSamples />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="editor">
+          <Card aria-labelledby="rich-description-title">
+            <CardHeader>
+              <CardTitle
+                id="rich-description-title"
+                role="heading"
+                aria-level={2}
+                className="text-lg"
+              >
+                Rich Description Editor
+              </CardTitle>
+              <div className="text-muted-foreground text-sm">
+                The shared description editor on its own, with the plain text derived for legacy
+                clients. No toolbar yet.
+              </div>
+            </CardHeader>
+            <CardContent>
+              <RichDescriptionDemo />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

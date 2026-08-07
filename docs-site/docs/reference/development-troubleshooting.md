@@ -116,7 +116,15 @@ The worker runs as its **own container**, separate from the web app: `afct-dev-w
 docker logs afct-dev-worker | grep SubmissionWorker
 ```
 
-`[SubmissionWorker] Started safely` means the worker is up. If the worker is running but a submission stays `PENDING`, read its logs for an evaluator error, and confirm the evaluator JAR and Java are present in the container. If the container is not running, start it with `docker compose -f docker-compose.dev.yml up -d worker`.
+`[SubmissionWorker] Started safely` means the worker is up.
+
+If the worker is running but a submission stays `PENDING`, read its logs for an evaluator error, and confirm the evaluator JAR and Java are present in the container.
+
+If the container is not running, start it:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d worker
+```
 
 ## Migration problems after switching branches
 

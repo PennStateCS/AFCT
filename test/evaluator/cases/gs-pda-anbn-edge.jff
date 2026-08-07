@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- Edge case: accepts EVERY string over {a,b} (the start state is also final and loops on
+     each symbol without using the stack). Must be rejected against gs-pda-anbn-solution. -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0">
+		<x>200.0</x>
+		<y>150.0</y>
+		<initial />
+		<final />
+	</state>
+	<transition>
+		<from>0</from>
+		<to>0</to>
+		<read>a</read>
+		<pop></pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>0</from>
+		<to>0</to>
+		<read>b</read>
+		<pop></pop>
+		<push></push>
+	</transition>
+</structure>

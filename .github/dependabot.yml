@@ -13,6 +13,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 0
+    # These touch the shipped app, so tag them for prompt attention.
+    labels:
+      - dependencies
+      - security
     groups:
       npm-security:
         applies-to: security-updates
@@ -27,6 +31,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 0
+    # Build-time deps for the static docs site; tag as development so they read as
+    # low-priority next to the shipped-app PRs.
+    labels:
+      - dependencies
+      - development
     groups:
       docs-npm-security:
         applies-to: security-updates
@@ -38,6 +47,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 0
+    # CI workflow pins, not the shipped app; tag as development.
+    labels:
+      - dependencies
+      - development
     groups:
       actions-security:
         applies-to: security-updates

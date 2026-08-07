@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { ACTIVE_STUDENT_ROSTER } from '@/lib/roster-status';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 import {
   buildAssignmentStatistics,
@@ -162,8 +163,10 @@ async function buildStudentParticipants(
   gradesByStudent: Map<string, Record<string, number>>,
   latestStatus: LatestStatusMap,
 ): Promise<StatsParticipant[]> {
+  // Statistics measure the active cohort, so dropped students are excluded (their
+  // individual submissions remain reviewable via the submissions view).
   const roster = await prisma.roster.findMany({
-    where: { courseId, role: 'STUDENT' },
+    where: { courseId, ...ACTIVE_STUDENT_ROSTER },
     select: { userId: true },
   });
   const studentIds = roster.map((r) => r.userId);

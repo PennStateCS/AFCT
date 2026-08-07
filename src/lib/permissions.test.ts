@@ -43,6 +43,16 @@ describe('getCourseRole', () => {
     await expect(getCourseRole('u', 'c')).resolves.toBeNull();
   });
 
+  it('returns the role for an ENROLLED student', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', status: 'ENROLLED' });
+    await expect(getCourseRole('u', 'c')).resolves.toBe('STUDENT');
+  });
+
+  it('returns null for a DROPPED student (treated as a non-member)', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', status: 'DROPPED' });
+    await expect(getCourseRole('u', 'c')).resolves.toBeNull();
+  });
+
   it('short-circuits (no DB call) when an id is missing', async () => {
     await expect(getCourseRole(null, 'c')).resolves.toBeNull();
     await expect(getCourseRole('u', undefined)).resolves.toBeNull();
@@ -66,9 +76,10 @@ describe('canAccessCourse', () => {
     await expect(canAccessCourse({ id: 'a', isAdmin: true }, 'c')).resolves.toBe(true);
   });
 
-  it('a student may access an enrolled PUBLISHED course', async () => {
+  it('an ENROLLED student may access an enrolled PUBLISHED course', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({
       role: 'STUDENT',
+      status: 'ENROLLED',
       course: { isPublished: true, deletedAt: null },
     });
     await expect(canAccessCourse({ id: 'u', isAdmin: false }, 'c')).resolves.toBe(true);
@@ -77,7 +88,17 @@ describe('canAccessCourse', () => {
   it('a student may NOT access an enrolled UNPUBLISHED course', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({
       role: 'STUDENT',
+      status: 'ENROLLED',
       course: { isPublished: false, deletedAt: null },
+    });
+    await expect(canAccessCourse({ id: 'u', isAdmin: false }, 'c')).resolves.toBe(false);
+  });
+
+  it('a DROPPED student may NOT access even a published course', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      status: 'DROPPED',
+      course: { isPublished: true, deletedAt: null },
     });
     await expect(canAccessCourse({ id: 'u', isAdmin: false }, 'c')).resolves.toBe(false);
   });

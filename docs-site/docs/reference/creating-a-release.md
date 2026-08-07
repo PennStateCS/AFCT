@@ -16,12 +16,108 @@ upgrade to it:
 - An entry added to the curated manifest `deploy/versions.json` on `main`. This is the
   list the installer and the in-app updater read to offer upgrade targets.
 - A GitHub Release for the tag.
+- The versioned **deployment tools** (the installer/updater bundles) for each platform,
+  attached to the GitHub Release as assets: `afct-linux-deploy-<tool-version>.tar.gz`,
+  `afct-macos-deploy-<tool-version>.tar.gz`, and `afct-windows-deploy-<tool-version>.zip`,
+  each with a `.sha256`, plus the deployment manifests and the bootstrap installers
+  (`install.sh`, `install-macos.sh`, `install-windows.ps1`). These carry a **separate**
+  version from the app images (see [Updating the deployment tools](#updating-the-deployment-tools)).
 
 By contrast, the `main` tag is a **rolling** build that moves forward on every merge. It
 is not a release; the installer deploys published releases only.
 
 A release is cut by pushing a `vX.Y.Z` git tag. That is the only trigger for the
 `.github/workflows/release.yml` workflow; ordinary pushes to `main` never cut a release.
+
+## Updating the deployment tools
+
+The deployment tools are the installer and updater that put AFCT on a host: the bootstrap
+installers, the `afctctl` controller, and the shared Compose file and environment template.
+They ship as the per-platform bundles listed above and carry their own **deployment-tool
+version**, which is deliberately independent of the app image tag `vX.Y.Z`. A given app
+release just publishes whatever the deployment-tool version happens to be at that commit.
+
+You only need to touch this when a change alters what goes into a bundle. If you are cutting
+a release that changed only application code, skip this section: the existing bundles are
+rebuilt at the same version and republished unchanged.
+
+### The version is unified across platforms
+
+There is one deployment-tool version, stored in two controllers that must always match:
+
+| Platform | File | Line |
+| --- | --- | --- |
+| Linux and macOS | `deploy/unix/bin/afctctl` | `INSTALLER_VERSION="X.Y.Z"` |
+| Windows | `deploy/windows/bin/afctctl.ps1` | `$InstallerVersion = 'X.Y.Z'` |
+
+Keep them equal. The repository does not use platform-specific tool versions.
+
+### When to bump it
+
+Bump the deployment-tool version whenever you change any file that goes into a bundle:
+
+- `deploy/unix/**`, `deploy/linux/**`, `deploy/macos/**`, `deploy/windows/**`
+- `deploy/docker-compose.yml`
+- `deploy/.env.production.example`
+
+The version is content-addressed at install time: a host refuses to install a bundle whose
+bytes differ from a version it already has. Changing bundle contents without bumping the
+version would therefore ship bytes that installed hosts reject. Use semantic versioning:
+patch for fixes, minor for new installer behavior, major for a breaking change to the
+tooling contract.
+
+### How to bump it
+
+Edit both controller files to the same new version, for example `2.2.3` to `2.2.4`:
+
+```bash
+# deploy/unix/bin/afctctl
+INSTALLER_VERSION="2.2.4"
+
+# deploy/windows/bin/afctctl.ps1
+$InstallerVersion = '2.2.4'
+```
+
+If a test asserts the version (the macOS bootstrap test pins the expected bundle name),
+update it too. `deploy/test/macos-bootstrap.bats` is the usual one.
+
+### CI enforces this
+
+The Installer workflow (`.github/workflows/installer.yml`) runs `deploy/ci-version-check.sh`
+on every build and blocks the merge if:
+
+- the Unix and Windows controllers name different versions (they must agree), or
+- a bundle source changed versus the base branch but the version did not change.
+
+So a bundle change with no bump, or a Unix/Windows mismatch, fails the pull request before
+it can reach a release. The Windows version is read by `deploy/ci-windows-version.ps1`, which
+the workflow cross-checks against the shell reader so the two cannot drift.
+
+### What the release does with the bundles
+
+When you push the app tag, `release.yml` builds each platform's bundle, validates it
+(checksum, manifest, version agreement, required modules, archive and ZIP path safety, and,
+for Windows, that every bundled PowerShell file parses), and only then, in a single final
+step, attaches every platform's assets to the GitHub Release. This is all-or-nothing: if any
+platform fails to build or validate, none of the bundle assets are published, so a release is
+never left with a partial set.
+
+### How operators pick up new tools
+
+Updating the app images does not update a host's installer tooling. Operators refresh the
+tools separately, which downloads and verifies the newest published bundle and switches to it
+(with rollback if the new controller fails validation):
+
+```bash
+afctctl self-update      # Linux and macOS
+```
+
+```powershell
+afctctl self-update      # Windows
+```
+
+Run this before `afctctl update` when a release changed the Compose file or the updater, so
+the host is applying the current tooling.
 
 ## Before you tag
 
@@ -57,12 +153,27 @@ git tag -a v0.1.3 <sha> -m "v0.1.3 - short summary"
 git push origin v0.1.3
 ```
 
+### Attaching an admin note (optional)
+
+For the rare release where the admin must do something on the server before or after
+upgrading, add a second `-m`. The first message is the normal summary; the second
+becomes a free-text note shown in the Updates tab when that version is selected:
+
+```bash
+git tag -a v0.1.3 <sha> -m "v0.1.3 - short summary" -m "Increase the VM disk to 60 GB before upgrading."
+git push origin v0.1.3
+```
+
+Ordinary releases use a single `-m` and show no note. Keep the note short and
+actionable; it is the only place this instruction reaches the operator in-app.
+
 The `release.yml` workflow then:
 
 1. Builds and pushes the four `:vX.Y.Z` images to GHCR.
 2. Runs an informational Trivy scan (non-blocking).
-3. Adds the version to `deploy/versions.json` on `main` (marking `requiresHostUpdate`
-   if the updater sidecar or the compose file changed since the previous release).
+3. Adds the version to `deploy/versions.json` on `main`, including the admin note from
+   the tag body if one was given and a checksum of the release's `docker-compose.yml` so
+   the in-app updater can verify the stack configuration it downloads for this release.
 4. Opens a GitHub Release with generated notes.
 
 ## Verify it triggered
@@ -108,8 +219,10 @@ images, recreates, and health-checks, rolling back automatically if the new vers
 unhealthy.
 
 **Completing the update.** Some releases also change the stack layout
-(`docker-compose.yml`) or the updater component. These are marked `requiresHostUpdate`
-(the Updates tab shows a note). The in-app path now handles both:
+(`docker-compose.yml`) or the updater component. The in-app path now handles both, so
+they no longer need a routine host-side step; if a specific release genuinely needs one,
+attach an admin note to the tag (above) and it shows in the Updates tab. The in-app path
+works as follows:
 
 - A changed `docker-compose.yml` is fetched from the target release, validated, and
   applied during the upgrade, provided the updater itself is current. This needs an
@@ -118,12 +231,13 @@ unhealthy.
 - The updater can't recreate its own running container, so it is updated separately:
   the Updates tab shows **Update the update service** when it lags the app version.
 
-The host-side commands remain as a fallback, and `self-update` is still how you refresh
-the installer script itself:
+The host-side commands remain as a fallback, and `self-update` is how you refresh the
+deployment tools themselves (see
+[Updating the deployment tools](#updating-the-deployment-tools)):
 
 ```bash
-sh install.sh self-update   # refresh install.sh + docker-compose.yml
-sh install.sh update        # pull + recreate the whole stack, incl. the updater
+afctctl self-update   # download + switch to the newest verified deployment bundle
+afctctl update        # pull + recreate the whole stack, incl. the updater
 ```
 
 See [Update AFCT](../operations/updates.md) for the operator-facing update flow and
@@ -134,5 +248,6 @@ See [Update AFCT](../operations/updates.md) for the operator-facing update flow 
 - **In-app:** the Updates tab lists restore points; downgrading restores the database
   backup taken before that version and runs the older image. This is destructive: it
   discards everything created since that backup.
-- **By pin:** set `AFCT_APP_TAG` back to a previously released tag and re-run
-  `sh install.sh update`.
+- **By pin:** run the update with `AFCT_APP_TAG` set to a previously released tag, for
+  example `AFCT_APP_TAG=v0.1.2 afctctl update`. Once the deploy passes its health check,
+  the tag is recorded in `.env.production`, so later plain updates stay on it.

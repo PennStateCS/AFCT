@@ -74,17 +74,17 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                         <div
                           className={`flex items-center gap-2 rounded-lg px-3 py-1.5 ${
                             isOverdue
-                              ? 'border border-red-200 bg-red-100'
-                              : 'border border-green-200 bg-green-100'
+                              ? 'border border-status-danger-border bg-status-danger-bg'
+                              : 'border border-status-success-border bg-status-success-bg'
                           }`}
                         >
                           <span
-                            className={`text-sm ${isOverdue ? 'text-red-700' : 'text-green-700'}`}
+                            className={`text-sm ${isOverdue ? 'text-status-danger' : 'text-status-success'}`}
                           >
                             <Clock className="h-4 w-4" aria-hidden="true" />
                           </span>
                           <span
-                            className={`text-sm font-medium ${isOverdue ? 'text-red-700' : 'text-green-700'}`}
+                            className={`text-sm font-medium ${isOverdue ? 'text-status-danger' : 'text-status-success'}`}
                           >
                             {isOverdue ? 'OVERDUE: ' : 'Due: '}
                             {formatDateInTimeZone(dueDate, timezone)} at{' '}
@@ -118,7 +118,7 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center pr-4 text-slate-400">
+                    <div className="flex items-center pr-4 text-muted-foreground">
                       <ChevronRight className="h-4 w-4" aria-hidden="true" />
                     </div>
                   </Link>

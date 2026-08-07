@@ -38,6 +38,49 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// Polyfill document.elementFromPoint (absent in jsdom) for ProseMirror/Tiptap: it calls
+// posAtCoords on mousedown to map a click to a document position, and jsdom does no layout
+// so it never implemented the hit-testing APIs. Returning null is the "no element here"
+// answer ProseMirror already handles, which is enough for the editor to take focus.
+if (typeof document !== 'undefined' && typeof document.elementFromPoint !== 'function') {
+  Object.defineProperty(document, 'elementFromPoint', {
+    writable: true,
+    value: () => null,
+  });
+}
+
+// Polyfill the geometry APIs on ranges and text nodes, also missing because jsdom does no
+// layout. ProseMirror measures a text range when it scrolls the selection into view after a
+// transaction; that happens outside any test's call stack, so the TypeError surfaces as an
+// unhandled error and fails the run even when every assertion passed. Empty geometry is the
+// honest answer for a document that was never laid out.
+{
+  const emptyRect = () => ({
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  type Measurable = { getClientRects: () => unknown; getBoundingClientRect: () => unknown };
+  const patch = (proto: object | undefined) => {
+    if (!proto) return;
+    const target = proto as Measurable;
+    if (typeof target.getClientRects !== 'function') {
+      target.getClientRects = () => Object.assign([] as unknown[], { item: () => null });
+    }
+    if (typeof target.getBoundingClientRect !== 'function') {
+      target.getBoundingClientRect = emptyRect;
+    }
+  };
+  patch(typeof Range !== 'undefined' ? Range.prototype : undefined);
+  patch(typeof Text !== 'undefined' ? Text.prototype : undefined);
+}
+
 // Polyfill matchMedia (absent in jsdom) for components that read it directly
 // (useIsMobile) or transitively (react-resizable-panels' pointer check). Defaults
 // to "does not match" so the desktop layout renders.

@@ -1,0 +1,59 @@
+# Autograder
+
+The **Autograder** page shows autograded submissions across the AFCT installation, including what is still waiting to be graded and what is being graded now. It is useful when an administrator needs to investigate an evaluator problem that is not limited to one course.
+
+Problems with the autograder switched off are not listed here, since the evaluator never sees them. Review those on the assignment's own [Submissions](../faculty/submissions.md) page.
+
+## Choose the scope
+
+The pickers at the top build on one another:
+
+1. Select one or more courses.
+2. Select assignments from those courses.
+3. Select problems from those assignments.
+
+Leaving a picker empty means **all of them**, which is why the page opens showing everything. Narrow from the top down: choose courses to unlock the assignment picker, then assignments to unlock the problem picker. Use **Clear Filters** to start over.
+
+## Read the table
+
+Each row is one submission, and shows when it arrived, whether it was on time, who submitted it, the course, assignment and problem, the submitted file, the grade, and the grading status. Course, assignment, and problem names link back to the related review pages.
+
+**File** is the student's own file name. Click it to open the submission in the viewer for that problem type, or use the download icon beside it to save the original file. This works the same way as the solution file on a course's problem list.
+
+**Grade** is what that one attempt earned: the problem's full points if the evaluator found it correct, zero if it did not, and a dash while the submission is still pending, processing or failed. A student's several attempts therefore show different grades.
+
+**Recorded grade** is the student's standing grade for the problem, the number the gradebook carries. It is the same on every attempt by that student, so it is off by default; turn it on from **Columns** to spot a grade that was entered by hand and no longer matches the latest attempt.
+
+Two columns carry a coloured badge:
+
+- **Timing** is **On time** or **Late**, measured against the problem's due date for that student.
+- **Status** is where the submission has got to: **Pending** (queued), **Processing** (being graded now), **Failed** (the evaluator itself could not finish), **Correct**, or **Incorrect**.
+
+**Failed** and **Incorrect** are different problems. Incorrect is an ordinary result, a student answer that did not match. Failed means the evaluator did not produce a verdict at all, which is worth investigating.
+
+The page opens showing everything in scope. It loads one page of submissions at a time, so searching, filtering and sorting all apply to the whole queue rather than to the rows currently on screen, and the count beside the pager is the total number of matches.
+
+To narrow it:
+
+- **Search** matches across the table, or one field if you pick one in the box beside it.
+- **Filters** holds Timing, Status and Submission as separate lists. Ticking several values in one list widens (any of them), while picking from two different lists narrows (both must be true), so Timing **Late** plus Submission **Incorrect** finds late wrong answers.
+- **Columns** turns columns on and off, including **Due** and **Recorded grade**, which are off by default. That choice is remembered in your browser.
+- Sort by most column headings, including Status. **Timing**, **Grade** and **Recorded grade** cannot be sorted: none of them is a stored value (Timing is a comparison against the due date, Grade is worked out from the result, and Recorded grade is kept with the gradebook), so there is nothing to order the whole queue by. Filter by Timing instead.
+
+There is no CSV export here. The page holds one page of results at a time, so an export would have written whatever was on screen rather than everything matching your filters. To get grades out of AFCT, use the [grade export](../faculty/grades.md#export-grades) on a course instead.
+
+## Inspect a submission
+
+Each row has a **Manage** menu:
+
+- **View submission** opens the submitted file in the viewer for that problem type
+- **Open in submission review** jumps to the assignment's own review screen, next to the grade box and the discussion
+- **View feedback** shows the evaluator's feedback
+- **Download** saves the original file
+- **Rerun** sends the submission back to the evaluator
+
+A pending or processing submission cannot be rerun yet, and feedback is not available until grading finishes.
+
+Rerunning is per submission. Start with the narrowest useful filter when you are working through a batch: a broad rerun places avoidable work on the evaluator and can make it harder to isolate the original failure. After rerunning, check the updated status and feedback before changing grades manually.
+
+For normal course grading and discussion, use the assignment's [Submissions](../faculty/submissions.md) page instead.

@@ -31,6 +31,9 @@ export default async function DashboardPage() {
   const rosterEntries = await prisma.roster.findMany({
     where: {
       userId: id,
+      // A course the viewer was dropped from (as a student) leaves their dashboard; their
+      // staff courses and active enrollments stay.
+      NOT: { role: 'STUDENT', status: 'DROPPED' },
       course: {
         // Never surface archived or soft-deleted courses on the dashboard (archiving
         // or deleting a course does not flip isPublished, so students could otherwise
@@ -57,6 +60,9 @@ export default async function DashboardPage() {
           isPublished: true,
           isArchived: true,
           roster: {
+            // Drop dropped students from the card's roster so the staff-facing student
+            // count reflects the active class (staff rows are always kept).
+            where: { NOT: { role: 'STUDENT', status: 'DROPPED' } },
             select: {
               role: true,
               user: {

@@ -1,22 +1,19 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { CreateAssignmentWizardDialog } from './CreateAssignmentWizardDialog';
 
-const { toastSuccessMock, toastErrorMock, toastWarningMock } = vi.hoisted(() => ({
-  toastSuccessMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-  toastWarningMock: vi.fn(),
-}));
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('sonner', () => ({
-  toast: { success: toastSuccessMock, error: toastErrorMock, warning: toastWarningMock },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccessMock = toastMock.success;
+const toastErrorMock = toastMock.error;
+const toastWarningMock = toastMock.warning;
 
 vi.mock('@/components/ui/InputGroup', () => ({
   __esModule: true,
@@ -56,7 +53,11 @@ vi.mock('@/components/ui/SelectField', () => ({
   }) => (
     <label>
       {label}
-      <select aria-label={label} value={value ?? ''} onChange={(e) => onValueChange?.(e.target.value)}>
+      <select
+        aria-label={label}
+        value={value ?? ''}
+        onChange={(e) => onValueChange?.(e.target.value)}
+      >
         <option value="" />
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -153,7 +154,13 @@ const groupSetDetail = {
       id: 'grp-1',
       name: 'Team A',
       members: [
-        { id: 'stu-2', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', inactive: false },
+        {
+          id: 'stu-2',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          email: 'ada@example.com',
+          inactive: false,
+        },
       ],
     },
   ],
@@ -168,10 +175,12 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   const method = (init?.method ?? 'GET').toUpperCase();
   if (method === 'GET' && u.includes('/students')) return studentsResp() as unknown as Response;
   // Group-set detail (has an id segment) before the group-set list.
-  if (method === 'GET' && u.includes('/group-sets/')) return ok(groupSetDetail) as unknown as Response;
+  if (method === 'GET' && u.includes('/group-sets/'))
+    return ok(groupSetDetail) as unknown as Response;
   if (method === 'GET' && u.includes('/group-sets')) return ok(groupSets) as unknown as Response;
   if (method === 'POST' && u.includes('/overrides')) return overrideResp() as unknown as Response;
-  if (method === 'POST' && u.includes('/assignments')) return assignmentResp() as unknown as Response;
+  if (method === 'POST' && u.includes('/assignments'))
+    return assignmentResp() as unknown as Response;
   throw new Error(`Unexpected fetch: ${method} ${u}`);
 });
 
@@ -207,7 +216,7 @@ const renderDialog = () => {
 beforeEach(() => {
   fetchMock.mockClear();
   studentsResp = () => ok(students);
-  assignmentResp = () => ok({ id: 'a1' });
+  assignmentResp = () => ok({ id: 'a1', title: 'Homework 1' });
   overrideResp = () => ok({ id: 'o1' });
   global.fetch = fetchMock as unknown as typeof fetch;
   toastSuccessMock.mockReset();
@@ -240,7 +249,9 @@ describe('CreateAssignmentWizardDialog', () => {
 
     await waitFor(() => expect(postCalls('/assignments').length).toBeGreaterThan(0));
 
-    const assignmentPost = postCalls('/assignments').find((c) => !String(c[0]).includes('/overrides'));
+    const assignmentPost = postCalls('/assignments').find(
+      (c) => !String(c[0]).includes('/overrides'),
+    );
     const body = JSON.parse((assignmentPost?.[1] as RequestInit).body as string);
     // Individual (no groupSetId), unpublished, restricted audience with the one assignee.
     expect(body).toMatchObject({
@@ -255,9 +266,34 @@ describe('CreateAssignmentWizardDialog', () => {
     // No separate override calls anymore; the audience is in the create body.
     expect(postCalls('/overrides')).toHaveLength(0);
 
-    expect(toastSuccessMock).toHaveBeenCalledWith('Assignment created');
+    // The dialog owns the success message, because it is what performed the write; its caller
+    // only updates state. Toasting in both places is what showed two messages for one assignment.
+    expect(toastMock.created).toHaveBeenCalledWith('Assignment', { name: 'Homework 1' });
+    expect(toastSuccessMock).not.toHaveBeenCalled();
     expect(onCreate).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('sends the rich description when one was written, and nothing when the editor is untouched', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.type(screen.getByLabelText('Title'), 'Homework 2');
+    // The Details step now hosts the rich editor. Drive it the way ProseMirror can be driven
+    // in jsdom: mutate the contenteditable, then let it read the DOM back.
+    const editor = await waitFor(() => screen.getByRole('textbox', { name: 'Description' }));
+    fireEvent.input(editor, { target: Object.assign(editor, { textContent: 'Prove it.' }) });
+
+    await clickNext(user); // -> Type
+    await clickNext(user); // -> Assign To
+    await clickNext(user); // -> Review
+    await user.click(screen.getByRole('button', { name: /create assignment/i }));
+
+    await waitFor(() => expect(postCalls('/assignments').length).toBeGreaterThan(0));
+    const body = JSON.parse((postCalls('/assignments')[0][1] as RequestInit).body as string);
+    // The document is authoritative; the server derives the plain text from it.
+    expect(body.descriptionJson?.version).toBe(1);
+    expect(body.description).toBeUndefined();
   });
 
   it('creates a group assignment pinned to the chosen group set (all groups by default)', async () => {

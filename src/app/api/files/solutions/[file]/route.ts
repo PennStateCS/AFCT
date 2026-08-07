@@ -64,15 +64,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     }
 
     // Solutions are the most sensitive protected material, so log every successful
-    // serve (not only the explicit ?download=1 variant).
+    // serve. Distinguish an inline view (the in-app viewer fetches the bytes to render)
+    // from an explicit ?download=1 download: they are different access events, and the
+    // audit log names them differently rather than logging every view as a download.
     const mode = req.nextUrl.searchParams.get('download') === '1' ? 'download' : 'inline';
+    const action = mode === 'download' ? 'DOWNLOAD_SOLUTION_FILE' : 'VIEW_SOLUTION_FILE';
     return await serveUploadedFile(file, 'solutions', {
       disposition: 'attachment',
       downloadName: problem.originalFileName ?? file,
       onServe: () =>
         createEnhancedActivityLog(prisma, req, {
           userId: session.user.id,
-          action: 'DOWNLOAD_SOLUTION_FILE',
+          action,
           severity: 'INFO',
           category: 'PROBLEM',
           courseId: problem.courseId,

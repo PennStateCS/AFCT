@@ -26,14 +26,14 @@ export function FeedbackDialog({
 }: FeedbackDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card max-w-xl p-0">
+      <DialogContent className="max-w-xl p-0">
         <DialogHeader className="px-6 pt-6">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {description}
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-auto px-6 py-5 text-base leading-relaxed text-slate-900">
+        <div className="max-h-[60vh] overflow-auto px-6 py-5 text-base leading-relaxed text-foreground">
           {feedbackText ? feedbackText : 'No feedback available.'}
         </div>
         <DialogFooter className="px-6 pb-6 pt-2">

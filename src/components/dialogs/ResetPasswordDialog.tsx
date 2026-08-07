@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { useState, useEffect } from 'react';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
 import { isStrongPassword, passwordRules } from '@/lib/password-policy';
 import { ResetPasswordSchema } from '@/schemas/password';
@@ -24,12 +24,7 @@ type Props = {
   targetUserName?: string;
 };
 
-export function ResetPasswordDialog({
-  open,
-  setOpen,
-  onResetPassword,
-  targetUserName,
-}: Props) {
+export function ResetPasswordDialog({ open, setOpen, onResetPassword, targetUserName }: Props) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,18 +53,18 @@ export function ResetPasswordDialog({
 
     const parsed = ResetPasswordSchema.safeParse({ newPassword, confirmNewPassword });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? 'Please review the password fields.');
+      showToast.error(parsed.error.issues[0]?.message ?? 'Please review the password fields.');
       return;
     }
 
     setLoading(true);
     try {
       await onResetPassword(parsed.data.newPassword, isTemporary);
-      toast.success('Password reset successfully!');
+      showToast.success('Password reset');
       setOpen(false);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to reset password';
-      toast.error(errorMessage);
+      showToast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -77,10 +72,7 @@ export function ResetPasswordDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent
-        className="bg-card"
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Reset Password</DialogTitle>
           <DialogDescription>

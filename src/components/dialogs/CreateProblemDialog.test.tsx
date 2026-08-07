@@ -19,14 +19,9 @@ vi.mock('@/hooks/use-max-upload-size', () => ({
   },
 }));
 
-const { showToastError } = vi.hoisted(() => ({
-  showToastError: vi.fn(),
-}));
-vi.mock('@/lib/toast', () => ({
-  showToast: {
-    error: showToastError,
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
@@ -124,6 +119,7 @@ describe('CreateProblemDialog', () => {
       title: 'DFA #1',
       courseId: 'course-1',
     });
+    expect(toastMock.created).toHaveBeenCalledWith('Problem', { name: undefined });
     expect(onCreated).toHaveBeenCalledWith({ id: 'prob-1' }, true);
     expect(setOpen).toHaveBeenCalledWith(false);
   });

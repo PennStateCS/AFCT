@@ -18,6 +18,7 @@ import { formatDeadlineDual } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
+import { RichDescription } from '@/components/rich-description/RichDescription';
 import type {
   AssignmentWithDetails,
   StudentAssignmentContext,
@@ -89,6 +90,17 @@ export default function StudentAssignmentPage({
   const comments = contextQuery.data?.commentsByProblem ?? EMPTY_COMMENTS;
   const problemGrades = contextQuery.data?.problemGrades ?? EMPTY_GRADES;
   const assignmentGrade = contextQuery.data?.assignmentGrade ?? null;
+  const problemLimits = contextQuery.data?.problemLimits;
+  // The cap that applies to THIS student (base plus any extra-submission grants). An
+  // unlimited effective cap keeps the base sentinel so the existing "<= 0 or null means
+  // unlimited" rendering stays the single convention.
+  const effectiveMax = useCallback(
+    (problemId: string, base: number | null | undefined) => {
+      const limit = problemLimits?.[problemId];
+      return limit && limit.max != null ? limit.max : (base ?? null);
+    },
+    [problemLimits],
+  );
   // Cold-load only: after the student adds/deletes a comment the context query is
   // invalidated and refetches; isFetching would blank the submissions/comments
   // panels on every such refetch. isPending is true only before the first load.
@@ -130,15 +142,15 @@ export default function StudentAssignmentPage({
         });
 
         if (!response.ok) {
-          throw new Error('Failed to submit comment');
+          throw new Error('Could not post your comment. Check your connection and try again.');
         }
 
         setNewComment((prev) => ({ ...prev, [problemId]: '' }));
         await refreshContext();
-        showToast.success('Comment added successfully!');
+        showToast.created('Comment');
       } catch (error) {
         console.error('Error submitting comment:', error);
-        showToast.error('Failed to submit comment');
+        showToast.error('Could not post your comment. Check your connection and try again.');
       } finally {
         setSubmittingComment((prev) => ({ ...prev, [problemId]: false }));
       }
@@ -154,13 +166,15 @@ export default function StudentAssignmentPage({
         });
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
-          throw new Error(error?.error || 'Failed to delete comment');
+          throw new Error(
+            error?.error || 'Could not delete the comment. Check your connection and try again.',
+          );
         }
         await refreshContext();
-        showToast.success('Comment deleted successfully');
+        showToast.deleted('Comment');
       } catch (error) {
         console.error('Error deleting comment:', error);
-        showToast.error('Failed to delete comment');
+        showToast.error('Could not delete the comment. Check your connection and try again.');
       }
     },
     [refreshContext],
@@ -172,18 +186,20 @@ export default function StudentAssignmentPage({
     const err = assignmentQuery.error as (Error & { status?: number }) | null;
     if (!err) return;
     if (err.status === 404) {
-      showToast.error('Assignment not found or you do not have permission to view it');
+      showToast.error(
+        'This assignment is not available. It may have been removed, or you may not have access to it.',
+      );
       router.push('/dashboard');
     } else {
       console.error('Error fetching assignment:', err);
-      showToast.error('Failed to load assignment');
+      showToast.error('Could not load the assignment. Refresh the page to try again.');
     }
   }, [assignmentQuery.error, router]);
 
   useEffect(() => {
     if (contextQuery.isError) {
       console.error('Error fetching assignment context:', contextQuery.error);
-      showToast.error('Failed to load assignment context');
+      showToast.error('Could not load the assignment. Refresh the page to try again.');
     }
   }, [contextQuery.isError, contextQuery.error]);
 
@@ -220,9 +236,9 @@ export default function StudentAssignmentPage({
       grade: problemGrades[assignmentProblem.problem.id] ?? null,
       maxGrade: assignmentProblem.maxPoints ?? null,
       submissionsCount: submissions[assignmentProblem.problem.id]?.length ?? 0,
-      maxSubmissions: assignmentProblem.maxSubmissions ?? null,
+      maxSubmissions: effectiveMax(assignmentProblem.problem.id, assignmentProblem.maxSubmissions),
     }));
-  }, [assignment, submissions, problemGrades]);
+  }, [assignment, submissions, problemGrades, effectiveMax]);
 
   if (loading) {
     return <div className="p-6">Loading assignment...</div>;
@@ -281,9 +297,10 @@ export default function StudentAssignmentPage({
   const selectedProblemDetails = selectedProblem
     ? {
         ...selectedProblem.problem,
-        // Points / submission cap / autograding are per-assignment (on the link).
+        // Points / submission cap / autograding are per-assignment (on the link). The
+        // cap shown is the one that applies to THIS student, grants included.
         maxPoints: selectedProblem.maxPoints,
-        maxSubmissions: selectedProblem.maxSubmissions,
+        maxSubmissions: effectiveMax(selectedProblem.problem.id, selectedProblem.maxSubmissions),
         autograderEnabled: selectedProblem.autograderEnabled,
       }
     : null;
@@ -304,7 +321,7 @@ export default function StudentAssignmentPage({
             {assignment.course || assignment.courseName ? (
               <Link
                 href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                className="max-w-full break-all text-blue-700 hover:underline"
+                className="text-primary max-w-full break-all hover:underline"
               >
                 {assignment.course?.name || assignment.courseName || assignment.courseId}
                 {assignment.course?.code
@@ -317,12 +334,19 @@ export default function StudentAssignmentPage({
           </div>
         </CardHeader>
         <CardContent>
-          {assignment.description && (
+          {Boolean(assignment.description || assignment.descriptionJson) && (
             <div>
               <h2 className="mb-2 font-semibold">Description</h2>
-              <p className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
-                {assignment.description}
-              </p>
+              {/* A div, not a p: a rich description can contain headings, lists, and rules,
+                  which are invalid inside a paragraph. */}
+              <div className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3">
+                <RichDescription
+                  // Heading base: sits under the h2 "Description", so the description starts one level below it.
+                  headingBaseLevel={3}
+                  description={assignment.description}
+                  descriptionJson={assignment.descriptionJson}
+                />
+              </div>
             </div>
           )}
         </CardContent>
@@ -336,32 +360,32 @@ export default function StudentAssignmentPage({
             </CardTitle>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:justify-between">
               <div className="flex flex-1 flex-wrap gap-2">
-                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Due
                   </span>
                   <span className="leading-none font-semibold">{dueDisplay}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Points
                   </span>
                   <span className="leading-none font-semibold">{assignment.maxPoints}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Problems
                   </span>
                   <span className="leading-none font-semibold">{assignment.problems.length}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
                   <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                     Late Policy
                   </span>
                   <span className="leading-none font-semibold">{latePolicyDisplay}</span>
                 </div>
               </div>
-              <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-4 py-2 text-right text-slate-700 lg:self-start dark:border-slate-200 dark:text-slate-200">
+              <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-4 py-2 text-right lg:self-start">
                 <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
                   Grade
                 </span>

@@ -10,6 +10,7 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { readFormData } from '@/lib/api/request';
+import { descriptionWriteData } from '@/lib/description-write';
 import {
   ProblemCreateApiSchema,
   ALLOWED_PROBLEM_EXTENSIONS,
@@ -18,6 +19,41 @@ import {
 
 // Solution files are written here; the URL to serve them is /api/files/solutions/[file].
 const uploadsDir = path.join('/private', 'uploads', 'solutions');
+
+/**
+ * Lists a course's problem bank (id, title, description, type), for pickers such as the
+ * "import a problem from another course" wizard. Course staff (faculty or TAs) or a
+ * system admin; this route is manage-gated, so no student reaches it.
+ * @openapi
+ * summary: List a course's problems
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The course's problems.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not course staff or a system admin. }
+ *   500: { description: Server error. }
+ */
+export const GET = withCourseAuth(
+  async (_req, _ctx, { courseId }) => {
+    try {
+      const problems = await prisma.problem.findMany({
+        where: { courseId },
+        select: { id: true, title: true, description: true, type: true },
+        orderBy: { title: 'asc' },
+      });
+      return NextResponse.json(problems);
+    } catch (error) {
+      console.error('Error listing problems:', error);
+      return NextResponse.json({ error: 'Failed to fetch problems.' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'COURSE_PROBLEMS_ACCESS_DENIED' },
+);
 
 /**
  * Creates a problem in a course from an uploaded solution file (multipart/form-data).
@@ -127,7 +163,7 @@ export const POST = withCourseAuth(
         problem = await prisma.problem.create({
           data: {
             title,
-            description: data.description ?? null,
+            ...descriptionWriteData(data),
             type: type as ProblemType,
             courseId,
             fileName,

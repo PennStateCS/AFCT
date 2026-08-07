@@ -130,13 +130,15 @@ describe('SystemStatusClient', () => {
 
   it('loads the Files tab from its own endpoint and deletes a file when confirmed', async () => {
     localStorage.setItem('afct.systemStatusTab', 'files');
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderWithClient(<SystemStatusClient />);
 
     const deleteBtn = await screen.findByRole('button', {
       name: 'Delete abandoned file orphan.jff',
     });
     fireEvent.click(deleteBtn);
+
+    // Deleting now opens a confirmation dialog; confirm it.
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete file' }));
 
     await waitFor(() => {
       const deleted = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(

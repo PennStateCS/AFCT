@@ -26,8 +26,10 @@ export function UpgradeLiveLog({ active }: { active: boolean }) {
         const { lines: incoming } = JSON.parse((e as MessageEvent).data) as { lines: string[] };
         setLines((prev) => {
           const next = [...prev, ...incoming];
-          // Bound memory/DOM: keep only the most recent lines.
-          return next.length > 500 ? next.slice(next.length - 500) : next;
+          // Bound memory/DOM, but keep enough that a whole run stays scrollable rather
+          // than dropping its early lines. (The updater also trims progress.log itself,
+          // so this cap is only a backstop for an unusually chatty run.)
+          return next.length > 5000 ? next.slice(next.length - 5000) : next;
         });
       } catch {
         // ignore a malformed frame
@@ -46,16 +48,25 @@ export function UpgradeLiveLog({ active }: { active: boolean }) {
 
   if (!active || lines.length === 0) return null;
 
+  // Styled as a console: a title bar with the familiar window dots, then a dark,
+  // monospace log body. Deliberately dark in both themes, the way a terminal is.
   return (
-    <div className="space-y-1">
-      <p className="text-muted-foreground text-xs font-medium">Live progress</p>
+    <div className="overflow-hidden rounded-md border border-zinc-700 bg-zinc-950 shadow-inner">
+      <div className="flex items-center gap-2 border-b border-zinc-700 bg-zinc-900 px-3 py-1.5">
+        <span className="flex gap-1.5" aria-hidden="true">
+          <span className="size-2.5 rounded-full bg-red-500/80" />
+          <span className="size-2.5 rounded-full bg-yellow-500/80" />
+          <span className="size-2.5 rounded-full bg-green-500/80" />
+        </span>
+        <span className="text-xs font-medium text-zinc-400">Live progress</span>
+      </div>
       <div
         ref={boxRef}
         role="log"
         aria-live="off"
         aria-label="Live upgrade log"
         tabIndex={0}
-        className="bg-muted/30 focus-visible:ring-ring max-h-48 overflow-auto rounded-md border p-2 font-mono text-xs leading-relaxed focus-visible:ring-2 focus-visible:outline-none"
+        className="max-h-80 overflow-auto px-3 py-2 font-mono text-xs leading-relaxed text-zinc-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 focus-visible:outline-none"
       >
         {lines.map((line, i) => (
           <div key={i} className="break-words whitespace-pre-wrap">

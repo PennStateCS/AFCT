@@ -53,13 +53,14 @@ export const TAB_BAR_LIST_CLASS =
 // container and produce a phantom vertical scrollbar.
 export const TAB_BAR_TRIGGER_CLASS = [
   'text-muted-foreground hover:text-foreground',
-  // teal-700 (not -600) for the active label so 14px text clears WCAG AA 4.5:1 on the
-  // card; the underline below stays teal-600. Interim until the visual redesign.
-  'data-[state=active]:text-teal-700 dark:data-[state=active]:text-teal-400 data-[state=active]:font-semibold',
+  // Active label + underline use the --tab-active brand token (teal-700 in light, chosen
+  // so 14px text clears WCAG AA 4.5:1 on the card; teal-400 in dark). It carries its own
+  // dark value, so no dark: variant is needed. Interim brand accent until the redesign.
+  'data-[state=active]:text-tab-active data-[state=active]:font-semibold',
   'inline-flex h-auto lg:min-w-36 flex-none items-center justify-center gap-1.5 whitespace-nowrap',
   'rounded-none border-0 border-b-2 border-transparent bg-transparent px-2 py-3 text-sm font-medium lg:px-1',
   'transition-colors',
-  'data-[state=active]:border-teal-600 dark:data-[state=active]:border-teal-400',
+  'data-[state=active]:border-tab-active',
   'data-[state=active]:bg-transparent data-[state=active]:shadow-none',
 ].join(' ');
 
@@ -166,7 +167,7 @@ export function TabBar({
             {Icon ? <Icon className="size-3.5 opacity-70" aria-hidden="true" /> : null}
             {label}
             {count !== undefined ? (
-              <span className="ml-0.5 rounded-full bg-teal-100 px-1.5 py-0.5 text-xs leading-none font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
+              <span className="bg-tab-active-bg text-tab-active ml-0.5 rounded-full px-1.5 py-0.5 text-xs leading-none font-medium">
                 {count}
               </span>
             ) : null}

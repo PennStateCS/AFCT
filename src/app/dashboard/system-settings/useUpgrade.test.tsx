@@ -85,6 +85,31 @@ describe('useUpgrade', () => {
     expect(JSON.parse(postCall![1].body as string)).toEqual({ tag: 'v1.1.0' });
   });
 
+  it('flips status to in-progress right after a request, without waiting for a refetch', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ current: 'v1.0.0', versions: [], status: null, manifestError: false }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: 'r1' }) })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ current: 'v1.0.0', versions: [], status: null, manifestError: false }),
+      });
+
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info).toBeTruthy());
+
+    result.current.startUpgrade('v1.1.0');
+
+    // The cached status becomes a non-terminal phase immediately, so the panel and
+    // poll start without a manual refresh. The server still reports status: null here.
+    await waitFor(() =>
+      expect(isUpgradeInProgress(result.current.info?.status)).toBe(true),
+    );
+    expect(result.current.info?.status?.toTag).toBe('v1.1.0');
+  });
+
   it('surfaces the server error message on a failed upgrade request', async () => {
     fetchMock
       .mockResolvedValueOnce({
@@ -105,6 +130,60 @@ describe('useUpgrade', () => {
     await waitFor(() =>
       expect(showToast.error).toHaveBeenCalledWith('Version v9.9.9 is not an available release'),
     );
+  });
+
+  const selfUpdateGet = (over: Record<string, unknown> = {}) => ({
+    ok: true,
+    json: async () => ({
+      current: 'v1.0.0',
+      updaterVersion: 'v0.9.0',
+      updaterAvailable: true,
+      versions: [],
+      status: null,
+      manifestError: false,
+      restorePoints: [],
+      ...over,
+    }),
+  });
+
+  it('self-update resolves to done when the updater comes back on the new version', async () => {
+    fetchMock
+      .mockResolvedValueOnce(selfUpdateGet()) // initial: updater behind
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: 's1' }) })
+      .mockResolvedValue(selfUpdateGet({ updaterVersion: 'v1.0.0' })); // caught up
+
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info?.updaterVersion).toBe('v0.9.0'));
+
+    result.current.startSelfUpdate('v1.0.0');
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('updating'));
+
+    void result.current.refetch();
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('done'));
+
+    result.current.dismissSelfUpdate();
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('idle'));
+  });
+
+  it('self-update reports failure only when the updater stays behind and reports failed', async () => {
+    fetchMock
+      .mockResolvedValueOnce(selfUpdateGet())
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: 's2' }) })
+      .mockResolvedValue(
+        selfUpdateGet({
+          updaterVersion: 'v0.9.0',
+          status: { phase: 'failed', requestId: 's2', message: 'could not download' },
+        }),
+      );
+
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info).toBeTruthy());
+
+    result.current.startSelfUpdate('v1.0.0');
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('updating'));
+
+    void result.current.refetch();
+    await waitFor(() => expect(result.current.selfUpdate.phase).toBe('failed'));
   });
 
   it('POSTs a downgrade with the restore point and toasts success', async () => {
@@ -136,6 +215,39 @@ describe('useUpgrade', () => {
       action: 'downgrade',
       tag: 'v0.9.0',
       restorePoint: '20260101-000000',
+    });
+  });
+
+  it('includes force in the downgrade body only when set', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          current: 'v1.0.0',
+          versions: [],
+          status: null,
+          manifestError: false,
+          restorePoints: [{ version: 'v0.9.0', backup: '20260101-000000' }],
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, requestId: 'd2' }) })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ current: 'v1.0.0', versions: [], status: null, manifestError: false }),
+      });
+
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info).toBeTruthy());
+
+    result.current.startDowngrade({ tag: 'v0.9.0', restorePoint: '20260101-000000', force: true });
+
+    await waitFor(() => expect(showToast.success).toHaveBeenCalled());
+    const postCall = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST');
+    expect(JSON.parse(postCall![1].body as string)).toEqual({
+      action: 'downgrade',
+      tag: 'v0.9.0',
+      restorePoint: '20260101-000000',
+      force: true,
     });
   });
 });

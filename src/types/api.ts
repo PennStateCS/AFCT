@@ -512,8 +512,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * List submissions for problems (admin)
-         * @description Returns every submission across a set of problems, flattened for the admin  grading view: student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.
+         * List autograded submissions (admin, paginated)
+         * @description One page of autograded submissions for the admin Autograder page: student, course,  assignment/problem titles, queue status, and the recorded grade (joined from  AssignmentProblemGrade). Search, filters, sort and pagination all run in the database.  System administrators only.   A POST with a JSON body rather than the GET + query string the other paginated routes  use, because the scope can carry hundreds of problem ids. Empty scope lists mean "no  constraint", so the common case (everything) sends nothing at all.   Problems with the autograder switched off are left out: this feeds the Autograder page,  and a submission the autograder never touches has no queue state and no per-attempt score  to show there. Those submissions still appear on the course's own submissions tab.   Deliberately does not log the read. It never has, and paginating turns one read into one  log per page the admin flips through, which would distort ActivityLog as research data.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/submissions/route.ts)
          */
@@ -930,8 +930,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a course's activity feed
-         * @description Returns a paginated activity feed for one course: course/assignment/problem/  submission activity plus member logins. Course-content activity by admins (even if  not enrolled) and enrolled staff (Faculty/TA) shows any time (so an admin creating  or editing a problem before the term is included), while other members' content and  all member logins are clipped to the course's start/end dates. Admin logins are never  shown (only their course edits). Staff-only to read (see access gate below).
+         * Get a page of a course's activity feed
+         * @description One page of a course's activity feed: course/assignment/problem/submission activity plus  member logins. Course-content activity by admins (even if not enrolled) and enrolled  staff (Faculty/TA) shows any time (so an admin creating or editing a problem before the  term is included), while other members' content and all member logins are clipped to the  course's start/end dates. Admin logins are never shown (only their course edits).  Staff-only to read (see the access gate below).   Search, filters, sort and pagination all run in the database. They used to run in the  browser over whatever "Load More" had fetched, which meant searching an audit trail could  return nothing for an event that existed.   `?part=filters` returns the course's assignments and problems so the filter menus can  offer every one of them, not just those present in the rows on screen.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/activity/route.ts)
          */
@@ -988,6 +988,28 @@ export interface paths {
          */
         put: operations["putCoursesByIdAssignmentsByAidAssignees"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duplicate an assignment
+         * @description Duplicate an assignment within the same course. The title/description come from the  request; the type (groupSetId), audience (AssignmentAssignee), schedule, and date  exceptions (AssignmentOverride) are copied verbatim from the source and are editable  afterward. The copy is always created unpublished. Submissions and grades are never  copied.   Problems are handled by `problemMode`:    - none      : the copy has no problems.    - link      : the copy shares the source's Problem records (editing one edits both).    - duplicate : each problem is copied to a new Problem (with its own solution file).
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/duplicate/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsByAidDuplicate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1122,6 +1144,56 @@ export interface paths {
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grade/[studentId]/route.ts)
          */
         post: operations["postCoursesByIdAssignmentsByAidProblemsByPidGradeByStudentId"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/problems/{pid}/grants/{gid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an extra-submission grant
+         * @description Revokes an extra-submission grant. Submissions already made stay untouched; the  target's cap simply returns to the shared value. Course staff (faculty or TAs) or a  system admin.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grants/[gid]/route.ts)
+         */
+        delete: operations["deleteCoursesByIdAssignmentsByAidProblemsByPidGrantsByGid"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/problems/{pid}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a problem's extra-submission grants
+         * @description Lists the extra-submission grants for one assignment problem. Course staff (faculty or  TAs) or a system admin.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grants/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidProblemsByPidGrants"];
+        put?: never;
+        /**
+         * Grant extra submissions to a student or group
+         * @description Grants extra submissions to one student or group on this problem, on top of the  problem's shared cap. Repeat grants to the same target accumulate onto one row. Course  staff (faculty or TAs) or a system admin.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grants/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsByAidProblemsByPidGrants"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1350,6 +1422,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/assignments/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an assignment from another course
+         * @description Imports an assignment from ANOTHER course the caller can manage into this course.  Unlike duplicate, audience, group set, and date exceptions are not carried across  (they reference records scoped to the source course); the import always lands as an  unpublished, individual, assigned-to-everyone assignment. The schedule (due date,  available-from, late settings) is copied from the source as a starting point and is  editable afterward.   Problems are handled by `problemMode`:    - none : the imported assignment has no problems.    - copy : each problem is copied into THIS course (a new Problem with its own             solution file); there is no "link" mode because problems are course-scoped.   Permission is tiered: the wrapper gates the destination course (manage), and the  caller must also be able to manage the source course.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/import/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments": {
         parameters: {
             query?: never;
@@ -1400,6 +1494,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/enrollable-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search accounts that can be enrolled in a course
+         * @description Accounts that could be enrolled in this course: active users who are not already on its  roster, searched server-side. Course staff (faculty or TAs) or a system admin.   Backs the Enroll User dialog, which used to fetch every account in the installation and  subtract the course's roster in the browser. That stopped being correct once the roster  itself was paginated (a partial roster would have offered people who are already members)  and it never scaled to a large user table.   Inactive accounts are left out because the enroll endpoint refuses them anyway, so  offering one could only produce a 409.   Each row carries only the name and email the dialog displays. Course staff are not  administrators, and this route reaches accounts outside their course, so it must not  hand back the admin user list's shape.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/enrollable-users/route.ts)
+         */
+        get: operations["getCoursesByIdEnrollableUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/grades/export": {
         parameters: {
             query?: never;
@@ -1430,8 +1546,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get the course grade matrix
-         * @description Returns the full gradebook matrix for a course: students x assignments with each cell  holding the student's summed assignment grade (problem grades collapsed into one  total). Course staff (faculty or TAs) or a system admin. Reading the whole gradebook  is a FERPA-relevant access, so it's recorded (throttled) in the audit log.
+         * Get a page of the course gradebook
+         * @description The gradebook, one page of students at a time.   `?part=columns` returns the assignment columns and the course's student total, which the  table caches for the course. Without `part` it returns one page of students, each row  carrying that student's assigned flags and their summed assignment grades.   The whole students x assignments matrix used to be returned in one go (as `structure`  plus `values`), which does not survive a course with a thousand students. The full matrix  still exists for the LMS export, which builds it server-side in its own route.   Course staff (faculty or TAs) or a system admin. Reading grade values is a FERPA-relevant  access, so it is recorded (throttled) in the audit log.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
@@ -1644,6 +1760,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/problems/{pid}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duplicate a course problem
+         * @description Duplicate a problem within the same course. The title/description come from the  request; the type, state cap, determinism flag, and the solution file (answer key) are  copied from the source and stay editable afterward. The solution file is copied to a  fresh name on disk so the two problems never share a file.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/problems/[pid]/duplicate/route.ts)
+         */
+        post: operations["postCoursesByIdProblemsByPidDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/problems/{pid}": {
         parameters: {
             query?: never;
@@ -1672,7 +1810,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/courses/{id}/problems": {
+    "/api/courses/{id}/problems/import": {
         parameters: {
             query?: never;
             header?: never;
@@ -1680,6 +1818,34 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /**
+         * Import a problem from another course
+         * @description Imports a problem from ANOTHER course the caller can manage into this course. The  title/description come from the request; the type, state cap, determinism flag, and  the solution file (answer key) are copied from the source. The solution file is copied  to a fresh name on disk so the two problems never share a file.   Permission is tiered: the wrapper gates the destination course (manage), and the caller  must also be able to manage the source course.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/problems/import/route.ts)
+         */
+        post: operations["postCoursesByIdProblemsImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a course's problems
+         * @description Lists a course's problem bank (id, title, description, type), for pickers such as the  "import a problem from another course" wizard. Course staff (faculty or TAs) or a  system admin; this route is manage-gated, so no student reaches it.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/problems/route.ts)
+         */
+        get: operations["getCoursesByIdProblems"];
         put?: never;
         /**
          * Create a problem in a course
@@ -1772,6 +1938,28 @@ export interface paths {
         patch: operations["patchCoursesByIdRosterByUserId"];
         trace?: never;
     };
+    "/api/courses/{id}/roster/{userId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Drop or re-enroll a student
+         * @description Drop or re-enroll a student in a course.   A DROPPED student keeps their roster row and all their work (submissions, grades,  group membership, audience/override rows) but loses access: `canAccessCourse` denies  them, so they can't see or interact with the course, and it disappears from their own  lists. Staff review surfaces still show them, marked "Dropped". Re-enrolling flips  them back to ENROLLED and restores everything.   This is distinct from removal (`DELETE .../roster/[userId]`): removal is a hard delete  for a student with no work; drop is the reversible action for a student who has work.  Only a global admin or a course FACULTY member may do it (TAs may not, matching the  other roster mutations), and it applies only to STUDENT rows.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/[userId]/status/route.ts)
+         */
+        patch: operations["patchCoursesByIdRosterByUserIdStatus"];
+        trace?: never;
+    };
     "/api/courses/{id}/roster/bulk": {
         parameters: {
             query?: never;
@@ -1801,7 +1989,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List a course's roster (paginated)
+         * @description One page of a course's roster, with search, filters, sort and pagination all applied in  the database. Course staff (faculty or TAs) or a system admin.   A staff surface, so dropped students are included and badged rather than hidden. Students  never reach this route; their course payload carries staff names only and no peer rows.   Deliberately does not log the read. Staff reading their own course's roster is routine,  and paginating would turn one read into one log per page flipped through, which would  distort ActivityLog as research data. See docs/logging-policy.md section 3.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/route.ts)
+         */
+        get: operations["getCoursesByIdRoster"];
         put?: never;
         /**
          * Enroll a user in a course
@@ -1887,7 +2081,7 @@ export interface paths {
         };
         /**
          * List a course's students
-         * @description Returns just the STUDENT members of a course (user profiles). Course staff  (faculty or TAs) or a system admin.
+         * @description Returns the STUDENT members of a course (user profiles, each tagged with its  `enrollmentStatus`). Course staff (faculty or TAs) or a system admin.   By default only ACTIVE (ENROLLED) students are returned, since the main caller is the  assignment-audience picker, where a dropped student must not be offered as a new  target. Pass `?includeDropped=1` to also return dropped students (for staff review  surfaces like the submissions view, which show them labeled).
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/students/route.ts)
          */
@@ -1935,7 +2129,7 @@ export interface paths {
          * Join a course by registration code
          * @description Enrolls the signed-in user in a course via its registration code,  as a STUDENT. Users never learn that an unpublished/archived course exists  (masked as 404). Global admins can't self-enroll, and the registration window  must be open.
          *
-         *     **Auth:** required
+         *     **Auth:** requires STUDENT
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/join/route.ts)
          */
@@ -2182,6 +2376,30 @@ export interface paths {
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/enrollments/route.ts)
          */
         get: operations["getMeEnrollments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/manageable-courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List courses the caller can manage
+         * @description Lists the courses the caller may manage, for the "import assignment" picker: courses  where they are FACULTY or TA, or every course when they are a system admin. Archived  courses are included (you can import from a past term); soft-deleted courses never  appear. Pass `excludeCourseId` to drop the course being imported into (importing from  the same course is what Duplicate already does).
+         *
+         *     **Auth:** requires FACULTY / TA
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/manageable-courses/route.ts)
+         */
+        get: operations["getMeManageableCourses"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3103,6 +3321,13 @@ export interface operations {
                         versions?: Record<string, never>[];
                         manifestError?: boolean;
                         updaterAvailable?: boolean;
+                        /** @description What the update service reports about its own configuration. Null when it is too old to report, which is not an error. */
+                        updaterReadiness?: {
+                            envFile?: string;
+                            composeFile?: string;
+                            envFileOk?: boolean;
+                            composeFileOk?: boolean;
+                        } | null;
                     };
                 };
             };
@@ -3131,6 +3356,8 @@ export interface operations {
                     action?: "upgrade" | "downgrade" | "self-update" | "delete-restore-point";
                     tag?: string;
                     restorePoint?: string;
+                    /** @description Downgrade only: proceed without a confirmed pre-downgrade safety backup. */
+                    force?: boolean;
                 };
             };
         };
@@ -3652,21 +3879,52 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    problemIds: string[];
+                    /** @description Empty means every course */
+                    courseIds?: string[];
+                    /** @description Empty means every assignment */
+                    assignmentIds?: string[];
+                    /** @description Empty means every problem */
+                    problemIds?: string[];
+                    /** @description Match on student, course, assignment, problem, or file name */
+                    q?: string;
+                    /**
+                     * @default all
+                     * @enum {string}
+                     */
+                    field?: "all" | "student" | "course" | "assignment" | "problem" | "file";
+                    timing?: ("ontime" | "late")[];
+                    status?: ("pending" | "processing" | "failed" | "correct" | "incorrect")[];
+                    /** @default 1 */
+                    page?: number;
+                    /** @default 10 */
+                    pageSize?: number;
+                    /** @enum {string} */
+                    sortBy?: "submittedAt" | "student" | "course" | "assignment" | "problem" | "file" | "due" | "status";
+                    /**
+                     * @default desc
+                     * @enum {string}
+                     */
+                    sortDir?: "asc" | "desc";
                 };
             };
         };
         responses: {
-            /** @description Flattened submissions, newest first. */
+            /** @description One page of autograded submissions. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": {
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
                 };
             };
-            /** @description problemIds missing or empty. */
+            /** @description Malformed body. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4823,8 +5081,21 @@ export interface operations {
     getCoursesByIdActivity: {
         parameters: {
             query?: {
-                limit?: number;
-                offset?: number;
+                /** @description `filters` returns the course's assignments and problems for the filter menus. */
+                part?: "filters";
+                page?: number;
+                pageSize?: number;
+                /** @description Match on action, category, or the actor's name/email */
+                q?: string;
+                field?: "all" | "action" | "category" | "user";
+                /** @description Repeatable */
+                category?: string[];
+                /** @description Repeatable */
+                assignmentId?: string[];
+                /** @description Repeatable */
+                problemId?: string[];
+                sortBy?: "timestamp" | "action" | "category" | "ipAddress" | "userLastName" | "userFirstName";
+                sortDir?: "asc" | "desc";
             };
             header?: never;
             path: {
@@ -4834,16 +5105,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A page of activity entries with a total count. */
+            /** @description One page of activity entries, or the filter option lists. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        activities?: Record<string, never>[];
-                        totalCount?: number;
-                        hasMore?: boolean;
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                        assignments?: Record<string, never>[];
+                        problems?: Record<string, never>[];
                     };
                 };
             };
@@ -4856,7 +5131,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not enrolled in the course and not a system admin. */
+            /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5071,6 +5346,72 @@ export interface operations {
                 };
             };
             /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignmentsByAidDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                    description?: string | null;
+                    /** @enum {string} */
+                    problemMode: "none" | "link" | "duplicate";
+                };
+            };
+        };
+        responses: {
+            /** @description The newly created (unpublished) assignment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Source assignment not found in this course. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5690,6 +6031,220 @@ export interface operations {
             };
             /** @description Problem not found in this assignment/course. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteCoursesByIdAssignmentsByAidProblemsByPidGrantsByGid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+                gid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The grant was removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Grant not found for this problem. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course is archived. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidProblemsByPidGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The problem's grants (newest first). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Problem not found in this assignment. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignmentsByAidProblemsByPidGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Target student (exactly one of userId/groupId). */
+                    userId?: string;
+                    /** @description Target group (exactly one of userId/groupId). */
+                    groupId?: string;
+                    extraSubmissions: number;
+                    /** @description Optional note shown to staff. */
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The grant row (with the accumulated total). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid target or an unlimited problem. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Problem not found in this assignment. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course archived or a concurrent grant conflicted. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6371,6 +6926,8 @@ export interface operations {
                         submissionCount?: number;
                         submissionsByProblem?: Record<string, never>;
                         commentsByProblem?: Record<string, never>;
+                        /** @description Per-problem effective submission cap for the caller (base plus any grants); max null means unlimited. */
+                        problemLimits?: Record<string, never>;
                     };
                 };
             };
@@ -6585,6 +7142,74 @@ export interface operations {
                 };
             };
             /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignmentsImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Destination course id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sourceCourseId: string;
+                    sourceAssignmentId: string;
+                    title: string;
+                    description?: string | null;
+                    /** @enum {string} */
+                    problemMode: "none" | "copy";
+                };
+            };
+        };
+        responses: {
+            /** @description The newly created (unpublished) assignment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body, or the source is the destination course. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller cannot manage the destination or the source course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Source assignment not found in the source course. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6832,6 +7457,81 @@ export interface operations {
             };
         };
     };
+    getCoursesByIdEnrollableUsers: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Match on first name, last name, or email */
+                q?: string;
+                field?: "all" | "firstName" | "lastName" | "email";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of enrollable accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows?: {
+                            id?: string;
+                            firstName?: string | null;
+                            lastName?: string | null;
+                            email?: string;
+                        }[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff (faculty or TAs) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getCoursesByIdGradesExport: {
         parameters: {
             query?: {
@@ -6894,7 +7594,17 @@ export interface operations {
     };
     getCoursesByIdGrades: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `columns` returns the assignment columns and the student total; omitted returns one page of students with their grades. */
+                part?: "columns";
+                page?: number;
+                pageSize?: number;
+                /** @description Match on the student's name or email */
+                q?: string;
+                /** @description lastName, firstName, email, totalGrade, or an assignment id */
+                sortBy?: string;
+                sortDir?: "asc" | "desc";
+            };
             header?: never;
             path: {
                 id: string;
@@ -6903,16 +7613,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Students, assignments, and a nested grades map (grades[studentId][assignmentId]). */
+            /** @description Either the columns payload or one page of student rows. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        students?: Record<string, never>[];
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
                         assignments?: Record<string, never>[];
-                        grades?: Record<string, never>;
+                        totalStudents?: number;
                     };
                 };
             };
@@ -7807,6 +8521,70 @@ export interface operations {
             };
         };
     };
+    postCoursesByIdProblemsByPidDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                    description?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The newly created problem. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Source problem not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     putCoursesByIdProblemsByPid: {
         parameters: {
             query?: never;
@@ -7946,6 +8724,121 @@ export interface operations {
             };
             /** @description Problem not found in this course. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdProblemsImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Destination course id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sourceCourseId: string;
+                    sourceProblemId: string;
+                    title: string;
+                    description?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The newly created problem. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body, or the source is the destination course. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller cannot manage the destination or the source course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Source problem not found in the source course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdProblems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The course's problems. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff or a system admin. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8394,6 +9287,88 @@ export interface operations {
             };
         };
     };
+    patchCoursesByIdRosterByUserIdStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    status: "ENROLLED" | "DROPPED";
+                };
+            };
+        };
+        responses: {
+            /** @description Status updated (or already at the requested status). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid body, or the target is not a student. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system admin or a course faculty member. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Roster entry not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course is archived. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     postCoursesByIdRosterBulk: {
         parameters: {
             query?: never;
@@ -8443,6 +9418,82 @@ export interface operations {
             };
             /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdRoster: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Match on name or email */
+                q?: string;
+                field?: "all" | "name" | "email";
+                /** @description Repeatable */
+                role?: ("FACULTY" | "TA" | "STUDENT")[];
+                /** @description Repeatable */
+                status?: ("ENROLLED" | "DROPPED")[];
+                sortBy?: "lastName" | "firstName" | "email" | "role" | "enrollmentStatus";
+                sortDir?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of roster members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff (faculty or TAs) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8801,7 +9852,10 @@ export interface operations {
     };
     getCoursesByIdStudents: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description "1"/"true" also returns dropped students (default: enrolled only). */
+                includeDropped?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -8810,7 +9864,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The course's students. */
+            /** @description The course's students, each with an enrollmentStatus. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8935,6 +9989,15 @@ export interface operations {
             };
             /** @description Not signed in. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Enrollment was dropped; re-enrollment is a staff action. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9563,6 +10626,47 @@ export interface operations {
             };
         };
     };
+    getMeManageableCourses: {
+        parameters: {
+            query?: {
+                /** @description A course id to omit from the list (typically the import destination). */
+                excludeCourseId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Manageable courses (id, name, code, semester, archived flag), active first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     postMePassword: {
         parameters: {
             query?: never;
@@ -10105,6 +11209,8 @@ export interface operations {
                     /** @description Global admin flag (only writable by admins) */
                     isAdmin?: boolean;
                     inactive?: boolean;
+                    /** @description New login email (admins only; must be unused) */
+                    email?: string;
                     timezone?: string;
                 };
                 "multipart/form-data": {
@@ -10155,7 +11261,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The change would remove the last active administrator. */
+            /** @description The change would remove the last active administrator, or the new email is already in use. */
             409: {
                 headers: {
                     [name: string]: unknown;

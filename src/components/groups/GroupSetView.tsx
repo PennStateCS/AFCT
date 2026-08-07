@@ -1,6 +1,20 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+  type Announcements,
+  type ScreenReaderInstructions,
+} from '@dnd-kit/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
@@ -20,19 +34,110 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, Copy, MoreVertical, Pencil, Plus, Shuffle, Trash2, Users } from 'lucide-react';
+import {
+  ChevronDown,
+  Copy,
+  GripVertical,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Shuffle,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { NameDialog } from './NameDialog';
 import { DuplicateGroupSetDialog } from './DuplicateGroupSetDialog';
 import { RandomAssignDialog } from './RandomAssignDialog';
-import type { GroupSetDetail, MembershipOperation } from './group-set-types';
+import type { EligibleStudent, GroupSetDetail, MembershipOperation } from './group-set-types';
 import { studentName } from './group-set-types';
+
+// A droppable target (a group card or the unassigned panel). Highlights while a
+// student is dragged over it. `id` is the group id, or the 'unassigned' sentinel.
+const UNASSIGNED_ZONE = 'unassigned';
+
+function DropZone({
+  id,
+  className,
+  children,
+}: {
+  id: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${className ?? ''} ${isOver ? 'ring-primary ring-2 ring-offset-1' : ''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// One student row: the existing checkbox + name (the keyboard/AT path), plus a drag
+// handle. Only the handle starts a drag, so the checkbox and label keep working
+// normally. Inactive members and locked/archived sets can't be dragged.
+function DraggableStudentRow({
+  student,
+  inactive = false,
+  selected,
+  onToggle,
+  checkboxDisabled,
+  dragDisabled,
+}: {
+  student: EligibleStudent;
+  inactive?: boolean;
+  selected: boolean;
+  onToggle: () => void;
+  checkboxDisabled: boolean;
+  dragDisabled: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: student.id,
+    disabled: dragDisabled,
+  });
+  return (
+    <li ref={setNodeRef} className={isDragging ? 'opacity-40' : undefined}>
+      <div className="hover:bg-muted flex items-center gap-2 rounded p-1 text-sm">
+        <label className="flex min-w-0 flex-1 items-center gap-2">
+          <Checkbox
+            checked={selected}
+            onCheckedChange={onToggle}
+            aria-label={`Select ${studentName(student)}`}
+            disabled={checkboxDisabled}
+          />
+          <span className="min-w-0 flex-1 truncate">{studentName(student)}</span>
+        </label>
+        {inactive && (
+          <Badge variant="outline" className="text-status-warning shrink-0">
+            Inactive
+          </Badge>
+        )}
+        {!dragDisabled && (
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring shrink-0 cursor-grab touch-none rounded p-0.5 focus-visible:ring-2 focus-visible:outline-none"
+            aria-label={`Drag ${studentName(student)}`}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
 
 /**
  * The selected group set: its header + actions, summary counts, a searchable
  * unassigned-students panel, and a responsive grid of group cards. Assigning,
- * moving, and removing all work through a selection model (checkboxes + an action
- * bar), so nothing depends on drag and drop.
+ * moving, and removing work through a selection model (checkboxes + an action bar).
+ * Drag and drop is layered on top as a convenience: every drag has an equivalent
+ * checkbox/menu action, so keyboard and assistive-tech users are never dependent on
+ * dragging (WCAG 2.1.1 and 2.5.7). The same applyOps mutation backs both paths.
  */
 export function GroupSetView({
   courseId,
@@ -146,38 +251,139 @@ export function GroupSetView({
     [detail, courseId, setId, queryClient, detailKey, onListChanged],
   );
 
-  // Only active students may be assigned/moved; inactive selected are excluded.
-  const eligibleSelectedIds = useMemo(() => {
-    if (!detail) return [];
-    const active = new Set(detail.eligibleStudents.map((s) => s.id));
-    return Array.from(selected).filter((id) => active.has(id));
-  }, [detail, selected]);
+  // Which group each student is currently in (for skipping no-op moves).
+  const memberGroupOf = useMemo(() => {
+    const m = new Map<string, string>();
+    if (detail) for (const g of detail.groups) for (const mem of g.members) m.set(mem.id, g.id);
+    return m;
+  }, [detail]);
 
-  const moveSelectedTo = (groupId: string, groupName: string) => {
-    const movable = eligibleSelectedIds;
-    if (movable.length === 0) {
-      showToast.warning('Select one or more active students first.');
-      return;
-    }
-    const skipped = selected.size - movable.length;
-    void applyOps(
-      movable.map((userId) => ({ userId, groupId })),
-      `Moved ${movable.length} to ${groupName}${skipped > 0 ? ` (${skipped} inactive skipped)` : ''}`,
-    );
-  };
+  // Move an explicit set of students into a group. Only active students actually move,
+  // and anyone already in the target group is skipped so a drop-in-place is a no-op.
+  // The checkbox action bar and drag-and-drop both funnel through here.
+  const moveIdsTo = useCallback(
+    (ids: string[], groupId: string, groupName: string) => {
+      if (!detail) return;
+      const active = new Set(detail.eligibleStudents.map((s) => s.id));
+      const movable = ids.filter((id) => active.has(id) && memberGroupOf.get(id) !== groupId);
+      if (movable.length === 0) {
+        showToast.warning('Select one or more active students first.');
+        return;
+      }
+      const skipped = ids.length - movable.length;
+      void applyOps(
+        movable.map((userId) => ({ userId, groupId })),
+        `Moved ${movable.length} to ${groupName}${skipped > 0 ? ` (${skipped} skipped)` : ''}`,
+      );
+    },
+    [detail, memberGroupOf, applyOps],
+  );
 
-  const removeSelected = () => {
-    if (selected.size === 0) return;
-    // Only remove those currently in a group.
-    const toRemove = Array.from(selected).filter((id) => assignedIds.has(id));
-    if (toRemove.length === 0) {
-      showToast.warning('None of the selected students are in a group.');
-      return;
+  // Remove an explicit set of students from whatever group they're in.
+  const removeIds = useCallback(
+    (ids: string[]) => {
+      const toRemove = ids.filter((id) => assignedIds.has(id));
+      if (toRemove.length === 0) {
+        showToast.warning('None of the selected students are in a group.');
+        return;
+      }
+      void applyOps(
+        toRemove.map((userId) => ({ userId, groupId: null })),
+        `Removed ${toRemove.length} from their group`,
+      );
+    },
+    [assignedIds, applyOps],
+  );
+
+  const moveSelectedTo = (groupId: string, groupName: string) =>
+    moveIdsTo(Array.from(selected), groupId, groupName);
+  const removeSelected = () => removeIds(Array.from(selected));
+
+  // Drag and drop (enhancement over the checkboxes). A 5px activation distance means a
+  // plain click on the handle never starts a drag; the KeyboardSensor makes the handle
+  // operable with space/enter + arrows for people who don't use a pointer.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  // id -> display name, for the drag overlay and the screen-reader announcements.
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>();
+    if (detail) {
+      for (const s of detail.eligibleStudents) m.set(s.id, studentName(s));
+      for (const g of detail.groups) for (const mem of g.members) m.set(mem.id, studentName(mem));
     }
-    void applyOps(
-      toRemove.map((userId) => ({ userId, groupId: null })),
-      `Removed ${toRemove.length} from their group`,
-    );
+    return m;
+  }, [detail]);
+
+  const zoneName = useCallback(
+    (id: string) =>
+      id === UNASSIGNED_ZONE
+        ? 'Unassigned'
+        : (detail?.groups.find((g) => g.id === id)?.name ?? 'group'),
+    [detail],
+  );
+
+  const [activeDrag, setActiveDrag] = useState<string | null>(null);
+
+  // Dragging an already-selected student carries the whole selection; dragging an
+  // unselected one carries just that student.
+  const draggedIdsFor = useCallback(
+    (activeId: string) => (selected.has(activeId) ? Array.from(selected) : [activeId]),
+    [selected],
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDrag(String(event.active.id));
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setActiveDrag(null);
+      if (disabled) return;
+      const over = event.over?.id;
+      if (over == null) return;
+      const ids = draggedIdsFor(String(event.active.id));
+      if (String(over) === UNASSIGNED_ZONE) {
+        removeIds(ids);
+      } else {
+        const g = detail?.groups.find((gr) => gr.id === String(over));
+        if (g) moveIdsTo(ids, g.id, g.name);
+      }
+    },
+    [disabled, draggedIdsFor, removeIds, moveIdsTo, detail],
+  );
+
+  const dragCount = activeDrag ? draggedIdsFor(activeDrag).length : 0;
+  const dragLabel = activeDrag
+    ? dragCount > 1
+      ? `${dragCount} students`
+      : (nameById.get(activeDrag) ?? 'Student')
+    : '';
+
+  const announcements: Announcements = useMemo(
+    () => ({
+      onDragStart: ({ active }) => `Picked up ${nameById.get(String(active.id)) ?? 'student'}.`,
+      onDragOver: ({ active, over }) =>
+        over
+          ? `${nameById.get(String(active.id)) ?? 'Student'} is over ${zoneName(String(over.id))}.`
+          : undefined,
+      onDragEnd: ({ active, over }) =>
+        over
+          ? `Dropped ${nameById.get(String(active.id)) ?? 'student'} on ${zoneName(String(over.id))}.`
+          : `Dropped ${nameById.get(String(active.id)) ?? 'student'}.`,
+      onDragCancel: ({ active }) =>
+        `Dragging ${nameById.get(String(active.id)) ?? 'student'} cancelled.`,
+    }),
+    [nameById, zoneName],
+  );
+
+  const screenReaderInstructions: ScreenReaderInstructions = {
+    draggable:
+      'To move a student, press space or enter to pick them up, use the arrow keys to move ' +
+      'over a group or the unassigned list, then press space or enter to drop. Press escape to ' +
+      'cancel. You can also use the checkboxes and the Move to menu.',
   };
 
   const doRename = async (name: string) => {
@@ -193,7 +399,7 @@ export function GroupSetView({
     await apiClient.post(apiPaths.courseGroupSetGroups(courseId, setId), { name });
     void queryClient.invalidateQueries({ queryKey: detailKey });
     onListChanged();
-    showToast.success('Group created');
+    showToast.created('Group');
   };
 
   const doRenameGroup = async (name: string) => {
@@ -209,7 +415,7 @@ export function GroupSetView({
       await apiClient.del(apiPaths.courseGroupSetGroup(courseId, setId, deleteGroup.id));
       void queryClient.invalidateQueries({ queryKey: detailKey });
       onListChanged();
-      showToast.success('Group deleted');
+      showToast.deleted('Group');
     } catch (err) {
       showToast.error(err instanceof ApiError ? err.message : 'Failed to delete group');
     } finally {
@@ -221,7 +427,7 @@ export function GroupSetView({
     setBusy(true);
     try {
       await apiClient.del(apiPaths.courseGroupSet(courseId, setId));
-      showToast.success('Group set deleted');
+      showToast.deleted('Group set');
       onListChanged();
       onSelectSet('');
     } catch (err) {
@@ -237,7 +443,7 @@ export function GroupSetView({
   }
   if (detailQuery.isError || !detail) {
     return (
-      <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="border-status-danger-border bg-status-danger-bg text-status-danger rounded-md border p-4 text-sm">
         Could not load this group set.{' '}
         <button
           type="button"
@@ -259,11 +465,7 @@ export function GroupSetView({
           {detail.locked && <Badge variant="secondary">Locked</Badge>}
         </h3>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setCreateGroupOpen(true)}
-            disabled={disabled}
-          >
+          <Button variant="secondary" onClick={() => setCreateGroupOpen(true)} disabled={disabled}>
             <Plus className="h-4 w-4" /> Add group
           </Button>
           <Button
@@ -304,11 +506,11 @@ export function GroupSetView({
       {detail.locked && (
         <div
           role="status"
-          className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+          className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border p-3 text-sm"
         >
-          This group set has associated submissions or grades. Its groups and memberships can
-          no longer be changed because doing so could affect academic records. Duplicate the
-          group set to create a new arrangement.
+          This group set has associated submissions or grades. Its groups and memberships can no
+          longer be changed because doing so could affect academic records. Duplicate the group set
+          to create a new arrangement.
         </div>
       )}
 
@@ -335,7 +537,7 @@ export function GroupSetView({
       {/* Selection action bar */}
       {selected.size > 0 && (
         <div
-          className="bg-muted/40 flex flex-wrap items-center gap-2 rounded-md border p-2"
+          className="bg-muted flex flex-wrap items-center gap-2 rounded-md border p-2"
           role="region"
           aria-label="Selection actions"
         >
@@ -376,114 +578,121 @@ export function GroupSetView({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Unassigned panel */}
-        <section className="lg:col-span-1" aria-label="Unassigned students">
-          <div className="rounded-md border">
-            <div className="border-b p-3">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <Users className="h-4 w-4" /> Unassigned ({unassigned.length})
-              </p>
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search students"
-                aria-label="Search unassigned students"
-                className="mt-2"
-              />
-            </div>
-            <ul className="max-h-96 space-y-1 overflow-y-auto p-2">
-              {unassigned.length === 0 && (
-                <li className="text-muted-foreground p-2 text-sm">
-                  {counts.eligible === 0
-                    ? 'No active students are enrolled yet.'
-                    : 'Every eligible student is assigned.'}
-                </li>
-              )}
-              {unassigned.map((s) => (
-                <li key={s.id}>
-                  <label className="hover:bg-muted/50 flex items-center gap-2 rounded p-1 text-sm">
-                    <Checkbox
-                      checked={selected.has(s.id)}
-                      onCheckedChange={() => toggle(s.id)}
-                      aria-label={`Select ${studentName(s)}`}
-                      disabled={disabled}
-                    />
-                    <span className="min-w-0 flex-1 truncate">{studentName(s)}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
+      {!disabled && (
+        <p className="text-muted-foreground text-xs">
+          Tip: drag a student onto a group by its handle, or use the checkboxes and the Move to
+          menu.
+        </p>
+      )}
 
-        {/* Group cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
-          {detail.groups.length === 0 && (
-            <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm sm:col-span-2">
-              This set has no groups yet. Use &quot;Add group&quot; to create one.
-            </div>
-          )}
-          {detail.groups.map((g) => (
-            <div key={g.id} className="flex flex-col rounded-md border">
-              <div className="flex items-center justify-between gap-2 border-b p-3">
-                <p className="min-w-0 truncate text-sm font-medium">
-                  {g.name} <span className="text-muted-foreground">({g.members.length})</span>
+      <DndContext
+        sensors={sensors}
+        accessibility={{ announcements, screenReaderInstructions }}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveDrag(null)}
+      >
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {/* Unassigned panel (also a drop target: dropping here removes from a group) */}
+          <section className="lg:col-span-1" aria-label="Unassigned students">
+            <DropZone id={UNASSIGNED_ZONE} className="rounded-md border">
+              <div className="border-b p-3">
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <Users className="h-4 w-4" /> Unassigned ({unassigned.length})
                 </p>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Actions for ${g.name}`}
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      disabled={disabled}
-                      onClick={() => setRenameGroup({ id: g.id, name: g.name })}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" /> Rename group
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      disabled={disabled}
-                      onClick={() => setDeleteGroup({ id: g.id, name: g.name })}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete group
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search students"
+                  aria-label="Search unassigned students"
+                  className="mt-2"
+                />
               </div>
-              <ul className="flex-1 space-y-1 p-2">
-                {g.members.length === 0 && (
-                  <li className="text-muted-foreground p-2 text-xs italic">No students</li>
-                )}
-                {g.members.map((m) => (
-                  <li key={m.id}>
-                    <label className="hover:bg-muted/50 flex items-center gap-2 rounded p-1 text-sm">
-                      <Checkbox
-                        checked={selected.has(m.id)}
-                        onCheckedChange={() => toggle(m.id)}
-                        aria-label={`Select ${studentName(m)}`}
-                        disabled={disabled}
-                      />
-                      <span className="min-w-0 flex-1 truncate">{studentName(m)}</span>
-                      {m.inactive && (
-                        <Badge variant="outline" className="shrink-0 text-amber-700">
-                          Inactive
-                        </Badge>
-                      )}
-                    </label>
+              <ul className="max-h-96 space-y-1 overflow-y-auto p-2">
+                {unassigned.length === 0 && (
+                  <li className="text-muted-foreground p-2 text-sm">
+                    {counts.eligible === 0
+                      ? 'No active students are enrolled yet.'
+                      : 'Every eligible student is assigned.'}
                   </li>
+                )}
+                {unassigned.map((s) => (
+                  <DraggableStudentRow
+                    key={s.id}
+                    student={s}
+                    selected={selected.has(s.id)}
+                    onToggle={() => toggle(s.id)}
+                    checkboxDisabled={disabled}
+                    dragDisabled={disabled}
+                  />
                 ))}
               </ul>
-            </div>
-          ))}
+            </DropZone>
+          </section>
+
+          {/* Group cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
+            {detail.groups.length === 0 && (
+              <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm sm:col-span-2">
+                This set has no groups yet. Use &quot;Add group&quot; to create one.
+              </div>
+            )}
+            {detail.groups.map((g) => (
+              <DropZone key={g.id} id={g.id} className="flex flex-col rounded-md border">
+                <div className="flex items-center justify-between gap-2 border-b p-3">
+                  <p className="min-w-0 truncate text-sm font-medium">
+                    {g.name} <span className="text-muted-foreground">({g.members.length})</span>
+                  </p>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" aria-label={`Actions for ${g.name}`}>
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={disabled}
+                        onClick={() => setRenameGroup({ id: g.id, name: g.name })}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" /> Rename group
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={disabled}
+                        onClick={() => setDeleteGroup({ id: g.id, name: g.name })}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete group
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <ul className="flex-1 space-y-1 p-2">
+                  {g.members.length === 0 && (
+                    <li className="text-muted-foreground p-2 text-xs italic">No students</li>
+                  )}
+                  {g.members.map((m) => (
+                    <DraggableStudentRow
+                      key={m.id}
+                      student={m}
+                      inactive={m.inactive}
+                      selected={selected.has(m.id)}
+                      onToggle={() => toggle(m.id)}
+                      checkboxDisabled={disabled}
+                      dragDisabled={disabled || m.inactive}
+                    />
+                  ))}
+                </ul>
+              </DropZone>
+            ))}
+          </div>
         </div>
-      </div>
+
+        <DragOverlay>
+          {activeDrag ? (
+            <div className="bg-card rounded-md border px-2 py-1 text-sm shadow-md">{dragLabel}</div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Dialogs */}
       <NameDialog
@@ -533,20 +742,22 @@ export function GroupSetView({
       />
       <ConfirmDialog
         open={deleteSetOpen}
-        title="Delete group set"
-        description={`Delete "${detail.name}" and all of its groups? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={() => void confirmDeleteSet()}
+        variant="destructive"
+        busy={busy}
+        title="Delete group set?"
+        description={`This permanently deletes "${detail.name}" and all of its groups and cannot be undone.`}
+        confirmText="Delete group set"
+        onConfirm={confirmDeleteSet}
         onCancel={() => setDeleteSetOpen(false)}
       />
       <ConfirmDialog
         open={!!deleteGroup}
-        title="Delete group"
+        variant="destructive"
+        busy={busy}
+        title="Delete group?"
         description={`Delete group "${deleteGroup?.name ?? ''}"? Its members return to unassigned.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={() => void confirmDeleteGroup()}
+        confirmText="Delete group"
+        onConfirm={confirmDeleteGroup}
         onCancel={() => setDeleteGroup(null)}
       />
     </div>

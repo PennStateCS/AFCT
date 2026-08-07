@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<!-- Equivalent to gs-pda-anbn-solution ({ a^n b^n : n >= 1 }) but structured differently:
+     the bottom marker "$" is pushed together with the first 'a' (push "a$", so "$" lands at
+     the bottom), which also forces at least one 'a'. Modern "$" convention. -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0">
+		<x>100.0</x>
+		<y>150.0</y>
+		<initial />
+	</state>
+	<state id="1" name="q1">
+		<x>250.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="2" name="q2">
+		<x>400.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="3" name="q3">
+		<x>550.0</x>
+		<y>150.0</y>
+		<final />
+	</state>
+	<transition>
+		<from>0</from>
+		<to>1</to>
+		<read>a</read>
+		<pop></pop>
+		<push>a$</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>a</read>
+		<pop></pop>
+		<push>a</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>2</to>
+		<read>b</read>
+		<pop>a</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>2</to>
+		<read>b</read>
+		<pop>a</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>3</to>
+		<read></read>
+		<pop>$</pop>
+		<push></push>
+	</transition>
+</structure>

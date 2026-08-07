@@ -217,7 +217,7 @@ export function CourseSettingsForm({
               value: tz,
               label: formatTimezoneLabel(tz),
             }))}
-            triggerClassName="border-black [&>svg]:!text-black [&>svg]:!opacity-100"
+            triggerClassName="border-input [&>svg]:!text-muted-foreground [&>svg]:!opacity-100"
             description="The dates below, and every assignment due date, are interpreted in this timezone for all students."
             error={errors.timezone?.message}
           />
@@ -317,7 +317,7 @@ export function CourseSettingsForm({
             value={field.value}
             onValueChange={field.onChange}
             options={EMPTY_STRING_NOTATION_OPTIONS}
-            triggerClassName="border-black [&>svg]:!text-black [&>svg]:!opacity-100"
+            triggerClassName="border-input [&>svg]:!text-muted-foreground [&>svg]:!opacity-100"
             description="Choose how the empty string should appear in automata and languages."
             error={errors.emptyStringNotation?.message}
           />

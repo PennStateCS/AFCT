@@ -1,0 +1,88 @@
+<?xml version="1.0"?>
+<!-- Equivalent to gs-pda-eq-solution ({ w | #a(w) = #b(w) }) but with a different accept
+     path: it first moves to an intermediate state on the exposed "$", then pops "$" to reach
+     the final state. Same language, different construction. Modern "$" convention. -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0">
+		<x>100.0</x>
+		<y>150.0</y>
+		<initial />
+	</state>
+	<state id="1" name="q1">
+		<x>280.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="2" name="q2">
+		<x>460.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="3" name="q3">
+		<x>620.0</x>
+		<y>150.0</y>
+		<final />
+	</state>
+	<transition>
+		<from>0</from>
+		<to>1</to>
+		<read></read>
+		<pop></pop>
+		<push>$</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>a</read>
+		<pop>a</pop>
+		<push>aa</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>a</read>
+		<pop>b</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>a</read>
+		<pop>$</pop>
+		<push>a$</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>b</read>
+		<pop>b</pop>
+		<push>bb</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>b</read>
+		<pop>a</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>b</read>
+		<pop>$</pop>
+		<push>b$</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>2</to>
+		<read></read>
+		<pop>$</pop>
+		<push>$</push>
+	</transition>
+	<transition>
+		<from>2</from>
+		<to>3</to>
+		<read></read>
+		<pop>$</pop>
+		<push></push>
+	</transition>
+</structure>

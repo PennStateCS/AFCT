@@ -74,7 +74,7 @@ export default function ArchivedCoursesClient({
 
       <CardContent>
         {isError && (
-          <div className="mb-3 flex items-center justify-between rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <div className="mb-3 flex items-center justify-between rounded-md border border-status-danger-border bg-status-danger-bg p-3 text-sm text-status-danger">
             <span>Failed to refresh courses. Please try again.</span>
             <Button size="sm" variant="outline" onClick={refresh}>
               Retry

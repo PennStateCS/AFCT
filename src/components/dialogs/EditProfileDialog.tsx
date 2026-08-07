@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AvatarCrop, type AvatarCropRef } from '../AvatarCrop';
 import { Trash2, Upload } from 'lucide-react';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
@@ -213,10 +213,10 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       // it so a changed (or cleared) timezone takes effect without a reload.
       await queryClient.invalidateQueries({ queryKey: ['profile'] });
 
-      toast.success('Profile updated!');
+      showToast.updated('Profile');
       setOpen(false);
     } catch {
-      toast.error('Failed to update profile.');
+      showToast.error('Could not save your profile. Check your connection and try again.');
     } finally {
       console.log('resetting form');
       resetForm();
@@ -234,7 +234,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         }
       }}
     >
-      <DialogContent className="bg-card max-w-lg">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>
           <DialogDescription>Update your personal information.</DialogDescription>
@@ -270,7 +270,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                 <Button
                   type="button"
                   variant="outline"
-                  className="flex flex-1 items-center justify-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
+                  className="border-destructive text-destructive hover:bg-destructive/10 flex flex-1 items-center justify-center gap-2"
                   onClick={handleDeleteAvatar}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -279,7 +279,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
               )}
             </div>
             {errors.avatarFile?.message && (
-              <p id={avatarErrorId} role="alert" className="text-xs text-red-600">
+              <p id={avatarErrorId} role="alert" className="text-destructive text-xs">
                 {typeof errors.avatarFile?.message === 'string'
                   ? errors.avatarFile.message
                   : String(errors.avatarFile?.message)}

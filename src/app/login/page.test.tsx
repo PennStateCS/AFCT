@@ -4,11 +4,16 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import LoginPage from './page';
+import LoginForm from './LoginForm';
 
-const { signInMock, showToastErrorMock, searchState } = vi.hoisted(() => ({
+// The page is now a server component that reads the public settings and passes them in, so the
+// tests drive the client form directly and supply those settings as props.
+const LoginPage = (props: { allowSignup?: boolean; hcaptchaSiteKey?: string } = {}) => (
+  <LoginForm allowSignup={props.allowSignup ?? true} hcaptchaSiteKey={props.hcaptchaSiteKey} />
+);
+
+const { signInMock, searchState } = vi.hoisted(() => ({
   signInMock: vi.fn(),
-  showToastErrorMock: vi.fn(),
   searchState: { current: new URLSearchParams() },
 }));
 
@@ -21,12 +26,10 @@ vi.mock('next-auth/react', () => ({
   signIn: signInMock,
 }));
 
-vi.mock('@/lib/toast', () => ({
-  showToast: {
-    error: showToastErrorMock,
-    success: vi.fn(),
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const showToastErrorMock = toastMock.error;
 
 vi.mock('@/components/ui/InputGroup', () => ({
   __esModule: true,
@@ -104,6 +107,10 @@ vi.mock('framer-motion', () => {
 
   return {
     motion: motionProxy,
+    // The form uses LazyMotion + `m` now, so the animation features load on demand.
+    m: motionProxy,
+    LazyMotion: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    domAnimation: {},
     AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
     useReducedMotion: () => false,
   };
@@ -231,14 +238,12 @@ beforeEach(() => {
 });
 
 describe('LoginPage', () => {
-  it('hides signup affordances when public settings disable signup', async () => {
-    mockPublicSettings(false);
+  it('hides signup affordances when public settings disable signup', () => {
+    // The server reads this setting and passes it in, so it is correct on the first paint
+    // rather than arriving after a fetch. No waiting required, which is the point.
+    render(<LoginPage allowSignup={false} />);
 
-    render(<LoginPage />);
-
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /Sign up/i })).not.toBeInTheDocument();
-    });
+    expect(screen.queryByRole('button', { name: /Sign up/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Don't have an account\?/i)).not.toBeInTheDocument();
   });
 

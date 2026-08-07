@@ -88,22 +88,6 @@
       "expectCorrect": true
     },
     {
-      "name": "PDA: pushdown automaton is equivalent to itself",
-      "type": "PDA",
-      "answer": "ex5.1.jff",
-      "submission": "ex5.1.jff",
-      "maxStates": -1,
-      "expectCorrect": true
-    },
-    {
-      "name": "PDA: second pushdown automaton is equivalent to itself",
-      "type": "PDA",
-      "answer": "pdaexample.jff",
-      "submission": "pdaexample.jff",
-      "maxStates": -1,
-      "expectCorrect": true
-    },
-    {
       "name": "FA (nondeterministic): third automaton is equivalent to itself",
       "type": "FA",
       "answer": "ex1.3a.jff",
@@ -139,6 +123,225 @@
       "submission": "turingAnBnCn.jff",
       "expectCorrect": false,
       "expectErrorContains": "unsupported answer type"
+    },
+
+    {
+      "name": "RE (ends in b): solution is equivalent to itself",
+      "type": "RE",
+      "answer": "gs-re-endsb-solution.jff",
+      "submission": "gs-re-endsb-solution.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "RE (ends in b): an equivalent expression is accepted",
+      "type": "RE",
+      "answer": "gs-re-endsb-solution.jff",
+      "submission": "gs-re-endsb-correct.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "RE (ends in b): a different language (ends in a) is rejected",
+      "type": "RE",
+      "answer": "gs-re-endsb-solution.jff",
+      "submission": "gs-re-endsb-incorrect.jff",
+      "expectCorrect": false
+    },
+    {
+      "name": "RE (ends in b): edge case missing the single string \"b\" is rejected",
+      "type": "RE",
+      "answer": "gs-re-endsb-solution.jff",
+      "submission": "gs-re-endsb-edge.jff",
+      "expectCorrect": false
+    },
+
+    {
+      "name": "CFG (a^n b^n): solution is equivalent to itself",
+      "type": "CFG",
+      "answer": "gs-cfg-anbn-solution.jff",
+      "submission": "gs-cfg-anbn-solution.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "CFG (a^n b^n): an equivalent grammar is accepted",
+      "type": "CFG",
+      "answer": "gs-cfg-anbn-solution.jff",
+      "submission": "gs-cfg-anbn-correct.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "CFG (a^n b^n): unequal counts (a^n b^m) is rejected",
+      "type": "CFG",
+      "answer": "gs-cfg-anbn-solution.jff",
+      "submission": "gs-cfg-anbn-incorrect.jff",
+      "expectCorrect": false
+    },
+    {
+      "name": "CFG (a^n b^n): edge case with equal letter counts but interleaved ((ab)^n) is rejected",
+      "type": "CFG",
+      "answer": "gs-cfg-anbn-solution.jff",
+      "submission": "gs-cfg-anbn-edge.jff",
+      "expectCorrect": false
+    },
+
+    {
+      "name": "PDA (a^n b^n): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-anbn-solution.jff",
+      "submission": "gs-pda-anbn-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (a^n b^n): an equivalent pushdown automaton is accepted",
+      "type": "PDA",
+      "answer": "gs-pda-anbn-solution.jff",
+      "submission": "gs-pda-anbn-correct.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (a^n b^n): a different language (a^n b^2n) is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-anbn-solution.jff",
+      "submission": "gs-pda-anbn-incorrect.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (a^n b^n): edge case accepting every string is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-anbn-solution.jff",
+      "submission": "gs-pda-anbn-edge.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+
+    {
+      "name": "PDA (a^n b^n): a version that empties its stack is equivalent",
+      "type": "PDA",
+      "answer": "gs-pda-anbn-solution.jff",
+      "submission": "gs-pda-anbn-emptystack.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (equal a and b): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-eq-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (equal a and b): a different construction is accepted",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-eq-correct.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (equal a and b): the one-more-a language (#a = #b + 1) is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-eq-incorrect.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (equal a and b): the a^n b^n subset language is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-eq-solution.jff",
+      "submission": "gs-pda-anbn-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (balanced parentheses): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-dyck-solution.jff",
+      "submission": "gs-pda-dyck-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (balanced parentheses): a different construction is accepted",
+      "type": "PDA",
+      "answer": "gs-pda-dyck-solution.jff",
+      "submission": "gs-pda-dyck-correct.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (balanced parentheses): the equal-count language (accepts \"ba\") is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-dyck-solution.jff",
+      "submission": "gs-pda-eq-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (marked palindromes w c w^R): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-pal-solution.jff",
+      "submission": "gs-pda-pal-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (marked palindromes): the equal-length-halves near-miss is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-pal-solution.jff",
+      "submission": "gs-pda-pal-incorrect.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (marked palindromes): the balanced-parentheses language is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-pal-solution.jff",
+      "submission": "gs-pda-dyck-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false
+    },
+    {
+      "name": "RE: (a+b)* and (a*b*)* both accept every string",
+      "type": "RE",
+      "answer": "gs-re-sigma-solution.jff",
+      "submission": "gs-re-sigma-equiv.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "CFG (a*): an ambiguous grammar is equivalent to the unambiguous one",
+      "type": "CFG",
+      "answer": "gs-cfg-astar-solution.jff",
+      "submission": "gs-cfg-astar-ambiguous.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "CFG (a^n b^n): a useless extra nonterminal does not change the language",
+      "type": "CFG",
+      "answer": "gs-cfg-anbn-solution.jff",
+      "submission": "gs-cfg-anbn-useless.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "Rejection path: a finite automaton submitted for a PDA problem is refused",
+      "type": "PDA",
+      "answer": "gs-pda-anbn-solution.jff",
+      "submission": "Hw-00-solution.jff",
+      "maxStates": -1,
+      "expectCorrect": false,
+      "expectErrorContains": "PushdownAutomaton"
+    },
+    {
+      "name": "Rejection path: a submission over the state cap is refused",
+      "type": "PDA",
+      "answer": "gs-pda-anbn-solution.jff",
+      "submission": "gs-pda-anbn-solution.jff",
+      "maxStates": 2,
+      "expectCorrect": false,
+      "expectErrorContains": "the maximum allowed is"
     }
   ]
 }

@@ -5,6 +5,8 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findMany: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn() },
   submission: { groupBy: vi.fn(), findMany: vi.fn() },
+  submissionGrant: { findMany: vi.fn() },
+  groupMembership: { findMany: vi.fn() },
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -35,6 +37,8 @@ beforeEach(() => {
   prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
   prismaMock.submission.groupBy.mockResolvedValue([]);
   prismaMock.submission.findMany.mockResolvedValue([]);
+  prismaMock.submissionGrant.findMany.mockResolvedValue([]);
+  prismaMock.groupMembership.findMany.mockResolvedValue([]);
 });
 
 describe('getStudentCourseAssignments', () => {
@@ -57,6 +61,44 @@ describe('getStudentCourseAssignments', () => {
     expect(result[0].dueDate).toEqual(new Date('2026-01-20T23:59:00.000Z'));
     expect(result[0].locked).toBe(false);
     expect(result[0].problems).toHaveLength(1);
+  });
+
+  it("raises maxSubmissions by the grants that apply to this student", async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'A1',
+        description: 'desc',
+        unlockAt: null,
+        dueDate: new Date('2026-01-10T23:59:00.000Z'),
+        allowLateSubmissions: false,
+        lateCutoff: null,
+        overrides: [],
+      },
+    ]);
+    prismaMock.submissionGrant.findMany.mockResolvedValue([
+      {
+        assignmentId: 'a1',
+        problemId: 'p1',
+        targetType: 'STUDENT',
+        userId: 'stu-1',
+        groupId: null,
+        extraSubmissions: 2,
+      },
+      // Someone else's grant must not leak into this student's cap.
+      {
+        assignmentId: 'a1',
+        problemId: 'p1',
+        targetType: 'STUDENT',
+        userId: 'stu-2',
+        groupId: null,
+        extraSubmissions: 5,
+      },
+    ]);
+
+    const result = await getStudentCourseAssignments('stu-1', 'c1');
+
+    expect(result[0].problems[0].maxSubmissions).toBe(3); // base 1 + granted 2
   });
 
   it('locks description and problems before unlock', async () => {

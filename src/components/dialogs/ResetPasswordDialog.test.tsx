@@ -38,16 +38,11 @@ vi.mock('@/components/ui/SwitchField', () => ({
   ),
 }));
 
-const { toastSuccess, toastError } = vi.hoisted(() => ({
-  toastSuccess: vi.fn(),
-  toastError: vi.fn(),
-}));
-vi.mock('sonner', () => ({
-  toast: {
-    success: toastSuccess,
-    error: toastError,
-  },
-}));
+import { toastMock } from '@/test/mocks/toast';
+
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccess = toastMock.success;
+const toastError = toastMock.error;
 
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
@@ -80,7 +75,7 @@ describe('ResetPasswordDialog', () => {
 
     await waitFor(() => expect(onResetPassword).toHaveBeenCalledWith('StrongPass1!', true));
     expect(setOpen).toHaveBeenCalledWith(false);
-    expect(toastSuccess).toHaveBeenCalledWith('Password reset successfully!');
+    expect(toastSuccess).toHaveBeenCalledWith('Password reset');
   });
 
   it('shows an error when passwords do not match', async () => {
@@ -88,7 +83,7 @@ describe('ResetPasswordDialog', () => {
     const setOpen = vi.fn();
     const onResetPassword = vi.fn();
 
-    render(<ResetPasswordDialog open setOpen={setOpen} onResetPassword={onResetPassword}/>);
+    render(<ResetPasswordDialog open setOpen={setOpen} onResetPassword={onResetPassword} />);
 
     await user.type(screen.getByLabelText('New Password'), 'StrongPass1!');
     await user.type(screen.getByLabelText('Confirm New Password'), 'Mismatch1');

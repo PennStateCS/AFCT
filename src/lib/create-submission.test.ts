@@ -19,6 +19,7 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findUnique: vi.fn() },
   assignment: { findUnique: vi.fn() },
   submission: { count: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+  submissionGrant: { findMany: vi.fn() },
   $transaction: vi.fn(),
 }));
 const auditMock = vi.hoisted(() => vi.fn());
@@ -80,6 +81,7 @@ type Overrides = {
   lastSubmittedAt?: Date | null;
   cooldownMs?: number;
   countInTx?: number;
+  grants?: Array<Record<string, unknown>>;
 };
 
 /** Happy path by default; each test overrides only the thing it is about. */
@@ -120,6 +122,7 @@ function setup(o: Overrides = {}) {
   prismaMock.submission.findFirst.mockResolvedValue(
     o.lastSubmittedAt ? { submittedAt: o.lastSubmittedAt } : null,
   );
+  prismaMock.submissionGrant.findMany.mockResolvedValue(o.grants ?? []);
 
   const tx = txClient(created, o.countInTx ?? 0);
   prismaMock.$transaction.mockImplementation(async (cb: (c: typeof tx) => unknown) => cb(tx));
@@ -255,6 +258,50 @@ describe('createSubmission', () => {
       expect(await call()).toMatchObject({ ok: true });
     });
 
+    it('an extra-submission grant raises the cap for its target', async () => {
+      // Base cap 3 already used; a +1 grant for this student lets a 4th through.
+      setup({
+        priorCount: 3,
+        grants: [
+          { targetType: 'STUDENT', userId: STUDENT.id, groupId: null, extraSubmissions: 1 },
+        ],
+      });
+      expect(await call()).toMatchObject({ ok: true });
+    });
+
+    it('the raised cap is enforced too, and the error names the effective limit', async () => {
+      setup({
+        priorCount: 4,
+        grants: [
+          { targetType: 'STUDENT', userId: STUDENT.id, groupId: null, extraSubmissions: 1 },
+        ],
+      });
+      const res = await call();
+      expect(res).toMatchObject({ ok: false, status: 409 });
+      expect((res as { error: string }).error).toMatch(/limit reached \(4\)/);
+    });
+
+    it("someone else's grant does not raise this student's cap", async () => {
+      setup({
+        priorCount: 3,
+        grants: [{ targetType: 'STUDENT', userId: 'other-1', groupId: null, extraSubmissions: 5 }],
+      });
+      expect(await call()).toMatchObject({ ok: false, status: 409 });
+    });
+
+    it("a GROUP grant raises the cap for the group's members", async () => {
+      setup({
+        assignment: {
+          ...baseAssignment(),
+          groupSetId: 'gs-1',
+          assignees: [{ targetType: 'GROUP', userId: null, groupId: 'grp-1' }],
+        },
+        priorCount: 3,
+        grants: [{ targetType: 'GROUP', userId: null, groupId: 'grp-1', extraSubmissions: 1 }],
+      });
+      expect(await call()).toMatchObject({ ok: true });
+    });
+
     it('re-checks the cap inside the transaction and rejects a racing submit', async () => {
       // The pre-check passes, but a concurrent submit filled the last slot before this
       // one committed. Without the in-transaction re-check both would be accepted.
@@ -377,11 +424,19 @@ describe('createSubmission', () => {
   });
 
   describe('group assignments', () => {
-    const groupAssignment = () => ({
+    /**
+     * A group assignment the submitter is a member of.
+     *
+     * Membership is what makes it a group submission, not the audience rows: `groupSet.groups`
+     * is the submitter's group in the assignment's set, which is what the query selects.
+     */
+    const groupAssignment = (over: Record<string, unknown> = {}) => ({
       ...baseAssignment(),
       groupSetId: 'gs-1',
       assignedToEveryone: false,
       assignees: [{ targetType: 'GROUP', userId: null, groupId: 'group-9' }],
+      groupSet: { groups: [{ id: 'group-9' }] },
+      ...over,
     });
 
     it('files the submission against the group and scopes the cap group-wide', async () => {
@@ -405,6 +460,70 @@ describe('createSubmission', () => {
       setup({ assignment: groupAssignment() });
       await call();
       expect(lockGroupSetMock).toHaveBeenCalledWith(expect.anything(), 'gs-1');
+    });
+
+    /**
+     * The ordinary group assignment: "assigned to everyone", which carries NO assignee rows.
+     *
+     * This is the default every group assignment is created with, and it used to submit as
+     * individuals, because the group was read off the audience rows rather than off
+     * membership. Each member quietly got their own submission set and their own full cap.
+     */
+    it('shares the group set and the cap when the assignment is simply assigned to everyone', async () => {
+      const { tx } = setup({
+        assignment: groupAssignment({ assignedToEveryone: true, assignees: [] }),
+      });
+      const res = await call();
+
+      expect(res).toMatchObject({ ok: true });
+      expect(tx.submission.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ studentGroupId: 'group-9', studentId: STUDENT.id }),
+        }),
+      );
+      expect(prismaMock.submission.count).toHaveBeenCalledWith({
+        where: { assignmentId: 'a-1', problemId: 'p-1', studentGroupId: 'group-9' },
+      });
+    });
+
+    it('submits individually when the student is in none of the set’s groups', async () => {
+      const { tx } = setup({
+        assignment: groupAssignment({ assignedToEveryone: true, assignees: [], groupSet: { groups: [] } }),
+      });
+      await call();
+
+      expect(tx.submission.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ studentGroupId: null }) }),
+      );
+      expect(prismaMock.submission.count).toHaveBeenCalledWith({
+        where: { assignmentId: 'a-1', problemId: 'p-1', studentId: STUDENT.id },
+      });
+    });
+
+    it('keeps an individual assignment individual even if a GROUP override names a group', async () => {
+      // groupSetId is what makes an assignment a group assignment. A stray GROUP override
+      // must move the deadline, never the submission set.
+      const { tx } = setup({
+        assignment: {
+          ...baseAssignment(),
+          overrides: [
+            {
+              targetType: 'GROUP',
+              userId: null,
+              groupId: 'group-9',
+              unlockAt: null,
+              dueDate: future(HOUR),
+              lateCutoff: null,
+              allowLateSubmissions: null,
+            },
+          ],
+        },
+      });
+      await call();
+
+      expect(tx.submission.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ studentGroupId: null }) }),
+      );
     });
 
     it('leaves an individual submission ungrouped and student-scoped', async () => {

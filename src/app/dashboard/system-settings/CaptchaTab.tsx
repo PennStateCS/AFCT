@@ -63,8 +63,8 @@ export function CaptchaTab({
 
       {/* Current status */}
       <div className="mb-5 space-y-2">
-        <h3 className="text-sm font-medium">Current status</h3>
-        <div className="bg-muted/10 w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+        <h2 className="text-sm font-medium">Current status</h2>
+        <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
           <Badge variant={hcaptchaEnabled ? 'success' : 'warning'} className="w-fit">
             {hcaptchaEnabled ? 'Enabled' : 'Disabled'}
           </Badge>
@@ -111,7 +111,7 @@ export function CaptchaTab({
       </div>
       {/* Verify the saved keys actually work before relying on them. */}
       <div className="mt-6 max-w-md space-y-3 border-t pt-5">
-        <h3 className="text-sm font-medium">Verify your keys</h3>
+        <h2 className="text-sm font-medium">Verify your keys</h2>
         {savedSiteKey && secretConfigured ? (
           <>
             <p className="text-muted-foreground text-xs">

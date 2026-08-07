@@ -18,6 +18,7 @@
 
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { sumProblemPoints } from '@/lib/course-format';
+import { projectDescription } from './rich-description/projection';
 
 /**
  * Both override selects the route issues land here: the staff one carries `user` for the
@@ -37,6 +38,8 @@ export type OverrideRowRaw = {
 export type AssignmentRow = Record<string, unknown> & {
   id: string;
   description?: string | null;
+  /** The rich document. Travels with `description` and is masked with it. */
+  descriptionJson?: unknown;
   dueDate?: Date;
   unlockAt?: Date | null;
   allowLateSubmissions?: boolean;
@@ -99,7 +102,10 @@ export function serializeAssignment(assignment: AssignmentRow, ctx: SerializeAss
   return {
     id: assignment.id,
     title: assignment.title,
-    description: locked ? null : assignment.description,
+    // All three description columns, masked together by the one `locked` decision. Going
+    // through the shared helper is what stops a future edit from reintroducing the bug where
+    // this serializer sent `description` and quietly dropped `descriptionJson`.
+    ...projectDescription(assignment, { locked }),
     locked,
     dueDate: assignment.dueDate,
     unlockAt: assignment.unlockAt ?? null,

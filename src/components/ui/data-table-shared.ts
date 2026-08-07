@@ -19,11 +19,23 @@ declare module '@tanstack/react-table' {
      *  values found in the data are used (good for plain string columns; set this
      *  for boolean/coded columns so the picker shows real labels). */
     filterOptions?: { label: string; value: string }[];
+    /** Split this column's options across several headings in the Filters popover.
+     *  Use it when the values are all one dimension (so they still OR together, and no
+     *  combination can be impossible) but read as separate lists to the user, e.g. the
+     *  queue's Status (pending/processing/failed) and Submission (correct/incorrect).
+     *  Values that need to AND belong in separate columns instead. Wins over
+     *  `filterOptions`. */
+    filterSections?: { label: string; options: { label: string; value: string }[] }[];
     /** Hide this column from the stacked mobile card view. */
     mobileHidden?: boolean;
     /** Keep this column's cell on one line. Cells wrap by default; set this for values
      *  that must not break (dates, counts, short codes, action buttons). */
     nowrap?: boolean;
+    /** Render this column's body cell as a row header (`<th scope="row">`) instead of a
+     *  plain `<td>`, so assistive tech associates the other cells in the row with it.
+     *  Use for the identity column of a matrix (e.g. the student in the gradebook).
+     *  At most one column per table should set this. */
+    rowHeader?: boolean;
   }
 }
 

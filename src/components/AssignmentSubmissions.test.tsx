@@ -13,12 +13,11 @@ const renderWithClient = (ui: React.ReactElement) => {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-const toastSuccess = vi.hoisted(() => vi.fn());
-const toastError = vi.hoisted(() => vi.fn());
+import { toastMock } from '@/test/mocks/toast';
 
-vi.mock('@/lib/toast', () => ({
-  showToast: { success: toastSuccess, error: toastError },
-}));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+const toastSuccess = toastMock.success;
+const toastError = toastMock.error;
 
 // Selected student is driven from the URL (?studentId=s1). useRouter returns a STABLE
 // object (like Next's real hook) so callbacks memoized on `router` don't churn every
@@ -193,7 +192,8 @@ describe('AssignmentSubmissions', () => {
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/students');
+      // The submissions view requests dropped students too (they show, labeled).
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/students?includeDropped=1');
     });
 
     await waitFor(() => {
@@ -286,7 +286,7 @@ describe('AssignmentSubmissions — grade validation', () => {
     const fetchMock = await setup();
     fireEvent.change(screen.getByTestId('grade-input'), { target: { value: 'abc' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Grade must be a number'));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Enter the grade as a number.'));
     expect(gradeEndpointCalled(fetchMock)).toBe(false);
   });
 
@@ -294,7 +294,7 @@ describe('AssignmentSubmissions — grade validation', () => {
     const fetchMock = await setup();
     fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '-5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Grade must be at least 0'));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Enter a grade of at least 0.'));
     expect(gradeEndpointCalled(fetchMock)).toBe(false);
   });
 
@@ -303,9 +303,7 @@ describe('AssignmentSubmissions — grade validation', () => {
     // baseProps p1 has maxPoints 10.
     fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '20' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
-    await waitFor(() =>
-      expect(toastError).toHaveBeenCalledWith('Grade must be between 0 and 10'),
-    );
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Enter a grade between 0 and 10.'));
     expect(gradeEndpointCalled(fetchMock)).toBe(false);
   });
 
@@ -317,7 +315,9 @@ describe('AssignmentSubmissions — grade validation', () => {
     fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
     await waitFor(() =>
-      expect(toastError).toHaveBeenCalledWith('Course is archived; grades cannot be edited.'),
+      expect(toastError).toHaveBeenCalledWith(
+        'This course is archived, so grades cannot be edited. Unarchive the course to make changes.',
+      ),
     );
     expect(gradeEndpointCalled(fetchMock)).toBe(false);
   });
@@ -356,7 +356,7 @@ describe('AssignmentSubmissions — comments', () => {
       problemId: 'p1',
       studentId: 's1',
     });
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Comment saved successfully'));
+    await waitFor(() => expect(toastMock.saved).toHaveBeenCalledWith('Comment'));
   });
 
   it('deletes an existing comment and toasts success', async () => {
@@ -364,7 +364,12 @@ describe('AssignmentSubmissions — comments', () => {
       '/students': () => ({ ok: true, json: async () => students }),
       'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
       '/review-data/': () => ({ ok: true, json: async () => seededReviewData }),
-      '/comments': () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '{}' }),
+      '/comments': () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        text: async () => '{}',
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
@@ -378,7 +383,7 @@ describe('AssignmentSubmissions — comments', () => {
         expect.objectContaining({ method: 'DELETE' }),
       ),
     );
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Comment deleted successfully'));
+    await waitFor(() => expect(toastMock.deleted).toHaveBeenCalledWith('Comment'));
   });
 });
 
@@ -409,7 +414,11 @@ describe('AssignmentSubmissions — state seeding & edges', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to load students'));
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not load the student list. Refresh the page to try again.',
+      ),
+    );
   });
 
   it('treats a 403 review-data response as an empty payload without erroring', async () => {
@@ -423,7 +432,9 @@ describe('AssignmentSubmissions — state seeding & edges', () => {
 
     // The workspace still renders (empty state), and no error toast fires.
     await screen.findByTestId('problem-workspace');
-    expect(toastError).not.toHaveBeenCalledWith('Failed to load review data');
+    expect(toastError).not.toHaveBeenCalledWith(
+      'Could not load this submission. Refresh the page to try again.',
+    );
   });
 
   it('toasts when the review-data read fails with a non-auth error', async () => {
@@ -434,7 +445,11 @@ describe('AssignmentSubmissions — state seeding & edges', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to load review data'));
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        'Could not load this submission. Refresh the page to try again.',
+      ),
+    );
   });
 });
 
@@ -584,7 +599,7 @@ describe('AssignmentSubmissions — reviewData seeding safety net (M12)', () => 
     fireEvent.change(screen.getByTestId('grade-input'), { target: { value: 'abc' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
     await waitFor(() =>
-      expect(screen.getByTestId('grade-error')).toHaveTextContent('Grade must be a number'),
+      expect(screen.getByTestId('grade-error')).toHaveTextContent('Enter the grade as a number.'),
     );
 
     // Editing the field clears the per-problem error.

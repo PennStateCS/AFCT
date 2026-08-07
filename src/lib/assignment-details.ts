@@ -1,7 +1,9 @@
 import type { Problem, CourseRole } from '@prisma/client';
 
 export type AssignmentProblemLink = {
-  problem: Problem;
+  // The API projects a subset of Problem plus the rich description, which Prisma's Problem type
+  // already includes; the intersection keeps that explicit for read surfaces.
+  problem: Problem & { descriptionJson?: unknown };
   maxPoints: number;
   maxSubmissions: number;
   autograderEnabled: boolean;
@@ -28,6 +30,15 @@ export type AssignmentWithDetails = {
   id: string;
   title: string;
   description?: string | null;
+  /**
+   * The stored rich description, when the assignment has one. Unvalidated here on purpose: the
+   * editor and every renderer run it through `validateRichDescription` and fall back to the
+   * plain-text `description`, so a document written by an older or newer version cannot break a
+   * page. Withheld (null) from a student while the assignment's content is locked, exactly like
+   * `description`.
+   */
+  descriptionJson?: unknown;
+  descriptionFormat?: 'PLAIN_TEXT' | 'TIPTAP_JSON';
   courseId: string;
   courseName?: string;
   courseCode?: string;
@@ -74,4 +85,9 @@ export type StudentAssignmentContext = {
   problemGrades: Record<string, number | null>;
   submissionsByProblem: Record<string, StudentProblemSubmission[]>;
   commentsByProblem: Record<string, StudentProblemComment[]>;
+  /**
+   * Per-problem submission cap for THIS caller: the shared base plus any
+   * extra-submission grants for them or their group. `max` null means unlimited.
+   */
+  problemLimits?: Record<string, { max: number | null; granted: number }>;
 };

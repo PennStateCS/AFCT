@@ -69,7 +69,7 @@ export function ProblemListCard({
     ...gradeLabels.map((s) => s.length),
     ...(showTotal ? [totalLabel.length] : []),
   );
-  const badgeClass = 'justify-center border border-slate-300 bg-white text-xs font-medium tabular-nums text-slate-700';
+  const badgeClass = 'justify-center border border-border bg-background text-xs font-medium tabular-nums text-foreground';
   const badgeStyle = badgeChars > 0 ? { minWidth: `${badgeChars}ch` } : undefined;
 
   return (
@@ -111,7 +111,7 @@ export function ProblemListCard({
                     key="usage"
                     variant="secondary"
                     title="Submissions Used / Submissions Allowed"
-                    className="border border-slate-300 bg-white text-xs font-medium text-slate-700"
+                    className="border border-border bg-background text-xs font-medium text-foreground"
                   >
                     {submissionLabel}
                   </Badge>
@@ -137,7 +137,7 @@ export function ProblemListCard({
                     className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
                       isActive
                         ? 'bg-secondary text-secondary-foreground'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                        : 'hover:bg-accent'
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2">

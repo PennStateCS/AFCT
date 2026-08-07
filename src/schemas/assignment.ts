@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { dateTimeLocalString } from './fields';
+import { richDescriptionEnvelopeSchema } from '@/lib/rich-description';
+
+// Optional versioned rich-description envelope accepted by the write APIs. When present it is
+// authoritative and the server derives the plain-text `description` from it.
+const descriptionJsonField = richDescriptionEnvelopeSchema.nullish();
 
 /** Datetime-local form field (shared with the course form). */
 const DateTimeLocalForm = dateTimeLocalString;
@@ -68,6 +73,9 @@ const BaseAssignmentFormSchemaObject = z
       .min(3, 'Title must be at least 3 characters.')
       .max(200, 'Title is too long.'),
     description: z.string().trim().max(20000, 'Description is too long.').optional(),
+    // The rich description as edited in the form. Present only once the author actually edits
+    // the editor, which is what keeps a legacy plain-text record from converting on view.
+    descriptionJson: descriptionJsonField,
     dueDate: DateTimeLocalForm,
     unlockAt: DateTimeLocalFormOptional,
     assignedToEveryone: z.boolean().default(true),
@@ -216,6 +224,7 @@ const AssigneeApiItem = z
 export const AssignmentCreateApiSchema = z.object({
   title: z.string().min(1, 'Missing required fields').max(200, 'Title is too long.'),
   description: z.string().max(20000, 'Description is too long.').optional(),
+  descriptionJson: descriptionJsonField,
   dueDate: z.string().min(1, 'A due date is required.'),
   // Nullable so callers can send null to mean "no value" (the create UI sends
   // lateCutoff: null when late is off); the handler treats null and absent the same.
@@ -231,9 +240,48 @@ export const AssignmentCreateApiSchema = z.object({
   assignees: z.array(AssigneeApiItem).optional(),
 });
 
+// What to do with the source assignment's problems when duplicating it:
+//   none      - the copy starts with no problems
+//   link      - the copy shares the same Problem records (editing one edits both)
+//   duplicate - independent Problem copies are made (with their own solution files)
+export const AssignmentProblemDuplicateMode = z.enum(['none', 'link', 'duplicate']);
+export type AssignmentProblemDuplicateMode = z.infer<typeof AssignmentProblemDuplicateMode>;
+
+// Duplicate an existing assignment. Only the title/description are editable here; the
+// type (groupSetId), audience, schedule, and date exceptions are copied verbatim from
+// the source (and are editable afterward). The copy is always created unpublished.
+export const AssignmentDuplicateApiSchema = z.object({
+  title: z.string().min(1, 'A title is required.').max(200, 'Title is too long.'),
+  description: z.string().max(20000, 'Description is too long.').nullable().optional(),
+  descriptionJson: descriptionJsonField,
+  problemMode: AssignmentProblemDuplicateMode,
+});
+
+// How to handle the source assignment's problems on IMPORT. Unlike duplicate there is
+// no "link" option: problems are course-scoped, so a problem from the source course
+// can't be shared with an assignment in the destination course.
+//   none - the imported assignment starts with no problems
+//   copy - each problem is copied into the destination course (with its own solution file)
+export const AssignmentImportProblemMode = z.enum(['none', 'copy']);
+export type AssignmentImportProblemMode = z.infer<typeof AssignmentImportProblemMode>;
+
+// Import an assignment from another course the caller can manage. Audience, group set,
+// and date exceptions are NOT carried across (they reference course-scoped records);
+// the copy is created unpublished and assigned to everyone. The schedule (due date,
+// available-from, late settings) IS copied from the source as a starting point.
+export const AssignmentImportApiSchema = z.object({
+  sourceCourseId: z.string().min(1, 'Select a course to import from.'),
+  sourceAssignmentId: z.string().min(1, 'Select an assignment to import.'),
+  title: z.string().min(1, 'A title is required.').max(200, 'Title is too long.'),
+  description: z.string().max(20000, 'Description is too long.').nullable().optional(),
+  descriptionJson: descriptionJsonField,
+  problemMode: AssignmentImportProblemMode,
+});
+
 export const AssignmentUpdateApiSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
+  descriptionJson: descriptionJsonField,
   dueDate: z.string().optional(),
   unlockAt: z.string().nullable().optional(),
   // NOTE: assignedToEveryone and groupSetId are intentionally NOT here. The audience
@@ -281,6 +329,29 @@ export const OverrideCreateApiSchema = z
 export const OverrideUpdateApiSchema = z.object({ ...OverrideDateFields });
 
 /**
+ * Extra submissions for one student or group on one assignment problem, on top of the
+ * problem's shared cap. Additive: repeat grants to the same target accumulate. The
+ * handler enforces the rest: the target is on the roster / in the assignment's group
+ * set, and the problem's cap is not unlimited (a grant would change nothing).
+ */
+export const SubmissionGrantCreateApiSchema = z
+  .object({
+    userId: z.string().min(1).optional(),
+    groupId: z.string().min(1).optional(),
+    extraSubmissions: z.number().int().min(1).max(100),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (!!d.userId === !!d.groupId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['userId'],
+        message: 'Provide exactly one target: a student or a group.',
+      });
+    }
+  });
+
+/**
  * Change an assignment's individual/group type. `groupSetId` null makes it individual; a
  * set id makes it a group assignment tied to that set. Switching type resets the audience
  * and clears every assignee + override (they reference the old type's targets), so the
@@ -316,3 +387,4 @@ export type UpdateAssignmentInput = z.infer<typeof UpdateAssignmentSchema>;
 export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
 export type OverrideCreateInput = z.infer<typeof OverrideCreateApiSchema>;
 export type OverrideUpdateInput = z.infer<typeof OverrideUpdateApiSchema>;
+export type SubmissionGrantCreateInput = z.infer<typeof SubmissionGrantCreateApiSchema>;

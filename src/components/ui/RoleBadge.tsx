@@ -21,7 +21,7 @@ const roleStyles: Record<string, string> = {
 const badgeVariants: Record<string, string> = {
   default: 'bg-primary text-white',
   destructive: 'bg-red-600 text-white',
-  outline: 'border border-gray-300 text-gray-700',
+  outline: 'border border-border text-foreground',
 };
 
 // Helper to normalize role input to match roleStyles keys

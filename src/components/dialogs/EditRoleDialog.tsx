@@ -15,6 +15,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Trash2 } from 'lucide-react';
@@ -101,7 +102,9 @@ export function EditRoleDialog({
   // Re-pull the edited roster entry and the course roster list (a role change or
   // removal is reflected there too).
   const invalidateRoster = () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.course.rosterEntry(courseId, userId),
+    });
     void queryClient.invalidateQueries({ queryKey: queryKeys.course.roster(courseId) });
   };
 
@@ -139,7 +142,9 @@ export function EditRoleDialog({
   useEffect(() => {
     if (open && !initialRoster && rosterQuery.isError) {
       console.error('Error loading roster entry', rosterQuery.error);
-      showToast.error('Failed to load roster entry');
+      showToast.error(
+        'Could not load this roster entry. Close and reopen this dialog to try again.',
+      );
       setOpen(false);
     }
   }, [open, initialRoster, rosterQuery.isError, rosterQuery.error, setOpen]);
@@ -155,7 +160,7 @@ export function EditRoleDialog({
       // Reflect the saved state so isDirty resets to false.
       originalRosterRef.current = roster ? JSON.parse(JSON.stringify(roster)) : null;
       invalidateRoster();
-      showToast.success('Roster updated');
+      showToast.updated('Roster');
       onSaved?.();
       setOpen(false);
     },
@@ -177,8 +182,8 @@ export function EditRoleDialog({
     saveRoster(parsed.data.role);
   };
 
-
-  const { mutate: deleteAvatar } = useMutation({
+  const [photoConfirmOpen, setPhotoConfirmOpen] = useState(false);
+  const { mutateAsync: deleteAvatarAsync, isPending: deletingPhoto } = useMutation({
     mutationFn: (targetUserId: string) => {
       const form = new FormData();
       form.append('deleteAvatar', 'true');
@@ -186,8 +191,10 @@ export function EditRoleDialog({
     },
     onSuccess: () => {
       setRoster((r) => (r ? { ...r, user: { ...r.user, avatar: null } } : r));
-      void queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
-      showToast.success('Profile photo removed');
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.course.rosterEntry(courseId, userId),
+      });
+      showToast.removed('Profile photo');
       onSaved?.();
     },
     onError: (err) => {
@@ -209,10 +216,7 @@ export function EditRoleDialog({
         }
       }}
     >
-      <DialogContent
-        className="bg-card max-w-md"
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>Modify course-specific settings for this user.</DialogDescription>
@@ -232,7 +236,7 @@ export function EditRoleDialog({
                     cropY={roster.user.cropY ?? 0.5}
                     zoom={roster.user.zoom ?? 1}
                   />
-                  <AvatarFallback className="bg-secondary text-secondary-foreground">
+                  <AvatarFallback>
                     {getInitials(
                       roster.user.firstName,
                       roster.user.lastName,
@@ -256,11 +260,8 @@ export function EditRoleDialog({
                     viewerDefaultRole === 'ADMIN') && (
                     <Button
                       variant="outline"
-                      className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
-                      onClick={() => {
-                        if (!confirm("Delete this user's profile photo?")) return;
-                        deleteAvatar(roster.user.id);
-                      }}
+                      className="border-destructive text-destructive hover:bg-destructive/10 flex items-center gap-2"
+                      onClick={() => setPhotoConfirmOpen(true)}
                       disabled={!roster.user?.avatar}
                       title={!roster.user?.avatar ? 'No profile photo to delete' : undefined}
                     >
@@ -269,6 +270,24 @@ export function EditRoleDialog({
                     </Button>
                   )}
                 </div>
+
+                <ConfirmDialog
+                  open={photoConfirmOpen}
+                  variant="destructive"
+                  busy={deletingPhoto}
+                  title="Delete profile photo?"
+                  description={`This removes ${roster.user.firstName ?? 'this user'}'s profile photo. They can upload a new one later.`}
+                  confirmText="Delete photo"
+                  onConfirm={async () => {
+                    try {
+                      await deleteAvatarAsync(roster.user.id);
+                    } catch {
+                      // The mutation's onError surfaces the failure.
+                    }
+                    setPhotoConfirmOpen(false);
+                  }}
+                  onCancel={() => setPhotoConfirmOpen(false)}
+                />
               </div>
 
               <SelectField

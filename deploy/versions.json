@@ -1,6 +1,210 @@
 {
   "versions": [
     {
+      "tag": "v0.2.9",
+      "label": "v0.2.9",
+      "notes": "Release v0.2.9.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.2.8",
+      "label": "v0.2.8",
+      "notes": "Release v0.2.8.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.2.7",
+      "label": "v0.2.7",
+      "notes": "Release v0.2.7.",
+      "requiresHostUpdate": true,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.2.6",
+      "label": "v0.2.6",
+      "notes": "Release v0.2.6.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.2.5",
+      "label": "v0.2.5",
+      "notes": "Release v0.2.5.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.2.4",
+      "label": "v0.2.4",
+      "notes": "Release v0.2.4.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.2.3",
+      "label": "v0.2.3",
+      "notes": "Release v0.2.3.",
+      "requiresHostUpdate": true,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.2.2",
+      "label": "v0.2.2",
+      "notes": "Release v0.2.2.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.2.1",
+      "label": "v0.2.1",
+      "notes": "Groups now share one submission set and limit per problem (existing submissions are migrated). Also fixes a lost description edit after the first save. NOTE: the deployment tooling fix in this release (automatic rollback could not complete) only arrives via 'sudo afctctl self-update' on the server; upgrading here does not deliver it.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.2.0",
+      "label": "v0.2.0",
+      "notes": "Release v0.2.0.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.1.38",
+      "label": "v0.1.38",
+      "notes": "Release v0.1.38.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.1.37",
+      "label": "v0.1.37",
+      "notes": "Release v0.1.37.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.1.36",
+      "label": "v0.1.36",
+      "notes": "Release v0.1.36.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.1.35",
+      "label": "v0.1.35",
+      "notes": "Release v0.1.35.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.1.34",
+      "label": "v0.1.34",
+      "notes": "Release v0.1.34.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.1.33",
+      "label": "v0.1.33",
+      "notes": "Release v0.1.33.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.1.32",
+      "label": "v0.1.32",
+      "notes": "Release v0.1.32.",
+      "requiresHostUpdate": false,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.1.31",
+      "label": "v0.1.31",
+      "notes": "Release v0.1.31.",
+      "requiresHostUpdate": true,
+      "composeSha256": "ffbdafc6cc94b25dd19e8564228a4ad743c2a1f993daf2c11691b243f611ea8d"
+    },
+    {
+      "tag": "v0.1.30",
+      "label": "v0.1.30",
+      "notes": "Release v0.1.30.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.29",
+      "label": "v0.1.29",
+      "notes": "Release v0.1.29.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.28",
+      "label": "v0.1.28",
+      "notes": "Release v0.1.28.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.27",
+      "label": "v0.1.27",
+      "notes": "Release v0.1.27.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.26",
+      "label": "v0.1.26",
+      "notes": "Release v0.1.26.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.25",
+      "label": "v0.1.25",
+      "notes": "Release v0.1.25.",
+      "requiresHostUpdate": true
+    },
+    {
+      "tag": "v0.1.24",
+      "label": "v0.1.24",
+      "notes": "Release v0.1.24.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.23",
+      "label": "v0.1.23",
+      "notes": "Release v0.1.23.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.22",
+      "label": "v0.1.22",
+      "notes": "Release v0.1.22.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.21",
+      "label": "v0.1.21",
+      "notes": "Release v0.1.21.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.20",
+      "label": "v0.1.20",
+      "notes": "Release v0.1.20.",
+      "requiresHostUpdate": false
+    },
+    {
+      "tag": "v0.1.19",
+      "label": "v0.1.19",
+      "notes": "Release v0.1.19.",
+      "requiresHostUpdate": true
+    },
+    {
+      "tag": "v0.1.18",
+      "label": "v0.1.18",
+      "notes": "Release v0.1.18.",
+      "requiresHostUpdate": true
+    },
+    {
       "tag": "v0.1.17",
       "label": "v0.1.17",
       "notes": "Release v0.1.17.",

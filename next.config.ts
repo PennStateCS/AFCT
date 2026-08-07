@@ -53,6 +53,31 @@ const nextConfig: NextConfig = {
   },
 
   webpack: (config, { isServer, webpack }) => {
+    // Don't watch trees the app is never built from.
+    //
+    // Dev in Docker polls for changes, because file events don't cross the Windows bind
+    // mount. Polling means every watched path is stat'ed on an interval, and over that
+    // mount each stat is a round trip to the host: walking the repo from inside the
+    // container measured 46 files per second, against roughly 350,000 on a container
+    // volume. The repo carries 77k files, of which the app owns about 900, so almost all
+    // of that polling was spent on the docs site, git objects, and deploy scripts. The
+    // compose file hides the biggest offenders from the container; this covers the rest,
+    // and applies to anyone running dev outside Docker too.
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: [
+        '**/.git/**',
+        '**/node_modules/**',
+        '**/.next/**',
+        '**/docs-site/**',
+        // Playwright writes failure artifacts while its webServer (next dev) is running.
+        // Unignored, the first failing spec triggers a Fast Refresh that remounts every
+        // component mid-test and cascades into unrelated failures.
+        '**/test-results/**',
+        '**/e2e-report/**',
+      ],
+    };
+
     // Fix CommonJS/ESM module issues
     config.resolve.fallback = {
       ...config.resolve.fallback,

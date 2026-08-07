@@ -2,6 +2,7 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import pluginQuery from '@tanstack/eslint-plugin-query';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
 // eslint-config-next 16 ships native flat configs (no more FlatCompat).
 import nextCoreWebVitals from 'eslint-config-next/core-web-vitals';
 import nextTypescript from 'eslint-config-next/typescript';
@@ -36,6 +37,37 @@ const eslintConfig = [
   // TanStack Query correctness rules: stable QueryClient, exhaustive query-key
   // deps, no void queryFn, correct infinite-query/mutation property order, etc.
   ...pluginQuery.configs['flat/recommended'],
+  // Full jsx-a11y recommended set on the app source. eslint-config-next only wires
+  // a six-rule subset (no label association, keyboard-handler, or interactive-role
+  // checks), so add the rest here to catch missing names, unlabeled controls, and
+  // interactive-element misuse as part of the normal lint gate.
+  // The jsx-a11y plugin is already registered by eslint-config-next; enable the full
+  // recommended rule set on the app source without re-declaring the plugin.
+  {
+    files: ['src/**/*.{jsx,tsx}'],
+    rules: {
+      ...jsxA11y.flatConfigs.recommended.rules,
+      // These two recommended rules only fire on deliberate, reviewed patterns in this
+      // codebase, so they would be pure false positives here:
+      // - no-autofocus: dialogs move focus to their first field on open (a user-invoked
+      //   action, not a page load), which is the correct WCAG 2.4.3 behavior.
+      // - no-noninteractive-tabindex: focusable scroll containers (WCAG 2.1.1 keyboard
+      //   scroll of overflow regions) and per-datapoint chart focus targets are
+      //   intentionally tabbable. Turned off rather than scattering inline disables.
+      'jsx-a11y/no-autofocus': 'off',
+      'jsx-a11y/no-noninteractive-tabindex': 'off',
+      // Several controls are labelled by wrapping them in a <label> whose visible text
+      // sits a couple of nodes deep (e.g. <label><input/><div><div>text</div></div></label>).
+      // The default traversal depth of 2 misreports these; depth 3 finds the text while
+      // still catching labels that wrap no control at all. controlComponents lists the
+      // shadcn/Radix wrappers that render a real form control (a role="checkbox"/"switch"
+      // button) so the rule recognizes a wrapped Checkbox/Switch as the label's control.
+      'jsx-a11y/label-has-associated-control': [
+        'error',
+        { depth: 3, controlComponents: ['Checkbox', 'Switch'] },
+      ],
+    },
+  },
   {
     // eslint-config-next 16 pulls in eslint-plugin-react-hooks 7, whose
     // "recommended" set newly enables the React-Compiler readiness rules. Adopting
@@ -62,6 +94,33 @@ const eslintConfig = [
       '@typescript-eslint/no-explicit-any': 'off',
       // Inline mock components (e.g. vi.mock factories) don't need display names.
       'react/display-name': 'off',
+    },
+  },
+  {
+    // Toasts go through `@/lib/toast`, never sonner directly.
+    //
+    // That wrapper is what sets role="alert" + aria-live="assertive" on errors and
+    // role="status" + polite on everything else. Importing sonner straight gets sonner's
+    // defaults instead, so a failed save announces politely and can sit behind whatever a
+    // screen reader is already reading. Eleven files had drifted that way, costing sixteen
+    // error toasts their interrupt.
+    //
+    // The wrapper itself and the <Toaster> mount are the only legitimate importers.
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    ignores: ['src/lib/toast.ts', 'src/components/providers/RootProviders.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'sonner',
+              message:
+                "Import { showToast } from '@/lib/toast' instead: it carries the ARIA roles that make error toasts interrupt.",
+            },
+          ],
+        },
+      ],
     },
   },
   {

@@ -64,6 +64,14 @@ describe('DataTable', () => {
     delete (window as any).matchMedia;
   });
 
+  it('adds gridline classes to the table only when bordered is set', () => {
+    const { rerender } = render(<DataTable columns={columns} data={data} showToolbar={false} />);
+    expect(screen.getByRole('table').className).not.toContain('border-r');
+
+    rerender(<DataTable columns={columns} data={data} showToolbar={false} bordered />);
+    expect(screen.getByRole('table').className).toContain('[&_td:not(:last-child)]:border-r');
+  });
+
   it('applies whitespace-nowrap to a body cell only when the column sets meta.nowrap', () => {
     const cols: ColumnDef<RowData>[] = [
       {
@@ -149,6 +157,40 @@ describe('DataTable', () => {
 
     // All 12 fit on one page at 25/page; at the default 10 the last two would be hidden.
     expect(await screen.findByText('Person 11')).toBeInTheDocument();
+  });
+
+  it('renders a row-header cell (th scope="row") only for the column that opts in', () => {
+    const cols: ColumnDef<RowData>[] = [
+      {
+        accessorKey: 'name',
+        header: 'Name',
+        cell: ({ getValue }) => <span>{getValue<string>()}</span>,
+        meta: { priority: 1, rowHeader: true },
+      },
+      {
+        accessorKey: 'role',
+        header: 'Role',
+        cell: ({ getValue }) => <span>{getValue<string>()}</span>,
+        meta: { priority: 1 },
+      },
+    ];
+    render(<DataTable columns={cols} data={[{ id: '1', name: 'Alice', role: 'Admin' }]} />);
+
+    // The identity cell is a scoped row header so a screen reader ties each grade cell
+    // to the student; the other cell stays a plain td.
+    const rowHeader = screen.getByText('Alice').closest('th');
+    expect(rowHeader).not.toBeNull();
+    expect(rowHeader).toHaveAttribute('scope', 'row');
+    expect(screen.getByText('Admin').closest('th')).toBeNull();
+  });
+
+  it('gives the empty state a status role so a filter-to-empty is announced', () => {
+    render(<DataTable columns={columns} data={[]} emptyTitle="No courses yet" />);
+
+    // The empty-state wrapper is its own live region, so narrowing a filter to zero rows
+    // is announced rather than leaving the table silently blank.
+    const status = screen.getByText('No courses yet').closest('[role="status"]');
+    expect(status).not.toBeNull();
   });
 
   it('renders an empty-state action when one is provided', () => {
@@ -259,6 +301,47 @@ describe('DataTable', () => {
     expect(screen.getByRole('button', { name: /clear all/i })).toBeInTheDocument();
   });
 
+  it('splits one column across filter headings and still ORs the picks', async () => {
+    const user = userEvent.setup();
+    const sectionColumns: ColumnDef<RowData>[] = [
+      { accessorKey: 'name', header: 'Name', meta: { priority: 1 } },
+      {
+        accessorKey: 'role',
+        header: 'Role',
+        meta: {
+          priority: 2,
+          filterVariant: 'multiselect',
+          filterSections: [
+            { label: 'Staff', options: [{ label: 'Admin', value: 'Admin' }] },
+            {
+              label: 'Enrolled',
+              options: [
+                { label: 'Student', value: 'Student' },
+                { label: 'TA', value: 'TA' },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+
+    render(<DataTable columns={sectionColumns} data={data} />);
+    await user.click(screen.getByRole('button', { name: 'Filters' }));
+
+    // Both headings label a group of their own, rather than one undivided list.
+    expect(await screen.findByRole('group', { name: 'Staff' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Enrolled' })).toBeInTheDocument();
+
+    // Ticking one value from each heading widens rather than producing an empty
+    // intersection, because both write to the same column filter.
+    await user.click(screen.getByRole('checkbox', { name: /^admin/i }));
+    await user.click(screen.getByRole('checkbox', { name: /^TA/ }));
+
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.getByText('Carol')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+  });
+
   it('does not render a Filters button when no column opts in', () => {
     render(<DataTable columns={columns} data={data} />);
     expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
@@ -288,5 +371,129 @@ describe('DataTable', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     // Each card labels its values with the column header (one per row).
     expect(screen.getAllByText('Role').length).toBeGreaterThan(1);
+  });
+
+  /*
+   * Server-driven ("manual") mode, used by the Users, System Logs and Autograder pages.
+   * The table holds one page and the parent owns pagination, sorting and filtering, so the
+   * things asserted here are the ones a client-side table would otherwise do for itself
+   * and silently get wrong: counting, slicing, and re-sorting the rows on screen.
+   */
+  describe('manual (server-driven) mode', () => {
+    it('groups a large total so it can be read at a glance', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={120440}
+          rowCount={1204393}
+          pagination={{ pageIndex: 0, pageSize: 10 }}
+          onPaginationChange={vi.fn()}
+        />,
+      );
+
+      // Expectation built with the same call the component uses, so this holds wherever
+      // the suite runs instead of hard-coding a comma. On any grouping locale (which is
+      // to say, in practice) it fails if the label goes back to raw digits.
+      const grouped = (1204393).toLocaleString();
+      expect(screen.getAllByText(new RegExp(`${grouped} total`)).length).toBeGreaterThan(0);
+    });
+
+    it('counts pages from pageCount/rowCount rather than the rows it holds', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={5}
+          rowCount={42}
+          pagination={{ pageIndex: 0, pageSize: 10 }}
+          onPaginationChange={vi.fn()}
+        />,
+      );
+
+      // Three rows on screen, 42 in the result set.
+      expect(screen.getAllByText(/Page 1 of 5/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/42 total/).length).toBeGreaterThan(0);
+    });
+
+    it('reports a page change to the parent instead of paging itself', () => {
+      const onPaginationChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={5}
+          rowCount={42}
+          pagination={{ pageIndex: 0, pageSize: 10 }}
+          onPaginationChange={onPaginationChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+
+      expect(onPaginationChange).toHaveBeenCalled();
+    });
+
+    it('shows every row it was given, without slicing to the page size', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={3}
+          rowCount={3}
+          pagination={{ pageIndex: 0, pageSize: 1 }}
+          onPaginationChange={vi.fn()}
+        />,
+      );
+
+      // pageSize 1, but the server already sliced: all three rows must render.
+      expect(screen.getByText('Alice')).toBeInTheDocument();
+      expect(screen.getByText('Bob')).toBeInTheDocument();
+      expect(screen.getByText('Carol')).toBeInTheDocument();
+    });
+
+    it('reports a sort change without reordering the rows on screen', () => {
+      const onSortingChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualSorting
+          sorting={[]}
+          onSortingChange={onSortingChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /^Name/ }));
+
+      expect(onSortingChange).toHaveBeenCalled();
+      // Still server order: a client sort here would only reorder this page and claim to
+      // have ordered the whole result set.
+      const cells = screen.getAllByRole('cell').map((c) => c.textContent);
+      expect(cells.slice(0, 2)).toEqual(['Alice', 'Admin']);
+    });
+
+    it('hands the search box to the parent and does not filter rows itself', () => {
+      const onGlobalFilterChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualFiltering
+          globalFilter=""
+          onGlobalFilterChange={onGlobalFilterChange}
+        />,
+      );
+
+      fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'Alice' } });
+
+      expect(onGlobalFilterChange).toHaveBeenCalledWith('Alice');
+      // Bob is still on screen: only the server can decide what matches.
+      expect(screen.getByText('Bob')).toBeInTheDocument();
+    });
   });
 });

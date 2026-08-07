@@ -56,7 +56,10 @@ test.fixme('admin creates a course through the wizard', async ({ page }) => {
     await next.click();
   }
 
-  await dialog.getByRole('button', { name: /^(Create|Finish|Submit)/ }).last().click();
+  await dialog
+    .getByRole('button', { name: /^(Create|Finish|Submit)/ })
+    .last()
+    .click();
   await expect(dialog).toBeHidden({ timeout: 30_000 });
   await expect(page.getByText(name)).toBeVisible({ timeout: 30_000 });
 });

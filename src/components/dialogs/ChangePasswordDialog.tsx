@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -54,11 +54,11 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
   const onSubmit = async (values: ChangePasswordInput) => {
     try {
       await onChangePassword(values.oldPassword, values.newPassword);
-      toast.success('Password changed successfully!');
+      showToast.success('Password changed');
       setOpen(false);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to change password';
-      toast.error(errorMessage);
+      showToast.error(errorMessage);
     }
   };
 
@@ -75,10 +75,7 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
         setOpen(val);
       }}
     >
-      <DialogContent
-        className="bg-card"
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Change Password</DialogTitle>
           <DialogDescription>Enter your old password and choose a new one.</DialogDescription>

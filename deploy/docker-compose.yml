@@ -52,8 +52,12 @@ services:
       # exploited by a malicious submission.
       - no-new-privileges:true
 
+    # The runtime env file. On Linux, afctctl sets AFCT_RUNTIME_ENV_FILE to the absolute
+    # shared path (/opt/afct/shared/.env.production) because the versioned Compose file no
+    # longer sits next to the configuration. Windows leaves it unset, so it stays the
+    # co-located .env.production the Windows installer writes.
     env_file:
-      - .env.production
+      - ${AFCT_RUNTIME_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
       DB_HOST: postgres
@@ -139,7 +143,7 @@ services:
       - no-new-privileges:true
 
     env_file:
-      - .env.production
+      - ${AFCT_RUNTIME_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
       DB_HOST: postgres
@@ -218,7 +222,7 @@ services:
           memory: 1G
 
     env_file:
-      - .env.production
+      - ${AFCT_RUNTIME_ENV_FILE:-.env.production}
     environment:
       POSTGRES_DB: afct
       POSTGRES_USER: afct_user
@@ -269,7 +273,7 @@ services:
         condition: service_healthy
 
     env_file:
-      - .env.production
+      - ${AFCT_RUNTIME_ENV_FILE:-.env.production}
     environment:
       PGHOST: postgres
       PGUSER: afct_user
@@ -325,6 +329,17 @@ services:
     environment:
       AFCT_APP_SERVICE: app
       AFCT_APP_CONTAINER: afct-app
+      # Explicit, narrowly scoped paths INSIDE this container. The runtime Compose file and
+      # the shared configuration are separate host directories in the versioned Linux
+      # layout, so they are mounted separately below and named here. The updater rewrites
+      # the env file (AFCT_APP_TAG) and, when a release changes the stack, the runtime
+      # Compose file; both stay on the host through their directory mounts.
+      UPDATER_COMPOSE_FILE: /afct-compose/docker-compose.yml
+      UPDATER_ENV_FILE: /afct-shared/.env.production
+      # When the updater runs `docker compose`, the Compose file's env_file entry resolves
+      # AFCT_RUNTIME_ENV_FILE against THIS container's filesystem, so it must point at the
+      # in-container shared mount, not the host path afctctl uses.
+      AFCT_RUNTIME_ENV_FILE: /afct-shared/.env.production
 
     # Needs registry egress to pull the new image, so it sits on the external-facing
     # network. It has no reason to reach the database.
@@ -335,10 +350,13 @@ services:
       # The Docker socket: the whole reason this service exists. Keep it OFF the
       # app container.
       - /var/run/docker.sock:/var/run/docker.sock
-      # The deploy directory (this compose file + .env.production, which the
-      # updater rewrites to select the version). Mounting the directory, not the
-      # single file, keeps the env rewrite atomic and visible on the host.
-      - .:/afct
+      # The runtime Compose directory (holds the mutable docker-compose.yml the updater may
+      # rewrite for a release that changes the stack layout) and the shared configuration
+      # directory (.env.production), mounted separately. On Linux afctctl sets these to
+      # /opt/afct/shared/runtime and /opt/afct/shared; on Windows both default to `.`, so
+      # the updater keeps seeing the single co-located deploy directory it always did.
+      - ${AFCT_RUNTIME_COMPOSE_DIR:-.}:/afct-compose
+      - ${AFCT_RUNTIME_SHARED_DIR:-.}:/afct-shared
       - update_triggers:/update-triggers
       # Request a pre-upgrade backup and confirm it landed before swapping images.
       - backup_triggers:/backup-triggers

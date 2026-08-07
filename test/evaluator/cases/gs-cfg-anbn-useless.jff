@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<!-- a^n b^n (n>=1) plus a useless, unreachable, non-generating nonterminal U. Language is unchanged; probes how the evaluator handles junk symbols. -->
+<structure>
+	<type>grammar</type>
+	<production><left>S</left><right>aSb</right></production>
+	<production><left>S</left><right>ab</right></production>
+	<production><left>U</left><right>aUb</right></production>
+</structure>

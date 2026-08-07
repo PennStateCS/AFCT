@@ -53,7 +53,7 @@ graph TD
 The running system is a set of containers split across two private Docker networks. nginx
 and the application share a `frontend` network; the application, PostgreSQL, the backup
 service, and the evaluator **worker** share a `backend` network. The `backend` network is
-`internal` — it has no gateway, so no internet egress in either direction. The application
+`internal`: it has no gateway, so no internet egress in either direction. The application
 bridges the two networks; the worker sits on `backend` **only**, so the process that runs
 untrusted student submissions through the Java/cfganalyzer evaluator can reach the database
 to record grades but cannot reach the internet. Only nginx is exposed to the public internet.
@@ -205,6 +205,12 @@ runs the Java evaluator as a child process, then writes the result back as `COMP
 left in `PROCESSING` too long is returned to `PENDING` by a periodic reaper so it can be
 retried, and a row that keeps failing is moved to `FAILED` so it cannot loop forever. On a
 completed autograded submission, grades are written without overwriting a manual grade.
+
+The worker finds new submissions by checking the queue on a timer rather than being pushed
+to, and it checks less often the longer the queue stays empty, down to twice a minute. A
+submission arriving after a quiet period can therefore sit for up to half a minute before
+grading starts. Once the queue is busy the workers check every few seconds, so this shows up
+only on the first submission of a session, never during an assignment rush.
 
 ## TLS certificate issuance and renewal
 

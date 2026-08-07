@@ -18,6 +18,7 @@ import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { errMessage } from '@/lib/errors';
 import { evaluateSubmissionWindow } from '@/lib/submission-window';
 import { effectiveDeadline } from '@/lib/effective-deadline';
+import { effectiveMaxSubmissions } from '@/lib/submission-limits';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 import { lockGroupSetIfUsed } from '@/lib/group-set-service';
 
@@ -148,6 +149,16 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       isPublished: true,
       assignedToEveryone: true,
       groupSetId: true,
+      // The submitter's group within this assignment's set, if any. Unique on
+      // (groupSetId, userId), so this is at most one row.
+      groupSet: {
+        select: {
+          groups: {
+            where: { memberships: { some: { userId: user.id } } },
+            select: { id: true },
+          },
+        },
+      },
       // The assignee rows that cover this submitter: their own STUDENT row and/or the
       // GROUP row for a group they belong to. Drives "is this student assigned" and, for a
       // group target, the group submission set.
@@ -192,12 +203,18 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
   const courseId = assignment.courseId;
   ctx.courseId = courseId;
 
-  // The submitter's group(s) for this assignment: any group they belong to that is either
-  // assigned (an assignee row) or carries a date override. Used for the group submission
-  // set and to match GROUP overrides/assignees. At most one applies (no double-targeting).
+  // The submitter's group for this assignment: their group in the assignment's group set.
+  // Membership decides it, not the audience rows, so an ordinary group assignment (the
+  // default, `assignedToEveryone`, which carries no assignee rows) still behaves as a group.
+  // See resolveStudentAssignmentGroupIds, which is the same rule for every read path.
+  const membershipGroupId = assignment.groupSet?.groups[0]?.id ?? null;
+  // Group ids that can match a GROUP assignee or override row. The membership group first,
+  // then anything the audience/override rows name, so a group targeted by an override the
+  // student is somehow no longer a member of still resolves its dates.
   const studentGroupIds = [
     ...new Set(
       [
+        membershipGroupId,
         ...(assignment.assignees ?? []).filter((a) => a.groupId != null).map((a) => a.groupId),
         ...(assignment.overrides ?? [])
           .filter((o) => o.targetType === 'GROUP' && o.groupId != null)
@@ -205,13 +222,27 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       ].filter((id): id is string => id != null),
     ),
   ];
-  // If the submitter is group-targeted, they submit into the group's shared set: any
-  // member submits, all members share it, and the cap/cooldown count group-wide.
-  const submissionGroupId = studentGroupIds[0] ?? null;
+  // A group assignment writes into the group's shared submission set: any member submits,
+  // all members see it, and the cap and cooldown count group-wide. An individual assignment
+  // never does, even if a stray GROUP override names a group the submitter is in.
+  const submissionGroupId = assignment.groupSetId ? membershipGroupId : null;
   // Count scope for the per-problem cap + cooldown: the whole group, or just this student.
   const countScope = submissionGroupId
     ? { assignmentId, problemId, studentGroupId: submissionGroupId }
     : { assignmentId, problemId, studentId: user.id };
+
+  // The extra-submission grants that apply to this submitter: their own STUDENT grant
+  // and/or a GROUP grant for a group of theirs on this assignment. Resolved into the
+  // effective cap by lib/submission-limits (unlimited stays unlimited).
+  const grants = await prisma.submissionGrant.findMany({
+    where: {
+      assignmentId,
+      problemId,
+      OR: [{ userId: user.id }, { groupId: { in: [...studentGroupIds] } }],
+    },
+    select: { targetType: true, userId: true, groupId: true, extraSubmissions: true },
+  });
+  const limit = effectiveMaxSubmissions(link.maxSubmissions, grants, user.id, studentGroupIds);
 
   // Authorization: admins may submit anywhere; everyone else must be on the roster.
   if (!(await canAccessCourse(user, courseId))) {
@@ -258,17 +289,19 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     };
   }
 
-  // Per-problem cap (staff exempt; `<= 0` is unlimited). Fast path; the authoritative
-  // check runs again inside the serializable transaction below.
+  // Per-problem cap: the base maxSubmissions plus any per-target grants (staff exempt;
+  // base `<= 0` is unlimited). Fast path; the authoritative check runs again inside the
+  // serializable transaction below.
   const isCourseStaff = submitterIsStaff;
-  if (!isCourseStaff && link.maxSubmissions > 0) {
+  if (!isCourseStaff && limit.max != null) {
     const priorCount = await prisma.submission.count({ where: countScope });
-    if (priorCount >= link.maxSubmissions) {
+    if (priorCount >= limit.max) {
       await audit('SUBMISSION_LIMIT_REACHED', 'WARNING', {
-        maxSubmissions: link.maxSubmissions,
+        maxSubmissions: limit.max,
+        grantedExtra: limit.granted,
         priorCount,
       });
-      return { ok: false, status: 409, error: `Submission limit reached (${link.maxSubmissions}).` };
+      return { ok: false, status: 409, error: `Submission limit reached (${limit.max}).` };
     }
   }
 
@@ -392,9 +425,9 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     try {
       submission = await prisma.$transaction(
         async (tx) => {
-          if (!isCourseStaff && link.maxSubmissions > 0) {
+          if (!isCourseStaff && limit.max != null) {
             const priorCount = await tx.submission.count({ where: countScope });
-            if (priorCount >= link.maxSubmissions) {
+            if (priorCount >= limit.max) {
               throw new SubmissionCapReachedError();
             }
           }
@@ -423,7 +456,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     } catch (err) {
       cleanupFile(uploadedFilePath);
       if (err instanceof SubmissionCapReachedError) {
-        return { ok: false, status: 409, error: `Submission limit reached (${link.maxSubmissions}).` };
+        return { ok: false, status: 409, error: `Submission limit reached (${limit.max}).` };
       }
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
         return { ok: false, status: 409, error: 'A concurrent submission conflicted; please retry.' };

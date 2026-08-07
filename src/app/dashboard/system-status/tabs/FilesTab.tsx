@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { fetchJson } from '@/lib/query-fetch';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import { showToast } from '@/lib/toast';
 import type { FilesStatusResponse } from '@/lib/status/types';
 import { Loading, Stat, Section, useStatusQuery } from '../status-ui';
 
@@ -25,8 +27,12 @@ export default function FilesTab({
     autoRefresh,
   });
 
+  const [pendingFile, setPendingFile] = useState<{ category: string; fileName: string } | null>(
+    null,
+  );
+
   const {
-    mutate: deleteFile,
+    mutateAsync: deleteFileAsync,
     isPending,
     variables,
   } = useMutation({
@@ -36,22 +42,26 @@ export default function FilesTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vars),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.statusFiles() });
+      showToast.deleted('File', { name: vars.fileName });
     },
     onError: (err) => {
       console.error('Delete abandoned file error:', err);
-      window.alert(err instanceof Error ? err.message : 'Failed to delete file');
+      showToast.error(
+        err instanceof Error
+          ? err.message
+          : 'Could not delete the file. Check your connection and try again.',
+      );
     },
   });
 
   const onDelete = useCallback(
     (category: string, fileName: string) => {
       if (isPending) return;
-      if (!window.confirm(`Delete abandoned file "${fileName}"?`)) return;
-      deleteFile({ category, fileName });
+      setPendingFile({ category, fileName });
     },
-    [isPending, deleteFile],
+    [isPending],
   );
 
   if (isLoading || !data) {
@@ -61,61 +71,86 @@ export default function FilesTab({
   const files = data.abandonedFiles;
 
   return (
-    <Section
-      title={
-        <>
-          Abandoned Files
-          <Badge variant="neutral">Total: {files.total}</Badge>
-        </>
-      }
-    >
-      <div className="max-w-xl space-y-4">
-        <div className="space-y-2">
-          {Object.entries(files.byCategory).map(([k, v]) => (
-            <Stat key={k} label={k} value={v} />
-          ))}
-        </div>
-
-        {files.samples.length ? (
-          <div className="rounded border">
-            <div className="text-muted-foreground border-b px-3 py-2 text-xs font-semibold">
-              Sample files (max 50)
-            </div>
-            <ul className="max-h-72 overflow-auto px-3 py-2 text-xs">
-              {files.samples.map((f, i) => {
-                const deleting =
-                  isPending &&
-                  variables?.category === f.category &&
-                  variables?.fileName === f.fileName;
-                return (
-                  <li
-                    key={`${f.category}-${f.fileName}-${i}`}
-                    className="mb-1 flex items-start justify-between gap-2 last:mb-0"
-                  >
-                    <div className="min-w-0">
-                      <span className="bg-muted mr-2 rounded px-1.5 py-0.5 text-xs uppercase">
-                        {f.category}
-                      </span>
-                      <span className="break-all">{f.path}</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={deleting}
-                      onClick={() => onDelete(f.category, f.fileName)}
-                      aria-label={`Delete abandoned file ${f.fileName}`}
-                    >
-                      {deleting ? 'Deleting…' : 'Delete'}
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
+    <>
+      <Section
+        title={
+          <>
+            Abandoned Files
+            <Badge variant="neutral">Total: {files.total}</Badge>
+          </>
+        }
+      >
+        <div className="max-w-xl space-y-4">
+          <div className="space-y-2">
+            {Object.entries(files.byCategory).map(([k, v]) => (
+              <Stat key={k} label={k} value={v} />
+            ))}
           </div>
-        ) : (
-          <div className="text-sm">No abandoned files found.</div>
-        )}
-      </div>
-    </Section>
+
+          {files.samples.length ? (
+            <div className="rounded border">
+              <div className="text-muted-foreground border-b px-3 py-2 text-xs font-semibold">
+                Sample files (max 50)
+              </div>
+              <ul className="max-h-72 overflow-auto px-3 py-2 text-xs">
+                {files.samples.map((f, i) => {
+                  const deleting =
+                    isPending &&
+                    variables?.category === f.category &&
+                    variables?.fileName === f.fileName;
+                  return (
+                    <li
+                      key={`${f.category}-${f.fileName}-${i}`}
+                      className="mb-1 flex items-start justify-between gap-2 last:mb-0"
+                    >
+                      <div className="min-w-0">
+                        <span className="bg-muted mr-2 rounded px-1.5 py-0.5 text-xs uppercase">
+                          {f.category}
+                        </span>
+                        <span className="break-all">{f.path}</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={deleting}
+                        onClick={() => onDelete(f.category, f.fileName)}
+                        aria-label={`Delete abandoned file ${f.fileName}`}
+                      >
+                        {deleting ? 'Deleting…' : 'Delete'}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : (
+            <div className="text-sm">No abandoned files found.</div>
+          )}
+        </div>
+      </Section>
+
+      <ConfirmDialog
+        open={!!pendingFile}
+        variant="destructive"
+        busy={isPending}
+        title="Delete abandoned file?"
+        description={
+          pendingFile
+            ? `This permanently removes "${pendingFile.fileName}" from disk and cannot be undone.`
+            : undefined
+        }
+        confirmText="Delete file"
+        onConfirm={async () => {
+          if (!pendingFile) return;
+          try {
+            await deleteFileAsync(pendingFile);
+          } catch {
+            // The mutation's onError surfaces the failure; keep the flow going.
+          }
+          setPendingFile(null);
+        }}
+        onCancel={() => setPendingFile(null)}
+      />
+    </>
   );
 }

@@ -66,7 +66,7 @@ export function clampUploadSizeMb(maxMb: number): number {
 
 export const DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS = 30_000;
 export const MIN_SUBMISSION_EVAL_TIMEOUT_MS = 1_000;
-export const MAX_SUBMISSION_EVAL_TIMEOUT_MS = 600_000;
+export const MAX_SUBMISSION_EVAL_TIMEOUT_MS = 900_000; // 15 minutes; some correct PDA equivalence checks run several minutes
 
 export const DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB = 256;
 export const MIN_SUBMISSION_EVAL_MAX_MEMORY_MB = 64;

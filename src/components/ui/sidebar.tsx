@@ -26,6 +26,11 @@ const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_WIDTH_MOBILE = '18rem';
 const SIDEBAR_WIDTH_ICON = '3rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
+// At or above this width the sidebar follows the saved preference (expanded by
+// default); between the mobile drawer breakpoint (768px) and this, it starts collapsed
+// to the icon rail so the 18rem sidebar doesn't crowd the content on tablets and
+// smaller laptop windows.
+const SIDEBAR_AUTO_EXPAND_WIDTH = 1024;
 
 type SidebarContextProps = {
   state: 'expanded' | 'collapsed';
@@ -100,6 +105,27 @@ function SidebarProvider({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleSidebar]);
+
+  // Responsive default width. Between the mobile drawer breakpoint and
+  // SIDEBAR_AUTO_EXPAND_WIDTH the sidebar starts collapsed to the icon rail so the
+  // content isn't crowded; at or above it, it uses the saved preference. On mobile the
+  // drawer controls visibility and shows full labels, so the desktop state stays
+  // expanded there (collapsing it would blank the drawer's labels). Uses the internal
+  // setter so this never overwrites the user's cookie, and re-applies only when the
+  // viewport crosses the breakpoint, so a manual toggle in between sticks.
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia(`(min-width: ${SIDEBAR_AUTO_EXPAND_WIDTH}px)`);
+    // Read the width directly (like useIsMobile) rather than mql.matches, so it's
+    // correct even where matchMedia is a minimal stub; mql only drives the change event.
+    const apply = () => {
+      const collapse = !isMobile && window.innerWidth < SIDEBAR_AUTO_EXPAND_WIDTH;
+      _setOpen(collapse ? false : defaultOpen);
+    };
+    apply();
+    mql.addEventListener('change', apply);
+    return () => mql.removeEventListener('change', apply);
+  }, [defaultOpen, isMobile]);
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.

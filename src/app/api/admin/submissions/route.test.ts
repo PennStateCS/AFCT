@@ -2,15 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { routeCtx } from '@/test/route';
 
-const prismaMock = vi.hoisted(() => ({
-  submission: { findMany: vi.fn() },
-  assignmentProblemGrade: { findMany: vi.fn() },
-}));
-
 const authMock = vi.hoisted(() => vi.fn());
+const getPageMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
+vi.mock('@/lib/autograder-submissions', () => ({ getAutograderSubmissionsPage: getPageMock }));
 
 import { POST } from './route';
 
@@ -20,103 +16,133 @@ const makeRequest = (body: unknown) =>
     body: JSON.stringify(body),
   });
 
-const submissionRow = {
-  id: 's1',
-  studentId: 'u1',
-  courseId: 'c1',
-  assignmentId: 'a1',
-  problemId: 'p1',
-  correct: true,
-  feedback: 'Looks good',
-  student: { email: 'stu@example.com', firstName: 'Stu', lastName: 'Dent', avatar: 'av.png' },
-  course: { name: 'Course 1' },
-  assignmentProblem: {
-    assignment: { title: 'Assignment 1' },
-    problem: { title: 'Problem 1' },
-    maxPoints: 10,
-  },
-  submittedAt: new Date('2025-01-01T00:00:00.000Z'),
-  status: 'GRADED',
-  fileName: 'file.jff',
-  originalFileName: 'orig.jff',
-};
+const admin = { user: { id: 'admin-1', isAdmin: true } };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getPageMock.mockResolvedValue({ rows: [], total: 0 });
 });
 
 describe('POST /api/admin/submissions', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
+    const res = await POST(makeRequest({}), routeCtx());
 
     expect(res.status).toBe(401);
+    expect(getPageMock).not.toHaveBeenCalled();
   });
 
   it('returns 403 when the user is not admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
-
-    expect(res.status).toBe(403);
-  });
-
-  it('returns 400 when problemIds are missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
-
     const res = await POST(makeRequest({}), routeCtx());
 
-    expect(res.status).toBe(400);
-    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
+    expect(res.status).toBe(403);
+    expect(getPageMock).not.toHaveBeenCalled();
   });
 
-  it('returns formatted submissions with merged grades', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
-    prismaMock.submission.findMany.mockResolvedValue([submissionRow]);
-    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
-      { studentId: 'u1', assignmentId: 'a1', problemId: 'p1', grade: 8 },
-    ]);
+  it('returns the page envelope', async () => {
+    authMock.mockResolvedValue(admin);
+    getPageMock.mockResolvedValue({ rows: [{ id: 's1' }], total: 23 });
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
+    const res = await POST(makeRequest({ page: 2, pageSize: 5 }), routeCtx());
 
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toHaveLength(1);
-    expect(body[0]).toMatchObject({
-      id: 's1',
-      studentFirstName: 'Stu',
-      studentLastName: 'Dent',
-      studentEmail: 'stu@example.com',
-      courseName: 'Course 1',
-      assignmentTitle: 'Assignment 1',
-      problemTitle: 'Problem 1',
-      submittedAt: '2025-01-01T00:00:00.000Z',
-      status: 'GRADED',
-      grade: 8,
-      maxPoints: 10,
-      avatar: 'av.png',
+    await expect(res.json()).resolves.toEqual({
+      rows: [{ id: 's1' }],
+      total: 23,
+      page: 2,
+      pageSize: 5,
+      totalPages: 5,
     });
   });
 
-  it('defaults grade to null when no grade row exists', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
-    prismaMock.submission.findMany.mockResolvedValue([submissionRow]);
-    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+  it('turns page and pageSize into skip and take', async () => {
+    authMock.mockResolvedValue(admin);
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
+    await POST(makeRequest({ page: 3, pageSize: 20 }), routeCtx());
+
+    expect(getPageMock).toHaveBeenCalledWith(expect.objectContaining({ skip: 40, take: 20 }));
+  });
+
+  it('defaults to the first page when pagination is omitted', async () => {
+    authMock.mockResolvedValue(admin);
+
+    await POST(makeRequest({}), routeCtx());
+
+    expect(getPageMock).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 10 }));
+  });
+
+  it('clamps an oversized pageSize rather than rejecting it', async () => {
+    authMock.mockResolvedValue(admin);
+
+    const res = await POST(makeRequest({ pageSize: 99999 }), routeCtx());
 
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body[0].grade).toBeNull();
+    expect(getPageMock).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
+  });
+
+  it('passes scope, search, filters and sort through to the query', async () => {
+    authMock.mockResolvedValue(admin);
+
+    await POST(
+      makeRequest({
+        courseIds: ['c1'],
+        assignmentIds: ['a1'],
+        problemIds: ['p1'],
+        q: 'dent',
+        field: 'student',
+        timing: ['late'],
+        status: ['failed', 'incorrect'],
+        sortBy: 'student',
+        sortDir: 'asc',
+      }),
+      routeCtx(),
+    );
+
+    expect(getPageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        courseIds: ['c1'],
+        assignmentIds: ['a1'],
+        problemIds: ['p1'],
+        q: 'dent',
+        field: 'student',
+        timing: ['late'],
+        status: ['failed', 'incorrect'],
+        sortBy: 'student',
+        sortDir: 'asc',
+      }),
+    );
+  });
+
+  it('treats an empty body as an unfiltered request rather than a 400', async () => {
+    authMock.mockResolvedValue(admin);
+
+    const res = await POST(makeRequest({}), routeCtx());
+
+    expect(res.status).toBe(200);
+    expect(getPageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ courseIds: [], assignmentIds: [], problemIds: [] }),
+    );
+  });
+
+  it('rejects an unknown filter token', async () => {
+    authMock.mockResolvedValue(admin);
+
+    const res = await POST(makeRequest({ status: ['banana'] }), routeCtx());
+
+    expect(res.status).toBe(400);
+    expect(getPageMock).not.toHaveBeenCalled();
   });
 
   it('returns 500 when the query fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
-    prismaMock.submission.findMany.mockRejectedValue(new Error('db down'));
+    authMock.mockResolvedValue(admin);
+    getPageMock.mockRejectedValue(new Error('db down'));
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
+    const res = await POST(makeRequest({}), routeCtx());
 
     expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({ error: 'Failed to fetch submissions' });
   });
 });

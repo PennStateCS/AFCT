@@ -49,6 +49,7 @@ const JoinBody = z.object({
  *     description: Joined; returns a message and the course.
  *   400: { description: "Invalid code, admin join attempt, already enrolled, or registration not open." }
  *   401: { description: Not signed in. }
+ *   403: { description: "Enrollment was dropped; re-enrollment is a staff action." }
  *   404: { description: "Course not found (also returned for unpublished/archived courses)." }
  *   500: { description: Server error. }
  */
@@ -91,6 +92,18 @@ export async function POST(req: Request) {
   }
 
   if (existing) {
+    // A dropped student can't re-enroll themselves with the code: dropping is a staff
+    // action, so re-enrollment is too. Tell them what to do rather than silently
+    // re-adding them. (They already know they were in the course, so this reveals nothing.)
+    if (existing.role === 'STUDENT' && existing.status === 'DROPPED') {
+      return NextResponse.json(
+        {
+          error:
+            'Your enrollment in this course was dropped. Contact your instructor to be re-enrolled.',
+        },
+        { status: 403 },
+      );
+    }
     return NextResponse.json(
       { error: `You are already registered for this course as ${existing.role}` },
       { status: 400 },

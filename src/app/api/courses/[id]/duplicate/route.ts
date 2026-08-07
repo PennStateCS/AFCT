@@ -8,6 +8,7 @@ import { logError } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { descriptionCopyData } from '@/lib/description-write';
 import { createWithUniqueCourseCode } from '@/lib/course-code';
 import { parseValidDate } from '@/lib/date-format';
 import { toDateTimeInTimezone } from '@/lib/date-convert';
@@ -347,7 +348,8 @@ export const POST = withAdminAuth(
               const created = await tx.problem.create({
                 data: {
                   title: p.title,
-                  description: p.description ?? undefined,
+                  // Carry the rich description verbatim so a copy is not silently downgraded.
+                  ...descriptionCopyData(p),
                   ...(solutionByProblemId.get(p.id) ?? {}),
                   type: p.type ?? undefined,
                   maxStates: p.maxStates ?? undefined,
@@ -367,7 +369,8 @@ export const POST = withAdminAuth(
                 const createdA = await tx.assignment.create({
                   data: {
                     title: a.title,
-                    description: a.description ?? undefined,
+                    // Carry the rich description verbatim so a copy is not silently downgraded.
+                    ...descriptionCopyData(a),
                     dueDate: a.dueDate,
                     unlockAt: a.unlockAt,
                     assignedToEveryone: a.assignedToEveryone,

@@ -8,7 +8,14 @@ name: Release
 # the curated manifest (deploy/versions.json on main, which the updater fetches over
 # HTTPS), and opens a GitHub Release.
 #
-# Ordinary pushes to main do NOT trigger this — only a v* tag does. The rolling
+# The deployment bundles (Linux, macOS, Windows) are built and validated in separate
+# per-platform jobs that publish their verified assets as workflow ARTIFACTS, never
+# straight to the release. A final publish job runs only after all three validate, then
+# uploads every platform's assets in one step. So a failure on any platform leaves the
+# release with NO partial set of bundle assets, rather than (say) Linux and macOS uploaded
+# but Windows missing.
+#
+# Ordinary pushes to main do NOT trigger this - only a v* tag does. The rolling
 # :main image keeps getting published by publish-ghcr.yml on every merge; a release
 # is a separate, deliberate act. Tag a commit that has already gone green on main.
 on:
@@ -25,6 +32,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Phase 1: build and push the images, add the version to the manifest, open the release.
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -71,8 +79,8 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
@@ -94,8 +102,8 @@ jobs:
         with:
           context: docker/nginx
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=nginx
+          cache-to: type=gha,mode=max,scope=nginx
           tags: ghcr.io/pennstatecs/afct-nginx:${{ github.ref_name }}
 
       - name: Build and push backup image
@@ -103,8 +111,8 @@ jobs:
         with:
           context: docker/backup
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,mode=max,scope=backup
           tags: ghcr.io/pennstatecs/afct-backup:${{ github.ref_name }}
 
       - name: Build and push updater image
@@ -112,8 +120,8 @@ jobs:
         with:
           context: docker/updater
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=updater
+          cache-to: type=gha,mode=max,scope=updater
           tags: ghcr.io/pennstatecs/afct-updater:${{ github.ref_name }}
 
       # Add the new version to the curated manifest on main so the updater offers it.
@@ -142,6 +150,28 @@ jobs:
             echo "no previous tag; requiresHostUpdate=false"
           fi
 
+          # An optional admin note for this release, taken from the BODY of the
+          # annotated tag's message: the subject (first -m) is the normal summary, and
+          # a second -m becomes the note. So `git tag -a vX.Y.Z -m "summary"` has no
+          # note, while `git tag -a vX.Y.Z -m "summary" -m "run X on the server first"`
+          # attaches one. It's shown in the Updates tab when this version is selected,
+          # for the rare release that needs a manual server step. %(contents:body)
+          # excludes both the subject and any PGP signature.
+          NOTE=""
+          if [ "$(git cat-file -t "$TAG" 2>/dev/null || true)" = "tag" ]; then
+            NOTE=$(git tag -l --format='%(contents:body)' "$TAG")
+          fi
+          [ -n "$NOTE" ] && echo "release note attached (${#NOTE} chars)" || echo "no release note"
+
+          # Checksum of the compose file AS IT EXISTS AT THIS TAG, which is exactly what the
+          # updater fetches from the tag ref (<base>/<tag>/deploy/docker-compose.yml) during
+          # an in-app upgrade. Recording it lets the updater verify the downloaded compose is
+          # byte-for-byte the file this release shipped, not merely that it parses. Read the
+          # blob at the tag directly so it doesn't depend on the working tree (the loop below
+          # checks out main). Empty (no file / older layout) simply omits the field.
+          COMPOSE_SHA=$(git show "${TAG}:deploy/docker-compose.yml" 2>/dev/null | sha256sum | awk '{print $1}')
+          [ -n "$COMPOSE_SHA" ] && echo "compose sha256 at ${TAG}: ${COMPOSE_SHA}" || echo "no compose file at ${TAG}"
+
           attempt=0
           while [ "$attempt" -lt 5 ]; do
             attempt=$((attempt + 1))
@@ -153,8 +183,12 @@ jobs:
             fi
             # Newest first; keep the moving "main" entry wherever it already sits.
             tmp=$(mktemp)
-            jq --arg t "$TAG" --argjson rhu "$RHU" \
-               '.versions = ([{tag:$t, label:$t, notes:("Release " + $t + "."), requiresHostUpdate:$rhu}] + (.versions // []))' \
+            jq --arg t "$TAG" --argjson rhu "$RHU" --arg note "$NOTE" --arg csha "$COMPOSE_SHA" \
+               '.versions = ([
+                  {tag:$t, label:$t, notes:("Release " + $t + "."), requiresHostUpdate:$rhu}
+                  + (if $note == "" then {} else {upgradeNote:$note} end)
+                  + (if $csha == "" then {} else {composeSha256:$csha} end)
+                ] + (.versions // []))' \
                deploy/versions.json > "$tmp"
             mv "$tmp" deploy/versions.json
             git add deploy/versions.json
@@ -179,3 +213,231 @@ jobs:
           else
             gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
           fi
+
+  # Phase 2a: build + VERIFY the Linux bundle, then stage its assets as an artifact. Nothing
+  # is uploaded to the release here.
+  bundle-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (tagged commit)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Install shellcheck + jq
+        run: sudo apt-get update && sudo apt-get install -y shellcheck jq
+      - name: Build and verify the Linux deployment bundle
+        run: |
+          set -eu
+          sh deploy/linux/build-bundle.sh deploy/dist
+          TARBALL=$(ls deploy/dist/afct-linux-deploy-*.tar.gz)
+          MANIFEST=deploy/dist/deployment-manifest.json
+          BASENAME=$(basename "$TARBALL")
+
+          ( cd deploy/dist && sha256sum -c "${BASENAME}.sha256" )
+
+          WORK=$(mktemp -d)
+          tar -xzf "$TARBALL" -C "$WORK"
+          ROOT=$(dirname "$(find "$WORK" -name afctctl -path '*/bin/*' | head -n1)")/..
+          sh -n "$ROOT/install.sh"
+          sh -n "$ROOT/bin/afctctl"
+          for f in "$ROOT"/lib/*.sh; do sh -n "$f"; done
+          ( cd "$ROOT" && shellcheck -s sh install.sh bin/afctctl lib/*.sh )
+
+          MSCHEMA=$(jq -r '.schema // ""' "$MANIFEST")
+          MVER=$(jq -r .deploymentToolVersion "$MANIFEST")
+          MBUNDLE=$(jq -r .bundle "$MANIFEST")
+          MSHA=$(jq -r .sha256 "$MANIFEST")
+          AVER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$ROOT/bin/afctctl" | head -n1)
+          DVER=$(sed -n '1p' "$ROOT/DEPLOY_VERSION" | tr -dc '0-9A-Za-z._-')
+          ASHA=$(awk '{print $1; exit}' "${TARBALL}.sha256")
+          [ "$MSCHEMA" = "afct-deployment-manifest/v1" ] || { echo "manifest schema ($MSCHEMA) is not afct-deployment-manifest/v1"; exit 1; }
+          [ "$MBUNDLE" = "$BASENAME" ] || { echo "manifest bundle ($MBUNDLE) != $BASENAME"; exit 1; }
+          [ "$MBUNDLE" = "afct-linux-deploy-${MVER}.tar.gz" ] || { echo "manifest bundle name does not match version $MVER"; exit 1; }
+          [ "$MSHA" = "$ASHA" ] || { echo "manifest sha256 mismatch"; exit 1; }
+          [ "$MVER" = "$AVER" ] || { echo "manifest version ($MVER) != afctctl INSTALLER_VERSION ($AVER)"; exit 1; }
+          [ "$MVER" = "$DVER" ] || { echo "manifest version ($MVER) != bundle DEPLOY_VERSION ($DVER)"; exit 1; }
+          for m in output common validation prompts environment platform docker compose \
+                   service-user migration manifest deployment update diagnostics doctor; do
+            [ -f "$ROOT/lib/${m}.sh" ] || { echo "bundle missing lib/${m}.sh"; exit 1; }
+          done
+          if tar -tzf "$TARBALL" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then echo "unsafe path in archive"; exit 1; fi
+          if tar -tvzf "$TARBALL" | awk '{print substr($1,1,1)}' | grep -q '[^d-]'; then echo "special file in archive"; exit 1; fi
+          sh deploy/test/compose-config.sh
+
+          mkdir -p out
+          cp "$TARBALL" "${TARBALL}.sha256" "$MANIFEST" out/
+          cp deploy/linux/install.sh out/install.sh
+          echo "Linux bundle verified: $BASENAME"
+      - name: Stage the verified Linux assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bundle-linux
+          path: out/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Phase 2b: build + VERIFY the macOS bundle on a real macOS runner (BSD tools), then stage
+  # its assets as an artifact.
+  bundle-macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (tagged commit)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Install shellcheck + jq (Homebrew)
+        run: brew install shellcheck jq
+      - name: Build and verify the macOS deployment bundle
+        run: |
+          set -eu
+          sh deploy/macos/build-bundle.sh deploy/dist
+          TARBALL=$(ls deploy/dist/afct-macos-deploy-*.tar.gz)
+          MANIFEST=deploy/dist/deployment-manifest-macos.json
+          BASENAME=$(basename "$TARBALL")
+
+          ( cd deploy/dist && shasum -a 256 -c "${BASENAME}.sha256" )
+
+          WORK=$(mktemp -d)
+          tar -xzf "$TARBALL" -C "$WORK"
+          ROOT=$(dirname "$(find "$WORK" -name afctctl -path '*/bin/*' | head -n1)")/..
+          sh -n "$ROOT/install.sh"
+          sh -n "$ROOT/bin/afctctl"
+          for f in "$ROOT"/lib/*.sh; do sh -n "$f"; done
+          ( cd "$ROOT" && shellcheck -s sh install.sh bin/afctctl lib/*.sh )
+
+          MSCHEMA=$(jq -r '.schema // ""' "$MANIFEST")
+          MVER=$(jq -r .deploymentToolVersion "$MANIFEST")
+          MBUNDLE=$(jq -r .bundle "$MANIFEST")
+          MSHA=$(jq -r .sha256 "$MANIFEST")
+          MBOOT=$(jq -r .bootstrap "$MANIFEST")
+          AVER=$(sed -n 's/^INSTALLER_VERSION="\(.*\)"/\1/p' "$ROOT/bin/afctctl" | head -n1)
+          DVER=$(sed -n '1p' "$ROOT/DEPLOY_VERSION" | tr -dc '0-9A-Za-z._-')
+          ASHA=$(awk '{print $1; exit}' "${TARBALL}.sha256")
+          [ "$MSCHEMA" = "afct-deployment-manifest/v1" ] || { echo "manifest schema ($MSCHEMA) is not afct-deployment-manifest/v1"; exit 1; }
+          [ "$MBUNDLE" = "$BASENAME" ] || { echo "manifest bundle ($MBUNDLE) != $BASENAME"; exit 1; }
+          [ "$MBUNDLE" = "afct-macos-deploy-${MVER}.tar.gz" ] || { echo "manifest bundle name does not match version $MVER"; exit 1; }
+          [ "$MBOOT" = "install-macos.sh" ] || { echo "manifest bootstrap ($MBOOT) != install-macos.sh"; exit 1; }
+          [ "$MSHA" = "$ASHA" ] || { echo "manifest sha256 mismatch"; exit 1; }
+          [ "$MVER" = "$AVER" ] || { echo "manifest version ($MVER) != afctctl INSTALLER_VERSION ($AVER)"; exit 1; }
+          [ "$MVER" = "$DVER" ] || { echo "manifest version ($MVER) != bundle DEPLOY_VERSION ($DVER)"; exit 1; }
+          for m in output common validation prompts environment platform docker compose \
+                   service-user migration manifest deployment update diagnostics doctor; do
+            [ -f "$ROOT/lib/${m}.sh" ] || { echo "bundle missing lib/${m}.sh"; exit 1; }
+          done
+          if tar -tzf "$TARBALL" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then echo "unsafe path in archive"; exit 1; fi
+          if tar -tvzf "$TARBALL" | awk '{print substr($1,1,1)}' | grep -q '[^d-]'; then echo "special file in archive"; exit 1; fi
+
+          mkdir -p out
+          cp "$TARBALL" "${TARBALL}.sha256" "$MANIFEST" out/
+          cp deploy/macos/install.sh out/install-macos.sh
+          echo "macOS bundle verified: $BASENAME"
+      - name: Stage the verified macOS assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bundle-macos
+          path: out/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Phase 2c: build + VERIFY the Windows bundle with pwsh (deterministic .NET ZIP + Get-
+  # FileHash, so the bytes match a Windows build), then stage its assets as an artifact.
+  bundle-windows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (tagged commit)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Build and verify the Windows deployment bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zipPath = (& deploy/windows/build-bundle.ps1 -OutDir deploy/dist | Select-Object -Last 1).Trim()
+          $manifestPath = 'deploy/dist/deployment-manifest-windows.json'
+          $basename = Split-Path -Leaf $zipPath
+
+          $sidecar = (Get-Content "$zipPath.sha256" -Raw).Trim()
+          $recorded = ($sidecar -split '\s+')[0].ToLower()
+          $actual = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLower()
+          if ($recorded -ne $actual) { throw "sha256 sidecar mismatch: $recorded != $actual" }
+
+          $m = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $controllerVer = (& deploy/ci-windows-version.ps1).Trim()
+
+          Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zipPath))
+          try {
+            $names = $zip.Entries | ForEach-Object { $_.FullName }
+            foreach ($n in $names) {
+              if ($n -match '^([A-Za-z]:|/|\\)' -or $n -match '\\' -or ($n -split '/') -contains '..') {
+                throw "unsafe ZIP entry: $n"
+              }
+            }
+            $dvEntry = $zip.Entries | Where-Object { $_.FullName -match '/DEPLOY_VERSION$' } | Select-Object -First 1
+            if (-not $dvEntry) { throw 'bundle is missing DEPLOY_VERSION' }
+            $sr = New-Object System.IO.StreamReader($dvEntry.Open())
+            try { $deployVer = $sr.ReadToEnd().Trim() } finally { $sr.Dispose() }
+            foreach ($mod in 'Output','Platform','Docker','Validation','Environment','Config',
+                             'Compose','Update','Deploy','Doctor','Diagnostics','Recover','Uninstall') {
+              if (-not ($names | Where-Object { $_ -match "/lib/$mod\.ps1$" })) { throw "bundle missing lib/$mod.ps1" }
+            }
+            # Every bundled PowerShell file must parse under the Windows PowerShell 5.1 parser.
+            $stage = Join-Path ([System.IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString('N'))
+            [System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $zipPath), $stage)
+            $bad = $false
+            foreach ($ps in Get-ChildItem -Path $stage -Recurse -Filter *.ps1) {
+              $errs = $null
+              [System.Management.Automation.Language.Parser]::ParseFile($ps.FullName, [ref]$null, [ref]$errs) | Out-Null
+              if ($errs.Count -gt 0) { $bad = $true; $errs | ForEach-Object { Write-Host "PARSE ERROR in $($ps.Name): $($_.Message)" } }
+            }
+            if ($bad) { throw 'a bundled PowerShell file failed its syntax check' }
+          } finally { $zip.Dispose() }
+
+          if ($m.schema -ne 'afct-deployment-manifest/v1') { throw "manifest schema ($($m.schema)) is not afct-deployment-manifest/v1" }
+          if ($m.bundle -ne $basename) { throw "manifest bundle ($($m.bundle)) != $basename" }
+          if ($m.bundle -ne "afct-windows-deploy-$($m.deploymentToolVersion).zip") { throw 'manifest bundle name does not match version' }
+          if ($m.bootstrap -ne 'install-windows.ps1') { throw "manifest bootstrap ($($m.bootstrap)) != install-windows.ps1" }
+          if ($m.sha256 -ne $actual) { throw 'manifest sha256 mismatch' }
+          if ($m.deploymentToolVersion -ne $controllerVer) { throw "manifest version ($($m.deploymentToolVersion)) != controller InstallerVersion ($controllerVer)" }
+          if ($m.deploymentToolVersion -ne $deployVer) { throw "manifest version ($($m.deploymentToolVersion)) != bundle DEPLOY_VERSION ($deployVer)" }
+
+          New-Item -ItemType Directory -Path out -Force | Out-Null
+          Copy-Item $zipPath, "$zipPath.sha256", $manifestPath out/
+          Copy-Item deploy/windows/install.ps1 out/install-windows.ps1
+          Write-Host "Windows bundle verified: $basename"
+      - name: Stage the verified Windows assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bundle-windows
+          path: out/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Phase 3: upload every platform's verified assets in one step. This job runs ONLY after
+  # the release exists and ALL three bundle jobs succeeded, so the release is never left with
+  # a partial set of platform assets.
+  publish-bundles:
+    needs: [release, bundle-linux, bundle-macos, bundle-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download all verified bundle assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          # Only the staged bundle artifacts, not the .dockerbuild build-record artifacts
+          # that docker/build-push-action uploads to the run.
+          pattern: bundle-*
+          path: dist
+          merge-multiple: true
+      - name: Upload all release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          echo "uploading:"; ls -1 dist
+          # Fail loudly if any expected platform asset is missing before we touch the release.
+          for f in afct-linux-deploy-*.tar.gz afct-macos-deploy-*.tar.gz afct-windows-deploy-*.zip \
+                   install.sh install-macos.sh install-windows.ps1 \
+                   deployment-manifest.json deployment-manifest-macos.json deployment-manifest-windows.json; do
+            ls dist/$f >/dev/null 2>&1 || { echo "::error::missing expected release asset: $f"; exit 1; }
+          done
+          # This job does not check out the repo, so name it explicitly for gh.
+          gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber

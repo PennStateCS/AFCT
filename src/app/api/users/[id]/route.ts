@@ -43,6 +43,7 @@ const pfpsDir = path.join('/private', 'uploads', 'pfps');
  *           lastName: { type: string }
  *           isAdmin: { type: boolean, description: Global admin flag (only writable by admins) }
  *           inactive: { type: boolean }
+ *           email: { type: string, description: New login email (admins only; must be unused) }
  *           timezone: { type: string }
  *     multipart/form-data:
  *       schema:
@@ -60,7 +61,7 @@ const pfpsDir = path.join('/private', 'uploads', 'pfps');
  *   400: { description: Invalid timezone. }
  *   401: { description: Not signed in. }
  *   403: { description: "Not allowed to edit this user, or deactivating an actively-enrolled user." }
- *   409: { description: The change would remove the last active administrator. }
+ *   409: { description: "The change would remove the last active administrator, or the new email is already in use." }
  *   413: { description: Avatar exceeds the system upload limit. }
  *   500: { description: Server error. }
  */
@@ -98,6 +99,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let firstName: string | undefined;
     let lastName: string | undefined;
     let inactive: boolean | undefined;
+    // Admin-only email change; only ever supplied on the JSON branch.
+    let email: string | undefined;
     let avatarFile: File | null = null;
     let deleteAvatar = false;
     let timezoneRaw: string | undefined;
@@ -127,6 +130,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       firstName = parsed.data.firstName;
       lastName = parsed.data.lastName;
       inactive = parsed.data.inactive;
+      email = parsed.data.email;
       timezoneRaw = parsed.data.timezone;
       isAdminFlag = parsed.data.isAdmin;
       cropX = parsed.data.cropX;
@@ -168,6 +172,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       where: { id: userId },
       select: {
         avatar: true,
+        email: true,
         firstName: true,
         lastName: true,
         isAdmin: true,
@@ -224,10 +229,34 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       }
     }
 
+    // Email change (admin-only). The schema already normalized it to a trimmed,
+    // lowercase address. Only touch it when it actually differs, and reject a
+    // collision up front with a clear 409 (the unique constraint is the real guard;
+    // this just gives a friendlier message and skips a pointless write).
+    let emailToUpdate: string | undefined;
+    if (email !== undefined && isAdmin(currentUser) && email !== userRecord?.email) {
+      const taken = await prisma.user.findFirst({
+        where: { email, NOT: { id: userId } },
+        select: { id: true },
+      });
+      if (taken) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: actorId,
+          action: 'USER_UPDATE_REJECTED',
+          category: 'USER',
+          severity: 'WARNING',
+          metadata: { targetUserId: userId, reason: 'email-in-use' },
+        });
+        return NextResponse.json({ error: 'That email is already in use' }, { status: 409 });
+      }
+      emailToUpdate = email;
+    }
+
     // Only fields that were actually supplied become `undefined` → left untouched.
     const dataToUpdate: {
       firstName?: string;
       lastName?: string;
+      email?: string;
       avatar?: string | null;
       isAdmin?: boolean;
       inactive?: boolean;
@@ -238,6 +267,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     } = {
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
+      email: emailToUpdate,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
       // Only admins may change a user's admin flag; self-editors cannot escalate.
       isAdmin: isAdmin(currentUser) ? isAdminFlag : undefined,
@@ -304,6 +334,16 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       if (avatarBuffer && avatarFilename) {
         await safeUnlinkInDir(pfpsDir, avatarFilename);
       }
+      // The unique email constraint is the real guard against a race between the
+      // pre-check above and this write; surface it as the same friendly 409.
+      if (
+        emailToUpdate &&
+        updateError &&
+        typeof updateError === 'object' &&
+        (updateError as { code?: string }).code === 'P2002'
+      ) {
+        return NextResponse.json({ error: 'That email is already in use' }, { status: 409 });
+      }
       throw updateError;
     }
 
@@ -321,6 +361,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const AUDITED_USER_FIELDS = [
       'firstName',
       'lastName',
+      'email',
       'isAdmin',
       'inactive',
       'timezone',

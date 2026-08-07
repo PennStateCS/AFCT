@@ -44,10 +44,7 @@ import {
   columnLabel,
 } from '@/components/ui/data-table-shared';
 import { DataTableToolbar } from '@/components/ui/data-table-toolbar';
-import {
-  PaginationControls,
-  DataTablePagination,
-} from '@/components/ui/data-table-pagination';
+import { PaginationControls, DataTablePagination } from '@/components/ui/data-table-pagination';
 import { DataTableCards, useStackedView } from '@/components/ui/data-table-cards';
 
 interface DataTableProps<TData, TValue> {
@@ -89,6 +86,13 @@ interface DataTableProps<TData, TValue> {
    * would otherwise change every existing table's behavior.
    */
   stickyHeader?: boolean;
+  /**
+   * Draw gridlines between rows and columns (a spreadsheet look). Off by default so
+   * existing tables keep their borderless style; opt in for dense grids like the
+   * gradebook where cell boundaries aid scanning. Only affects the desktop table, not
+   * the mobile card view.
+   */
+  bordered?: boolean;
 
   // ---- Server-side ("manual") mode: all optional; omit for client-side. ----
   // When a controlled value + handler is provided, the table hands that concern
@@ -107,7 +111,6 @@ interface DataTableProps<TData, TValue> {
   onSortingChange?: OnChangeFn<SortingState>;
   /** Initial client-side sort (uncontrolled). Ignored when `sorting` is controlled. */
   defaultSorting?: SortingState;
-
   manualFiltering?: boolean;
   globalFilter?: string;
   onGlobalFilterChange?: (value: string) => void;
@@ -138,6 +141,7 @@ export function DataTable<TData, TValue>({
   loadingMessage = 'Loading data, please wait...',
   emptyAction,
   stickyHeader = false,
+  bordered = false,
   manualPagination = false,
   pageCount,
   rowCount,
@@ -394,7 +398,19 @@ export function DataTable<TData, TValue>({
            here produced a doubled/flaky horizontal scrollbar). overflow-hidden keeps the
            rounded corners clipping the scrolling content. */
         <div className="overflow-hidden rounded-md border">
-          <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
+          <Table
+            // `bordered` adds gridlines: a right border on every cell except the last
+            // column (vertical lines) plus a bottom border on body rows (horizontal
+            // lines). Scoped to this table so other DataTables keep their borderless look.
+            className={`w-full ${
+              bordered
+                ? '[&_td]:border-border [&_th]:border-border [&_tbody_tr]:border-b [&_td:not(:last-child)]:border-r [&_th:not(:last-child)]:border-r'
+                : ''
+            }`}
+            role="table"
+            aria-label={tableLabel}
+            aria-busy={loading}
+          >
             {/* stickyHeader needs the row itself to carry the background (the header cells
                 are transparent), which it already does via the inline style below. */}
             <TableHeader role="rowgroup" className={stickyHeader ? 'sticky top-0 z-10' : undefined}>
@@ -493,15 +509,20 @@ export function DataTable<TData, TValue>({
                     {/* No forced nowrap on cells: on narrow screens long values
                         (emails, titles) wrap inside their cell instead of
                         stretching the whole table into a sideways scroll. */}
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                        nowrap={cell.column.columnDef.meta?.nowrap}
-                        className={`${responsiveClass(cell.column.columnDef.meta?.priority)} ${alignTextClass(cell.column.columnDef.meta?.align)}`}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
+                    {row.getVisibleCells().map((cell) => {
+                      const isRowHeader = cell.column.columnDef.meta?.rowHeader;
+                      return (
+                        <TableCell
+                          key={cell.id}
+                          as={isRowHeader ? 'th' : undefined}
+                          scope={isRowHeader ? 'row' : undefined}
+                          nowrap={cell.column.columnDef.meta?.nowrap}
+                          className={`${responsiveClass(cell.column.columnDef.meta?.priority)} ${alignTextClass(cell.column.columnDef.meta?.align)}`}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 ))
               ) : (

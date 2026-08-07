@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
  */
 export function RequiredMark({ className }: { className?: string }) {
   return (
-    <span aria-hidden="true" className={cn('ml-0.5 text-red-600', className)}>
+    <span aria-hidden="true" className={cn('ml-0.5 text-destructive', className)}>
       *
     </span>
   );

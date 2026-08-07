@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import FileUploadInput from '@/components/FileUploadInput';
@@ -59,6 +61,9 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
     disableLetsEncrypt,
   } = useTlsCertificate();
 
+  // Both of these change HTTPS for every visitor, so confirm before running them.
+  const [tlsConfirm, setTlsConfirm] = useState<null | 'reset' | 'disable-renew'>(null);
+
   return (
     <>
       <p className="text-muted-foreground mb-4 text-sm">
@@ -68,8 +73,8 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
       <div className="space-y-5">
         {/* Current status */}
         <div className="space-y-2">
-          <h3 className="text-sm font-medium">Current certificate</h3>
-          <div className="bg-muted/10 w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+          <h2 className="text-sm font-medium">Current certificate</h2>
+          <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
             {tls?.installed ? (
               <>
                 <div className="flex flex-wrap items-center gap-2">
@@ -128,7 +133,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={disableLetsEncrypt}
+                  onClick={() => setTlsConfirm('disable-renew')}
                   disabled={tlsBusy}
                 >
                   Turn off auto-renewal
@@ -153,7 +158,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
 
         {/* Method chooser */}
         <div className="space-y-2">
-          <h3 className="text-sm font-medium">Set up a certificate</h3>
+          <h2 className="text-sm font-medium">Set up a certificate</h2>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Certificate setup method">
             <Button
               type="button"
@@ -191,18 +196,18 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             if (!open) setTlsMethod(null);
           }}
         >
-          <DialogContent className="bg-card sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Get a free certificate (Let’s Encrypt)</DialogTitle>
               <DialogDescription>
-                Automatically obtain and renew a browser-trusted certificate from Let’s Encrypt. This
-                works only for a public server.
+                Automatically obtain and renew a browser-trusted certificate from Let’s Encrypt.
+                This works only for a public server.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-5">
               <div
                 role="note"
-                className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                className="rounded-md border border-status-warning-border bg-status-warning-bg p-3 text-xs text-status-warning"
               >
                 Before you start: this domain must point at this server in public DNS, and port 80
                 must be reachable from the internet (that is how Let’s Encrypt verifies you control
@@ -239,7 +244,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 disabled={tlsBusy}
                 descriptionPlacement="inline"
                 description="Issues an untrusted test certificate from the staging environment. Use this first to confirm setup without spending the weekly rate limit."
-                boxClassName="border-black"
+                boxClassName="border-input"
               />
               <SwitchField
                 id="le-tos"
@@ -250,13 +255,10 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 disabled={tlsBusy}
                 descriptionPlacement="inline"
                 description="Required to request a certificate."
-                boxClassName="border-black"
+                boxClassName="border-input"
               />
               {leProgress && (
-                <div
-                  role="status"
-                  className="bg-muted/10 space-y-2 rounded-md border p-3 text-sm"
-                >
+                <div role="status" className="bg-muted space-y-2 rounded-md border p-3 text-sm">
                   {deriveAcmeSteps(leProgress.phase) && (
                     <StepList
                       steps={deriveAcmeSteps(leProgress.phase)!}
@@ -296,7 +298,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             if (!open) setTlsMethod(null);
           }}
         >
-          <DialogContent className="bg-card sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>
                 {tlsMethod === 'csr'
@@ -341,7 +343,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             </div>
 
             {tlsMethod === 'csr' && tls?.pendingCsr && (
-              <div className="bg-muted/30 space-y-3 rounded-md border p-3">
+              <div className="bg-muted space-y-3 rounded-md border p-3">
                 <p className="text-sm">
                   CSR generated (<span className="font-mono text-xs">afct.csr</span>). Upload the
                   signed certificate from your CA:
@@ -368,7 +370,11 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                     onChange={(f) => setSignedChainFile(f ?? null)}
                   />
                 </div>
-                <Button type="button" onClick={installSignedCert} disabled={tlsBusy || !signedCertFile}>
+                <Button
+                  type="button"
+                  onClick={installSignedCert}
+                  disabled={tlsBusy || !signedCertFile}
+                >
                   Install signed certificate
                 </Button>
               </div>
@@ -403,7 +409,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             if (!open) setTlsMethod(null);
           }}
         >
-          <DialogContent className="bg-card sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Upload an existing certificate</DialogTitle>
               <DialogDescription>
@@ -462,15 +468,49 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-muted-foreground max-w-xl text-xs">
             The new certificate takes effect within about 15 seconds. If the new certificate is
-            invalid, it’s rejected and the current one is kept in place, so the site stays reachable.
+            invalid, it’s rejected and the current one is kept in place, so the site stays
+            reachable.
           </p>
           {tls?.installed && (
-            <Button type="button" variant="outline" size="sm" onClick={resetCert} disabled={tlsBusy}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setTlsConfirm('reset')}
+              disabled={tlsBusy}
+            >
               Reset to self-signed
             </Button>
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={tlsConfirm === 'reset'}
+        variant="destructive"
+        busy={tlsBusy}
+        title="Reset to a self-signed certificate?"
+        description="This replaces the current trusted certificate with a self-signed one. Every visitor will see a browser security warning until a trusted certificate is installed again."
+        confirmText="Reset certificate"
+        onConfirm={async () => {
+          await resetCert();
+          setTlsConfirm(null);
+        }}
+        onCancel={() => setTlsConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={tlsConfirm === 'disable-renew'}
+        busy={tlsBusy}
+        title="Turn off automatic renewal?"
+        description="The current certificate stays in place, but AFCT stops renewing it with Let's Encrypt. If it expires before you set up renewal again, visitors will see certificate errors."
+        confirmText="Turn off auto-renewal"
+        onConfirm={async () => {
+          await disableLetsEncrypt();
+          setTlsConfirm(null);
+        }}
+        onCancel={() => setTlsConfirm(null)}
+      />
     </>
   );
 }

@@ -91,7 +91,7 @@ export function AudienceSelect({
       <div
         className={cn(
           'flex flex-wrap items-center gap-1.5 rounded-md border p-2',
-          error ? 'border-red-500' : 'border-black',
+          error ? 'border-destructive' : 'border-input',
         )}
       >
         {isAll ? (
@@ -127,7 +127,7 @@ export function AudienceSelect({
               aria-describedby={error ? errorId : undefined}
               className={cn(
                 'text-muted-foreground hover:bg-muted focus-visible:ring-ring/40 ml-auto inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs focus-visible:ring-2 focus-visible:outline-none',
-                error && 'border-red-500',
+                error && 'border-destructive',
               )}
             >
               <Pencil className="h-3 w-3" aria-hidden="true" /> {addLabel}
@@ -174,7 +174,7 @@ export function AudienceSelect({
                 filtered.map((item) => (
                   <label
                     key={item.id}
-                    className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
+                    className="hover:bg-muted flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
                   >
                     <Checkbox
                       checked={selectedSet.has(item.id)}
@@ -190,7 +190,7 @@ export function AudienceSelect({
       </div>
 
       {error ? (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-red-600">
+        <p id={errorId} role="alert" className="mt-1 text-xs text-destructive">
           {error}
         </p>
       ) : null}
