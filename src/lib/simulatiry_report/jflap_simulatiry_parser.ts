@@ -41,7 +41,7 @@ function serializeStructureNode(xml: string): string | null {
 
     // 3. Trim outer leading/trailing whitespace
     return serializedXml.trim();
-  } catch (ex) {
+  } catch {
     return null;
   }
 }

@@ -232,8 +232,8 @@ describe('evaluateSubmission', () => {
         data: expect.objectContaining({
           correct: true,
           status: 'COMPLETED',
-          contentHash: 'content-hash-value',
-          fileHash: 'file-hash-value',
+          calcHashData: 'content-hash-value',
+          fileHashData: 'file-hash-value',
         }),
       }),
     );
