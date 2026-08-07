@@ -278,3 +278,63 @@ test.describe('accessibility: description editor (axe, contrast excluded)', () =
     await expect(box).not.toBeFocused();
   });
 });
+
+/**
+ * The four server-side paginated tables.
+ *
+ * These are scanned as a group because they share one component (`DataTable`) but each wires
+ * it differently: its own toolbar filters, its own column set, and its own empty state. The
+ * shared parts (aria-sort, the single live region in the footer, the labelled search box) are
+ * unit-tested in `data-table.test.tsx`; what only a browser can prove is that each caller's
+ * filter controls and column headers still come out with accessible names once they are
+ * composed together and rendered for real.
+ *
+ * Scanned at rest with whatever the fixture course holds. An empty table is not a wasted scan:
+ * the empty state is its own markup, and it is the state a new course actually starts in.
+ *
+ * Run the file whole. Isolating this block with `-g` against a freshly started `next dev`
+ * makes the fixture's first sign-in the first request to hit the credentials route, and the
+ * cold compile lands as "Email or password is incorrect" rather than a timeout, which reads
+ * like a seeded-password problem and is not one. The describes above warm that route.
+ */
+test.describe('accessibility: paginated tables (axe, contrast excluded)', () => {
+  let COURSE = '';
+
+  test.beforeAll(async ({ browser }) => {
+    COURSE = await createFixtureCourse(browser);
+  });
+
+  /** Open a course tab as course staff and wait for its table to exist. */
+  async function openCourseTab(page: Page, tab: string, tableName: string) {
+    await signIn(page, 'faculty2');
+    await page.goto(`/dashboard/courses/${COURSE}?tab=${tab}`);
+    // Generous: under `next dev` a first hit on a route compiles it.
+    await expect(page.getByRole('table', { name: tableName })).toBeVisible({ timeout: 60_000 });
+  }
+
+  test('the course roster', async ({ page }) => {
+    await openCourseTab(page, 'roster', 'Course roster table');
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the gradebook', async ({ page }) => {
+    await openCourseTab(page, 'grades', 'Course grades table');
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the course activity log', async ({ page }) => {
+    await openCourseTab(page, 'activity', 'Activity log table');
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the autograder queue', async ({ page }) => {
+    await signIn(page, 'admin');
+    await page.goto('/dashboard/autograder');
+    await expect(page.getByRole('table', { name: 'Autograder' })).toBeVisible({ timeout: 60_000 });
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+});

@@ -95,12 +95,21 @@ export function CfgViewerDialog({
               Context-free grammar productions.
             </DialogDescription>
             <table className="w-full text-sm">
+              {/* The caption names the table for a screen reader; LHS and RHS alone do not
+                  say what is being listed. Sighted users get that from the dialog title,
+                  which the caption deliberately does not repeat. */}
+              <caption className="sr-only">Grammar productions</caption>
               <thead className="border-foreground border-b">
                 <tr>
-                  <th className="text-foreground border-foreground border-r py-2 text-center font-medium">
+                  <th
+                    scope="col"
+                    className="text-foreground border-foreground border-r py-2 text-center font-medium"
+                  >
                     LHS
                   </th>
-                  <th className="text-foreground py-2 text-center font-medium">RHS</th>
+                  <th scope="col" className="text-foreground py-2 text-center font-medium">
+                    RHS
+                  </th>
                 </tr>
               </thead>
 

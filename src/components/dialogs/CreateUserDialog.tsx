@@ -130,6 +130,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="First Name"
+                requiredMark
                 name="firstName"
                 fieldProps={field}
                 error={errors.firstName?.message}
@@ -144,6 +145,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="Last Name"
+                requiredMark
                 name="lastName"
                 fieldProps={field}
                 error={errors.lastName?.message}
@@ -158,6 +160,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="Email"
+                requiredMark
                 name="email"
                 type="email"
                 fieldProps={field}
@@ -175,6 +178,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="Password"
+                requiredMark
                 name="password"
                 type="password"
                 showEye
@@ -193,6 +197,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <InputGroup
                 label="Confirm Password"
+                requiredMark
                 name="confirmPassword"
                 type="password"
                 showEye
