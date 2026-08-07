@@ -140,7 +140,7 @@ If you do not have an existing checkout, start from the example instead:
 cp .env.development.example .env.development && nano .env.development
 ```
 
-The example file documents each variable. See [Development setup](./development-setup.md) for what to change.
+The example file documents each variable. See [Development setup](./development.md) for what to change.
 
 Two other files are worth copying the same way if your old checkout has them, since neither is in the repository:
 
@@ -185,7 +185,7 @@ Two things to do on first open:
 
 After this, use the built in terminal with Ctrl and the backtick key. It opens a shell that is already inside Ubuntu, in the repository.
 
-The repository ships its own extension list and editor settings, so there is nothing to configure by hand. [Editor setup](./editor-setup.md) explains what they do and why two of them are not the defaults.
+The repository ships its own extension list and editor settings, so there is nothing to configure by hand. [Editor setup](./editor.md) explains what they do and why two of them are not the defaults.
 
 ## Everyday use
 

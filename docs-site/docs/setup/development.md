@@ -4,7 +4,7 @@ Docker is the supported way to develop AFCT. It provides the expected PostgreSQL
 
 A non-Docker option is included at the end for cases where Docker is unavailable.
 
-Once the stack runs, see [Editor setup](./editor-setup.md) for the VS Code extensions and
+Once the stack runs, see [Editor setup](./editor.md) for the VS Code extensions and
 settings the repository ships.
 
 ## Requirements
@@ -20,7 +20,7 @@ The development stack runs PostgreSQL, nginx, the Next.js development server, th
 
 ### Windows
 
-**Follow [Windows: keep the checkout inside WSL](./windows-wsl-setup.md) instead of this page.**
+**Follow [Windows: keep the checkout inside WSL](./development-windows.md) instead of this page.**
 It covers everything below with the Windows specifics filled in, and it is the setup the team
 actually uses.
 

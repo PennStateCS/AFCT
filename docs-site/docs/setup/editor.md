@@ -12,7 +12,7 @@ The repository ships two files, so most of this is automatic:
 You do not need to copy anything. Open the folder and VS Code picks them up.
 
 :::tip Windows
-Set up [WSL](./windows-wsl-setup.md) first and open the project from inside Ubuntu. Working
+Set up [WSL](./development-windows.md) first and open the project from inside Ubuntu. Working
 from `C:\` is many times slower, and extensions have to be installed into WSL separately.
 :::
 
@@ -66,7 +66,7 @@ extensionless file such as `deploy/unix/bin/afctctl` saved with CRLF stops being
 - **Terminal**: `` Ctrl+` `` opens a shell already in the right place. On WSL that is a shell
   inside Ubuntu, in the repository.
 - **The full check before pushing** still belongs in a terminal, and is described in
-  [Contributing](./contributing.md). The editor catches your own slips; it does not replace
+  [Contributing](../reference/contributing.md). The editor catches your own slips; it does not replace
   the checks CI runs.
 
 ## If you use something else
