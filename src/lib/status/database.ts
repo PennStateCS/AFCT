@@ -297,7 +297,7 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
           p = (p.startsWith('file:') ? p.replace('file:', '') : p).split('?')[0] ?? '';
           const pathMod = await import('path');
           const fsMod = await import('fs');
-          const resolved = pathMod.isAbsolute(p) ? p : pathMod.resolve(process.cwd(), p);
+          const resolved = pathMod.isAbsolute(p) ? p : pathMod.resolve(/* turbopackIgnore: true */ process.cwd(), p);
           try {
             const st = await fsMod.promises.stat(resolved);
             dbDetails.sqlite_file_path = resolved;
