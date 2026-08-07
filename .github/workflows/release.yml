@@ -50,7 +50,6 @@ jobs:
           # where GITHUB_TOKEN does not, so the `[skip ci]` marker on both commits stops the
           # loop and is now load-bearing rather than a safeguard.
           token: ${{ secrets.RELEASE_TOKEN || github.token }}
-        with:
           # Full history + tags so the manifest step can diff this tag against the
           # previous release to decide whether a host-side installer run is needed.
           fetch-depth: 0
