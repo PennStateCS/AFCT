@@ -28,14 +28,22 @@ export type ParsedLatex =
  * inspection short of reimplementing the parser. Handing it to KaTeX with `throwOnError: true`
  * is the only honest answer, and it uses the same options the published renderer will use, so a
  * source accepted here cannot fail there.
+ *
+ * `displayMode` has to match how the equation will actually be rendered, because some constructs
+ * are display-only: `\begin{align}` and `\tag` both parse in display mode and throw in inline
+ * mode. Validating a display equation as inline rejected it with a message that contradicted the
+ * preview the author was looking at, and made `align` unsavable altogether.
  */
-export function parseLatexSource(raw: string): ParsedLatex {
+export function parseLatexSource(
+  raw: string,
+  { displayMode = false }: { displayMode?: boolean } = {},
+): ParsedLatex {
   // Source policy first: it is cheaper, and "too long" is a better message than a parse error.
   const policy = validateLatex(raw);
   if (!policy.ok) return { ok: false, error: policy.error, kind: 'policy' };
 
   try {
-    katex.renderToString(policy.latex, { ...KATEX_VALIDATION_OPTIONS, displayMode: false });
+    katex.renderToString(policy.latex, { ...KATEX_VALIDATION_OPTIONS, displayMode });
   } catch (cause) {
     return {
       ok: false,
@@ -47,6 +55,6 @@ export function parseLatexSource(raw: string): ParsedLatex {
 }
 
 /** Cheap predicate for callers that only need a yes or no. */
-export function isParsableLatex(raw: unknown): boolean {
-  return typeof raw === 'string' && parseLatexSource(raw).ok;
+export function isParsableLatex(raw: unknown, displayMode = false): boolean {
+  return typeof raw === 'string' && parseLatexSource(raw, { displayMode }).ok;
 }

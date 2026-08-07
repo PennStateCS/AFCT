@@ -219,4 +219,55 @@ describe('equation dialog', () => {
     await waitFor(() => expect(nodesOfType(onChange, 'blockMath')).toHaveLength(1));
     expect(nodesOfType(onChange, 'inlineMath')).toHaveLength(0);
   });
+
+  it('switching placement keeps surrounding text intact', async () => {
+    // The other switch test has the equation as the only content. Switching deletes the old
+    // node and inserts the new kind where it stood, so the case worth pinning is one where
+    // that position is not the start of the document.
+    const user = userEvent.setup();
+    const { onChange } = await setup();
+
+    await user.click(document.querySelector('.tiptap') as Element);
+    await user.keyboard('before ');
+
+    const field = await openInsertDialog(user);
+    await user.type(field, 'x');
+    await user.click(screen.getByRole('button', { name: 'Save equation' }));
+    await waitFor(() => expect(nodesOfType(onChange, 'inlineMath')).toHaveLength(1));
+
+    await user.click(document.querySelector('.tiptap [data-type="inline-math"]') as Element);
+    await user.click(await screen.findByRole('radio', { name: 'Display' }));
+    await user.click(screen.getByRole('button', { name: 'Update equation' }));
+
+    await waitFor(() => expect(nodesOfType(onChange, 'blockMath')).toHaveLength(1));
+    expect(nodesOfType(onChange, 'inlineMath')).toHaveLength(0);
+    expect(richDescriptionToPlainText(lastDoc(onChange)!)).toContain('before');
+  });
+
+  it('accepts a display-only construct when the placement is Display', async () => {
+    // \begin{align} (not `aligned`, which parses in both) and \tag are display-only. Validation used
+    // to run as inline whatever the author chose, so the preview rendered and the save was
+    // then rejected with a message contradicting it - and align could not be saved at all.
+    const user = userEvent.setup();
+    const { onChange } = await setup();
+
+    const field = await openInsertDialog(user);
+    await user.click(screen.getByRole('radio', { name: 'Display' }));
+    await typeLatex(user, field, '\\begin{align} a &= b \\end{align}');
+    await user.click(screen.getByRole('button', { name: 'Save equation' }));
+
+    await waitFor(() => expect(nodesOfType(onChange, 'blockMath')).toHaveLength(1));
+  });
+
+  it('still refuses a display-only construct when the placement is Inline', async () => {
+    // The mode is now honoured in both directions: inline really is validated as inline.
+    const user = userEvent.setup();
+    const { onChange } = await setup();
+
+    const field = await openInsertDialog(user);
+    await typeLatex(user, field, '\\tag{1} x=y');
+    await user.click(screen.getByRole('button', { name: 'Save equation' }));
+
+    expect(nodesOfType(onChange, 'inlineMath')).toHaveLength(0);
+  });
 });

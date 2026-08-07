@@ -627,7 +627,7 @@ export default function AutograderClient() {
             return <span className="text-muted-foreground text-sm">-</span>;
           }
           return (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => handleViewSubmission(submission)}
@@ -648,7 +648,8 @@ export default function AutograderClient() {
             </div>
           );
         },
-        meta: { priority: 3 },
+        // Right-aligned so the download icons line up down the column.
+        meta: { priority: 3, align: 'right' },
       },
       {
         id: 'due',

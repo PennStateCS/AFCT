@@ -135,7 +135,7 @@ export function EquationDialog({ editor, open, onOpenChange, target }: EquationD
     //
     // parseLatexSource re-parses through KaTeX with the same options the published renderer
     // uses, so anything it accepts is something the reader will actually see rendered.
-    const result = parseLatexSource(latex);
+    const result = parseLatexSource(latex, { displayMode: mode === 'block' });
     if (!result.ok) {
       // Policy messages ("Enter a LaTeX expression.") are already written for the author. Only
       // KaTeX's own wording needs translating.

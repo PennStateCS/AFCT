@@ -58,7 +58,11 @@ function firstUnparsableEquation(
   const visit = (node: TiptapNode): string | null => {
     if (node.type === INLINE_MATH_NODE || node.type === BLOCK_MATH_NODE) {
       const latex = node.attrs?.[MATH_LATEX_ATTR];
-      const parsed = parseLatexSource(typeof latex === 'string' ? latex : '');
+      // Validate in the mode the node renders in: display-only constructs (`\begin{align}`,
+      // `\tag`) throw when parsed as inline, which made them unsavable in a block equation.
+      const parsed = parseLatexSource(typeof latex === 'string' ? latex : '', {
+        displayMode: node.type === BLOCK_MATH_NODE,
+      });
       if (!parsed.ok) return parsed.error;
     }
     for (const child of node.content ?? []) {
