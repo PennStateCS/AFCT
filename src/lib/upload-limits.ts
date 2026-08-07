@@ -11,7 +11,10 @@ export type UploadLimit = {
 };
 
 export async function getSystemUploadLimit(): Promise<UploadLimit> {
-  const settings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+  const settings = await prisma.systemSettings.findUnique({
+    where: { id: 1 },
+    select: { maxUploadSizeMb: true },
+  });
   const rawMb = Number(settings?.maxUploadSizeMb ?? DEFAULT_MAX_UPLOAD_SIZE_MB);
   // Clamp to the same ceiling as the settings validator so a stale/oversized stored
   // value can't exceed the nginx body-size limit.

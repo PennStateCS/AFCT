@@ -108,6 +108,11 @@ function diffSettings(
  */
 export const GET = withAdminAuth(
   async () => {
+    // The whole row on purpose, unlike the public endpoint's narrowed read. This handler
+    // uses 20 of the 22 columns, including the hCaptcha secret, which it reports only as
+    // the `hcaptchaSecretConfigured` boolean below. A select here would restate the
+    // response shape and add a quiet failure mode: a new setting whose column is missing
+    // from the list reads as undefined and silently serves its default instead.
     const settings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
     return NextResponse.json({
       // Read-only: the public address is an environment variable (NEXTAUTH_URL) set by
@@ -300,6 +305,10 @@ export const PUT = withAdminAuth(
     if (hasClock24Hour) createData.clock24Hour = body.clock24Hour;
 
     // Snapshot the prior state so the audit log can report what actually changed.
+    // Whole row on purpose: diffSettings reads it by key over AUDITED_FIELDS, so a select
+    // that fell behind that list would make a field read as undefined and log a change
+    // that never happened. The hCaptcha secret is not an audited field, so its value is
+    // never diffed or recorded.
     const existing = await prisma.systemSettings.findUnique({ where: { id: 1 } });
 
     let settings;
