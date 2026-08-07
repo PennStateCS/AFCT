@@ -693,6 +693,10 @@ model Submission {
   /// Name of the file as the student sent it.
   originalFileName String?
 
+  fileHashData         String?
+  calcHashData         String?
+  similarityReportJson Json?
+
   /// When this record was created.
   createdAt DateTime @default(now())
   /// When this record was last changed.

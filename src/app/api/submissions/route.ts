@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     courseId: parsed.data.courseId,
     assignmentId: parsed.data.assignmentId,
     problemId: parsed.data.problemId,
-    file: parsed.form.get('file') as File | null,
+    file: parsed.form.get('file') as File | null,   
     req,
   });
 

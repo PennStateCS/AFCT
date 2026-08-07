@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import type { SubmissionStatus } from '@prisma/client';
+import type { FileStatusReturn } from './simulatiry_report/types';
 
 import fs from 'fs';
 import path from 'path';
@@ -15,6 +16,8 @@ import {
   DEFAULT_SUBMISSION_MAX_CONCURRENT,
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
 } from './system-settings';
+import { check_file_status } from './simulatiry_report/check_file_status';
+import { jflapSimilarityParser } from './simulatiry_report/jflap_simulatiry_parser';
 
 // The activity logger accepts either a Request or an explicit {ipAddress, userAgent}
 // context. The worker has no HTTP request behind it, so it logs a "system" origin
@@ -106,6 +109,9 @@ interface SubmissionEvaluationResult {
   correct?: boolean;
   evaluationRaw: unknown | null;
   status: SubmissionEvaluationStatus;
+  fileHashData?: string | null;
+  calcHashData?: string | null;
+  similarityReportJson?: FileStatusReturn;
 }
 
 async function logSubmissionActivity(
@@ -414,6 +420,9 @@ async function evaluateSubmission(id: string) {
           ? Prisma.JsonNull
           : (evaluation.evaluationRaw as Prisma.InputJsonValue),
       status: evaluation.status,
+      fileHashData: evaluation.fileHashData,
+      calcHashData: evaluation.calcHashData,
+      similarityReportJson: evaluation.similarityReportJson,
     });
 
     if (!written) {
@@ -693,6 +702,7 @@ async function evaluateWithJar(
     }
 
     try {
+      // Parse evaluation
       const evaluation = JSON.parse(stdoutTrimmed);
 
       if (!evaluation || typeof evaluation !== 'object') {
@@ -708,6 +718,15 @@ async function evaluateWithJar(
           status: 'FAILED',
         };
       }
+
+      // Run simularity report
+      const similarityData = await jflapSimilarityParser(uploadedFilePath);
+
+      const fileHashData = similarityData?.fileHashData ?? undefined;
+      const calcHashData = similarityData?.calcHashData ?? undefined;
+      const fileHashEmail = similarityData?.fileHashEmail ?? undefined;
+
+      const similarityReportJson = await check_file_status(fileHashData, calcHashData, fileHashEmail, submission.studentId);
 
       const correct = typeof evaluation.correct === 'boolean' ? evaluation.correct : undefined;
       let feedback: string;
@@ -725,7 +744,15 @@ async function evaluateWithJar(
         evaluation,
       });
 
-      return { feedback, correct, evaluationRaw: evaluation, status: 'COMPLETED' };
+      return {
+        feedback,
+        correct,
+        evaluationRaw: evaluation,
+        status: 'COMPLETED',
+        similarityReportJson,
+        fileHashData: fileHashData ?? null,
+        calcHashData: calcHashData ?? null,
+      };
     } catch (parseErr) {
       const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
       await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
