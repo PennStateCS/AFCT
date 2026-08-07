@@ -81,6 +81,7 @@ const sidebars: SidebarsConfig = {
                     'faculty/similarity',
                   ],
                 },
+                'faculty/descriptions',
                 'faculty/grades',
                 'faculty/groups',
                 'faculty/problems',

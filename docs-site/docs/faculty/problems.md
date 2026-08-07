@@ -19,7 +19,7 @@ Create Problem is a short guided wizard with four steps: Details, Type, Answer F
 
 1. Open the course and select **Problems**.
 2. Select **Create Problem**.
-3. On **Details**, enter a clear title and an optional description.
+3. On **Details**, enter a clear title and an optional description. The description accepts formatting, equations and links, see [Formatted descriptions](descriptions.md).
 4. On **Type**, choose the problem type. For a finite automaton or push-down automaton, choose a state limit or leave it unlimited; for a finite automaton, turn on **Deterministic** when the student's answer must be deterministic.
 5. On **Answer File**, upload the answer file.
 6. On **Review**, confirm your choices and select **Create Problem**.
