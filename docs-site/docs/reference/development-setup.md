@@ -4,6 +4,9 @@ Docker is the supported way to develop AFCT. It provides the expected PostgreSQL
 
 A non-Docker option is included at the end for cases where Docker is unavailable.
 
+Once the stack runs, see [Editor setup](./editor-setup.md) for the VS Code extensions and
+settings the repository ships.
+
 ## Requirements
 
 - At least 2 CPU cores
@@ -17,9 +20,17 @@ The development stack runs PostgreSQL, nginx, the Next.js development server, th
 
 ### Windows
 
-Install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/) and use the WSL 2 backend.
+**Follow [Windows: keep the checkout inside WSL](./windows-wsl-setup.md) instead of this page.**
+It covers everything below with the Windows specifics filled in, and it is the setup the team
+actually uses.
 
-Verify in PowerShell:
+This is not a preference. A checkout on `C:` is read by the container across the Windows
+filesystem boundary, and the first page load was measured at **105 seconds from `C:` against
+1.4 seconds from WSL** on the same commit. Turbopack's file watcher also never fires over
+that boundary, so changes do not reload.
+
+You still install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
+with the WSL 2 backend; the difference is where the repository lives. Verify in PowerShell:
 
 ```powershell
 wsl --status
@@ -28,13 +39,7 @@ docker compose version
 docker info
 ```
 
-:::tip Put the checkout inside WSL
-
-Clone the repository into the WSL filesystem rather than onto `C:`. A checkout on `C:` is read by the container across the Windows boundary, which took a measured 105 seconds for the first page load against 1.4 seconds from WSL.
-
-Follow [Windows: keep the checkout inside WSL](./windows-wsl-setup.md) instead of the generic steps below. It covers the same ground with the Windows specifics filled in.
-
-:::
+Then continue in the WSL guide rather than with the steps below.
 
 ### macOS
 
