@@ -1,13 +1,15 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { User } from '@prisma/client';
 
 vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
+import { toastMock } from '@/test/mocks/toast';
 
 // The Manage menu is a Radix dropdown, which drives itself with pointer capture and portals
 // that jsdom does not implement. Render its content inline so the items are queryable.
@@ -49,6 +51,20 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuSubContent: Pass,
   };
 });
+
+// ConfirmDialog is a Radix alert dialog behind a portal. Render it as a plain button when
+// open so the confirm handler (which performs the roster mutation) can be driven directly.
+vi.mock('@/components/dialogs/ConfirmDialog', () => ({
+  ConfirmDialog: ({
+    open,
+    onConfirm,
+    confirmText,
+  }: {
+    open: boolean;
+    onConfirm: () => void | Promise<void>;
+    confirmText?: string;
+  }) => (open ? <button type="button" onClick={() => void onConfirm()}>{confirmText}</button> : null),
+}));
 
 import { userColumns } from './user-columns';
 
@@ -248,5 +264,152 @@ describe('roster Manage menu', () => {
 
     // Course staff resets are a site-admin job on the User Accounts page, not a course one.
     expect(screen.queryByRole('button', { name: /Reset Password/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The roster mutations. Everything above proves who is *offered* an action; this proves what
+ * the action then does. These are the writes that change a student's access to a course, so
+ * both the success path and the server-refusal path are pinned.
+ */
+describe('roster mutations', () => {
+  const okJson = (body: unknown = {}) =>
+    ({ ok: true, status: 200, json: async () => body }) as Response;
+  const errJson = (status: number, body: unknown) =>
+    ({ ok: false, status, json: async () => body }) as Response;
+
+  let fetchMock: ReturnType<typeof vi.fn>;
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  /** Open the Manage menu, click an item, then confirm the dialog it opens. */
+  async function act(row: RosterRow, itemName: RegExp, confirmName: RegExp) {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const columns = userColumns(onChange, 'c1', false, 'FACULTY', false) as ColumnDef<User>[];
+    const manage = columns.find((c) => c.id === 'manage');
+    if (!manage) throw new Error('No manage column');
+    const Cell = manage.cell as (ctx: unknown) => React.ReactElement;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    render(
+      <QueryClientProvider client={client}>{Cell({ row: { original: row } })}</QueryClientProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: itemName }));
+    await user.click(await screen.findByRole('button', { name: confirmName }));
+    return { onChange };
+  }
+
+  it('drops a student through the roster status endpoint', async () => {
+    fetchMock.mockResolvedValue(okJson());
+
+    const { onChange } = await act(student, /^Drop/, /^Drop student$/);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/courses/c1/roster/u1/status');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body as string)).toEqual({ status: 'DROPPED' });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(toastMock.success).toHaveBeenCalledWith('Student dropped from course');
+  });
+
+  it('re-enrolls a dropped student', async () => {
+    // Re-enrolling is not destructive, so it fires straight from the menu with no confirm.
+    fetchMock.mockResolvedValue(okJson());
+    const user = userEvent.setup();
+    renderManageCell({ ...student, enrollmentStatus: 'DROPPED' });
+    await user.click(screen.getByRole('button', { name: /^Re-enroll/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ status: 'ENROLLED' });
+    expect(toastMock.success).toHaveBeenCalledWith('Student re-enrolled');
+  });
+
+  it('surfaces the server reason when a drop is refused, and does not claim success', async () => {
+    fetchMock.mockResolvedValue(errJson(409, { error: 'Course is archived' }));
+
+    const { onChange } = await act(student, /^Drop/, /^Drop student$/);
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Course is archived'));
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('removes a student from the roster', async () => {
+    fetchMock.mockResolvedValue(okJson());
+
+    const { onChange } = await act(student, /^Remove/, /^Remove from course$/);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/courses/c1/roster/u1');
+    expect(init.method).toBe('DELETE');
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(toastMock.success).toHaveBeenCalledWith('User removed from roster');
+  });
+
+  it('reports the server message when a removal is refused', async () => {
+    fetchMock.mockResolvedValue(errJson(409, { error: 'Student has submissions' }));
+
+    const { onChange } = await act(student, /^Remove/, /^Remove from course$/);
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Student has submissions'));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('reports a network failure rather than failing silently', async () => {
+    fetchMock.mockRejectedValue(new Error('offline'));
+
+    const { onChange } = await act(student, /^Remove/, /^Remove from course$/);
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining('offline')),
+    );
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('never fires a removal request for a student who has work', async () => {
+    // The item is disabled, so no confirm opens and nothing reaches the server. The server
+    // refuses this too; the point here is that the UI does not ask.
+    const user = userEvent.setup();
+    renderManageCell({ ...student, hasSubmissions: true });
+
+    const remove = screen.getByRole('button', { name: /^Remove From Course/ });
+    expect(remove).toBeDisabled();
+    await user.click(remove);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('roster display cells', () => {
+  it('falls back to initials when the student has no avatar', () => {
+    const { container } = renderCell('avatar', student);
+
+    expect(container.textContent).toContain('AL');
+  });
+
+  it('shows a neutral placeholder when the row has no name at all', () => {
+    // getInitials returns 'U' for a nameless row; its email fallback is unreachable
+    // because of that earlier return, so do not assert on the email here.
+    const { container } = renderCell('avatar', { ...student, firstName: '', lastName: '' });
+
+    expect(container.textContent).toContain('U');
+  });
+
+  it('makes the email a mailto link, so staff can contact a student from the roster', () => {
+    renderCell('email', student);
+
+    const link = screen.getByRole('link', { name: 'ada@x.edu' });
+    expect(link).toHaveAttribute('href', 'mailto:ada@x.edu');
   });
 });
