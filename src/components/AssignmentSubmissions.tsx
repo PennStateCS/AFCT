@@ -1,15 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { FileText } from 'lucide-react';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
-import { queryKeys } from '@/lib/query-keys';
-import { apiClient } from '@/lib/api/fetch-client';
-import { errMessage } from '@/lib/errors';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
@@ -31,7 +27,10 @@ const GrantExtraSubmissionsDialog = dynamic(
   { ssr: false },
 );
 import { Button } from '@/components/ui/button';
-import { useReviewData, type ReviewDataResponse } from './useReviewData';
+import { useReviewData } from './useReviewData';
+import { useComments } from './useComments';
+import { useProblemGrades } from './useProblemGrades';
+import { useReviewSelection } from './useReviewSelection';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'> & { enrollmentStatus?: string | null };
 
@@ -96,21 +95,8 @@ export default function AssignmentSubmissions({
   assignmentDueDate,
   problems,
 }: Props) {
-  const queryClient = useQueryClient();
   const epsSymbol = useEmptyStringSymbol(courseId);
-  const searchParams = useSearchParams();
-  const searchParamsString = searchParams.toString();
-  const selectedStudentIdParam = searchParams.get('studentId');
-  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
-  const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
-  const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
-  const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
-  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
-  // Who a new comment reaches on a group assignment. Defaults to the group: the shared
-  // submission is what staff are looking at, so the group is the common case. Reset per
-  // student so a private note to one person does not silently carry to the next.
-  const [commentTarget, setCommentTarget] = useState<'student' | 'group'>('group');
   const [grantDialogOpen, setGrantDialogOpen] = useState(false);
   // Set on first open and never cleared, so the dynamic import above stays deferred.
   const [grantMounted, setGrantMounted] = useState(false);
@@ -118,13 +104,7 @@ export default function AssignmentSubmissions({
     if (grantDialogOpen) setGrantMounted(true);
   }, [grantDialogOpen]);
 
-  // Grade editing state (robust, GradesCard style)
-  const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
-  const [gradeInputs, setGradeInputs] = useState<Record<string, string>>({});
-  const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
-  const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
   const [showStudentDataLoading, setShowStudentDataLoading] = useState(false);
-  const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
     submission: Submission | ProblemSubmission | null;
@@ -172,39 +152,6 @@ export default function AssignmentSubmissions({
     }
   }, [studentsQueryIsError, studentsQuery.error]);
 
-  /**
-   * Keep the selected problem and student in the URL without asking the server for
-   * anything.
-   *
-   * `router.replace` looks harmless here but this route is a dynamic server component, so
-   * every call fetched a fresh RSC payload and re-ran the page's auth, roster and
-   * assignment-with-problems queries. Clicking through a roster of any size paid four
-   * database queries per student for data the client already had in the query cache.
-   *
-   * `history.replaceState` is what Next documents for exactly this: it updates the address
-   * bar and still feeds `useSearchParams`, with no navigation. Bookmarking, reload and the
-   * back button all behave the same, because the URL is identical either way.
-   */
-  const setUrlParam = useCallback(
-    (key: string, value: string) => {
-      const params = new URLSearchParams(searchParamsString);
-      if (params.get(key) === value) return;
-      params.set(key, value);
-      window.history.replaceState(null, '', `?${params.toString()}`);
-    },
-    [searchParamsString],
-  );
-
-  const updateQuery = useCallback(
-    (problemId: string) => setUrlParam('problemId', problemId),
-    [setUrlParam],
-  );
-
-  const updateStudentQuery = useCallback(
-    (studentId: string) => setUrlParam('studentId', studentId),
-    [setUrlParam],
-  );
-
   // Build the assignment-specific problem list from assignment payload.
   const assignmentProblems = useMemo(() => {
     return problems ?? [];
@@ -217,36 +164,15 @@ export default function AssignmentSubmissions({
     return value.length > max ? `${value.slice(0, max - 1)}…` : value;
   }, []);
 
-  // Initialize selected problem from the URL, but only from the set of
-  // currently visible problems (handles group assignment filtering).
-  useEffect(() => {
-    if (visibleProblems.length === 0) return;
-    const params = new URLSearchParams(searchParamsString);
-    const paramProblemId = params.get('problemId');
-    const firstProblem = visibleProblems[0];
-    if (!firstProblem) return;
-    const validProblemId = visibleProblems.some((p) => p.id === paramProblemId)
-      ? (paramProblemId as string)
-      : firstProblem.id;
-
-    setSelectedProblemId((currentProblemId) =>
-      currentProblemId === validProblemId ? currentProblemId : validProblemId,
-    );
-    if (paramProblemId !== validProblemId) {
-      updateQuery(validProblemId);
-    }
-  }, [visibleProblems, searchParamsString, updateQuery]);
-
-  const selectedStudent = students[selectedIndex] ?? null;
-  const selectedStudentId = selectedStudent?.id ?? null;
-
-  const handleSelectProblem = useCallback(
-    (problemId: string) => {
-      setSelectedProblemId(problemId);
-      updateQuery(problemId);
-    },
-    [updateQuery],
-  );
+  const {
+    selectedIndex,
+    setSelectedIndex,
+    selectedStudent,
+    selectedStudentId,
+    selectedProblemId,
+    handleSelectProblem,
+    handleSelectChange,
+  } = useReviewSelection({ students, visibleProblems });
 
   // Number keys 1-9 jump to that problem (matching the numbers in the list), unless
   // the user is typing in a field (comment box, grade input, student search, etc.).
@@ -265,77 +191,47 @@ export default function AssignmentSubmissions({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [visibleProblems, handleSelectProblem]);
 
-  useEffect(() => {
-    if (students.length === 0) {
-      setSelectedIndex(-1);
-      return;
-    }
-
-    const nextIndex = selectedStudentIdParam
-      ? students.findIndex((student) => student.id === selectedStudentIdParam)
-      : -1;
-
-    const resolvedIndex = nextIndex !== -1 ? nextIndex : 0;
-    setSelectedIndex((currentIndex) =>
-      currentIndex === resolvedIndex ? currentIndex : resolvedIndex,
-    );
-  }, [students, selectedStudentIdParam]);
-
-  useEffect(() => {
-    if (!selectedStudent) return;
-    if (selectedStudentIdParam !== selectedStudent.id) {
-      updateStudentQuery(selectedStudent.id);
-    }
-  }, [selectedStudentIdParam, selectedStudent, updateStudentQuery]);
-
-  // Grade summary: cached read of which students have all problems graded.
-  const gradeSummaryQuery = useQuery({
-    queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', 'summary'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.assignmentProblemGradesSummary(courseId, assignmentId));
-      if (!res.ok) {
-        // Match the previous silent handling of auth/not-found responses.
-        if ([401, 403, 404].includes(res.status)) return {} as Record<string, boolean>;
-        throw new Error((await res.json())?.error || 'Failed to load grade summary');
-      }
-      return ((await res.json()) ?? {}) as Record<string, boolean>;
-    },
-    enabled: students.length > 0,
-    staleTime: 30_000,
-  });
-
-  const gradeSummaryQueryIsError = gradeSummaryQuery.isError;
-  useEffect(() => {
-    if (gradeSummaryQueryIsError) {
-      console.error('Failed to load grade summary:', gradeSummaryQuery.error);
-    }
-  }, [gradeSummaryQueryIsError, gradeSummaryQuery.error]);
-
-  // Seed the base studentGradeStatuses from the summary, normalized over students
-  // exactly as the previous effect did. This local state is also updated by grade
-  // saves and review-data seeding, so we do NOT invalidate the summary on save.
-  const gradeSummaryData = gradeSummaryQuery.data;
-  useEffect(() => {
-    if (students.length === 0) {
-      setStudentGradeStatuses({});
-      return;
-    }
-    if (gradeSummaryData === undefined) return;
-    const normalized: Record<string, boolean> = {};
-    students.forEach((student) => {
-      normalized[student.id] = Boolean(gradeSummaryData?.[student.id]);
-    });
-    setStudentGradeStatuses(normalized);
-  }, [students, gradeSummaryData]);
-
   // Review data (submissions + comments + problem grades) for the selected student:
   // the TanStack Query fetch, its cold-load flag, and refresher live in a hook.
   const { reviewData, reviewQueryIsError, reviewError, reviewFetching, refreshReview } =
     useReviewData(courseId, assignmentId, selectedStudentId);
 
-  useEffect(() => {
-    setCommentTarget('group');
-  }, [selectedStudentId]);
+  const {
+    commentTexts,
+    setCommentText,
+    savingComments,
+    deletingComments,
+    commentTarget,
+    setCommentTarget,
+    saveComment,
+    deleteComment,
+  } = useComments({
+    courseId,
+    assignmentId,
+    selectedStudentId,
+    group: reviewData?.group,
+    groupMembers: reviewData?.groupMembers,
+  });
+
+  const {
+    problemGrades,
+    gradeInputs,
+    problemGradeErrors,
+    savingProblemGrades,
+    studentGradeStatuses,
+    handleGradeInputChange,
+    saveProblemGrade,
+  } = useProblemGrades({
+    courseId,
+    assignmentId,
+    courseIsArchived,
+    students,
+    selectedStudent,
+    assignmentProblems,
+    reviewData,
+    reviewQueryIsError,
+    reviewError,
+  });
 
   // All three loading flags previously flipped together; they track the cold load.
   const loadingSubmissions = reviewFetching;
@@ -395,268 +291,12 @@ export default function AssignmentSubmissions({
     [selectedProblemId, visibleProblems],
   );
 
-  // Seed the local editable GRADE state from the cached review data. Submissions and
-  // comments are derived above; only the editable grade fields still live in state.
-  // When there is no selected student, clear it (the old null-branch behavior).
-  useEffect(() => {
-    if (!selectedStudentId) {
-      setProblemGrades({});
-      setGradeInputs({});
-      setProblemGradeErrors({});
-      return;
-    }
-
-    if (reviewQueryIsError) {
-      console.error('Fetch review data error:', reviewError);
-      showToast.error('Could not load this submission. Refresh the page to try again.');
-      setProblemGrades({});
-      setGradeInputs({});
-      return;
-    }
-
-    if (reviewData === undefined) return;
-
-    const gradeData = reviewData.problemGrades ?? {};
-    const normalizedGrades: Record<string, number | null> = {};
-    const normalizedInputs: Record<string, string> = {};
-    assignmentProblems.forEach((problem) => {
-      const entry = gradeData?.[problem.id];
-      const value = typeof entry?.grade === 'number' ? entry.grade : null;
-      normalizedGrades[problem.id] = value;
-      normalizedInputs[problem.id] = value === null || value === undefined ? '' : String(value);
-    });
-
-    setProblemGrades(normalizedGrades);
-    setGradeInputs(normalizedInputs);
-    setProblemGradeErrors({});
-
-    const hasAllGrades =
-      assignmentProblems.length === 0
-        ? true
-        : assignmentProblems.every((problem) => {
-            const value = normalizedGrades[problem.id];
-            return value !== null && value !== undefined;
-          });
-    setStudentGradeStatuses((prev) => ({
-      ...prev,
-      [selectedStudentId]: hasAllGrades,
-    }));
-  }, [selectedStudentId, reviewData, reviewQueryIsError, reviewError, assignmentProblems]);
-
   const handleRerunSubmission = useCallback(
     async (submission: Submission) => {
       await rerunSubmission({ submission, setRerunning, fetchReviewData: refreshReview });
     },
     [refreshReview],
   );
-
-  const saveComment = useCallback(
-    async (problemId: string) => {
-      const commentText = commentTexts[problemId]?.trim();
-      if (!commentText || !selectedStudent) return;
-
-      setSavingComments((prev) => ({ ...prev, [problemId]: true }));
-      try {
-        // A group comment is one row addressed to the group; an individual one names the
-        // student. Sending both is refused by the API and by a database constraint.
-        const toGroup = !!reviewData?.group && commentTarget === 'group';
-        const newComment = await apiClient.post<DiscussionComment>(apiPaths.comments(), {
-          content: commentText,
-          assignmentId,
-          problemId,
-          ...(toGroup
-            ? { groupId: reviewData?.group?.id }
-            : { studentId: selectedStudent.id }),
-        });
-        // Optimistically add the comment to the review-data cache (the derived
-        // `comments` reads from it), then invalidate so the server copy replaces it.
-        queryClient.setQueryData<ReviewDataResponse>(
-          queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
-          (old) => ({
-            ...old,
-            comments: [...(old?.comments ?? []), { ...newComment, problemId }],
-          }),
-        );
-        setCommentTexts((prev) => ({ ...prev, [problemId]: '' }));
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
-        });
-        // Review data is cached per student, so a comment addressed to the group would sit
-        // unseen in every groupmate's cached copy until it went stale. Drop theirs too.
-        if (toGroup) {
-          for (const member of reviewData?.groupMembers ?? []) {
-            void queryClient.invalidateQueries({
-              queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, member.id),
-            });
-          }
-        }
-        showToast.saved('Comment');
-      } catch (err) {
-        console.error('Save comment error:', err);
-        showToast.error(errMessage(err, 'Failed to save comment'));
-      } finally {
-        setSavingComments((prev) => ({ ...prev, [problemId]: false }));
-      }
-    },
-    [
-      commentTexts,
-      selectedStudent,
-      assignmentId,
-      courseId,
-      queryClient,
-      // Without these the callback keeps whichever audience was current when it was last
-      // built, which is how a note meant for one student ends up posted to their group.
-      commentTarget,
-      reviewData,
-    ],
-  );
-
-  const deleteComment = useCallback(
-    async (commentId: string) => {
-      setDeletingComments((prev) => ({ ...prev, [commentId]: true }));
-      try {
-        await apiClient.del(apiPaths.comments({ commentId }));
-        // Optimistically drop the comment from the review-data cache (the derived
-        // `comments` reads from it), then invalidate to reconcile with the server.
-        queryClient.setQueryData<ReviewDataResponse>(
-          queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
-          (old) =>
-            old
-              ? { ...old, comments: (old.comments ?? []).filter((c) => c.id !== commentId) }
-              : old,
-        );
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.assignment.reviewData(
-            courseId,
-            assignmentId,
-            selectedStudentId ?? '',
-          ),
-        });
-        showToast.deleted('Comment');
-      } catch (err) {
-        console.error('Delete comment error:', err);
-        showToast.error(errMessage(err, 'Failed to delete comment'));
-      } finally {
-        setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
-      }
-    },
-    [courseId, assignmentId, selectedStudentId, queryClient],
-  );
-
-  const handleGradeInputChange = useCallback((problemId: string, value: string) => {
-    setGradeInputs((prev) => ({ ...prev, [problemId]: value }));
-    setProblemGradeErrors((prev) => ({ ...prev, [problemId]: null }));
-  }, []);
-
-  const saveProblemGrade = useCallback(
-    async (problemId: string) => {
-      if (!selectedStudent) return;
-      if (courseIsArchived) {
-        showToast.error(
-          'This course is archived, so grades cannot be edited. Unarchive the course to make changes.',
-        );
-        return;
-      }
-
-      const problem = assignmentProblems.find((p) => p.id === problemId);
-      if (!problem) return;
-      const rawMaxPoints = typeof problem.maxPoints === 'number' ? problem.maxPoints : null;
-      const hasUpperBound = typeof rawMaxPoints === 'number' && rawMaxPoints >= 0;
-      const rawValue = gradeInputs[problemId] ?? '';
-      const trimmed = rawValue.trim();
-      const numericValue = trimmed === '' ? null : Number(trimmed);
-
-      // Each of these shows the same sentence twice on purpose: inline next to the field, so it
-      // stays put while the grader fixes it, and as a toast, because the field can be scrolled
-      // out of view in a long problem list.
-      if (numericValue !== null) {
-        const message = Number.isNaN(numericValue)
-          ? 'Enter the grade as a number.'
-          : numericValue < 0
-            ? 'Enter a grade of at least 0.'
-            : hasUpperBound && rawMaxPoints !== null && numericValue > rawMaxPoints
-              ? `Enter a grade between 0 and ${rawMaxPoints}.`
-              : null;
-        if (message) {
-          setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
-          showToast.error(message);
-          return;
-        }
-      }
-
-      setProblemGradeErrors((prev) => ({ ...prev, [problemId]: null }));
-      setSavingProblemGrades((prev) => ({ ...prev, [problemId]: true }));
-
-      try {
-        await apiClient.post(
-          apiPaths.assignmentProblemGrade(courseId, assignmentId, problemId, selectedStudent.id),
-          { grade: numericValue },
-        );
-
-        setProblemGrades((prev) => {
-          const updated = { ...prev, [problemId]: numericValue };
-          if (selectedStudent) {
-            const hasAllGrades =
-              assignmentProblems.length === 0
-                ? true
-                : assignmentProblems.every((problem) => {
-                    const value =
-                      problem.id === problemId ? numericValue : (prev[problem.id] ?? null);
-                    return value !== null && value !== undefined;
-                  });
-            setStudentGradeStatuses((prevStatus) => ({
-              ...prevStatus,
-              [selectedStudent.id]: hasAllGrades,
-            }));
-          }
-          return updated;
-        });
-        setGradeInputs((prev) => ({
-          ...prev,
-          [problemId]:
-            numericValue === null || numericValue === undefined ? '' : String(numericValue),
-        }));
-        // Keep the cached review data fresh after the optimistic local updates.
-        // NOTE: deliberately NOT invalidating the summary query, which would
-        // clobber the optimistic studentGradeStatuses update above.
-        void queryClient.invalidateQueries({
-          queryKey: [
-            'course',
-            courseId,
-            'assignment',
-            assignmentId,
-            'review-data',
-            selectedStudent.id,
-          ],
-        });
-        showToast.success(
-          `Grade ${numericValue ?? 'cleared'} saved for ${selectedStudent.firstName} ${selectedStudent.lastName} on ${problem.title}`,
-        );
-      } catch (error) {
-        console.error('Save problem grade error:', error);
-        const message = error instanceof Error ? error.message : 'Failed to save problem grade';
-        setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
-        showToast.error(message);
-      } finally {
-        setSavingProblemGrades((prev) => ({ ...prev, [problemId]: false }));
-      }
-    },
-    [
-      assignmentId,
-      courseId,
-      courseIsArchived,
-      gradeInputs,
-      assignmentProblems,
-      selectedStudent,
-      setProblemGrades,
-      queryClient,
-    ],
-  );
-
-  const handleSelectChange = (id: string) => {
-    const index = students.findIndex((s) => s.id === id);
-    if (index !== -1) setSelectedIndex(index);
-  };
 
   const goPrev = () =>
     setSelectedIndex((prev) => {
@@ -688,7 +328,9 @@ export default function AssignmentSubmissions({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [students.length]);
+    // setSelectedIndex is a useState setter from useReviewSelection, so it is stable; the
+    // linter cannot see that through the hook boundary.
+  }, [students.length, setSelectedIndex]);
 
   const isStudentDataLoading = loadingSubmissions || loadingComments || loadingProblemGrades;
 
@@ -704,6 +346,53 @@ export default function AssignmentSubmissions({
     setShowStudentDataLoading(false);
     return undefined;
   }, [isStudentDataLoading]);
+
+  // The panel is built around a selected student, so everything before there is one needs
+  // saying out loud. It used to render an empty div: a course with nobody enrolled looked
+  // identical to a page that had failed, and every cold load flashed blank first.
+  const heading = (
+    <h2 className="flex items-center gap-2 text-2xl font-semibold">
+      <FileText className="h-6 w-6" /> Submissions
+    </h2>
+  );
+
+  if (studentsQuery.isPending) {
+    return (
+      <div className="space-y-4">
+        {heading}
+        <div role="status" className="flex min-h-[320px] flex-col items-center justify-center gap-3">
+          <div
+            aria-hidden="true"
+            className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4"
+          />
+          <p className="text-muted-foreground text-sm">Loading students...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (studentsQueryIsError) {
+    return (
+      <div className="space-y-4">
+        {heading}
+        <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
+          Could not load the student list. Refresh the page to try again.
+        </div>
+      </div>
+    );
+  }
+
+  if (students.length === 0) {
+    return (
+      <div className="space-y-4">
+        {heading}
+        <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
+          Nobody is enrolled in this course yet. Add students on the Roster tab, and their
+          submissions will appear here.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -835,11 +524,7 @@ export default function AssignmentSubmissions({
                     comments={selectedComments}
                     commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
                     onCommentTextChange={(text: string) =>
-                      selectedProblem &&
-                      setCommentTexts((prev) => ({
-                        ...prev,
-                        [selectedProblem.id]: text,
-                      }))
+                      selectedProblem && setCommentText(selectedProblem.id, text)
                     }
                     onSaveComment={() => selectedProblem && saveComment(selectedProblem.id)}
                     onDeleteComment={(commentId: string) =>
