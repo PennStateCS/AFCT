@@ -35,6 +35,13 @@ const GrantExtraSubmissionsDialog = dynamic(
   { ssr: false },
 );
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import { MoreVertical } from 'lucide-react';
 import { useReviewData } from './useReviewData';
 import { useComments } from './useComments';
 import { useProblemGrades } from './useProblemGrades';
@@ -242,6 +249,7 @@ export default function AssignmentSubmissions({
     handleGradeInputChange,
     saveProblemGrade,
     setManualHold,
+    overrideProblemGrade,
     gradeTarget,
     setGradeTarget,
     pendingGroupGrade,
@@ -317,19 +325,6 @@ export default function AssignmentSubmissions({
     },
     [refreshReview],
   );
-
-  const goPrev = () =>
-    setSelectedIndex((prev) => {
-      if (students.length === 0) return -1;
-      const nextIndex = prev <= 0 ? students.length - 1 : prev - 1;
-      return nextIndex;
-    });
-  const goNext = () =>
-    setSelectedIndex((prev) => {
-      if (students.length === 0) return -1;
-      const nextIndex = prev >= students.length - 1 ? 0 : prev + 1;
-      return nextIndex;
-    });
 
   // Left/Right arrows page to the previous/next student (wrapping), unless the user is
   // typing in a field (so arrow keys still move the cursor there).
@@ -420,14 +415,12 @@ export default function AssignmentSubmissions({
             {/* One bar: who you are reviewing, when their work was due, which problem, and how
                 the assignment is going. Divided into cells rather than spaced apart, so the
                 regions read as parts of one control strip instead of loose groups. */}
-            <div className="mt-4 flex flex-col divide-y rounded-md border py-3 2xl:flex-row 2xl:items-stretch 2xl:divide-x 2xl:divide-y-0">
-              <div className="flex min-w-0 items-center px-4 2xl:flex-1">
+            <div className="mt-4 flex flex-col divide-y rounded-md border xl:py-3 xl:flex-row xl:items-stretch xl:divide-x xl:divide-y-0">
+              <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
               <StudentNavigator
                 students={students}
                 selectedIndex={selectedIndex}
                 onSelectStudent={handleSelectChange}
-                onPrev={goPrev}
-                onNext={goNext}
                 gradeStatuses={studentGradeStatuses}
                 earnedByStudent={studentEarned}
                 totalPoints={assignmentTotals.totalPoints}
@@ -444,7 +437,7 @@ export default function AssignmentSubmissions({
                 }
               />
               </div>
-              <div className="flex min-w-0 items-center px-4 2xl:flex-1">
+              <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
                 <ProblemPicker
                   problems={visibleProblems}
                   selectedProblemId={selectedProblem?.id ?? null}
@@ -461,7 +454,9 @@ export default function AssignmentSubmissions({
               {/* A cell each, so the strip's rules separate them the way they separate the
                   dates from the picker. They answer different questions: how much is done,
                   and how it is going. */}
-              <div className="flex min-w-0 items-center px-4 2xl:flex-1">
+              {/* Dropped first when the bar is tight: how many problems are graded is the
+                  least load-bearing figure here, and the picker already shows it per problem. */}
+              <div className="hidden min-w-0 items-center px-4 py-2 2xl:flex xl:flex-auto xl:py-0">
                 <ProgressRing
                   label="Graded"
                   value={assignmentTotals.graded}
@@ -469,7 +464,7 @@ export default function AssignmentSubmissions({
                   srLabel={`${assignmentTotals.graded} of ${assignmentTotals.count} problems graded`}
                 />
               </div>
-              <div className="flex min-w-0 items-center px-4 2xl:flex-1">
+              <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
                 <ProgressRing
                   label="Assignment score"
                   value={assignmentTotals.earned}
@@ -519,13 +514,21 @@ export default function AssignmentSubmissions({
                   : (selectedProblem?.maxSubmissions ?? 0) > 0;
 
                 const grantAction = selectedProblem && hasSubmissionCap ? (
-                  <Button
-                    size="sm"
-                    onClick={() => setGrantDialogOpen(true)}
-                    disabled={courseIsArchived}
-                  >
-                    Grant extra submissions
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label="Problem actions">
+                        <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={courseIsArchived}
+                        onClick={() => setGrantDialogOpen(true)}
+                      >
+                        Grant extra submissions
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : null;
 
                 const workspace = (
@@ -552,6 +555,9 @@ export default function AssignmentSubmissions({
                     }
                     onManualHoldChange={(held) =>
                       selectedProblem && void setManualHold(selectedProblem.id, held)
+                    }
+                    onOverrideGrade={(grade) =>
+                      selectedProblem && void overrideProblemGrade(selectedProblem.id, grade)
                     }
                     showSubmitter={reviewIsGroup}
                     subjectName={

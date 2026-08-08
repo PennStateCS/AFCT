@@ -6,14 +6,23 @@ import {
   ChevronUp,
   ClipboardCheck,
   Download,
+  MoreHorizontal,
+  MoreVertical,
   FileText,
   MessageSquare,
   RotateCcw,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { GradeOverrideDialog } from '@/components/dialogs/GradeOverrideDialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Switch } from '@/components/ui/switch';
 import { DataTable } from '@/components/ui/data-table';
 import ProblemHeader from '@/components/ProblemHeader';
 import ProblemGradeForm from '@/components/ProblemGradeForm';
@@ -83,6 +92,8 @@ export type ProblemWorkspaceProps = {
   gradedManually?: boolean;
   /** Hold the grade against the autograder, or hand it back. */
   onManualHoldChange?: (held: boolean) => void;
+  /** Set the grade and lock it, from the override dialog. */
+  onOverrideGrade?: (grade: number) => void;
   /** Group assignments only: who a saved grade applies to. */
   gradeAudience?: GradeAudience | null;
   /** The value this student's group was given, when the grade came from one. */
@@ -141,6 +152,7 @@ export default function ProblemWorkspace({
   submissionsAction,
   gradedManually = false,
   onManualHoldChange,
+  onOverrideGrade,
   gradeAudience,
   groupGradeValue,
   isSavingGrade = false,
@@ -150,6 +162,7 @@ export default function ProblemWorkspace({
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
   const [discussionOpen, setDiscussionOpen] = useState(true);
+  const [overrideOpen, setOverrideOpen] = useState(false);
   // Render each submission's date/time in the course/effective timezone (not the
   // reviewer's browser locale), so the time shown is the one that student submitted at.
   const { timezone, hour12 } = useEffectiveTimezone();
@@ -311,45 +324,59 @@ export default function ProblemWorkspace({
       cell: ({ row }) => {
         const submission = row.original;
         if (!submission.fileName) return <span className="text-muted-foreground">—</span>;
+        return (
+          // The name previews; everything else lives in the row's menu.
+          <button
+            type="button"
+            onClick={() => onViewSubmission(submission)}
+            className="text-primary break-all hover:underline"
+            title={`Preview ${submission.originalFileName || 'submission'}`}
+          >
+            {submission.originalFileName || submission.fileName}
+          </button>
+        );
+      },
+      meta: { priority: 2 },
+    },
+    {
+      id: 'actions',
+      header: '',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const submission = row.original;
+        if (!submission.fileName) return null;
+        // A re-run while one is already queued or running would do nothing useful, so the
+        // item is disabled rather than hidden: the action still reads as available in
+        // general, just not right now.
         const pendingOrProcessing =
           submission.status?.toLowerCase() === 'pending' ||
           submission.status?.toLowerCase() === 'processing';
         return (
-          <div className="flex items-center gap-2">
-            {/* Click the name to preview; the icons download and (for staff) rerun. */}
-            <button
-              type="button"
-              onClick={() => onViewSubmission(submission)}
-              className="text-primary break-all hover:underline"
-              title={`Preview ${submission.originalFileName || 'submission'}`}
-            >
-              {submission.originalFileName || submission.fileName}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDownload(submission)}
-              className="text-muted-foreground hover:text-foreground shrink-0"
-              title={`Download ${submission.originalFileName || 'submission'}`}
-              aria-label={`Download ${submission.originalFileName || 'submission'}`}
-            >
-              <Download className="h-4 w-4" aria-hidden="true" />
-            </button>
-            {isPrivilegedUser ? (
-              <button
-                type="button"
-                onClick={() => onRerunSubmission?.(submission)}
-                disabled={pendingOrProcessing}
-                className="text-muted-foreground hover:text-foreground shrink-0 disabled:pointer-events-none disabled:opacity-50"
-                title="Rerun submission"
-                aria-label="Rerun submission"
-              >
-                <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              </button>
-            ) : null}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Attempt actions">
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleDownload(submission)}>
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Download file
+              </DropdownMenuItem>
+              {isPrivilegedUser ? (
+                <DropdownMenuItem
+                  disabled={pendingOrProcessing}
+                  onClick={() => onRerunSubmission?.(submission)}
+                >
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  Rerun the autograder
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         );
       },
-      meta: { priority: 2 },
+      meta: { align: 'right' },
     },
   ];
 
@@ -418,26 +445,48 @@ export default function ProblemWorkspace({
                 <div className="flex items-center gap-2">
                   <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
                   <h3 className="text-sm font-medium">Problem Grade</h3>
-                  {/* Only meaningful where the autograder would otherwise write this grade.
-                      On a hand-graded problem every grade is manual and the switch would be
-                      a control with nothing on the other side of it. */}
-                  {problem.autograderEnabled && onManualHoldChange ? (
-                    <label className="text-muted-foreground ml-auto flex items-center gap-2 text-xs">
-                      <span>Manual override</span>
-                      <Switch
-                        checked={gradedManually}
-                        onCheckedChange={(v) => onManualHoldChange(!!v)}
-                        disabled={courseIsArchived}
-                        aria-label="Hold this grade against the autograder"
-                      />
-                    </label>
+                  {onManualHoldChange ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="ml-auto"
+                          aria-label="Grade actions"
+                        >
+                          <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {gradedManually ? (
+                          <DropdownMenuItem
+                            disabled={courseIsArchived}
+                            onClick={() => onManualHoldChange(false)}
+                          >
+                            Remove override
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            disabled={courseIsArchived}
+                            onClick={() => setOverrideOpen(true)}
+                          >
+                            Manual override
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ) : null}
                 </div>
+                {gradedManually ? (
+                  <p className="text-muted-foreground text-xs">
+                    This grade is overridden and locked. Remove the override to edit it here.
+                  </p>
+                ) : null}
                 <ProblemGradeForm
                   value={gradeInput}
                   currentGrade={currentGrade}
                   maxPoints={problem.maxPoints}
-                  disabled={courseIsArchived}
+                  disabled={courseIsArchived || gradedManually}
                   isSaving={isSavingGrade}
                   isLoading={isLoadingGrade}
                   error={gradeError}
@@ -499,6 +548,21 @@ export default function ProblemWorkspace({
             )}
             </div>
           </div>
+
+      {problem ? (
+        <GradeOverrideDialog
+          open={overrideOpen}
+          onOpenChange={setOverrideOpen}
+          problemTitle={problem.title}
+          maxPoints={problem.maxPoints}
+          currentGrade={currentGrade}
+          saving={isSavingGrade}
+          onApply={(grade) => {
+            setOverrideOpen(false);
+            onOverrideGrade?.(grade);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

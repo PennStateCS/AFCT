@@ -18,8 +18,6 @@ const baseProps: StudentNavigatorProps = {
   students: [{ id: 's1', firstName: 'Ada', lastName: 'Lovelace' }],
   selectedIndex: 0,
   onSelectStudent: vi.fn(),
-  onPrev: vi.fn(),
-  onNext: vi.fn(),
 };
 
 /** The group panel is fed by a prop, from the review data the parent already holds. */

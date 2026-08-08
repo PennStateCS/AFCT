@@ -91,9 +91,9 @@ export function StudentSchedule({
   // nested inside a tall one.
   return (
     <>
-      <div className={`flex min-w-0 items-center px-4 2xl:flex-1 ${className}`}>
+      <div className={`flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0 ${className}`}>
         <div className="flex items-center gap-2">
-        <CalendarDays className="text-brand-teal hidden h-8 w-8 shrink-0 2xl:block" aria-hidden="true" />
+        <CalendarDays className="text-brand-teal hidden h-8 w-8 shrink-0 xl:block" aria-hidden="true" />
         <Field label="Due">
           {/* Date and time on separate lines: the strip has the room, and a grader scanning
               for "which day" should not have to read past a timestamp to find it. */}
@@ -114,9 +114,9 @@ export function StudentSchedule({
         </div>
       </div>
 
-      <div className="flex min-w-0 items-center px-4 2xl:flex-1">
+      <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
         <div className="flex items-center gap-2">
-        <Clock className="text-brand-teal hidden h-8 w-8 shrink-0 2xl:block" aria-hidden="true" />
+        <Clock className="text-brand-teal hidden h-8 w-8 shrink-0 xl:block" aria-hidden="true" />
         <Field label="Late Policy">
           <span className="block">
             <span className="font-medium">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}

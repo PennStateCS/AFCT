@@ -43,7 +43,7 @@ export function ProgressRing({
     // above its value. The ring IS the icon, so these read as the same kind of fact rather
     // than a chart parked next to some text.
     <div className={`flex items-center gap-2 ${className}`}>
-      <div className="relative hidden h-10 w-10 shrink-0 2xl:block">
+      <div className="relative hidden h-10 w-10 shrink-0 xl:block">
         <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90" aria-hidden="true">
           <circle cx="20" cy="20" r={radius} fill="none" strokeWidth="4" className="stroke-muted" />
           <circle

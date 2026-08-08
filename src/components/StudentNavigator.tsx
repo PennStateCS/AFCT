@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import {
@@ -77,8 +77,6 @@ export type StudentNavigatorProps = {
   students: StudentNavigatorStudent[];
   selectedIndex: number;
   onSelectStudent: (studentId: string) => void;
-  onPrev: () => void;
-  onNext: () => void;
   gradeStatuses?: Record<string, boolean | undefined>;
   /** Points each student has earned on this assignment, shown beside their name. */
   earnedByStudent?: Record<string, number | undefined>;
@@ -96,8 +94,6 @@ export default function StudentNavigator({
   students,
   selectedIndex,
   onSelectStudent,
-  onPrev,
-  onNext,
   gradeStatuses,
   earnedByStudent,
   totalPoints,
@@ -160,47 +156,16 @@ export default function StudentNavigator({
             }`
           : ''}
       </span>
-      <div className="min-w-0">
-        {groupInfo?.isGroup && groupInfo.group ? (
-          <span className="text-muted-foreground block text-xs">
-            Submitting with {groupInfo.group.name}
-            {groupInfo.members.length > 0 ? `: ${groupInfo.members.map(memberName).join(', ')}` : ''}
-          </span>
-        ) : null}
-        {/* A group assignment with nobody to submit alongside is a setup mistake, not a
-            fact about this student's work. Say so here rather than letting the panel read
-            as a normal individual submission. */}
-        {groupInfo?.isGroupAssignment && !groupInfo.isGroup ? (
-          <span className="text-status-warning block text-xs font-medium">
-            Not in a group. Their work below is their own; add them to a group to review it
-            with the rest.
-          </span>
-        ) : null}
-        {groupInfo?.isGroup && groupInfo.members.length === 0 ? (
-          <span className="text-muted-foreground block text-xs">
-            The only member of that group.
-          </span>
-        ) : null}
-      </div>
       {/* Labelled like the problem picker beside it: the two are the same kind of control and
           should read as a pair rather than one being a bare row of buttons. */}
       <span className="text-muted-foreground text-xs font-medium">Student</span>
       {/* Prev / student picker / Next joined into one segmented control, below the info. */}
       <div className="flex w-full min-w-0 items-center">
-        <Button
-          variant="secondary"
-          onClick={onPrev}
-          aria-keyshortcuts="ArrowLeft"
-          title="Previous student (Left arrow)"
-          className="flex w-28 items-center justify-center gap-x-1 rounded-r-none"
-        >
-          <ChevronLeft className="h-4 w-4" /> Previous
-        </Button>
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="bg-card text-foreground border-border hover:bg-accent focus:ring-ring relative flex min-w-0 flex-1 items-center gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
+              className="bg-card text-foreground border-border hover:bg-accent focus:ring-ring relative flex min-w-0 flex-1 items-center gap-2 focus:z-10 focus:ring-2"
             >
               <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                 {selectedStudent ? (
@@ -307,15 +272,28 @@ export default function StudentNavigator({
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          variant="secondary"
-          onClick={onNext}
-          aria-keyshortcuts="ArrowRight"
-          title="Next student (Right arrow)"
-          className="flex w-28 items-center justify-center gap-x-1 rounded-l-none"
-        >
-          Next <ChevronRight className="h-4 w-4" />
-        </Button>
+      </div>
+      <div className="min-w-0">
+        {groupInfo?.isGroup && groupInfo.group ? (
+          <span className="text-muted-foreground block text-xs">
+            Submitting with {groupInfo.group.name}
+            {groupInfo.members.length > 0 ? `: ${groupInfo.members.map(memberName).join(', ')}` : ''}
+          </span>
+        ) : null}
+        {/* A group assignment with nobody to submit alongside is a setup mistake, not a
+            fact about this student's work. Say so here rather than letting the panel read
+            as a normal individual submission. */}
+        {groupInfo?.isGroupAssignment && !groupInfo.isGroup ? (
+          <span className="text-status-warning block text-xs font-medium">
+            Not in a group. Their work below is their own; add them to a group to review it
+            with the rest.
+          </span>
+        ) : null}
+        {groupInfo?.isGroup && groupInfo.members.length === 0 ? (
+          <span className="text-muted-foreground block text-xs">
+            The only member of that group.
+          </span>
+        ) : null}
       </div>
     </div>
   );

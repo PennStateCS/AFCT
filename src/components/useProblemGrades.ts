@@ -269,6 +269,45 @@ export function useProblemGrades({
     [courseId, assignmentId, selectedStudentId, queryClient],
   );
 
+  /**
+   * Set a grade and lock it, from the override dialog.
+   *
+   * The ordinary grade write already marks a grade as manually set, which is what holds it
+   * against the autograder, so an override is that same write with the value coming from the
+   * dialog rather than the inline field.
+   */
+  const overrideProblemGrade = useCallback(
+    async (problemId: string, grade: number) => {
+      if (!selectedStudent) return;
+      setSavingProblemGrades((prev) => ({ ...prev, [problemId]: true }));
+      try {
+        await apiClient.post(
+          apiPaths.assignmentProblemGrade(courseId, assignmentId, problemId, selectedStudent.id),
+          { grade },
+        );
+        setProblemGrades((prev) => ({ ...prev, [problemId]: grade }));
+        setGradeInputs((prev) => ({ ...prev, [problemId]: String(grade) }));
+        void queryClient.invalidateQueries({
+          queryKey: [
+            'course',
+            courseId,
+            'assignment',
+            assignmentId,
+            'review-data',
+            selectedStudent.id,
+          ],
+        });
+        showToast.success(`Grade ${grade} overridden and locked`);
+      } catch (error) {
+        console.error('Override grade error:', error);
+        showToast.error(errMessage(error, 'Failed to override the grade'));
+      } finally {
+        setSavingProblemGrades((prev) => ({ ...prev, [problemId]: false }));
+      }
+    },
+    [courseId, assignmentId, selectedStudent, queryClient],
+  );
+
   const saveProblemGrade = useCallback(
     async (problemId: string) => {
       if (!selectedStudent) return;
@@ -413,6 +452,7 @@ export function useProblemGrades({
     confirmGroupGrade,
     cancelGroupGrade,
     setManualHold,
+    overrideProblemGrade,
     problemGrades,
     gradeInputs,
     problemGradeErrors,
