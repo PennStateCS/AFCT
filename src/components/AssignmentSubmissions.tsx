@@ -238,6 +238,7 @@ export default function AssignmentSubmissions({
     problemGradeErrors,
     savingProblemGrades,
     studentGradeStatuses,
+    studentEarned,
     handleGradeInputChange,
     saveProblemGrade,
     setManualHold,
@@ -428,6 +429,8 @@ export default function AssignmentSubmissions({
                 onPrev={goPrev}
                 onNext={goNext}
                 gradeStatuses={studentGradeStatuses}
+                earnedByStudent={studentEarned}
+                totalPoints={assignmentTotals.totalPoints}
                 groupInfo={
                   reviewData
                     ? {

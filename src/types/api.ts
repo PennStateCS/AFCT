@@ -5909,14 +5909,19 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A map of studentId → fully-graded boolean (empty object if the assignment has no problems). */
+            /** @description A map of studentId to their grading state (empty object if the assignment has no problems). */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        [key: string]: boolean;
+                        [key: string]: {
+                            /** @description Every problem has a grade. */
+                            graded?: boolean;
+                            /** @description Points earned so far. */
+                            earned?: number;
+                        };
                     };
                 };
             };

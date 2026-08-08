@@ -76,6 +76,8 @@ export function useProblemGrades({
   const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
   const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
   const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
+  /** Points each student has earned on this assignment so far, for the student picker. */
+  const [studentEarned, setStudentEarned] = useState<Record<string, number>>({});
 
   // Whether a saved grade applies to the whole group. Defaults to the group, and resets per
   // student so a deliberate individual adjustment does not carry to the next person.
@@ -93,10 +95,12 @@ export function useProblemGrades({
       const res = await fetch(apiPaths.assignmentProblemGradesSummary(courseId, assignmentId));
       if (!res.ok) {
         // Match the previous silent handling of auth/not-found responses.
-        if ([401, 403, 404].includes(res.status)) return {} as Record<string, boolean>;
+        if ([401, 403, 404].includes(res.status)) {
+          return {} as Record<string, { graded: boolean; earned: number }>;
+        }
         throw new Error((await res.json())?.error || 'Failed to load grade summary');
       }
-      return ((await res.json()) ?? {}) as Record<string, boolean>;
+      return ((await res.json()) ?? {}) as Record<string, { graded: boolean; earned: number }>;
     },
     enabled: students.length > 0,
     staleTime: 30_000,
@@ -116,14 +120,18 @@ export function useProblemGrades({
   useEffect(() => {
     if (students.length === 0) {
       setStudentGradeStatuses({});
+      setStudentEarned({});
       return;
     }
     if (gradeSummaryData === undefined) return;
     const normalized: Record<string, boolean> = {};
+    const earned: Record<string, number> = {};
     students.forEach((student) => {
-      normalized[student.id] = Boolean(gradeSummaryData?.[student.id]);
+      normalized[student.id] = Boolean(gradeSummaryData?.[student.id]?.graded);
+      earned[student.id] = gradeSummaryData?.[student.id]?.earned ?? 0;
     });
     setStudentGradeStatuses(normalized);
+    setStudentEarned(earned);
   }, [students, gradeSummaryData]);
 
   // Seed the local editable GRADE state from the cached review data. When there is no
@@ -410,6 +418,7 @@ export function useProblemGrades({
     problemGradeErrors,
     savingProblemGrades,
     studentGradeStatuses,
+    studentEarned,
     handleGradeInputChange,
     saveProblemGrade,
   };

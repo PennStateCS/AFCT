@@ -39,26 +39,13 @@ export function ProgressRing({
   const circumference = 2 * Math.PI * radius;
 
   return (
-    <div className={`flex flex-col items-center gap-1 ${className}`}>
-      {/* Caption above the figure, matching the other cells on the strip, which all label
-          first and answer second. */}
-      <span aria-hidden="true" className="text-muted-foreground text-xs">
-        {label}
-      </span>
-      <div className="flex items-center gap-2">
-        <span aria-hidden="true" className="text-sm font-semibold tabular-nums">
-          {display ?? `${value}/${total}`}
-        </span>
-        <div className="relative h-10 w-10 shrink-0">
+    // Laid out like the dated cells beside it on the strip: a mark on the left, the label
+    // above its value. The ring IS the icon, so these read as the same kind of fact rather
+    // than a chart parked next to some text.
+    <div className={`flex items-center gap-2 ${className}`}>
+      <div className="relative h-10 w-10 shrink-0">
         <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90" aria-hidden="true">
-          <circle
-            cx="20"
-            cy="20"
-            r={radius}
-            fill="none"
-            strokeWidth="4"
-            className="stroke-muted"
-          />
+          <circle cx="20" cy="20" r={radius} fill="none" strokeWidth="4" className="stroke-muted" />
           <circle
             cx="20"
             cy="20"
@@ -72,6 +59,13 @@ export function ProgressRing({
           />
         </svg>
       </div>
+      <div className="min-w-0">
+        <div aria-hidden="true" className="text-muted-foreground text-xs">
+          {label}
+        </div>
+        <div aria-hidden="true" className="text-sm font-medium tabular-nums">
+          {display ?? `${value}/${total}`}
+        </div>
       </div>
       <span className="sr-only">{srLabel}</span>
     </div>

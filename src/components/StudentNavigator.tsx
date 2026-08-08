@@ -80,6 +80,10 @@ export type StudentNavigatorProps = {
   onPrev: () => void;
   onNext: () => void;
   gradeStatuses?: Record<string, boolean | undefined>;
+  /** Points each student has earned on this assignment, shown beside their name. */
+  earnedByStudent?: Record<string, number | undefined>;
+  /** What the assignment is out of, so the figure reads as a score rather than a count. */
+  totalPoints?: number;
   /**
    * The selected student's group and effective schedule, from the review-data the parent
    * already fetched. This used to be a second per-student request from inside here, which
@@ -95,6 +99,8 @@ export default function StudentNavigator({
   onPrev,
   onNext,
   gradeStatuses,
+  earnedByStudent,
+  totalPoints,
   groupInfo = null,
 }: StudentNavigatorProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -144,7 +150,7 @@ export default function StudentNavigator({
   const selectedSpokenName = selectedStudent ? memberName(selectedStudent) : null;
 
   return (
-    <div className="flex w-full flex-col items-start gap-3">
+    <div className="flex w-full flex-col items-start gap-1">
       {/* Polite live region: announces the newly selected student on navigation,
           since focus stays on the Prev/Next/dropdown control while the panel changes. */}
       <span className="sr-only" aria-live="polite">
@@ -263,6 +269,17 @@ export default function StudentNavigator({
                       />
                       <span className="truncate">{listName(s)}</span>
                       {s.enrollmentStatus === 'DROPPED' ? <DroppedBadge /> : null}
+                      {/* Their standing on this assignment, the way the problem picker shows
+                          each problem's. A dash reads as ungraded without relying on the dot's
+                          colour. */}
+                      {typeof totalPoints === 'number' ? (
+                        <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
+                          {gradeStatuses?.[s.id] || (earnedByStudent?.[s.id] ?? 0) > 0
+                            ? (earnedByStudent?.[s.id] ?? 0)
+                            : '—'}
+                          /{totalPoints}
+                        </span>
+                      ) : null}
                       {/* Text equivalent for the color-coded dot (use of color). */}
                       <span className="sr-only">
                         {gradeStatuses?.[s.id] ? 'All problems graded' : 'Missing grades'}
