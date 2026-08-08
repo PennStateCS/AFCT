@@ -13,6 +13,10 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { ProblemPicker } from '@/components/assignments/ProblemPicker';
 import { ProgressRing } from '@/components/assignments/ProgressRing';
+import { StudentSchedule } from '@/components/assignments/StudentSchedule';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { queryKeys } from '@/lib/query-keys';
+import { fetchJson } from '@/lib/query-fetch';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -117,6 +121,20 @@ export default function AssignmentSubmissions({
   // Students for review: includes DROPPED students (labeled), since staff still review
   // their submitted work. Its own query key ('students', 'all') so it doesn't collide
   // with the active-only list GroupsCard/audience pickers share.
+  const { timezone } = useEffectiveTimezone();
+  const assignmentShellQuery = useQuery<{
+    dueDate?: string | Date;
+    allowLateSubmissions?: boolean;
+    lateCutoff?: string | Date | null;
+  }>({
+    queryKey: queryKeys.assignment.shell(courseId, assignmentId),
+    queryFn: () =>
+      fetchJson(apiPaths.assignment(courseId, assignmentId, { view: 'problems' })),
+    enabled: !!assignmentId,
+    staleTime: 30_000,
+  });
+  const assignmentShell = assignmentShellQuery.isError ? null : (assignmentShellQuery.data ?? null);
+
   const studentsQuery = useQuery({
     queryKey: ['course', courseId, 'students', 'all'],
     queryFn: async () => {
@@ -222,6 +240,7 @@ export default function AssignmentSubmissions({
     studentGradeStatuses,
     handleGradeInputChange,
     saveProblemGrade,
+    setManualHold,
     gradeTarget,
     setGradeTarget,
     pendingGroupGrade,
@@ -397,7 +416,11 @@ export default function AssignmentSubmissions({
               <FileText className="h-6 w-6" /> Submissions
             </h2>
 
-            <div className="mt-4 flex flex-col items-start gap-4 border-b pb-4 lg:flex-row lg:items-center lg:justify-between">
+            {/* One bar: who you are reviewing, when their work was due, which problem, and how
+                the assignment is going. Divided into cells rather than spaced apart, so the
+                regions read as parts of one control strip instead of loose groups. */}
+            <div className="mt-4 flex flex-col divide-y rounded-md border py-3 xl:flex-row xl:items-stretch xl:divide-x xl:divide-y-0">
+              <div className="flex items-center px-4 xl:flex-1">
               <StudentNavigator
                 students={students}
                 selectedIndex={selectedIndex}
@@ -405,8 +428,6 @@ export default function AssignmentSubmissions({
                 onPrev={goPrev}
                 onNext={goNext}
                 gradeStatuses={studentGradeStatuses}
-                courseId={courseId}
-                assignmentId={assignmentId}
                 groupInfo={
                   reviewData
                     ? {
@@ -419,20 +440,33 @@ export default function AssignmentSubmissions({
                     : null
                 }
               />
-
-              <div className="flex flex-wrap items-center gap-6">
+              </div>
+              <div className="flex items-center px-4 xl:flex-1">
                 <ProblemPicker
                   problems={visibleProblems}
                   selectedProblemId={selectedProblem?.id ?? null}
                   onSelect={handleSelectProblem}
                   grades={problemGrades}
                 />
+              </div>
+              <StudentSchedule
+                assignment={assignmentShell}
+                effective={reviewData?.effective ?? null}
+                loading={!assignmentShell}
+                timezone={timezone}
+              />
+              {/* A cell each, so the strip's rules separate them the way they separate the
+                  dates from the picker. They answer different questions: how much is done,
+                  and how it is going. */}
+              <div className="flex items-center px-4 xl:flex-1">
                 <ProgressRing
                   label="Graded"
                   value={assignmentTotals.graded}
                   total={assignmentTotals.count}
                   srLabel={`${assignmentTotals.graded} of ${assignmentTotals.count} problems graded`}
                 />
+              </div>
+              <div className="flex items-center px-4 xl:flex-1">
                 <ProgressRing
                   label="Assignment score"
                   value={assignmentTotals.earned}
@@ -483,9 +517,7 @@ export default function AssignmentSubmissions({
 
                 const grantAction = selectedProblem && hasSubmissionCap ? (
                   <Button
-                    variant="outline"
                     size="sm"
-                    className="h-7"
                     onClick={() => setGrantDialogOpen(true)}
                     disabled={courseIsArchived}
                   >
@@ -510,6 +542,14 @@ export default function AssignmentSubmissions({
                     submissions={selectedSubs}
                     assignmentDueDate={assignmentDueDate}
                     submissionsAction={grantAction}
+                    gradedManually={
+                      selectedProblem
+                        ? (reviewData?.problemGrades?.[selectedProblem.id]?.gradedManually ?? false)
+                        : false
+                    }
+                    onManualHoldChange={(held) =>
+                      selectedProblem && void setManualHold(selectedProblem.id, held)
+                    }
                     showSubmitter={reviewIsGroup}
                     subjectName={
                       `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||

@@ -1,6 +1,12 @@
 'use client';
 
-import { formatDateTimeInTimeZone } from '@/lib/date-format';
+import type React from 'react';
+import { CalendarDays, Clock } from 'lucide-react';
+import {
+  formatDateInTimeZone,
+  formatDateTimeInTimeZone,
+  formatTimeInTimeZone,
+} from '@/lib/date-format';
 
 /** The assignment's own dates, before any override is applied. */
 export type ScheduleBase = {
@@ -45,7 +51,11 @@ export function StudentSchedule({
   className = '',
 }: StudentScheduleProps) {
   if (loading) {
-    return <span className={`text-muted-foreground text-sm ${className}`}>Loading assignment...</span>;
+    return (
+      <div className={`text-muted-foreground px-4 text-sm ${className}`}>
+        Loading assignment...
+      </div>
+    );
   }
   if (!assignment) return null;
 
@@ -69,27 +79,60 @@ export function StudentSchedule({
     <span className="text-primary ml-1 text-xs font-medium">({overrideLabel})</span>
   );
 
+  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div className="min-w-0">
+      <div className="text-muted-foreground text-xs">{label}</div>
+      <div className="text-sm">{children}</div>
+    </div>
+  );
+
+  // Two cells rather than one divided internally: as direct children of the strip they take
+  // its own rules, so every separator on the bar is the same height instead of a short one
+  // nested inside a tall one.
   return (
-    <span className={`block ${className}`}>
-      <span>
-        <span className="font-semibold">Due:</span>{' '}
-        {showDueDate ? formatDateTimeInTimeZone(showDueDate, timezone) : '—'}
-        {dueOverridden ? <OverrideMark /> : null}
-      </span>
-      <span className="text-muted-foreground mx-2">•</span>
-      <span>
-        <span className="font-semibold">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}
-        {allowLateOverridden ? <OverrideMark /> : null}
-      </span>
-      <span className="text-muted-foreground mx-2">•</span>
-      <span>
-        <span className="font-semibold">Late Cutoff:</span>{' '}
-        {showAllowLate && showLateCutoff
-          ? formatDateTimeInTimeZone(showLateCutoff, timezone)
-          : 'Never'}
-        {cutoffOverridden ? <OverrideMark /> : null}
-      </span>
-    </span>
+    <>
+      <div className={`flex items-center px-4 xl:flex-1 ${className}`}>
+        <div className="flex items-center gap-2">
+        <CalendarDays className="text-brand-teal h-5 w-5 shrink-0" aria-hidden="true" />
+        <Field label="Due">
+          {/* Date and time on separate lines: the strip has the room, and a grader scanning
+              for "which day" should not have to read past a timestamp to find it. */}
+          {showDueDate ? (
+            <>
+              <span className="block font-medium">
+                {formatDateInTimeZone(showDueDate, timezone)}
+                {dueOverridden ? <OverrideMark /> : null}
+              </span>
+              <span className="text-muted-foreground block">
+                {formatTimeInTimeZone(showDueDate, timezone)}
+              </span>
+            </>
+          ) : (
+            <span className="font-medium">—</span>
+          )}
+        </Field>
+        </div>
+      </div>
+
+      <div className="flex items-center px-4 xl:flex-1">
+        <div className="flex items-center gap-2">
+        <Clock className="text-brand-teal h-5 w-5 shrink-0" aria-hidden="true" />
+        <Field label="Late Policy">
+          <span className="block">
+            <span className="font-medium">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}
+            {allowLateOverridden ? <OverrideMark /> : null}
+          </span>
+          <span className="block">
+            <span className="font-medium">Late Cutoff:</span>{' '}
+            {showAllowLate && showLateCutoff
+              ? formatDateTimeInTimeZone(showLateCutoff, timezone)
+              : 'Never'}
+            {cutoffOverridden ? <OverrideMark /> : null}
+          </span>
+        </Field>
+        </div>
+      </div>
+    </>
   );
 }
 

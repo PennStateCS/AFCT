@@ -1,13 +1,22 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { Download, FileText, MessageSquare, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
+import {
+  ChevronUp,
+  ClipboardCheck,
+  Download,
+  FileText,
+  MessageSquare,
+  RotateCcw,
+} from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Switch } from '@/components/ui/switch';
 import { DataTable } from '@/components/ui/data-table';
 import ProblemHeader from '@/components/ProblemHeader';
 import ProblemGradeForm from '@/components/ProblemGradeForm';
-import WorkspacePanel from '@/components/WorkspacePanel';
 import { DataTableLoading } from '@/components/ui/data-table-status';
 import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
 import type { GradeAudience } from '@/components/ProblemGradeForm';
@@ -19,7 +28,6 @@ import type { StudentProblemComment } from '@/lib/assignment-details';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import { apiPaths } from '@/lib/api-paths';
 import {
-  statusToneClass,
   getTimingStatusChip,
   getReviewStatusChip,
   type StatusChip,
@@ -71,6 +79,10 @@ export type ProblemWorkspaceProps = {
   onSaveGrade?: () => void;
   /** Control shown in the Submissions panel header, e.g. granting extra attempts. */
   submissionsAction?: React.ReactNode;
+  /** Whether a person set this grade, so the autograder will leave it alone. */
+  gradedManually?: boolean;
+  /** Hold the grade against the autograder, or hand it back. */
+  onManualHoldChange?: (held: boolean) => void;
   /** Group assignments only: who a saved grade applies to. */
   gradeAudience?: GradeAudience | null;
   /** The value this student's group was given, when the grade came from one. */
@@ -88,7 +100,7 @@ const normalizeComments = (comments: ProblemWorkspaceComment[]): DiscussionComme
       return comment;
     }
 
-    const [firstName, ...rest] = (comment.authorName ?? '').split(' ');
+  const [firstName, ...rest] = (comment.authorName ?? '').split(' ');
     return {
       id: comment.id,
       content: comment.content,
@@ -127,6 +139,8 @@ export default function ProblemWorkspace({
   onGradeInputChange,
   onSaveGrade,
   submissionsAction,
+  gradedManually = false,
+  onManualHoldChange,
   gradeAudience,
   groupGradeValue,
   isSavingGrade = false,
@@ -135,6 +149,7 @@ export default function ProblemWorkspace({
   submissionsLoading = false,
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
+  const [discussionOpen, setDiscussionOpen] = useState(true);
   // Render each submission's date/time in the course/effective timezone (not the
   // reviewer's browser locale), so the time shown is the one that student submitted at.
   const { timezone, hour12 } = useEffectiveTimezone();
@@ -154,6 +169,11 @@ export default function ProblemWorkspace({
   const dueDate = assignmentDueDate ? new Date(assignmentDueDate) : null;
   const hasValidDueDate = !!dueDate && !Number.isNaN(dueDate.getTime());
 
+  const attemptNumbers = new Map<string, number>();
+  [...submissions]
+    .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime())
+    .forEach((s, i) => attemptNumbers.set(s.id, i + 1));
+
   const sortedSubmissions = [...submissions].sort(
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
   );
@@ -170,22 +190,25 @@ export default function ProblemWorkspace({
     link.click();
   };
 
-  // A single status chip (dot + label). Status (timing) and Result (evaluator verdict)
-  // each render one of these in their own column.
-  const renderStatusChip = (chip: StatusChip) => (
-    <span className="inline-flex items-center gap-2 text-xs font-medium" title={chip.title}>
-      <span
-        className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[chip.tone]}`}
-        aria-hidden="true"
-      />
-      <span>{chip.label}</span>
-    </span>
-  );
+  // Status (timing) and Result (evaluator verdict) each render one of these. StatusBadge
+  // takes its colour from the chip's own variant, so the label and its colour are decided in
+  // lib/submission-status rather than per table, and a dot conveying meaning by colour alone
+  // is replaced by a badge whose text carries it.
+  const renderStatusChip = (chip: StatusChip) => <StatusBadge chip={chip} />;
 
   // Built inline so each cell's action buttons capture the current handlers/flags.
   // Status and Result expose a string accessor + multiselect filter so DataTable's own
   // Filters popover replaces the previous custom status chips.
   const submissionColumns: ColumnDef<ProblemSubmission>[] = [
+    {
+      id: 'attempt',
+      header: 'Attempt',
+      accessorFn: (s) => attemptNumbers.get(s.id) ?? 0,
+      cell: ({ row }) => (
+        <span className="tabular-nums">{attemptNumbers.get(row.original.id) ?? '—'}</span>
+      ),
+      meta: { align: 'center' },
+    },
     {
       id: 'submitted',
       header: 'Submitted',
@@ -331,13 +354,85 @@ export default function ProblemWorkspace({
   ];
 
   return (
-    <div className="grid h-full items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] print:block print:space-y-2">
-      {/* Left column: what the problem is, then the work submitted for it. */}
-      <div className="flex min-w-0 flex-col gap-4">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,70fr)_minmax(0,30fr)] print:block print:space-y-2">
+      {/* Two matching cards: what the problem is and the work submitted for it, beside what
+          you are doing about it. */}
+      <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4">
           <ProblemHeader
             className="min-w-0"
             action={
-              isPrivilegedUser && onGradeInputChange && onSaveGrade ? (
+              isPrivilegedUser ? (
+                submissionsAction
+              ) : (
+                <div className="border-border text-foreground inline-flex items-center gap-2 rounded-full border bg-transparent px-3 py-2 text-xs whitespace-nowrap">
+                  <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
+                  <span>
+                    {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
+                  </span>
+                </div>
+              )
+            }
+            title={problem.title}
+            description={problem.description ?? undefined}
+            descriptionJson={(problem as { descriptionJson?: unknown }).descriptionJson}
+            type={problem.type ?? undefined}
+            maxStates={problem.maxStates ?? undefined}
+            isDeterministic={problem.isDeterministic ?? undefined}
+            maxSubmissions={problem.maxSubmissions ?? undefined}
+            autograderEnabled={problem.autograderEnabled ?? undefined}
+          />
+
+          <h3 className="text-sm font-medium">Attempts</h3>
+          {/* No panel around the table: it carries its own toolbar, column headers and pager,
+              so a band above it repeating "Submissions" on the Submissions tab added a frame
+              and a word without adding information. `tableLabel` still names it for assistive
+              tech, and the grant action sits with the table's other controls. */}
+          {submissionsLoading ? (
+            <DataTableLoading message="Loading submissions, please wait..." className="min-h-[320px]" />
+          ) : sortedSubmissions.length > 0 ? (
+            <DataTable
+              columns={submissionColumns}
+              data={sortedSubmissions}
+              storageKey="problem-submissions"
+              tableLabel="Attempts"
+              // A handful of attempts for one student on one problem: search, filters and a
+              // column picker are more chrome than the data underneath them.
+              showToolbar={false}
+              showExportButton={false}
+              defaultSorting={[{ id: 'submitted', desc: true }]}
+              emptyTitle="No attempts match the filters"
+              emptyDescription="Adjust the filters to see more."
+              emptyIcon={FileText}
+            />
+          ) : (
+            <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
+              No attempts yet.
+            </div>
+          )}
+      </div>
+
+          {/* Right column: what you are doing about this student's work. */}
+          <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4">
+            {isPrivilegedUser && onGradeInputChange && onSaveGrade ? (
+              <div className="flex flex-col gap-2 border-b pb-4">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+                  <h3 className="text-sm font-medium">Problem Grade</h3>
+                  {/* Only meaningful where the autograder would otherwise write this grade.
+                      On a hand-graded problem every grade is manual and the switch would be
+                      a control with nothing on the other side of it. */}
+                  {problem.autograderEnabled && onManualHoldChange ? (
+                    <label className="text-muted-foreground ml-auto flex items-center gap-2 text-xs">
+                      <span>Manual override</span>
+                      <Switch
+                        checked={gradedManually}
+                        onCheckedChange={(v) => onManualHoldChange(!!v)}
+                        disabled={courseIsArchived}
+                        aria-label="Hold this grade against the autograder"
+                      />
+                    </label>
+                  ) : null}
+                </div>
                 <ProblemGradeForm
                   value={gradeInput}
                   currentGrade={currentGrade}
@@ -357,59 +452,33 @@ export default function ProblemWorkspace({
                     onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined
                   }
                 />
-              ) : !isPrivilegedUser ? (
-                <div className="border-border text-foreground inline-flex items-center gap-2 rounded-full border bg-transparent px-3 py-2 text-xs whitespace-nowrap">
-                  <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
-                  <span>
-                    {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
-                  </span>
-                </div>
-              ) : null
-            }
-            title={problem.title}
-            description={problem.description ?? undefined}
-            descriptionJson={(problem as { descriptionJson?: unknown }).descriptionJson}
-            type={problem.type ?? undefined}
-            maxStates={problem.maxStates ?? undefined}
-            isDeterministic={problem.isDeterministic ?? undefined}
-            maxSubmissions={problem.maxSubmissions ?? undefined}
-            autograderEnabled={problem.autograderEnabled ?? undefined}
-          />
-
-          {/* No panel around the table: it carries its own toolbar, column headers and pager,
-              so a band above it repeating "Submissions" on the Submissions tab added a frame
-              and a word without adding information. `tableLabel` still names it for assistive
-              tech, and the grant action sits with the table's other controls. */}
-          {submissionsLoading ? (
-            <DataTableLoading message="Loading submissions, please wait..." className="min-h-[320px]" />
-          ) : sortedSubmissions.length > 0 ? (
-            <DataTable
-              columns={submissionColumns}
-              data={sortedSubmissions}
-              storageKey="problem-submissions"
-              tableLabel="Submissions"
-              actionButtons={submissionsAction}
-              showExportButton={false}
-              defaultSorting={[{ id: 'submitted', desc: true }]}
-              emptyTitle="No submissions match the filters"
-              emptyDescription="Adjust the filters to see more."
-              emptyIcon={FileText}
-            />
-          ) : (
-            <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed p-4 text-sm">
-              <span>No submissions yet.</span>
-              {submissionsAction}
+              </div>
+            ) : null}
+            <div className="flex items-center gap-2">
+              <MessageSquare className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+              <h3 className="text-sm font-medium">
+                Problem Discussion ({normalizedComments.length})
+              </h3>
+              {/* Collapsing gets the composer out of the way when a grader is reading rather
+                  than replying. aria-expanded and aria-controls carry the state, so it is not
+                  a chevron whose meaning only a sighted user can infer. */}
+              <button
+                type="button"
+                onClick={() => setDiscussionOpen((open) => !open)}
+                aria-expanded={discussionOpen}
+                aria-controls="problem-discussion"
+                className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
+              >
+                <ChevronUp
+                  className={`h-4 w-4 transition-transform ${discussionOpen ? '' : 'rotate-180'}`}
+                  aria-hidden="true"
+                />
+                <span className="sr-only">
+                  {discussionOpen ? 'Collapse discussion' : 'Expand discussion'}
+                </span>
+              </button>
             </div>
-          )}
-      </div>
-
-          {/* Right column: the discussion, full height beside the rest. */}
-          <WorkspacePanel
-            className="h-full"
-            contentClassName="flex flex-col"
-            title={`Discussion (${normalizedComments.length})`}
-            icon={<MessageSquare className="h-4 w-4" />}
-          >
+            <div id="problem-discussion" hidden={!discussionOpen}>
             {commentsLoading ? (
               <div role="status" className="text-muted-foreground text-sm">
                 Loading discussion...
@@ -428,7 +497,8 @@ export default function ProblemWorkspace({
                 deletingComments={deletingComments}
               />
             )}
-          </WorkspacePanel>
+            </div>
+          </div>
     </div>
   );
 }

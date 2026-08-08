@@ -34,24 +34,34 @@ export function ProgressRing({
   // An empty assignment (no points, no problems) is 0/0. Treat it as complete rather than
   // dividing by zero: there is nothing outstanding.
   const fraction = total > 0 ? Math.min(1, Math.max(0, value / total)) : 1;
-  const radius = 18;
+  // Sized to hold the figure inside it: "90/210" overflowed a 48px ring.
+  const radius = 16;
   const circumference = 2 * Math.PI * radius;
 
   return (
     <div className={`flex flex-col items-center gap-1 ${className}`}>
-      <div className="relative h-12 w-12">
-        <svg viewBox="0 0 44 44" className="h-12 w-12 -rotate-90" aria-hidden="true">
+      {/* Caption above the figure, matching the other cells on the strip, which all label
+          first and answer second. */}
+      <span aria-hidden="true" className="text-muted-foreground text-xs">
+        {label}
+      </span>
+      <div className="flex items-center gap-2">
+        <span aria-hidden="true" className="text-sm font-semibold tabular-nums">
+          {display ?? `${value}/${total}`}
+        </span>
+        <div className="relative h-10 w-10 shrink-0">
+        <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90" aria-hidden="true">
           <circle
-            cx="22"
-            cy="22"
+            cx="20"
+            cy="20"
             r={radius}
             fill="none"
             strokeWidth="4"
             className="stroke-muted"
           />
           <circle
-            cx="22"
-            cy="22"
+            cx="20"
+            cy="20"
             r={radius}
             fill="none"
             strokeWidth="4"
@@ -61,16 +71,8 @@ export function ProgressRing({
             strokeDashoffset={circumference * (1 - fraction)}
           />
         </svg>
-        <span
-          aria-hidden="true"
-          className="absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums"
-        >
-          {display ?? `${value}/${total}`}
-        </span>
       </div>
-      <span aria-hidden="true" className="text-muted-foreground text-xs">
-        {label}
-      </span>
+      </div>
       <span className="sr-only">{srLabel}</span>
     </div>
   );

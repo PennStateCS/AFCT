@@ -59,16 +59,32 @@ export function ProblemPicker({
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="hover:bg-accent w-full min-w-0 justify-between gap-2 sm:w-56"
-            // Names the control and reports the backlog, so the count is not something you
-            // can only get by opening the menu and counting dashes.
+            // Matches the student picker beside it: same surface, same shape, a status dot
+            // and a position readout. They are the same kind of control and should not look
+            // like two different ones.
+            className="bg-card text-foreground border-border hover:bg-accent flex w-full min-w-0 items-center gap-2 sm:w-64"
             aria-label={
               ungradedCount > 0
                 ? `Problem: ${selected?.title ?? 'none selected'}. ${ungradedCount} still need grading.`
                 : `Problem: ${selected?.title ?? 'none selected'}. All graded.`
             }
           >
+            {selected ? (
+              <span
+                aria-hidden="true"
+                className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 ${
+                  typeof grades[selected.id] === 'number'
+                    ? 'border-status-success-solid bg-status-success-solid'
+                    : 'border-status-danger-solid bg-transparent'
+                }`}
+              />
+            ) : null}
             <span className="truncate">{selected?.title ?? 'Select problem'}</span>
+            {selected && problems.length > 0 ? (
+              <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
+                {problems.findIndex((p) => p.id === selected.id) + 1} of {problems.length}
+              </span>
+            ) : null}
             <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>

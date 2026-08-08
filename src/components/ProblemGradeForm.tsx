@@ -111,10 +111,9 @@ export default function ProblemGradeForm({
         </div>
       ) : null}
       <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
-        {/* Input, a static "/N" points suffix, and the button, joined into one
-            segmented control. The admin types the earned points; "/N" shows the total
-            the problem is worth. */}
-        <div className="flex w-fit items-stretch">
+        {/* The field and its "/N" suffix read as one control; the button is separate, so
+            saving looks like an action rather than another part of the number. */}
+        <div className="border-input focus-within:border-ring focus-within:ring-ring/50 flex w-fit items-stretch overflow-hidden rounded-md border shadow-xs focus-within:ring-[3px]">
           <Input
             type="number"
             inputMode="decimal"
@@ -122,7 +121,7 @@ export default function ProblemGradeForm({
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={isLoading ? '-' : sanitizedCurrent === null ? '-' : ''}
-            className="w-20 rounded-r-none border-r-0 focus-visible:z-10"
+            className="w-20 rounded-none border-0 shadow-none focus-visible:border-0 focus-visible:ring-0"
             aria-label={
               maxPoints === null || maxPoints === undefined
                 ? 'Problem grade'
@@ -135,15 +134,15 @@ export default function ProblemGradeForm({
           {maxPoints === null || maxPoints === undefined ? null : (
             <span
               aria-hidden="true"
-              className="border-input text-muted-foreground flex items-center border border-x-0 pr-2 pl-1 text-sm whitespace-nowrap select-none"
+              className="text-muted-foreground flex items-center pr-3 pl-1 text-sm whitespace-nowrap select-none"
             >
               /{maxPoints}
             </span>
           )}
-          <Button type="submit" className="rounded-l-none whitespace-nowrap" disabled={disableButton}>
-            {isSaving ? 'Saving…' : 'Save Grade'}
-          </Button>
         </div>
+        <Button type="submit" className="whitespace-nowrap" disabled={disableButton}>
+          {isSaving ? 'Saving…' : 'Save Grade'}
+        </Button>
         {error ? (
         <p id="problem-grade-error" role="alert" className="text-destructive text-xs">
           {error}

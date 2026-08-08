@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient } from '@/lib/api/fetch-client';
+import { errMessage } from '@/lib/errors';
 import { ApiError } from '@/lib/api/fetch-client';
 import type { ReviewDataResponse } from './useReviewData';
 
@@ -233,6 +234,33 @@ export function useProblemGrades({
 
   const cancelGroupGrade = useCallback(() => setPendingGroupGrade(null), []);
 
+  /**
+   * Hold this student's grade against the autograder, or hand it back.
+   *
+   * Releasing it is the consequential direction: the next re-run of that submission may
+   * replace the mark with nothing further from a person, so it is worth the grader knowing
+   * that is what the switch means.
+   */
+  const setManualHold = useCallback(
+    async (problemId: string, held: boolean) => {
+      if (!selectedStudentId) return;
+      try {
+        await apiClient.patch(
+          apiPaths.assignmentProblemGradeManual(courseId, assignmentId, problemId, selectedStudentId),
+          { gradedManually: held },
+        );
+        void queryClient.invalidateQueries({
+          queryKey: ['course', courseId, 'assignment', assignmentId, 'review-data', selectedStudentId],
+        });
+        showToast.success(held ? 'Grade held' : 'Grade released to the autograder');
+      } catch (error) {
+        console.error('Set manual hold error:', error);
+        showToast.error(errMessage(error, 'Failed to update the grade hold'));
+      }
+    },
+    [courseId, assignmentId, selectedStudentId, queryClient],
+  );
+
   const saveProblemGrade = useCallback(
     async (problemId: string) => {
       if (!selectedStudent) return;
@@ -376,6 +404,7 @@ export function useProblemGrades({
     pendingGroupGrade,
     confirmGroupGrade,
     cancelGroupGrade,
+    setManualHold,
     problemGrades,
     gradeInputs,
     problemGradeErrors,

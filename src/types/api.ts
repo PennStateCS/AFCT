@@ -1122,6 +1122,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/problems/{pid}/grade/{studentId}/manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set whether a grade is manually held
+         * @description Sets whether a grade was entered by a person, which is what stops the autograder  overwriting it on a re-run.   Its own endpoint rather than a field on the grade write, because turning it off is not a  grading action: the number does not change, and the audit entry should say what actually  happened. Turning it off hands the grade back to the autograder, which may replace it the  next time that submission is re-run, so it is recorded as its own event.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grade/[studentId]/manual/route.ts)
+         */
+        patch: operations["patchCoursesByIdAssignmentsByAidProblemsByPidGradeByStudentIdManual"];
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/problems/{pid}/grade/{studentId}": {
         parameters: {
             query?: never;
@@ -5917,6 +5939,81 @@ export interface operations {
                 };
             };
             /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patchCoursesByIdAssignmentsByAidProblemsByPidGradeByStudentIdManual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Hold the grade against the autograder. */
+                    gradedManually: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The new state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No grade recorded for this student on this problem. */
             404: {
                 headers: {
                     [name: string]: unknown;

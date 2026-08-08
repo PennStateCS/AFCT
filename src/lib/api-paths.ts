@@ -162,6 +162,9 @@ export const apiPaths = {
   /** Grade every member of a group on one problem in a single write. */
   assignmentGroupGrade: (courseId: string, aid: string, pid: string, groupId: string) =>
     `/api/courses/${courseId}/assignments/${aid}/problems/${pid}/group-grade/${groupId}`,
+  /** Hold a grade against the autograder, or release it back. */
+  assignmentProblemGradeManual: (courseId: string, aid: string, pid: string, studentId: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/problems/${pid}/grade/${studentId}/manual`,
   assignmentProblemGrades: (courseId: string, aid: string, studentId: string) =>
     `/api/courses/${courseId}/assignments/${aid}/problem-grades/${studentId}`,
   assignmentProblemGradesSummary: (courseId: string, aid: string) =>

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -11,12 +10,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from './ui/dropdown-menu';
-
-import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { StudentSchedule } from '@/components/assignments/StudentSchedule';
-import { apiPaths } from '@/lib/api-paths';
-import { queryKeys } from '@/lib/query-keys';
-import { fetchJson } from '@/lib/query-fetch';
 
 export type StudentNavigatorStudent = {
   id: string;
@@ -87,8 +80,6 @@ export type StudentNavigatorProps = {
   onPrev: () => void;
   onNext: () => void;
   gradeStatuses?: Record<string, boolean | undefined>;
-  courseId: string;
-  assignmentId: string;
   /**
    * The selected student's group and effective schedule, from the review-data the parent
    * already fetched. This used to be a second per-student request from inside here, which
@@ -104,37 +95,11 @@ export default function StudentNavigator({
   onPrev,
   onNext,
   gradeStatuses,
-  courseId,
-  assignmentId,
   groupInfo = null,
 }: StudentNavigatorProps) {
-  const { timezone } = useEffectiveTimezone();
   const [menuOpen, setMenuOpen] = useState(false);
   const [studentFilter, setStudentFilter] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
-
-  // Assignment shell: cached and shared with StudentAssignmentView via the same
-  // key (queryKeys.assignment.shell), so the two dedupe/share this read.
-  const assignmentQuery = useQuery<{
-    dueDate?: string | Date;
-    allowLateSubmissions?: boolean;
-    lateCutoff?: string | Date | null;
-  }>({
-    queryKey: queryKeys.assignment.shell(courseId, assignmentId),
-    queryFn: () =>
-      fetchJson<{
-        dueDate?: string | Date;
-        allowLateSubmissions?: boolean;
-        lateCutoff?: string | Date | null;
-      }>(apiPaths.assignment(courseId, assignmentId, { view: 'problems' })),
-    enabled: !!assignmentId,
-    staleTime: 30_000,
-  });
-
-  const assignment = assignmentQuery.isError ? null : (assignmentQuery.data ?? null);
-  // Only surface the loading label when a fetch is actually in flight; a disabled
-  // query (no assignmentId) reports isPending but should render nothing here.
-  const loadingAssignment = !!assignmentId && assignmentQuery.isPending;
 
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStatus = selectedStudent ? (gradeStatuses?.[selectedStudent.id] ?? false) : false;
@@ -190,12 +155,6 @@ export default function StudentNavigator({
           : ''}
       </span>
       <div className="min-w-0">
-        <StudentSchedule
-          assignment={assignment}
-          effective={groupInfo?.effective ?? null}
-          loading={loadingAssignment}
-          timezone={timezone}
-        />
         {groupInfo?.isGroup && groupInfo.group ? (
           <span className="text-muted-foreground block text-xs">
             Submitting with {groupInfo.group.name}
@@ -217,6 +176,9 @@ export default function StudentNavigator({
           </span>
         ) : null}
       </div>
+      {/* Labelled like the problem picker beside it: the two are the same kind of control and
+          should read as a pair rather than one being a bare row of buttons. */}
+      <span className="text-muted-foreground text-xs font-medium">Student</span>
       {/* Prev / student picker / Next joined into one segmented control, below the info. */}
       <div className="flex items-center">
         <Button

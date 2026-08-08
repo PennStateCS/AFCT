@@ -256,6 +256,9 @@ export const GET = withCourseAuth(
             feedback: true,
             updatedAt: true,
             groupGradeValue: true,
+            // Whether a person set this grade. The autograder skips these, so the workspace
+            // can say which grades a re-run would leave alone.
+            gradedManually: true,
           },
         }),
       ]);
@@ -398,6 +401,7 @@ export const GET = withCourseAuth(
             feedback: string | null;
             updatedAt: string;
             groupGradeValue: number | null;
+            gradedManually: boolean;
           }
         >
       >((acc, record) => {
@@ -406,6 +410,7 @@ export const GET = withCourseAuth(
           feedback: record.feedback ?? null,
           updatedAt: record.updatedAt.toISOString(),
           groupGradeValue: record.groupGradeValue ?? null,
+          gradedManually: record.gradedManually,
         };
         return acc;
       }, {});
