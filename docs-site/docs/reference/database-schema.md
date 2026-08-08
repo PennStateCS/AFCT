@@ -519,6 +519,7 @@ erDiagram
   String authorId FK
   String rosterId FK "nullable"
   String aboutStudentId FK "nullable"
+  String aboutGroupId FK "nullable"
 }
 ```
 
@@ -589,6 +590,7 @@ Properties as follows:
 - `authorId`: Who wrote it.
 - `rosterId`: The commenter's place in the course, recording the role they wrote in.
 - `aboutStudentId`: The student the comment concerns, when staff comment on someone's work.
+- `aboutGroupId`: The group the comment concerns, when staff comment on a group's shared work.
 
 ## System
 

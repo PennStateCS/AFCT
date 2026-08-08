@@ -622,6 +622,7 @@ model StudentGroup {
   assignmentOverrides AssignmentOverride[] @relation("OverrideGroupTarget")
   submissionGrants    SubmissionGrant[]    @relation("SubmissionGrantGroupTarget")
   submissions         Submission[]
+  comments            Comment[]            @relation("CommentsAboutGroup")
 
   // Unique group name within its set (case-insensitive + trimmed in the service
   // layer). Different sets may reuse the same group names.
@@ -842,11 +843,24 @@ model Comment {
   /// The student the comment concerns, when staff comment on someone's work.
   aboutStudentId String?
 
+  // A comment is addressed to one student OR to a whole group, never both. On a group
+  // assignment staff usually mean the group, so the shared submission gets one comment
+  // every member sees rather than a copy per member that can drift apart.
+  //
+  // SetNull, not Cascade: deleting a group must not destroy the feedback written about
+  // its work. The comment survives and simply stops being addressed to anyone, which is
+  // recoverable; the cascade is not.
+  aboutGroup   StudentGroup? @relation("CommentsAboutGroup", fields: [aboutGroupId], references: [id], onDelete: SetNull)
+  /// The group the comment concerns, when staff comment on a group's shared work.
+  aboutGroupId String?
+
   @@index([assignmentId])
   @@index([problemId])
   @@index([authorId])
   @@index([rosterId])
   @@index([aboutStudentId])
+  @@index([aboutGroupId])
+  @@index([assignmentId, problemId, aboutGroupId])
   @@index([assignmentId, problemId])
   @@index([assignmentId, problemId, aboutStudentId])
   @@index([createdAt])
