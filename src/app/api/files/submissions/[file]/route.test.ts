@@ -90,7 +90,7 @@ describe('GET /api/files/submissions/[file]', () => {
       prismaMock,
       expect.anything(),
       expect.objectContaining({
-        action: 'SUBMISSION_FILE_DOWNLOAD_DENIED',
+        action: 'SUBMISSION_FILE_ACCESS_DENIED',
         courseId: 'course-1',
       }),
     );
@@ -251,7 +251,7 @@ describe('GET /api/files/submissions/[file]', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       expect.anything(),
-      expect.objectContaining({ action: 'SUBMISSION_FILE_DOWNLOAD_ERROR', severity: 'ERROR' }),
+      expect.objectContaining({ action: 'SUBMISSION_FILE_ACCESS_ERROR', severity: 'ERROR' }),
     );
   });
 

@@ -2227,7 +2227,7 @@ export interface paths {
         };
         /**
          * Get a problem file
-         * @description Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system  admin only**: a problem file is the autograder's answer/solution key, so a student  must never receive it (same sensitivity as a solution file). The download is audited,  and traversal filenames are rejected.
+         * @description Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system  admin only**: a problem file is the autograder's answer/solution key, so a student  must never receive it (same sensitivity as a solution file). Every serve is audited as  a view, since this route has no download path, and traversal filenames are rejected.
          *
          *     **Auth:** required
          *

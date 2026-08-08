@@ -9,8 +9,8 @@ import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
 /**
  * Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system
  * admin only**: a problem file is the autograder's answer/solution key, so a student
- * must never receive it (same sensitivity as a solution file). The download is audited,
- * and traversal filenames are rejected.
+ * must never receive it (same sensitivity as a solution file). Every serve is audited as
+ * a view, since this route has no download path, and traversal filenames are rejected.
  * @openapi
  * summary: Get a problem file
  * parameters:
@@ -53,7 +53,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     if (!(await canManageCourse(session.user, problem.courseId))) {
       return logDenial(req, {
         userId: session.user.id,
-        action: 'PROBLEM_FILE_DOWNLOAD_DENIED',
+        action: 'PROBLEM_FILE_ACCESS_DENIED',
         category: 'PROBLEM',
         courseId: problem.courseId,
       });
@@ -64,7 +64,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       onServe: () =>
         createEnhancedActivityLog(prisma, req, {
           userId: session.user.id,
-          action: 'DOWNLOAD_PROBLEM_FILE',
+          action: 'VIEW_PROBLEM_FILE',
           severity: 'INFO',
           category: 'PROBLEM',
           courseId: problem.courseId,
@@ -79,7 +79,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     console.error('Error serving problem file:', err);
     await logError(req, {
       userId: actorId,
-      action: 'PROBLEM_FILE_DOWNLOAD_ERROR',
+      action: 'PROBLEM_FILE_ACCESS_ERROR',
       category: 'PROBLEM',
       error: err,
       metadata: { fileName: fileName ?? null },
