@@ -1200,6 +1200,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/problems/{pid}/group-grade/{groupId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grade a whole group on a problem
+         * @description Grades a whole group on one problem, writing one grade row per member.   A group submits once, so grading member by member is the same grade entered N times, and  a typo on the fourth entry is invisible. This writes them together and stamps each row  with the group and the value applied, so a later change to one member reads as a  deliberate adjustment rather than an inconsistency.   Course staff (faculty or TAs) or a system admin.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/group-grade/[groupId]/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsByAidProblemsByPidGroupGradeByGroupId"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/problems/{pid}": {
         parameters: {
             query?: never;
@@ -6244,6 +6266,92 @@ export interface operations {
                 };
             };
             /** @description Course archived or a concurrent grant conflicted. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignmentsByAidProblemsByPidGroupGradeByGroupId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The grade to give every member (0..maxPoints). */
+                    grade: number;
+                    /** @description Apply even where members already differ. */
+                    overwrite?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The grade applied and the members written. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Grade missing or out of range for this problem. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such problem or group in this assignment. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Some members already differ. Retry with overwrite. */
             409: {
                 headers: {
                     [name: string]: unknown;

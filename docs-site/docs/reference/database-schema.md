@@ -578,7 +578,10 @@ Properties as follows:
 - `problemId`: The problem graded.
 - `studentId`: The student graded.
 - `groupGradeGroupId`: The group whose group grade produced this row, when it came from one.
-- `groupGradeValue`: The value that group grade set, so a later individual change reads as an adjustment.
+- `groupGradeValue`
+  > The value that group grade set, so a later individual change reads as an adjustment.
+  > Outlives the group: deleting one nulls the id above but keeps this, so "adjusted away
+  > from 8" stays true afterwards.
 
 ### `Comment`
 
