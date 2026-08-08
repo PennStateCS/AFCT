@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import StudentNavigator, { type StudentNavigatorProps } from './StudentNavigator';
@@ -201,5 +202,56 @@ describe('student names', () => {
 
     renderWithClient(<StudentNavigator {...twoStudents} selectedIndex={3} />);
     await waitFor(() => expect(screen.getByText('Mononymous')).toBeInTheDocument());
+  });
+});
+
+describe('a very large roster', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  const manyStudents = Array.from({ length: 250 }, (_, i) => ({
+    id: `s${i}`,
+    firstName: 'Student',
+    lastName: `Name${String(i).padStart(3, '0')}`,
+  }));
+
+  const openPicker = async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ dueDate: '2026-01-10T00:00:00.000Z', allowLateSubmissions: false }),
+    });
+    renderWithClient(<StudentNavigator {...baseProps} students={manyStudents} />);
+    await userEvent.click(screen.getByRole('button', { name: /Name000/ }));
+  };
+
+  // Every row is a Radix menu item, so drawing a thousand of them on open is the thing that
+  // makes a large course feel broken.
+  it('draws a bounded number of rows', async () => {
+    await openPicker();
+
+    const items = await screen.findAllByRole('menuitem');
+    expect(items.length).toBeLessThanOrEqual(100);
+  });
+
+  // Truncating in silence would read as "that student is not enrolled".
+  it('says the list is capped, and how many there are', async () => {
+    await openPicker();
+
+    expect(await screen.findByText(/Showing the first 100 of 250/)).toBeInTheDocument();
+  });
+
+  it('drops the notice once a search narrows the list', async () => {
+    await openPicker();
+    await screen.findByText(/Showing the first 100 of 250/);
+
+    await userEvent.type(screen.getByLabelText('Search students by name'), 'Name123');
+
+    await waitFor(() =>
+      expect(screen.queryByText(/Showing the first/)).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('Name123, Student')).toBeInTheDocument();
   });
 });

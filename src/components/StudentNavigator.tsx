@@ -53,6 +53,16 @@ type StudentGroupInfo = {
   effective?: EffectiveSchedule;
 };
 
+/**
+ * How many students the menu will draw at once.
+ *
+ * Every row is a Radix menu item, so a thousand-student course mounted a thousand of them
+ * every time the menu opened. Rather than pull in a virtualization library on a route that
+ * has been deliberately slimmed, the list is capped and says so, and the search box narrows
+ * it. Prev/Next still walk the entire roster, so nothing becomes unreachable.
+ */
+const MAX_VISIBLE_STUDENTS = 100;
+
 /** "First Last" (falls back to "Student"). Used for prose, like the groupmates line. */
 function memberName(m: { firstName?: string | null; lastName?: string | null }): string {
   return `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student';
@@ -152,6 +162,9 @@ export default function StudentNavigator({
       );
     });
   }, [students, studentFilter]);
+
+  const visibleStudents = filteredStudents.slice(0, MAX_VISIBLE_STUDENTS);
+  const hiddenStudentCount = filteredStudents.length - visibleStudents.length;
 
   useEffect(() => {
     if (menuOpen) {
@@ -316,7 +329,7 @@ export default function StudentNavigator({
               {filteredStudents.length === 0 ? (
                 <div className="text-muted-foreground p-2 text-sm">No students found</div>
               ) : (
-                filteredStudents.map((s) => (
+                visibleStudents.map((s) => (
                   <DropdownMenuItem
                     key={s.id}
                     className="hover:bg-accent"
@@ -337,6 +350,14 @@ export default function StudentNavigator({
                   </DropdownMenuItem>
                 ))
               )}
+              {/* Never truncate silently: a grader who cannot see a name needs to know the
+                  list is capped rather than conclude the student is not enrolled. */}
+              {hiddenStudentCount > 0 ? (
+                <div className="text-muted-foreground border-t p-2 text-xs">
+                  Showing the first {MAX_VISIBLE_STUDENTS} of {filteredStudents.length}. Type a
+                  name to narrow the list.
+                </div>
+              ) : null}
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
