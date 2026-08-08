@@ -159,6 +159,15 @@ export const GET = withCourseAuth(
         }
       }
 
+      // Group-aware read: if the student is group-assigned for this assignment, they see
+      // the group's shared submission set plus any of their own individual rows. Resolved
+      // before the batch below because the comment query needs it to pick up comments
+      // addressed to the group rather than to this student.
+      const groupId =
+        assignmentId && studentId
+          ? await resolveStudentSubmissionGroupId(assignmentId, studentId)
+          : null;
+
       const [assignmentProblems, commentsRaw, gradesRaw] = await Promise.all([
         prisma.assignmentProblem.findMany({
           where: { assignmentId },
@@ -179,7 +188,15 @@ export const GET = withCourseAuth(
         prisma.comment.findMany({
           where: {
             assignmentId,
-            OR: [{ aboutStudentId: studentId }, { authorId: studentId }],
+            // A comment reaches this student if it is addressed to them, was written by
+            // them, or is addressed to the group they submit this assignment with. The
+            // group arm is what makes one comment visible to every member instead of a
+            // copy each.
+            OR: [
+              { aboutStudentId: studentId },
+              { authorId: studentId },
+              ...(groupId ? [{ aboutGroupId: groupId }] : []),
+            ],
           },
           include: {
             author: {
@@ -202,13 +219,6 @@ export const GET = withCourseAuth(
           select: { problemId: true, grade: true, feedback: true, updatedAt: true },
         }),
       ]);
-
-      // Group-aware read: if the student is group-assigned for this assignment, they
-      // see the group's shared submission set plus any of their own individual rows.
-      const groupId =
-        assignmentId && studentId
-          ? await resolveStudentSubmissionGroupId(assignmentId, studentId)
-          : null;
 
       // The submission cap this student is actually working against per problem: the
       // base maxSubmissions plus any extra-submission grants for them or their group.
