@@ -44,6 +44,9 @@ type EffectiveSchedule = {
 };
 
 type StudentGroupInfo = {
+  /** Whether the ASSIGNMENT is a group assignment, regardless of this student's group. */
+  isGroupAssignment?: boolean;
+  /** Whether THIS student has a group to submit with. */
   isGroup: boolean;
   group: { id: string; name: string } | null;
   members: { id: string; firstName: string | null; lastName: string | null }[];
@@ -201,7 +204,10 @@ export default function StudentNavigator({
                   <span className="text-muted-foreground mx-2">•</span>
                   <span>
                     <span className="font-semibold">Type:</span>{' '}
-                    {groupInfo.isGroup
+                    {/* The assignment's own nature decides this label. Reading it off the
+                        student's group instead made a group assignment look individual for
+                        anyone who had not been put in a group yet. */}
+                    {groupInfo.isGroupAssignment ?? groupInfo.isGroup
                       ? `Group${groupInfo.group ? ` (${groupInfo.group.name})` : ''}`
                       : 'Individual'}
                   </span>
@@ -213,6 +219,20 @@ export default function StudentNavigator({
         {groupInfo?.isGroup && groupInfo.members.length > 0 ? (
           <span className="text-muted-foreground block text-xs">
             With: {groupInfo.members.map(memberName).join(', ')}
+          </span>
+        ) : null}
+        {/* A group assignment with nobody to submit alongside is a setup mistake, not a
+            fact about this student's work. Say so here rather than letting the panel read
+            as a normal individual submission. */}
+        {groupInfo?.isGroupAssignment && !groupInfo.isGroup ? (
+          <span className="text-status-warning block text-xs font-medium">
+            Not in a group. Their work below is their own; add them to a group to review it
+            with the rest.
+          </span>
+        ) : null}
+        {groupInfo?.isGroup && groupInfo.members.length === 0 ? (
+          <span className="text-muted-foreground block text-xs">
+            The only member of {groupInfo.group?.name ?? 'their group'}.
           </span>
         ) : null}
       </div>
