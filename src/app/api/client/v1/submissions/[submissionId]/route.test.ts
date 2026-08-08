@@ -4,6 +4,7 @@ const resolveMock = vi.hoisted(() => vi.fn());
 const canViewMock = vi.hoisted(() => vi.fn());
 const canAccessMock = vi.hoisted(() => vi.fn());
 const canManageMock = vi.hoisted(() => vi.fn());
+const activityLogMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   submission: { findUnique: vi.fn() },
   assignment: { findUnique: vi.fn() },
@@ -18,6 +19,7 @@ vi.mock('@/lib/permissions', () => ({
   isAdmin: (u: { isAdmin?: boolean } | null) => !!u?.isAdmin,
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
 import { GET } from './route';
 
@@ -204,6 +206,64 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
 
     const res = await GET(makeReq('Bearer good'), ctx);
     expect(res.status).toBe(200);
+  });
+
+  // Staff reading a student's work through the native client is the same disclosure as
+  // reading it in the browser, and was previously invisible in the log.
+  it('logs a staff read of another student as a disclosure', async () => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      studentId: 'someone-else',
+      studentGroupId: null,
+      courseId: 'c1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      status: 'COMPLETED',
+      correct: true,
+      feedback: 'w',
+    });
+    canViewMock.mockResolvedValue(true);
+    canManageMock.mockResolvedValue(true);
+    prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue(null);
+
+    const res = await GET(makeReq('Bearer good'), ctx);
+
+    expect(res.status).toBe(200);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        userId: 'u1',
+        action: 'VIEW_STUDENT_SUBMISSION',
+        category: 'SUBMISSION',
+        metadata: expect.objectContaining({ viewedStudentId: 'someone-else' }),
+      }),
+    );
+  });
+
+  // Students poll this endpoint for their own result. Logging that would bury the staff
+  // reads above under polling traffic, and reading your own work is not a disclosure.
+  it('does not log the owner polling their own submission', async () => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      studentId: 'u1',
+      studentGroupId: null,
+      courseId: 'c1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      status: 'COMPLETED',
+      correct: true,
+      feedback: 'w',
+    });
+    canViewMock.mockResolvedValue(true);
+    prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue(null);
+
+    const res = await GET(makeReq('Bearer good'), ctx);
+
+    expect(res.status).toBe(200);
+    expect(activityLogMock).not.toHaveBeenCalled();
   });
 
   it('reports a still-queued submission with null result fields', async () => {

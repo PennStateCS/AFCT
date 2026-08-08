@@ -121,8 +121,15 @@ the host is applying the current tooling.
 
 ## Before you tag
 
-1. **Pick the version.** AFCT uses semantic versioning: bump the patch for fixes, the
-   minor for backward-compatible features, the major for breaking changes.
+1. **Pick the version and bump `package.json` first.** AFCT uses semantic versioning: bump
+   the patch for fixes, the minor for backward-compatible features, the major for breaking
+   changes. Every existing tag sits on a `bump package.json to X.Y.Z` commit, and that is
+   the commit to tag. Since `main` requires a pull request, the bump goes in as its own PR
+   rather than a direct push:
+
+   ```bash
+   npm version 0.1.3 --no-git-tag-version
+   ```
 2. **Choose a green commit.** Tag a commit that has already passed CI on `main`. Check
    the Actions tab, or:
 
@@ -146,12 +153,22 @@ the host is applying the current tooling.
 
 ## Cut the release
 
+Only repository administrators can do this: a ruleset blocks creating, updating or deleting
+any `v*` tag for everyone else.
+
 ```bash
 git fetch origin main
 # Tag the last non-[skip ci] commit; substitute the real SHA.
 git tag -a v0.1.3 <sha> -m "v0.1.3 - short summary"
 git push origin v0.1.3
 ```
+
+:::warning Tag a commit that contains the workflow you want to run
+A tag-triggered workflow runs the version of `.github/workflows/release.yml` **at the tagged
+commit**, not the one on `main`. If the workflow was broken and then fixed, tagging a commit
+from before the fix runs the broken copy again. Move the tag forward to a commit that
+includes it.
+:::
 
 ### Attaching an admin note (optional)
 
@@ -185,8 +202,18 @@ gh api "repos/PennStateCS/AFCT/actions/runs?per_page=8" \
   --jq '[.workflow_runs[] | select(.head_branch=="v0.1.3")] | length'
 ```
 
-If that returns `0` after a minute, the most likely cause is that the tag points at a
-`[skip ci]` commit. Retarget the tag to a real commit and push again:
+If that returns `0` after a minute, there are two likely causes.
+
+**The tag points at a `[skip ci]` commit.** Retarget it, as below.
+
+**The workflow file is invalid at that commit.** GitHub cannot parse it, so nothing triggers.
+The tell is in `gh run list`: a run listed as `.github/workflows/release.yml` rather than by
+its name, `Release`, means GitHub fell back to the file path because it could not read the
+file. Such a workflow also fires on pushes it should ignore and fails within seconds. Note
+that `yaml.safe_load` will **not** catch this: it silently keeps the last of a duplicated key,
+where Actions rejects the file outright.
+
+To retarget the tag to a real commit and push again:
 
 ```bash
 git tag -d v0.1.3

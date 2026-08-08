@@ -26,6 +26,18 @@ The rest of this guide is how to do exactly that.
 Never push straight to `main`. Always go through a branch and a pull request so CI runs
 before the code is merged, not after.
 
+This is enforced, not just convention. `main` requires a pull request, an approving review
+from a code owner (the `afct-maintainers` team, listed in `.github/CODEOWNERS`), and passing
+checks. Only that team can merge, because merging is a push to `main`.
+
+Two consequences worth knowing:
+
+- **You cannot approve your own pull request.** GitHub blocks it. Ask someone else on the
+  team; if you are a repository administrator and genuinely have nobody to ask, there is a
+  "merge without waiting for requirements" override, which is recorded when used.
+- **Releases are restricted too.** Only administrators can create a `v*` tag, so cutting a
+  release is deliberately not something an ordinary contributor can trigger.
+
 ## 1. Start a branch
 
 Always branch from the latest `main`:

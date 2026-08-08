@@ -211,7 +211,8 @@ export const apiPaths = {
   files: {
     pfp: (file: string) => `/api/files/pfps/${file}`,
     problem: (file: string) => `/api/files/problems/${file}`,
-    submission: (file: string) => `/api/files/submissions/${file}`,
+    submission: (file: string, opts?: { download?: boolean }) =>
+      `/api/files/submissions/${file}${opts?.download ? '?download=1' : ''}`,
     solution: (file: string, opts?: { download?: boolean }) =>
       `/api/files/solutions/${file}${opts?.download ? '?download=1' : ''}`,
   },

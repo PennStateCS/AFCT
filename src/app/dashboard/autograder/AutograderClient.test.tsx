@@ -458,7 +458,9 @@ describe('AutograderClient', () => {
 
     const table = screen.getByRole('table');
     const download = within(table).getByRole('link', { name: 'Download sub-1.jff' });
-    expect(download).toHaveAttribute('href', '/api/files/submissions/sub-1.jff');
+    // The download link asks to be audited as a download; the viewer below deliberately
+    // does not, so opening a solution is not recorded as taking a copy of it.
+    expect(download).toHaveAttribute('href', '/api/files/submissions/sub-1.jff?download=1');
     expect(download).toHaveAttribute('download', 'sub-1.jff');
 
     // The viewer picks itself by problem type, which is only known once a row is chosen,

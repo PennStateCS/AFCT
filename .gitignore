@@ -68,6 +68,11 @@ docker/nginx/certs/
 
 # IDE settings
 .vscode/
+# ...except the shared editor config: recommended extensions and the settings that keep
+# the editor agreeing with `npm run lint` and `npm run typecheck:all`. mcp.json stays
+# ignored: it is personal tooling and carries absolute paths.
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 *.sw?
 

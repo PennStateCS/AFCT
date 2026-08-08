@@ -88,7 +88,7 @@ describe('GET /api/files/problems/[file]', () => {
     expect(res.status).toBe(403);
   });
 
-  it('allows admin to download file', async () => {
+  it('allows admin to view file', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
@@ -104,7 +104,13 @@ describe('GET /api/files/problems/[file]', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Disposition')).toContain('original.txt');
-    expect(activityLogMock).toHaveBeenCalled();
+    // This route serves inline and has no download path, so the audit entry has to say
+    // view. Calling it a download would overstate the access in the FERPA record.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'VIEW_PROBLEM_FILE', courseId: 'course-1' }),
+    );
   });
 
   it('allows faculty to download file', async () => {
@@ -167,7 +173,7 @@ describe('GET /api/files/problems/[file]', () => {
       prismaMock,
       expect.anything(),
       expect.objectContaining({
-        action: 'PROBLEM_FILE_DOWNLOAD_DENIED',
+        action: 'PROBLEM_FILE_ACCESS_DENIED',
         severity: 'SECURITY',
         courseId: 'course-1',
       }),
@@ -214,7 +220,7 @@ describe('GET /api/files/problems/[file]', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       expect.anything(),
-      expect.objectContaining({ action: 'PROBLEM_FILE_DOWNLOAD_ERROR', severity: 'ERROR' }),
+      expect.objectContaining({ action: 'PROBLEM_FILE_ACCESS_ERROR', severity: 'ERROR' }),
     );
   });
 
