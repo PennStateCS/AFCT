@@ -145,6 +145,7 @@ export const POST = withClientAuth(async (req, _ctx, { user }) => {
 
   try {
     const result = await createSubmission({
+      source: 'client',
       user,
       courseId: parsed.data.courseId,
       assignmentId: parsed.data.assignmentId,

@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
   // The whole pipeline lives in the shared service so the browser and the native
   // client create submissions through identical code.
   const result = await createSubmission({
+    source: 'web',
     user: session.user,
     courseId: parsed.data.courseId,
     assignmentId: parsed.data.assignmentId,

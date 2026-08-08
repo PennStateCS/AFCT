@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { withClientAuth } from '@/lib/api/with-client-auth';
 import { apiError } from '@/lib/api/http';
 import { canAccessCourse, canManageCourse, canViewStudentData, isAdmin } from '@/lib/permissions';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 type RouteCtx = { params: Promise<{ submissionId: string }> };
 
@@ -32,7 +33,7 @@ type RouteCtx = { params: Promise<{ submissionId: string }> };
  *   401: { description: Missing or invalid token. }
  *   404: { description: Submission not found or not visible to the caller. }
  */
-export const GET = withClientAuth(async (_req, ctx: RouteCtx, { user }) => {
+export const GET = withClientAuth(async (req, ctx: RouteCtx, { user }) => {
   const { submissionId } = await ctx.params;
 
   const submission = await prisma.submission.findUnique({
@@ -89,6 +90,22 @@ export const GET = withClientAuth(async (_req, ctx: RouteCtx, { user }) => {
     },
     select: { grade: true },
   });
+
+  // Staff reading a student's work is a disclosure and belongs in the log, the same as
+  // the web review-data route. Students poll this endpoint for their own result, which is
+  // not a disclosure, so logging it would bury the staff reads under polling traffic.
+  if (staff && user.id !== submission.studentId) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'VIEW_STUDENT_SUBMISSION',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      courseId: submission.courseId,
+      assignmentId: submission.assignmentId,
+      submissionId: submission.id,
+      metadata: { viewedStudentId: submission.studentId, source: 'client' },
+    });
+  }
 
   return NextResponse.json({
     id: submission.id,

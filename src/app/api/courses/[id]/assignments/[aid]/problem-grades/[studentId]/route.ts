@@ -86,9 +86,31 @@ export const GET = withCourseAuth(
         return acc;
       }, {});
 
+      // Staff opening someone else's grade breakdown is a disclosure of an education
+      // record, so it belongs in the log the same way review-data already records one.
+      // A student reading their own grades is not a disclosure and is not logged, which
+      // also keeps the student surfaces from burying the staff accesses in noise.
+      if (user.id !== studentId) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: user.id,
+          action: 'VIEW_STUDENT_PROBLEM_GRADES',
+          severity: 'INFO',
+          category: 'GRADE',
+          courseId,
+          assignmentId,
+          metadata: { viewedStudentId: studentId, problemCount: grades.length },
+        });
+      }
+
       return NextResponse.json(payload);
     } catch (error) {
       console.error('GET /api/courses/[id]/[aid]/problem-grades/[studentId] error:', error);
+      await logError(req, {
+        userId: user.id,
+        action: 'PROBLEM_GRADES_ACCESS_ERROR',
+        category: 'GRADE',
+        error,
+      });
       return NextResponse.json({ error: 'Failed to fetch problem grades' }, { status: 500 });
     }
   },
