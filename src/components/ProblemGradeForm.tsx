@@ -1,7 +1,17 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Badge } from '@/components/ui/badge';
 import type { FormEvent, KeyboardEvent } from 'react';
+
+/** Who a saved grade applies to. Group assignments only; otherwise there is no choice. */
+export type GradeAudience = {
+  group: { id: string; name: string } | null;
+  studentName: string;
+  target: 'student' | 'group';
+  onTargetChange: (target: 'student' | 'group') => void;
+};
 
 type ProblemGradeFormProps = {
   value: string;
@@ -16,6 +26,13 @@ type ProblemGradeFormProps = {
   onRerun?: () => void;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  /** Omit on individual assignments. */
+  audience?: GradeAudience | null;
+  /**
+   * The value this student's group was given, when the grade came from a group grade. A
+   * current grade that differs from it means somebody changed this member deliberately.
+   */
+  groupGradeValue?: number | null;
 };
 
 export default function ProblemGradeForm({
@@ -28,6 +45,8 @@ export default function ProblemGradeForm({
   error,
   onChange,
   onSubmit,
+  audience = null,
+  groupGradeValue = null,
 }: ProblemGradeFormProps) {
   const gradeValue = typeof value === 'string' ? value : '';
   const trimmed = gradeValue.trim();
@@ -59,8 +78,38 @@ export default function ProblemGradeForm({
     if (!disableButton) onSubmit();
   };
 
+  // Only meaningful once a group grade has been applied: without the recorded value, a grade
+  // that differs from the rest of the group could equally be a group never graded together.
+  const isAdjusted =
+    typeof groupGradeValue === 'number' &&
+    sanitizedCurrent !== null &&
+    sanitizedCurrent !== groupGradeValue;
+
   return (
     <div className="flex flex-col gap-2">
+      {/* Group assignments only. Defaults to the group, because one submission earns one
+          grade; grading member by member is the same number typed N times, where a typo on
+          the fourth is invisible. */}
+      {audience?.group && !disabled ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground text-xs font-medium">Grade</span>
+          <SegmentedControl
+            name="grade-audience"
+            value={audience.target}
+            onValueChange={(v) => audience.onTargetChange(v as 'student' | 'group')}
+            ariaLabel="Who this grade applies to"
+            options={[
+              { value: 'group', label: audience.group.name },
+              { value: 'student', label: `Only ${audience.studentName}` },
+            ]}
+          />
+          {isAdjusted ? (
+            <Badge variant="outline" className="text-[0.7rem] font-normal">
+              Adjusted from {groupGradeValue}
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
       <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
         {/* Input, a static "/N" points suffix, and the button, joined into one
             segmented control. The admin types the earned points; "/N" shows the total

@@ -66,6 +66,7 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
     comments,
     submissions,
     commentAudience,
+    gradeAudience,
   }: {
     onGradeInputChange: (value: string) => void;
     onSaveGrade: () => void;
@@ -82,6 +83,7 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
       target: 'student' | 'group';
       onTargetChange: (t: 'student' | 'group') => void;
     } | null;
+    gradeAudience?: { target: 'student' | 'group' } | null;
   }) => (
     <div data-testid="problem-workspace">
       <span data-testid="submission-count">{(submissions ?? []).length}</span>
@@ -106,6 +108,7 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
       {/* The real workspace renders a segmented control for this; the stub just exposes
           the audience so a test can read the default and switch it. */}
       <span data-testid="comment-audience">{commentAudience?.target ?? 'none'}</span>
+      <span data-testid="grade-audience">{gradeAudience?.target ?? 'none'}</span>
       {commentAudience ? (
         <button type="button" onClick={() => commentAudience.onTargetChange('student')}>
           Send to student only
@@ -973,5 +976,165 @@ describe('AssignmentSubmissions — which student is selected', () => {
 
     await waitFor(() => expect(screen.getByText(/Could not load the student list/)).toBeInTheDocument());
     expect(screen.queryByText(/Nobody is enrolled/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Grading a group. The whole point is one action instead of the same number typed once per
+ * member, so the cases that matter are which endpoint is hit and what happens when members
+ * already differ.
+ */
+describe('AssignmentSubmissions — grading a group', () => {
+  const groupReview = {
+    ...emptyReviewData,
+    isGroupAssignment: true,
+    isGroup: true,
+    group: { id: 'g1', name: 'Group 3' },
+    groupMembers: [{ id: 's2', firstName: 'Grace', lastName: 'Hopper' }],
+  };
+
+  const setup = async (groupGradeRoute: () => Record<string, unknown>) => {
+    const fetchMock = routeFetch({
+      ...baseRoutes(),
+      '/review-data/': () => ({ ok: true, json: async () => groupReview }),
+      'group-grade': groupGradeRoute as never,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await screen.findByTestId('problem-workspace');
+    // The grade fields are seeded from review data, so typing before it lands is silently
+    // undone. The audience only appears once that payload has arrived.
+    await waitFor(() => expect(screen.getByTestId('grade-audience')).toHaveTextContent('group'));
+    return fetchMock;
+  };
+
+  const ok = () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ grade: 7, applied: 2 }),
+    text: async () => JSON.stringify({ grade: 7, applied: 2 }),
+  });
+
+  const conflict = () => ({
+    ok: false,
+    status: 409,
+    json: async () => ({
+      error: 'Some members already have a different grade',
+      conflicts: [{ studentId: 's2', name: 'Grace Hopper', grade: 5 }],
+    }),
+    text: async () =>
+      JSON.stringify({
+        error: 'Some members already have a different grade',
+        conflicts: [{ studentId: 's2', name: 'Grace Hopper', grade: 5 }],
+      }),
+  });
+
+  it('sends one write for the group rather than one per member', async () => {
+    const fetchMock = await setup(ok);
+
+    fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/courses/c1/assignments/a1/problems/p1/group-grade/g1',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    // Not the per-student route.
+    const perStudent = fetchMock.mock.calls.filter(([u]) => String(u).includes('/grade/s1'));
+    expect(perStudent).toHaveLength(0);
+  });
+
+  // The server declines rather than overwriting; the grader has to see who and confirm.
+  it('asks before overwriting members who already differ', async () => {
+    const fetchMock = await setup(conflict);
+
+    fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
+
+    expect(await screen.findByText(/Overwrite a grade in Group 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Grace Hopper currently has 5/)).toBeInTheDocument();
+
+    // The first attempt must NOT ask to overwrite, or the server would apply it and the
+    // dialog would be asking about something already done. The 409 is what makes the
+    // confirmation meaningful, so requesting it up front defeats the whole mechanism.
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const first = calls.find(([u]) => String(u).includes('group-grade'));
+    expect(JSON.parse(String(first![1].body))).not.toHaveProperty('overwrite');
+  });
+
+  it('retries with overwrite once confirmed', async () => {
+    let calls = 0;
+    const fetchMock = await setup(() => {
+      calls += 1;
+      return calls === 1 ? conflict() : ok();
+    });
+
+    fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
+    await screen.findByText(/Overwrite a grade in Group 3/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Overwrite and apply' }));
+
+    await waitFor(() => expect(calls).toBe(2));
+    const sent = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const second = sent.filter(([u]) => String(u).includes('group-grade')).at(-1);
+    expect(JSON.parse(String(second![1].body))).toMatchObject({
+      grade: 7,
+      overwrite: true,
+    });
+  });
+
+  // Cancelling must leave every grade exactly as it was.
+  it('writes nothing when the grader backs out', async () => {
+    let calls = 0;
+    await setup(() => {
+      calls += 1;
+      return conflict();
+    });
+
+    fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
+    await screen.findByText(/Overwrite a grade in Group 3/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/Overwrite a grade in Group 3/)).not.toBeInTheDocument(),
+    );
+    expect(calls).toBe(1);
+  });
+
+  it('uses the per-student route on an individual assignment', async () => {
+    const fetchMock = routeFetch({
+      ...baseRoutes(),
+      '/problems/p1/grade/s1': () => ({
+        ok: true,
+        json: async () => ({ ok: true }),
+        text: async () => JSON.stringify({ ok: true }),
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await screen.findByTestId('problem-workspace');
+    // No audience on an individual assignment, and it doubles as the "review data has
+    // seeded" signal: typing before that lands is silently undone.
+    await waitFor(() => expect(screen.getByTestId('grade-audience')).toHaveTextContent('none'));
+
+    fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/courses/c1/assignments/a1/problems/p1/grade/s1',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    // Assert the value too: the route alone passes even when the grade was cleared.
+    const call = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(
+      ([u, init]) => String(u).includes('/grade/s1') && init?.method === 'POST',
+    );
+    expect(JSON.parse(String(call![1].body))).toMatchObject({ grade: 7 });
   });
 });

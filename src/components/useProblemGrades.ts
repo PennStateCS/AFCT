@@ -5,10 +5,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient } from '@/lib/api/fetch-client';
+import { ApiError } from '@/lib/api/fetch-client';
 import type { ReviewDataResponse } from './useReviewData';
 
 type GradeableProblem = { id: string; title?: string; maxPoints?: number };
 type Person = { id: string; firstName?: string | null; lastName?: string | null };
+
+/** A member whose existing grade differs from the group grade about to be applied. */
+export type GradeConflict = { studentId: string; name: string; grade: number };
+
+/** A group grade held back because members differ, waiting on the grader to confirm. */
+export type PendingGroupGrade = {
+  problemId: string;
+  grade: number;
+  groupName: string;
+  conflicts: GradeConflict[];
+};
 
 type UseProblemGradesArgs = {
   courseId: string;
@@ -21,6 +33,10 @@ type UseProblemGradesArgs = {
   reviewData: ReviewDataResponse | undefined;
   reviewQueryIsError: boolean;
   reviewError: unknown;
+  /** The selected student's group, when the assignment is a group assignment. */
+  group: { id: string; name: string } | null | undefined;
+  /** Their groupmates, whose cached review data a group grade also invalidates. */
+  groupMembers: { id: string }[] | undefined;
 };
 
 /**
@@ -48,6 +64,8 @@ export function useProblemGrades({
   reviewData,
   reviewQueryIsError,
   reviewError,
+  group,
+  groupMembers,
 }: UseProblemGradesArgs) {
   const queryClient = useQueryClient();
   const selectedStudentId = selectedStudent?.id ?? null;
@@ -57,6 +75,15 @@ export function useProblemGrades({
   const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
   const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
   const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
+
+  // Whether a saved grade applies to the whole group. Defaults to the group, and resets per
+  // student so a deliberate individual adjustment does not carry to the next person.
+  const [gradeTarget, setGradeTarget] = useState<'student' | 'group'>('group');
+  const [pendingGroupGrade, setPendingGroupGrade] = useState<PendingGroupGrade | null>(null);
+  useEffect(() => {
+    setGradeTarget('group');
+    setPendingGroupGrade(null);
+  }, [selectedStudentId]);
 
   // Grade summary: cached read of which students have all problems graded.
   const gradeSummaryQuery = useQuery({
@@ -150,6 +177,62 @@ export function useProblemGrades({
     setProblemGradeErrors((prev) => ({ ...prev, [problemId]: null }));
   }, []);
 
+  /**
+   * Apply a grade to every member of the group. Returns the conflicting members when the
+   * server holds the write back, so the caller can ask before overwriting anyone.
+   */
+  const applyGroupGrade = useCallback(
+    async (problemId: string, grade: number, overwrite: boolean): Promise<GradeConflict[]> => {
+      if (!group) return [];
+      try {
+        await apiClient.post(
+          apiPaths.assignmentGroupGrade(courseId, assignmentId, problemId, group.id),
+          { grade, ...(overwrite ? { overwrite: true } : {}) },
+        );
+      } catch (err) {
+        // 409 is not a failure: it is the server declining to overwrite grades somebody set
+        // deliberately, and handing back who they are.
+        if (err instanceof ApiError && err.status === 409) {
+          const body = err.body as { conflicts?: GradeConflict[] } | null;
+          return body?.conflicts ?? [];
+        }
+        throw err;
+      }
+
+      // Every member's cached review data now has a stale grade, including the groupmates
+      // whose pages are not on screen.
+      for (const id of [selectedStudentId, ...(groupMembers ?? []).map((m) => m.id)]) {
+        if (!id) continue;
+        void queryClient.invalidateQueries({
+          queryKey: ['course', courseId, 'assignment', assignmentId, 'review-data', id],
+        });
+      }
+      return [];
+    },
+    [group, groupMembers, courseId, assignmentId, selectedStudentId, queryClient],
+  );
+
+  /** Retry a held-back group grade, overwriting the members who differed. */
+  const confirmGroupGrade = useCallback(async () => {
+    if (!pendingGroupGrade) return;
+    const { problemId, grade } = pendingGroupGrade;
+    setPendingGroupGrade(null);
+    setSavingProblemGrades((prev) => ({ ...prev, [problemId]: true }));
+    try {
+      await applyGroupGrade(problemId, grade, true);
+      setProblemGrades((prev) => ({ ...prev, [problemId]: grade }));
+      showToast.success(`Grade ${grade} saved for ${pendingGroupGrade.groupName}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save group grade';
+      setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
+      showToast.error(message);
+    } finally {
+      setSavingProblemGrades((prev) => ({ ...prev, [problemId]: false }));
+    }
+  }, [pendingGroupGrade, applyGroupGrade]);
+
+  const cancelGroupGrade = useCallback(() => setPendingGroupGrade(null), []);
+
   const saveProblemGrade = useCallback(
     async (problemId: string) => {
       if (!selectedStudent) return;
@@ -188,6 +271,35 @@ export function useProblemGrades({
 
       setProblemGradeErrors((prev) => ({ ...prev, [problemId]: null }));
       setSavingProblemGrades((prev) => ({ ...prev, [problemId]: true }));
+
+      // Grading the group: one write for every member, held back if any of them already
+      // carry a different grade. Clearing a grade (null) stays per student, since "clear the
+      // whole group" is a different action nobody has asked for.
+      if (group && gradeTarget === 'group' && numericValue !== null) {
+        try {
+          const conflicts = await applyGroupGrade(problemId, numericValue, false);
+          if (conflicts.length > 0) {
+            setPendingGroupGrade({
+              problemId,
+              grade: numericValue,
+              groupName: group.name,
+              conflicts,
+            });
+            return;
+          }
+          setProblemGrades((prev) => ({ ...prev, [problemId]: numericValue }));
+          setGradeInputs((prev) => ({ ...prev, [problemId]: String(numericValue) }));
+          showToast.success(`Grade ${numericValue} saved for ${group.name}`);
+        } catch (error) {
+          console.error('Save group grade error:', error);
+          const message = error instanceof Error ? error.message : 'Failed to save group grade';
+          setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
+          showToast.error(message);
+        } finally {
+          setSavingProblemGrades((prev) => ({ ...prev, [problemId]: false }));
+        }
+        return;
+      }
 
       try {
         await apiClient.post(
@@ -252,10 +364,18 @@ export function useProblemGrades({
       selectedStudent,
       setProblemGrades,
       queryClient,
+      group,
+      gradeTarget,
+      applyGroupGrade,
     ],
   );
 
   return {
+    gradeTarget,
+    setGradeTarget,
+    pendingGroupGrade,
+    confirmGroupGrade,
+    cancelGroupGrade,
     problemGrades,
     gradeInputs,
     problemGradeErrors,

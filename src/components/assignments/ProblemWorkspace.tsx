@@ -9,6 +9,7 @@ import ProblemHeader from '@/components/ProblemHeader';
 import ProblemGradeForm from '@/components/ProblemGradeForm';
 import WorkspacePanel from '@/components/WorkspacePanel';
 import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
+import type { GradeAudience } from '@/components/ProblemGradeForm';
 import type {
   Comment as DiscussionComment,
   CommentAudience,
@@ -67,6 +68,10 @@ export type ProblemWorkspaceProps = {
   gradeError?: string | null;
   onGradeInputChange?: (value: string) => void;
   onSaveGrade?: () => void;
+  /** Group assignments only: who a saved grade applies to. */
+  gradeAudience?: GradeAudience | null;
+  /** The value this student's group was given, when the grade came from one. */
+  groupGradeValue?: number | null;
   isSavingGrade?: boolean;
   isLoadingGrade?: boolean;
   isPrivilegedUser: boolean;
@@ -118,6 +123,8 @@ export default function ProblemWorkspace({
   gradeError = null,
   onGradeInputChange,
   onSaveGrade,
+  gradeAudience,
+  groupGradeValue,
   isSavingGrade = false,
   isLoadingGrade = false,
   isPrivilegedUser,
@@ -345,6 +352,8 @@ export default function ProblemWorkspace({
               error={gradeError}
               onChange={onGradeInputChange}
               onSubmit={onSaveGrade}
+              audience={gradeAudience}
+              groupGradeValue={groupGradeValue}
               autograderStatus={submissions[0]?.status ?? null}
               // `submissions[0]!` preserves the prior pass-through exactly; `!` is
               // compile-only so runtime behavior is unchanged.

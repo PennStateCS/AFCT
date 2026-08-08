@@ -15,6 +15,7 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import dynamic from 'next/dynamic';
 
 // On demand: the grant dialog carries the form stack and was the last thing putting zod on the
@@ -221,6 +222,11 @@ export default function AssignmentSubmissions({
     studentGradeStatuses,
     handleGradeInputChange,
     saveProblemGrade,
+    gradeTarget,
+    setGradeTarget,
+    pendingGroupGrade,
+    confirmGroupGrade,
+    cancelGroupGrade,
   } = useProblemGrades({
     courseId,
     assignmentId,
@@ -231,6 +237,8 @@ export default function AssignmentSubmissions({
     reviewData,
     reviewQueryIsError,
     reviewError,
+    group: reviewData?.group,
+    groupMembers: reviewData?.groupMembers,
   });
 
   // All three loading flags previously flipped together; they track the cold load.
@@ -555,6 +563,23 @@ export default function AssignmentSubmissions({
                       selectedProblem ? Boolean(savingProblemGrades[selectedProblem.id]) : false
                     }
                     isLoadingGrade={loadingProblemGrades}
+                    groupGradeValue={
+                      selectedProblem
+                        ? (reviewData?.problemGrades?.[selectedProblem.id]?.groupGradeValue ?? null)
+                        : null
+                    }
+                    gradeAudience={
+                      reviewData?.group
+                        ? {
+                            group: reviewData.group,
+                            studentName:
+                              `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+                              'this student',
+                            target: gradeTarget,
+                            onTargetChange: setGradeTarget,
+                          }
+                        : null
+                    }
                     isPrivilegedUser={true}
                   />
                 );
@@ -603,6 +628,34 @@ export default function AssignmentSubmissions({
           onGranted={refreshReview}
         />
       )}
+
+      {/* Applying a group grade over members who already differ. Naming them and their
+          current grades makes overwriting somebody's deliberate adjustment a decision rather
+          than a side effect of a routine save. */}
+      <ConfirmDialog
+        open={!!pendingGroupGrade}
+        title={`Overwrite ${pendingGroupGrade?.conflicts.length === 1 ? 'a grade' : 'grades'} in ${pendingGroupGrade?.groupName ?? 'this group'}?`}
+        description={
+          pendingGroupGrade ? (
+            <>
+              <span className="block">
+                Giving {pendingGroupGrade.groupName} {pendingGroupGrade.grade} will replace what
+                these members already have:
+              </span>
+              <ul className="mt-2 list-disc pl-5">
+                {pendingGroupGrade.conflicts.map((c) => (
+                  <li key={c.studentId}>
+                    {c.name} currently has {c.grade}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null
+        }
+        confirmText="Overwrite and apply"
+        onConfirm={confirmGroupGrade}
+        onCancel={cancelGroupGrade}
+      />
 
       {openDialog.submission && (
         <SubmissionViewerDialog
