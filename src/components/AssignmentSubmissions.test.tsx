@@ -485,6 +485,26 @@ describe('AssignmentSubmissions — student navigation', () => {
     expect(idx).toHaveTextContent('1');
   });
 
+  // Selecting a student used to call router.replace, which on a dynamic server component
+  // route fetches a fresh RSC payload and re-runs the page's database queries. The URL
+  // still has to change; it just must not cost a round trip to do it.
+  it('syncs the selected student into the URL without navigating', async () => {
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    renderTwo();
+    const idx = await screen.findByTestId('selected-index');
+    await waitFor(() => expect(idx).toHaveTextContent('0'));
+    replaceState.mockClear();
+    routerMock.replace.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'pick-s2' }));
+
+    await waitFor(() =>
+      expect(replaceState).toHaveBeenCalledWith(null, '', expect.stringContaining('studentId=s2')),
+    );
+    expect(routerMock.replace).not.toHaveBeenCalled();
+    replaceState.mockRestore();
+  });
+
   it('selects a specific student by id', async () => {
     renderTwo();
     const idx = await screen.findByTestId('selected-index');

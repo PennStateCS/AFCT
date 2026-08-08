@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
@@ -96,7 +96,6 @@ export default function AssignmentSubmissions({
   assignmentDueDate,
   problems,
 }: Props) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const epsSymbol = useEmptyStringSymbol(courseId);
   const searchParams = useSearchParams();
@@ -169,22 +168,37 @@ export default function AssignmentSubmissions({
     }
   }, [studentsQueryIsError, studentsQuery.error]);
 
-  const updateQuery = useCallback(
-    (problemId: string) => {
+  /**
+   * Keep the selected problem and student in the URL without asking the server for
+   * anything.
+   *
+   * `router.replace` looks harmless here but this route is a dynamic server component, so
+   * every call fetched a fresh RSC payload and re-ran the page's auth, roster and
+   * assignment-with-problems queries. Clicking through a roster of any size paid four
+   * database queries per student for data the client already had in the query cache.
+   *
+   * `history.replaceState` is what Next documents for exactly this: it updates the address
+   * bar and still feeds `useSearchParams`, with no navigation. Bookmarking, reload and the
+   * back button all behave the same, because the URL is identical either way.
+   */
+  const setUrlParam = useCallback(
+    (key: string, value: string) => {
       const params = new URLSearchParams(searchParamsString);
-      params.set('problemId', problemId);
-      router.replace(`?${params.toString()}`, { scroll: false });
+      if (params.get(key) === value) return;
+      params.set(key, value);
+      window.history.replaceState(null, '', `?${params.toString()}`);
     },
-    [router, searchParamsString],
+    [searchParamsString],
+  );
+
+  const updateQuery = useCallback(
+    (problemId: string) => setUrlParam('problemId', problemId),
+    [setUrlParam],
   );
 
   const updateStudentQuery = useCallback(
-    (studentId: string) => {
-      const params = new URLSearchParams(searchParamsString);
-      params.set('studentId', studentId);
-      router.replace(`?${params.toString()}`, { scroll: false });
-    },
-    [router, searchParamsString],
+    (studentId: string) => setUrlParam('studentId', studentId),
+    [setUrlParam],
   );
 
   // Build the assignment-specific problem list from assignment payload.
