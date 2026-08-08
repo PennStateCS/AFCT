@@ -2227,7 +2227,7 @@ export interface paths {
         };
         /**
          * Get a problem file
-         * @description Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system  admin only**: a problem file is the autograder's answer/solution key, so a student  must never receive it (same sensitivity as a solution file). The download is audited,  and traversal filenames are rejected.
+         * @description Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system  admin only**: a problem file is the autograder's answer/solution key, so a student  must never receive it (same sensitivity as a solution file). Every serve is audited as  a view, since this route has no download path, and traversal filenames are rejected.
          *
          *     **Auth:** required
          *
@@ -2275,7 +2275,7 @@ export interface paths {
         };
         /**
          * Get a submission file
-         * @description Serves a submission's uploaded file as a download. Restricted to the submitting  student, course staff (faculty or TAs), or a system admin. The download is audited,  and traversal filenames are rejected.
+         * @description Serves a submission's uploaded file. Restricted to the submitting student, course  staff (faculty or TAs), or a system admin. Every successful serve is audited, as a  view by default and as a download when `?download=1` is set. Traversal filenames are  rejected.
          *
          *     **Auth:** required
          *
@@ -10387,7 +10387,10 @@ export interface operations {
     };
     getFilesSubmissionsByFile: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Set to `1` to audit the serve as a download rather than an inline view. */
+                download?: "1";
+            };
             header?: never;
             path: {
                 file: string;

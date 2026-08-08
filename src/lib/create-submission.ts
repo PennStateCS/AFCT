@@ -39,6 +39,13 @@ export type CreateSubmissionInput = {
   file: File | null;
   /** The originating request, used only for audit-log IP/UA context. */
   req: Request;
+  /**
+   * Which front end submitted. Recorded on every audit entry this service writes,
+   * because most students submit from the native client rather than the browser and
+   * the two are otherwise indistinguishable in the log (the user agent is stored, but
+   * inferring the channel from it is guesswork that breaks when the client changes).
+   */
+  source: 'web' | 'client';
 };
 
 export type CreateSubmissionResult =
@@ -75,7 +82,7 @@ function storeSubmissionFile(filePath: string, buffer: Buffer): void {
  * background worker picks it up.
  */
 export async function createSubmission(input: CreateSubmissionInput): Promise<CreateSubmissionResult> {
-  const { user, assignmentId, problemId, file, req } = input;
+  const { user, assignmentId, problemId, file, req, source } = input;
   const { maxBytes, maxMb } = await getSystemUploadLimit();
 
   // Every submission audit entry shares the same actor + course/assignment/problem/
@@ -106,6 +113,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
         assignmentId: ctx.assignmentId,
         problemId: ctx.problemId,
         ...(ctx.submissionId ? { submissionId: ctx.submissionId } : {}),
+        source,
         ...meta,
       },
     });

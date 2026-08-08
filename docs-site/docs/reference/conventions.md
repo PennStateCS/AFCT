@@ -2,7 +2,7 @@
 
 **Audience:** engineers working on AFCT
 
-This page covers the conventions that affect correctness, security, and maintainability. For the branch-and-check workflow, see [Contributing changes](./contributing.md); when the dev stack misbehaves, see [Development troubleshooting](./development-troubleshooting.md).
+This page covers the conventions that affect correctness, security, and maintainability. For the branch-and-check workflow, see [Contributing changes](./contributing.md); when the dev stack misbehaves, see [Development troubleshooting](../setup/development-troubleshooting.md).
 
 ## Technology stack
 

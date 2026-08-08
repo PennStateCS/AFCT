@@ -442,7 +442,9 @@ export default function AutograderClient() {
   const handleDownloadSubmission = (submission: SubmissionItem) => {
     if (!submission.fileName) return;
 
-    const url = apiPaths.files.submission(encodeURIComponent(submission.fileName));
+    const url = apiPaths.files.submission(encodeURIComponent(submission.fileName), {
+      download: true,
+    });
     const link = document.createElement('a');
     link.href = url;
     link.download = submission.originalFileName || 'Download';
@@ -640,7 +642,9 @@ export default function AutograderClient() {
                 {name}
               </button>
               <a
-                href={apiPaths.files.submission(encodeURIComponent(submission.fileName))}
+                href={apiPaths.files.submission(encodeURIComponent(submission.fileName), {
+                  download: true,
+                })}
                 download={name}
                 title={`Download ${name}`}
                 aria-label={`Download ${name}`}

@@ -138,6 +138,7 @@ const call = (extra: Partial<Parameters<typeof createSubmission>[0]> = {}) =>
     problemId: 'p-1',
     file: null,
     req: new Request('http://localhost/api/submissions'),
+    source: 'web',
     ...extra,
   });
 
@@ -635,6 +636,16 @@ describe('createSubmission', () => {
         }),
       );
       expect(auditActions()).toContain('SUBMISSION_CREATED');
+    });
+
+    // Most students submit from the native client, so an entry that does not say which
+    // front end it came from cannot answer "how did this student actually submit".
+    it('records which front end submitted on every audit entry', async () => {
+      setup();
+      await call({ source: 'client' });
+
+      const created = auditMock.mock.calls.find((c) => c[2].action === 'SUBMISSION_CREATED');
+      expect(created?.[2].metadata).toMatchObject({ source: 'client' });
     });
 
     it('runs the insert at serializable isolation', async () => {

@@ -1,0 +1,49 @@
+{
+  // Safe only because the repo lints clean at --max-warnings=0, so there is nothing
+  // pre-existing for this to "fix" in a file you happen to open. It catches your own
+  // slips as you save.
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // Format only the lines you actually changed. A plain format-on-save would rewrite
+  // whole files, because src/ is deliberately not Prettier-clean and .prettierrc.json
+  // loads prettier-plugin-tailwindcss, so every class list in an old file would be
+  // reordered and bury the real change. Use "modifications", NOT
+  // "modificationsIfAvailable": that one falls back to formatting the entire file
+  // whenever git change tracking is unavailable, which is the case being avoided.
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "modifications",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+
+  // Use the repo's TypeScript, not whichever version VS Code ships, so the editor
+  // agrees with `npm run typecheck:all`.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // LF everywhere. CRLF has broken deploy scripts before: an extensionless file such
+  // as deploy/unix/bin/afctctl saved with CRLF stops being runnable by sh, and the
+  // failure surfaces inside a container rather than here.
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  // afctctl has no extension, so it gets no highlighting and no shellcheck by default.
+  "files.associations": {
+    "afctctl": "shellscript"
+  },
+
+  // docs-site carries its own node_modules, so an unfiltered search walks two full
+  // dependency trees.
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/coverage": true,
+    "docs-site/build": true,
+    "docs-dist": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.next/**": true
+  }
+}

@@ -90,7 +90,7 @@ describe('GET /api/files/solutions/[file]', () => {
       prismaMock,
       expect.anything(),
       expect.objectContaining({
-        action: 'SOLUTION_DOWNLOAD_DENIED',
+        action: 'SOLUTION_ACCESS_DENIED',
         severity: 'SECURITY',
         category: 'PROBLEM',
         courseId: 'course-1',
@@ -250,7 +250,7 @@ describe('GET /api/files/solutions/[file]', () => {
       prismaMock,
       expect.anything(),
       expect.objectContaining({
-        action: 'SOLUTION_DOWNLOAD_ERROR',
+        action: 'SOLUTION_ACCESS_ERROR',
         severity: 'ERROR',
         category: 'PROBLEM',
       }),

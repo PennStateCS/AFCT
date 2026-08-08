@@ -96,6 +96,45 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     expect(prismaMock.assignmentProblemGrade.findMany).not.toHaveBeenCalled();
   });
 
+  // Staff opening a student's grade breakdown discloses an education record, so the
+  // audit log has to name who looked and whose record it was.
+  it('logs a staff read of another student as a disclosure', async () => {
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      { problemId: 'p1', grade: 9, feedback: 'nice', updatedAt: new Date('2026-01-01') },
+    ]);
+
+    const res = await GET(new Request('http://localhost'), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(200);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        userId: 'staff-1',
+        action: 'VIEW_STUDENT_PROBLEM_GRADES',
+        category: 'GRADE',
+        metadata: expect.objectContaining({ viewedStudentId: 'student-1' }),
+      }),
+    );
+  });
+
+  it('does not log a student reading their own grades', async () => {
+    authMock.mockResolvedValue({ user: { id: defaultParams.studentId, role: 'STUDENT' } });
+    canManageCourseMock.mockResolvedValue(false);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      { problemId: 'p1', grade: 9, feedback: 'nice', updatedAt: new Date('2026-01-01') },
+    ]);
+
+    const res = await GET(new Request('http://localhost'), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(200);
+    expect(activityLogMock).not.toHaveBeenCalled();
+  });
+
   it('returns 204 when no grades are present', async () => {
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
 

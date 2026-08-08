@@ -57,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     if (!(await canManageCourse(session.user, problem.courseId))) {
       return logDenial(req, {
         userId: session.user.id,
-        action: 'SOLUTION_DOWNLOAD_DENIED',
+        action: 'SOLUTION_ACCESS_DENIED',
         category: 'PROBLEM',
         courseId: problem.courseId,
       });
@@ -91,7 +91,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     console.error('Error serving solution file:', err);
     await logError(req, {
       userId: actorId,
-      action: 'SOLUTION_DOWNLOAD_ERROR',
+      action: 'SOLUTION_ACCESS_ERROR',
       error: err,
       category: 'PROBLEM',
       metadata: { fileName: fileName ?? null },
