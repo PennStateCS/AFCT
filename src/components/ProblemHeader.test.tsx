@@ -96,36 +96,3 @@ describe('ProblemHeader', () => {
     });
   });
 });
-
-describe('the facts bar', () => {
-  // The bar is the description's header, so the two have to stay one unit rather than a row
-  // of pills floating above unrelated text.
-  it('puts the description in the same box as the facts', () => {
-    render(
-      <ProblemHeader
-        title="Deterministic FA"
-        description="Build a DFA for the language."
-        type="FA"
-        maxStates={6}
-      />,
-    );
-
-    const facts = screen.getByText('Finite Automaton').closest('section');
-    expect(facts).not.toBeNull();
-    expect(facts).toHaveTextContent('Build a DFA for the language.');
-  });
-
-  it('renders the bar alone when the problem has no description', () => {
-    render(<ProblemHeader title="No description" type="FA" maxStates={6} />);
-
-    const section = screen.getByText('Finite Automaton').closest('section');
-    expect(section).toHaveTextContent('Max States: 6');
-  });
-
-  // Nothing to say means no empty box.
-  it('renders no box when there is neither a description nor any facts', () => {
-    const { container } = render(<ProblemHeader title="Bare" />);
-
-    expect(container.querySelector('section')).toBeNull();
-  });
-});

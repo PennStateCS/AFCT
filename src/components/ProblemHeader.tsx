@@ -54,28 +54,44 @@ export default function ProblemHeader({
   const submissionsLabel =
     typeof maxSubmissions === 'number' ? (maxSubmissions < 0 ? 'Unlimited' : maxSubmissions) : null;
 
-  // One bar of facts rather than five pills. Each fact stays a single text node so it reads
-  // as one phrase, and so it can still be found by its whole label.
   const hasDescription = !!description || !!descriptionJson;
+  const pillClass =
+    'inline-flex min-h-8 items-center rounded-full border border-border bg-transparent px-3 py-1 text-xs font-medium leading-none';
   const facts: React.ReactNode[] = [];
   if (badge) {
     facts.push(
-      <span key="type" className={`font-medium ${badge.className}`}>
+      <span key="type" className={`${pillClass} ${badge.className}`}>
         {badge.label}
       </span>,
     );
   }
   if (typeof maxStates === 'number') {
-    facts.push(<span key="states">Max States: {maxStates === -1 ? 'Unlimited' : maxStates}</span>);
+    facts.push(
+      <span key="states" className={pillClass}>
+        Max States: {maxStates === -1 ? 'Unlimited' : maxStates}
+      </span>,
+    );
   }
   if (typeof isDeterministic === 'boolean') {
-    facts.push(<span key="det">{isDeterministic ? 'Deterministic' : 'Nondeterministic'}</span>);
+    facts.push(
+      <span key="det" className={pillClass}>
+        {isDeterministic ? 'Deterministic' : 'Nondeterministic'}
+      </span>,
+    );
   }
   if (submissionsLabel !== null) {
-    facts.push(<span key="subs">Max Submissions: {submissionsLabel}</span>);
+    facts.push(
+      <span key="subs" className={pillClass}>
+        Max Submissions: {submissionsLabel}
+      </span>,
+    );
   }
   if (typeof autograderEnabled === 'boolean') {
-    facts.push(<span key="ag">Autograder: {autograderEnabled ? 'On' : 'Off'}</span>);
+    facts.push(
+      <span key="ag" className={pillClass}>
+        Autograder: {autograderEnabled ? 'On' : 'Off'}
+      </span>,
+    );
   }
 
   return (
@@ -84,40 +100,18 @@ export default function ProblemHeader({
         <CardTitle className="min-w-0 text-lg">{title}</CardTitle>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      {/* The facts and the description are one unit: the bar reads as the description's
-          header, the same shape as the Submissions and Discussion panels beside it, rather
-          than a row of loose pills floating above unrelated text. */}
-      {facts.length > 0 || hasDescription ? (
-        <section className="mt-2 overflow-hidden rounded-md border">
-          {facts.length > 0 ? (
-            <div
-              className={`text-foreground bg-accent flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-xs ${
-                hasDescription ? 'border-b' : ''
-              }`}
-            >
-              {facts.map((fact, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 ? (
-                    <span aria-hidden="true" className="text-muted-foreground/60">
-                      •
-                    </span>
-                  ) : null}
-                  {fact}
-                </React.Fragment>
-              ))}
-            </div>
-          ) : null}
-          {hasDescription ? (
-            <RichDescription
-              // Heading base: the CardTitle above is aria-level 3, so the description starts one level below it.
-              headingBaseLevel={4}
-              compact
-              description={description}
-              descriptionJson={descriptionJson}
-              className="text-muted-foreground px-3 py-2 text-sm"
-            />
-          ) : null}
-        </section>
+      {facts.length > 0 ? (
+        <div className="text-foreground mt-2 flex flex-wrap items-center gap-2 text-xs">{facts}</div>
+      ) : null}
+      {hasDescription ? (
+        <RichDescription
+          // Heading base: the CardTitle above is aria-level 3, so the description starts one level below it.
+          headingBaseLevel={4}
+          compact
+          description={description}
+          descriptionJson={descriptionJson}
+          className="text-muted-foreground mt-3 text-sm"
+        />
       ) : null}
     </div>
   );
