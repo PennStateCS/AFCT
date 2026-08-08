@@ -260,7 +260,7 @@ export default function StudentNavigator({
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 relative flex w-[320px] items-center gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
+              className="bg-card text-foreground border-border hover:bg-accent focus:ring-ring relative flex w-[320px] items-center gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
             >
               <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                 {selectedStudent ? (
@@ -319,7 +319,7 @@ export default function StudentNavigator({
                 filteredStudents.map((s) => (
                   <DropdownMenuItem
                     key={s.id}
-                    className="hover:bg-input"
+                    className="hover:bg-accent"
                     onClick={() => handleSelect(s.id)}
                   >
                     <span className="flex items-center gap-2 truncate">

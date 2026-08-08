@@ -107,6 +107,10 @@ export default function AssignmentSubmissions({
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  // Who a new comment reaches on a group assignment. Defaults to the group: the shared
+  // submission is what staff are looking at, so the group is the common case. Reset per
+  // student so a private note to one person does not silently carry to the next.
+  const [commentTarget, setCommentTarget] = useState<'student' | 'group'>('group');
   const [grantDialogOpen, setGrantDialogOpen] = useState(false);
   // Set on first open and never cleared, so the dynamic import above stays deferred.
   const [grantMounted, setGrantMounted] = useState(false);
@@ -329,6 +333,10 @@ export default function AssignmentSubmissions({
   const { reviewData, reviewQueryIsError, reviewError, reviewFetching, refreshReview } =
     useReviewData(courseId, assignmentId, selectedStudentId);
 
+  useEffect(() => {
+    setCommentTarget('group');
+  }, [selectedStudentId]);
+
   // All three loading flags previously flipped together; they track the cold load.
   const loadingSubmissions = reviewFetching;
   const loadingComments = reviewFetching;
@@ -449,11 +457,16 @@ export default function AssignmentSubmissions({
 
       setSavingComments((prev) => ({ ...prev, [problemId]: true }));
       try {
+        // A group comment is one row addressed to the group; an individual one names the
+        // student. Sending both is refused by the API and by a database constraint.
+        const toGroup = !!reviewData?.group && commentTarget === 'group';
         const newComment = await apiClient.post<DiscussionComment>(apiPaths.comments(), {
           content: commentText,
           assignmentId,
           problemId,
-          studentId: selectedStudent.id,
+          ...(toGroup
+            ? { groupId: reviewData?.group?.id }
+            : { studentId: selectedStudent.id }),
         });
         // Optimistically add the comment to the review-data cache (the derived
         // `comments` reads from it), then invalidate so the server copy replaces it.
@@ -468,6 +481,15 @@ export default function AssignmentSubmissions({
         void queryClient.invalidateQueries({
           queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
         });
+        // Review data is cached per student, so a comment addressed to the group would sit
+        // unseen in every groupmate's cached copy until it went stale. Drop theirs too.
+        if (toGroup) {
+          for (const member of reviewData?.groupMembers ?? []) {
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, member.id),
+            });
+          }
+        }
         showToast.saved('Comment');
       } catch (err) {
         console.error('Save comment error:', err);
@@ -476,7 +498,17 @@ export default function AssignmentSubmissions({
         setSavingComments((prev) => ({ ...prev, [problemId]: false }));
       }
     },
-    [commentTexts, selectedStudent, assignmentId, courseId, queryClient],
+    [
+      commentTexts,
+      selectedStudent,
+      assignmentId,
+      courseId,
+      queryClient,
+      // Without these the callback keeps whichever audience was current when it was last
+      // built, which is how a note meant for one student ends up posted to their group.
+      commentTarget,
+      reviewData,
+    ],
   );
 
   const deleteComment = useCallback(
@@ -784,6 +816,22 @@ export default function AssignmentSubmissions({
                     submissions={selectedSubs}
                     assignmentDueDate={assignmentDueDate}
                     showSubmitter={reviewIsGroup}
+                    subjectName={
+                      `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+                      'this student'
+                    }
+                    commentAudience={
+                      reviewData?.group
+                        ? {
+                            group: reviewData.group,
+                            studentName:
+                              `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+                              'this student',
+                            target: commentTarget,
+                            onTargetChange: setCommentTarget,
+                          }
+                        : null
+                    }
                     comments={selectedComments}
                     commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
                     onCommentTextChange={(text: string) =>

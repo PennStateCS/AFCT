@@ -5,6 +5,8 @@ import { useSession } from 'next-auth/react';
 import { MessageSquare, Send, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ConfirmDialog } from './dialogs/ConfirmDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -15,6 +17,10 @@ export type Comment = {
   id: string;
   content: string;
   createdAt: string;
+  /** The student this was addressed to, when it was meant for one person. */
+  aboutStudentId?: string | null;
+  /** The group this was addressed to, when every member can see it. */
+  aboutGroupId?: string | null;
   author: {
     id?: string;
     firstName: string | null;
@@ -28,8 +34,22 @@ export type Comment = {
   };
 };
 
+/** Who a new comment will reach. Group assignments only; otherwise there is no choice. */
+export type CommentAudience = {
+  /** The group the selected student submits with, when they have one. */
+  group: { id: string; name: string } | null;
+  /** The student being reviewed, for the "only this person" option's label. */
+  studentName: string;
+  target: 'student' | 'group';
+  onTargetChange: (target: 'student' | 'group') => void;
+};
+
 type Props = {
   courseIsArchived: boolean;
+  /** Omit on individual assignments: there is nothing to choose between. */
+  audience?: CommentAudience | null;
+  /** The student being reviewed, used to label who a private comment was for. */
+  subjectName?: string;
   comments: Comment[];
   commentText: string;
   onCommentTextChange: (text: string) => void;
@@ -70,6 +90,8 @@ const authorAvatarSrc = (author: Comment['author']) => {
 
 export default function DiscussionPanel({
   courseIsArchived,
+  audience = null,
+  subjectName,
   comments,
   commentText,
   onCommentTextChange,
@@ -82,6 +104,18 @@ export default function DiscussionPanel({
   className = '',
   frameless = false,
 }: Props) {
+  /**
+   * The visibility badge for one comment. Only meaningful on a group assignment: on an
+   * individual one every comment is between staff and that student, so a badge on each
+   * would be noise repeating the same fact.
+   */
+  const audienceLabel = (comment: Comment): string | null => {
+    if (!audience?.group) return null;
+    if (comment.aboutGroupId) return `Visible to ${audience.group.name}`;
+    if (comment.aboutStudentId) return `Only ${subjectName ?? audience.studentName}`;
+    return null;
+  };
+
   const { data: session } = useSession();
   const myId = session?.user?.id ?? null;
   const { timezone } = useEffectiveTimezone();
@@ -182,6 +216,16 @@ export default function DiscussionPanel({
                             {comment.content}
                           </p>
 
+                          {/* Who can read this. Shown on every comment rather than only the
+                              private ones: a missing badge is not a reliable signal, and
+                              staff scanning an old thread cannot otherwise tell whether a
+                              remark went to one student or to their whole group. */}
+                          {audienceLabel(comment) ? (
+                            <Badge variant="outline" className="mt-1 text-[0.7rem] font-normal">
+                              {audienceLabel(comment)}
+                            </Badge>
+                          ) : null}
+
                           <div className="mt-1 flex items-center justify-between gap-1 overflow-hidden whitespace-nowrap">
                             <span className="text-muted-foreground truncate text-xs">{name}</span>
                             <span className={`text-muted-foreground text-xs ${metaAlign}`}>
@@ -202,6 +246,24 @@ export default function DiscussionPanel({
           )}
 
           <div className="space-y-2">
+            {/* Group assignments only. Defaults to the whole group, because the shared
+                submission is what is on screen, so the choice is stated plainly rather
+                than left to be inferred from a default nobody read. */}
+            {audience?.group && !courseIsArchived ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground text-xs font-medium">Send to</span>
+                <SegmentedControl
+                  name="comment-audience"
+                  value={audience.target}
+                  onValueChange={(v) => audience.onTargetChange(v as 'student' | 'group')}
+                  ariaLabel="Who this comment is for"
+                  options={[
+                    { value: 'group', label: audience.group.name },
+                    { value: 'student', label: `Only ${audience.studentName}` },
+                  ]}
+                />
+              </div>
+            ) : null}
             <Textarea
               placeholder={placeholder}
               value={commentText}

@@ -365,6 +365,11 @@ export const GET = withCourseAuth(
         content: comment.content,
         createdAt: comment.createdAt,
         problemId: comment.problemId,
+        // Who this comment was addressed to, so the thread can say who can see it. A
+        // reader cannot tell a group note from a private one otherwise, and that is the
+        // mistake with consequences.
+        aboutStudentId: comment.aboutStudentId ?? null,
+        aboutGroupId: comment.aboutGroupId ?? null,
         author: {
           id: comment.author.id,
           firstName: comment.author.firstName ?? null,

@@ -276,6 +276,9 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
           content: 'Looks good',
           createdAt: createdAt.toISOString(),
           problemId: 'p1',
+          // Who the comment was addressed to, so the thread can badge who can see it.
+          aboutStudentId: null,
+          aboutGroupId: null,
           author: {
             id: 'faculty-1',
             firstName: 'Ada',

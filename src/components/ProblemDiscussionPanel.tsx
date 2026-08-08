@@ -1,10 +1,13 @@
 'use client';
 
-import type { Comment as DiscussionComment } from './DiscussionPanel';
+import type { Comment as DiscussionComment, CommentAudience } from './DiscussionPanel';
 import DiscussionPanel from './DiscussionPanel';
 
 export type ProblemDiscussionPanelProps = {
   courseIsArchived: boolean;
+  /** Group assignments only: who a new comment reaches. Omit for individual ones. */
+  audience?: CommentAudience | null;
+  subjectName?: string;
   comments: DiscussionComment[];
   commentText: string;
   onCommentTextChange: (text: string) => void;
@@ -16,6 +19,8 @@ export type ProblemDiscussionPanelProps = {
 
 export default function ProblemDiscussionPanel({
   courseIsArchived,
+  audience,
+  subjectName,
   comments,
   commentText,
   onCommentTextChange,
@@ -27,6 +32,8 @@ export default function ProblemDiscussionPanel({
   return (
     <DiscussionPanel
       courseIsArchived={courseIsArchived}
+      audience={audience}
+      subjectName={subjectName}
       comments={comments}
       commentText={commentText}
       onCommentTextChange={onCommentTextChange}
