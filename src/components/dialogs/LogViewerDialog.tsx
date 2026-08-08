@@ -33,7 +33,9 @@ export function LogViewerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      {/* A full log entry is long enough that this dialog is usually scrolling, so it gets
+          the themed bar rather than the default OS one sitting on the card surface. */}
+      <DialogContent className="themed-scroll">
         <DialogHeader>
           <DialogTitle className="truncate">{title || 'System Log'}</DialogTitle>
           <DialogDescription className="sr-only">Raw log file contents.</DialogDescription>
