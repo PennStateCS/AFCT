@@ -8,11 +8,11 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
-import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
-import { useIsMobile } from '@/hooks/use-mobile';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
+import { ProblemPicker } from '@/components/assignments/ProblemPicker';
+import { ProgressRing } from '@/components/assignments/ProgressRing';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -164,9 +164,6 @@ export default function AssignmentSubmissions({
   // All assignment problems are visible.
   const visibleProblems = assignmentProblems;
 
-  const limitText = useCallback((value: string, max = 80) => {
-    return value.length > max ? `${value.slice(0, max - 1)}…` : value;
-  }, []);
 
   const {
     selectedIndex,
@@ -253,10 +250,6 @@ export default function AssignmentSubmissions({
   // column so staff can see which member made each attempt.
   const reviewIsGroup = !!reviewData?.isGroup;
 
-  // Below the desktop breakpoint the two panels stack; above it they sit side by side
-  // in a draggable split.
-  const isMobile = useIsMobile();
-
   // Read-only review data derived straight from the query cache instead of being
   // mirrored into state by an effect. Empty for no selected student or a failed load
   // (the query data is then undefined).
@@ -280,18 +273,14 @@ export default function AssignmentSubmissions({
     return grouped;
   }, [assignmentProblems, reviewData, selectedStudentId]);
 
-  const problemListItems = useMemo(
-    () =>
-      visibleProblems.map((problem, index) => ({
-        id: problem.id,
-        title: problem.title ? limitText(problem.title, 25) : `Problem ${index + 1}`,
-        grade: problemGrades[problem.id] ?? null,
-        maxGrade: problem.maxPoints ?? null,
-        submissionsCount: extractSubs(submissions[problem.id]).length,
-        maxSubmissions: problem.maxSubmissions ?? null,
-      })),
-    [visibleProblems, limitText, problemGrades, submissions],
-  );
+  // The whole assignment at a glance, for the strip. Both come from the grades already
+  // loaded for this student, so neither needs a request of its own.
+  const assignmentTotals = useMemo(() => {
+    const totalPoints = assignmentProblems.reduce((sum, p) => sum + (p.maxPoints ?? 0), 0);
+    const earned = assignmentProblems.reduce((sum, p) => sum + (problemGrades[p.id] ?? 0), 0);
+    const graded = assignmentProblems.filter((p) => typeof problemGrades[p.id] === 'number').length;
+    return { totalPoints, earned, graded, count: assignmentProblems.length };
+  }, [assignmentProblems, problemGrades]);
 
   // The problem whose submissions are on screen; also the target of a grant action.
   const selectedProblem = useMemo(
@@ -408,7 +397,7 @@ export default function AssignmentSubmissions({
               <FileText className="h-6 w-6" /> Submissions
             </h2>
 
-            <div className="mt-4 flex flex-col items-start gap-2 border-b pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="mt-4 flex flex-col items-start gap-4 border-b pb-4 lg:flex-row lg:items-center lg:justify-between">
               <StudentNavigator
                 students={students}
                 selectedIndex={selectedIndex}
@@ -430,6 +419,27 @@ export default function AssignmentSubmissions({
                     : null
                 }
               />
+
+              <div className="flex flex-wrap items-center gap-6">
+                <ProblemPicker
+                  problems={visibleProblems}
+                  selectedProblemId={selectedProblem?.id ?? null}
+                  onSelect={handleSelectProblem}
+                  grades={problemGrades}
+                />
+                <ProgressRing
+                  label="Graded"
+                  value={assignmentTotals.graded}
+                  total={assignmentTotals.count}
+                  srLabel={`${assignmentTotals.graded} of ${assignmentTotals.count} problems graded`}
+                />
+                <ProgressRing
+                  label="Assignment score"
+                  value={assignmentTotals.earned}
+                  total={assignmentTotals.totalPoints}
+                  srLabel={`${assignmentTotals.earned} of ${assignmentTotals.totalPoints} points`}
+                />
+              </div>
             </div>
           </div>
 
@@ -482,21 +492,6 @@ export default function AssignmentSubmissions({
                     Grant extra submissions
                   </Button>
                 ) : null;
-
-                const listCard = (
-                  <ProblemListCard
-                    problems={problemListItems}
-                    selectedProblemId={selectedProblem?.id ?? null}
-                    onSelect={handleSelectProblem}
-                    title="Problems"
-                    description="Select a problem to review submissions and discussion."
-                    className="h-full"
-                    scrollAreaClassName="max-h-[520px]"
-                    numberShortcuts
-                    showSubmissionUsage={false}
-                    showTotal
-                  />
-                );
 
                 const workspace = (
                   <ProblemWorkspace
@@ -588,23 +583,7 @@ export default function AssignmentSubmissions({
                 );
 
                 // Stack on small screens; a fixed two-column layout on desktop.
-                if (isMobile) {
-                  return (
-                    <div className="flex flex-col gap-4">
-                      {listCard}
-                      <div className="print:col-span-2">{workspace}</div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-[280px_minmax(0,1fr)] items-stretch gap-6 print:block">
-                      <div className="min-w-0">{listCard}</div>
-                      <div className="min-w-0 print:col-span-2">{workspace}</div>
-                    </div>
-                  </div>
-                );
+                return <div className="min-w-0">{workspace}</div>;
               })()
             )}
           </div>
