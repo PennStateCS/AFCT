@@ -9,7 +9,10 @@ import ProblemHeader from '@/components/ProblemHeader';
 import ProblemGradeForm from '@/components/ProblemGradeForm';
 import WorkspacePanel from '@/components/WorkspacePanel';
 import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
-import type { Comment as DiscussionComment } from '@/components/DiscussionPanel';
+import type {
+  Comment as DiscussionComment,
+  CommentAudience,
+} from '@/components/DiscussionPanel';
 import type { StudentProblemComment } from '@/lib/assignment-details';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import { apiPaths } from '@/lib/api-paths';
@@ -49,6 +52,9 @@ export type ProblemWorkspaceProps = {
   commentText: string;
   onCommentTextChange: (text: string) => void;
   onSaveComment: () => void;
+  /** Group assignments only: who a new comment reaches. */
+  commentAudience?: CommentAudience | null;
+  subjectName?: string;
   onDeleteComment?: (id: string) => void;
   isSaving?: boolean;
   deletingComments?: Record<string, boolean>;
@@ -99,6 +105,8 @@ export default function ProblemWorkspace({
   commentText,
   onCommentTextChange,
   onSaveComment,
+  commentAudience,
+  subjectName,
   onDeleteComment,
   isSaving = false,
   deletingComments = {},
@@ -400,6 +408,8 @@ export default function ProblemWorkspace({
             ) : (
               <ProblemDiscussionPanel
                 courseIsArchived={courseIsArchived}
+                audience={commentAudience}
+                subjectName={subjectName}
                 comments={normalizedComments}
                 commentText={commentText}
                 onCommentTextChange={onCommentTextChange}

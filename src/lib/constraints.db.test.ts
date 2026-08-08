@@ -30,6 +30,7 @@ const ids = {
 };
 
 async function destroyFixtures() {
+  await prisma.comment.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.submissionGrant.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.assignmentOverride.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.assignmentAssignee.deleteMany({ where: { assignmentId: ids.assignment } });
@@ -107,6 +108,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  await prisma.comment.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.submissionGrant.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.assignmentOverride.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.assignmentAssignee.deleteMany({ where: { assignmentId: ids.assignment } });
@@ -355,5 +357,77 @@ describe('a submission grant is for a positive number of attempts', () => {
     await refusedBy('SubmissionGrant_positive', () =>
       prisma.submissionGrant.update({ where: { id: row.id }, data: { extraSubmissions: 0 } }),
     );
+  });
+});
+
+/**
+ * A comment is addressed to one student OR one group. Unlike the three tables above it may
+ * also be addressed to neither (a comment on the problem itself, with no subject), so the
+ * rule here is "not both" rather than a strict xor.
+ */
+describe('Comment names at most one subject', () => {
+  const base = {
+    content: 'Fixture comment',
+    assignmentId: ids.assignment,
+    problemId: ids.problem,
+    authorId: ids.user,
+  };
+
+  it('accepts a comment about a student', async () => {
+    const row = await prisma.comment.create({
+      data: { ...base, aboutStudentId: ids.user },
+    });
+    expect(row.aboutGroupId).toBeNull();
+  });
+
+  it('accepts a comment about a group', async () => {
+    const row = await prisma.comment.create({
+      data: { ...base, aboutGroupId: ids.group },
+    });
+    expect(row.aboutStudentId).toBeNull();
+  });
+
+  it('accepts a comment about neither', async () => {
+    const row = await prisma.comment.create({ data: base });
+    expect(row.aboutStudentId).toBeNull();
+    expect(row.aboutGroupId).toBeNull();
+  });
+
+  // Both set has no coherent audience, and the read path ORs the two columns, so such a row
+  // would come back twice for a member of that group.
+  it('refuses a comment naming both a student and a group', async () => {
+    await refusedBy('Comment_target_not_both', () =>
+      prisma.comment.create({
+        data: { ...base, aboutStudentId: ids.user, aboutGroupId: ids.group },
+      }),
+    );
+  });
+});
+
+/**
+ * Deleting a group must not take the feedback with it. The FK is SET NULL rather than the
+ * CASCADE used for aboutStudent, so the comment survives and simply stops being addressed.
+ */
+describe('deleting a group keeps its comments', () => {
+  it('nulls aboutGroupId instead of deleting the row', async () => {
+    const doomed = await prisma.studentGroup.create({
+      data: { name: `Doomed ${SUFFIX}`, groupSetId: ids.groupSet },
+    });
+    const comment = await prisma.comment.create({
+      data: {
+        content: 'Feedback that must outlive the group',
+        assignmentId: ids.assignment,
+        problemId: ids.problem,
+        authorId: ids.user,
+        aboutGroupId: doomed.id,
+      },
+    });
+
+    await prisma.studentGroup.delete({ where: { id: doomed.id } });
+
+    const after = await prisma.comment.findUnique({ where: { id: comment.id } });
+    expect(after).not.toBeNull();
+    expect(after?.aboutGroupId).toBeNull();
+    expect(after?.content).toBe('Feedback that must outlive the group');
   });
 });

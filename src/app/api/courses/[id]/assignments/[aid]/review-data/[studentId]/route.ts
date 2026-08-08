@@ -8,6 +8,7 @@ import { logDenial } from '@/lib/api/activity';
 import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
 import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { effectiveMaxSubmissions } from '@/lib/submission-limits';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 
 type SubmissionRecord = {
   id: string;
@@ -103,7 +104,35 @@ export const GET = withCourseAuth(
     try {
       const assignment = await prisma.assignment.findFirst({
         where: { id: assignmentId, courseId },
-        select: { id: true, isPublished: true },
+        // groupSetId decides whether this is a group ASSIGNMENT, which is a different
+        // question from whether this student has a group. Both are returned below.
+        select: {
+          id: true,
+          isPublished: true,
+          groupSetId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+          // This student's applicable date overrides: their own, and their group's.
+          overrides: {
+            where: {
+              OR: [
+                { userId: studentId },
+                { studentGroup: { memberships: { some: { userId: studentId } } } },
+              ],
+            },
+            select: {
+              targetType: true,
+              userId: true,
+              groupId: true,
+              unlockAt: true,
+              dueDate: true,
+              lateCutoff: true,
+              allowLateSubmissions: true,
+            },
+          },
+        },
       });
 
       if (!assignment) {
@@ -153,11 +182,23 @@ export const GET = withCourseAuth(
             submissions: {},
             comments: [],
             problemGrades: {},
+            isGroupAssignment: !!assignment.groupSetId,
             isGroup: false,
+            group: null,
+            groupMembers: [],
             locked: true,
           });
         }
       }
+
+      // Group-aware read: if the student is group-assigned for this assignment, they see
+      // the group's shared submission set plus any of their own individual rows. Resolved
+      // before the batch below because the comment query needs it to pick up comments
+      // addressed to the group rather than to this student.
+      const groupId =
+        assignmentId && studentId
+          ? await resolveStudentSubmissionGroupId(assignmentId, studentId)
+          : null;
 
       const [assignmentProblems, commentsRaw, gradesRaw] = await Promise.all([
         prisma.assignmentProblem.findMany({
@@ -179,7 +220,15 @@ export const GET = withCourseAuth(
         prisma.comment.findMany({
           where: {
             assignmentId,
-            OR: [{ aboutStudentId: studentId }, { authorId: studentId }],
+            // A comment reaches this student if it is addressed to them, was written by
+            // them, or is addressed to the group they submit this assignment with. The
+            // group arm is what makes one comment visible to every member instead of a
+            // copy each.
+            OR: [
+              { aboutStudentId: studentId },
+              { authorId: studentId },
+              ...(groupId ? [{ aboutGroupId: groupId }] : []),
+            ],
           },
           include: {
             author: {
@@ -202,13 +251,6 @@ export const GET = withCourseAuth(
           select: { problemId: true, grade: true, feedback: true, updatedAt: true },
         }),
       ]);
-
-      // Group-aware read: if the student is group-assigned for this assignment, they
-      // see the group's shared submission set plus any of their own individual rows.
-      const groupId =
-        assignmentId && studentId
-          ? await resolveStudentSubmissionGroupId(assignmentId, studentId)
-          : null;
 
       // The submission cap this student is actually working against per problem: the
       // base maxSubmissions plus any extra-submission grants for them or their group.
@@ -323,6 +365,11 @@ export const GET = withCourseAuth(
         content: comment.content,
         createdAt: comment.createdAt,
         problemId: comment.problemId,
+        // Who this comment was addressed to, so the thread can say who can see it. A
+        // reader cannot tell a group note from a private one otherwise, and that is the
+        // mistake with consequences.
+        aboutStudentId: comment.aboutStudentId ?? null,
+        aboutGroupId: comment.aboutGroupId ?? null,
         author: {
           id: comment.author.id,
           firstName: comment.author.firstName ?? null,
@@ -366,12 +413,69 @@ export const GET = withCourseAuth(
         console.warn('Failed to log activity:', logError);
       }
 
+      // The group's identity and the student's groupmates. Folded in here because the
+      // navigator previously fetched this separately for the very same student, so every
+      // click cost two requests where one carries all of it.
+      const group = groupId
+        ? await prisma.studentGroup.findUnique({
+            where: { id: groupId },
+            select: {
+              id: true,
+              name: true,
+              memberships: {
+                select: { roster: { select: { user: { select: { id: true, firstName: true, lastName: true } } } } },
+              },
+            },
+          })
+        : null;
+      const groupMembers = (group?.memberships ?? [])
+        .map((m) => m.roster.user)
+        .filter((u) => u.id !== studentId);
+
+      // The student's effective schedule: their own or their group's date override resolved
+      // against the assignment base. Group ids come from the submission group plus any group
+      // an override targets (the query above already limits those to this student's groups).
+      const overrideGroupIds = [
+        ...new Set(
+          [
+            groupId,
+            ...assignment.overrides
+              .filter((o) => o.targetType === 'GROUP' && o.groupId)
+              .map((o) => o.groupId),
+          ].filter((v): v is string => !!v),
+        ),
+      ];
+      const eff = effectiveDeadline(
+        {
+          unlockAt: assignment.unlockAt,
+          dueDate: assignment.dueDate,
+          lateCutoff: assignment.lateCutoff,
+          allowLateSubmissions: assignment.allowLateSubmissions,
+        },
+        assignment.overrides,
+        // studentId is optional on this route's params; an empty id simply matches no
+        // student-targeted override, which is the right answer when there is no student.
+        studentId ?? '',
+        overrideGroupIds,
+      );
+      const effective = {
+        unlockAt: eff.unlockAt ? eff.unlockAt.toISOString() : null,
+        dueDate: eff.dueDate.toISOString(),
+        lateCutoff: eff.lateCutoff ? eff.lateCutoff.toISOString() : null,
+        allowLateSubmissions: eff.allowLateSubmissions,
+        source: eff.source,
+      };
+
       return NextResponse.json({
         submissions: submissionsByProblem,
         comments,
         problemGrades,
         // Group assignment for this student => the workspace shows a "Submitted by" column.
+        isGroupAssignment: !!assignment.groupSetId,
         isGroup: !!groupId,
+        group: group ? { id: group.id, name: group.name } : null,
+        groupMembers,
+        effective,
         // The student's group for this assignment (grant targets need it); null otherwise.
         groupId,
         problemLimits,

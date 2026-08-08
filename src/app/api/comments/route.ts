@@ -7,13 +7,22 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 import { apiError } from '@/lib/api/http';
 import { logDenial, logError } from '@/lib/api/activity';
+import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
 
-const createCommentSchema = z.object({
-  content: z.string().min(1, 'Comment content is required').max(5000, 'Comment too long'),
-  assignmentId: z.string(),
-  problemId: z.string(),
-  studentId: z.string().optional(), // the student this thread is about (optional)
-});
+const createCommentSchema = z
+  .object({
+    content: z.string().min(1, 'Comment content is required').max(5000, 'Comment too long'),
+    assignmentId: z.string(),
+    problemId: z.string(),
+    studentId: z.string().optional(), // the student this thread is about (optional)
+    groupId: z.string().optional(), // the group this thread is about, for group assignments
+  })
+  // One audience or the other. The database enforces this too; rejecting it here means the
+  // caller gets a reason instead of a 500 from a constraint violation.
+  .refine((v) => !(v.studentId && v.groupId), {
+    message: 'A comment is addressed to a student or a group, not both',
+    path: ['groupId'],
+  });
 
 /**
  * Creates a comment on an assignment problem, optionally scoped to a particular
@@ -53,12 +62,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { content, assignmentId, problemId, studentId } = createCommentSchema.parse(body);
+    const { content, assignmentId, problemId, studentId, groupId } =
+      createCommentSchema.parse(body);
 
     // Verify assignment & course
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      select: { courseId: true, isPublished: true },
+      select: { courseId: true, isPublished: true, groupSetId: true },
     });
     if (!assignment) {
       return apiError(404, 'Assignment not found');
@@ -108,6 +118,36 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Addressing a group. Staff may write to any group in the assignment's set; a student
+    // may write only to the group they are actually in, which is the same audience they
+    // can already read. Anything else would let one student post into another group's
+    // thread.
+    if (groupId) {
+      if (!assignment.groupSetId) {
+        return apiError(400, 'This assignment is not a group assignment');
+      }
+      const group = await prisma.studentGroup.findFirst({
+        where: { id: groupId, groupSetId: assignment.groupSetId },
+        select: { id: true },
+      });
+      if (!group) {
+        return apiError(404, 'Group not found in this assignment');
+      }
+      if (!isStaff) {
+        const ownGroupId = await resolveStudentSubmissionGroupId(assignmentId, user.id);
+        if (ownGroupId !== groupId) {
+          return logDenial(request, {
+            userId: user.id,
+            action: 'COMMENT_CREATE_DENIED',
+            category: 'ASSIGNMENT',
+            courseId: assignment.courseId,
+            assignmentId,
+            metadata: { reason: "another group's thread" },
+          });
+        }
+      }
+    }
+
     // The author's roster row supplies only their course-role badge and may be absent
     // (e.g. a system admin commenting on a course they aren't enrolled in). We do NOT
     // fabricate a roster row; the comment is attributed to the author (User) directly.
@@ -154,6 +194,7 @@ export async function POST(request: NextRequest) {
         authorId: user.id,
         rosterId: rosterEntry?.id ?? null,
         aboutStudentId: studentId || null,
+        aboutGroupId: groupId || null,
       },
       include: {
         author: {
@@ -186,6 +227,7 @@ export async function POST(request: NextRequest) {
         problemId: problemId,
         commentId: comment.id,
         aboutStudentId: studentId || null,
+        aboutGroupId: groupId || null,
         contentLength: content.length,
       },
     });

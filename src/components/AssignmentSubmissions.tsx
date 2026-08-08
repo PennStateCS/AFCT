@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
@@ -96,7 +96,6 @@ export default function AssignmentSubmissions({
   assignmentDueDate,
   problems,
 }: Props) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const epsSymbol = useEmptyStringSymbol(courseId);
   const searchParams = useSearchParams();
@@ -108,6 +107,10 @@ export default function AssignmentSubmissions({
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  // Who a new comment reaches on a group assignment. Defaults to the group: the shared
+  // submission is what staff are looking at, so the group is the common case. Reset per
+  // student so a private note to one person does not silently carry to the next.
+  const [commentTarget, setCommentTarget] = useState<'student' | 'group'>('group');
   const [grantDialogOpen, setGrantDialogOpen] = useState(false);
   // Set on first open and never cleared, so the dynamic import above stays deferred.
   const [grantMounted, setGrantMounted] = useState(false);
@@ -169,22 +172,37 @@ export default function AssignmentSubmissions({
     }
   }, [studentsQueryIsError, studentsQuery.error]);
 
-  const updateQuery = useCallback(
-    (problemId: string) => {
+  /**
+   * Keep the selected problem and student in the URL without asking the server for
+   * anything.
+   *
+   * `router.replace` looks harmless here but this route is a dynamic server component, so
+   * every call fetched a fresh RSC payload and re-ran the page's auth, roster and
+   * assignment-with-problems queries. Clicking through a roster of any size paid four
+   * database queries per student for data the client already had in the query cache.
+   *
+   * `history.replaceState` is what Next documents for exactly this: it updates the address
+   * bar and still feeds `useSearchParams`, with no navigation. Bookmarking, reload and the
+   * back button all behave the same, because the URL is identical either way.
+   */
+  const setUrlParam = useCallback(
+    (key: string, value: string) => {
       const params = new URLSearchParams(searchParamsString);
-      params.set('problemId', problemId);
-      router.replace(`?${params.toString()}`, { scroll: false });
+      if (params.get(key) === value) return;
+      params.set(key, value);
+      window.history.replaceState(null, '', `?${params.toString()}`);
     },
-    [router, searchParamsString],
+    [searchParamsString],
+  );
+
+  const updateQuery = useCallback(
+    (problemId: string) => setUrlParam('problemId', problemId),
+    [setUrlParam],
   );
 
   const updateStudentQuery = useCallback(
-    (studentId: string) => {
-      const params = new URLSearchParams(searchParamsString);
-      params.set('studentId', studentId);
-      router.replace(`?${params.toString()}`, { scroll: false });
-    },
-    [router, searchParamsString],
+    (studentId: string) => setUrlParam('studentId', studentId),
+    [setUrlParam],
   );
 
   // Build the assignment-specific problem list from assignment payload.
@@ -315,6 +333,10 @@ export default function AssignmentSubmissions({
   const { reviewData, reviewQueryIsError, reviewError, reviewFetching, refreshReview } =
     useReviewData(courseId, assignmentId, selectedStudentId);
 
+  useEffect(() => {
+    setCommentTarget('group');
+  }, [selectedStudentId]);
+
   // All three loading flags previously flipped together; they track the cold load.
   const loadingSubmissions = reviewFetching;
   const loadingComments = reviewFetching;
@@ -435,11 +457,16 @@ export default function AssignmentSubmissions({
 
       setSavingComments((prev) => ({ ...prev, [problemId]: true }));
       try {
+        // A group comment is one row addressed to the group; an individual one names the
+        // student. Sending both is refused by the API and by a database constraint.
+        const toGroup = !!reviewData?.group && commentTarget === 'group';
         const newComment = await apiClient.post<DiscussionComment>(apiPaths.comments(), {
           content: commentText,
           assignmentId,
           problemId,
-          studentId: selectedStudent.id,
+          ...(toGroup
+            ? { groupId: reviewData?.group?.id }
+            : { studentId: selectedStudent.id }),
         });
         // Optimistically add the comment to the review-data cache (the derived
         // `comments` reads from it), then invalidate so the server copy replaces it.
@@ -454,6 +481,15 @@ export default function AssignmentSubmissions({
         void queryClient.invalidateQueries({
           queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
         });
+        // Review data is cached per student, so a comment addressed to the group would sit
+        // unseen in every groupmate's cached copy until it went stale. Drop theirs too.
+        if (toGroup) {
+          for (const member of reviewData?.groupMembers ?? []) {
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, member.id),
+            });
+          }
+        }
         showToast.saved('Comment');
       } catch (err) {
         console.error('Save comment error:', err);
@@ -462,7 +498,17 @@ export default function AssignmentSubmissions({
         setSavingComments((prev) => ({ ...prev, [problemId]: false }));
       }
     },
-    [commentTexts, selectedStudent, assignmentId, courseId, queryClient],
+    [
+      commentTexts,
+      selectedStudent,
+      assignmentId,
+      courseId,
+      queryClient,
+      // Without these the callback keeps whichever audience was current when it was last
+      // built, which is how a note meant for one student ends up posted to their group.
+      commentTarget,
+      reviewData,
+    ],
   );
 
   const deleteComment = useCallback(
@@ -678,6 +724,17 @@ export default function AssignmentSubmissions({
                 gradeStatuses={studentGradeStatuses}
                 courseId={courseId}
                 assignmentId={assignmentId}
+                groupInfo={
+                  reviewData
+                    ? {
+                        isGroupAssignment: reviewData.isGroupAssignment,
+                        isGroup: !!reviewData.isGroup,
+                        group: reviewData.group ?? null,
+                        members: reviewData.groupMembers ?? [],
+                        effective: reviewData.effective,
+                      }
+                    : null
+                }
               />
             </div>
           </div>
@@ -759,6 +816,22 @@ export default function AssignmentSubmissions({
                     submissions={selectedSubs}
                     assignmentDueDate={assignmentDueDate}
                     showSubmitter={reviewIsGroup}
+                    subjectName={
+                      `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+                      'this student'
+                    }
+                    commentAudience={
+                      reviewData?.group
+                        ? {
+                            group: reviewData.group,
+                            studentName:
+                              `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+                              'this student',
+                            target: commentTarget,
+                            onTargetChange: setCommentTarget,
+                          }
+                        : null
+                    }
                     comments={selectedComments}
                     commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
                     onCommentTextChange={(text: string) =>

@@ -64,6 +64,7 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
     onDeleteComment,
     comments,
     submissions,
+    commentAudience,
   }: {
     onGradeInputChange: (value: string) => void;
     onSaveGrade: () => void;
@@ -76,6 +77,10 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
     onDeleteComment: (commentId: string) => void;
     comments?: Array<{ id: string; content?: string }>;
     submissions?: Array<{ id: string }>;
+    commentAudience?: {
+      target: 'student' | 'group';
+      onTargetChange: (t: 'student' | 'group') => void;
+    } | null;
   }) => (
     <div data-testid="problem-workspace">
       <span data-testid="submission-count">{(submissions ?? []).length}</span>
@@ -97,6 +102,14 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
       <button type="button" onClick={onSaveComment}>
         Save Comment
       </button>
+      {/* The real workspace renders a segmented control for this; the stub just exposes
+          the audience so a test can read the default and switch it. */}
+      <span data-testid="comment-audience">{commentAudience?.target ?? 'none'}</span>
+      {commentAudience ? (
+        <button type="button" onClick={() => commentAudience.onTargetChange('student')}>
+          Send to student only
+        </button>
+      ) : null}
       <ul data-testid="comments">
         {(comments ?? []).map((c) => (
           <li key={c.id}>
@@ -151,6 +164,15 @@ vi.mock('@/components/dialogs/CfgViewerDialog', () => ({ CfgViewerDialog: () => 
 const students = [{ id: 's1', firstName: 'Ada', lastName: 'Lovelace' }];
 
 const emptyReviewData = { submissions: {}, comments: [], problemGrades: {} };
+
+/** The selected student submits this assignment with Group 3, alongside s2. */
+const groupReviewData = {
+  ...emptyReviewData,
+  isGroupAssignment: true,
+  isGroup: true,
+  group: { id: 'g1', name: 'Group 3' },
+  groupMembers: [{ id: 's2', firstName: 'Grace', lastName: 'Hopper' }],
+};
 
 // Simple URL router over fetch. Each route returns a fresh response object.
 type FetchResult = {
@@ -485,6 +507,26 @@ describe('AssignmentSubmissions — student navigation', () => {
     expect(idx).toHaveTextContent('1');
   });
 
+  // Selecting a student used to call router.replace, which on a dynamic server component
+  // route fetches a fresh RSC payload and re-runs the page's database queries. The URL
+  // still has to change; it just must not cost a round trip to do it.
+  it('syncs the selected student into the URL without navigating', async () => {
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    renderTwo();
+    const idx = await screen.findByTestId('selected-index');
+    await waitFor(() => expect(idx).toHaveTextContent('0'));
+    replaceState.mockClear();
+    routerMock.replace.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'pick-s2' }));
+
+    await waitFor(() =>
+      expect(replaceState).toHaveBeenCalledWith(null, '', expect.stringContaining('studentId=s2')),
+    );
+    expect(routerMock.replace).not.toHaveBeenCalled();
+    replaceState.mockRestore();
+  });
+
   it('selects a specific student by id', async () => {
     renderTwo();
     const idx = await screen.findByTestId('selected-index');
@@ -691,5 +733,94 @@ describe('AssignmentSubmissions — reviewData seeding safety net (M12)', () => 
       fireEvent.keyDown(screen.getByTestId('comment-input'), { key: 'ArrowRight' });
       expect(screen.getByTestId('selected-index')).toHaveTextContent('0');
     });
+  });
+});
+
+describe('AssignmentSubmissions — who a comment reaches', () => {
+  const commentRoute = () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ id: 'c-new', content: 'Great', problemId: 'p1' }),
+    text: async () => JSON.stringify({ id: 'c-new', content: 'Great', problemId: 'p1' }),
+  });
+
+  const postBody = (fetchMock: ReturnType<typeof vi.fn>) => {
+    const call = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(
+      ([u, init]) => String(u) === '/api/comments' && init?.method === 'POST',
+    );
+    return JSON.parse(String(call![1].body));
+  };
+
+  const setupGroup = async () => {
+    const fetchMock = routeFetch({
+      ...baseRoutes(),
+      '/review-data/': () => ({ ok: true, json: async () => groupReviewData }),
+      '/comments': commentRoute,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await screen.findByTestId('problem-workspace');
+    await waitFor(() =>
+      expect(screen.getByTestId('comment-audience')).toHaveTextContent('group'),
+    );
+    return fetchMock;
+  };
+
+  // Agreed default: the shared submission is what staff are looking at, so the group is
+  // the common case and the one that must not need a deliberate click.
+  it('defaults to the whole group and posts a group comment', async () => {
+    const fetchMock = await setupGroup();
+
+    fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'Great' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Comment' }));
+
+    await waitFor(() => expect(toastMock.saved).toHaveBeenCalledWith('Comment'));
+    const body = postBody(fetchMock);
+    expect(body.groupId).toBe('g1');
+    // Never both: the API rejects it and a CHECK constraint refuses the row.
+    expect(body.studentId).toBeUndefined();
+  });
+
+  it('posts to the one student when the target is switched', async () => {
+    const fetchMock = await setupGroup();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send to student only' }));
+    fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'Great' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Comment' }));
+
+    await waitFor(() => expect(toastMock.saved).toHaveBeenCalledWith('Comment'));
+    const body = postBody(fetchMock);
+    expect(body.studentId).toBe('s1');
+    expect(body.groupId).toBeUndefined();
+  });
+
+  // Review data is cached per student, so without this a groupmate keeps a cached thread
+  // that is missing the comment until it goes stale.
+  it("refreshes each groupmate's cached thread after a group comment", async () => {
+    const invalidate = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+    await setupGroup();
+
+    fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'Great' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Comment' }));
+
+    await waitFor(() => expect(toastMock.saved).toHaveBeenCalledWith('Comment'));
+    const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+    expect(keys.some((k) => k?.includes('s2'))).toBe(true);
+    invalidate.mockRestore();
+  });
+
+  it('offers no choice on an individual assignment', async () => {
+    const fetchMock = routeFetch({ ...baseRoutes(), '/comments': commentRoute });
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await screen.findByTestId('problem-workspace');
+
+    expect(screen.getByTestId('comment-audience')).toHaveTextContent('none');
+
+    fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'Great' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Comment' }));
+
+    await waitFor(() => expect(toastMock.saved).toHaveBeenCalledWith('Comment'));
+    expect(postBody(fetchMock).studentId).toBe('s1');
   });
 });

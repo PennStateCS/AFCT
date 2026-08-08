@@ -8,6 +8,7 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblemGrade: { findMany: vi.fn() },
   submission: { findMany: vi.fn() },
   submissionGrant: { findMany: vi.fn() },
+  studentGroup: { findUnique: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -37,7 +38,16 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     authMock.mockResolvedValue({ user: { id: 'faculty-1', role: 'FACULTY' } });
     // Assigned and unlocked by default; the gating tests override this.
     contentGateMock.mockResolvedValue({ assigned: true, locked: false, unlockAt: null });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: params.aid, isPublished: true });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: params.aid,
+      isPublished: true,
+      groupSetId: null,
+      unlockAt: null,
+      dueDate: new Date('2026-12-01T00:00:00.000Z'),
+      lateCutoff: null,
+      allowLateSubmissions: false,
+      overrides: [],
+    });
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'FACULTY' });
     prismaMock.submissionGrant.findMany.mockResolvedValue([]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
@@ -126,7 +136,10 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
       submissions: {},
       comments: [],
       problemGrades: {},
+      isGroupAssignment: false,
       isGroup: false,
+      group: null,
+      groupMembers: [],
       locked: true,
     });
     expect(prismaMock.assignmentProblem.findMany).not.toHaveBeenCalled();
@@ -145,7 +158,16 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     // an unpublished assignment.
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT', course: { isPublished: true } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: params.aid, isPublished: false });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: params.aid,
+      isPublished: false,
+      groupSetId: null,
+      unlockAt: null,
+      dueDate: new Date('2026-12-01T00:00:00.000Z'),
+      lateCutoff: null,
+      allowLateSubmissions: false,
+      overrides: [],
+    });
 
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
 
@@ -235,7 +257,17 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
           ],
         },
       },
+      isGroupAssignment: false,
       isGroup: false,
+      group: null,
+      groupMembers: [],
+      effective: {
+        unlockAt: null,
+        dueDate: '2026-12-01T00:00:00.000Z',
+        lateCutoff: null,
+        allowLateSubmissions: false,
+        source: 'base',
+      },
       groupId: null,
       problemLimits: { p1: { base: 2, max: 2, granted: 0 } },
       comments: [
@@ -244,6 +276,9 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
           content: 'Looks good',
           createdAt: createdAt.toISOString(),
           problemId: 'p1',
+          // Who the comment was addressed to, so the thread can badge who can see it.
+          aboutStudentId: null,
+          aboutGroupId: null,
           author: {
             id: 'faculty-1',
             firstName: 'Ada',

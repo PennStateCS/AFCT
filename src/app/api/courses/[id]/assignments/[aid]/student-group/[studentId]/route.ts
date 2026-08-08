@@ -33,6 +33,11 @@ export const GET = withCourseAuth(
         where: { id: aid, courseId },
         select: {
           id: true,
+          // Whether the ASSIGNMENT is a group assignment, which is not the same question
+          // as whether this student has a group. A group assignment with a student in no
+          // group used to report isGroup:false and render as "Individual", hiding a setup
+          // mistake behind a plausible-looking answer.
+          groupSetId: true,
           unlockAt: true,
           dueDate: true,
           lateCutoff: true,
@@ -96,7 +101,13 @@ export const GET = withCourseAuth(
       };
 
       if (!groupId) {
-        return NextResponse.json({ isGroup: false, group: null, members: [], effective });
+        return NextResponse.json({
+          isGroupAssignment: !!assignment.groupSetId,
+          isGroup: false,
+          group: null,
+          members: [],
+          effective,
+        });
       }
 
       const group = await prisma.studentGroup.findUnique({
@@ -121,6 +132,7 @@ export const GET = withCourseAuth(
         .filter((u) => u.id !== studentId);
 
       return NextResponse.json({
+        isGroupAssignment: !!assignment.groupSetId,
         isGroup: true,
         group: group ? { id: group.id, name: group.name } : null,
         members,

@@ -62,6 +62,10 @@ be granted more.
 
 The **Discussion** panel belongs to the selected student and problem. Add a comment when you need to explain a score, ask for clarification, or leave feedback that does not fit the autograder result.
 
+On a **group assignment** the panel adds a **Send to** control, because the submission belongs to the whole group. It defaults to the group, so feedback on shared work reaches every member as a single comment rather than a copy each. Switch it to **Only \<student\>** for something meant for one person, such as a note about their individual contribution.
+
+Every comment shows who can read it, either **Visible to \<group\>** or **Only \<student\>**, so you can tell at a glance what a member of the group has already seen. Individual assignments show neither control nor badge: those comments are always between you and that student.
+
 You can delete a comment when the interface offers that action. Comments count as assignment activity and prevent the assignment from being deleted.
 
 Archived courses remain available for review, but grades, comments, and other course changes are read-only.
