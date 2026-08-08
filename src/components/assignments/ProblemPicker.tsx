@@ -53,7 +53,7 @@ export function ProblemPicker({
   const ungradedCount = problems.filter((p) => typeof grades[p.id] !== 'number').length;
 
   return (
-    <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
+    <div className={`flex w-full min-w-0 flex-col gap-1 ${className}`}>
       <span className="text-muted-foreground text-xs font-medium">Problem</span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -62,7 +62,7 @@ export function ProblemPicker({
             // Matches the student picker beside it: same surface, same shape, a status dot
             // and a position readout. They are the same kind of control and should not look
             // like two different ones.
-            className="bg-card text-foreground border-border hover:bg-accent flex w-full min-w-0 items-center gap-2 sm:w-64"
+            className="bg-card text-foreground border-border hover:bg-accent flex w-full min-w-0 items-center gap-2"
             aria-label={
               ungradedCount > 0
                 ? `Problem: ${selected?.title ?? 'none selected'}. ${ungradedCount} still need grading.`

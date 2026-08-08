@@ -354,10 +354,10 @@ export default function ProblemWorkspace({
   ];
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,70fr)_minmax(0,30fr)] print:block print:space-y-2">
+    <div className="grid items-start gap-4 lg:items-stretch lg:grid-cols-[minmax(0,70fr)_minmax(0,30fr)] print:block print:space-y-2">
       {/* Two matching cards: what the problem is and the work submitted for it, beside what
           you are doing about it. */}
-      <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4">
+      <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4 lg:h-full">
           <ProblemHeader
             className="min-w-0"
             action={
@@ -412,7 +412,7 @@ export default function ProblemWorkspace({
       </div>
 
           {/* Right column: what you are doing about this student's work. */}
-          <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4">
+          <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4 lg:h-full">
             {isPrivilegedUser && onGradeInputChange && onSaveGrade ? (
               <div className="flex flex-col gap-2 border-b pb-4">
                 <div className="flex items-center gap-2">

@@ -186,7 +186,7 @@ export default function StudentNavigator({
           should read as a pair rather than one being a bare row of buttons. */}
       <span className="text-muted-foreground text-xs font-medium">Student</span>
       {/* Prev / student picker / Next joined into one segmented control, below the info. */}
-      <div className="flex items-center">
+      <div className="flex w-full min-w-0 items-center">
         <Button
           variant="secondary"
           onClick={onPrev}
@@ -200,7 +200,7 @@ export default function StudentNavigator({
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="bg-card text-foreground border-border hover:bg-accent focus:ring-ring relative flex w-[320px] items-center gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
+              className="bg-card text-foreground border-border hover:bg-accent focus:ring-ring relative flex min-w-0 flex-1 items-center gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
             >
               <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                 {selectedStudent ? (
@@ -262,9 +262,17 @@ export default function StudentNavigator({
                     className="hover:bg-accent"
                     onClick={() => handleSelect(s.id)}
                   >
-                    <span className="flex items-center gap-2 truncate">
+                    {/* Full width, or ml-auto on the score below has nothing to push against
+                        and the figures never line up. */}
+                    <span className="flex w-full items-center gap-2">
+                      {/* Filled when fully graded, hollow when not: a shape difference as well
+                          as a colour one, matching the problem picker. */}
                       <span
-                        className={`h-2.5 w-2.5 rounded-full ${gradeStatuses?.[s.id] ? 'bg-status-success-solid' : 'bg-status-danger-solid'}`}
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 ${
+                          gradeStatuses?.[s.id]
+                            ? 'border-status-success-solid bg-status-success-solid'
+                            : 'border-status-danger-solid bg-transparent'
+                        }`}
                         aria-hidden="true"
                       />
                       <span className="truncate">{listName(s)}</span>

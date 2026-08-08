@@ -420,8 +420,8 @@ export default function AssignmentSubmissions({
             {/* One bar: who you are reviewing, when their work was due, which problem, and how
                 the assignment is going. Divided into cells rather than spaced apart, so the
                 regions read as parts of one control strip instead of loose groups. */}
-            <div className="mt-4 flex flex-col divide-y rounded-md border py-3 xl:flex-row xl:items-stretch xl:divide-x xl:divide-y-0">
-              <div className="flex items-center px-4 xl:flex-1">
+            <div className="mt-4 flex flex-col divide-y rounded-md border py-3 2xl:flex-row 2xl:items-stretch 2xl:divide-x 2xl:divide-y-0">
+              <div className="flex min-w-0 items-center px-4 2xl:flex-1">
               <StudentNavigator
                 students={students}
                 selectedIndex={selectedIndex}
@@ -444,7 +444,7 @@ export default function AssignmentSubmissions({
                 }
               />
               </div>
-              <div className="flex items-center px-4 xl:flex-1">
+              <div className="flex min-w-0 items-center px-4 2xl:flex-1">
                 <ProblemPicker
                   problems={visibleProblems}
                   selectedProblemId={selectedProblem?.id ?? null}
@@ -461,7 +461,7 @@ export default function AssignmentSubmissions({
               {/* A cell each, so the strip's rules separate them the way they separate the
                   dates from the picker. They answer different questions: how much is done,
                   and how it is going. */}
-              <div className="flex items-center px-4 xl:flex-1">
+              <div className="flex min-w-0 items-center px-4 2xl:flex-1">
                 <ProgressRing
                   label="Graded"
                   value={assignmentTotals.graded}
@@ -469,7 +469,7 @@ export default function AssignmentSubmissions({
                   srLabel={`${assignmentTotals.graded} of ${assignmentTotals.count} problems graded`}
                 />
               </div>
-              <div className="flex items-center px-4 xl:flex-1">
+              <div className="flex min-w-0 items-center px-4 2xl:flex-1">
                 <ProgressRing
                   label="Assignment score"
                   value={assignmentTotals.earned}
