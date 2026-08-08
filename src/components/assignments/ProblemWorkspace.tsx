@@ -68,6 +68,8 @@ export type ProblemWorkspaceProps = {
   gradeError?: string | null;
   onGradeInputChange?: (value: string) => void;
   onSaveGrade?: () => void;
+  /** Control shown in the Submissions panel header, e.g. granting extra attempts. */
+  submissionsAction?: React.ReactNode;
   /** Group assignments only: who a saved grade applies to. */
   gradeAudience?: GradeAudience | null;
   /** The value this student's group was given, when the grade came from one. */
@@ -123,6 +125,7 @@ export default function ProblemWorkspace({
   gradeError = null,
   onGradeInputChange,
   onSaveGrade,
+  submissionsAction,
   gradeAudience,
   groupGradeValue,
   isSavingGrade = false,
@@ -327,7 +330,9 @@ export default function ProblemWorkspace({
   ];
 
   return (
-    <div className="space-y-4 print:space-y-2">
+    <div className="grid h-full items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] print:block print:space-y-2">
+      {/* Left column: what the problem is, then the work submitted for it. */}
+      <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <ProblemHeader
             className="min-w-0 lg:flex-1"
@@ -369,8 +374,8 @@ export default function ProblemWorkspace({
           ) : null}
         </div>
 
-      <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <WorkspacePanel
+            action={submissionsAction}
             title="Submissions"
             icon={<FileText className="h-4 w-4" />}
             className="h-full"
@@ -405,8 +410,12 @@ export default function ProblemWorkspace({
               </div>
             )}
           </WorkspacePanel>
+      </div>
 
+          {/* Right column: the discussion, full height beside the rest. */}
           <WorkspacePanel
+            className="h-full"
+            contentClassName="flex flex-col"
             title={`Discussion (${normalizedComments.length})`}
             icon={<MessageSquare className="h-4 w-4" />}
           >
@@ -429,7 +438,6 @@ export default function ProblemWorkspace({
               />
             )}
           </WorkspacePanel>
-        </div>
     </div>
   );
 }
