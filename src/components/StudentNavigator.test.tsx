@@ -151,14 +151,6 @@ describe('the selected student\'s own schedule', () => {
     expect(screen.queryByText(/Not in a group/)).not.toBeInTheDocument();
   });
 
-  // "Due:" on its own reads as the assignment's deadline, which is wrong the moment this
-  // student has an extension.
-  it('says whose schedule these dates are', async () => {
-    renderWithGroup({ isGroupAssignment: false, isGroup: false, group: null, members: [] });
-
-    await waitFor(() => expect(screen.getByText(/Lovelace, Ada's schedule/)).toBeInTheDocument());
-  });
-
   // Which kind matters: a whole group being given longer is a different situation from one
   // student being given longer, and the resolver already knows which it was.
   it('distinguishes a group override from a student one', async () => {

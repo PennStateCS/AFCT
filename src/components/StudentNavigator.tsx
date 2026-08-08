@@ -220,11 +220,6 @@ export default function StudentNavigator({
           : ''}
       </span>
       <div className="min-w-0">
-        {selectedName ? (
-          <span className="text-muted-foreground block text-xs font-semibold tracking-wide uppercase">
-            {selectedName}&apos;s schedule
-          </span>
-        ) : null}
         <span className="block">
           {loadingAssignment ? (
             <span className="text-muted-foreground text-sm">Loading assignment...</span>
