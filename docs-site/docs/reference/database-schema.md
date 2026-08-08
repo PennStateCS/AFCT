@@ -509,6 +509,8 @@ erDiagram
   String assignmentId FK
   String problemId
   String studentId FK
+  String groupGradeGroupId FK "nullable"
+  Float groupGradeValue "nullable"
 }
 "Comment" {
   String id PK
@@ -575,6 +577,8 @@ Properties as follows:
 - `assignmentId`: The assignment.
 - `problemId`: The problem graded.
 - `studentId`: The student graded.
+- `groupGradeGroupId`: The group whose group grade produced this row, when it came from one.
+- `groupGradeValue`: The value that group grade set, so a later individual change reads as an adjustment.
 
 ### `Comment`
 
