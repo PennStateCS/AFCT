@@ -7,9 +7,7 @@ import { FileText } from 'lucide-react';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
-import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
-import { errMessage } from '@/lib/errors';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
@@ -31,7 +29,8 @@ const GrantExtraSubmissionsDialog = dynamic(
   { ssr: false },
 );
 import { Button } from '@/components/ui/button';
-import { useReviewData, type ReviewDataResponse } from './useReviewData';
+import { useReviewData } from './useReviewData';
+import { useComments } from './useComments';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'> & { enrollmentStatus?: string | null };
 
@@ -102,15 +101,8 @@ export default function AssignmentSubmissions({
   const searchParamsString = searchParams.toString();
   const selectedStudentIdParam = searchParams.get('studentId');
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
-  const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
-  const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
-  const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
-  // Who a new comment reaches on a group assignment. Defaults to the group: the shared
-  // submission is what staff are looking at, so the group is the common case. Reset per
-  // student so a private note to one person does not silently carry to the next.
-  const [commentTarget, setCommentTarget] = useState<'student' | 'group'>('group');
   const [grantDialogOpen, setGrantDialogOpen] = useState(false);
   // Set on first open and never cleared, so the dynamic import above stays deferred.
   const [grantMounted, setGrantMounted] = useState(false);
@@ -333,9 +325,22 @@ export default function AssignmentSubmissions({
   const { reviewData, reviewQueryIsError, reviewError, reviewFetching, refreshReview } =
     useReviewData(courseId, assignmentId, selectedStudentId);
 
-  useEffect(() => {
-    setCommentTarget('group');
-  }, [selectedStudentId]);
+  const {
+    commentTexts,
+    setCommentText,
+    savingComments,
+    deletingComments,
+    commentTarget,
+    setCommentTarget,
+    saveComment,
+    deleteComment,
+  } = useComments({
+    courseId,
+    assignmentId,
+    selectedStudentId,
+    group: reviewData?.group,
+    groupMembers: reviewData?.groupMembers,
+  });
 
   // All three loading flags previously flipped together; they track the cold load.
   const loadingSubmissions = reviewFetching;
@@ -448,99 +453,6 @@ export default function AssignmentSubmissions({
       await rerunSubmission({ submission, setRerunning, fetchReviewData: refreshReview });
     },
     [refreshReview],
-  );
-
-  const saveComment = useCallback(
-    async (problemId: string) => {
-      const commentText = commentTexts[problemId]?.trim();
-      if (!commentText || !selectedStudent) return;
-
-      setSavingComments((prev) => ({ ...prev, [problemId]: true }));
-      try {
-        // A group comment is one row addressed to the group; an individual one names the
-        // student. Sending both is refused by the API and by a database constraint.
-        const toGroup = !!reviewData?.group && commentTarget === 'group';
-        const newComment = await apiClient.post<DiscussionComment>(apiPaths.comments(), {
-          content: commentText,
-          assignmentId,
-          problemId,
-          ...(toGroup
-            ? { groupId: reviewData?.group?.id }
-            : { studentId: selectedStudent.id }),
-        });
-        // Optimistically add the comment to the review-data cache (the derived
-        // `comments` reads from it), then invalidate so the server copy replaces it.
-        queryClient.setQueryData<ReviewDataResponse>(
-          queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
-          (old) => ({
-            ...old,
-            comments: [...(old?.comments ?? []), { ...newComment, problemId }],
-          }),
-        );
-        setCommentTexts((prev) => ({ ...prev, [problemId]: '' }));
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudent.id),
-        });
-        // Review data is cached per student, so a comment addressed to the group would sit
-        // unseen in every groupmate's cached copy until it went stale. Drop theirs too.
-        if (toGroup) {
-          for (const member of reviewData?.groupMembers ?? []) {
-            void queryClient.invalidateQueries({
-              queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, member.id),
-            });
-          }
-        }
-        showToast.saved('Comment');
-      } catch (err) {
-        console.error('Save comment error:', err);
-        showToast.error(errMessage(err, 'Failed to save comment'));
-      } finally {
-        setSavingComments((prev) => ({ ...prev, [problemId]: false }));
-      }
-    },
-    [
-      commentTexts,
-      selectedStudent,
-      assignmentId,
-      courseId,
-      queryClient,
-      // Without these the callback keeps whichever audience was current when it was last
-      // built, which is how a note meant for one student ends up posted to their group.
-      commentTarget,
-      reviewData,
-    ],
-  );
-
-  const deleteComment = useCallback(
-    async (commentId: string) => {
-      setDeletingComments((prev) => ({ ...prev, [commentId]: true }));
-      try {
-        await apiClient.del(apiPaths.comments({ commentId }));
-        // Optimistically drop the comment from the review-data cache (the derived
-        // `comments` reads from it), then invalidate to reconcile with the server.
-        queryClient.setQueryData<ReviewDataResponse>(
-          queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
-          (old) =>
-            old
-              ? { ...old, comments: (old.comments ?? []).filter((c) => c.id !== commentId) }
-              : old,
-        );
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.assignment.reviewData(
-            courseId,
-            assignmentId,
-            selectedStudentId ?? '',
-          ),
-        });
-        showToast.deleted('Comment');
-      } catch (err) {
-        console.error('Delete comment error:', err);
-        showToast.error(errMessage(err, 'Failed to delete comment'));
-      } finally {
-        setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
-      }
-    },
-    [courseId, assignmentId, selectedStudentId, queryClient],
   );
 
   const handleGradeInputChange = useCallback((problemId: string, value: string) => {
@@ -835,11 +747,7 @@ export default function AssignmentSubmissions({
                     comments={selectedComments}
                     commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
                     onCommentTextChange={(text: string) =>
-                      selectedProblem &&
-                      setCommentTexts((prev) => ({
-                        ...prev,
-                        [selectedProblem.id]: text,
-                      }))
+                      selectedProblem && setCommentText(selectedProblem.id, text)
                     }
                     onSaveComment={() => selectedProblem && saveComment(selectedProblem.id)}
                     onDeleteComment={(commentId: string) =>
