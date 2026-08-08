@@ -932,13 +932,46 @@ describe('AssignmentSubmissions — which student is selected', () => {
     await waitFor(() => expect(idx).toHaveTextContent('2'));
   });
 
-  it('reports no selection when the course has no students', async () => {
-    vi.stubGlobal('fetch', routeFetch({ ...routesFor(twoStudents), '/students': () => ({ ok: true, json: async () => [] }) }));
+  // Everything before a student is selected used to render an empty div, so a course with
+  // nobody enrolled looked exactly like a page that had failed to load.
+  it('says so when the course has nobody enrolled', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({ ...routesFor(twoStudents), '/students': () => ({ ok: true, json: async () => [] }) }),
+    );
 
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
 
-    await waitFor(() =>
-      expect(screen.queryByTestId('problem-workspace')).not.toBeInTheDocument(),
+    await waitFor(() => expect(screen.getByText(/Nobody is enrolled/)).toBeInTheDocument());
+    expect(screen.queryByTestId('problem-workspace')).not.toBeInTheDocument();
+    // Still recognisably the Submissions panel, not a bare message.
+    expect(screen.getByRole('heading', { name: /Submissions/ })).toBeInTheDocument();
+  });
+
+  it('shows a loading state instead of flashing blank', async () => {
+    // A fetch that never settles: the component should be mid-load, not empty.
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading students');
+    expect(screen.queryByText(/Nobody is enrolled/)).not.toBeInTheDocument();
+  });
+
+  // A failed load and an empty roster are different problems with different fixes, so they
+  // must not read the same.
+  it('distinguishes a failed load from an empty roster', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({
+        ...routesFor(twoStudents),
+        '/students': () => ({ ok: false, status: 500, json: async () => ({ error: 'boom' }) }),
+      }),
     );
+
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+
+    await waitFor(() => expect(screen.getByText(/Could not load the student list/)).toBeInTheDocument());
+    expect(screen.queryByText(/Nobody is enrolled/)).not.toBeInTheDocument();
   });
 });

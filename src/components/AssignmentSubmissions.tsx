@@ -347,6 +347,53 @@ export default function AssignmentSubmissions({
     return undefined;
   }, [isStudentDataLoading]);
 
+  // The panel is built around a selected student, so everything before there is one needs
+  // saying out loud. It used to render an empty div: a course with nobody enrolled looked
+  // identical to a page that had failed, and every cold load flashed blank first.
+  const heading = (
+    <h2 className="flex items-center gap-2 text-2xl font-semibold">
+      <FileText className="h-6 w-6" /> Submissions
+    </h2>
+  );
+
+  if (studentsQuery.isPending) {
+    return (
+      <div className="space-y-4">
+        {heading}
+        <div role="status" className="flex min-h-[320px] flex-col items-center justify-center gap-3">
+          <div
+            aria-hidden="true"
+            className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4"
+          />
+          <p className="text-muted-foreground text-sm">Loading students...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (studentsQueryIsError) {
+    return (
+      <div className="space-y-4">
+        {heading}
+        <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
+          Could not load the student list. Refresh the page to try again.
+        </div>
+      </div>
+    );
+  }
+
+  if (students.length === 0) {
+    return (
+      <div className="space-y-4">
+        {heading}
+        <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
+          Nobody is enrolled in this course yet. Add students on the Roster tab, and their
+          submissions will appear here.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {selectedStudent && (
