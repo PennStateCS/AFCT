@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
@@ -31,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { useReviewData } from './useReviewData';
 import { useComments } from './useComments';
 import { useProblemGrades } from './useProblemGrades';
+import { useReviewSelection } from './useReviewSelection';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'> & { enrollmentStatus?: string | null };
 
@@ -96,12 +96,7 @@ export default function AssignmentSubmissions({
   problems,
 }: Props) {
   const epsSymbol = useEmptyStringSymbol(courseId);
-  const searchParams = useSearchParams();
-  const searchParamsString = searchParams.toString();
-  const selectedStudentIdParam = searchParams.get('studentId');
-  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
-  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [grantDialogOpen, setGrantDialogOpen] = useState(false);
   // Set on first open and never cleared, so the dynamic import above stays deferred.
   const [grantMounted, setGrantMounted] = useState(false);
@@ -157,39 +152,6 @@ export default function AssignmentSubmissions({
     }
   }, [studentsQueryIsError, studentsQuery.error]);
 
-  /**
-   * Keep the selected problem and student in the URL without asking the server for
-   * anything.
-   *
-   * `router.replace` looks harmless here but this route is a dynamic server component, so
-   * every call fetched a fresh RSC payload and re-ran the page's auth, roster and
-   * assignment-with-problems queries. Clicking through a roster of any size paid four
-   * database queries per student for data the client already had in the query cache.
-   *
-   * `history.replaceState` is what Next documents for exactly this: it updates the address
-   * bar and still feeds `useSearchParams`, with no navigation. Bookmarking, reload and the
-   * back button all behave the same, because the URL is identical either way.
-   */
-  const setUrlParam = useCallback(
-    (key: string, value: string) => {
-      const params = new URLSearchParams(searchParamsString);
-      if (params.get(key) === value) return;
-      params.set(key, value);
-      window.history.replaceState(null, '', `?${params.toString()}`);
-    },
-    [searchParamsString],
-  );
-
-  const updateQuery = useCallback(
-    (problemId: string) => setUrlParam('problemId', problemId),
-    [setUrlParam],
-  );
-
-  const updateStudentQuery = useCallback(
-    (studentId: string) => setUrlParam('studentId', studentId),
-    [setUrlParam],
-  );
-
   // Build the assignment-specific problem list from assignment payload.
   const assignmentProblems = useMemo(() => {
     return problems ?? [];
@@ -202,36 +164,15 @@ export default function AssignmentSubmissions({
     return value.length > max ? `${value.slice(0, max - 1)}…` : value;
   }, []);
 
-  // Initialize selected problem from the URL, but only from the set of
-  // currently visible problems (handles group assignment filtering).
-  useEffect(() => {
-    if (visibleProblems.length === 0) return;
-    const params = new URLSearchParams(searchParamsString);
-    const paramProblemId = params.get('problemId');
-    const firstProblem = visibleProblems[0];
-    if (!firstProblem) return;
-    const validProblemId = visibleProblems.some((p) => p.id === paramProblemId)
-      ? (paramProblemId as string)
-      : firstProblem.id;
-
-    setSelectedProblemId((currentProblemId) =>
-      currentProblemId === validProblemId ? currentProblemId : validProblemId,
-    );
-    if (paramProblemId !== validProblemId) {
-      updateQuery(validProblemId);
-    }
-  }, [visibleProblems, searchParamsString, updateQuery]);
-
-  const selectedStudent = students[selectedIndex] ?? null;
-  const selectedStudentId = selectedStudent?.id ?? null;
-
-  const handleSelectProblem = useCallback(
-    (problemId: string) => {
-      setSelectedProblemId(problemId);
-      updateQuery(problemId);
-    },
-    [updateQuery],
-  );
+  const {
+    selectedIndex,
+    setSelectedIndex,
+    selectedStudent,
+    selectedStudentId,
+    selectedProblemId,
+    handleSelectProblem,
+    handleSelectChange,
+  } = useReviewSelection({ students, visibleProblems });
 
   // Number keys 1-9 jump to that problem (matching the numbers in the list), unless
   // the user is typing in a field (comment box, grade input, student search, etc.).
@@ -249,29 +190,6 @@ export default function AssignmentSubmissions({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [visibleProblems, handleSelectProblem]);
-
-  useEffect(() => {
-    if (students.length === 0) {
-      setSelectedIndex(-1);
-      return;
-    }
-
-    const nextIndex = selectedStudentIdParam
-      ? students.findIndex((student) => student.id === selectedStudentIdParam)
-      : -1;
-
-    const resolvedIndex = nextIndex !== -1 ? nextIndex : 0;
-    setSelectedIndex((currentIndex) =>
-      currentIndex === resolvedIndex ? currentIndex : resolvedIndex,
-    );
-  }, [students, selectedStudentIdParam]);
-
-  useEffect(() => {
-    if (!selectedStudent) return;
-    if (selectedStudentIdParam !== selectedStudent.id) {
-      updateStudentQuery(selectedStudent.id);
-    }
-  }, [selectedStudentIdParam, selectedStudent, updateStudentQuery]);
 
   // Review data (submissions + comments + problem grades) for the selected student:
   // the TanStack Query fetch, its cold-load flag, and refresher live in a hook.
@@ -380,11 +298,6 @@ export default function AssignmentSubmissions({
     [refreshReview],
   );
 
-  const handleSelectChange = (id: string) => {
-    const index = students.findIndex((s) => s.id === id);
-    if (index !== -1) setSelectedIndex(index);
-  };
-
   const goPrev = () =>
     setSelectedIndex((prev) => {
       if (students.length === 0) return -1;
@@ -415,7 +328,9 @@ export default function AssignmentSubmissions({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [students.length]);
+    // setSelectedIndex is a useState setter from useReviewSelection, so it is stable; the
+    // linter cannot see that through the hook boundary.
+  }, [students.length, setSelectedIndex]);
 
   const isStudentDataLoading = loadingSubmissions || loadingComments || loadingProblemGrades;
 

@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AssignmentSubmissions from './AssignmentSubmissions';
 
@@ -10,7 +10,7 @@ import AssignmentSubmissions from './AssignmentSubmissions';
 // read starts clean.
 const renderWithClient = (ui: React.ReactElement) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return { ...render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>), client };
 };
 
 import { toastMock } from '@/test/mocks/toast';
@@ -23,9 +23,10 @@ const toastError = toastMock.error;
 // object (like Next's real hook) so callbacks memoized on `router` don't churn every
 // render.
 const routerMock = vi.hoisted(() => ({ replace: vi.fn() }));
+const urlQuery = vi.hoisted(() => ({ current: 'studentId=s1' }));
 vi.mock('next/navigation', () => ({
   useRouter: () => routerMock,
-  useSearchParams: () => new URLSearchParams('studentId=s1'),
+  useSearchParams: () => new URLSearchParams(urlQuery.current),
 }));
 
 vi.mock('@/hooks/use-empty-string-symbol', () => ({
@@ -854,5 +855,90 @@ describe('AssignmentSubmissions — who a comment reaches', () => {
 
     await waitFor(() => expect(toastMock.saved).toHaveBeenCalledWith('Comment'));
     expect(postBody(fetchMock).studentId).toBe('s1');
+  });
+});
+
+/**
+ * Selection is the fragile part of this component: two effects point in opposite
+ * directions, one resolving the URL into an index and one writing the index back to the
+ * URL. These pin the behaviour that matters before that logic moves anywhere.
+ */
+describe('AssignmentSubmissions — which student is selected', () => {
+  const twoStudents = [
+    { id: 's1', firstName: 'Ada', lastName: 'Lovelace' },
+    { id: 's2', firstName: 'Grace', lastName: 'Hopper' },
+  ];
+
+  const routesFor = (list: typeof twoStudents) => ({
+    '/students': () => ({ ok: true, json: async () => list }),
+    'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+    '/review-data/': () => ({ ok: true, json: async () => emptyReviewData }),
+  });
+
+  afterEach(() => {
+    urlQuery.current = 'studentId=s1';
+  });
+
+  // The list is sorted by surname, so Hopper precedes Lovelace whatever order the server
+  // sent them in. Naming Lovelace proves the URL decides the selection rather than position.
+  it('selects the student the URL names, not the first in the list', async () => {
+    urlQuery.current = 'studentId=s1';
+    vi.stubGlobal('fetch', routeFetch(routesFor(twoStudents)));
+
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+
+    const idx = await screen.findByTestId('selected-index');
+    await waitFor(() => expect(idx).toHaveTextContent('1'));
+  });
+
+  it('falls back to the first student when the URL names someone not on the list', async () => {
+    urlQuery.current = 'studentId=nobody';
+    vi.stubGlobal('fetch', routeFetch(routesFor(twoStudents)));
+
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+
+    const idx = await screen.findByTestId('selected-index');
+    await waitFor(() => expect(idx).toHaveTextContent('0'));
+  });
+
+  // The case worth having: the selection is stored as an index, but the list can grow under
+  // it. Sorting means a reorder from the server changes nothing, so the real hazard is
+  // somebody being added ahead of the selected student. It has to follow the student, not
+  // the position, or staff quietly end up grading somebody else.
+  it('follows the same student when someone is added ahead of them', async () => {
+    urlQuery.current = 'studentId=s1';
+    const withNewcomer = [...twoStudents, { id: 's3', firstName: 'Zoe', lastName: 'Adams' }];
+    let call = 0;
+    const fetchMock = routeFetch({
+      ...routesFor(twoStudents),
+      '/students': () => {
+        call += 1;
+        return { ok: true, json: async () => (call === 1 ? twoStudents : withNewcomer) };
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { client } = renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    const idx = await screen.findByTestId('selected-index');
+    // Sorted: Hopper, Lovelace. Lovelace (s1) is second.
+    await waitFor(() => expect(idx).toHaveTextContent('1'));
+
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['course', 'c1', 'students', 'all'] });
+    });
+    await waitFor(() => expect(call).toBe(2));
+
+    // Sorted: Adams, Hopper, Lovelace. Lovelace is now third, and still the one selected.
+    await waitFor(() => expect(idx).toHaveTextContent('2'));
+  });
+
+  it('reports no selection when the course has no students', async () => {
+    vi.stubGlobal('fetch', routeFetch({ ...routesFor(twoStudents), '/students': () => ({ ok: true, json: async () => [] }) }));
+
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('problem-workspace')).not.toBeInTheDocument(),
+    );
   });
 });
