@@ -271,6 +271,38 @@ describe('AssignmentSubmissions', () => {
     await waitFor(() => expect(reviewCalls).toBe(2));
     expect(toastSuccess).toHaveBeenCalled();
   });
+
+  // The graded-or-not dot beside each student is updated optimistically on save. Refetching
+  // the summary would overwrite that with a server answer computed before the write landed,
+  // so the dot would flick back to "missing grades" for a student who was just fully graded.
+  // The code says this is deliberate; nothing checked it until now.
+  it('does not refetch the grade summary after a save', async () => {
+    const invalidate = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+    const fetchMock = routeFetch({
+      '/students': () => ({ ok: true, json: async () => students }),
+      'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/problems/p1/grade/s1': () => ({
+        ok: true,
+        json: async () => ({ ok: true }),
+        text: async () => JSON.stringify({ ok: true }),
+      }),
+      '/review-data/': () => ({ ok: true, json: async () => emptyReviewData }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+    await screen.findByTestId('problem-workspace');
+    invalidate.mockClear();
+
+    fireEvent.change(screen.getByTestId('grade-input'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Grade' }));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+    const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+    expect(keys.some((k) => k?.includes('review-data'))).toBe(true);
+    expect(keys.some((k) => k?.includes('summary'))).toBe(false);
+    invalidate.mockRestore();
+  });
 });
 
 // A review-data payload with an existing grade and comment on p1.

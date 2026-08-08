@@ -1,13 +1,12 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
-import { apiClient } from '@/lib/api/fetch-client';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
@@ -31,6 +30,7 @@ const GrantExtraSubmissionsDialog = dynamic(
 import { Button } from '@/components/ui/button';
 import { useReviewData } from './useReviewData';
 import { useComments } from './useComments';
+import { useProblemGrades } from './useProblemGrades';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'> & { enrollmentStatus?: string | null };
 
@@ -95,7 +95,6 @@ export default function AssignmentSubmissions({
   assignmentDueDate,
   problems,
 }: Props) {
-  const queryClient = useQueryClient();
   const epsSymbol = useEmptyStringSymbol(courseId);
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
@@ -110,13 +109,7 @@ export default function AssignmentSubmissions({
     if (grantDialogOpen) setGrantMounted(true);
   }, [grantDialogOpen]);
 
-  // Grade editing state (robust, GradesCard style)
-  const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
-  const [gradeInputs, setGradeInputs] = useState<Record<string, string>>({});
-  const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
-  const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
   const [showStudentDataLoading, setShowStudentDataLoading] = useState(false);
-  const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
     submission: Submission | ProblemSubmission | null;
@@ -280,46 +273,6 @@ export default function AssignmentSubmissions({
     }
   }, [selectedStudentIdParam, selectedStudent, updateStudentQuery]);
 
-  // Grade summary: cached read of which students have all problems graded.
-  const gradeSummaryQuery = useQuery({
-    queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', 'summary'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.assignmentProblemGradesSummary(courseId, assignmentId));
-      if (!res.ok) {
-        // Match the previous silent handling of auth/not-found responses.
-        if ([401, 403, 404].includes(res.status)) return {} as Record<string, boolean>;
-        throw new Error((await res.json())?.error || 'Failed to load grade summary');
-      }
-      return ((await res.json()) ?? {}) as Record<string, boolean>;
-    },
-    enabled: students.length > 0,
-    staleTime: 30_000,
-  });
-
-  const gradeSummaryQueryIsError = gradeSummaryQuery.isError;
-  useEffect(() => {
-    if (gradeSummaryQueryIsError) {
-      console.error('Failed to load grade summary:', gradeSummaryQuery.error);
-    }
-  }, [gradeSummaryQueryIsError, gradeSummaryQuery.error]);
-
-  // Seed the base studentGradeStatuses from the summary, normalized over students
-  // exactly as the previous effect did. This local state is also updated by grade
-  // saves and review-data seeding, so we do NOT invalidate the summary on save.
-  const gradeSummaryData = gradeSummaryQuery.data;
-  useEffect(() => {
-    if (students.length === 0) {
-      setStudentGradeStatuses({});
-      return;
-    }
-    if (gradeSummaryData === undefined) return;
-    const normalized: Record<string, boolean> = {};
-    students.forEach((student) => {
-      normalized[student.id] = Boolean(gradeSummaryData?.[student.id]);
-    });
-    setStudentGradeStatuses(normalized);
-  }, [students, gradeSummaryData]);
-
   // Review data (submissions + comments + problem grades) for the selected student:
   // the TanStack Query fetch, its cold-load flag, and refresher live in a hook.
   const { reviewData, reviewQueryIsError, reviewError, reviewFetching, refreshReview } =
@@ -340,6 +293,26 @@ export default function AssignmentSubmissions({
     selectedStudentId,
     group: reviewData?.group,
     groupMembers: reviewData?.groupMembers,
+  });
+
+  const {
+    problemGrades,
+    gradeInputs,
+    problemGradeErrors,
+    savingProblemGrades,
+    studentGradeStatuses,
+    handleGradeInputChange,
+    saveProblemGrade,
+  } = useProblemGrades({
+    courseId,
+    assignmentId,
+    courseIsArchived,
+    students,
+    selectedStudent,
+    assignmentProblems,
+    reviewData,
+    reviewQueryIsError,
+    reviewError,
   });
 
   // All three loading flags previously flipped together; they track the cold load.
@@ -400,169 +373,11 @@ export default function AssignmentSubmissions({
     [selectedProblemId, visibleProblems],
   );
 
-  // Seed the local editable GRADE state from the cached review data. Submissions and
-  // comments are derived above; only the editable grade fields still live in state.
-  // When there is no selected student, clear it (the old null-branch behavior).
-  useEffect(() => {
-    if (!selectedStudentId) {
-      setProblemGrades({});
-      setGradeInputs({});
-      setProblemGradeErrors({});
-      return;
-    }
-
-    if (reviewQueryIsError) {
-      console.error('Fetch review data error:', reviewError);
-      showToast.error('Could not load this submission. Refresh the page to try again.');
-      setProblemGrades({});
-      setGradeInputs({});
-      return;
-    }
-
-    if (reviewData === undefined) return;
-
-    const gradeData = reviewData.problemGrades ?? {};
-    const normalizedGrades: Record<string, number | null> = {};
-    const normalizedInputs: Record<string, string> = {};
-    assignmentProblems.forEach((problem) => {
-      const entry = gradeData?.[problem.id];
-      const value = typeof entry?.grade === 'number' ? entry.grade : null;
-      normalizedGrades[problem.id] = value;
-      normalizedInputs[problem.id] = value === null || value === undefined ? '' : String(value);
-    });
-
-    setProblemGrades(normalizedGrades);
-    setGradeInputs(normalizedInputs);
-    setProblemGradeErrors({});
-
-    const hasAllGrades =
-      assignmentProblems.length === 0
-        ? true
-        : assignmentProblems.every((problem) => {
-            const value = normalizedGrades[problem.id];
-            return value !== null && value !== undefined;
-          });
-    setStudentGradeStatuses((prev) => ({
-      ...prev,
-      [selectedStudentId]: hasAllGrades,
-    }));
-  }, [selectedStudentId, reviewData, reviewQueryIsError, reviewError, assignmentProblems]);
-
   const handleRerunSubmission = useCallback(
     async (submission: Submission) => {
       await rerunSubmission({ submission, setRerunning, fetchReviewData: refreshReview });
     },
     [refreshReview],
-  );
-
-  const handleGradeInputChange = useCallback((problemId: string, value: string) => {
-    setGradeInputs((prev) => ({ ...prev, [problemId]: value }));
-    setProblemGradeErrors((prev) => ({ ...prev, [problemId]: null }));
-  }, []);
-
-  const saveProblemGrade = useCallback(
-    async (problemId: string) => {
-      if (!selectedStudent) return;
-      if (courseIsArchived) {
-        showToast.error(
-          'This course is archived, so grades cannot be edited. Unarchive the course to make changes.',
-        );
-        return;
-      }
-
-      const problem = assignmentProblems.find((p) => p.id === problemId);
-      if (!problem) return;
-      const rawMaxPoints = typeof problem.maxPoints === 'number' ? problem.maxPoints : null;
-      const hasUpperBound = typeof rawMaxPoints === 'number' && rawMaxPoints >= 0;
-      const rawValue = gradeInputs[problemId] ?? '';
-      const trimmed = rawValue.trim();
-      const numericValue = trimmed === '' ? null : Number(trimmed);
-
-      // Each of these shows the same sentence twice on purpose: inline next to the field, so it
-      // stays put while the grader fixes it, and as a toast, because the field can be scrolled
-      // out of view in a long problem list.
-      if (numericValue !== null) {
-        const message = Number.isNaN(numericValue)
-          ? 'Enter the grade as a number.'
-          : numericValue < 0
-            ? 'Enter a grade of at least 0.'
-            : hasUpperBound && rawMaxPoints !== null && numericValue > rawMaxPoints
-              ? `Enter a grade between 0 and ${rawMaxPoints}.`
-              : null;
-        if (message) {
-          setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
-          showToast.error(message);
-          return;
-        }
-      }
-
-      setProblemGradeErrors((prev) => ({ ...prev, [problemId]: null }));
-      setSavingProblemGrades((prev) => ({ ...prev, [problemId]: true }));
-
-      try {
-        await apiClient.post(
-          apiPaths.assignmentProblemGrade(courseId, assignmentId, problemId, selectedStudent.id),
-          { grade: numericValue },
-        );
-
-        setProblemGrades((prev) => {
-          const updated = { ...prev, [problemId]: numericValue };
-          if (selectedStudent) {
-            const hasAllGrades =
-              assignmentProblems.length === 0
-                ? true
-                : assignmentProblems.every((problem) => {
-                    const value =
-                      problem.id === problemId ? numericValue : (prev[problem.id] ?? null);
-                    return value !== null && value !== undefined;
-                  });
-            setStudentGradeStatuses((prevStatus) => ({
-              ...prevStatus,
-              [selectedStudent.id]: hasAllGrades,
-            }));
-          }
-          return updated;
-        });
-        setGradeInputs((prev) => ({
-          ...prev,
-          [problemId]:
-            numericValue === null || numericValue === undefined ? '' : String(numericValue),
-        }));
-        // Keep the cached review data fresh after the optimistic local updates.
-        // NOTE: deliberately NOT invalidating the summary query, which would
-        // clobber the optimistic studentGradeStatuses update above.
-        void queryClient.invalidateQueries({
-          queryKey: [
-            'course',
-            courseId,
-            'assignment',
-            assignmentId,
-            'review-data',
-            selectedStudent.id,
-          ],
-        });
-        showToast.success(
-          `Grade ${numericValue ?? 'cleared'} saved for ${selectedStudent.firstName} ${selectedStudent.lastName} on ${problem.title}`,
-        );
-      } catch (error) {
-        console.error('Save problem grade error:', error);
-        const message = error instanceof Error ? error.message : 'Failed to save problem grade';
-        setProblemGradeErrors((prev) => ({ ...prev, [problemId]: message }));
-        showToast.error(message);
-      } finally {
-        setSavingProblemGrades((prev) => ({ ...prev, [problemId]: false }));
-      }
-    },
-    [
-      assignmentId,
-      courseId,
-      courseIsArchived,
-      gradeInputs,
-      assignmentProblems,
-      selectedStudent,
-      setProblemGrades,
-      queryClient,
-    ],
   );
 
   const handleSelectChange = (id: string) => {
