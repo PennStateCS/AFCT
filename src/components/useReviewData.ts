@@ -13,8 +13,22 @@ export type ReviewDataResponse = {
   submissions?: Record<string, SubmissionData>;
   comments?: Array<DiscussionComment & { problemId?: string | null }>;
   problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
+  /** True when the ASSIGNMENT is a group assignment, whatever this student's group is. */
+  isGroupAssignment?: boolean;
   /** True when the selected student submits this assignment as a group. */
   isGroup?: boolean;
+  /** The selected student's group, when they have one. */
+  group?: { id: string; name: string } | null;
+  /** Their groupmates, excluding themselves. */
+  groupMembers?: { id: string; firstName: string | null; lastName: string | null }[];
+  /** Their effective schedule, with their own or their group's date override applied. */
+  effective?: {
+    unlockAt: string | null;
+    dueDate: string;
+    lateCutoff: string | null;
+    allowLateSubmissions: boolean;
+    source: 'base' | 'student-override' | 'group-override';
+  };
   /** The selected student's group for this assignment (grant targets), or null. */
   groupId?: string | null;
   /**

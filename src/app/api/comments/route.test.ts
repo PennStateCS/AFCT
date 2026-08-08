@@ -13,6 +13,9 @@ const prismaMock = vi.hoisted(() => ({
   problem: {
     findFirst: vi.fn(),
   },
+  studentGroup: {
+    findFirst: vi.fn(),
+  },
   assignmentProblem: {
     findUnique: vi.fn(),
   },
@@ -26,10 +29,14 @@ const prismaMock = vi.hoisted(() => ({
 
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
+const resolveGroupMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+vi.mock('@/lib/assignment-groups', () => ({
+  resolveStudentSubmissionGroupId: resolveGroupMock,
+}));
 
 import { POST, DELETE } from './route';
 
@@ -358,6 +365,134 @@ describe('POST /api/comments', () => {
         category: 'ASSIGNMENT',
       }),
     );
+  });
+
+  // Group assignments: one comment addressed to the group, which every member reads,
+  // instead of a copy per member that can be edited or deleted out of step.
+  describe('addressing a group', () => {
+    const groupReq = (body: Record<string, unknown>) =>
+      new NextRequest('http://localhost/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'Nice work', assignmentId: 'a1', problemId: 'p1', ...body }),
+      });
+
+    const seedStaff = () => {
+      authMock.mockResolvedValue({ user: { id: 'fac1', isAdmin: true } });
+      prismaMock.assignment.findUnique.mockResolvedValue({
+        courseId: 'c1',
+        isPublished: true,
+        groupSetId: 'gs1',
+      });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        id: 'r1',
+        role: 'FACULTY',
+        course: { isPublished: true },
+      });
+      prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
+      prismaMock.studentGroup.findFirst.mockResolvedValue({ id: 'g1' });
+      prismaMock.comment.create.mockResolvedValue({
+        id: 'cm1',
+        content: 'Nice work',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        author: { id: 'fac1', firstName: 'F', lastName: 'A', avatar: null },
+        roster: { role: 'FACULTY' },
+      });
+    };
+
+    it('lets staff address a group in the assignment set', async () => {
+      seedStaff();
+
+      const res = await POST(groupReq({ groupId: 'g1' }));
+
+      expect(res.status).toBe(201);
+      expect(prismaMock.comment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ aboutGroupId: 'g1', aboutStudentId: null }),
+        }),
+      );
+    });
+
+    it('records the audience in the audit entry', async () => {
+      seedStaff();
+
+      await POST(groupReq({ groupId: 'g1' }));
+
+      expect(activityLogMock).toHaveBeenCalledWith(
+        prismaMock,
+        expect.anything(),
+        expect.objectContaining({
+          action: 'CREATE_COMMENT',
+          metadata: expect.objectContaining({ aboutGroupId: 'g1' }),
+        }),
+      );
+    });
+
+    it('refuses a group that is not in this assignment set', async () => {
+      seedStaff();
+      prismaMock.studentGroup.findFirst.mockResolvedValue(null);
+
+      const res = await POST(groupReq({ groupId: 'other-set-group' }));
+
+      expect(res.status).toBe(404);
+      expect(prismaMock.comment.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a group target on an individual assignment', async () => {
+      seedStaff();
+      prismaMock.assignment.findUnique.mockResolvedValue({
+        courseId: 'c1',
+        isPublished: true,
+        groupSetId: null,
+      });
+
+      const res = await POST(groupReq({ groupId: 'g1' }));
+
+      expect(res.status).toBe(400);
+      expect(prismaMock.comment.create).not.toHaveBeenCalled();
+    });
+
+    // A student may write to their own group, which is the audience they can already
+    // read, but not into another group's thread.
+    it("refuses a student writing into another group's thread", async () => {
+      seedStaff();
+      authMock.mockResolvedValue({ user: { id: 'stu1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        id: 'r2',
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
+      resolveGroupMock.mockResolvedValue('their-own-group');
+
+      const res = await POST(groupReq({ groupId: 'g1' }));
+
+      expect(res.status).toBe(403);
+      expect(prismaMock.comment.create).not.toHaveBeenCalled();
+    });
+
+    it('lets a student write to their own group', async () => {
+      seedStaff();
+      authMock.mockResolvedValue({ user: { id: 'stu1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        id: 'r2',
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
+      resolveGroupMock.mockResolvedValue('g1');
+
+      const res = await POST(groupReq({ groupId: 'g1' }));
+
+      expect(res.status).toBe(201);
+    });
+
+    it('rejects a comment addressed to both a student and a group', async () => {
+      seedStaff();
+
+      const res = await POST(groupReq({ groupId: 'g1', studentId: 's1' }));
+
+      expect(res.status).toBe(400);
+      expect(prismaMock.comment.create).not.toHaveBeenCalled();
+    });
   });
 
   it('creates comment about specific student', async () => {

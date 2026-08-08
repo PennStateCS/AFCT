@@ -95,3 +95,111 @@ describe('StudentNavigator', () => {
     expect(screen.getByText('1 of 1')).toBeInTheDocument();
   });
 });
+
+/**
+ * The group panel is fed by a prop now, from the review-data the parent already holds, so
+ * these render it directly rather than stubbing a second fetch.
+ */
+const renderWithGroup = (groupInfo: Record<string, unknown>) => {
+  const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+  fetchMock.mockResolvedValue({
+    ok: true,
+    json: async () => ({ dueDate: '2026-01-10T00:00:00.000Z', allowLateSubmissions: false }),
+  });
+  return renderWithClient(
+    <StudentNavigator
+      {...baseProps}
+      groupInfo={groupInfo as unknown as StudentNavigatorProps['groupInfo']}
+    />,
+  );
+};
+
+describe('individual versus group', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  it('says Individual for an assignment that is not a group assignment', async () => {
+    renderWithGroup({ isGroupAssignment: false, isGroup: false, group: null, members: [] });
+
+    await waitFor(() => expect(screen.getByText('Individual')).toBeInTheDocument());
+  });
+
+  it('names the group when the student has one', async () => {
+    renderWithGroup({
+      isGroupAssignment: true,
+      isGroup: true,
+      group: { id: 'g1', name: 'Group 3' },
+      members: [{ id: 's2', firstName: 'Grace', lastName: 'Hopper' }],
+    });
+
+    await waitFor(() => expect(screen.getByText('Group (Group 3)')).toBeInTheDocument());
+    expect(screen.getByText(/Grace Hopper/)).toBeInTheDocument();
+  });
+
+  // The case the old code got wrong: it read the student's group membership rather than
+  // the assignment, so this rendered as a normal individual submission.
+  it('still says Group, and warns, when the student is in no group', async () => {
+    renderWithGroup({ isGroupAssignment: true, isGroup: false, group: null, members: [] });
+
+    await waitFor(() => expect(screen.getByText('Group')).toBeInTheDocument());
+    expect(screen.getByText(/Not in a group/)).toBeInTheDocument();
+  });
+
+  it('does not warn on an individual assignment', async () => {
+    renderWithGroup({ isGroupAssignment: false, isGroup: false, group: null, members: [] });
+
+    await waitFor(() => expect(screen.getByText('Individual')).toBeInTheDocument());
+    expect(screen.queryByText(/Not in a group/)).not.toBeInTheDocument();
+  });
+
+  // The whole point of the fold: this component must not make its own per-student call.
+  it('does not fetch student-group itself', async () => {
+    renderWithGroup({ isGroupAssignment: true, isGroup: true, group: { id: 'g1', name: 'G' }, members: [] });
+
+    await waitFor(() => expect(screen.getByText('Group (G)')).toBeInTheDocument());
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.includes('student-group'))).toBe(false);
+  });
+});
+
+describe('student names', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  const twoStudents: StudentNavigatorProps = {
+    ...baseProps,
+    students: [
+      { id: 's1', firstName: 'Ada', lastName: 'Lovelace' },
+      { id: 's2', firstName: 'Grace', lastName: 'Hopper' },
+      { id: 's3', firstName: null, lastName: 'Turing' },
+      { id: 's4', firstName: 'Mononymous', lastName: null },
+    ],
+  };
+
+  // Staff scan this list by surname, the way a roster or gradebook reads.
+  it('shows the selected student as "Last, First"', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ dueDate: '2026-01-10T00:00:00.000Z' }) });
+
+    renderWithClient(<StudentNavigator {...twoStudents} />);
+
+    await waitFor(() => expect(screen.getByText('Lovelace, Ada')).toBeInTheDocument());
+  });
+
+  // A student with only one name recorded must not come out as ", Ada" or "Turing, ".
+  it('omits the comma when only one name is recorded', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ dueDate: '2026-01-10T00:00:00.000Z' }) });
+
+    renderWithClient(<StudentNavigator {...twoStudents} selectedIndex={2} />);
+    await waitFor(() => expect(screen.getByText('Turing')).toBeInTheDocument());
+
+    renderWithClient(<StudentNavigator {...twoStudents} selectedIndex={3} />);
+    await waitFor(() => expect(screen.getByText('Mononymous')).toBeInTheDocument());
+  });
+});
