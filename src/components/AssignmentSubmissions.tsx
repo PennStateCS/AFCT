@@ -692,6 +692,17 @@ export default function AssignmentSubmissions({
                 gradeStatuses={studentGradeStatuses}
                 courseId={courseId}
                 assignmentId={assignmentId}
+                groupInfo={
+                  reviewData
+                    ? {
+                        isGroupAssignment: reviewData.isGroupAssignment,
+                        isGroup: !!reviewData.isGroup,
+                        group: reviewData.group ?? null,
+                        members: reviewData.groupMembers ?? [],
+                        effective: reviewData.effective,
+                      }
+                    : null
+                }
               />
             </div>
           </div>

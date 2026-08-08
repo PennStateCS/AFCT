@@ -53,9 +53,21 @@ type StudentGroupInfo = {
   effective?: EffectiveSchedule;
 };
 
-/** "First Last" (falls back to "Student"). */
-function memberName(m: { firstName: string | null; lastName: string | null }): string {
+/** "First Last" (falls back to "Student"). Used for prose, like the groupmates line. */
+function memberName(m: { firstName?: string | null; lastName?: string | null }): string {
   return `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student';
+}
+
+/**
+ * "Last, First" for the picker, which is a list staff scan by surname the way a roster or
+ * a gradebook reads. Falls back to whichever half exists rather than emitting a stray
+ * comma, so a student with only one name recorded still shows something sensible.
+ */
+function listName(s: { firstName?: string | null; lastName?: string | null }): string {
+  const first = (s.firstName ?? '').trim();
+  const last = (s.lastName ?? '').trim();
+  if (last && first) return `${last}, ${first}`;
+  return last || first || 'Unnamed student';
 }
 
 export type StudentNavigatorProps = {
@@ -67,6 +79,12 @@ export type StudentNavigatorProps = {
   gradeStatuses?: Record<string, boolean | undefined>;
   courseId: string;
   assignmentId: string;
+  /**
+   * The selected student's group and effective schedule, from the review-data the parent
+   * already fetched. This used to be a second per-student request from inside here, which
+   * doubled the traffic of walking a roster for a payload the parent was fetching anyway.
+   */
+  groupInfo?: StudentGroupInfo | null;
 };
 
 export default function StudentNavigator({
@@ -78,6 +96,7 @@ export default function StudentNavigator({
   gradeStatuses,
   courseId,
   assignmentId,
+  groupInfo = null,
 }: StudentNavigatorProps) {
   const { timezone } = useEffectiveTimezone();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -109,20 +128,6 @@ export default function StudentNavigator({
 
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStatus = selectedStudent ? (gradeStatuses?.[selectedStudent.id] ?? false) : false;
-  const selectedStudentId = selectedStudent?.id ?? null;
-
-  // Whether the selected student submits this assignment individually or as a group,
-  // plus their groupmates (for the group case). Drives the Individual/Group indicator.
-  const groupQuery = useQuery<StudentGroupInfo>({
-    queryKey: queryKeys.assignment.studentGroup(courseId, assignmentId, selectedStudentId ?? ''),
-    queryFn: () =>
-      fetchJson<StudentGroupInfo>(
-        apiPaths.assignmentStudentGroup(courseId, assignmentId, selectedStudentId as string),
-      ),
-    enabled: !!assignmentId && !!selectedStudentId,
-    staleTime: 30_000,
-  });
-  const groupInfo = groupQuery.data ?? null;
 
   // Prefer the selected student's effective schedule (their own or their group's date
   // override); fall back to the assignment base while that per-student read loads.
@@ -136,9 +141,12 @@ export default function StudentNavigator({
     const f = studentFilter.trim().toLowerCase();
     if (!f) return students;
     return students.filter((s) => {
+      // Match both orders, so typing what is on screen ("lovelace, ada") finds the row
+      // just as readily as typing the name the natural way round.
       const full = `${s.firstName ?? ''} ${s.lastName ?? ''}`.toLowerCase();
       return (
         full.includes(f) ||
+        listName(s).toLowerCase().includes(f) ||
         (s.firstName ?? '').toLowerCase().includes(f) ||
         (s.lastName ?? '').toLowerCase().includes(f)
       );
@@ -159,18 +167,19 @@ export default function StudentNavigator({
     setMenuOpen(false);
   };
 
-  const selectedName = selectedStudent
-    ? `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
-      'Unnamed student'
-    : null;
+  // The trigger matches the list it opens, so the name does not reorder as you pick it.
+  const selectedName = selectedStudent ? listName(selectedStudent) : null;
+  // Spoken announcements stay in natural order: "Now reviewing Lovelace, Ada" reads as a
+  // filing-card entry rather than a sentence.
+  const selectedSpokenName = selectedStudent ? memberName(selectedStudent) : null;
 
   return (
     <div className="flex w-full flex-col items-start gap-3">
       {/* Polite live region: announces the newly selected student on navigation,
           since focus stays on the Prev/Next/dropdown control while the panel changes. */}
       <span className="sr-only" aria-live="polite">
-        {selectedName
-          ? `Now reviewing ${selectedName}, student ${selectedIndex + 1} of ${students.length}. ${
+        {selectedSpokenName
+          ? `Now reviewing ${selectedSpokenName}, student ${selectedIndex + 1} of ${students.length}. ${
               selectedStatus ? 'All problems graded.' : 'Missing grades.'
             }`
           : ''}
@@ -318,9 +327,7 @@ export default function StudentNavigator({
                         className={`h-2.5 w-2.5 rounded-full ${gradeStatuses?.[s.id] ? 'bg-status-success-solid' : 'bg-status-danger-solid'}`}
                         aria-hidden="true"
                       />
-                      <span className="truncate">
-                        {s.firstName} {s.lastName}
-                      </span>
+                      <span className="truncate">{listName(s)}</span>
                       {s.enrollmentStatus === 'DROPPED' ? <DroppedBadge /> : null}
                       {/* Text equivalent for the color-coded dot (use of color). */}
                       <span className="sr-only">

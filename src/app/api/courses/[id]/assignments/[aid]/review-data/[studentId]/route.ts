@@ -8,6 +8,7 @@ import { logDenial } from '@/lib/api/activity';
 import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
 import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { effectiveMaxSubmissions } from '@/lib/submission-limits';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 
 type SubmissionRecord = {
   id: string;
@@ -103,7 +104,35 @@ export const GET = withCourseAuth(
     try {
       const assignment = await prisma.assignment.findFirst({
         where: { id: assignmentId, courseId },
-        select: { id: true, isPublished: true },
+        // groupSetId decides whether this is a group ASSIGNMENT, which is a different
+        // question from whether this student has a group. Both are returned below.
+        select: {
+          id: true,
+          isPublished: true,
+          groupSetId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+          // This student's applicable date overrides: their own, and their group's.
+          overrides: {
+            where: {
+              OR: [
+                { userId: studentId },
+                { studentGroup: { memberships: { some: { userId: studentId } } } },
+              ],
+            },
+            select: {
+              targetType: true,
+              userId: true,
+              groupId: true,
+              unlockAt: true,
+              dueDate: true,
+              lateCutoff: true,
+              allowLateSubmissions: true,
+            },
+          },
+        },
       });
 
       if (!assignment) {
@@ -153,7 +182,10 @@ export const GET = withCourseAuth(
             submissions: {},
             comments: [],
             problemGrades: {},
+            isGroupAssignment: !!assignment.groupSetId,
             isGroup: false,
+            group: null,
+            groupMembers: [],
             locked: true,
           });
         }
@@ -376,12 +408,69 @@ export const GET = withCourseAuth(
         console.warn('Failed to log activity:', logError);
       }
 
+      // The group's identity and the student's groupmates. Folded in here because the
+      // navigator previously fetched this separately for the very same student, so every
+      // click cost two requests where one carries all of it.
+      const group = groupId
+        ? await prisma.studentGroup.findUnique({
+            where: { id: groupId },
+            select: {
+              id: true,
+              name: true,
+              memberships: {
+                select: { roster: { select: { user: { select: { id: true, firstName: true, lastName: true } } } } },
+              },
+            },
+          })
+        : null;
+      const groupMembers = (group?.memberships ?? [])
+        .map((m) => m.roster.user)
+        .filter((u) => u.id !== studentId);
+
+      // The student's effective schedule: their own or their group's date override resolved
+      // against the assignment base. Group ids come from the submission group plus any group
+      // an override targets (the query above already limits those to this student's groups).
+      const overrideGroupIds = [
+        ...new Set(
+          [
+            groupId,
+            ...assignment.overrides
+              .filter((o) => o.targetType === 'GROUP' && o.groupId)
+              .map((o) => o.groupId),
+          ].filter((v): v is string => !!v),
+        ),
+      ];
+      const eff = effectiveDeadline(
+        {
+          unlockAt: assignment.unlockAt,
+          dueDate: assignment.dueDate,
+          lateCutoff: assignment.lateCutoff,
+          allowLateSubmissions: assignment.allowLateSubmissions,
+        },
+        assignment.overrides,
+        // studentId is optional on this route's params; an empty id simply matches no
+        // student-targeted override, which is the right answer when there is no student.
+        studentId ?? '',
+        overrideGroupIds,
+      );
+      const effective = {
+        unlockAt: eff.unlockAt ? eff.unlockAt.toISOString() : null,
+        dueDate: eff.dueDate.toISOString(),
+        lateCutoff: eff.lateCutoff ? eff.lateCutoff.toISOString() : null,
+        allowLateSubmissions: eff.allowLateSubmissions,
+        source: eff.source,
+      };
+
       return NextResponse.json({
         submissions: submissionsByProblem,
         comments,
         problemGrades,
         // Group assignment for this student => the workspace shows a "Submitted by" column.
+        isGroupAssignment: !!assignment.groupSetId,
         isGroup: !!groupId,
+        group: group ? { id: group.id, name: group.name } : null,
+        groupMembers,
+        effective,
         // The student's group for this assignment (grant targets need it); null otherwise.
         groupId,
         problemLimits,
