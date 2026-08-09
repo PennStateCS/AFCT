@@ -91,6 +91,20 @@ describe('POST group-grade', () => {
     expect(first.update).toMatchObject({ groupGradeGroupId: 'g1', groupGradeValue: 8 });
   });
 
+  /**
+   * A group grade is a person's decision for every member, and it stays one even after a
+   * member is released back to the autograder. Without the source recorded here, releasing
+   * one member told them the autograder had chosen their mark.
+   */
+  it('records that a person set every one of those grades', async () => {
+    await post({ grade: 8 });
+
+    for (const [args] of tx.assignmentProblemGrade.upsert.mock.calls) {
+      expect(args.create).toMatchObject({ gradeSource: 'MANUAL', gradedManually: true });
+      expect(args.update).toMatchObject({ gradeSource: 'MANUAL', gradedManually: true });
+    }
+  });
+
   it('locks the group set, so membership cannot move under a grade', async () => {
     await post({ grade: 8 });
 

@@ -5767,7 +5767,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A map of problemId → { grade, feedback, updatedAt }. */
+            /** @description A map of problemId to { grade, feedback, updatedAt, gradedManually, gradeSource }. */
             200: {
                 headers: {
                     [name: string]: unknown;

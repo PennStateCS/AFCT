@@ -253,6 +253,21 @@ describe('evaluateSubmission', () => {
         skipDuplicates: true,
       }),
     );
+    /**
+     * The row it overwrites may be a grade a person entered and then released. Once the
+     * autograder replaces the number, that number is the autograder's, and leaving the
+     * source alone would keep crediting a person for a mark they did not choose.
+     */
+    expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ gradeSource: 'AUTOGRADER' }),
+      }),
+    );
+    expect(prismaMock.assignmentProblemGrade.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [expect.objectContaining({ gradeSource: 'AUTOGRADER' })],
+      }),
+    );
     expect(loggedActions()).toContain('SUBMISSION_AUTOGRADED');
   });
 
@@ -361,15 +376,28 @@ describe('evaluateSubmission', () => {
     expect(prismaMock.$transaction).toHaveBeenCalled();
   });
 
-  it('does not autograde when the problem has the autograder disabled', async () => {
+  /**
+   * On a hand-graded problem the evaluator is a feedback tool and nothing more. It still
+   * runs, and its feedback still reaches the student, but it must never put a number on a
+   * grade a person owns.
+   */
+  it('gives feedback but sets no grade when the problem has the autograder disabled', async () => {
     const submission = makeSubmission();
     submission.assignmentProblem.autograderEnabled = false;
     prismaMock.submission.findUnique.mockResolvedValue(submission);
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
 
     await evaluateSubmission('sub-1');
 
     expect(prismaMock.assignmentProblemGrade.updateMany).not.toHaveBeenCalled();
     expect(prismaMock.assignmentProblemGrade.createMany).not.toHaveBeenCalled();
+    // The feedback half still happens: correct answers included, which is the case where
+    // silently skipping the whole write would be easiest to miss.
+    expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ feedback: 'great', correct: true }),
+      }),
+    );
   });
 
   it('discards a stale result (and skips autograde) when the row was reclaimed mid-evaluation', async () => {

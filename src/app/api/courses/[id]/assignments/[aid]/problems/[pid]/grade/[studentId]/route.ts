@@ -230,11 +230,13 @@ export const POST = withCourseAuth(
             grade,
             feedback,
             gradedManually: true,
+            gradeSource: 'MANUAL',
           },
           update: {
             grade,
             feedback,
             gradedManually: true,
+            gradeSource: 'MANUAL',
           },
         });
         await lockGroupSetIfUsed(tx, assignmentProblem.assignment.groupSetId);

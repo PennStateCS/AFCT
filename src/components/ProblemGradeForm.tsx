@@ -25,8 +25,6 @@ type ProblemGradeFormProps = {
   isSaving?: boolean;
   isLoading?: boolean;
   error?: string | null;
-  autograderStatus?: string | null;
-  onRerun?: () => void;
   onChange: (value: string) => void;
   onSubmit: () => void;
   /** Omit on individual assignments. */

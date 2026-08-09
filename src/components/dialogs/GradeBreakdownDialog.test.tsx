@@ -26,7 +26,10 @@ type Row = {
   title: string;
   maxPoints: number;
   grade: number | null;
-  autograded: boolean;
+  storedGrade: number | null;
+  autograderEnabled: boolean;
+  gradedManually: boolean;
+  gradeSource: 'AUTOGRADER' | 'MANUAL';
 };
 
 // DataTable stub: render each row's title, and render the real Grade column's
@@ -136,7 +139,80 @@ describe('GradeBreakdownDialog', () => {
     expect(screen.getByTestId('grade-p2').textContent).toBe('null');
   });
 
-  it('labels each problem as autograded or manually graded', async () => {
+  /**
+   * The Grading column reports where each grade came from. It used to report the problem's
+   * autograder setting instead, so p1 below (autograded problem, grade typed by a person)
+   * read as "Autograded" when a person had overridden it.
+   */
+  describe('the Grading column', () => {
+    const renderWithGrades = async (grades: Record<string, unknown>) => {
+      const fetchMock = vi.fn((url: string): Promise<FetchResult> => {
+        if (url === '/api/courses/c1/assignments/a1') {
+          return Promise.resolve({ ok: true, json: async () => assignmentPayload });
+        }
+        if (url === '/api/courses/c1/assignments/a1/problem-grades/s1') {
+          return Promise.resolve({ ok: true, json: async () => grades });
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      renderWithClient(<GradeBreakdownDialog {...baseProps} setOpen={vi.fn()} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('table-rows').textContent).toBe('2');
+      });
+    };
+
+    // p1 has the autograder on, p2 has it off. Both grades below were typed by a person,
+    // and only one of them overrode anything.
+    it('calls a hand-entered grade an override only where an autograder would run', async () => {
+      await renderWithGrades({
+        p1: { grade: 7, gradedManually: true, gradeSource: 'MANUAL' },
+        p2: { grade: 15, gradedManually: true, gradeSource: 'MANUAL' },
+      });
+
+      // p1 also carries the padlock, since the autograder is what it is held against. p2
+      // gets no padlock: nothing there would overwrite it, so a lock would imply a danger
+      // that does not exist on a hand-graded problem.
+      expect(screen.getByTestId('grading-p1').textContent).toBe('Manual override, held');
+      expect(screen.getByTestId('grading-p2').textContent).toBe('Manually graded');
+    });
+
+    it('credits the autograder for its own grades, and says when there is none', async () => {
+      await renderWithGrades({
+        p1: { grade: 9, gradedManually: false, gradeSource: 'AUTOGRADER' },
+      });
+
+      expect(screen.getByTestId('grading-p1').textContent).toBe('Autograded');
+      expect(screen.getByTestId('grading-p2').textContent).toBe('Not graded');
+    });
+
+    /**
+     * Releasing a grade hands it back to the autograder; it does not rewrite who set it.
+     * The badge used to flip to "Autograded" here, telling a grader the autograder had
+     * chosen a number they had typed themselves.
+     */
+    it('still credits the person who set a grade that has been released', async () => {
+      await renderWithGrades({
+        p1: { grade: 7, gradedManually: false, gradeSource: 'MANUAL' },
+      });
+
+      expect(screen.getByTestId('grading-p1').textContent).toBe('Manual override');
+    });
+
+    // The badge describes what is stored. Typing into the box does not make it true yet.
+    it('does not relabel a grade that has only been typed', async () => {
+      await renderWithGrades({});
+
+      fireEvent.change(screen.getByLabelText(/Grade for Problem One/), {
+        target: { value: '5' },
+      });
+
+      expect(screen.getByTestId('grading-p1').textContent).toBe('Not graded');
+    });
+  });
+
+  it('warns that saving here holds the grades against the autograder', async () => {
     const fetchMock = vi.fn((url: string): Promise<FetchResult> => {
       if (url === '/api/courses/c1/assignments/a1') {
         return Promise.resolve({ ok: true, json: async () => assignmentPayload });
@@ -153,10 +229,7 @@ describe('GradeBreakdownDialog', () => {
     await waitFor(() => {
       expect(screen.getByTestId('table-rows').textContent).toBe('2');
     });
-
-    // p1 is autograded, p2 is manual.
-    expect(screen.getByTestId('grading-p1').textContent).toBe('Autograded');
-    expect(screen.getByTestId('grading-p2').textContent).toBe('Manual');
+    expect(screen.getByText(/re-running the autograder will not change them/i)).toBeInTheDocument();
   });
 
   it('handles a 204 on problem-grades (rows with null grades, no crash)', async () => {

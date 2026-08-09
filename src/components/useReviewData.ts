@@ -19,8 +19,10 @@ export type ReviewDataResponse = {
       feedback: string | null;
       /** The value this student's group was given, when the grade came from a group grade. */
       groupGradeValue?: number | null;
-      /** Set by a person rather than the autograder, which therefore will not overwrite it. */
+      /** Held against automatic grading, so a re-run will not overwrite it. */
       gradedManually?: boolean;
+      /** Who produced the number. Not the same question as the flag above. */
+      gradeSource?: 'AUTOGRADER' | 'MANUAL';
     }
   >;
   /** True when the ASSIGNMENT is a group assignment, whatever this student's group is. */

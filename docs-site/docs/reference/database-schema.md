@@ -504,6 +504,7 @@ erDiagram
   Float grade
   String feedback "nullable"
   Boolean gradedManually
+  GradeSource gradeSource
   DateTime createdAt
   DateTime updatedAt
   String assignmentId FK
@@ -570,8 +571,18 @@ Properties as follows:
 - `grade`: Points awarded.
 - `feedback`: Comment recorded with the grade.
 - `gradedManually`
-  > Whether a staff member set this grade by hand. Automatic grading will not overwrite a grade
-  > that was, so re-running the grader cannot undo a person's decision.
+  > Whether this grade is held against automatic grading. Re-running the grader skips a held
+  > grade, so it cannot undo a person's decision.
+  >
+  > This is a hold, NOT a record of who graded. It starts true for every hand-entered grade,
+  > but staff can release one (handing it back to the grader) or hold an autograded one, and
+  > after either the flag says nothing about where the number came from. Use `gradeSource`
+  > for that.
+- `gradeSource`
+  > Who produced the number. Separate from the hold above because the two come apart: a
+  > released manual grade is still a manual grade, and a held autograded one is still the
+  > autograder's. Reading the hold as provenance told a grader who had released their own
+  > grade that "the autograder set this grade".
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
 - `assignmentId`: The assignment.

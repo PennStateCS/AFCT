@@ -24,6 +24,21 @@ Select **Refresh** after grading in another tab or when you want to load the lat
 
 Each score must be between zero and that problem's maximum points. Saving the breakdown updates the assignment total shown in the gradebook.
 
+Grades you save here are held, so re-running the autograder will not change them.
+
+### Where each grade came from
+
+The **Grading** column reports who produced the score, which is not the same as how the problem is set up:
+
+| Badge | Meaning |
+| --- | --- |
+| **Autograded** | The autograder produced this score. |
+| **Manual override** | Someone entered this score on a problem the autograder also grades. |
+| **Manually graded** | Someone entered this score on a problem that is not automatically graded. |
+| **Not graded** | No score has been recorded yet. |
+
+A padlock next to the badge means the autograder cannot change that score. It appears only on problems the autograder grades, because nothing overwrites a score on a hand-graded problem. Releasing a held score hands it back to the autograder, and is done from the assignment's [Submissions](submissions.md) tab.
+
 You can also grade from the assignment's [Submissions](submissions.md) tab. That view is better when you need to inspect files, autograder feedback, or discussion before entering a score.
 
 ## Export grades

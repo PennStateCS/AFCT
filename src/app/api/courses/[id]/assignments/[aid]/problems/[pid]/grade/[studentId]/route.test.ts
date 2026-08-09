@@ -319,11 +319,13 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
           grade: 90,
           feedback: 'Great',
           gradedManually: true,
+          gradeSource: 'MANUAL',
         },
         update: {
           grade: 90,
           feedback: 'Great',
           gradedManually: true,
+          gradeSource: 'MANUAL',
         },
       });
       await expect(res.json()).resolves.toEqual({
