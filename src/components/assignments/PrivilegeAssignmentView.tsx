@@ -19,6 +19,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import {
   Dialog,
@@ -484,6 +485,13 @@ export default function AssignmentDashboardPage({
                 />
                 Published
               </label>
+              {/* Whether this is group work belongs to the assignment, so it is stated once
+                  here rather than repeated beside every student on the Submissions tab. The
+                  dates are NOT here on purpose: those resolve per student through date
+                  overrides, so a single header value would hide an extension. */}
+              <Badge variant="outline" className="shrink-0 text-xs font-normal">
+                {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
+              </Badge>
               {/* Quick jump to another assignment in this course. */}
               <div className="ml-auto w-56 shrink-0">
                 <SearchableSelect

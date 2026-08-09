@@ -159,6 +159,9 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/problems/${pid}`,
   assignmentProblemGrade: (courseId: string, aid: string, pid: string, studentId: string) =>
     `/api/courses/${courseId}/assignments/${aid}/problems/${pid}/grade/${studentId}`,
+  /** Grade every member of a group on one problem in a single write. */
+  assignmentGroupGrade: (courseId: string, aid: string, pid: string, groupId: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/problems/${pid}/group-grade/${groupId}`,
   assignmentProblemGrades: (courseId: string, aid: string, studentId: string) =>
     `/api/courses/${courseId}/assignments/${aid}/problem-grades/${studentId}`,
   assignmentProblemGradesSummary: (courseId: string, aid: string) =>

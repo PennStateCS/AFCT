@@ -115,19 +115,15 @@ const renderWithGroup = (groupInfo: Record<string, unknown>) => {
   );
 };
 
-describe('individual versus group', () => {
+describe('the selected student\'s own schedule', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
   });
 
-  it('says Individual for an assignment that is not a group assignment', async () => {
-    renderWithGroup({ isGroupAssignment: false, isGroup: false, group: null, members: [] });
-
-    await waitFor(() => expect(screen.getByText('Individual')).toBeInTheDocument());
-  });
-
-  it('names the group when the student has one', async () => {
+  // Whether the assignment is group work now lives in the assignment header, since it never
+  // changes as you page through students. What belongs here is what DOES change.
+  it('names the group this student submits with', async () => {
     renderWithGroup({
       isGroupAssignment: true,
       isGroup: true,
@@ -135,31 +131,98 @@ describe('individual versus group', () => {
       members: [{ id: 's2', firstName: 'Grace', lastName: 'Hopper' }],
     });
 
-    await waitFor(() => expect(screen.getByText('Group (Group 3)')).toBeInTheDocument());
-    expect(screen.getByText(/Grace Hopper/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/Submitting with Group 3: Grace Hopper/)).toBeInTheDocument(),
+    );
   });
 
-  // The case the old code got wrong: it read the student's group membership rather than
-  // the assignment, so this rendered as a normal individual submission.
-  it('still says Group, and warns, when the student is in no group', async () => {
+  // A group assignment with nobody to submit alongside is a setup mistake, not a fact about
+  // this student's work.
+  it('warns when the student is in no group', async () => {
     renderWithGroup({ isGroupAssignment: true, isGroup: false, group: null, members: [] });
 
-    await waitFor(() => expect(screen.getByText('Group')).toBeInTheDocument());
-    expect(screen.getByText(/Not in a group/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Not in a group/)).toBeInTheDocument());
   });
 
   it('does not warn on an individual assignment', async () => {
     renderWithGroup({ isGroupAssignment: false, isGroup: false, group: null, members: [] });
 
-    await waitFor(() => expect(screen.getByText('Individual')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Due:/)).toBeInTheDocument());
     expect(screen.queryByText(/Not in a group/)).not.toBeInTheDocument();
+  });
+
+  // Which kind matters: a whole group being given longer is a different situation from one
+  // student being given longer, and the resolver already knows which it was.
+  it('distinguishes a group override from a student one', async () => {
+    renderWithGroup({
+      isGroupAssignment: true,
+      isGroup: true,
+      group: { id: 'g1', name: 'Group 3' },
+      members: [],
+      effective: {
+        unlockAt: null,
+        dueDate: '2026-02-01T00:00:00.000Z',
+        lateCutoff: null,
+        allowLateSubmissions: false,
+        source: 'group-override',
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText('(group override)')).toBeInTheDocument());
+  });
+
+  it('labels a student-targeted override', async () => {
+    renderWithGroup({
+      isGroupAssignment: false,
+      isGroup: false,
+      group: null,
+      members: [],
+      effective: {
+        unlockAt: null,
+        dueDate: '2026-02-01T00:00:00.000Z',
+        lateCutoff: null,
+        allowLateSubmissions: false,
+        source: 'student-override',
+      },
+    });
+
+    await waitFor(() => expect(screen.getByText('(student override)')).toBeInTheDocument());
+  });
+
+  // Overrides merge field by field, so one can move the late window and leave the due date
+  // alone. Marking Due regardless would point at the one value that did not change.
+  it('marks only the fields the override actually changed', async () => {
+    renderWithGroup({
+      isGroupAssignment: false,
+      isGroup: false,
+      group: null,
+      members: [],
+      effective: {
+        unlockAt: null,
+        // Same due date the assignment has; only the late window moved.
+        dueDate: '2026-01-10T00:00:00.000Z',
+        lateCutoff: '2026-01-20T00:00:00.000Z',
+        allowLateSubmissions: true,
+        source: 'student-override',
+      },
+    });
+
+    // Allow Late and Late Cutoff changed, the due date did not.
+    await waitFor(() => expect(screen.getAllByText('(student override)')).toHaveLength(2));
+    const due = screen.getByText('Due:').parentElement;
+    expect(due?.textContent).not.toContain('override');
   });
 
   // The whole point of the fold: this component must not make its own per-student call.
   it('does not fetch student-group itself', async () => {
-    renderWithGroup({ isGroupAssignment: true, isGroup: true, group: { id: 'g1', name: 'G' }, members: [] });
+    renderWithGroup({
+      isGroupAssignment: true,
+      isGroup: true,
+      group: { id: 'g1', name: 'G' },
+      members: [],
+    });
 
-    await waitFor(() => expect(screen.getByText('Group (G)')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Submitting with G/)).toBeInTheDocument());
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
     const urls = fetchMock.mock.calls.map((c) => String(c[0]));
     expect(urls.some((u) => u.includes('student-group'))).toBe(false);

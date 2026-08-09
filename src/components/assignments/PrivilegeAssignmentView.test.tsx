@@ -362,6 +362,18 @@ describe('PrivilegeAssignmentView — header', () => {
     expect(link).toHaveAttribute('href', '/dashboard/courses/c1');
   });
 
+  // Whether this is group work never changes as you page through students, so it is stated
+  // once in the header rather than repeated beside every student on the Submissions tab.
+  it('says whether the assignment is group work', () => {
+    renderView();
+    expect(screen.getByText('Individual assignment')).toBeInTheDocument();
+  });
+
+  it('says so when the assignment uses a group set', () => {
+    renderView({ initialAssignment: makeAssignment({ groupSetId: 'gs1' }) as never });
+    expect(screen.getByText('Group assignment')).toBeInTheDocument();
+  });
+
   it('renders the description in the editable form', async () => {
     renderView();
     // The Assignment tab shows a title input plus the rich-description editor, seeded with the

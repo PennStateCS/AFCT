@@ -58,6 +58,20 @@ their own higher limit in their assignment view, and the workspace header here s
 limit that applies to the selected student. A problem with unlimited submissions cannot
 be granted more.
 
+## Grade a group assignment
+
+On a group assignment the grade box adds the same **Grade** choice the discussion has, and it
+also defaults to the group. Entering a grade once records it for every member, so a shared
+submission does not have to be graded person by person.
+
+If some members already have a different grade, AFCT stops and names them with their current
+grades before doing anything, so a deliberate adjustment is never overwritten by accident.
+Confirm to apply, or cancel to leave everything as it was.
+
+To give one member something different, switch to **Only \<student\>** and grade them on their
+own. Their grade then shows **Adjusted from \<value\>**, so it is clear the difference was
+intended rather than a mistake.
+
 ## Use the discussion
 
 The **Discussion** panel belongs to the selected student and problem. Add a comment when you need to explain a score, ask for clarification, or leave feedback that does not fit the autograder result.

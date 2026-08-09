@@ -248,7 +248,15 @@ export const GET = withCourseAuth(
         }),
         prisma.assignmentProblemGrade.findMany({
           where: { assignmentId, studentId },
-          select: { problemId: true, grade: true, feedback: true, updatedAt: true },
+          // groupGradeValue lets the workspace mark a member whose grade was changed away
+          // from what their group was given.
+          select: {
+            problemId: true,
+            grade: true,
+            feedback: true,
+            updatedAt: true,
+            groupGradeValue: true,
+          },
         }),
       ]);
 
@@ -383,12 +391,21 @@ export const GET = withCourseAuth(
       }));
 
       const problemGrades = gradesRaw.reduce<
-        Record<string, { grade: number | null; feedback: string | null; updatedAt: string }>
+        Record<
+          string,
+          {
+            grade: number | null;
+            feedback: string | null;
+            updatedAt: string;
+            groupGradeValue: number | null;
+          }
+        >
       >((acc, record) => {
         acc[record.problemId] = {
           grade: record.grade ?? null,
           feedback: record.feedback ?? null,
           updatedAt: record.updatedAt.toISOString(),
+          groupGradeValue: record.groupGradeValue ?? null,
         };
         return acc;
       }, {});

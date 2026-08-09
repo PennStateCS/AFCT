@@ -296,6 +296,9 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
           grade: 10,
           feedback: 'Nice',
           updatedAt: updatedAt.toISOString(),
+          // Null unless the grade came from a group grade; the workspace uses it to mark a
+          // member whose grade was changed away from their group's.
+          groupGradeValue: null,
         },
       },
     });

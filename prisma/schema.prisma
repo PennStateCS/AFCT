@@ -618,11 +618,12 @@ model StudentGroup {
   updatedAt DateTime @updatedAt
 
   memberships         GroupMembership[]
-  assignmentAssignees AssignmentAssignee[] @relation("AssigneeGroupTarget")
-  assignmentOverrides AssignmentOverride[] @relation("OverrideGroupTarget")
-  submissionGrants    SubmissionGrant[]    @relation("SubmissionGrantGroupTarget")
+  assignmentAssignees AssignmentAssignee[]     @relation("AssigneeGroupTarget")
+  assignmentOverrides AssignmentOverride[]     @relation("OverrideGroupTarget")
+  submissionGrants    SubmissionGrant[]        @relation("SubmissionGrantGroupTarget")
   submissions         Submission[]
-  comments            Comment[]            @relation("CommentsAboutGroup")
+  comments            Comment[]                @relation("CommentsAboutGroup")
+  groupGrades         AssignmentProblemGrade[] @relation("GroupGradedMembers")
 
   // Unique group name within its set (case-insensitive + trimmed in the service
   // layer). Different sets may reuse the same group names.
@@ -798,7 +799,25 @@ model AssignmentProblemGrade {
   /// The student graded.
   studentId String
 
+  // Grading a group writes one of these rows per member, so every reader (the gradebook,
+  // the CSV export, statistics, an LMS carry-back) keeps finding a grade of its own on each
+  // student and needs to know nothing about groups.
+  //
+  // The two fields below only record where the row came from. Without them "this member's
+  // grade differs from their groupmates'" is ambiguous: it could be a deliberate adjustment
+  // for uneven contribution, or a group that was simply never graded together. Keeping the
+  // applied value makes it exact: adjusted means groupGradeValue is set and grade differs
+  // from it. SetNull so deleting a group leaves the grades themselves untouched.
+  groupGradeGroup   StudentGroup? @relation("GroupGradedMembers", fields: [groupGradeGroupId], references: [id], onDelete: SetNull)
+  /// The group whose group grade produced this row, when it came from one.
+  groupGradeGroupId String?
+  /// The value that group grade set, so a later individual change reads as an adjustment.
+  /// Outlives the group: deleting one nulls the id above but keeps this, so "adjusted away
+  /// from 8" stays true afterwards.
+  groupGradeValue   Float?
+
   @@unique([assignmentId, problemId, studentId])
+  @@index([groupGradeGroupId])
   @@index([assignmentId, problemId])
   @@index([assignmentId])
   @@index([studentId])

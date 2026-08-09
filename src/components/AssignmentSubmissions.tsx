@@ -15,6 +15,10 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+// The same loading indicator the tables use. It lives under data-table-status because that
+// is where it started, but it is the app's status renderer rather than a table-only one.
+import { DataTableLoading } from '@/components/ui/data-table-status';
 import dynamic from 'next/dynamic';
 
 // On demand: the grant dialog carries the form stack and was the last thing putting zod on the
@@ -221,6 +225,11 @@ export default function AssignmentSubmissions({
     studentGradeStatuses,
     handleGradeInputChange,
     saveProblemGrade,
+    gradeTarget,
+    setGradeTarget,
+    pendingGroupGrade,
+    confirmGroupGrade,
+    cancelGroupGrade,
   } = useProblemGrades({
     courseId,
     assignmentId,
@@ -231,6 +240,8 @@ export default function AssignmentSubmissions({
     reviewData,
     reviewQueryIsError,
     reviewError,
+    group: reviewData?.group,
+    groupMembers: reviewData?.groupMembers,
   });
 
   // All three loading flags previously flipped together; they track the cold load.
@@ -360,13 +371,7 @@ export default function AssignmentSubmissions({
     return (
       <div className="space-y-4">
         {heading}
-        <div role="status" className="flex min-h-[320px] flex-col items-center justify-center gap-3">
-          <div
-            aria-hidden="true"
-            className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4"
-          />
-          <p className="text-muted-foreground text-sm">Loading students...</p>
-        </div>
+        <DataTableLoading message="Loading students, please wait..." className="min-h-[320px]" />
       </div>
     );
   }
@@ -441,16 +446,10 @@ export default function AssignmentSubmissions({
                 No problems have been added to this assignment yet.
               </div>
             ) : showStudentDataLoading ? (
-              <div
-                role="status"
-                className="flex min-h-[320px] flex-col items-center justify-center gap-3"
-              >
-                <div
-                  aria-hidden="true"
-                  className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4"
-                />
-                <p className="text-muted-foreground text-sm">Loading submissions...</p>
-              </div>
+              <DataTableLoading
+                message="Loading submissions, please wait..."
+                className="min-h-[320px]"
+              />
             ) : (
               (() => {
                 const selectedSubs = selectedProblem
@@ -458,19 +457,30 @@ export default function AssignmentSubmissions({
                   : [];
                 const selectedComments = selectedProblem ? comments[selectedProblem.id] || [] : [];
 
-                // Staff can hand the selected student (or their group) extra attempts on
-                // the selected problem, on top of the shared cap.
-                const grantAction = selectedProblem ? (
-                  <div className="flex justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setGrantDialogOpen(true)}
-                      disabled={courseIsArchived}
-                    >
-                      Grant extra submissions
-                    </Button>
-                  </div>
+                // Staff can hand the selected student (or their group) extra attempts on the
+                // selected problem, on top of the shared cap. It sits in the Submissions
+                // panel header because that is what it acts on; floating above the layout it
+                // competed for attention with the grade box and pointed at nothing.
+                // Granting extra attempts only means something when there is a cap to add to.
+                // `max: null` from the limit resolver is "unlimited", which a problem gets by
+                // having a base of zero or less, so the button would promise nothing.
+                const problemLimit = selectedProblem
+                  ? reviewData?.problemLimits?.[selectedProblem.id]
+                  : undefined;
+                const hasSubmissionCap = problemLimit
+                  ? problemLimit.max !== null
+                  : (selectedProblem?.maxSubmissions ?? 0) > 0;
+
+                const grantAction = selectedProblem && hasSubmissionCap ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7"
+                    onClick={() => setGrantDialogOpen(true)}
+                    disabled={courseIsArchived}
+                  >
+                    Grant extra submissions
+                  </Button>
                 ) : null;
 
                 const listCard = (
@@ -504,6 +514,7 @@ export default function AssignmentSubmissions({
                     }
                     submissions={selectedSubs}
                     assignmentDueDate={assignmentDueDate}
+                    submissionsAction={grantAction}
                     showSubmitter={reviewIsGroup}
                     subjectName={
                       `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
@@ -555,6 +566,23 @@ export default function AssignmentSubmissions({
                       selectedProblem ? Boolean(savingProblemGrades[selectedProblem.id]) : false
                     }
                     isLoadingGrade={loadingProblemGrades}
+                    groupGradeValue={
+                      selectedProblem
+                        ? (reviewData?.problemGrades?.[selectedProblem.id]?.groupGradeValue ?? null)
+                        : null
+                    }
+                    gradeAudience={
+                      reviewData?.group
+                        ? {
+                            group: reviewData.group,
+                            studentName:
+                              `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+                              'this student',
+                            target: gradeTarget,
+                            onTargetChange: setGradeTarget,
+                          }
+                        : null
+                    }
                     isPrivilegedUser={true}
                   />
                 );
@@ -563,7 +591,6 @@ export default function AssignmentSubmissions({
                 if (isMobile) {
                   return (
                     <div className="flex flex-col gap-4">
-                      {grantAction}
                       {listCard}
                       <div className="print:col-span-2">{workspace}</div>
                     </div>
@@ -572,7 +599,6 @@ export default function AssignmentSubmissions({
 
                 return (
                   <div className="space-y-3">
-                    {grantAction}
                     <div className="grid grid-cols-[280px_minmax(0,1fr)] items-stretch gap-6 print:block">
                       <div className="min-w-0">{listCard}</div>
                       <div className="min-w-0 print:col-span-2">{workspace}</div>
@@ -603,6 +629,34 @@ export default function AssignmentSubmissions({
           onGranted={refreshReview}
         />
       )}
+
+      {/* Applying a group grade over members who already differ. Naming them and their
+          current grades makes overwriting somebody's deliberate adjustment a decision rather
+          than a side effect of a routine save. */}
+      <ConfirmDialog
+        open={!!pendingGroupGrade}
+        title={`Overwrite ${pendingGroupGrade?.conflicts.length === 1 ? 'a grade' : 'grades'} in ${pendingGroupGrade?.groupName ?? 'this group'}?`}
+        description={
+          pendingGroupGrade ? (
+            <>
+              <span className="block">
+                Giving {pendingGroupGrade.groupName} {pendingGroupGrade.grade} will replace what
+                these members already have:
+              </span>
+              <ul className="mt-2 list-disc pl-5">
+                {pendingGroupGrade.conflicts.map((c) => (
+                  <li key={c.studentId}>
+                    {c.name} currently has {c.grade}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null
+        }
+        confirmText="Overwrite and apply"
+        onConfirm={confirmGroupGrade}
+        onCancel={cancelGroupGrade}
+      />
 
       {openDialog.submission && (
         <SubmissionViewerDialog

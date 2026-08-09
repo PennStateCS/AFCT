@@ -147,6 +147,28 @@ export default function StudentNavigator({
   const showLateCutoff = eff ? eff.lateCutoff : (assignment?.lateCutoff ?? null);
   const isOverridden = !!eff && eff.source !== 'base';
 
+  /**
+   * Which fields an override actually changed.
+   *
+   * `effectiveDeadline` merges field by field, so one override row can move the late cutoff
+   * and leave the due date alone. A single marker on Due would then point at the one value
+   * that did not change. There is no per-field provenance in the payload, so compare the
+   * resolved values against the assignment's own.
+   */
+  const sameTime = (a?: string | Date | null, b?: string | Date | null) => {
+    if (!a || !b) return !a && !b;
+    return new Date(a).getTime() === new Date(b).getTime();
+  };
+  const overrideLabel = eff?.source === 'group-override' ? 'group override' : 'student override';
+  const dueOverridden = isOverridden && !sameTime(eff?.dueDate, assignment?.dueDate);
+  const allowLateOverridden =
+    isOverridden && !!eff && eff.allowLateSubmissions !== (assignment?.allowLateSubmissions ?? false);
+  const cutoffOverridden = isOverridden && !sameTime(eff?.lateCutoff, assignment?.lateCutoff);
+
+  const OverrideMark = () => (
+    <span className="text-primary ml-1 text-xs font-medium">({overrideLabel})</span>
+  );
+
   const filteredStudents = useMemo(() => {
     const f = studentFilter.trim().toLowerCase();
     if (!f) return students;
@@ -206,13 +228,12 @@ export default function StudentNavigator({
               <span>
                 <span className="font-semibold">Due:</span>{' '}
                 {showDueDate ? formatDateTimeInTimeZone(showDueDate, timezone) : '—'}
-                {isOverridden ? (
-                  <span className="text-primary ml-1 text-xs font-medium">(override)</span>
-                ) : null}
+                {dueOverridden ? <OverrideMark /> : null}
               </span>
               <span className="text-muted-foreground mx-2">•</span>
               <span>
                 <span className="font-semibold">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}
+                {allowLateOverridden ? <OverrideMark /> : null}
               </span>
               <span className="text-muted-foreground mx-2">•</span>
               <span>
@@ -220,27 +241,16 @@ export default function StudentNavigator({
                 {showAllowLate && showLateCutoff
                   ? formatDateTimeInTimeZone(showLateCutoff, timezone)
                   : 'Never'}
+                {cutoffOverridden ? <OverrideMark /> : null}
               </span>
-              {groupInfo ? (
-                <>
-                  <span className="text-muted-foreground mx-2">•</span>
-                  <span>
-                    <span className="font-semibold">Type:</span>{' '}
-                    {/* The assignment's own nature decides this label. Reading it off the
-                        student's group instead made a group assignment look individual for
-                        anyone who had not been put in a group yet. */}
-                    {groupInfo.isGroupAssignment ?? groupInfo.isGroup
-                      ? `Group${groupInfo.group ? ` (${groupInfo.group.name})` : ''}`
-                      : 'Individual'}
-                  </span>
-                </>
-              ) : null}
+
             </>
           ) : null}
         </span>
-        {groupInfo?.isGroup && groupInfo.members.length > 0 ? (
+        {groupInfo?.isGroup && groupInfo.group ? (
           <span className="text-muted-foreground block text-xs">
-            With: {groupInfo.members.map(memberName).join(', ')}
+            Submitting with {groupInfo.group.name}
+            {groupInfo.members.length > 0 ? `: ${groupInfo.members.map(memberName).join(', ')}` : ''}
           </span>
         ) : null}
         {/* A group assignment with nobody to submit alongside is a setup mistake, not a
@@ -254,7 +264,7 @@ export default function StudentNavigator({
         ) : null}
         {groupInfo?.isGroup && groupInfo.members.length === 0 ? (
           <span className="text-muted-foreground block text-xs">
-            The only member of {groupInfo.group?.name ?? 'their group'}.
+            The only member of that group.
           </span>
         ) : null}
       </div>

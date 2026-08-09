@@ -12,7 +12,15 @@ type SubmissionData = Submission[] | { submissions: Submission[] };
 export type ReviewDataResponse = {
   submissions?: Record<string, SubmissionData>;
   comments?: Array<DiscussionComment & { problemId?: string | null }>;
-  problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
+  problemGrades?: Record<
+    string,
+    {
+      grade: number | null;
+      feedback: string | null;
+      /** The value this student's group was given, when the grade came from a group grade. */
+      groupGradeValue?: number | null;
+    }
+  >;
   /** True when the ASSIGNMENT is a group assignment, whatever this student's group is. */
   isGroupAssignment?: boolean;
   /** True when the selected student submits this assignment as a group. */

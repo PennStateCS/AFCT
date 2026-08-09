@@ -274,7 +274,9 @@ export default function DiscussionPanel({
                   onSaveComment();
                 }
               }}
-              className="bg-background min-h-[80px]"
+              // --background is the PAGE grey, which reads dark sitting on a white card.
+              // --muted is the light surface token meant for a filled control like this.
+              className="bg-muted min-h-[80px]"
               aria-label="Add comment"
               hidden={courseIsArchived}
             />

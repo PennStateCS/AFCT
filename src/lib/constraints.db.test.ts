@@ -30,6 +30,7 @@ const ids = {
 };
 
 async function destroyFixtures() {
+  await prisma.assignmentProblemGrade.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.comment.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.submissionGrant.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.assignmentOverride.deleteMany({ where: { assignmentId: ids.assignment } });
@@ -108,6 +109,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  await prisma.assignmentProblemGrade.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.comment.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.submissionGrant.deleteMany({ where: { assignmentId: ids.assignment } });
   await prisma.assignmentOverride.deleteMany({ where: { assignmentId: ids.assignment } });
@@ -429,5 +431,87 @@ describe('deleting a group keeps its comments', () => {
     expect(after).not.toBeNull();
     expect(after?.aboutGroupId).toBeNull();
     expect(after?.content).toBe('Feedback that must outlive the group');
+  });
+});
+
+/**
+ * Grading a group writes one row per member. The two provenance columns say where a row came
+ * from, and are only meaningful as a pair: a group id with no value cannot tell an adjusted
+ * grade from an unadjusted one.
+ */
+describe('a grade records where it came from', () => {
+  const base = {
+    grade: 8,
+    assignmentId: ids.assignment,
+    problemId: ids.problem,
+    studentId: ids.user,
+  };
+
+  it('accepts an ordinary individual grade with no provenance', async () => {
+    const row = await prisma.assignmentProblemGrade.create({ data: base });
+    expect(row.groupGradeGroupId).toBeNull();
+    expect(row.groupGradeValue).toBeNull();
+  });
+
+  it('accepts a grade that came from a group grade', async () => {
+    const row = await prisma.assignmentProblemGrade.create({
+      data: { ...base, groupGradeGroupId: ids.group, groupGradeValue: 8 },
+    });
+    expect(row.groupGradeValue).toBe(8);
+  });
+
+  // An adjusted member: the row still remembers the group value it diverged from.
+  it('accepts a grade adjusted away from its group value', async () => {
+    const row = await prisma.assignmentProblemGrade.create({
+      data: { ...base, grade: 5, groupGradeGroupId: ids.group, groupGradeValue: 8 },
+    });
+    expect(row.grade).toBe(5);
+    expect(row.groupGradeValue).toBe(8);
+  });
+
+  it('refuses a group id with no recorded value', async () => {
+    await refusedBy('AssignmentProblemGrade_group_provenance', () =>
+      prisma.assignmentProblemGrade.create({
+        data: { ...base, groupGradeGroupId: ids.group },
+      }),
+    );
+  });
+
+  // The reverse is deliberately allowed: deleting a group nulls the id and leaves the
+  // value, so "adjusted away from 8" survives the group it came from.
+  it('accepts a recorded value whose group is gone', async () => {
+    const row = await prisma.assignmentProblemGrade.create({
+      data: { ...base, groupGradeValue: 8 },
+    });
+    expect(row.groupGradeGroupId).toBeNull();
+    expect(row.groupGradeValue).toBe(8);
+  });
+});
+
+/** Deleting a group must never delete a grade. It only loses its provenance. */
+describe('deleting a group keeps its grades', () => {
+  it('nulls the provenance instead of deleting the row', async () => {
+    const doomed = await prisma.studentGroup.create({
+      data: { name: `Doomed grades ${SUFFIX}`, groupSetId: ids.groupSet },
+    });
+    const row = await prisma.assignmentProblemGrade.create({
+      data: {
+        grade: 8,
+        assignmentId: ids.assignment,
+        problemId: ids.problem,
+        studentId: ids.user,
+        groupGradeGroupId: doomed.id,
+        groupGradeValue: 8,
+      },
+    });
+
+    await prisma.studentGroup.delete({ where: { id: doomed.id } });
+
+    const after = await prisma.assignmentProblemGrade.findUnique({ where: { id: row.id } });
+    expect(after).not.toBeNull();
+    expect(after?.grade).toBe(8);
+    expect(after?.groupGradeGroupId).toBeNull();
+    // The value stays, so an adjusted member still reads as adjusted afterwards.
+    expect(after?.groupGradeValue).toBe(8);
   });
 });

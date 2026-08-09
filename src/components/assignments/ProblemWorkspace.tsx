@@ -8,7 +8,9 @@ import { DataTable } from '@/components/ui/data-table';
 import ProblemHeader from '@/components/ProblemHeader';
 import ProblemGradeForm from '@/components/ProblemGradeForm';
 import WorkspacePanel from '@/components/WorkspacePanel';
+import { DataTableLoading } from '@/components/ui/data-table-status';
 import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
+import type { GradeAudience } from '@/components/ProblemGradeForm';
 import type {
   Comment as DiscussionComment,
   CommentAudience,
@@ -67,6 +69,12 @@ export type ProblemWorkspaceProps = {
   gradeError?: string | null;
   onGradeInputChange?: (value: string) => void;
   onSaveGrade?: () => void;
+  /** Control shown in the Submissions panel header, e.g. granting extra attempts. */
+  submissionsAction?: React.ReactNode;
+  /** Group assignments only: who a saved grade applies to. */
+  gradeAudience?: GradeAudience | null;
+  /** The value this student's group was given, when the grade came from one. */
+  groupGradeValue?: number | null;
   isSavingGrade?: boolean;
   isLoadingGrade?: boolean;
   isPrivilegedUser: boolean;
@@ -118,6 +126,9 @@ export default function ProblemWorkspace({
   gradeError = null,
   onGradeInputChange,
   onSaveGrade,
+  submissionsAction,
+  gradeAudience,
+  groupGradeValue,
   isSavingGrade = false,
   isLoadingGrade = false,
   isPrivilegedUser,
@@ -320,10 +331,41 @@ export default function ProblemWorkspace({
   ];
 
   return (
-    <div className="space-y-4 print:space-y-2">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="grid h-full items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] print:block print:space-y-2">
+      {/* Left column: what the problem is, then the work submitted for it. */}
+      <div className="flex min-w-0 flex-col gap-4">
           <ProblemHeader
-            className="min-w-0 lg:flex-1"
+            className="min-w-0"
+            action={
+              isPrivilegedUser && onGradeInputChange && onSaveGrade ? (
+                <ProblemGradeForm
+                  value={gradeInput}
+                  currentGrade={currentGrade}
+                  maxPoints={problem.maxPoints}
+                  disabled={courseIsArchived}
+                  isSaving={isSavingGrade}
+                  isLoading={isLoadingGrade}
+                  error={gradeError}
+                  onChange={onGradeInputChange}
+                  onSubmit={onSaveGrade}
+                  audience={gradeAudience}
+                  groupGradeValue={groupGradeValue}
+                  autograderStatus={submissions[0]?.status ?? null}
+                  // `submissions[0]!` preserves the prior pass-through exactly; `!` is
+                  // compile-only so runtime behavior is unchanged.
+                  onRerun={
+                    onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined
+                  }
+                />
+              ) : !isPrivilegedUser ? (
+                <div className="border-border text-foreground inline-flex items-center gap-2 rounded-full border bg-transparent px-3 py-2 text-xs whitespace-nowrap">
+                  <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
+                  <span>
+                    {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
+                  </span>
+                </div>
+              ) : null
+            }
             title={problem.title}
             description={problem.description ?? undefined}
             descriptionJson={(problem as { descriptionJson?: unknown }).descriptionJson}
@@ -334,70 +376,37 @@ export default function ProblemWorkspace({
             autograderEnabled={problem.autograderEnabled ?? undefined}
           />
 
-          {isPrivilegedUser && onGradeInputChange && onSaveGrade ? (
-            <ProblemGradeForm
-              value={gradeInput}
-              currentGrade={currentGrade}
-              maxPoints={problem.maxPoints}
-              disabled={courseIsArchived}
-              isSaving={isSavingGrade}
-              isLoading={isLoadingGrade}
-              error={gradeError}
-              onChange={onGradeInputChange}
-              onSubmit={onSaveGrade}
-              autograderStatus={submissions[0]?.status ?? null}
-              // `submissions[0]!` preserves the prior pass-through exactly; `!` is
-              // compile-only so runtime behavior is unchanged.
-              onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined}
+          {/* No panel around the table: it carries its own toolbar, column headers and pager,
+              so a band above it repeating "Submissions" on the Submissions tab added a frame
+              and a word without adding information. `tableLabel` still names it for assistive
+              tech, and the grant action sits with the table's other controls. */}
+          {submissionsLoading ? (
+            <DataTableLoading message="Loading submissions, please wait..." className="min-h-[320px]" />
+          ) : sortedSubmissions.length > 0 ? (
+            <DataTable
+              columns={submissionColumns}
+              data={sortedSubmissions}
+              storageKey="problem-submissions"
+              tableLabel="Submissions"
+              actionButtons={submissionsAction}
+              showExportButton={false}
+              defaultSorting={[{ id: 'submitted', desc: true }]}
+              emptyTitle="No submissions match the filters"
+              emptyDescription="Adjust the filters to see more."
+              emptyIcon={FileText}
             />
-          ) : !isPrivilegedUser ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-transparent px-3 py-2 text-xs whitespace-nowrap text-foreground">
-              <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
-              <span>
-                {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
-              </span>
+          ) : (
+            <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed p-4 text-sm">
+              <span>No submissions yet.</span>
+              {submissionsAction}
             </div>
-          ) : null}
-        </div>
+          )}
+      </div>
 
-      <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          {/* Right column: the discussion, full height beside the rest. */}
           <WorkspacePanel
-            title="Submissions"
-            icon={<FileText className="h-4 w-4" />}
             className="h-full"
-            contentClassName="p-2"
-          >
-            {submissionsLoading ? (
-              <div
-                role="status"
-                className="flex min-h-[320px] flex-col items-center justify-center gap-3"
-              >
-                <div
-                  aria-hidden="true"
-                  className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4"
-                />
-                <p className="text-muted-foreground text-sm">Loading submissions...</p>
-              </div>
-            ) : sortedSubmissions.length > 0 ? (
-              <DataTable
-                columns={submissionColumns}
-                data={sortedSubmissions}
-                storageKey="problem-submissions"
-                tableLabel="Submissions"
-                showExportButton={false}
-                defaultSorting={[{ id: 'submitted', desc: true }]}
-                emptyTitle="No submissions match the filters"
-                emptyDescription="Adjust the filters to see more."
-                emptyIcon={FileText}
-              />
-            ) : (
-              <div className="text-muted-foreground space-y-2 rounded-md border border-dashed p-4 text-center text-sm">
-                <p>No submissions yet.</p>
-              </div>
-            )}
-          </WorkspacePanel>
-
-          <WorkspacePanel
+            contentClassName="flex flex-col"
             title={`Discussion (${normalizedComments.length})`}
             icon={<MessageSquare className="h-4 w-4" />}
           >
@@ -420,7 +429,6 @@ export default function ProblemWorkspace({
               />
             )}
           </WorkspacePanel>
-        </div>
     </div>
   );
 }
