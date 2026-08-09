@@ -70,6 +70,17 @@ export type GradeHoldDescriptor = {
    */
   emphasis: boolean;
   action: GradeHoldAction | null;
+  /**
+   * The same information split into its two halves, for surfaces with room to show them
+   * side by side. `label` above is the two crossed together, which is what a single line
+   * has to do; a table can give each its own column and let the reader do the crossing.
+   */
+  parts: {
+    /** How the problem is configured. True of the problem, whether or not it is graded. */
+    problemGrading: { label: string; detail: string };
+    /** Who produced this particular score. */
+    origin: { label: string; detail: string };
+  };
 };
 
 const RELEASE: GradeHoldAction = {
@@ -88,6 +99,37 @@ const HOLD: GradeHoldAction = {
   hold: true,
   confirm: null,
 };
+
+/**
+ * The two halves, for a table that gives each its own column. Kept here rather than in the
+ * table so the words match the single-line wording the review page uses.
+ */
+function partsFor(
+  autograderEnabled: boolean,
+  gradeSource: GradeSource,
+  hasGrade: boolean,
+): GradeHoldDescriptor['parts'] {
+  return {
+    // Phrased as the autograder being on or off, matching the problem list and the problem
+    // header. "Automatic"/"Manual" would put a second "Manual" badge in the same row as the
+    // grade source, meaning something different: how the problem is set up, not who graded.
+    problemGrading: autograderEnabled
+      ? {
+          label: 'Autograder on',
+          detail: 'This problem is graded by the autograder.',
+        }
+      : {
+          label: 'Autograder off',
+          detail:
+            'This problem is graded by hand. Re-running the evaluator gives feedback without changing the grade.',
+        },
+    origin: !hasGrade
+      ? { label: 'Not graded', detail: 'No grade has been recorded for this problem yet.' }
+      : gradeSource === 'MANUAL'
+        ? { label: 'Manual', detail: 'A person entered this grade.' }
+        : { label: 'Autograder', detail: 'The autograder produced this grade.' },
+  };
+}
 
 /**
  * Resolve the three facts into everything a surface needs: the label, the sentence, whether
@@ -112,6 +154,7 @@ export function describeGradeHold({
       held: false,
       emphasis: false,
       action: null,
+      parts: partsFor(autograderEnabled, gradeSource, hasGrade),
     };
   }
 
@@ -131,6 +174,7 @@ export function describeGradeHold({
           held: gradedManually,
           emphasis: false,
           action: null,
+          parts: partsFor(autograderEnabled, gradeSource, hasGrade),
         }
       : {
           state: 'autograded',
@@ -140,6 +184,7 @@ export function describeGradeHold({
           held: gradedManually,
           emphasis: false,
           action: null,
+          parts: partsFor(autograderEnabled, gradeSource, hasGrade),
         };
   }
 
@@ -153,6 +198,7 @@ export function describeGradeHold({
       held: gradedManually,
       emphasis: true,
       action: gradedManually ? RELEASE : HOLD,
+      parts: partsFor(autograderEnabled, gradeSource, hasGrade),
     };
   }
 
@@ -165,5 +211,6 @@ export function describeGradeHold({
     held: gradedManually,
     emphasis: false,
     action: gradedManually ? RELEASE : HOLD,
+    parts: partsFor(autograderEnabled, gradeSource, hasGrade),
   };
 }

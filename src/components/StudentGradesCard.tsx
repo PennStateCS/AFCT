@@ -203,7 +203,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                                       problem.status.toLowerCase() == 'completed')
                                   ? 'Processed'
                                   : problem.grade === null
-                                    ? 'Not Graded'
+                                    ? 'Not graded'
                                     : 'Graded'}
                             </span>
                             <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">

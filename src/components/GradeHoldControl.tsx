@@ -56,6 +56,73 @@ export function GradeHoldBadge({
   );
 }
 
+/**
+ * How the problem itself is graded, as a badge. A property of the problem, so it reads the
+ * same whether or not anyone has been graded on it.
+ *
+ * Pairs with `GradeOriginBadge`: side by side in a table those two answer "how is this meant
+ * to be graded" and "who actually graded it", which is the pair `GradeHoldBadge` has to cross
+ * into one label when there is only room for one.
+ */
+export function ProblemGradingBadge({
+  autograderEnabled,
+  className,
+}: {
+  autograderEnabled: boolean;
+  className?: string;
+}) {
+  const { problemGrading } = describeGradeHold({
+    autograderEnabled,
+    // Neither of these reaches the half being read, but the resolver takes whole input.
+    gradeSource: 'AUTOGRADER',
+    gradedManually: false,
+    hasGrade: false,
+  }).parts;
+
+  return (
+    <Badge
+      variant="neutral"
+      className={cn('font-normal', className)}
+      title={problemGrading.detail}
+    >
+      {autograderEnabled ? <Bot aria-hidden="true" /> : <PenLine aria-hidden="true" />}
+      {problemGrading.label}
+    </Badge>
+  );
+}
+
+/**
+ * Who produced this particular score, as a badge, with a padlock when a re-run cannot change
+ * it. Says nothing about how the problem is configured; `ProblemGradingBadge` is that half.
+ */
+export function GradeOriginBadge({
+  className,
+  ...input
+}: GradeHoldInput & { className?: string }) {
+  const { parts, held, emphasis } = describeGradeHold(input);
+  const { origin } = parts;
+
+  const Icon = !input.hasGrade ? null : input.gradeSource === 'MANUAL' ? PenLine : Bot;
+  // Emphasized only where a person overrode an autograder that would otherwise have graded
+  // this. Reading it beside the Grading column, that is the row worth stopping on.
+  const variant = !input.hasGrade ? 'outline' : emphasis ? 'info' : 'neutral';
+  const showHold = held && input.autograderEnabled && input.hasGrade;
+
+  return (
+    <Badge variant={variant} className={cn('font-normal', className)} title={origin.detail}>
+      {Icon ? <Icon aria-hidden="true" /> : null}
+      {origin.label}
+      {showHold ? (
+        <>
+          <Lock aria-hidden="true" />
+          {/* The padlock is the only thing marking a held grade, so it needs words too. */}
+          <span className="sr-only">, held</span>
+        </>
+      ) : null}
+    </Badge>
+  );
+}
+
 type GradeHoldControlProps = GradeHoldInput & {
   /** Hold this grade against the autograder, or hand it back. */
   onChange: (hold: boolean) => void | Promise<void>;

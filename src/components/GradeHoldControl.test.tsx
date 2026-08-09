@@ -5,7 +5,12 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 
-import { GradeHoldControl, GradeHoldBadge } from './GradeHoldControl';
+import {
+  GradeHoldControl,
+  GradeHoldBadge,
+  GradeOriginBadge,
+  ProblemGradingBadge,
+} from './GradeHoldControl';
 
 const renderControl = (
   props: Partial<React.ComponentProps<typeof GradeHoldControl>> = {},
@@ -38,6 +43,69 @@ describe('GradeHoldBadge', () => {
     );
 
     expect(screen.getByText('Manually graded')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The two halves, for the gradebook breakdown, which has room for a column each. Together
+ * they must not lose the distinction the single badge crosses into one label.
+ */
+describe('the split badges', () => {
+  it('reports the problem setting without reference to any grade', () => {
+    const { rerender } = render(<ProblemGradingBadge autograderEnabled />);
+    expect(screen.getByText('Autograder on')).toBeInTheDocument();
+
+    rerender(<ProblemGradingBadge autograderEnabled={false} />);
+    expect(screen.getByText('Autograder off')).toBeInTheDocument();
+  });
+
+  // The pair that the merged label had to distinguish with different words. Here the origin
+  // reads the same for both and the Grading column carries the difference.
+  it('credits a person the same way on either kind of problem', () => {
+    const { rerender } = render(
+      <GradeOriginBadge autograderEnabled gradeSource="MANUAL" gradedManually hasGrade />,
+    );
+    expect(screen.getByText('Manual')).toBeInTheDocument();
+
+    rerender(
+      <GradeOriginBadge
+        autograderEnabled={false}
+        gradeSource="MANUAL"
+        gradedManually
+        hasGrade
+      />,
+    );
+    expect(screen.getByText('Manual')).toBeInTheDocument();
+  });
+
+  it('marks a held grade, and only where something could overwrite it', () => {
+    const { rerender } = render(
+      <GradeOriginBadge autograderEnabled gradeSource="MANUAL" gradedManually hasGrade />,
+    );
+    expect(screen.getByText(', held')).toBeInTheDocument();
+
+    rerender(
+      <GradeOriginBadge
+        autograderEnabled={false}
+        gradeSource="MANUAL"
+        gradedManually
+        hasGrade
+      />,
+    );
+    expect(screen.queryByText(', held')).not.toBeInTheDocument();
+  });
+
+  it('says so when nothing has been graded', () => {
+    render(
+      <GradeOriginBadge
+        autograderEnabled
+        gradeSource="AUTOGRADER"
+        gradedManually={false}
+        hasGrade={false}
+      />,
+    );
+
+    expect(screen.getByText('Not graded')).toBeInTheDocument();
   });
 });
 

@@ -46,7 +46,8 @@ vi.mock('@/components/ui/data-table', () => ({
     loading?: boolean;
   }) => {
     const gradeColumn = columns.find((c) => c.id === 'Grade');
-    const gradingColumn = columns.find((c) => c.id === 'Grading');
+    const gradingColumn = columns.find((c) => c.id === 'Problem Setting');
+    const originColumn = columns.find((c) => c.id === 'Grade Source');
     return (
       <div>
         <div data-testid="table-loading">{String(!!loading)}</div>
@@ -61,6 +62,13 @@ vi.mock('@/components/ui/data-table', () => ({
               <span data-testid={`grading-${r.problemId}`}>
                 {gradingColumn?.cell
                   ? (gradingColumn.cell as (ctx: { row: { original: Row } }) => React.ReactNode)({
+                      row: { original: r },
+                    })
+                  : null}
+              </span>
+              <span data-testid={`origin-${r.problemId}`}>
+                {originColumn?.cell
+                  ? (originColumn.cell as (ctx: { row: { original: Row } }) => React.ReactNode)({
                       row: { original: r },
                     })
                   : null}
@@ -140,11 +148,11 @@ describe('GradeBreakdownDialog', () => {
   });
 
   /**
-   * The Grading column reports where each grade came from. It used to report the problem's
-   * autograder setting instead, so p1 below (autograded problem, grade typed by a person)
-   * read as "Autograded" when a person had overridden it.
+   * Two columns: how the problem is graded, and who produced the score. They were one
+   * column showing only the problem's setting, so p1 below (autograded problem, grade
+   * typed by a person) read as "Autograded" when a person had overridden it.
    */
-  describe('the Grading column', () => {
+  describe('the Problem Setting and Grade Source columns', () => {
     const renderWithGrades = async (grades: Record<string, unknown>) => {
       const fetchMock = vi.fn((url: string): Promise<FetchResult> => {
         if (url === '/api/courses/c1/assignments/a1') {
@@ -163,9 +171,18 @@ describe('GradeBreakdownDialog', () => {
       });
     };
 
-    // p1 has the autograder on, p2 has it off. Both grades below were typed by a person,
-    // and only one of them overrode anything.
-    it('calls a hand-entered grade an override only where an autograder would run', async () => {
+    // The problem's own setting, which is true of the problem whether or not anyone has
+    // been graded on it. p1 has the autograder on, p2 has it off.
+    it('reports how each problem is set up, with or without a grade', async () => {
+      await renderWithGrades({});
+
+      expect(screen.getByTestId('grading-p1').textContent).toBe('Autograder on');
+      expect(screen.getByTestId('grading-p2').textContent).toBe('Autograder off');
+    });
+
+    // Both grades below were typed by a person, on problems set up differently. Problem
+    // Setting is what tells them apart now, so Grade Source reads the same for each.
+    it('credits a person for a hand-entered grade whatever the problem setting', async () => {
       await renderWithGrades({
         p1: { grade: 7, gradedManually: true, gradeSource: 'MANUAL' },
         p2: { grade: 15, gradedManually: true, gradeSource: 'MANUAL' },
@@ -174,8 +191,8 @@ describe('GradeBreakdownDialog', () => {
       // p1 also carries the padlock, since the autograder is what it is held against. p2
       // gets no padlock: nothing there would overwrite it, so a lock would imply a danger
       // that does not exist on a hand-graded problem.
-      expect(screen.getByTestId('grading-p1').textContent).toBe('Manual override, held');
-      expect(screen.getByTestId('grading-p2').textContent).toBe('Manually graded');
+      expect(screen.getByTestId('origin-p1').textContent).toBe('Manual, held');
+      expect(screen.getByTestId('origin-p2').textContent).toBe('Manual');
     });
 
     it('credits the autograder for its own grades, and says when there is none', async () => {
@@ -183,8 +200,8 @@ describe('GradeBreakdownDialog', () => {
         p1: { grade: 9, gradedManually: false, gradeSource: 'AUTOGRADER' },
       });
 
-      expect(screen.getByTestId('grading-p1').textContent).toBe('Autograded');
-      expect(screen.getByTestId('grading-p2').textContent).toBe('Not graded');
+      expect(screen.getByTestId('origin-p1').textContent).toBe('Autograder');
+      expect(screen.getByTestId('origin-p2').textContent).toBe('Not graded');
     });
 
     /**
@@ -197,7 +214,7 @@ describe('GradeBreakdownDialog', () => {
         p1: { grade: 7, gradedManually: false, gradeSource: 'MANUAL' },
       });
 
-      expect(screen.getByTestId('grading-p1').textContent).toBe('Manual override');
+      expect(screen.getByTestId('origin-p1').textContent).toBe('Manual');
     });
 
     // The badge describes what is stored. Typing into the box does not make it true yet.
@@ -208,7 +225,7 @@ describe('GradeBreakdownDialog', () => {
         target: { value: '5' },
       });
 
-      expect(screen.getByTestId('grading-p1').textContent).toBe('Not graded');
+      expect(screen.getByTestId('origin-p1').textContent).toBe('Not graded');
     });
   });
 

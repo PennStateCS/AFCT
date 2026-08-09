@@ -772,14 +772,17 @@ export default function SubmissionsClient() {
         accessorFn: (s) =>
           s.autograderEnabled
             ? getReviewStatusChip(s as ProblemSubmission).label
-            : 'Manually graded',
+            : 'Not autograded',
         cell: ({ row }) => (
           row.original.autograderEnabled ? (
             <StatusBadge chip={getReviewStatusChip(row.original as ProblemSubmission)} />
           ) : (
             <StatusBadge
               chip={{
-                label: 'Manually graded',
+                // Not "Manually graded": this column is the evaluator's verdict, and a
+                // hand-graded problem may have no grade at all. It also has to stay clear of
+                // the grade-source wording, where "Manual" means a person entered the grade.
+                label: 'Not autograded',
                 tone: 'gray',
                 variant: 'neutral',
                 title: 'The autograder is switched off for this problem.',

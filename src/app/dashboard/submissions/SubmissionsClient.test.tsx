@@ -573,7 +573,7 @@ describe('SubmissionsClient — beyond the autograder', () => {
 
     renderWithClient(<SubmissionsClient />);
 
-    expect(await screen.findByText('Manually graded')).toBeInTheDocument();
+    expect(await screen.findByText('Not autograded')).toBeInTheDocument();
     // Scoped to the table: "Correct" is also a choice in the Filters menu, so an unscoped
     // query would pass whatever the row said.
     expect(within(screen.getByRole('table')).queryByText('Correct')).not.toBeInTheDocument();

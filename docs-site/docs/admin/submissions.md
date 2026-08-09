@@ -2,7 +2,7 @@
 
 The **Submissions** page shows every submission across the AFCT installation, including what is still waiting to be graded and what is being graded now. It is useful when an administrator needs to look across courses, or to investigate an evaluator problem that is not limited to one of them.
 
-Problems with the autograder switched off appear here too. They never enter the queue, so their Status reads **Manually graded** rather than a queue state. The **Type** column says whether the work was handed in by a group or an individual.
+Problems with the autograder switched off appear here too. They never enter the queue, so their Result reads **Not autograded** rather than a queue state. The **Type** column says whether the work was handed in by a group or an individual.
 
 ## Choose the scope
 
