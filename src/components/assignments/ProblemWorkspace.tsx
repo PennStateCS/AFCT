@@ -7,7 +7,6 @@ import {
   ClipboardCheck,
   Download,
   MoreHorizontal,
-  MoreVertical,
   FileText,
   MessageSquare,
   RotateCcw,
@@ -16,7 +15,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { GradeOverrideDialog } from '@/components/dialogs/GradeOverrideDialog';
+import { Switch } from '@/components/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -93,8 +92,6 @@ export type ProblemWorkspaceProps = {
   gradedManually?: boolean;
   /** Hold the grade against the autograder, or hand it back. */
   onManualHoldChange?: (held: boolean) => void;
-  /** Set the grade and lock it, from the override dialog. */
-  onOverrideGrade?: (grade: number) => void;
   /** The group whose work this is, on a group assignment. */
   group?: { id: string; name: string } | null;
   /** The other members of that group. */
@@ -157,7 +154,6 @@ export default function ProblemWorkspace({
   submissionsAction,
   gradedManually = false,
   onManualHoldChange,
-  onOverrideGrade,
   group = null,
   groupMembers,
   gradeAudience,
@@ -169,7 +165,7 @@ export default function ProblemWorkspace({
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
   const [discussionOpen, setDiscussionOpen] = useState(true);
-  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   // Render each submission's date/time in the course/effective timezone (not the
   // reviewer's browser locale), so the time shown is the one that student submitted at.
   const { timezone, hour12 } = useEffectiveTimezone();
@@ -394,14 +390,14 @@ export default function ProblemWorkspace({
       <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4 lg:h-full">
           <div className="flex items-center gap-2">
             <FileText className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-            <h3 className="text-sm font-medium">Attempts</h3>
+            <h3 className="text-sm font-medium">Problem Attempts</h3>
+            {/* Across from the heading, matching the menu opposite in Problem Grade. */}
+            {isPrivilegedUser ? <div className="ml-auto">{submissionsAction}</div> : null}
           </div>
           <ProblemHeader
             className="min-w-0"
             action={
-              isPrivilegedUser ? (
-                submissionsAction
-              ) : (
+              isPrivilegedUser ? null : (
                 <div className="border-border text-foreground inline-flex items-center gap-2 rounded-full border bg-transparent px-3 py-2 text-xs whitespace-nowrap">
                   <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
                   <span>
@@ -431,7 +427,7 @@ export default function ProblemWorkspace({
               columns={submissionColumns}
               data={sortedSubmissions}
               storageKey="problem-submissions"
-              tableLabel="Attempts"
+              tableLabel="Problem attempts"
               // A handful of attempts for one student on one problem: search, filters and a
               // column picker are more chrome than the data underneath them.
               showToolbar={false}
@@ -455,48 +451,26 @@ export default function ProblemWorkspace({
                 <div className="flex items-center gap-2">
                   <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
                   <h3 className="text-sm font-medium">Problem Grade</h3>
-                  {onManualHoldChange ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="ml-auto"
-                          aria-label="Grade actions"
-                        >
-                          <MoreVertical className="h-4 w-4" aria-hidden="true" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {gradedManually ? (
-                          <DropdownMenuItem
-                            disabled={courseIsArchived}
-                            onClick={() => onManualHoldChange(false)}
-                          >
-                            Remove override
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem
-                            disabled={courseIsArchived}
-                            onClick={() => setOverrideOpen(true)}
-                          >
-                            Manual override
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  {/* Only meaningful where the autograder would otherwise write this grade.
+                      On a hand-graded problem every grade is manual and the switch would be a
+                      control with nothing on the other side of it. */}
+                  {problem.autograderEnabled && onManualHoldChange ? (
+                    <label className="text-muted-foreground ml-auto flex items-center gap-2 text-xs">
+                      <span>Manual override</span>
+                      <Switch
+                        checked={gradedManually}
+                        onCheckedChange={(v) => onManualHoldChange(!!v)}
+                        disabled={courseIsArchived}
+                        aria-label="Hold this grade against the autograder"
+                      />
+                    </label>
                   ) : null}
                 </div>
-                {gradedManually ? (
-                  <p className="text-muted-foreground text-xs">
-                    This grade is overridden and locked. Remove the override to edit it here.
-                  </p>
-                ) : null}
                 <ProblemGradeForm
                   value={gradeInput}
                   currentGrade={currentGrade}
                   maxPoints={problem.maxPoints}
-                  disabled={courseIsArchived || gradedManually}
+                  disabled={courseIsArchived}
                   isSaving={isSavingGrade}
                   isLoading={isLoadingGrade}
                   error={gradeError}
@@ -517,16 +491,38 @@ export default function ProblemWorkspace({
               <div className="flex flex-col gap-1 border-b pb-4">
                 <div className="flex items-center gap-2">
                   <Users className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-                  <h3 className="text-sm font-medium">{group.name} Members</h3>
+                  <h3 className="text-sm font-medium">
+                    {group.name} · {(groupMembers?.length ?? 0) + 1}{' '}
+                    {(groupMembers?.length ?? 0) + 1 === 1 ? 'member' : 'members'}
+                  </h3>
+                  {/* Collapsed by default: the count in the heading answers the usual
+                      question, and the names are only needed when something looks wrong. */}
+                  <button
+                    type="button"
+                    onClick={() => setMembersOpen((open) => !open)}
+                    aria-expanded={membersOpen}
+                    aria-controls="group-members"
+                    className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
+                  >
+                    <ChevronUp
+                      className={`h-4 w-4 transition-transform ${membersOpen ? '' : 'rotate-180'}`}
+                      aria-hidden="true"
+                    />
+                    <span className="sr-only">
+                      {membersOpen ? 'Collapse members' : 'Expand members'}
+                    </span>
+                  </button>
                 </div>
-                {/* Named here because both the grade above and the thread below can apply to
-                    all of them, so who "the group" is should not be a guess. */}
-                <p className="text-muted-foreground text-xs">
-                  {groupMembers && groupMembers.length > 0
-                    ? groupMembers
-                        .map((m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student')
-                        .join(', ')
-                    : 'No other members.'}
+                {/* The whole group, the student under review included: a list that omitted
+                    them would read as "everyone else", which is not who the grade and the
+                    thread apply to. */}
+                <p id="group-members" hidden={!membersOpen} className="text-muted-foreground text-xs">
+                  {[
+                    subjectName ?? 'This student',
+                    ...(groupMembers ?? []).map(
+                      (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student',
+                    ),
+                  ].join(', ')}
                 </p>
               </div>
             ) : null}
@@ -576,20 +572,6 @@ export default function ProblemWorkspace({
             </div>
           </div>
 
-      {problem ? (
-        <GradeOverrideDialog
-          open={overrideOpen}
-          onOpenChange={setOverrideOpen}
-          problemTitle={problem.title}
-          maxPoints={problem.maxPoints}
-          currentGrade={currentGrade}
-          saving={isSavingGrade}
-          onApply={(grade) => {
-            setOverrideOpen(false);
-            onOverrideGrade?.(grade);
-          }}
-        />
-      ) : null}
     </div>
   );
 }

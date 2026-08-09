@@ -13,6 +13,8 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { ProblemPicker } from '@/components/assignments/ProblemPicker';
 import { ProgressRing } from '@/components/assignments/ProgressRing';
+import { ReviewShortcutsDialog } from '@/components/assignments/ReviewShortcutsDialog';
+import { GRADE_INPUT_ID } from '@/components/ProblemGradeForm';
 import { StudentSchedule } from '@/components/assignments/StudentSchedule';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { queryKeys } from '@/lib/query-keys';
@@ -113,6 +115,7 @@ export default function AssignmentSubmissions({
   const epsSymbol = useEmptyStringSymbol(courseId);
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [grantDialogOpen, setGrantDialogOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Set on first open and never cleared, so the dynamic import above stays deferred.
   const [grantMounted, setGrantMounted] = useState(false);
   useEffect(() => {
@@ -205,6 +208,16 @@ export default function AssignmentSubmissions({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
+      // Grading is the reason to be here, so it gets a key of its own rather than a reach
+      // for the mouse after every problem change.
+      if (e.key === 'g' || e.key === 'G') {
+        const field = document.getElementById(GRADE_INPUT_ID);
+        if (field) {
+          e.preventDefault();
+          field.focus();
+        }
+        return;
+      }
       if (e.key >= '1' && e.key <= '9') {
         const problem = visibleProblems[Number(e.key) - 1];
         if (problem) {
@@ -249,7 +262,6 @@ export default function AssignmentSubmissions({
     handleGradeInputChange,
     saveProblemGrade,
     setManualHold,
-    overrideProblemGrade,
     gradeTarget,
     setGradeTarget,
     pendingGroupGrade,
@@ -467,7 +479,7 @@ export default function AssignmentSubmissions({
                   least load-bearing figure here, and the picker already shows it per problem. */}
               <div className="hidden min-w-0 items-center px-4 py-2 2xl:flex xl:flex-auto xl:py-0">
                 <ProgressRing
-                  label="Graded"
+                  label="Problems graded"
                   value={assignmentTotals.graded}
                   total={assignmentTotals.count}
                   srLabel={`${assignmentTotals.graded} of ${assignmentTotals.count} problems graded`}
@@ -478,6 +490,12 @@ export default function AssignmentSubmissions({
                   label="Assignment score"
                   value={assignmentTotals.earned}
                   total={assignmentTotals.totalPoints}
+                  // Only once everything is graded is the shortfall actually points lost.
+                  remainderTone={
+                    assignmentTotals.count > 0 && assignmentTotals.graded === assignmentTotals.count
+                      ? 'danger'
+                      : 'muted'
+                  }
                   srLabel={`${assignmentTotals.earned} of ${assignmentTotals.totalPoints} points`}
                 />
               </div>
@@ -522,7 +540,10 @@ export default function AssignmentSubmissions({
                   ? problemLimit.max !== null
                   : (selectedProblem?.maxSubmissions ?? 0) > 0;
 
-                const grantAction = selectedProblem && hasSubmissionCap ? (
+                // The menu itself always shows: it carries the keyboard shortcuts, which are
+                // useful whatever the problem's submission cap is. Only the grant item depends
+                // on there being a cap to add to.
+                const grantAction = selectedProblem ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" aria-label="Problem actions">
@@ -530,11 +551,16 @@ export default function AssignmentSubmissions({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={courseIsArchived}
-                        onClick={() => setGrantDialogOpen(true)}
-                      >
-                        Grant extra submissions
+                      {hasSubmissionCap ? (
+                        <DropdownMenuItem
+                          disabled={courseIsArchived}
+                          onClick={() => setGrantDialogOpen(true)}
+                        >
+                          Grant extra submissions
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuItem onClick={() => setShortcutsOpen(true)}>
+                        Keyboard shortcuts
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -566,9 +592,6 @@ export default function AssignmentSubmissions({
                     }
                     onManualHoldChange={(held) =>
                       selectedProblem && void setManualHold(selectedProblem.id, held)
-                    }
-                    onOverrideGrade={(grade) =>
-                      selectedProblem && void overrideProblemGrade(selectedProblem.id, grade)
                     }
                     showSubmitter={reviewIsGroup}
                     subjectName={
@@ -696,6 +719,8 @@ export default function AssignmentSubmissions({
         onConfirm={confirmGroupGrade}
         onCancel={cancelGroupGrade}
       />
+
+      <ReviewShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
       {openDialog.submission && (
         <SubmissionViewerDialog

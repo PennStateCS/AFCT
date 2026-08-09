@@ -212,19 +212,27 @@ export default function DiscussionPanel({
                           >
                             <X className="h-3 w-3 stroke-2" />
                           </button>
-                          <p className="pr-6 text-sm leading-relaxed whitespace-pre-wrap">
-                            {comment.content}
-                          </p>
-
-                          {/* Who can read this. Shown on every comment rather than only the
-                              private ones: a missing badge is not a reliable signal, and
-                              staff scanning an old thread cannot otherwise tell whether a
-                              remark went to one student or to their whole group. */}
+                          {/* Who can read this, leading the bubble opposite the delete
+                              control. Shown on every comment rather than only the private
+                              ones: a missing badge is not a reliable signal, and staff
+                              scanning an old thread cannot otherwise tell whether a remark
+                              went to one student or to their whole group. */}
                           {audienceLabel(comment) ? (
-                            <Badge variant="outline" className="mt-1 text-[0.7rem] font-normal">
+                            <Badge
+                              variant="outline"
+                              className={`mr-6 mb-1 text-[0.7rem] font-normal ${
+                                comment.aboutGroupId
+                                  ? 'bg-status-info-bg border-status-info-border text-status-info'
+                                  : 'bg-status-warning-bg border-status-warning-border text-status-warning'
+                              }`}
+                            >
                               {audienceLabel(comment)}
                             </Badge>
                           ) : null}
+
+                          <p className="pr-6 text-sm leading-relaxed whitespace-pre-wrap">
+                            {comment.content}
+                          </p>
 
                           <div className="mt-1 flex items-center justify-between gap-1 overflow-hidden whitespace-nowrap">
                             <span className="text-muted-foreground truncate text-xs">{name}</span>
@@ -246,24 +254,6 @@ export default function DiscussionPanel({
           )}
 
           <div className="space-y-2">
-            {/* Group assignments only. Defaults to the whole group, because the shared
-                submission is what is on screen, so the choice is stated plainly rather
-                than left to be inferred from a default nobody read. */}
-            {audience?.group && !courseIsArchived ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground text-xs font-medium">Send to</span>
-                <SegmentedControl
-                  name="comment-audience"
-                  value={audience.target}
-                  onValueChange={(v) => audience.onTargetChange(v as 'student' | 'group')}
-                  ariaLabel="Who this comment is for"
-                  options={[
-                    { value: 'group', label: audience.group.name },
-                    { value: 'student', label: `Only ${audience.studentName}` },
-                  ]}
-                />
-              </div>
-            ) : null}
             <Textarea
               placeholder={placeholder}
               value={commentText}
@@ -280,6 +270,26 @@ export default function DiscussionPanel({
               aria-label="Add comment"
               hidden={courseIsArchived}
             />
+            {/* Group assignments only. Defaults to the whole group, because the shared
+                submission is what is on screen, so the choice is stated plainly rather than
+                left to be inferred from a default nobody read. */}
+            {audience?.group && !courseIsArchived ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="text-muted-foreground text-xs font-medium">
+                  Send comment to:
+                </span>
+                <SegmentedControl
+                  name="comment-audience"
+                  value={audience.target}
+                  onValueChange={(v) => audience.onTargetChange(v as 'student' | 'group')}
+                  ariaLabel="Who this comment is for"
+                  options={[
+                    { value: 'group', label: 'Entire group' },
+                    { value: 'student', label: `${audience.studentName} only` },
+                  ]}
+                />
+              </div>
+            ) : null}
             <div className="flex justify-end">
               <Button
                 size="sm"

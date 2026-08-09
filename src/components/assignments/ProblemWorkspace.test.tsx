@@ -67,7 +67,7 @@ describe('ProblemWorkspace submissions area', () => {
       />,
     );
 
-    expect(screen.getByRole('table', { name: /Attempts/i })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /Problem attempts/i })).toBeInTheDocument();
   });
 
   // Granting sits on the problem's own title row, beside what it acts on, rather than in

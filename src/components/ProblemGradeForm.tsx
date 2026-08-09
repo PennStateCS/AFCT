@@ -13,6 +13,9 @@ export type GradeAudience = {
   onTargetChange: (target: 'student' | 'group') => void;
 };
 
+/** Shared with the page's keyboard handler, which focuses this field. */
+export const GRADE_INPUT_ID = 'problem-grade-input';
+
 type ProblemGradeFormProps = {
   value: string;
   currentGrade: number | null;
@@ -86,21 +89,21 @@ export default function ProblemGradeForm({
     sanitizedCurrent !== groupGradeValue;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col items-start gap-1">
       {/* Group assignments only. Defaults to the group, because one submission earns one
           grade; grading member by member is the same number typed N times, where a typo on
           the fourth is invisible. */}
       {audience?.group && !disabled ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground text-xs font-medium">Grade</span>
+        <div className="flex flex-col items-start gap-1">
+          <span className="text-muted-foreground text-xs font-medium">Apply grade to</span>
           <SegmentedControl
             name="grade-audience"
             value={audience.target}
             onValueChange={(v) => audience.onTargetChange(v as 'student' | 'group')}
             ariaLabel="Who this grade applies to"
             options={[
-              { value: 'group', label: audience.group.name },
-              { value: 'student', label: `Only ${audience.studentName}` },
+              { value: 'group', label: 'Entire group' },
+              { value: 'student', label: `${audience.studentName} Only` },
             ]}
           />
           {isAdjusted ? (
@@ -110,11 +113,13 @@ export default function ProblemGradeForm({
           ) : null}
         </div>
       ) : null}
-      <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
+      <span className="text-muted-foreground text-xs font-medium">Grade</span>
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-start gap-2">
         {/* The field and its "/N" suffix read as one control; the button is separate, so
             saving looks like an action rather than another part of the number. */}
         <div className="border-input focus-within:border-ring focus-within:ring-ring/50 flex w-fit items-stretch overflow-hidden rounded-md border shadow-xs focus-within:ring-[3px]">
           <Input
+            id={GRADE_INPUT_ID}
             type="number"
             inputMode="decimal"
             value={gradeValue}
@@ -139,10 +144,15 @@ export default function ProblemGradeForm({
               /{maxPoints}
             </span>
           )}
+          <Button
+            type="submit"
+            variant="secondary"
+            className="rounded-l-none whitespace-nowrap"
+            disabled={disableButton}
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </Button>
         </div>
-        <Button type="submit" className="whitespace-nowrap" disabled={disableButton}>
-          {isSaving ? 'Saving…' : 'Save Grade'}
-        </Button>
         {error ? (
         <p id="problem-grade-error" role="alert" className="text-destructive text-xs">
           {error}

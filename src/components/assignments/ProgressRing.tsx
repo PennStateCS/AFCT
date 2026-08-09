@@ -13,6 +13,12 @@ type ProgressRingProps = {
    * conveys nothing without one, and a percentage alone rarely answers the question.
    */
   srLabel: string;
+  /**
+   * How to draw the part that is NOT achieved. 'danger' reads it as points lost, which is
+   * only true once everything has been graded: before that the remainder is unknown, not
+   * lost, and a red ring would accuse a student of losing marks nobody has awarded yet.
+   */
+  remainderTone?: 'muted' | 'danger';
   className?: string;
 };
 
@@ -29,6 +35,7 @@ export function ProgressRing({
   total,
   display,
   srLabel,
+  remainderTone = 'muted',
   className = '',
 }: ProgressRingProps) {
   // An empty assignment (no points, no problems) is 0/0. Treat it as complete rather than
@@ -45,7 +52,14 @@ export function ProgressRing({
     <div className={`flex items-center gap-2 ${className}`}>
       <div className="relative hidden h-10 w-10 shrink-0 xl:block">
         <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90" aria-hidden="true">
-          <circle cx="20" cy="20" r={radius} fill="none" strokeWidth="4" className="stroke-muted" />
+          <circle
+            cx="20"
+            cy="20"
+            r={radius}
+            fill="none"
+            strokeWidth="4"
+            className={remainderTone === 'danger' ? 'stroke-status-danger-solid' : 'stroke-muted'}
+          />
           <circle
             cx="20"
             cy="20"

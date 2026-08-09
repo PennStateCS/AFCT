@@ -49,8 +49,12 @@ export function SegmentedControl({
             className={cn(
               'cursor-pointer rounded-[0.3rem] px-3 py-1 text-sm font-medium transition-colors',
               'has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-offset-1',
+              // --secondary is the documented "selected" step of the surface ladder in
+              // globals.css, and it is what the neighbouring nav buttons already use.
+              // --primary is a page-level action colour: a dark navy in light mode and a
+              // saturated blue in dark, both of which read as a button rather than a choice.
               checked
-                ? 'bg-primary text-primary-foreground shadow-sm'
+                ? 'bg-secondary text-secondary-foreground shadow-sm'
                 : 'text-foreground hover:bg-muted',
               disabled && 'pointer-events-none',
             )}
