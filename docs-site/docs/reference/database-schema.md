@@ -42,7 +42,17 @@ erDiagram
   DateTime expiresAt "nullable"
   DateTime revokedAt "nullable"
 }
+"SingleUseToken" {
+  String id PK
+  String tokenHash UK
+  SingleUseTokenPurpose purpose
+  String userId FK "nullable"
+  DateTime expiresAt
+  DateTime usedAt "nullable"
+  DateTime createdAt
+}
 "ClientApiToken" }o--|| "User" : user
+"SingleUseToken" }o--o| "User" : user
 ```
 
 ### `User`
@@ -102,6 +112,28 @@ Properties as follows:
 - `lastUsedAt`: When the token was last used, so unused tokens can be spotted.
 - `expiresAt`: When the token stops working. Empty means it does not expire on its own.
 - `revokedAt`: When the token was withdrawn. Once set, the token is refused.
+
+### `SingleUseToken`
+
+A token that works exactly once, within a time window: the password-reset link today, and
+the shape anything similar should reuse.
+
+Only the SHA-256 hash is stored, so a leaked database, or a leaked backup, does not hand
+anyone a working link. "Used exactly once" is enforced by a conditional update on `usedAt`
+rather than by reading and then writing, so two simultaneous clicks on the same link cannot
+both succeed.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `tokenHash`: sha256(token), never the plaintext.
+- `purpose`: What the token authorises. A token issued for one purpose is refused for another.
+- `userId`
+  > Who the token is for. Optional because not every future purpose has a user behind it
+  > (an LTI launch nonce, for instance, is issued before anyone is identified).
+- `expiresAt`: When the token stops working.
+- `usedAt`: When it was spent. Once set, the token is refused.
+- `createdAt`: When this record was created.
 
 ## Courses
 

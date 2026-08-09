@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   systemSettings: { findUnique: vi.fn() },
   activityLog: { deleteMany: vi.fn() },
+  singleUseToken: { deleteMany: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -13,6 +14,7 @@ const { pruneOnce, getRetentionDays } = __test__;
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.activityLog.deleteMany.mockResolvedValue({ count: 0 });
+  prismaMock.singleUseToken.deleteMany.mockResolvedValue({ count: 0 });
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -57,5 +59,28 @@ describe('pruneOnce', () => {
     prismaMock.systemSettings.findUnique.mockResolvedValue({ activityLogRetentionDays: 100 });
     prismaMock.activityLog.deleteMany.mockRejectedValue(new Error('boom'));
     await expect(pruneOnce()).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Expired single-use tokens share the log pruner's daily pass. Both are retention chores on
+ * the same schedule, so one loop is one thing to reason about. The property that matters is
+ * that they are independent: a sweep that cannot run must not stop the one beside it.
+ */
+describe('the single-use token sweep', () => {
+  it('deletes expired tokens', async () => {
+    prismaMock.singleUseToken.deleteMany.mockResolvedValue({ count: 3 });
+
+    await __test__.purgeTokensOnce();
+
+    expect(prismaMock.singleUseToken.deleteMany).toHaveBeenCalled();
+  });
+
+  it('logs and swallows a failure rather than stopping the pass', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    prismaMock.singleUseToken.deleteMany.mockRejectedValueOnce(new Error('db down'));
+
+    await expect(__test__.purgeTokensOnce()).resolves.toBeUndefined();
+    expect(consoleSpy).toHaveBeenCalled();
   });
 });
