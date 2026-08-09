@@ -4,7 +4,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import AutograderClient from './AutograderClient';
+import SubmissionsClient from './SubmissionsClient';
 
 // Fresh QueryClient per test (retry off, no lingering cache) so the submissions
 // query starts clean each time.
@@ -145,6 +145,8 @@ const SUBMISSIONS = [
     problemType: 'FA',
     submittedAt: '2026-01-15T00:00:00.000Z',
     status: 'COMPLETED',
+    autograderEnabled: true,
+    isGroupAssignment: false,
     grade: 8,
     correct: true,
     maxPoints: 10,
@@ -193,11 +195,11 @@ const lastQuery = (fetchMock: FetchMock) => {
   return JSON.parse(String((calls[calls.length - 1][1] as RequestInit).body));
 };
 
-describe('AutograderClient', () => {
+describe('SubmissionsClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
-    // AutograderClient.tsx does not import React, and the test transform uses
+    // SubmissionsClient.tsx does not import React, and the test transform uses
     // the classic JSX runtime, so its compiled `React.createElement` calls
     // resolve `React` from the global scope. Provide it without touching the
     // component. (This test file itself uses the same classic transform.)
@@ -207,7 +209,7 @@ describe('AutograderClient', () => {
   it('asks for the first page with an empty scope, without fanning out over courses', async () => {
     const fetchMock = installFetchRouter();
 
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
 
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
@@ -238,7 +240,7 @@ describe('AutograderClient', () => {
       capturedInit = init;
     });
 
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     expect(capturedInit?.method).toBe('POST');
@@ -256,7 +258,7 @@ describe('AutograderClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // 42 rows at 10 per page is 5 pages, and the footer counts the whole result set rather
@@ -286,7 +288,7 @@ describe('AutograderClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: /next page/i }));
@@ -309,7 +311,7 @@ describe('AutograderClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: /next page/i }));
@@ -335,7 +337,7 @@ describe('AutograderClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
 
     // While the POST is pending, the table shows the loading placeholder.
     await waitFor(() => {
@@ -352,7 +354,7 @@ describe('AutograderClient', () => {
 
   it('opens with nothing filtered, so every submission is on screen', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
 
     // The fixture row is graded, and it shows: the queue no longer opens narrowed to
     // outstanding work, so what is on screen is everything the pickers allow through.
@@ -363,7 +365,7 @@ describe('AutograderClient', () => {
 
   it('keeps Status and Submission as one filter under two headings', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // Two headings, so "where has it got to" and "how did it turn out" read as separate
@@ -375,7 +377,7 @@ describe('AutograderClient', () => {
 
   it('offers the row actions in a manage menu, including a link into submission review', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // One Manage control per row, named after the student so screen reader users can
@@ -401,7 +403,7 @@ describe('AutograderClient', () => {
 
   it('shows the grading result as a badge in its own Status column', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // Scoped to the grid, because the same words label the checkboxes in the Filters
@@ -426,7 +428,7 @@ describe('AutograderClient', () => {
 
   it('sorts through the server and returns to the first page', async () => {
     const fetchMock = installFetchRouter();
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // Scoped to the grid: "Student" also names an option in the search-scope picker.
@@ -440,7 +442,7 @@ describe('AutograderClient', () => {
 
   it('leaves the derived grade columns unsortable', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     // Grade is derived from `correct` and the problem's points, so there is no column to
@@ -453,7 +455,7 @@ describe('AutograderClient', () => {
 
   it('lists the submitted file, opening the viewer from its name and downloading from the icon', async () => {
     installFetchRouter();
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     const table = screen.getByRole('table');
@@ -478,7 +480,7 @@ describe('AutograderClient', () => {
     // The fixture is a correct attempt on a 10 point problem whose recorded grade is 8,
     // so the two numbers cannot be confused for one another.
     installFetchRouter();
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     const table = screen.getByRole('table');
@@ -504,7 +506,7 @@ describe('AutograderClient', () => {
         correct: null,
       },
     ]);
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     const table = screen.getByRole('table');
@@ -527,7 +529,7 @@ describe('AutograderClient', () => {
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('checkbox', { name: /^Incorrect/ }));
@@ -545,7 +547,7 @@ describe('AutograderClient', () => {
 
   it('sends the timing filter as its own dimension, so it ANDs with Status', async () => {
     const fetchMock = installFetchRouter();
-    renderWithClient(<AutograderClient />);
+    renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('checkbox', { name: /^Late/ }));
@@ -554,5 +556,42 @@ describe('AutograderClient', () => {
     await waitFor(() => {
       expect(lastQuery(fetchMock)).toMatchObject({ timing: ['late'], status: ['failed'] });
     });
+  });
+});
+
+describe('SubmissionsClient — beyond the autograder', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn());
+    vi.stubGlobal('React', React);
+  });
+
+  // The page lists everything handed in, so a hand-graded problem appears with no queue
+  // state. Showing it as "Incorrect" or "Pending" would be inventing one.
+  it('reports a hand-graded problem as manually graded', async () => {
+    installFetchRouter([{ ...SUBMISSIONS[0]!, autograderEnabled: false }]);
+
+    renderWithClient(<SubmissionsClient />);
+
+    expect(await screen.findByText('Manually graded')).toBeInTheDocument();
+    // Scoped to the table: "Correct" is also a choice in the Filters menu, so an unscoped
+    // query would pass whatever the row said.
+    expect(within(screen.getByRole('table')).queryByText('Correct')).not.toBeInTheDocument();
+  });
+
+  it('says whether the work was handed in as a group', async () => {
+    installFetchRouter([{ ...SUBMISSIONS[0]!, isGroupAssignment: true }]);
+
+    renderWithClient(<SubmissionsClient />);
+
+    expect(await screen.findByText('Group')).toBeInTheDocument();
+  });
+
+  it('says individual otherwise', async () => {
+    installFetchRouter();
+
+    renderWithClient(<SubmissionsClient />);
+
+    expect(await screen.findByText('Individual')).toBeInTheDocument();
   });
 });

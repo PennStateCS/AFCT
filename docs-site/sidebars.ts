@@ -101,7 +101,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'admin/courses',
             'admin/development-tests',
-            'admin/autograder',
+            'admin/submissions',
             'admin/system-logs',
             'admin/system-settings',
             'admin/system-status',

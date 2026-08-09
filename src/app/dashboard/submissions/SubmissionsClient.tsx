@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { ColumnDef, OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
-import { ChevronDown, Download, ExternalLink, Eye, File, FileCode2, RotateCcw } from 'lucide-react';
+import {
+  ChevronDown,
+  Download,
+  ExternalLink,
+  Eye,
+  File,
+  FileCode2,
+  RotateCcw,
+  User,
+  Users,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import type { Course } from '@prisma/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,6 +60,10 @@ type AssignmentItem = {
 // selection and quietly returned nothing for anything outside it.
 type SubmissionItem = {
   id: string;
+  /** False when the problem is hand-graded, so there is no queue state to report. */
+  autograderEnabled: boolean;
+  /** True when the assignment is group work. */
+  isGroupAssignment: boolean;
   studentId: string;
   courseId: string;
   assignmentId: string;
@@ -243,7 +258,7 @@ const SEARCH_FIELDS = [
   { value: 'file', label: 'File' },
 ];
 
-export default function AutograderClient() {
+export default function SubmissionsClient() {
   // Scope. Empty means "everything", so the page opens unfiltered without enumerating every
   // id in the installation, and the assignment/problem lists are only fetched once the admin
   // actually narrows. Selecting all of them used to fan out one request per course and then
@@ -595,6 +610,32 @@ export default function AutograderClient() {
         meta: { priority: 3 },
       },
       {
+        id: 'assignmentType',
+        header: 'Type',
+        // Whether the work was handed in as a group, which decides whether one submission
+        // stands for several students.
+        accessorFn: (s) => (s.isGroupAssignment ? 'Group' : 'Individual'),
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Badge
+            variant="outline"
+            className={`gap-1.5 text-xs font-normal ${
+              row.original.isGroupAssignment
+                ? 'bg-status-warning-bg border-status-warning-border text-status-warning'
+                : 'bg-status-info-bg border-status-info-border text-status-info'
+            }`}
+          >
+            {row.original.isGroupAssignment ? (
+              <Users className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <User className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {row.original.isGroupAssignment ? 'Group' : 'Individual'}
+          </Badge>
+        ),
+        meta: { priority: 3 },
+      },
+      {
         id: 'problem',
         header: 'Problem',
         accessorFn: (s) => s.problemTitle ?? s.problemId,
@@ -728,9 +769,23 @@ export default function AutograderClient() {
          * rather than on the column: the table shows one server-ordered page, so a
          * client-side faceted filter could only ever narrow the rows already on screen.
          */
-        accessorFn: (s) => getReviewStatusChip(s as ProblemSubmission).label,
+        accessorFn: (s) =>
+          s.autograderEnabled
+            ? getReviewStatusChip(s as ProblemSubmission).label
+            : 'Manually graded',
         cell: ({ row }) => (
-          <StatusBadge chip={getReviewStatusChip(row.original as ProblemSubmission)} />
+          row.original.autograderEnabled ? (
+            <StatusBadge chip={getReviewStatusChip(row.original as ProblemSubmission)} />
+          ) : (
+            <StatusBadge
+              chip={{
+                label: 'Manually graded',
+                tone: 'gray',
+                variant: 'neutral',
+                title: 'The autograder is switched off for this problem.',
+              }}
+            />
+          )
         ),
         meta: { priority: 1 },
       },
@@ -829,7 +884,7 @@ export default function AutograderClient() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <CardTitle role="heading" aria-level={1} className="text-2xl">
-              Autograder
+              Submissions
             </CardTitle>
           </div>
           {/* No bulk rerun here. It re-ran whatever the page's own selection held, which
@@ -903,7 +958,7 @@ export default function AutograderClient() {
           // defaults, so a browser holding the old one would keep showing the recorded
           // grade in place of the per-attempt one.
           storageKey="autograder-columns-v3"
-          tableLabel="Autograder"
+          tableLabel="Submissions"
           // The browser holds one page, so an export from here would silently write that
           // page and call it the table. Dropped rather than left to mislead, matching the
           // other server-paginated tables.
