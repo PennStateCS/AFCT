@@ -176,8 +176,8 @@ describe('GradeBreakdownDialog', () => {
     it('reports how each problem is set up, with or without a grade', async () => {
       await renderWithGrades({});
 
-      expect(screen.getByTestId('grading-p1').textContent).toBe('Automatic');
-      expect(screen.getByTestId('grading-p2').textContent).toBe('Manual');
+      expect(screen.getByTestId('grading-p1').textContent).toBe('Autograder on');
+      expect(screen.getByTestId('grading-p2').textContent).toBe('Autograder off');
     });
 
     // Both grades below were typed by a person, on problems set up differently. Problem

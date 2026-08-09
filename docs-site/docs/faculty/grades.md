@@ -34,8 +34,8 @@ Two columns answer two different questions, and it is worth keeping them apart.
 
 | Badge | Meaning |
 | --- | --- |
-| **Automatic** | The autograder grades this problem. |
-| **Manual** | This problem is graded by hand. Re-running the evaluator gives the student feedback but never sets a score. |
+| **Autograder on** | The autograder grades this problem. |
+| **Autograder off** | This problem is graded by hand. Re-running the evaluator gives the student feedback but never sets a score. |
 
 **Grade Source** is who produced this particular score.
 
@@ -45,7 +45,7 @@ Two columns answer two different questions, and it is worth keeping them apart.
 | **Manual** | Someone entered this score by hand. |
 | **Not graded** | No score has been recorded yet. |
 
-An **Automatic** problem with a **Manual** grade source is someone overriding the autograder, which is why that combination is highlighted.
+**Autograder on** with a grade source of **Manual** is someone overriding the autograder, which is why that combination is highlighted.
 
 A padlock beside the score's origin means the autograder cannot change it. It appears only on problems the autograder grades, because nothing overwrites a score on a hand-graded problem. Releasing a held score hands it back to the autograder, and is done from the assignment's [Submissions](submissions.md) tab.
 

@@ -228,7 +228,7 @@ export async function getAutograderSubmissionsPage(
 ): Promise<{ rows: AutograderSubmissionRow[]; total: number }> {
   // No autograder filter: this feeds the Submissions page, which lists everything a student
   // has handed in. A problem with the autograder switched off has no queue state, so its rows
-  // report "Manually graded" instead.
+  // report "Not autograded" instead.
   const and: Prisma.SubmissionWhereInput[] = [];
 
   const scope = scopeWhere(params);

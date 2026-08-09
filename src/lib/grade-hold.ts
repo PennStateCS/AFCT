@@ -110,13 +110,16 @@ function partsFor(
   hasGrade: boolean,
 ): GradeHoldDescriptor['parts'] {
   return {
+    // Phrased as the autograder being on or off, matching the problem list and the problem
+    // header. "Automatic"/"Manual" would put a second "Manual" badge in the same row as the
+    // grade source, meaning something different: how the problem is set up, not who graded.
     problemGrading: autograderEnabled
       ? {
-          label: 'Automatic',
+          label: 'Autograder on',
           detail: 'This problem is graded by the autograder.',
         }
       : {
-          label: 'Manual',
+          label: 'Autograder off',
           detail:
             'This problem is graded by hand. Re-running the evaluator gives feedback without changing the grade.',
         },

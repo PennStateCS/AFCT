@@ -53,10 +53,10 @@ describe('GradeHoldBadge', () => {
 describe('the split badges', () => {
   it('reports the problem setting without reference to any grade', () => {
     const { rerender } = render(<ProblemGradingBadge autograderEnabled />);
-    expect(screen.getByText('Automatic')).toBeInTheDocument();
+    expect(screen.getByText('Autograder on')).toBeInTheDocument();
 
     rerender(<ProblemGradingBadge autograderEnabled={false} />);
-    expect(screen.getByText('Manual')).toBeInTheDocument();
+    expect(screen.getByText('Autograder off')).toBeInTheDocument();
   });
 
   // The pair that the merged label had to distinguish with different words. Here the origin
