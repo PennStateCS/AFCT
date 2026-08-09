@@ -14,6 +14,21 @@ export type Point = { x: number; y: number };
 /** Diameter of a state node in the JFLAP viewer; sets the overlap threshold. */
 export const NODE_DIAMETER = 58;
 
+/**
+ * Border widths the viewer draws states with. Exported rather than left as literals in the
+ * stylesheet because the initial-state marker has to be placed against the OUTER edge of
+ * whichever border a state has, and cytoscape centres a border on the node boundary
+ * (`border-position` defaults to `center`), so half of it lies outside the nominal radius.
+ *
+ * A final state is drawn as a double border, which is JFLAP's two concentric circles. At 6px
+ * centred on a 29px radius, the outer circle sits at ~32 and the inner at ~26, with the gap
+ * between them straddling 29. That is why these two numbers have to reach the geometry: a
+ * marker placed against the nominal radius stops in the gap, so the arrow appears to pierce
+ * the outer circle and stop inside the ring.
+ */
+export const STATE_BORDER_WIDTH = 2;
+export const FINAL_STATE_BORDER_WIDTH = 6;
+
 /** How far a transition label sits off its edge, in pixels. */
 export const EDGE_LABEL_GAP = 12;
 
@@ -103,17 +118,25 @@ export function bestStartMarkerDirection(
 
 /**
  * Where the marker's box goes for a given direction: far enough out that the triangle's
- * point lands on the state's rim. The point sits half a box from the box's centre, so a
- * whole diameter from the state's centre puts it exactly on the rim.
+ * point lands against the outside of the state's rim. The point sits half a box from the
+ * box's centre, so the distance is the state's radius, plus the half of its border that is
+ * drawn outside the boundary, plus that half box.
+ *
+ * `borderWidth` is what makes a final state work. Its double border is wider, and reaching
+ * only to the nominal radius left the point in the gap between the two circles, so the
+ * arrow looked like it had pierced the outer one. An arrow stops at a state's outermost
+ * edge, whether the state is accepting or not.
  */
 export function startMarkerPosition(
   statePos: Point,
   angle: number = Math.PI,
   nodeDiameter: number = NODE_DIAMETER,
+  borderWidth: number = STATE_BORDER_WIDTH,
 ): Point {
+  const distance = nodeDiameter / 2 + borderWidth / 2 + START_MARKER_SIZE / 2;
   return {
-    x: statePos.x + Math.cos(angle) * nodeDiameter,
-    y: statePos.y + Math.sin(angle) * nodeDiameter,
+    x: statePos.x + Math.cos(angle) * distance,
+    y: statePos.y + Math.sin(angle) * distance,
   };
 }
 
