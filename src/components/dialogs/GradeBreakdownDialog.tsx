@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { GradeHoldBadge } from '@/components/GradeHoldControl';
+import { GradeOriginBadge, ProblemGradingBadge } from '@/components/GradeHoldControl';
 import type { GradeSource } from '@/lib/grade-hold';
 import { showToast } from '@/lib/toast';
 import { ClipboardList, Loader2 } from 'lucide-react';
@@ -223,14 +223,23 @@ export function GradeBreakdownDialog({
         cell: ({ row }) => <div className="truncate">{row.original.title}</div>,
         meta: { priority: 1 },
       },
+      // Two columns rather than one, because they answer two questions that were being
+      // collapsed into each other: how the problem is graded, and who produced this score.
+      // This used to be a single column showing only the problem's autograder setting, so a
+      // grade a person had typed on an autograded problem read as "Autograded".
       {
-        id: 'Grading',
-        header: 'Grading',
-        // Where this grade came from, which is not the same question as how the problem is
-        // set up. This column used to show the problem's autograder setting, so a grade a
-        // person had typed on an autograded problem read as "Autograded".
+        id: 'Problem Setting',
+        header: 'Problem Setting',
         cell: ({ row }) => (
-          <GradeHoldBadge
+          <ProblemGradingBadge autograderEnabled={row.original.autograderEnabled} />
+        ),
+        meta: { priority: 3 },
+      },
+      {
+        id: 'Grade Source',
+        header: 'Grade Source',
+        cell: ({ row }) => (
+          <GradeOriginBadge
             autograderEnabled={row.original.autograderEnabled}
             gradeSource={row.original.gradeSource}
             gradedManually={row.original.gradedManually}

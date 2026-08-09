@@ -28,16 +28,28 @@ Grades you save here are held, so re-running the autograder will not change them
 
 ### Where each grade came from
 
-The **Grading** column reports who produced the score, which is not the same as how the problem is set up:
+Two columns answer two different questions, and it is worth keeping them apart.
+
+**Problem Setting** is how the problem is set up. It reads the same whether or not the student has been graded yet.
 
 | Badge | Meaning |
 | --- | --- |
-| **Autograded** | The autograder produced this score. |
-| **Manual override** | Someone entered this score on a problem the autograder also grades. |
-| **Manually graded** | Someone entered this score on a problem that is not automatically graded. |
+| **Automatic** | The autograder grades this problem. |
+| **Manual** | This problem is graded by hand. Re-running the evaluator gives the student feedback but never sets a score. |
+
+**Grade Source** is who produced this particular score.
+
+| Badge | Meaning |
+| --- | --- |
+| **Autograder** | The autograder produced this score. |
+| **Manual** | Someone entered this score by hand. |
 | **Not graded** | No score has been recorded yet. |
 
-A padlock next to the badge means the autograder cannot change that score. It appears only on problems the autograder grades, because nothing overwrites a score on a hand-graded problem. Releasing a held score hands it back to the autograder, and is done from the assignment's [Submissions](submissions.md) tab.
+An **Automatic** problem with a **Manual** grade source is someone overriding the autograder, which is why that combination is highlighted.
+
+A padlock beside the score's origin means the autograder cannot change it. It appears only on problems the autograder grades, because nothing overwrites a score on a hand-graded problem. Releasing a held score hands it back to the autograder, and is done from the assignment's [Submissions](submissions.md) tab.
+
+Releasing a score does not change who is credited with it. A score you entered still reads as **Manual**; it simply loses the padlock.
 
 You can also grade from the assignment's [Submissions](submissions.md) tab. That view is better when you need to inspect files, autograder feedback, or discussion before entering a score.
 
