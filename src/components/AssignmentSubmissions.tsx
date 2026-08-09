@@ -10,12 +10,9 @@ import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import type { ProblemSubmission } from '@/lib/problem-submission';
-import StudentNavigator from './StudentNavigator';
-import { ProblemPicker } from '@/components/assignments/ProblemPicker';
-import { ProgressRing } from '@/components/assignments/ProgressRing';
+import { ReviewStrip } from '@/components/assignments/ReviewStrip';
 import { ReviewShortcutsDialog } from '@/components/assignments/ReviewShortcutsDialog';
 import { GRADE_INPUT_ID } from '@/components/ProblemGradeForm';
-import { StudentSchedule } from '@/components/assignments/StudentSchedule';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
@@ -431,75 +428,35 @@ export default function AssignmentSubmissions({
               <FileText className="h-6 w-6" /> Submissions
             </h2>
 
-            {/* One bar: who you are reviewing, when their work was due, which problem, and how
-                the assignment is going. Divided into cells rather than spaced apart, so the
-                regions read as parts of one control strip instead of loose groups. */}
-            <div className="mt-4 flex flex-col divide-y rounded-md border xl:py-3 xl:flex-row xl:items-stretch xl:divide-x xl:divide-y-0">
-              <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
-              <StudentNavigator
-                students={students}
-                selectedIndex={selectedIndex}
-                onSelectStudent={handleSelectChange}
-                onPrev={goPrev}
-                onNext={goNext}
-                gradeStatuses={studentGradeStatuses}
-                earnedByStudent={studentEarned}
-                totalPoints={assignmentTotals.totalPoints}
-                groupInfo={
-                  reviewData
-                    ? {
-                        isGroupAssignment: reviewData.isGroupAssignment,
-                        isGroup: !!reviewData.isGroup,
-                        group: reviewData.group ?? null,
-                        members: reviewData.groupMembers ?? [],
-                        effective: reviewData.effective,
-                      }
-                    : null
-                }
-              />
-              </div>
-              <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
-                <ProblemPicker
-                  problems={visibleProblems}
-                  selectedProblemId={selectedProblem?.id ?? null}
-                  onSelect={handleSelectProblem}
-                  grades={problemGrades}
-                />
-              </div>
-              <StudentSchedule
-                assignment={assignmentShell}
-                effective={reviewData?.effective ?? null}
-                loading={!assignmentShell}
-                timezone={timezone}
-              />
-              {/* A cell each, so the strip's rules separate them the way they separate the
-                  dates from the picker. They answer different questions: how much is done,
-                  and how it is going. */}
-              {/* Dropped first when the bar is tight: how many problems are graded is the
-                  least load-bearing figure here, and the picker already shows it per problem. */}
-              <div className="hidden min-w-0 items-center px-4 py-2 2xl:flex xl:flex-auto xl:py-0">
-                <ProgressRing
-                  label="Problems graded"
-                  value={assignmentTotals.graded}
-                  total={assignmentTotals.count}
-                  srLabel={`${assignmentTotals.graded} of ${assignmentTotals.count} problems graded`}
-                />
-              </div>
-              <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
-                <ProgressRing
-                  label="Assignment score"
-                  value={assignmentTotals.earned}
-                  total={assignmentTotals.totalPoints}
-                  // Only once everything is graded is the shortfall actually points lost.
-                  remainderTone={
-                    assignmentTotals.count > 0 && assignmentTotals.graded === assignmentTotals.count
-                      ? 'danger'
-                      : 'muted'
-                  }
-                  srLabel={`${assignmentTotals.earned} of ${assignmentTotals.totalPoints} points`}
-                />
-              </div>
-            </div>
+            <ReviewStrip
+              className="mt-4"
+              students={students}
+              selectedIndex={selectedIndex}
+              onSelectStudent={handleSelectChange}
+              onPrevStudent={goPrev}
+              onNextStudent={goNext}
+              gradeStatuses={studentGradeStatuses}
+              earnedByStudent={studentEarned}
+              groupInfo={
+                reviewData
+                  ? {
+                      isGroupAssignment: reviewData.isGroupAssignment,
+                      isGroup: !!reviewData.isGroup,
+                      group: reviewData.group ?? null,
+                      members: reviewData.groupMembers ?? [],
+                      effective: reviewData.effective,
+                    }
+                  : null
+              }
+              problems={visibleProblems}
+              selectedProblemId={selectedProblem?.id ?? null}
+              onSelectProblem={handleSelectProblem}
+              problemGrades={problemGrades}
+              assignment={assignmentShell}
+              effective={reviewData?.effective ?? null}
+              timezone={timezone}
+              totals={assignmentTotals}
+            />
           </div>
 
           <div role="region" aria-labelledby="review-student-heading">
