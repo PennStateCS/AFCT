@@ -143,6 +143,50 @@ EOF
   [[ "$output" == *"ADMIN_PASSWORD or ADMIN_PASSWORD_FILE is required"* ]]
 }
 
+# --- secret-encryption key -----------------------------------------------------
+
+# The key encrypts settings stored in the database (mail and sign-in credentials, later the
+# LTI signing key). Replacing it would make every one of those unreadable, so no path may
+# ever overwrite one that already exists.
+@test "an existing secret-encryption key is never replaced" {
+  write_complete_env
+  printf 'AFCT_SECRET_KEY=keepthisexactkeyvaluekeepthisexactkey\n' >> .env.production
+
+  run sh install.sh update
+  [ "$status" -eq 0 ]
+
+  run grep -q '^AFCT_SECRET_KEY=keepthisexactkeyvaluekeepthisexactkey$' .env.production
+  [ "$status" -eq 0 ]
+  # Exactly once: topping up must not append a duplicate line.
+  [ "$(grep -c '^AFCT_SECRET_KEY=' .env.production)" -eq 1 ]
+}
+
+# Installs predating secret encryption have no key, and an update is how they reach a version
+# that needs one. Without this they come up with no key and fail the first time an admin saves
+# a mail or sign-in credential, long after the update looked successful.
+@test "an update tops up a missing secret-encryption key" {
+  write_complete_env
+  run grep -q 'AFCT_SECRET_KEY' .env.production; [ "$status" -ne 0 ]
+
+  run sh install.sh update
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^AFCT_SECRET_KEY=.{32,}$' .env.production; [ "$status" -eq 0 ]
+}
+
+# Installing over an existing complete configuration deploys without rewriting the file, so
+# that path has to top the key up too.
+@test "deploying over an existing configuration tops up a missing key" {
+  write_complete_env
+  export ADMIN_EMAIL="admin@example.com"
+  export ADMIN_PASSWORD="Str0ng!Pass1"
+
+  run sh install.sh --non-interactive < /dev/null
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^AFCT_SECRET_KEY=.{32,}$' .env.production; [ "$status" -eq 0 ]
+}
+
 # --- config writing ------------------------------------------------------------
 
 @test "--non-interactive writes a complete, unquoted .env.production" {
@@ -154,6 +198,7 @@ EOF
   run grep -Eq '^DATABASE_URL=postgresql://' .env.production; [ "$status" -eq 0 ]
   run grep -Eq '^ADMIN_EMAIL=admin@example.com$' .env.production; [ "$status" -eq 0 ]
   run grep -Eq '^NEXTAUTH_SECRET=.+' .env.production; [ "$status" -eq 0 ]
+  run grep -Eq '^AFCT_SECRET_KEY=.+' .env.production; [ "$status" -eq 0 ]
   # Values are stored UNQUOTED so Compose v1 and v2 read them identically.
   run grep -q "ADMIN_PASSWORD='" .env.production; [ "$status" -ne 0 ]
   run grep -Eq '^ADMIN_PASSWORD=Str0ng!Pass1$' .env.production; [ "$status" -eq 0 ]

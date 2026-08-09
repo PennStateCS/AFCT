@@ -85,6 +85,8 @@ function Invoke-AfctInstall {
     if ($existingComplete -and -not $Reconfigure) {
         # A complete config already exists: warn about ports only if fresh, then just deploy.
         Write-AfctInfo "using the existing $EnvFile. Pass -Reconfigure to replace managed settings."
+        # This path deploys without rewriting the file, so the key has to be topped up here.
+        Confirm-AfctSecretKey $EnvFile
         Invoke-AfctDeployStack
         $cfg = @{
             AppUrl = (Read-AfctEnvValue 'NEXTAUTH_URL' $EnvFile)

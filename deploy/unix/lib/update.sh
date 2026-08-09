@@ -135,6 +135,10 @@ do_update() {
   prepare_existing_stack
   DIAG_ON_EXIT="true"
 
+  # Before the new images start, so the version being deployed comes up with a key rather
+  # than discovering it is missing the first time an admin saves a credential.
+  ensure_secret_key
+
   _prev_tag=$(read_env_value AFCT_APP_TAG "$ENV_FILE")
   [ -n "$_prev_tag" ] || _prev_tag="main"
   _target_tag=$(effective_app_tag)

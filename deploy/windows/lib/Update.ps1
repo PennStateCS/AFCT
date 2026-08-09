@@ -249,6 +249,9 @@ function Restore-AfctPreviousRelease {
 
 function Invoke-AfctUpdate {
     Assert-AfctStack
+    # Before the new images start, so the deployed version comes up with a key rather than
+    # discovering it is missing the first time an admin saves a credential.
+    Confirm-AfctSecretKey $EnvFile
     $prevTag = Read-AfctEnvValue 'AFCT_APP_TAG' $EnvFile
     if (-not $prevTag) { $prevTag = 'main' }
     $targetTag = [Environment]::GetEnvironmentVariable('AFCT_APP_TAG')
