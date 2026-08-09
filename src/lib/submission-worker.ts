@@ -454,25 +454,37 @@ async function evaluateSubmission(id: string) {
           ).map((m) => m.userId)
         : [submission.studentId];
 
-      await prisma.assignmentProblemGrade.updateMany({
-        where: {
-          assignmentId: gradeAssignmentId,
-          problemId: gradeProblemId,
-          studentId: { in: gradeTargetIds },
-          gradedManually: false,
-        },
-        data: { grade: earnedPoints, feedback: evaluation.feedback },
-      });
-      await prisma.assignmentProblemGrade.createMany({
-        data: gradeTargetIds.map((studentId) => ({
-          assignmentId: gradeAssignmentId,
-          problemId: gradeProblemId,
-          studentId,
-          grade: earnedPoints,
-          feedback: evaluation.feedback,
-          gradedManually: false,
-        })),
-        skipDuplicates: true,
+      // Where the grade came from, matching what manual group grading records. Without it a
+      // member later changed by hand looks the same as one the group was never graded
+      // together on, so the "adjusted from" marker never appears for autograded groups.
+      const groupProvenance = submission.studentGroupId
+        ? { groupGradeGroupId: submission.studentGroupId, groupGradeValue: earnedPoints }
+        : {};
+
+      // One transaction: a group is graded together or not at all. As two statements a
+      // failure between them left a group half-graded with nothing recording which half.
+      await prisma.$transaction(async (tx) => {
+        await tx.assignmentProblemGrade.updateMany({
+          where: {
+            assignmentId: gradeAssignmentId,
+            problemId: gradeProblemId,
+            studentId: { in: gradeTargetIds },
+            gradedManually: false,
+          },
+          data: { grade: earnedPoints, feedback: evaluation.feedback, ...groupProvenance },
+        });
+        await tx.assignmentProblemGrade.createMany({
+          data: gradeTargetIds.map((studentId) => ({
+            assignmentId: gradeAssignmentId,
+            problemId: gradeProblemId,
+            studentId,
+            grade: earnedPoints,
+            feedback: evaluation.feedback,
+            gradedManually: false,
+            ...groupProvenance,
+          })),
+          skipDuplicates: true,
+        });
       });
 
       await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {

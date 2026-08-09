@@ -11,6 +11,9 @@ const prismaMock = vi.hoisted(() => ({
   },
   assignmentProblemGrade: { upsert: vi.fn(), updateMany: vi.fn(), createMany: vi.fn() },
   groupMembership: { findMany: vi.fn() },
+  // The grade fan-out runs in one transaction; the callback gets the same mock client so the
+  // existing assertions on updateMany/createMany still see the calls.
+  $transaction: vi.fn(),
 }));
 const executeMock = vi.hoisted(() => vi.fn());
 const getEvaluatorConfigMock = vi.hoisted(() => vi.fn());
@@ -76,6 +79,9 @@ const loggedActions = () =>
   activityLogMock.mock.calls.map((c) => (c[2] as { action: string }).action);
 
 beforeEach(() => {
+  prismaMock.$transaction.mockImplementation(async (cb: (c: typeof prismaMock) => unknown) =>
+    cb(prismaMock),
+  );
   vi.clearAllMocks();
   platformMock.mockReturnValue('linux');
   existsSyncMock.mockReturnValue(true);
@@ -301,6 +307,58 @@ describe('evaluateSubmission', () => {
       'm2',
       'm3',
     ]);
+  });
+
+  /**
+   * The same provenance manual group grading records. Without it a member later changed by
+   * hand is indistinguishable from a group that was never graded together, so the workspace
+   * cannot say a grade was adjusted away from what the group was given.
+   */
+  it('records which group an autograded grade came from', async () => {
+    prismaMock.submission.findUnique.mockResolvedValue({
+      ...makeSubmission(),
+      studentGroupId: 'grp-1',
+    });
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 'm1' }, { userId: 'm2' }]);
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+
+    await evaluateSubmission('sub-1');
+
+    expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ groupGradeGroupId: 'grp-1', groupGradeValue: 10 }),
+      }),
+    );
+    const createArg = prismaMock.assignmentProblemGrade.createMany.mock.calls[0]![0];
+    expect(createArg.data[0]).toMatchObject({ groupGradeGroupId: 'grp-1', groupGradeValue: 10 });
+  });
+
+  // An individual submission has no group to attribute the grade to, and stamping one would
+  // make a solo grade read as part of a group's.
+  it('records no group provenance for an individual submission', async () => {
+    // Set explicitly: a previous test's group submission would otherwise still be returned.
+    prismaMock.submission.findUnique.mockResolvedValue({ ...makeSubmission(), studentGroupId: null });
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+
+    await evaluateSubmission('sub-1');
+
+    const createArg = prismaMock.assignmentProblemGrade.createMany.mock.calls[0]![0];
+    expect(createArg.data[0]).not.toHaveProperty('groupGradeGroupId');
+  });
+
+  // A group is graded together or not at all: two statements outside a transaction could
+  // leave half the members updated with nothing recording which half.
+  it('writes the whole fan-out in one transaction', async () => {
+    prismaMock.submission.findUnique.mockResolvedValue({
+      ...makeSubmission(),
+      studentGroupId: 'grp-1',
+    });
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 'm1' }, { userId: 'm2' }]);
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+
+    await evaluateSubmission('sub-1');
+
+    expect(prismaMock.$transaction).toHaveBeenCalled();
   });
 
   it('does not autograde when the problem has the autograder disabled', async () => {
