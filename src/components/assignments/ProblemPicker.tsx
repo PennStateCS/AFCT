@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -50,11 +50,30 @@ export function ProblemPicker({
   className = '',
 }: ProblemPickerProps) {
   const selected = problems.find((p) => p.id === selectedProblemId) ?? problems[0] ?? null;
+  const selectedIndex = selected ? problems.findIndex((p) => p.id === selected.id) : -1;
+  const step = (delta: number) => {
+    if (problems.length === 0 || selectedIndex < 0) return;
+    const next = (selectedIndex + delta + problems.length) % problems.length;
+    const target = problems[next];
+    if (target) onSelect(target.id);
+  };
   const ungradedCount = problems.filter((p) => typeof grades[p.id] !== 'number').length;
 
   return (
     <div className={`flex w-full min-w-0 flex-col gap-1 ${className}`}>
       <span className="text-muted-foreground text-xs font-medium">Problem</span>
+      <div className="flex w-full min-w-0 items-center">
+        <Button
+          variant="secondary"
+          size="icon"
+          onClick={() => step(-1)}
+          aria-label="Previous problem"
+          title="Previous problem"
+          className="shrink-0 rounded-r-none"
+          disabled={problems.length < 2}
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -62,7 +81,7 @@ export function ProblemPicker({
             // Matches the student picker beside it: same surface, same shape, a status dot
             // and a position readout. They are the same kind of control and should not look
             // like two different ones.
-            className="bg-card text-foreground border-border hover:bg-accent flex w-full min-w-0 items-center gap-2"
+            className="bg-card text-foreground border-border hover:bg-accent flex min-w-0 flex-1 items-center gap-2 rounded-none border-x-0"
             aria-label={
               ungradedCount > 0
                 ? `Problem: ${selected?.title ?? 'none selected'}. ${ungradedCount} still need grading.`
@@ -79,7 +98,11 @@ export function ProblemPicker({
                 }`}
               />
             ) : null}
-            <span className="truncate">{selected?.title ?? 'Select problem'}</span>
+            <span className="truncate">
+              {selected
+                ? `${problems.findIndex((p) => p.id === selected.id) + 1}. ${selected.title ?? ''}`
+                : 'Select problem'}
+            </span>
             {selected && problems.length > 0 ? (
               <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
                 {problems.findIndex((p) => p.id === selected.id) + 1} of {problems.length}
@@ -120,6 +143,18 @@ export function ProblemPicker({
           })}
         </DropdownMenuContent>
       </DropdownMenu>
+        <Button
+          variant="secondary"
+          size="icon"
+          onClick={() => step(1)}
+          aria-label="Next problem"
+          title="Next problem"
+          className="shrink-0 rounded-l-none"
+          disabled={problems.length < 2}
+        >
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
     </div>
   );
 }

@@ -326,6 +326,13 @@ export default function AssignmentSubmissions({
     [refreshReview],
   );
 
+  const goPrev = () =>
+    setSelectedIndex((prev) => (students.length === 0 ? -1 : prev <= 0 ? students.length - 1 : prev - 1));
+  const goNext = () =>
+    setSelectedIndex((prev) =>
+      students.length === 0 ? -1 : prev >= students.length - 1 ? 0 : prev + 1,
+    );
+
   // Left/Right arrows page to the previous/next student (wrapping), unless the user is
   // typing in a field (so arrow keys still move the cursor there).
   useEffect(() => {
@@ -421,6 +428,8 @@ export default function AssignmentSubmissions({
                 students={students}
                 selectedIndex={selectedIndex}
                 onSelectStudent={handleSelectChange}
+                onPrev={goPrev}
+                onNext={goNext}
                 gradeStatuses={studentGradeStatuses}
                 earnedByStudent={studentEarned}
                 totalPoints={assignmentTotals.totalPoints}
@@ -548,6 +557,8 @@ export default function AssignmentSubmissions({
                     submissions={selectedSubs}
                     assignmentDueDate={assignmentDueDate}
                     submissionsAction={grantAction}
+                    group={reviewData?.group ?? null}
+                    groupMembers={reviewData?.groupMembers}
                     gradedManually={
                       selectedProblem
                         ? (reviewData?.problemGrades?.[selectedProblem.id]?.gradedManually ?? false)

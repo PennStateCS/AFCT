@@ -101,3 +101,31 @@ describe('ProblemPicker', () => {
     expect(screen.getByRole('button', { name: /Collatz Binary/ })).toBeInTheDocument();
   });
 });
+
+describe('stepping between problems', () => {
+  it('moves to the previous and next problem', async () => {
+    const onSelect = vi.fn();
+    renderPicker({ onSelect, selectedProblemId: 'p2' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next problem' }));
+    expect(onSelect).toHaveBeenCalledWith('p3');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Previous problem' }));
+    expect(onSelect).toHaveBeenCalledWith('p1');
+  });
+
+  // Wrapping keeps the arrows useful at either end rather than dead-ending.
+  it('wraps around at both ends', async () => {
+    const onSelect = vi.fn();
+    renderPicker({ onSelect, selectedProblemId: 'p3' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next problem' }));
+    expect(onSelect).toHaveBeenCalledWith('p1');
+  });
+
+  it('disables stepping when there is only one problem', () => {
+    renderPicker({ problems: [problems[0]!], selectedProblemId: 'p1' });
+
+    expect(screen.getByRole('button', { name: 'Next problem' })).toBeDisabled();
+  });
+});

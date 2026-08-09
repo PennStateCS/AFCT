@@ -11,6 +11,7 @@ import {
   FileText,
   MessageSquare,
   RotateCcw,
+  Users,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -94,6 +95,10 @@ export type ProblemWorkspaceProps = {
   onManualHoldChange?: (held: boolean) => void;
   /** Set the grade and lock it, from the override dialog. */
   onOverrideGrade?: (grade: number) => void;
+  /** The group whose work this is, on a group assignment. */
+  group?: { id: string; name: string } | null;
+  /** The other members of that group. */
+  groupMembers?: { id: string; firstName: string | null; lastName: string | null }[];
   /** Group assignments only: who a saved grade applies to. */
   gradeAudience?: GradeAudience | null;
   /** The value this student's group was given, when the grade came from one. */
@@ -153,6 +158,8 @@ export default function ProblemWorkspace({
   gradedManually = false,
   onManualHoldChange,
   onOverrideGrade,
+  group = null,
+  groupMembers,
   gradeAudience,
   groupGradeValue,
   isSavingGrade = false,
@@ -385,6 +392,10 @@ export default function ProblemWorkspace({
       {/* Two matching cards: what the problem is and the work submitted for it, beside what
           you are doing about it. */}
       <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4 lg:h-full">
+          <div className="flex items-center gap-2">
+            <FileText className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+            <h3 className="text-sm font-medium">Attempts</h3>
+          </div>
           <ProblemHeader
             className="min-w-0"
             action={
@@ -409,7 +420,6 @@ export default function ProblemWorkspace({
             autograderEnabled={problem.autograderEnabled ?? undefined}
           />
 
-          <h3 className="text-sm font-medium">Attempts</h3>
           {/* No panel around the table: it carries its own toolbar, column headers and pager,
               so a band above it repeating "Submissions" on the Submissions tab added a frame
               and a word without adding information. `tableLabel` still names it for assistive
@@ -501,6 +511,23 @@ export default function ProblemWorkspace({
                     onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined
                   }
                 />
+              </div>
+            ) : null}
+            {group ? (
+              <div className="flex flex-col gap-1 border-b pb-4">
+                <div className="flex items-center gap-2">
+                  <Users className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+                  <h3 className="text-sm font-medium">{group.name} Members</h3>
+                </div>
+                {/* Named here because both the grade above and the thread below can apply to
+                    all of them, so who "the group" is should not be a guess. */}
+                <p className="text-muted-foreground text-xs">
+                  {groupMembers && groupMembers.length > 0
+                    ? groupMembers
+                        .map((m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student')
+                        .join(', ')
+                    : 'No other members.'}
+                </p>
               </div>
             ) : null}
             <div className="flex items-center gap-2">

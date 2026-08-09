@@ -18,6 +18,8 @@ const baseProps: StudentNavigatorProps = {
   students: [{ id: 's1', firstName: 'Ada', lastName: 'Lovelace' }],
   selectedIndex: 0,
   onSelectStudent: vi.fn(),
+  onPrev: vi.fn(),
+  onNext: vi.fn(),
 };
 
 /** The group panel is fed by a prop, from the review data the parent already holds. */
@@ -33,21 +35,6 @@ describe('the selected student\'s group', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
-  });
-
-  // Whether the assignment is group work now lives in the assignment header, since it never
-  // changes as you page through students. What belongs here is what DOES change.
-  it('names the group this student submits with', async () => {
-    renderWithGroup({
-      isGroupAssignment: true,
-      isGroup: true,
-      group: { id: 'g1', name: 'Group 3' },
-      members: [{ id: 's2', firstName: 'Grace', lastName: 'Hopper' }],
-    });
-
-    await waitFor(() =>
-      expect(screen.getByText(/Submitting with Group 3: Grace Hopper/)).toBeInTheDocument(),
-    );
   });
 
   // A group assignment with nobody to submit alongside is a setup mistake, not a fact about
@@ -77,7 +64,9 @@ describe('the selected student\'s group', () => {
       members: [],
     });
 
-    await waitFor(() => expect(screen.getByText(/Submitting with G/)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Lovelace/ })).toBeInTheDocument(),
+    );
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
     const urls = fetchMock.mock.calls.map((c) => String(c[0]));
     expect(urls.some((u) => u.includes('student-group'))).toBe(false);

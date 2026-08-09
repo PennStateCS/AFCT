@@ -219,11 +219,11 @@ describe('AssignmentSubmissions', () => {
       );
     });
 
-    // The seeded problem renders through the ProblemListCard stub.
+    // The problem list card was replaced by the picker in the strip, so what proves the
+    // page arrived is the workspace itself.
     await waitFor(() => {
-      expect(screen.getByText('Problem One')).toBeInTheDocument();
+      expect(screen.getByTestId('problem-workspace')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('problem-workspace')).toBeInTheDocument();
   });
 
   it('posts a single-problem grade then re-fetches review-data (invalidation)', async () => {
