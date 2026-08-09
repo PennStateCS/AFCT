@@ -131,27 +131,17 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
 vi.mock('./StudentNavigator', () => ({
   default: ({
     students: navStudents,
-    onPrev,
-    onNext,
     onSelectStudent,
     gradeStatuses,
     selectedIndex,
   }: {
     students: Array<{ id: string }>;
-    onPrev: () => void;
-    onNext: () => void;
     onSelectStudent: (id: string) => void;
     gradeStatuses?: Record<string, boolean>;
     selectedIndex: number;
   }) => (
     <div data-testid="student-navigator">
       <span data-testid="selected-index">{selectedIndex}</span>
-      <button type="button" onClick={onPrev}>
-        prev-student
-      </button>
-      <button type="button" onClick={onNext}>
-        next-student
-      </button>
       {navStudents.map((s) => (
         <button key={s.id} type="button" onClick={() => onSelectStudent(s.id)}>
           pick-{s.id}
@@ -229,11 +219,11 @@ describe('AssignmentSubmissions', () => {
       );
     });
 
-    // The seeded problem renders through the ProblemListCard stub.
+    // The problem list card was replaced by the picker in the strip, so what proves the
+    // page arrived is the workspace itself.
     await waitFor(() => {
-      expect(screen.getByText('Problem One')).toBeInTheDocument();
+      expect(screen.getByTestId('problem-workspace')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('problem-workspace')).toBeInTheDocument();
   });
 
   it('posts a single-problem grade then re-fetches review-data (invalidation)', async () => {
@@ -528,18 +518,20 @@ describe('AssignmentSubmissions — student navigation', () => {
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
   };
 
-  it('advances and wraps with next/prev', async () => {
+  // The Prev/Next buttons were dropped from the strip to save room; the arrow keys they
+  // duplicated are what steps through the roster now, so nobody lost the ability.
+  it('advances and wraps with the arrow keys', async () => {
     renderTwo();
     const idx = await screen.findByTestId('selected-index');
     await waitFor(() => expect(idx).toHaveTextContent('0'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'next-student' }));
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
     expect(idx).toHaveTextContent('1');
 
-    fireEvent.click(screen.getByRole('button', { name: 'next-student' })); // wraps to first
+    fireEvent.keyDown(window, { key: 'ArrowRight' }); // wraps to first
     expect(idx).toHaveTextContent('0');
 
-    fireEvent.click(screen.getByRole('button', { name: 'prev-student' })); // wraps to last
+    fireEvent.keyDown(window, { key: 'ArrowLeft' }); // wraps to last
     expect(idx).toHaveTextContent('1');
   });
 
@@ -612,7 +604,7 @@ describe('AssignmentSubmissions — reviewData seeding safety net (M12)', () => 
     expect(screen.getByText('S1 note')).toBeInTheDocument();
 
     // Advancing to s2 must re-seed everything from s2's review-data.
-    fireEvent.click(screen.getByRole('button', { name: 'next-student' }));
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
     await waitFor(() => expect(screen.getByTestId('current-grade')).toHaveTextContent('3'));
     expect(screen.getByText('S2 note')).toBeInTheDocument();
     expect(screen.queryByText('S1 note')).not.toBeInTheDocument();

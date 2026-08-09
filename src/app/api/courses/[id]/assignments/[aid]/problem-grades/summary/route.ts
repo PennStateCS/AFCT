@@ -13,10 +13,16 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *   - { name: aid, in: path, required: true, schema: { type: string } }
  * responses:
  *   200:
- *     description: A map of studentId → fully-graded boolean (empty object if the assignment has no problems).
+ *     description: A map of studentId to their grading state (empty object if the assignment has no problems).
  *     content:
  *       application/json:
- *         schema: { type: object, additionalProperties: { type: boolean } }
+ *         schema:
+ *           type: object
+ *           additionalProperties:
+ *             type: object
+ *             properties:
+ *               graded: { type: boolean, description: Every problem has a grade. }
+ *               earned: { type: number, description: Points earned so far. }
  *   401: { description: Not signed in. }
  *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: Assignment not found in this course. }
@@ -45,11 +51,18 @@ export const GET = withCourseAuth(
         by: ['studentId'],
         where: { assignmentId },
         _count: { grade: true },
+        // The same grouping already reads every grade, so the running total costs nothing
+        // beyond a sum. It lets the student picker show each student's standing the way the
+        // problem picker shows each problem's.
+        _sum: { grade: true },
       });
 
-      const payload: Record<string, boolean> = {};
+      const payload: Record<string, { graded: boolean; earned: number }> = {};
       for (const group of gradeGroups) {
-        payload[group.studentId] = group._count.grade >= problemCount;
+        payload[group.studentId] = {
+          graded: group._count.grade >= problemCount,
+          earned: group._sum.grade ?? 0,
+        };
       }
 
       return NextResponse.json(payload);

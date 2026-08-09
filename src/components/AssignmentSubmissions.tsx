@@ -8,11 +8,14 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
-import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
-import { useIsMobile } from '@/hooks/use-mobile';
 import type { ProblemSubmission } from '@/lib/problem-submission';
-import StudentNavigator from './StudentNavigator';
+import { ReviewStrip } from '@/components/assignments/ReviewStrip';
+import { ReviewShortcutsDialog } from '@/components/assignments/ReviewShortcutsDialog';
+import { GRADE_INPUT_ID } from '@/components/ProblemGradeForm';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { queryKeys } from '@/lib/query-keys';
+import { fetchJson } from '@/lib/query-fetch';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -31,6 +34,13 @@ const GrantExtraSubmissionsDialog = dynamic(
   { ssr: false },
 );
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import { MoreVertical } from 'lucide-react';
 import { useReviewData } from './useReviewData';
 import { useComments } from './useComments';
 import { useProblemGrades } from './useProblemGrades';
@@ -102,6 +112,7 @@ export default function AssignmentSubmissions({
   const epsSymbol = useEmptyStringSymbol(courseId);
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [grantDialogOpen, setGrantDialogOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Set on first open and never cleared, so the dynamic import above stays deferred.
   const [grantMounted, setGrantMounted] = useState(false);
   useEffect(() => {
@@ -117,6 +128,20 @@ export default function AssignmentSubmissions({
   // Students for review: includes DROPPED students (labeled), since staff still review
   // their submitted work. Its own query key ('students', 'all') so it doesn't collide
   // with the active-only list GroupsCard/audience pickers share.
+  const { timezone } = useEffectiveTimezone();
+  const assignmentShellQuery = useQuery<{
+    dueDate?: string | Date;
+    allowLateSubmissions?: boolean;
+    lateCutoff?: string | Date | null;
+  }>({
+    queryKey: queryKeys.assignment.shell(courseId, assignmentId),
+    queryFn: () =>
+      fetchJson(apiPaths.assignment(courseId, assignmentId, { view: 'problems' })),
+    enabled: !!assignmentId,
+    staleTime: 30_000,
+  });
+  const assignmentShell = assignmentShellQuery.isError ? null : (assignmentShellQuery.data ?? null);
+
   const studentsQuery = useQuery({
     queryKey: ['course', courseId, 'students', 'all'],
     queryFn: async () => {
@@ -164,9 +189,6 @@ export default function AssignmentSubmissions({
   // All assignment problems are visible.
   const visibleProblems = assignmentProblems;
 
-  const limitText = useCallback((value: string, max = 80) => {
-    return value.length > max ? `${value.slice(0, max - 1)}…` : value;
-  }, []);
 
   const {
     selectedIndex,
@@ -183,6 +205,16 @@ export default function AssignmentSubmissions({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
+      // Grading is the reason to be here, so it gets a key of its own rather than a reach
+      // for the mouse after every problem change.
+      if (e.key === 'g' || e.key === 'G') {
+        const field = document.getElementById(GRADE_INPUT_ID);
+        if (field) {
+          e.preventDefault();
+          field.focus();
+        }
+        return;
+      }
       if (e.key >= '1' && e.key <= '9') {
         const problem = visibleProblems[Number(e.key) - 1];
         if (problem) {
@@ -223,8 +255,10 @@ export default function AssignmentSubmissions({
     problemGradeErrors,
     savingProblemGrades,
     studentGradeStatuses,
+    studentEarned,
     handleGradeInputChange,
     saveProblemGrade,
+    setManualHold,
     gradeTarget,
     setGradeTarget,
     pendingGroupGrade,
@@ -253,10 +287,6 @@ export default function AssignmentSubmissions({
   // column so staff can see which member made each attempt.
   const reviewIsGroup = !!reviewData?.isGroup;
 
-  // Below the desktop breakpoint the two panels stack; above it they sit side by side
-  // in a draggable split.
-  const isMobile = useIsMobile();
-
   // Read-only review data derived straight from the query cache instead of being
   // mirrored into state by an effect. Empty for no selected student or a failed load
   // (the query data is then undefined).
@@ -280,18 +310,14 @@ export default function AssignmentSubmissions({
     return grouped;
   }, [assignmentProblems, reviewData, selectedStudentId]);
 
-  const problemListItems = useMemo(
-    () =>
-      visibleProblems.map((problem, index) => ({
-        id: problem.id,
-        title: problem.title ? limitText(problem.title, 25) : `Problem ${index + 1}`,
-        grade: problemGrades[problem.id] ?? null,
-        maxGrade: problem.maxPoints ?? null,
-        submissionsCount: extractSubs(submissions[problem.id]).length,
-        maxSubmissions: problem.maxSubmissions ?? null,
-      })),
-    [visibleProblems, limitText, problemGrades, submissions],
-  );
+  // The whole assignment at a glance, for the strip. Both come from the grades already
+  // loaded for this student, so neither needs a request of its own.
+  const assignmentTotals = useMemo(() => {
+    const totalPoints = assignmentProblems.reduce((sum, p) => sum + (p.maxPoints ?? 0), 0);
+    const earned = assignmentProblems.reduce((sum, p) => sum + (problemGrades[p.id] ?? 0), 0);
+    const graded = assignmentProblems.filter((p) => typeof problemGrades[p.id] === 'number').length;
+    return { totalPoints, earned, graded, count: assignmentProblems.length };
+  }, [assignmentProblems, problemGrades]);
 
   // The problem whose submissions are on screen; also the target of a grant action.
   const selectedProblem = useMemo(
@@ -310,17 +336,11 @@ export default function AssignmentSubmissions({
   );
 
   const goPrev = () =>
-    setSelectedIndex((prev) => {
-      if (students.length === 0) return -1;
-      const nextIndex = prev <= 0 ? students.length - 1 : prev - 1;
-      return nextIndex;
-    });
+    setSelectedIndex((prev) => (students.length === 0 ? -1 : prev <= 0 ? students.length - 1 : prev - 1));
   const goNext = () =>
-    setSelectedIndex((prev) => {
-      if (students.length === 0) return -1;
-      const nextIndex = prev >= students.length - 1 ? 0 : prev + 1;
-      return nextIndex;
-    });
+    setSelectedIndex((prev) =>
+      students.length === 0 ? -1 : prev >= students.length - 1 ? 0 : prev + 1,
+    );
 
   // Left/Right arrows page to the previous/next student (wrapping), unless the user is
   // typing in a field (so arrow keys still move the cursor there).
@@ -408,29 +428,35 @@ export default function AssignmentSubmissions({
               <FileText className="h-6 w-6" /> Submissions
             </h2>
 
-            <div className="mt-4 flex flex-col items-start gap-2 border-b pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-              <StudentNavigator
-                students={students}
-                selectedIndex={selectedIndex}
-                onSelectStudent={handleSelectChange}
-                onPrev={goPrev}
-                onNext={goNext}
-                gradeStatuses={studentGradeStatuses}
-                courseId={courseId}
-                assignmentId={assignmentId}
-                groupInfo={
-                  reviewData
-                    ? {
-                        isGroupAssignment: reviewData.isGroupAssignment,
-                        isGroup: !!reviewData.isGroup,
-                        group: reviewData.group ?? null,
-                        members: reviewData.groupMembers ?? [],
-                        effective: reviewData.effective,
-                      }
-                    : null
-                }
-              />
-            </div>
+            <ReviewStrip
+              className="mt-4"
+              students={students}
+              selectedIndex={selectedIndex}
+              onSelectStudent={handleSelectChange}
+              onPrevStudent={goPrev}
+              onNextStudent={goNext}
+              gradeStatuses={studentGradeStatuses}
+              earnedByStudent={studentEarned}
+              groupInfo={
+                reviewData
+                  ? {
+                      isGroupAssignment: reviewData.isGroupAssignment,
+                      isGroup: !!reviewData.isGroup,
+                      group: reviewData.group ?? null,
+                      members: reviewData.groupMembers ?? [],
+                      effective: reviewData.effective,
+                    }
+                  : null
+              }
+              problems={visibleProblems}
+              selectedProblemId={selectedProblem?.id ?? null}
+              onSelectProblem={handleSelectProblem}
+              problemGrades={problemGrades}
+              assignment={assignmentShell}
+              effective={reviewData?.effective ?? null}
+              timezone={timezone}
+              totals={assignmentTotals}
+            />
           </div>
 
           <div role="region" aria-labelledby="review-student-heading">
@@ -471,32 +497,31 @@ export default function AssignmentSubmissions({
                   ? problemLimit.max !== null
                   : (selectedProblem?.maxSubmissions ?? 0) > 0;
 
-                const grantAction = selectedProblem && hasSubmissionCap ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7"
-                    onClick={() => setGrantDialogOpen(true)}
-                    disabled={courseIsArchived}
-                  >
-                    Grant extra submissions
-                  </Button>
+                // The menu itself always shows: it carries the keyboard shortcuts, which are
+                // useful whatever the problem's submission cap is. Only the grant item depends
+                // on there being a cap to add to.
+                const grantAction = selectedProblem ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label="Problem actions">
+                        <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {hasSubmissionCap ? (
+                        <DropdownMenuItem
+                          disabled={courseIsArchived}
+                          onClick={() => setGrantDialogOpen(true)}
+                        >
+                          Grant extra submissions
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuItem onClick={() => setShortcutsOpen(true)}>
+                        Keyboard shortcuts
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : null;
-
-                const listCard = (
-                  <ProblemListCard
-                    problems={problemListItems}
-                    selectedProblemId={selectedProblem?.id ?? null}
-                    onSelect={handleSelectProblem}
-                    title="Problems"
-                    description="Select a problem to review submissions and discussion."
-                    className="h-full"
-                    scrollAreaClassName="max-h-[520px]"
-                    numberShortcuts
-                    showSubmissionUsage={false}
-                    showTotal
-                  />
-                );
 
                 const workspace = (
                   <ProblemWorkspace
@@ -515,6 +540,16 @@ export default function AssignmentSubmissions({
                     submissions={selectedSubs}
                     assignmentDueDate={assignmentDueDate}
                     submissionsAction={grantAction}
+                    group={reviewData?.group ?? null}
+                    groupMembers={reviewData?.groupMembers}
+                    gradedManually={
+                      selectedProblem
+                        ? (reviewData?.problemGrades?.[selectedProblem.id]?.gradedManually ?? false)
+                        : false
+                    }
+                    onManualHoldChange={(held) =>
+                      selectedProblem && void setManualHold(selectedProblem.id, held)
+                    }
                     showSubmitter={reviewIsGroup}
                     subjectName={
                       `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
@@ -588,23 +623,7 @@ export default function AssignmentSubmissions({
                 );
 
                 // Stack on small screens; a fixed two-column layout on desktop.
-                if (isMobile) {
-                  return (
-                    <div className="flex flex-col gap-4">
-                      {listCard}
-                      <div className="print:col-span-2">{workspace}</div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-[280px_minmax(0,1fr)] items-stretch gap-6 print:block">
-                      <div className="min-w-0">{listCard}</div>
-                      <div className="min-w-0 print:col-span-2">{workspace}</div>
-                    </div>
-                  </div>
-                );
+                return <div className="min-w-0">{workspace}</div>;
               })()
             )}
           </div>
@@ -657,6 +676,8 @@ export default function AssignmentSubmissions({
         onConfirm={confirmGroupGrade}
         onCancel={cancelGroupGrade}
       />
+
+      <ReviewShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
       {openDialog.submission && (
         <SubmissionViewerDialog

@@ -1,4 +1,13 @@
 import React from 'react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleSlash,
+  Gauge,
+  ListOrdered,
+  Share2,
+  Workflow,
+} from 'lucide-react';
 import { CardTitle } from '@/components/ui/card';
 import { RichDescription } from '@/components/rich-description/RichDescription';
 
@@ -21,21 +30,31 @@ type ProblemHeaderProps = {
   action?: React.ReactNode;
 };
 
-// The problem type keeps its colour, as the one thing here worth picking out at a glance.
-// Colour is decorative rather than load-bearing: the type is spelled out beside it, so
-// nothing is lost to a reader who cannot distinguish the hues.
-const typeBadgeMap: Record<string, { label: string; className: string }> = {
-  PDA: { label: 'Pushdown Automaton', className: 'text-purple-700 dark:text-purple-300' },
-  RE: { label: 'Regular Expression', className: 'text-blue-700 dark:text-blue-300' },
-  CFG: { label: 'Context-Free Grammar', className: 'text-green-700 dark:text-green-300' },
-  FA: { label: 'Finite Automaton', className: 'text-orange-700 dark:text-orange-300' },
+/**
+ * Icon-led badges for a problem's facts.
+ *
+ * One mapping rather than conditional classes at each call site, so a new problem type or a
+ * new fact is a row here instead of another branch in the markup.
+ *
+ * Colour comes from the semantic status tokens, which already carry a soft background, a
+ * border and a readable foreground in both themes. Nothing depends on the hue: every badge
+ * names itself in text and carries an icon, so the colour is reinforcement rather than the
+ * message. That is also why "Autograder" is not styled only for the On case.
+ */
+type BadgeTone = 'type' | 'neutral' | 'info' | 'success';
+
+const toneClasses: Record<BadgeTone, string> = {
+  type: 'bg-status-warning-bg border-status-warning-border text-status-warning',
+  info: 'bg-status-info-bg border-status-info-border text-status-info',
+  success: 'bg-status-success-bg border-status-success-border text-status-success',
+  neutral: 'bg-badge-neutral-bg border-badge-neutral-border text-badge-neutral',
 };
 
-const getTypeBadge = (type?: string) => {
-  if (!type) return null;
-  return (
-    typeBadgeMap[type] || { label: type, className: 'text-muted-foreground' }
-  );
+const typeLabels: Record<string, string> = {
+  PDA: 'Pushdown Automaton',
+  RE: 'Regular Expression',
+  CFG: 'Context-Free Grammar',
+  FA: 'Finite Automaton',
 };
 
 export default function ProblemHeader({
@@ -50,48 +69,49 @@ export default function ProblemHeader({
   className,
   action,
 }: ProblemHeaderProps) {
-  const badge = getTypeBadge(type);
   const submissionsLabel =
     typeof maxSubmissions === 'number' ? (maxSubmissions < 0 ? 'Unlimited' : maxSubmissions) : null;
-
   const hasDescription = !!description || !!descriptionJson;
-  const pillClass =
-    'inline-flex min-h-8 items-center rounded-full border border-border bg-transparent px-3 py-1 text-xs font-medium leading-none';
-  const facts: React.ReactNode[] = [];
-  if (badge) {
-    facts.push(
-      <span key="type" className={`${pillClass} ${badge.className}`}>
-        {badge.label}
-      </span>,
-    );
+
+  const badgeClass =
+    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium leading-none';
+
+  const facts: { key: string; icon: LucideIcon; label: string; tone: BadgeTone }[] = [];
+  if (type) {
+    facts.push({ key: 'type', icon: Workflow, label: typeLabels[type] ?? type, tone: 'type' });
   }
   if (typeof maxStates === 'number') {
-    facts.push(
-      <span key="states" className={pillClass}>
-        Max States: {maxStates === -1 ? 'Unlimited' : maxStates}
-      </span>,
-    );
+    facts.push({
+      key: 'states',
+      icon: Gauge,
+      label: `Max States: ${maxStates === -1 ? 'Unlimited' : maxStates}`,
+      tone: 'neutral',
+    });
   }
   if (typeof isDeterministic === 'boolean') {
-    facts.push(
-      <span key="det" className={pillClass}>
-        {isDeterministic ? 'Deterministic' : 'Nondeterministic'}
-      </span>,
-    );
+    facts.push({
+      key: 'det',
+      icon: Share2,
+      label: isDeterministic ? 'Deterministic' : 'Nondeterministic',
+      tone: 'info',
+    });
   }
   if (submissionsLabel !== null) {
-    facts.push(
-      <span key="subs" className={pillClass}>
-        Max Submissions: {submissionsLabel}
-      </span>,
-    );
+    facts.push({
+      key: 'subs',
+      icon: ListOrdered,
+      label: `Max Submissions: ${submissionsLabel}`,
+      tone: 'neutral',
+    });
   }
   if (typeof autograderEnabled === 'boolean') {
-    facts.push(
-      <span key="ag" className={pillClass}>
-        Autograder: {autograderEnabled ? 'On' : 'Off'}
-      </span>,
-    );
+    facts.push({
+      key: 'ag',
+      icon: autograderEnabled ? CircleCheck : CircleSlash,
+      label: `Autograder: ${autograderEnabled ? 'On' : 'Off'}`,
+      // Off is not a fault, just not switched on, so it reads neutral rather than alarming.
+      tone: autograderEnabled ? 'success' : 'neutral',
+    });
   }
 
   return (
@@ -101,7 +121,16 @@ export default function ProblemHeader({
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
       {facts.length > 0 ? (
-        <div className="text-foreground mt-2 flex flex-wrap items-center gap-2 text-xs">{facts}</div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {facts.map(({ key, icon: Icon, label, tone }) => (
+            <span key={key} className={`${badgeClass} ${toneClasses[tone]}`}>
+              {/* Decorative: the label beside it already says the same thing, so announcing
+                  the icon would read every badge twice. */}
+              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {label}
+            </span>
+          ))}
+        </div>
       ) : null}
       {hasDescription ? (
         <RichDescription

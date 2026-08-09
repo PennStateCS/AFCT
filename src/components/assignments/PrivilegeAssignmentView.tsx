@@ -10,6 +10,7 @@ import {
   Package,
   Plus,
   Shapes,
+  User,
   Users,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
@@ -489,7 +490,22 @@ export default function AssignmentDashboardPage({
                   here rather than repeated beside every student on the Submissions tab. The
                   dates are NOT here on purpose: those resolve per student through date
                   overrides, so a single header value would hide an extension. */}
-              <Badge variant="outline" className="shrink-0 text-xs font-normal">
+              {/* Tinted so it registers at a glance. The two tones differ to tell them apart,
+                  not to say one is better: an icon carries the same distinction for anyone who
+                  cannot separate the hues. */}
+              <Badge
+                variant="outline"
+                className={`shrink-0 gap-1.5 text-xs font-normal ${
+                  assignment.groupSetId
+                    ? 'bg-status-warning-bg border-status-warning-border text-status-warning'
+                    : 'bg-status-info-bg border-status-info-border text-status-info'
+                }`}
+              >
+                {assignment.groupSetId ? (
+                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                ) : (
+                  <User className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
                 {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
               </Badge>
               {/* Quick jump to another assignment in this course. */}

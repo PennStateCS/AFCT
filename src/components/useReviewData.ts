@@ -19,6 +19,8 @@ export type ReviewDataResponse = {
       feedback: string | null;
       /** The value this student's group was given, when the grade came from a group grade. */
       groupGradeValue?: number | null;
+      /** Set by a person rather than the autograder, which therefore will not overwrite it. */
+      gradedManually?: boolean;
     }
   >;
   /** True when the ASSIGNMENT is a group assignment, whatever this student's group is. */

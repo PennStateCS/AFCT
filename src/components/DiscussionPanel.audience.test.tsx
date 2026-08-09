@@ -89,16 +89,16 @@ describe('DiscussionPanel audience', () => {
   it('offers the choice of audience, defaulting to the group', () => {
     render(<DiscussionPanel {...baseProps} audience={groupAudience()} />);
 
-    const group = screen.getByRole('radio', { name: 'Group 3' });
+    const group = screen.getByRole('radio', { name: 'Entire group' });
     expect(group).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Only Grace Hopper' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Grace Hopper only' })).not.toBeChecked();
   });
 
   it('reports a change of audience', async () => {
     const onTargetChange = vi.fn();
     render(<DiscussionPanel {...baseProps} audience={groupAudience(onTargetChange)} />);
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Only Grace Hopper' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Grace Hopper only' }));
 
     expect(onTargetChange).toHaveBeenCalledWith('student');
   });

@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import {
@@ -11,12 +10,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from './ui/dropdown-menu';
-
-import { formatDateTimeInTimeZone } from '@/lib/date-format';
-import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { apiPaths } from '@/lib/api-paths';
-import { queryKeys } from '@/lib/query-keys';
-import { fetchJson } from '@/lib/query-fetch';
 
 export type StudentNavigatorStudent = {
   id: string;
@@ -87,8 +80,10 @@ export type StudentNavigatorProps = {
   onPrev: () => void;
   onNext: () => void;
   gradeStatuses?: Record<string, boolean | undefined>;
-  courseId: string;
-  assignmentId: string;
+  /** Points each student has earned on this assignment, shown beside their name. */
+  earnedByStudent?: Record<string, number | undefined>;
+  /** What the assignment is out of, so the figure reads as a score rather than a count. */
+  totalPoints?: number;
   /**
    * The selected student's group and effective schedule, from the review-data the parent
    * already fetched. This used to be a second per-student request from inside here, which
@@ -104,70 +99,16 @@ export default function StudentNavigator({
   onPrev,
   onNext,
   gradeStatuses,
-  courseId,
-  assignmentId,
+  earnedByStudent,
+  totalPoints,
   groupInfo = null,
 }: StudentNavigatorProps) {
-  const { timezone } = useEffectiveTimezone();
   const [menuOpen, setMenuOpen] = useState(false);
   const [studentFilter, setStudentFilter] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Assignment shell: cached and shared with StudentAssignmentView via the same
-  // key (queryKeys.assignment.shell), so the two dedupe/share this read.
-  const assignmentQuery = useQuery<{
-    dueDate?: string | Date;
-    allowLateSubmissions?: boolean;
-    lateCutoff?: string | Date | null;
-  }>({
-    queryKey: queryKeys.assignment.shell(courseId, assignmentId),
-    queryFn: () =>
-      fetchJson<{
-        dueDate?: string | Date;
-        allowLateSubmissions?: boolean;
-        lateCutoff?: string | Date | null;
-      }>(apiPaths.assignment(courseId, assignmentId, { view: 'problems' })),
-    enabled: !!assignmentId,
-    staleTime: 30_000,
-  });
-
-  const assignment = assignmentQuery.isError ? null : (assignmentQuery.data ?? null);
-  // Only surface the loading label when a fetch is actually in flight; a disabled
-  // query (no assignmentId) reports isPending but should render nothing here.
-  const loadingAssignment = !!assignmentId && assignmentQuery.isPending;
-
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStatus = selectedStudent ? (gradeStatuses?.[selectedStudent.id] ?? false) : false;
-
-  // Prefer the selected student's effective schedule (their own or their group's date
-  // override); fall back to the assignment base while that per-student read loads.
-  const eff = groupInfo?.effective ?? null;
-  const showDueDate = eff?.dueDate ?? assignment?.dueDate ?? null;
-  const showAllowLate = eff ? eff.allowLateSubmissions : (assignment?.allowLateSubmissions ?? false);
-  const showLateCutoff = eff ? eff.lateCutoff : (assignment?.lateCutoff ?? null);
-  const isOverridden = !!eff && eff.source !== 'base';
-
-  /**
-   * Which fields an override actually changed.
-   *
-   * `effectiveDeadline` merges field by field, so one override row can move the late cutoff
-   * and leave the due date alone. A single marker on Due would then point at the one value
-   * that did not change. There is no per-field provenance in the payload, so compare the
-   * resolved values against the assignment's own.
-   */
-  const sameTime = (a?: string | Date | null, b?: string | Date | null) => {
-    if (!a || !b) return !a && !b;
-    return new Date(a).getTime() === new Date(b).getTime();
-  };
-  const overrideLabel = eff?.source === 'group-override' ? 'group override' : 'student override';
-  const dueOverridden = isOverridden && !sameTime(eff?.dueDate, assignment?.dueDate);
-  const allowLateOverridden =
-    isOverridden && !!eff && eff.allowLateSubmissions !== (assignment?.allowLateSubmissions ?? false);
-  const cutoffOverridden = isOverridden && !sameTime(eff?.lateCutoff, assignment?.lateCutoff);
-
-  const OverrideMark = () => (
-    <span className="text-primary ml-1 text-xs font-medium">({overrideLabel})</span>
-  );
 
   const filteredStudents = useMemo(() => {
     const f = studentFilter.trim().toLowerCase();
@@ -209,7 +150,7 @@ export default function StudentNavigator({
   const selectedSpokenName = selectedStudent ? memberName(selectedStudent) : null;
 
   return (
-    <div className="flex w-full flex-col items-start gap-3">
+    <div className="flex w-full flex-col items-start gap-1">
       {/* Polite live region: announces the newly selected student on navigation,
           since focus stays on the Prev/Next/dropdown control while the panel changes. */}
       <span className="sr-only" aria-live="polite">
@@ -219,71 +160,27 @@ export default function StudentNavigator({
             }`
           : ''}
       </span>
-      <div className="min-w-0">
-        <span className="block">
-          {loadingAssignment ? (
-            <span className="text-muted-foreground text-sm">Loading assignment...</span>
-          ) : assignment ? (
-            <>
-              <span>
-                <span className="font-semibold">Due:</span>{' '}
-                {showDueDate ? formatDateTimeInTimeZone(showDueDate, timezone) : '—'}
-                {dueOverridden ? <OverrideMark /> : null}
-              </span>
-              <span className="text-muted-foreground mx-2">•</span>
-              <span>
-                <span className="font-semibold">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}
-                {allowLateOverridden ? <OverrideMark /> : null}
-              </span>
-              <span className="text-muted-foreground mx-2">•</span>
-              <span>
-                <span className="font-semibold">Late Cutoff:</span>{' '}
-                {showAllowLate && showLateCutoff
-                  ? formatDateTimeInTimeZone(showLateCutoff, timezone)
-                  : 'Never'}
-                {cutoffOverridden ? <OverrideMark /> : null}
-              </span>
-
-            </>
-          ) : null}
-        </span>
-        {groupInfo?.isGroup && groupInfo.group ? (
-          <span className="text-muted-foreground block text-xs">
-            Submitting with {groupInfo.group.name}
-            {groupInfo.members.length > 0 ? `: ${groupInfo.members.map(memberName).join(', ')}` : ''}
-          </span>
-        ) : null}
-        {/* A group assignment with nobody to submit alongside is a setup mistake, not a
-            fact about this student's work. Say so here rather than letting the panel read
-            as a normal individual submission. */}
-        {groupInfo?.isGroupAssignment && !groupInfo.isGroup ? (
-          <span className="text-status-warning block text-xs font-medium">
-            Not in a group. Their work below is their own; add them to a group to review it
-            with the rest.
-          </span>
-        ) : null}
-        {groupInfo?.isGroup && groupInfo.members.length === 0 ? (
-          <span className="text-muted-foreground block text-xs">
-            The only member of that group.
-          </span>
-        ) : null}
-      </div>
+      {/* Labelled like the problem picker beside it: the two are the same kind of control and
+          should read as a pair rather than one being a bare row of buttons. */}
+      <span className="text-muted-foreground text-xs font-medium">Student</span>
       {/* Prev / student picker / Next joined into one segmented control, below the info. */}
-      <div className="flex items-center">
+      <div className="flex w-full min-w-0 items-center">
         <Button
           variant="secondary"
+          size="icon"
           onClick={onPrev}
           aria-keyshortcuts="ArrowLeft"
+          aria-label="Previous student"
           title="Previous student (Left arrow)"
-          className="flex w-28 items-center justify-center gap-x-1 rounded-r-none"
+          className="shrink-0 rounded-r-none"
         >
-          <ChevronLeft className="h-4 w-4" /> Previous
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </Button>
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="bg-card text-foreground border-border hover:bg-accent focus:ring-ring relative flex w-[320px] items-center gap-2 rounded-none border border-x-0 focus:z-10 focus:ring-2"
+              className="bg-card text-foreground border-border hover:bg-accent focus:ring-ring relative flex min-w-0 flex-1 items-center gap-2 rounded-none border-x-0 focus:z-10 focus:ring-2"
             >
               <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                 {selectedStudent ? (
@@ -345,13 +242,32 @@ export default function StudentNavigator({
                     className="hover:bg-accent"
                     onClick={() => handleSelect(s.id)}
                   >
-                    <span className="flex items-center gap-2 truncate">
+                    {/* Full width, or ml-auto on the score below has nothing to push against
+                        and the figures never line up. */}
+                    <span className="flex w-full items-center gap-2">
+                      {/* Filled when fully graded, hollow when not: a shape difference as well
+                          as a colour one, matching the problem picker. */}
                       <span
-                        className={`h-2.5 w-2.5 rounded-full ${gradeStatuses?.[s.id] ? 'bg-status-success-solid' : 'bg-status-danger-solid'}`}
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 ${
+                          gradeStatuses?.[s.id]
+                            ? 'border-status-success-solid bg-status-success-solid'
+                            : 'border-status-danger-solid bg-transparent'
+                        }`}
                         aria-hidden="true"
                       />
                       <span className="truncate">{listName(s)}</span>
                       {s.enrollmentStatus === 'DROPPED' ? <DroppedBadge /> : null}
+                      {/* Their standing on this assignment, the way the problem picker shows
+                          each problem's. A dash reads as ungraded without relying on the dot's
+                          colour. */}
+                      {typeof totalPoints === 'number' ? (
+                        <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
+                          {gradeStatuses?.[s.id] || (earnedByStudent?.[s.id] ?? 0) > 0
+                            ? (earnedByStudent?.[s.id] ?? 0)
+                            : '—'}
+                          /{totalPoints}
+                        </span>
+                      ) : null}
                       {/* Text equivalent for the color-coded dot (use of color). */}
                       <span className="sr-only">
                         {gradeStatuses?.[s.id] ? 'All problems graded' : 'Missing grades'}
@@ -373,13 +289,26 @@ export default function StudentNavigator({
         </DropdownMenu>
         <Button
           variant="secondary"
+          size="icon"
           onClick={onNext}
           aria-keyshortcuts="ArrowRight"
+          aria-label="Next student"
           title="Next student (Right arrow)"
-          className="flex w-28 items-center justify-center gap-x-1 rounded-l-none"
+          className="shrink-0 rounded-l-none"
         >
-          Next <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </Button>
+      </div>
+      <div className="min-w-0">
+        {/* A group assignment with nobody to submit alongside is a setup mistake, not a
+            fact about this student's work. Say so here rather than letting the panel read
+            as a normal individual submission. */}
+        {groupInfo?.isGroupAssignment && !groupInfo.isGroup ? (
+          <span className="text-status-warning block text-xs font-medium">
+            Not in a group. Their work below is their own; add them to a group to review it
+            with the rest.
+          </span>
+        ) : null}
       </div>
     </div>
   );

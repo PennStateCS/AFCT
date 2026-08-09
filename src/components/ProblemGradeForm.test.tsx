@@ -15,7 +15,7 @@ describe('ProblemGradeForm', () => {
 
     render(<ProblemGradeForm value="7" currentGrade={5} onChange={onChange} onSubmit={onSubmit} />);
 
-    const saveButton = screen.getByRole('button', { name: 'Save Grade' });
+    const saveButton = screen.getByRole('button', { name: 'Save' });
     expect(saveButton).toBeEnabled();
 
     await user.click(saveButton);
@@ -33,7 +33,7 @@ describe('ProblemGradeForm', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Save Grade' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.getByText('Grade must be numeric')).toBeInTheDocument();
   });
 

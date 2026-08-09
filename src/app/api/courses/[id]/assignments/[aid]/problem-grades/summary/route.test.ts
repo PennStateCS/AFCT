@@ -70,11 +70,11 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/summary', () => {
     expect(prismaMock.assignmentProblemGrade.groupBy).not.toHaveBeenCalled();
   });
 
-  it('returns completion booleans for each student', async () => {
+  it('reports each student\'s completion and what they have earned', async () => {
     prismaMock.assignmentProblem.count.mockResolvedValue(3);
     prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
-      { studentId: 's1', _count: { grade: 3 } },
-      { studentId: 's2', _count: { grade: 2 } },
+      { studentId: 's1', _count: { grade: 3 }, _sum: { grade: 30 } },
+      { studentId: 's2', _count: { grade: 2 }, _sum: { grade: 12 } },
     ]);
 
     const res = await GET(new Request('http://localhost'), {
@@ -83,8 +83,8 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/summary', () => {
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      s1: true,
-      s2: false,
+      s1: { graded: true, earned: 30 },
+      s2: { graded: false, earned: 12 },
     });
   });
 

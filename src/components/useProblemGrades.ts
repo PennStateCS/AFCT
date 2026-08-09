@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient } from '@/lib/api/fetch-client';
+import { errMessage } from '@/lib/errors';
 import { ApiError } from '@/lib/api/fetch-client';
 import type { ReviewDataResponse } from './useReviewData';
 
@@ -75,6 +76,8 @@ export function useProblemGrades({
   const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
   const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
   const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
+  /** Points each student has earned on this assignment so far, for the student picker. */
+  const [studentEarned, setStudentEarned] = useState<Record<string, number>>({});
 
   // Whether a saved grade applies to the whole group. Defaults to the group, and resets per
   // student so a deliberate individual adjustment does not carry to the next person.
@@ -92,10 +95,12 @@ export function useProblemGrades({
       const res = await fetch(apiPaths.assignmentProblemGradesSummary(courseId, assignmentId));
       if (!res.ok) {
         // Match the previous silent handling of auth/not-found responses.
-        if ([401, 403, 404].includes(res.status)) return {} as Record<string, boolean>;
+        if ([401, 403, 404].includes(res.status)) {
+          return {} as Record<string, { graded: boolean; earned: number }>;
+        }
         throw new Error((await res.json())?.error || 'Failed to load grade summary');
       }
-      return ((await res.json()) ?? {}) as Record<string, boolean>;
+      return ((await res.json()) ?? {}) as Record<string, { graded: boolean; earned: number }>;
     },
     enabled: students.length > 0,
     staleTime: 30_000,
@@ -115,14 +120,18 @@ export function useProblemGrades({
   useEffect(() => {
     if (students.length === 0) {
       setStudentGradeStatuses({});
+      setStudentEarned({});
       return;
     }
     if (gradeSummaryData === undefined) return;
     const normalized: Record<string, boolean> = {};
+    const earned: Record<string, number> = {};
     students.forEach((student) => {
-      normalized[student.id] = Boolean(gradeSummaryData?.[student.id]);
+      normalized[student.id] = Boolean(gradeSummaryData?.[student.id]?.graded);
+      earned[student.id] = gradeSummaryData?.[student.id]?.earned ?? 0;
     });
     setStudentGradeStatuses(normalized);
+    setStudentEarned(earned);
   }, [students, gradeSummaryData]);
 
   // Seed the local editable GRADE state from the cached review data. When there is no
@@ -233,6 +242,33 @@ export function useProblemGrades({
 
   const cancelGroupGrade = useCallback(() => setPendingGroupGrade(null), []);
 
+  /**
+   * Hold this student's grade against the autograder, or hand it back.
+   *
+   * Releasing it is the consequential direction: the next re-run of that submission may
+   * replace the mark with nothing further from a person, so it is worth the grader knowing
+   * that is what the switch means.
+   */
+  const setManualHold = useCallback(
+    async (problemId: string, held: boolean) => {
+      if (!selectedStudentId) return;
+      try {
+        await apiClient.patch(
+          apiPaths.assignmentProblemGradeManual(courseId, assignmentId, problemId, selectedStudentId),
+          { gradedManually: held },
+        );
+        void queryClient.invalidateQueries({
+          queryKey: ['course', courseId, 'assignment', assignmentId, 'review-data', selectedStudentId],
+        });
+        showToast.success(held ? 'Grade held' : 'Grade released to the autograder');
+      } catch (error) {
+        console.error('Set manual hold error:', error);
+        showToast.error(errMessage(error, 'Failed to update the grade hold'));
+      }
+    },
+    [courseId, assignmentId, selectedStudentId, queryClient],
+  );
+
   const saveProblemGrade = useCallback(
     async (problemId: string) => {
       if (!selectedStudent) return;
@@ -322,6 +358,14 @@ export function useProblemGrades({
               ...prevStatus,
               [selectedStudent.id]: hasAllGrades,
             }));
+            const before = prev[problemId] ?? 0;
+            const delta = (numericValue ?? 0) - before;
+            if (delta !== 0) {
+              setStudentEarned((prevEarned) => ({
+                ...prevEarned,
+                [selectedStudent.id]: (prevEarned[selectedStudent.id] ?? 0) + delta,
+              }));
+            }
           }
           return updated;
         });
@@ -376,11 +420,13 @@ export function useProblemGrades({
     pendingGroupGrade,
     confirmGroupGrade,
     cancelGroupGrade,
+    setManualHold,
     problemGrades,
     gradeInputs,
     problemGradeErrors,
     savingProblemGrades,
     studentGradeStatuses,
+    studentEarned,
     handleGradeInputChange,
     saveProblemGrade,
   };

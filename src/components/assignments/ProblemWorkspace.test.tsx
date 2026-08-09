@@ -47,8 +47,8 @@ beforeEach(() => {
 
 describe('ProblemWorkspace submissions area', () => {
   // The table carries its own toolbar, headers and pager, so it is rendered in place rather
-  // than inside a panel whose only content was the word "Submissions".
-  it('names the table for assistive tech without a visible panel header', () => {
+  // than inside a panel whose only content was a heading.
+  it('names the table for assistive tech', () => {
     render(
       <ProblemWorkspace
         {...baseProps}
@@ -67,12 +67,12 @@ describe('ProblemWorkspace submissions area', () => {
       />,
     );
 
-    expect(screen.getByRole('table', { name: /Submissions/i })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /Problem attempts/i })).toBeInTheDocument();
   });
 
-  // The action used to live in the panel header. With the panel gone it belongs with the
-  // table's other controls.
-  it('offers the grant action alongside the table controls', () => {
+  // Granting sits on the problem's own title row, beside what it acts on, rather than in
+  // the table toolbar where it competed with the table's controls.
+  it('offers the grant action on the problem row', () => {
     render(
       <ProblemWorkspace
         {...baseProps}
@@ -95,21 +95,21 @@ describe('ProblemWorkspace submissions area', () => {
   });
 
   /**
-   * The case that is easy to lose: with no submissions the table is not rendered at all, so
-   * an action living only in its toolbar would disappear exactly when a student has nothing
-   * yet, which is a moment staff may well want to grant them another attempt.
+   * The case that is easy to lose: with no attempts the table is not rendered at all, so an
+   * action living in its toolbar would disappear exactly when a student has nothing yet,
+   * which is a moment staff may well want to grant them another attempt.
    */
-  it('keeps the grant action reachable when there are no submissions', () => {
+  it('keeps the grant action reachable when there are no attempts', () => {
     render(<ProblemWorkspace {...baseProps} submissionsAction={grantButton} />);
 
-    expect(screen.getByText('No submissions yet.')).toBeInTheDocument();
+    expect(screen.getByText('No attempts yet.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Grant extra submissions' })).toBeInTheDocument();
   });
 
   it('renders the empty state without an action when none is given', () => {
     render(<ProblemWorkspace {...baseProps} />);
 
-    expect(screen.getByText('No submissions yet.')).toBeInTheDocument();
+    expect(screen.getByText('No attempts yet.')).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Grant extra submissions' }),
     ).not.toBeInTheDocument();

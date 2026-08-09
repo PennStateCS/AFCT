@@ -13,6 +13,9 @@ export type GradeAudience = {
   onTargetChange: (target: 'student' | 'group') => void;
 };
 
+/** Shared with the page's keyboard handler, which focuses this field. */
+export const GRADE_INPUT_ID = 'problem-grade-input';
+
 type ProblemGradeFormProps = {
   value: string;
   currentGrade: number | null;
@@ -86,21 +89,21 @@ export default function ProblemGradeForm({
     sanitizedCurrent !== groupGradeValue;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col items-start gap-1">
       {/* Group assignments only. Defaults to the group, because one submission earns one
           grade; grading member by member is the same number typed N times, where a typo on
           the fourth is invisible. */}
       {audience?.group && !disabled ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground text-xs font-medium">Grade</span>
+        <div className="flex flex-col items-start gap-1">
+          <span className="text-muted-foreground text-xs font-medium">Apply grade to</span>
           <SegmentedControl
             name="grade-audience"
             value={audience.target}
             onValueChange={(v) => audience.onTargetChange(v as 'student' | 'group')}
             ariaLabel="Who this grade applies to"
             options={[
-              { value: 'group', label: audience.group.name },
-              { value: 'student', label: `Only ${audience.studentName}` },
+              { value: 'group', label: 'Entire group' },
+              { value: 'student', label: `${audience.studentName} Only` },
             ]}
           />
           {isAdjusted ? (
@@ -110,19 +113,20 @@ export default function ProblemGradeForm({
           ) : null}
         </div>
       ) : null}
-      <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
-        {/* Input, a static "/N" points suffix, and the button, joined into one
-            segmented control. The admin types the earned points; "/N" shows the total
-            the problem is worth. */}
-        <div className="flex w-fit items-stretch">
+      <span className="text-muted-foreground text-xs font-medium">Grade</span>
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-start gap-2">
+        {/* The field and its "/N" suffix read as one control; the button is separate, so
+            saving looks like an action rather than another part of the number. */}
+        <div className="border-input focus-within:border-ring focus-within:ring-ring/50 flex w-fit items-stretch overflow-hidden rounded-md border shadow-xs focus-within:ring-[3px]">
           <Input
+            id={GRADE_INPUT_ID}
             type="number"
             inputMode="decimal"
             value={gradeValue}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={isLoading ? '-' : sanitizedCurrent === null ? '-' : ''}
-            className="w-20 rounded-r-none border-r-0 focus-visible:z-10"
+            className="w-20 rounded-none border-0 shadow-none focus-visible:border-0 focus-visible:ring-0"
             aria-label={
               maxPoints === null || maxPoints === undefined
                 ? 'Problem grade'
@@ -135,13 +139,18 @@ export default function ProblemGradeForm({
           {maxPoints === null || maxPoints === undefined ? null : (
             <span
               aria-hidden="true"
-              className="border-input text-muted-foreground flex items-center border border-x-0 pr-2 pl-1 text-sm whitespace-nowrap select-none"
+              className="text-muted-foreground flex items-center pr-3 pl-1 text-sm whitespace-nowrap select-none"
             >
               /{maxPoints}
             </span>
           )}
-          <Button type="submit" className="rounded-l-none whitespace-nowrap" disabled={disableButton}>
-            {isSaving ? 'Saving…' : 'Save Grade'}
+          <Button
+            type="submit"
+            variant="secondary"
+            className="rounded-l-none whitespace-nowrap"
+            disabled={disableButton}
+          >
+            {isSaving ? 'Saving…' : 'Save'}
           </Button>
         </div>
         {error ? (
