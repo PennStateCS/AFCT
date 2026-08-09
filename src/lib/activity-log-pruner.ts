@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { purgeExpiredSingleUseTokens } from '@/lib/single-use-token';
 import {
   DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
   clampActivityLogRetentionDays,
@@ -41,8 +42,24 @@ async function pruneOnce(): Promise<void> {
   }
 }
 
+// Expired password-reset links and the like. Sharing this daily pass rather than starting a
+// second timer: both are retention chores on the same schedule, and one loop is one thing to
+// reason about. Failures are logged and swallowed, because a sweep that cannot run must never
+// stop the one beside it.
+async function purgeTokensOnce(): Promise<void> {
+  try {
+    const count = await purgeExpiredSingleUseTokens();
+    if (count > 0) {
+      console.log(`[single-use-token] deleted ${count} expired tokens`);
+    }
+  } catch (error) {
+    console.error('[single-use-token] purge failed:', error);
+  }
+}
+
 async function loop(): Promise<void> {
   await pruneOnce();
+  await purgeTokensOnce();
   setTimeout(() => void loop(), PRUNE_INTERVAL_MS);
 }
 
@@ -54,4 +71,4 @@ export function startActivityLogPruner(): void {
 }
 
 // Exposed for unit tests only.
-export const __test__ = { pruneOnce, getRetentionDays };
+export const __test__ = { pruneOnce, purgeTokensOnce, getRetentionDays };

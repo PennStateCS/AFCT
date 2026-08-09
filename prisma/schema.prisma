@@ -73,6 +73,13 @@ enum GradeSource {
   MANUAL
 }
 
+// What a single-use token authorises. One table rather than one per purpose, because they all
+// need the same properties (hashed at rest, expiring, used exactly once) and getting any of
+// those wrong once is better than getting them wrong three times.
+enum SingleUseTokenPurpose {
+  PASSWORD_RESET
+}
+
 /// A person with an account: student, teaching assistant, faculty member or system
 /// administrator. One account is used across every course; what a person may do in a given
 /// course comes from their Roster row, not from this record.
@@ -134,6 +141,7 @@ model User {
   commentsAbout       Comment[]                @relation("CommentsAboutStudent") // Comments about this student's work
   commentsAuthored    Comment[]                @relation("CommentAuthor") // Comments this user wrote
   clientTokens        ClientApiToken[] // Bearer tokens issued to the native (Java) client
+  singleUseTokens     SingleUseToken[] // Password-reset and similar one-shot links
   assignmentAssignees AssignmentAssignee[]     @relation("AssigneeTarget") // assignments this student is individually assigned
   assignmentOverrides AssignmentOverride[]     @relation("OverrideTarget") // deadline overrides targeting this student
   overridesCreated    AssignmentOverride[]     @relation("OverrideCreatedBy") // overrides this user created
@@ -179,6 +187,40 @@ model ClientApiToken {
   revokedAt  DateTime?
 
   @@index([userId])
+}
+
+/// A token that works exactly once, within a time window: the password-reset link today, and
+/// the shape anything similar should reuse.
+///
+/// Only the SHA-256 hash is stored, so a leaked database, or a leaked backup, does not hand
+/// anyone a working link. "Used exactly once" is enforced by a conditional update on `usedAt`
+/// rather than by reading and then writing, so two simultaneous clicks on the same link cannot
+/// both succeed.
+///
+/// @namespace Identity
+model SingleUseToken {
+  /// Unique identifier.
+  id        String                @id @default(cuid())
+  /// sha256(token), never the plaintext.
+  tokenHash String                @unique
+  /// What the token authorises. A token issued for one purpose is refused for another.
+  purpose   SingleUseTokenPurpose
+
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Who the token is for. Optional because not every future purpose has a user behind it
+  /// (an LTI launch nonce, for instance, is issued before anyone is identified).
+  userId String?
+
+  /// When the token stops working.
+  expiresAt DateTime
+  /// When it was spent. Once set, the token is refused.
+  usedAt    DateTime?
+  /// When this record was created.
+  createdAt DateTime  @default(now())
+
+  @@index([userId, purpose])
+  /// Expired rows are swept periodically; this is the index that sweep reads.
+  @@index([expiresAt])
 }
 
 /// A single offering of a course: one section, in one term, with its own roster, assignments
