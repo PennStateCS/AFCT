@@ -579,10 +579,14 @@ Properties as follows:
   > after either the flag says nothing about where the number came from. Use `gradeSource`
   > for that.
 - `gradeSource`
-  > Who produced the number. Separate from the hold above because the two come apart: a
-  > released manual grade is still a manual grade, and a held autograded one is still the
-  > autograder's. Reading the hold as provenance told a grader who had released their own
-  > grade that "the autograder set this grade".
+  > Who produced the number: `AUTOGRADER` or `MANUAL`. Separate from the hold above because
+  > the two come apart: a released manual grade is still a manual grade, and a held
+  > autograded one is still the autograder's. Reading the hold as provenance told a grader
+  > who had released their own grade that "the autograder set this grade".
+  >
+  > The three hand-grading routes write `MANUAL`; the submission worker writes `AUTOGRADER`,
+  > including when it overwrites a released grade, because at that point the number is its
+  > own. `lib/grade-hold.ts` is the only place that turns this into words for a screen.
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
 - `assignmentId`: The assignment.
