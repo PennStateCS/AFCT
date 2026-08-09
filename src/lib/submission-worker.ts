@@ -428,6 +428,9 @@ async function evaluateSubmission(id: string) {
       fileHashData: evaluation.fileHashData,
       calcHashData: evaluation.calcHashData,
       similarityReportJson: evaluation.similarityReportJson,
+      isSuspicious: evaluation.isSuspicious ?? null,
+      isSuspiciousOverride: evaluation.isSuspiciousOverride ?? null,
+      isSuspiciousReason: evaluation.isSuspiciousReason ?? null,
     });
 
     if (!written) {

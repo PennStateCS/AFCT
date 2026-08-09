@@ -67,8 +67,15 @@ export async function jflapSimilarityParser(filePath: string): Promise<JflapSimi
 
     const lines = fileContents.trimEnd().split(/\r?\n/);
     const [secondLastLine, lastLine] = [lines[lines.length - 2] ?? '', lines[lines.length - 1] ?? ''];
-    const fileHashEmail = extractCommentTagValue(secondLastLine, 'hashE');
-    const fileHashData = extractCommentTagValue(lastLine, 'hashD');
+
+    let fileHashEmail = extractCommentTagValue(secondLastLine, 'hashE');
+    let fileHashData = extractCommentTagValue(lastLine, 'hashD');
+    
+    if (fileHashEmail === null && fileHashData === null) {
+      fileHashEmail = extractCommentTagValue(lastLine, 'hashE');
+      fileHashData = extractCommentTagValue(secondLastLine, 'hashD');
+    }
+
     const calcHashData = hashStructureElement(fileContents);
 
     return { fileHashEmail, fileHashData, calcHashData };

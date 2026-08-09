@@ -485,10 +485,16 @@ erDiagram
   Json evaluationRaw "nullable"
   String fileName "nullable"
   String originalFileName "nullable"
+  String fileHashData "nullable"
+  String calcHashData "nullable"
+  Json similarityReportJson "nullable"
+  Boolean isSuspicious "nullable"
+  Boolean isSuspiciousOverride "nullable"
+  String isSuspiciousReason "nullable"
   DateTime createdAt
   DateTime updatedAt
   String assignmentId FK
-  String problemId
+  String problemId FK
   String studentId FK
   String courseId FK
   String studentGroupId FK "nullable"
@@ -533,6 +539,12 @@ Properties as follows:
 - `evaluationRaw`: Full grader output, kept for diagnosis.
 - `fileName`: Stored submitted file.
 - `originalFileName`: Name of the file as the student sent it.
+- `fileHashData`:
+- `calcHashData`:
+- `similarityReportJson`:
+- `isSuspicious`:
+- `isSuspiciousOverride`:
+- `isSuspiciousReason`:
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
 - `assignmentId`: The assignment.
