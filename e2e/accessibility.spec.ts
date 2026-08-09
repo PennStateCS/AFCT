@@ -330,10 +330,10 @@ test.describe('accessibility: paginated tables (axe, contrast excluded)', () => 
     expect(violations, summarize(violations)).toEqual([]);
   });
 
-  test('the autograder queue', async ({ page }) => {
+  test('the submissions page', async ({ page }) => {
     await signIn(page, 'admin');
     await page.goto('/dashboard/submissions');
-    await expect(page.getByRole('table', { name: 'Autograder' })).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole('table', { name: 'Submissions' })).toBeVisible({ timeout: 60_000 });
     const { violations } = await scan(page);
     expect(violations, summarize(violations)).toEqual([]);
   });
