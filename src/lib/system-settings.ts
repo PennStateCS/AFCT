@@ -30,6 +30,9 @@ export const MAX_LOGIN_LOCKOUT_MINUTES = 1440;
 // retention bounds keep dumps from being kept forever or pruned too aggressively.
 export const DEFAULT_BACKUP_ENABLED = true;
 export const DEFAULT_BACKUP_HOUR = 2;
+
+/** Port an admin starts from. 587 with STARTTLS is what most institutional servers expect. */
+export const DEFAULT_SMTP_PORT = 587;
 export const MIN_BACKUP_HOUR = 0;
 export const MAX_BACKUP_HOUR = 23;
 export const DEFAULT_BACKUP_RETENTION_DAYS = 14;

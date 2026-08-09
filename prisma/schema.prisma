@@ -60,6 +60,15 @@ enum OverrideTargetType {
 // How an assignment/problem description is stored. PLAIN_TEXT keeps the legacy `description`
 // string as the source of truth; TIPTAP_JSON means the rich source lives in `descriptionJson`
 // and `description` holds derived plain text for legacy clients.
+// How AFCT connects to a mail server. STARTTLS is what most institutional servers expect on
+// port 587; TLS is an implicit-TLS connection, usually port 465. NONE exists for a relay on a
+// trusted internal network and should be rare.
+enum SmtpSecurity {
+  NONE
+  STARTTLS
+  TLS
+}
+
 enum DescriptionFormat {
   PLAIN_TEXT
   TIPTAP_JSON
@@ -1027,6 +1036,24 @@ model SystemSettings {
   hcaptchaSiteKey   String?
   /// Private hCaptcha key. Never sent to the browser.
   hcaptchaSecretKey String?
+
+  /// Whether AFCT may send email at all. Off until an admin configures a server and turns it
+  /// on, so an install that does not want mail behaves exactly as it did before.
+  smtpEnabled     Boolean      @default(false)
+  /// Mail server hostname.
+  smtpHost        String?
+  /// Mail server port. 587 with STARTTLS is the usual institutional answer.
+  smtpPort        Int?
+  smtpSecurity    SmtpSecurity @default(STARTTLS)
+  /// Username for the mail server, when it requires one.
+  smtpUsername    String?
+  /// Password for the mail server. Encrypted at rest (see `lib/secret-encryption`) and never
+  /// returned to the browser; the API reports only whether one is stored.
+  smtpPassword    String?
+  /// Address mail is sent from. Institutions usually require this to be one they host.
+  smtpFromAddress String?
+  /// Display name shown beside the from address.
+  smtpFromName    String?
 
   /// When this record was created.
   createdAt DateTime @default(now())

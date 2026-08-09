@@ -192,6 +192,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/settings/test-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test email using the stored mail settings
+         * @description Sends a test message using the stored mail settings.   Exists so mail is proved working at the moment an admin configures it, rather than the first  time a student cannot get back into their account. It reads the saved settings rather than  anything in the request body, so what it proves is what the site will actually do.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/test-email/route.ts)
+         */
+        post: operations["postAdminSettingsTestEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/settings/tls/acme-progress": {
         parameters: {
             query?: never;
@@ -3161,6 +3183,70 @@ export interface operations {
                 };
             };
             /** @description Failed to persist the update. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminSettingsTestEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: email
+                     * @description Where to send the test message
+                     */
+                    to: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The message was accepted by the mail server. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad body, or mail is not configured. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
             500: {
                 headers: {
                     [name: string]: unknown;
