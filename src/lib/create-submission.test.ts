@@ -457,6 +457,32 @@ describe('createSubmission', () => {
       });
     });
 
+    /**
+     * The mirror of the case above, and the one that was unguarded: a student can be in a
+     * group in the course while the assignment they are submitting to is not group work.
+     * Filing that against the group would pool their cap with people they are not working
+     * with, and put one student's submission in front of the others.
+     */
+    it('files an individual assignment against the student, even when they are in a group', async () => {
+      const { tx } = setup({
+        // Not a group assignment, but the submitter is still a member of group-9.
+        assignment: { ...groupAssignment(), groupSetId: null },
+      });
+
+      const res = await call();
+
+      expect(res).toMatchObject({ ok: true });
+      expect(tx.submission.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ studentGroupId: null, studentId: STUDENT.id }),
+        }),
+      );
+      // And the cap counts only this student's attempts.
+      expect(prismaMock.submission.count).toHaveBeenCalledWith({
+        where: { assignmentId: 'a-1', problemId: 'p-1', studentId: STUDENT.id },
+      });
+    });
+
     it('locks the group set as part of the same transaction', async () => {
       setup({ assignment: groupAssignment() });
       await call();
