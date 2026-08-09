@@ -9,9 +9,12 @@ import {
   loopLabelOffset,
   startMarkerPolygon,
   startMarkerPosition,
+  FINAL_STATE_BORDER_WIDTH,
   LABEL_LINE_HEIGHT,
   LOOP_REACH,
+  NODE_DIAMETER,
   START_MARKER_SIZE,
+  STATE_BORDER_WIDTH,
 } from '@/lib/jflap-layout';
 import { parseJflap, toElements, type MachineType, type Parsed } from '@/lib/jflap-parse';
 
@@ -151,7 +154,15 @@ function repositionStartNodes(cy: any) {
         .concat(selfLoopObstacles(node));
 
       const angle = bestStartMarkerDirection(node.position(), obstacles, incidentEdgeAngles(node));
-      const pos = startMarkerPosition(node.position(), angle);
+      // A final state carries the wider double border, and the marker has to clear its
+      // outer circle rather than stopping at the nominal radius, which put the arrow's
+      // point in the gap between the two circles.
+      const pos = startMarkerPosition(
+        node.position(),
+        angle,
+        NODE_DIAMETER,
+        node.hasClass('final') ? FINAL_STATE_BORDER_WIDTH : STATE_BORDER_WIDTH,
+      );
       const startNodeId = `__start${idx}`;
       let startNode = cy.getElementById(startNodeId);
 
@@ -270,7 +281,7 @@ export function useJffCytoscape({
               style: {
                 'background-color': NODE_FILL,
                 'border-color': STATE_STROKE,
-                'border-width': 2,
+                'border-width': STATE_BORDER_WIDTH,
                 label: 'data(label)',
                 'font-family': uiFontFamily,
                 'font-size': 16,
@@ -284,7 +295,10 @@ export function useJffCytoscape({
             },
             // JFLAP marks a final state with a second, inner circle. A double border is
             // the same picture without a second element per state.
-            { selector: 'node.final', style: { 'border-width': 6, 'border-style': 'double' } },
+            {
+              selector: 'node.final',
+              style: { 'border-width': FINAL_STATE_BORDER_WIDTH, 'border-style': 'double' },
+            },
             // The initial-state marker, drawn the way JFLAP draws it: an unfilled
             // triangle on its side with its point against the state. It follows the theme
             // rather than JFLAP's flat black, for the same reason the edges do: it sits on

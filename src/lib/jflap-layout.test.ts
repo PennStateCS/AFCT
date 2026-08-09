@@ -7,11 +7,13 @@ import {
   startMarkerPolygon,
   startMarkerPosition,
   EDGE_LABEL_GAP,
+  FINAL_STATE_BORDER_WIDTH,
   LABEL_LINE_HEIGHT,
   LABEL_LOOP_GAP,
   LOOP_REACH,
   NODE_DIAMETER,
   START_MARKER_SIZE,
+  STATE_BORDER_WIDTH,
 } from './jflap-layout';
 
 describe('the initial-state marker', () => {
@@ -24,21 +26,55 @@ describe('the initial-state marker', () => {
     expect(pos.y).toBeCloseTo(state.y);
   });
 
+  // The point is half a box out from the box centre, facing back at the state.
+  const triangleTip = (pos: { x: number; y: number }, angle: number) => ({
+    x: pos.x - (Math.cos(angle) * START_MARKER_SIZE) / 2,
+    y: pos.y - (Math.sin(angle) * START_MARKER_SIZE) / 2,
+  });
+  const tipDistance = (angle: number, borderWidth?: number) => {
+    const pos = startMarkerPosition(state, angle, NODE_DIAMETER, borderWidth);
+    const tip = triangleTip(pos, angle);
+    return Math.hypot(tip.x - state.x, tip.y - state.y);
+  };
+
   it('puts the triangle point on the state rim, with no gap and no overlap', () => {
     for (const angle of [WEST, 0, Math.PI / 2, -Math.PI / 4]) {
-      const pos = startMarkerPosition(state, angle);
-      // The point is half a box out from the box centre, facing back at the state.
-      const point = {
-        x: pos.x - (Math.cos(angle) * START_MARKER_SIZE) / 2,
-        y: pos.y - (Math.sin(angle) * START_MARKER_SIZE) / 2,
-      };
-      expect(Math.hypot(point.x - state.x, point.y - state.y)).toBeCloseTo(NODE_DIAMETER / 2);
+      // Cytoscape centres a border on the node boundary, so the outside of the rim is half
+      // a border beyond the nominal radius.
+      expect(tipDistance(angle)).toBeCloseTo(NODE_DIAMETER / 2 + STATE_BORDER_WIDTH / 2);
     }
+  });
+
+  /**
+   * A final state is two concentric circles, drawn as a 6px double border centred on the
+   * boundary: the outer circle lands near 32 and the inner near 26, with the gap straddling
+   * the nominal radius of 29. Reaching only to 29 left the arrow's point in that gap, so it
+   * read as having pierced the outer circle. An arrow stops at the outermost edge.
+   */
+  it('clears the outer circle of a final state', () => {
+    for (const angle of [WEST, 0, Math.PI / 2, -Math.PI / 4]) {
+      const tip = tipDistance(angle, FINAL_STATE_BORDER_WIDTH);
+
+      expect(tip).toBeCloseTo(NODE_DIAMETER / 2 + FINAL_STATE_BORDER_WIDTH / 2);
+      // Specifically outside the gap, which is what the old placement landed in.
+      expect(tip).toBeGreaterThan(NODE_DIAMETER / 2);
+    }
+  });
+
+  it('pushes the marker further out for a final state than a plain one', () => {
+    const plain = startMarkerPosition(state, WEST);
+    const final = startMarkerPosition(state, WEST, NODE_DIAMETER, FINAL_STATE_BORDER_WIDTH);
+
+    expect(Math.hypot(final.x - state.x, final.y - state.y)).toBeGreaterThan(
+      Math.hypot(plain.x - state.x, plain.y - state.y),
+    );
   });
 
   it('respects a custom node diameter', () => {
     const pos = startMarkerPosition({ x: 0, y: 0 }, WEST, 100);
-    expect(pos.x).toBeCloseTo(-100);
+
+    // Half the state, half its border, half the marker box, which is a fixed size.
+    expect(pos.x).toBeCloseTo(-(50 + STATE_BORDER_WIDTH / 2 + START_MARKER_SIZE / 2));
   });
 
   it('stays on the left when nothing is in the way', () => {
