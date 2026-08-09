@@ -38,6 +38,19 @@ The grade field applies to the selected student and problem.
 
 Enter a score only after checking that you have the right student and problem. You can also edit several problem scores at once from the [Grades](grades.md) page by opening a student's assignment breakdown.
 
+### Grades the autograder cannot change
+
+On a problem the autograder grades, a line under the grade field reports where the current score came from and whether the autograder can still change it. Any score you enter is held automatically, so a re-run leaves it alone. You do not need to lock anything yourself.
+
+Two buttons appear there, depending on the state:
+
+- **Release to autograder** hands a held score back. The score does not change now, but the next time that submission is re-run the autograder may replace it, without anyone entering a new score. AFCT asks you to confirm before doing this.
+- **Lock this grade** protects a score the autograder produced, so a later re-run cannot change it.
+
+Releasing a score does not change who is credited with it. If you entered the score yourself, it still reads as a manual override; the line simply warns that the autograder can now replace it.
+
+Nothing appears on a problem that is not automatically graded. Re-running the evaluator there produces feedback for the student and never writes a grade, so there is nothing to protect against.
+
 ## Grant extra submissions
 
 Each problem has a shared submission limit set in the assignment's problem settings.

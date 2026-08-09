@@ -15,7 +15,6 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -26,6 +25,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { DataTable } from '@/components/ui/data-table';
 import ProblemHeader from '@/components/ProblemHeader';
 import ProblemGradeForm from '@/components/ProblemGradeForm';
+import { GradeHoldControl } from '@/components/GradeHoldControl';
 import { DataTableLoading } from '@/components/ui/data-table-status';
 import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
 import type { GradeAudience } from '@/components/ProblemGradeForm';
@@ -88,8 +88,10 @@ export type ProblemWorkspaceProps = {
   onSaveGrade?: () => void;
   /** Control shown in the Submissions panel header, e.g. granting extra attempts. */
   submissionsAction?: React.ReactNode;
-  /** Whether a person set this grade, so the autograder will leave it alone. */
+  /** Whether this grade is held, so the autograder will leave it alone. */
   gradedManually?: boolean;
+  /** Who produced the grade. Not derivable from the hold above; see `lib/grade-hold`. */
+  gradeSource?: 'AUTOGRADER' | 'MANUAL';
   /** Hold the grade against the autograder, or hand it back. */
   onManualHoldChange?: (held: boolean) => void;
   /** The group whose work this is, on a group assignment. */
@@ -153,6 +155,7 @@ export default function ProblemWorkspace({
   onSaveGrade,
   submissionsAction,
   gradedManually = false,
+  gradeSource = 'AUTOGRADER',
   onManualHoldChange,
   group = null,
   groupMembers,
@@ -451,20 +454,6 @@ export default function ProblemWorkspace({
                 <div className="flex items-center gap-2">
                   <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
                   <h3 className="text-sm font-medium">Problem Grade</h3>
-                  {/* Only meaningful where the autograder would otherwise write this grade.
-                      On a hand-graded problem every grade is manual and the switch would be a
-                      control with nothing on the other side of it. */}
-                  {problem.autograderEnabled && onManualHoldChange ? (
-                    <label className="text-muted-foreground ml-auto flex items-center gap-2 text-xs">
-                      <span>Manual override</span>
-                      <Switch
-                        checked={gradedManually}
-                        onCheckedChange={(v) => onManualHoldChange(!!v)}
-                        disabled={courseIsArchived}
-                        aria-label="Hold this grade against the autograder"
-                      />
-                    </label>
-                  ) : null}
                 </div>
                 <ProblemGradeForm
                   value={gradeInput}
@@ -478,13 +467,20 @@ export default function ProblemWorkspace({
                   onSubmit={onSaveGrade}
                   audience={gradeAudience}
                   groupGradeValue={groupGradeValue}
-                  autograderStatus={submissions[0]?.status ?? null}
-                  // `submissions[0]!` preserves the prior pass-through exactly; `!` is
-                  // compile-only so runtime behavior is unchanged.
-                  onRerun={
-                    onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined
-                  }
                 />
+                {/* Under the grade rather than beside the heading: it needs a sentence to
+                    mean anything, and the sentence is the part the old switch was missing. */}
+                {onManualHoldChange ? (
+                  <GradeHoldControl
+                    autograderEnabled={!!problem.autograderEnabled}
+                    gradeSource={gradeSource}
+                    gradedManually={gradedManually}
+                    hasGrade={currentGrade !== null && currentGrade !== undefined}
+                    onChange={onManualHoldChange}
+                    disabled={courseIsArchived}
+                    className="mt-1"
+                  />
+                ) : null}
               </div>
             ) : null}
             {group ? (

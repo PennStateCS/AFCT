@@ -259,6 +259,9 @@ export const GET = withCourseAuth(
             // Whether a person set this grade. The autograder skips these, so the workspace
             // can say which grades a re-run would leave alone.
             gradedManually: true,
+            // Who produced the number, which the flag above stops telling you the moment a
+            // grade is released or an autograded one is held.
+            gradeSource: true,
           },
         }),
       ]);
@@ -402,6 +405,7 @@ export const GET = withCourseAuth(
             updatedAt: string;
             groupGradeValue: number | null;
             gradedManually: boolean;
+            gradeSource: string;
           }
         >
       >((acc, record) => {
@@ -411,6 +415,7 @@ export const GET = withCourseAuth(
           updatedAt: record.updatedAt.toISOString(),
           groupGradeValue: record.groupGradeValue ?? null,
           gradedManually: record.gradedManually,
+          gradeSource: record.gradeSource,
         };
         return acc;
       }, {});

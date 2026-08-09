@@ -471,7 +471,15 @@ async function evaluateSubmission(id: string) {
             studentId: { in: gradeTargetIds },
             gradedManually: false,
           },
-          data: { grade: earnedPoints, feedback: evaluation.feedback, ...groupProvenance },
+          // Stamping the source here matters for released grades: a grade a person entered
+          // and then handed back becomes the autograder's the moment it overwrites it, and
+          // saying otherwise would credit a person with a number they did not choose.
+          data: {
+            grade: earnedPoints,
+            feedback: evaluation.feedback,
+            gradeSource: 'AUTOGRADER',
+            ...groupProvenance,
+          },
         });
         await tx.assignmentProblemGrade.createMany({
           data: gradeTargetIds.map((studentId) => ({
@@ -481,6 +489,7 @@ async function evaluateSubmission(id: string) {
             grade: earnedPoints,
             feedback: evaluation.feedback,
             gradedManually: false,
+            gradeSource: 'AUTOGRADER',
             ...groupProvenance,
           })),
           skipDuplicates: true,

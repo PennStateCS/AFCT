@@ -24,7 +24,7 @@ type RouteCtx = { params: Promise<{ id: string; aid: string; studentId: string }
  *   - { name: studentId, in: path, required: true, schema: { type: string } }
  * responses:
  *   200:
- *     description: A map of problemId → { grade, feedback, updatedAt }.
+ *     description: "A map of problemId to { grade, feedback, updatedAt, gradedManually, gradeSource }."
  *     content:
  *       application/json:
  *         schema: { type: object }
@@ -68,7 +68,17 @@ export const GET = withCourseAuth(
 
       const grades = await prisma.assignmentProblemGrade.findMany({
         where: { assignmentId, studentId },
-        select: { problemId: true, grade: true, feedback: true, updatedAt: true },
+        select: {
+          problemId: true,
+          grade: true,
+          feedback: true,
+          updatedAt: true,
+          // Whether a re-run can change this grade, and who produced it. Without the second
+          // the gradebook can only read the problem's autograder setting, which says how the
+          // problem is graded, not who graded it.
+          gradedManually: true,
+          gradeSource: true,
+        },
       });
 
       if (grades.length === 0) {
@@ -76,12 +86,23 @@ export const GET = withCourseAuth(
       }
 
       const payload = grades.reduce<
-        Record<string, { grade: number | null; feedback: string | null; updatedAt: string }>
+        Record<
+          string,
+          {
+            grade: number | null;
+            feedback: string | null;
+            updatedAt: string;
+            gradedManually: boolean;
+            gradeSource: string;
+          }
+        >
       >((acc, record) => {
         acc[record.problemId] = {
           grade: record.grade ?? null,
           feedback: record.feedback ?? null,
           updatedAt: record.updatedAt.toISOString(),
+          gradedManually: record.gradedManually,
+          gradeSource: record.gradeSource,
         };
         return acc;
       }, {});
@@ -257,8 +278,9 @@ export const POST = withCourseAuth(
                 grade: change.grade,
                 feedback: null,
                 gradedManually: true,
+                gradeSource: 'MANUAL',
               },
-              update: { grade: change.grade, gradedManually: true },
+              update: { grade: change.grade, gradedManually: true, gradeSource: 'MANUAL' },
             }),
       );
       const setsAnyGrade = changes.some((c) => c.grade !== null);

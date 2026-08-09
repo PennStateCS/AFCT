@@ -547,6 +547,12 @@ export default function AssignmentSubmissions({
                         ? (reviewData?.problemGrades?.[selectedProblem.id]?.gradedManually ?? false)
                         : false
                     }
+                    gradeSource={
+                      selectedProblem
+                        ? (reviewData?.problemGrades?.[selectedProblem.id]?.gradeSource ??
+                          'AUTOGRADER')
+                        : 'AUTOGRADER'
+                    }
                     onManualHoldChange={(held) =>
                       selectedProblem && void setManualHold(selectedProblem.id, held)
                     }

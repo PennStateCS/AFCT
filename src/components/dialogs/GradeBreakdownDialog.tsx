@@ -16,7 +16,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { GradeHoldBadge } from '@/components/GradeHoldControl';
+import type { GradeSource } from '@/lib/grade-hold';
 import { showToast } from '@/lib/toast';
 import { ClipboardList, Loader2 } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
@@ -30,8 +31,25 @@ type Row = {
   title: string;
   maxPoints: number;
   grade: number | null;
-  autograded: boolean;
+  /**
+   * The grade as stored, which `grade` drifts from as soon as someone types. The Grading
+   * badge describes what is recorded, so it reads from this rather than claiming a state
+   * the database is not in yet.
+   */
+  storedGrade: number | null;
+  /** Whether automatic grading is switched on for this problem. */
+  autograderEnabled: boolean;
+  /** Whether the grade is held against automatic grading. */
+  gradedManually: boolean;
+  /** Who produced the number. Distinct from both fields above: see `lib/grade-hold`. */
+  gradeSource: GradeSource;
 };
+
+/** What the problem-grades endpoint returns, keyed by problem id. */
+type ProblemGradeMap = Record<
+  string,
+  { grade: number | null; gradedManually?: boolean; gradeSource?: GradeSource }
+>;
 
 interface GradeBreakdownDialogProps {
   courseId: string;
@@ -80,9 +98,9 @@ export function GradeBreakdownDialog({
     queryFn: async () => {
       const res = await fetch(apiPaths.assignmentProblemGrades(courseId, assignmentId, studentId));
       // 204 means nothing graded yet; treat as an empty map.
-      if (res.status === 204) return {} as Record<string, { grade: number | null }>;
+      if (res.status === 204) return {} as ProblemGradeMap;
       if (!res.ok) throw new Error('Failed to fetch problem grades');
-      return (await res.json()) as Record<string, { grade: number | null }>;
+      return (await res.json()) as ProblemGradeMap;
     },
     enabled: open,
     staleTime: 30_000,
@@ -114,7 +132,10 @@ export function GradeBreakdownDialog({
       title: link.problem.title ?? 'Untitled',
       maxPoints: link.maxPoints,
       grade: grades[link.problem.id]?.grade ?? null,
-      autograded: link.autograderEnabled,
+      storedGrade: grades[link.problem.id]?.grade ?? null,
+      autograderEnabled: link.autograderEnabled,
+      gradedManually: grades[link.problem.id]?.gradedManually ?? false,
+      gradeSource: grades[link.problem.id]?.gradeSource ?? 'AUTOGRADER',
     }));
     setRows(newRows);
     setOriginalRows(newRows);
@@ -131,6 +152,9 @@ export function GradeBreakdownDialog({
     const hasAny = rows.some((r) => typeof r.grade === 'number');
     return { earned, possible, hasAny };
   }, [rows]);
+
+  // Only worth warning about where an autograder would otherwise touch these grades.
+  const hasAutogradedProblem = useMemo(() => rows.some((r) => r.autograderEnabled), [rows]);
 
   const isDirty = useMemo(() => {
     if (rows.length !== originalRows.length) return true;
@@ -202,12 +226,17 @@ export function GradeBreakdownDialog({
       {
         id: 'Grading',
         header: 'Grading',
-        cell: ({ row }) =>
-          row.original.autograded ? (
-            <Badge variant="secondary">Autograded</Badge>
-          ) : (
-            <Badge variant="outline">Manual</Badge>
-          ),
+        // Where this grade came from, which is not the same question as how the problem is
+        // set up. This column used to show the problem's autograder setting, so a grade a
+        // person had typed on an autograded problem read as "Autograded".
+        cell: ({ row }) => (
+          <GradeHoldBadge
+            autograderEnabled={row.original.autograderEnabled}
+            gradeSource={row.original.gradeSource}
+            gradedManually={row.original.gradedManually}
+            hasGrade={row.original.storedGrade !== null}
+          />
+        ),
         meta: { priority: 2 },
       },
       {
@@ -251,7 +280,15 @@ export function GradeBreakdownDialog({
           <DialogTitle>
             {studentName} &ndash; {assignmentTitle}
           </DialogTitle>
-          <DialogDescription>Edit individual problem scores for this assignment.</DialogDescription>
+          <DialogDescription>
+            Edit individual problem scores for this assignment.
+            {/* Saving here sets the manual flag on every grade written, so the autograder
+                will leave them alone from then on. That is a consequence worth stating
+                where it happens, rather than leaving it to be discovered after a re-run. */}
+            {hasAutogradedProblem
+              ? ' Grades saved here are held, so re-running the autograder will not change them.'
+              : ''}
+          </DialogDescription>
           {/* current score summary */}
           <div className="mt-1 text-right text-sm font-medium">
             Score:{' '}

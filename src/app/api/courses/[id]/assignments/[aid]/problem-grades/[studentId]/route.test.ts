@@ -149,8 +149,8 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
   it('returns grade map with timestamps when data exists', async () => {
     const updatedAt = new Date('2026-02-15T12:00:00.000Z');
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
-      { problemId: 'prob-1', grade: 10, feedback: 'Nice work', updatedAt },
-      { problemId: 'prob-2', grade: null, feedback: null, updatedAt },
+      { problemId: 'prob-1', grade: 10, feedback: 'Nice work', updatedAt, gradedManually: true },
+      { problemId: 'prob-2', grade: null, feedback: null, updatedAt, gradedManually: false },
     ]);
 
     const res = await GET(new Request('http://localhost'), {
@@ -159,9 +159,44 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      'prob-1': { grade: 10, feedback: 'Nice work', updatedAt: updatedAt.toISOString() },
-      'prob-2': { grade: null, feedback: null, updatedAt: updatedAt.toISOString() },
+      'prob-1': {
+        grade: 10,
+        feedback: 'Nice work',
+        updatedAt: updatedAt.toISOString(),
+        gradedManually: true,
+      },
+      'prob-2': {
+        grade: null,
+        feedback: null,
+        updatedAt: updatedAt.toISOString(),
+        gradedManually: false,
+      },
     });
+  });
+
+  /**
+   * Without this field the gradebook can only read the problem's autograder setting, which
+   * says how the problem is graded and not who graded it. That is how a hand-entered grade
+   * came to be labeled "Autograded".
+   */
+  it('says where each grade came from', async () => {
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      {
+        problemId: 'prob-1',
+        grade: 10,
+        feedback: null,
+        updatedAt: new Date('2026-02-15T12:00:00.000Z'),
+        gradedManually: true,
+      },
+    ]);
+
+    await GET(new Request('http://localhost'), { params: Promise.resolve(defaultParams) });
+
+    expect(prismaMock.assignmentProblemGrade.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ gradedManually: true }),
+      }),
+    );
   });
 
   it('returns 500 when the grade lookup throws', async () => {
