@@ -1,8 +1,8 @@
-# Autograder
+# Submissions
 
-The **Autograder** page shows autograded submissions across the AFCT installation, including what is still waiting to be graded and what is being graded now. It is useful when an administrator needs to investigate an evaluator problem that is not limited to one course.
+The **Submissions** page shows every submission across the AFCT installation, including what is still waiting to be graded and what is being graded now. It is useful when an administrator needs to look across courses, or to investigate an evaluator problem that is not limited to one of them.
 
-Problems with the autograder switched off are not listed here, since the evaluator never sees them. Review those on the assignment's own [Submissions](../faculty/submissions.md) page.
+Problems with the autograder switched off appear here too. They never enter the queue, so their Status reads **Manually graded** rather than a queue state. The **Type** column says whether the work was handed in by a group or an individual.
 
 ## Choose the scope
 

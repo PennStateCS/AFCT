@@ -43,10 +43,12 @@ beforeEach(() => {
 });
 
 describe('getAutograderSubmissionsPage', () => {
-  it('always excludes problems whose autograder is switched off', async () => {
+  // The page lists everything a student has handed in, so a hand-graded problem is included
+  // and simply has no queue state to report.
+  it('does not exclude problems whose autograder is switched off', async () => {
     await getAutograderSubmissionsPage({ skip: 0, take: 10 });
 
-    expect(whereClauses()).toContainEqual({ assignmentProblem: { autograderEnabled: true } });
+    expect(whereClauses()).not.toContainEqual({ assignmentProblem: { autograderEnabled: true } });
   });
 
   it('applies skip and take', async () => {
@@ -75,7 +77,7 @@ describe('getAutograderSubmissionsPage', () => {
         problemIds: [],
       });
 
-      expect(whereClauses()).toHaveLength(1); // the autograderEnabled clause only
+      expect(whereClauses()).toHaveLength(0);
     });
 
     it('prefers problems over assignments and courses', async () => {
@@ -137,7 +139,7 @@ describe('getAutograderSubmissionsPage', () => {
         status: ['pending', 'processing', 'failed', 'correct', 'incorrect'],
       });
 
-      expect(whereClauses()).toHaveLength(1);
+      expect(whereClauses()).toHaveLength(0);
     });
   });
 
@@ -174,7 +176,7 @@ describe('getAutograderSubmissionsPage', () => {
       await getAutograderSubmissionsPage({ skip: 0, take: 10, timing: ['ontime', 'late'] });
 
       expect(prismaMock.assignment.findMany).not.toHaveBeenCalled();
-      expect(whereClauses()).toHaveLength(1);
+      expect(whereClauses()).toHaveLength(0);
     });
 
     it('scopes the assignment lookup the same way as the rows', async () => {

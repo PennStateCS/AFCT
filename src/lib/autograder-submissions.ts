@@ -50,6 +50,10 @@ export type AutograderSubmissionRow = {
   feedback: string | null;
   /** The student's standing grade for the problem, or null when nothing is recorded. */
   grade: number | null;
+  /** False when the problem is hand-graded, so the row has no queue state to report. */
+  autograderEnabled: boolean;
+  /** True when the assignment is group work. */
+  isGroupAssignment: boolean;
   maxPoints: number | null;
   fileName: string | null;
   originalFileName: string | null;
@@ -91,7 +95,10 @@ const SUBMISSION_LIST_SELECT = {
   assignmentProblem: {
     select: {
       maxPoints: true,
-      assignment: { select: { title: true, dueDate: true } },
+      // Whether the autograder was ever going to touch this, and whether the assignment is
+      // group work. Both are columns on the page now.
+      autograderEnabled: true,
+      assignment: { select: { title: true, dueDate: true, groupSetId: true } },
       problem: { select: { title: true, type: true } },
     },
   },
@@ -219,7 +226,10 @@ async function timingWhere(
 export async function getAutograderSubmissionsPage(
   params: AutograderPageParams,
 ): Promise<{ rows: AutograderSubmissionRow[]; total: number }> {
-  const and: Prisma.SubmissionWhereInput[] = [{ assignmentProblem: { autograderEnabled: true } }];
+  // No autograder filter: this feeds the Submissions page, which lists everything a student
+  // has handed in. A problem with the autograder switched off has no queue state, so its rows
+  // report "Manually graded" instead.
+  const and: Prisma.SubmissionWhereInput[] = [];
 
   const scope = scopeWhere(params);
   if (scope) and.push(scope);
@@ -296,6 +306,8 @@ export async function getAutograderSubmissionsPage(
     feedback: s.feedback,
     grade: gradeMap.get(`${s.studentId}:${s.assignmentId}:${s.problemId}`) ?? null,
     maxPoints: s.assignmentProblem.maxPoints,
+    autograderEnabled: s.assignmentProblem.autograderEnabled,
+    isGroupAssignment: !!s.assignmentProblem.assignment.groupSetId,
     fileName: s.fileName,
     originalFileName: s.originalFileName,
   }));
