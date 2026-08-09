@@ -95,6 +95,7 @@ function Get-AfctNewInstallConfig {
         PostgresPassword  = $postgres
         DatabaseUrl       = "postgresql://afct_user:$postgres@postgres:5432/afct"
         NextAuthSecret    = New-AfctSecret
+        SecretKey         = New-AfctSecret
         PasswordGenerated = $generated
         Reconfiguring     = $false
     }
@@ -146,6 +147,16 @@ function Get-AfctReconfigureConfig {
     if (-not $databaseUrl) { throw "afct-fatal: DATABASE_URL is missing from $EnvFile." }
     if (-not $nextAuth) { throw "afct-fatal: NEXTAUTH_SECRET is missing from $EnvFile." }
 
+    # Generated rather than required: installs predating secret encryption have no key, and
+    # refusing to upgrade them would be absurd. A fresh key is correct there, because nothing
+    # has been encrypted under an older one yet. An existing key is preserved untouched, since
+    # replacing it would make every stored secret unreadable.
+    $secretKey = Read-AfctEnvValue 'AFCT_SECRET_KEY' $EnvFile
+    if (-not $secretKey) {
+        $secretKey = New-AfctSecret
+        Write-AfctInfo 'generated a secret-encryption key for this install; it protects stored settings such as mail and sign-in credentials.'
+    }
+
     if ([Environment]::GetEnvironmentVariable('POSTGRES_PASSWORD') -or
         [Environment]::GetEnvironmentVariable('DATABASE_URL') -or
         [Environment]::GetEnvironmentVariable('NEXTAUTH_SECRET')) {
@@ -159,6 +170,7 @@ function Get-AfctReconfigureConfig {
         PostgresPassword  = $postgres
         DatabaseUrl       = $databaseUrl
         NextAuthSecret    = $nextAuth
+        SecretKey         = $secretKey
         PasswordGenerated = $false
         Reconfiguring     = $true
     }

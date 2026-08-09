@@ -108,7 +108,7 @@ Describe 'Environment' {
         Write-AfctEnvContent $f @('# keep me', 'CUSTOM_SETTING=hello')
         $cfg = @{
             AppUrl = 'https://afct.example.edu'; AdminEmail = 'a@b.edu'; AdminPassword = 'Aa1!aaaa'
-            PostgresPassword = 'pg'; DatabaseUrl = 'postgresql://afct_user:pg@postgres:5432/afct'; NextAuthSecret = 'ns'
+            PostgresPassword = 'pg'; DatabaseUrl = 'postgresql://afct_user:pg@postgres:5432/afct'; NextAuthSecret = 'ns'; SecretKey = 'sk'
         }
         Write-AfctEnvironmentFile $f $cfg $null '2.2.3'
         Write-AfctEnvironmentFile $f $cfg $null '2.2.3'
@@ -122,7 +122,7 @@ Describe 'Environment' {
         $f = New-TmpFile
         $cfg = @{
             AppUrl = 'https://afct.example.edu'; AdminEmail = 'a@b.edu'; AdminPassword = 'bad"pw'
-            PostgresPassword = 'pg'; DatabaseUrl = 'u'; NextAuthSecret = 'ns'
+            PostgresPassword = 'pg'; DatabaseUrl = 'u'; NextAuthSecret = 'ns'; SecretKey = 'sk'
         }
         { Write-AfctEnvironmentFile $f $cfg $null '2.2.3' } | Should -Throw
     }
@@ -258,9 +258,44 @@ Describe 'Config resolution (non-interactive)' {
             $cfg.DatabaseUrl | Should -Be 'keep-url'
             $cfg.NextAuthSecret | Should -Be 'keep-ns'
             $cfg.Reconfiguring | Should -BeTrue
+            # This env file predates secret encryption, so a key is generated rather than
+            # demanded. Refusing to reconfigure an older install would be absurd.
+            $cfg.SecretKey.Length | Should -BeGreaterOrEqual 32
         } finally {
             Remove-Item Env:\APP_URL -ErrorAction SilentlyContinue
         }
+    }
+
+    # Replacing the key would make every already-encrypted secret unreadable, which is the one
+    # unrecoverable mistake available here.
+    It 'preserves an existing secret-encryption key' {
+        $f = New-TmpFile
+        Write-AfctEnvContent $f @(
+            'NEXTAUTH_URL=https://old.example.edu', 'ADMIN_EMAIL=old@example.edu',
+            'ADMIN_PASSWORD=Aa1!aaaa', 'POSTGRES_PASSWORD=keep-pg', 'DATABASE_URL=keep-url',
+            'NEXTAUTH_SECRET=keep-ns', 'AFCT_SECRET_KEY=keep-this-exact-key-value-keep-this'
+        )
+        $env:APP_URL = 'https://new.example.edu'
+        try {
+            $cfg = Get-AfctReconfigureConfig $f $Work $true
+            $cfg.SecretKey | Should -Be 'keep-this-exact-key-value-keep-this'
+        } finally {
+            Remove-Item Env:\APP_URL -ErrorAction SilentlyContinue
+        }
+    }
+
+    # The paths that deploy WITHOUT rewriting the env file have to top the key up themselves,
+    # or an existing install reaches a version that needs one and comes up without it.
+    It 'tops up a missing key without touching an existing one' {
+        $f = New-TmpFile
+        Write-AfctEnvContent $f @('NEXTAUTH_SECRET=keep-ns')
+
+        Confirm-AfctSecretKey $f
+        $generated = Read-AfctEnvValue 'AFCT_SECRET_KEY' $f
+        $generated.Length | Should -BeGreaterOrEqual 32
+
+        Confirm-AfctSecretKey $f
+        Read-AfctEnvValue 'AFCT_SECRET_KEY' $f | Should -Be $generated
     }
 }
 

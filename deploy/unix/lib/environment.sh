@@ -73,6 +73,26 @@ read_env_value() {
 
 # Set or replace a single unmanaged KEY=VALUE line in the env file, in place and
 # atomically, preserving everything else. Used for AFCT_UPDATER_ENABLED / AFCT_APP_TAG.
+# Guarantee the secret-encryption key exists, generating one if it does not.
+#
+# Called from the paths that deploy WITHOUT rewriting the environment file: an ordinary
+# `update`, and an install that finds a complete env file and is not reconfiguring. Those
+# paths are how an existing deployment reaches a version that needs the key, and without this
+# it would come up with no key at all and fail the first time an admin saved a mail or
+# sign-in credential.
+#
+# Never replaces an existing key. Doing so would make every already-encrypted secret
+# unreadable, which is the one unrecoverable mistake available here.
+ensure_secret_key() {
+  [ -f "$ENV_FILE" ] || return 0
+  _existing_key=$(read_env_value AFCT_SECRET_KEY "$ENV_FILE")
+  [ -z "$_existing_key" ] || return 0
+
+  _new_key=$(gen_secret) || die "could not generate a secret-encryption key."
+  set_env_flag AFCT_SECRET_KEY "$_new_key"
+  info "generated a secret-encryption key; it protects stored settings such as mail and sign-in credentials. Keep ${ENV_FILE} with your backups."
+}
+
 set_env_flag() {
   _key=$1
   _val=$2
@@ -130,6 +150,7 @@ write_environment_file() {
         managed["ADMIN_EMAIL"] = 1
         managed["ADMIN_PASSWORD"] = 1
         managed["NEXTAUTH_SECRET"] = 1
+        managed["AFCT_SECRET_KEY"] = 1
         managed["NEXTAUTH_URL"] = 1
         managed["AUTH_TRUST_HOST"] = 1
       }
@@ -162,6 +183,7 @@ write_environment_file() {
     write_env_assignment ADMIN_EMAIL "$ADMIN_EMAIL_IN"
     write_env_assignment ADMIN_PASSWORD "$ADMIN_PASSWORD_IN"
     write_env_assignment NEXTAUTH_SECRET "$NEXTAUTH_SECRET_IN"
+    write_env_assignment AFCT_SECRET_KEY "$AFCT_SECRET_KEY_IN"
     write_env_assignment NEXTAUTH_URL "$APP_URL_IN"
     write_env_assignment AUTH_TRUST_HOST true
     printf '# END AFCT INSTALLER MANAGED SETTINGS\n'

@@ -12,7 +12,7 @@ Set-StrictMode -Version Latest
 # The keys the installer owns. Everything else in the file (comments, app-specific
 # settings) is preserved verbatim across a rewrite.
 $script:AfctManagedKeys = @('NODE_ENV', 'POSTGRES_PASSWORD', 'DATABASE_URL', 'ADMIN_EMAIL',
-    'ADMIN_PASSWORD', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'AUTH_TRUST_HOST')
+    'ADMIN_PASSWORD', 'NEXTAUTH_SECRET', 'AFCT_SECRET_KEY', 'NEXTAUTH_URL', 'AUTH_TRUST_HOST')
 
 # Apply the restrictive ACL to a file with icacls: strip inheritance and grant the current
 # account (by SID) FullControl. The SID is given as a literal (the leading '*'), so icacls
@@ -73,6 +73,25 @@ function Test-AfctEnvFileComplete {
 
 # Read a single KEY=VALUE from the env file, stripping one layer of matching quotes.
 # Returns '' when the key or file is absent.
+# Guarantee the secret-encryption key exists, generating one if it does not. Mirrors
+# ensure_secret_key in deploy/unix/lib/environment.sh; the two installers must agree.
+#
+# Called from the paths that deploy WITHOUT rewriting the environment file: an ordinary
+# update, and an install over an existing complete configuration. Those are how an existing
+# deployment reaches a version that needs the key, and without this it comes up with no key
+# and fails the first time an admin saves a mail or sign-in credential.
+#
+# Never replaces an existing key: that would make every already-encrypted secret unreadable,
+# which is the one unrecoverable mistake available here.
+function Confirm-AfctSecretKey {
+    param([string]$File)
+    if (-not (Test-Path -LiteralPath $File)) { return }
+    if (Read-AfctEnvValue 'AFCT_SECRET_KEY' $File) { return }
+
+    Set-AfctEnvFlag 'AFCT_SECRET_KEY' (New-AfctSecret) $File
+    Write-AfctInfo "generated a secret-encryption key; it protects stored settings such as mail and sign-in credentials. Keep $File with your backups."
+}
+
 function Read-AfctEnvValue {
     param([string]$Key, [string]$File)
     if (-not (Test-Path -LiteralPath $File)) { return '' }
@@ -175,6 +194,7 @@ function Write-AfctEnvironmentFile {
         (& $assign 'ADMIN_EMAIL' $Config.AdminEmail),
         (& $assign 'ADMIN_PASSWORD' $Config.AdminPassword),
         (& $assign 'NEXTAUTH_SECRET' $Config.NextAuthSecret),
+        (& $assign 'AFCT_SECRET_KEY' $Config.SecretKey),
         (& $assign 'NEXTAUTH_URL' $Config.AppUrl),
         (& $assign 'AUTH_TRUST_HOST' 'true'),
         '# END AFCT INSTALLER MANAGED SETTINGS'

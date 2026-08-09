@@ -94,6 +94,7 @@ $script:AdminPasswordIn = ''
 $script:PostgresPasswordIn = ''
 $script:DatabaseUrlIn = ''
 $script:NextAuthSecretIn = ''
+$script:SecretKeyIn = ''
 
 # A lock name derived from this deploy directory, so two copies of the installer
 # in different folders don't contend.
@@ -451,6 +452,21 @@ function Test-EnvFileComplete([string]$file) {
   return $true
 }
 
+# Guarantee the secret-encryption key exists, generating one if it does not. Mirrors
+# ensure_secret_key in deploy/unix/lib/environment.sh and Confirm-AfctSecretKey in
+# deploy/windows/lib/Environment.ps1; all three installers must agree.
+#
+# Called from the paths that deploy WITHOUT rewriting the environment file. Never replaces an
+# existing key: that would make every already-encrypted secret unreadable.
+function Confirm-SecretKey([string]$file) {
+  if (-not (Test-Path -LiteralPath $file)) { return }
+  if (Read-EnvValue 'AFCT_SECRET_KEY' $file) { return }
+
+  # Set-EnvFlag writes to the script-scope $EnvFile, so it takes only key and value.
+  Set-EnvFlag 'AFCT_SECRET_KEY' (New-Secret)
+  Write-Info 'generated a secret-encryption key; it protects stored settings such as mail and sign-in credentials. Keep the environment file with your backups.'
+}
+
 function Read-EnvValue([string]$key, [string]$file) {
   if (-not (Test-Path -LiteralPath $file)) { return '' }
   foreach ($line in Get-Content -LiteralPath $file -ErrorAction SilentlyContinue) {
@@ -511,7 +527,8 @@ function Write-EnvAssignment([string]$key, [string]$value) {
 
 function Write-EnvironmentFile {
   $managed = @('NODE_ENV', 'POSTGRES_PASSWORD', 'DATABASE_URL', 'ADMIN_EMAIL',
-               'ADMIN_PASSWORD', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'AUTH_TRUST_HOST')
+               'ADMIN_PASSWORD', 'NEXTAUTH_SECRET', 'AFCT_SECRET_KEY', 'NEXTAUTH_URL',
+               'AUTH_TRUST_HOST')
 
   $baseFile = $null
   if (Test-Path -LiteralPath $EnvFile) { $baseFile = $EnvFile }
@@ -547,6 +564,7 @@ function Write-EnvironmentFile {
     (Write-EnvAssignment 'ADMIN_EMAIL' $script:AdminEmailIn),
     (Write-EnvAssignment 'ADMIN_PASSWORD' $script:AdminPasswordIn),
     (Write-EnvAssignment 'NEXTAUTH_SECRET' $script:NextAuthSecretIn),
+    (Write-EnvAssignment 'AFCT_SECRET_KEY' $script:SecretKeyIn),
     (Write-EnvAssignment 'NEXTAUTH_URL' $script:AppUrlIn),
     (Write-EnvAssignment 'AUTH_TRUST_HOST' 'true'),
     '# END AFCT INSTALLER MANAGED SETTINGS'
@@ -943,6 +961,7 @@ function Set-NewInstallConfig {
 
   $script:PostgresPasswordIn = New-Secret
   $script:NextAuthSecretIn = New-Secret
+  $script:SecretKeyIn = New-Secret
   $script:DatabaseUrlIn = "postgresql://afct_user:$($script:PostgresPasswordIn)@postgres:5432/afct"
   $script:AdminPasswordGenerated = $passwordGenerated
 }
@@ -993,6 +1012,15 @@ function Set-ExistingInstallConfig {
   if (-not $script:PostgresPasswordIn) { Stop-Install "POSTGRES_PASSWORD is missing from $EnvFile." }
   if (-not $script:DatabaseUrlIn) { Stop-Install "DATABASE_URL is missing from $EnvFile." }
   if (-not $script:NextAuthSecretIn) { Stop-Install "NEXTAUTH_SECRET is missing from $EnvFile." }
+
+  # Generated rather than required: installs predating secret encryption have no key, and
+  # refusing to upgrade them would be absurd. An existing key is preserved untouched, since
+  # replacing it would make every stored secret unreadable.
+  $script:SecretKeyIn = Read-EnvValue 'AFCT_SECRET_KEY' $EnvFile
+  if (-not $script:SecretKeyIn) {
+    $script:SecretKeyIn = New-Secret
+    Write-Info 'generated a secret-encryption key for this install; it protects stored settings such as mail and sign-in credentials.'
+  }
 
   if ($env:POSTGRES_PASSWORD -or $env:DATABASE_URL -or $env:NEXTAUTH_SECRET) {
     Write-WarnMsg 'exported infrastructure credentials were ignored during reconfiguration to avoid breaking the existing database or invalidating sessions.'
@@ -1271,6 +1299,7 @@ function Invoke-Install {
       Show-ExistingInstallMenu
       if (-not $script:Reconfiguring) {
         Write-Info "using the existing $EnvFile."
+        Confirm-SecretKey $EnvFile
         Write-Step 'Deploy'
         $script:DiagOnExit = $true
         Invoke-DeployStack
@@ -1281,6 +1310,7 @@ function Invoke-Install {
       }
     } else {
       Write-Info "using the existing $EnvFile. Pass -Reconfigure to replace managed settings."
+      Confirm-SecretKey $EnvFile
       Write-Step 'Deploy'
       $script:DiagOnExit = $true
       Invoke-DeployStack
@@ -1434,6 +1464,10 @@ function Remove-SupersededImages {
 }
 
 function Invoke-Update {
+  # Before the new images start, so the deployed version comes up with a key rather than
+  # discovering it is missing the first time an admin saves a credential.
+  Confirm-SecretKey $EnvFile
+
   Lock-Installer
   Confirm-ExistingStack
   $script:DiagOnExit = $true

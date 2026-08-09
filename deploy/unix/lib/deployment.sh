@@ -329,6 +329,7 @@ configure_new_install() {
 
   POSTGRES_PASSWORD_IN=$(gen_secret) || die "could not generate a PostgreSQL password."
   NEXTAUTH_SECRET_IN=$(gen_secret) || die "could not generate an authentication secret."
+  AFCT_SECRET_KEY_IN=$(gen_secret) || die "could not generate a secret-encryption key."
   DATABASE_URL_IN="postgresql://afct_user:${POSTGRES_PASSWORD_IN}@postgres:5432/afct"
   ADMIN_PASSWORD_GENERATED=$_password_generated
 }
@@ -370,10 +371,20 @@ configure_existing_install() {
   POSTGRES_PASSWORD_IN=$(read_env_value POSTGRES_PASSWORD "$ENV_FILE")
   DATABASE_URL_IN=$(read_env_value DATABASE_URL "$ENV_FILE")
   NEXTAUTH_SECRET_IN=$(read_env_value NEXTAUTH_SECRET "$ENV_FILE")
+  AFCT_SECRET_KEY_IN=$(read_env_value AFCT_SECRET_KEY "$ENV_FILE")
 
   require_value "$POSTGRES_PASSWORD_IN" "POSTGRES_PASSWORD is missing from ${ENV_FILE}."
   require_value "$DATABASE_URL_IN" "DATABASE_URL is missing from ${ENV_FILE}."
   require_value "$NEXTAUTH_SECRET_IN" "NEXTAUTH_SECRET is missing from ${ENV_FILE}."
+
+  # Generated rather than required: installs that predate secret encryption have no key, and
+  # refusing to upgrade them would be absurd. A fresh key is correct there because nothing has
+  # been encrypted with an older one yet. An existing key is preserved untouched, because
+  # replacing it would make every stored secret unreadable.
+  if [ -z "$AFCT_SECRET_KEY_IN" ]; then
+    AFCT_SECRET_KEY_IN=$(gen_secret) || die "could not generate a secret-encryption key."
+    info "generated a secret-encryption key for this install; it protects stored settings such as mail and sign-in credentials."
+  fi
 
   if [ -n "${POSTGRES_PASSWORD:-}${DATABASE_URL:-}${NEXTAUTH_SECRET:-}" ]; then
     warn "exported infrastructure credentials were ignored during reconfiguration to avoid breaking the existing database or invalidating sessions."
@@ -460,6 +471,8 @@ do_install() {
       fi
     else
       info "using the existing ${ENV_FILE}. Pass --reconfigure to replace managed settings."
+      # This path deploys without rewriting the file, so the key has to be topped up here.
+      ensure_secret_key
       step "Deploy"
       DIAG_ON_EXIT="true"
       deploy_stack
