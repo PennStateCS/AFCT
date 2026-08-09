@@ -2,16 +2,19 @@
 import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 
 const showToast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ showToast }));
 
 import { useUpgrade, isUpgradeInProgress } from './useUpgrade';
 
+// Mirrors the app's provider, which turns focus refetching off for every query
+// (QueryProvider.tsx). The upgrade status has to opt back in, so a wrapper that left the
+// library default in place would pass whether or not it did.
 const createWrapper = () => {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    defaultOptions: { queries: { retry: false, gcTime: 0, refetchOnWindowFocus: false } },
   });
   return ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client }, children);
@@ -38,6 +41,63 @@ describe('isUpgradeInProgress', () => {
     expect(isUpgradeInProgress({ phase: 'failed' })).toBe(false);
     expect(isUpgradeInProgress(null)).toBe(false);
     expect(isUpgradeInProgress(undefined)).toBe(false);
+  });
+});
+
+/**
+ * An upgrade runs for minutes, so the admin starts it and switches away. The interval
+ * timer stops when the tab loses focus, and the app turns focus refetching off globally,
+ * so the panel and its live log sat frozen until someone reloaded the page.
+ */
+describe('useUpgrade polling while the tab is not in front', () => {
+  const infoWith = (status: unknown) => ({
+    ok: true,
+    json: async () => ({ current: 'v1.0.0', versions: [], status, manifestError: false }),
+  });
+
+  afterEach(() => focusManager.setFocused(undefined));
+
+  it('refetches on return to the tab while an upgrade is running', async () => {
+    fetchMock.mockResolvedValue(infoWith({ phase: 'backing_up' }));
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info?.status?.phase).toBe('backing_up'));
+
+    const before = fetchMock.mock.calls.length;
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
+  });
+
+  // The opt-in is scoped to a running upgrade: a settled panel should not refetch every
+  // time the admin tabs back to a page they left open.
+  it('does not refetch on focus once the upgrade has settled', async () => {
+    fetchMock.mockResolvedValue(infoWith({ phase: 'healthy' }));
+    const { result } = renderHook(() => useUpgrade(true), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.info?.status?.phase).toBe('healthy'));
+
+    const before = fetchMock.mock.calls.length;
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(fetchMock.mock.calls.length).toBe(before);
+  });
+
+  // Necessary but not sufficient on its own: browsers throttle background timers hard,
+  // which is why the focus refetch above exists as well.
+  it('keeps the interval running while the tab is in the background', () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0, refetchOnWindowFocus: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+    fetchMock.mockResolvedValue(infoWith({ phase: 'backing_up' }));
+
+    renderHook(() => useUpgrade(true), { wrapper });
+
+    const query = client.getQueryCache().find({ queryKey: ['admin', 'settings', 'upgrade'] });
+    expect(query?.observers[0]?.options.refetchIntervalInBackground).toBe(true);
   });
 });
 

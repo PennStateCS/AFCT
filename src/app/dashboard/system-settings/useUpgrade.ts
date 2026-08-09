@@ -138,6 +138,28 @@ export function useUpgrade(enabled: boolean) {
       Date.now() - requestedAtRef.current < REQUEST_GRACE_MS
         ? 3000
         : false,
+    // An upgrade takes minutes, so nobody watches it happen: they start it and switch
+    // away. Without this the interval timer stops the moment the tab loses focus and the
+    // panel is frozen at whatever it last saw, which is why the status and the live log
+    // only moved on a manual page refresh. The interval itself is still gated on an
+    // upgrade being in flight, so this does not leave a poll running in the background
+    // the rest of the time.
+    refetchIntervalInBackground: true,
+    // Browsers throttle timers in a background tab hard (Chrome down to about once a
+    // minute), so the interval above is necessary but not sufficient: coming back to the
+    // tab has to snap the panel current rather than waiting out a throttled tick. The app
+    // turns focus refetching off globally, so this query opts back in, and only while
+    // something is actually running.
+    //
+    // 'always' rather than true, because true still defers to `staleTime` below: a status
+    // nine seconds old counts as fresh, and nine seconds of a running upgrade is exactly
+    // the stale panel this is here to fix.
+    refetchOnWindowFocus: () =>
+      isUpgradeInProgress(queryClient.getQueryData<UpgradeInfo>(UPGRADE_QUERY_KEY)?.status) ||
+      selfUpdatingRef.current ||
+      Date.now() - requestedAtRef.current < REQUEST_GRACE_MS
+        ? 'always'
+        : false,
   });
 
   const { mutate: startUpgrade, isPending: upgradeBusy } = useMutation({
