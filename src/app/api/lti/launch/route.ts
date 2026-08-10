@@ -90,7 +90,9 @@ export async function POST(request: Request) {
       action: 'LTI_LAUNCH_DENIED',
       severity: 'SECURITY',
       category: 'USER',
-      metadata: { reason: verified.reason },
+      // `observed` is only present on an unregistered platform, and is what the token claimed
+      // rather than anything proved. Named accordingly in the log.
+      metadata: { reason: verified.reason, observedClaims: verified.observed ?? null },
     });
     return refuse(launchRefusalMessage(verified.reason), 403);
   }

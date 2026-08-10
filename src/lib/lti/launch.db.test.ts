@@ -195,9 +195,33 @@ describe('a launch that must be refused', () => {
   it('from an LMS nobody registered', async () => {
     await prisma.ltiPlatform.deleteMany({ where: { issuer: ISSUER } });
 
-    expect(await validateLaunch({ idToken: await launchToken() })).toEqual({
+    expect(await validateLaunch({ idToken: await launchToken() })).toMatchObject({
       ok: false,
       reason: 'unregistered-platform',
+    });
+  });
+
+  /**
+   * Getting one character wrong in a registration is the most common setup failure, and without
+   * this the refusal names nothing an administrator can compare against what they typed.
+   */
+  it('reports what the unregistered launch claimed to be', async () => {
+    await prisma.ltiPlatform.deleteMany({ where: { issuer: ISSUER } });
+
+    const result = await validateLaunch({ idToken: await launchToken() });
+
+    expect(result).toMatchObject({
+      observed: { issuer: ISSUER, clientId: CLIENT_ID, deploymentId: DEPLOYMENT_ID },
+    });
+  });
+
+  // Only on that one refusal. Everywhere else the claims were either verified or irrelevant.
+  it('reports nothing of the sort for a forged signature', async () => {
+    const forged = await launchToken({}, attackerKeys.privateKey);
+
+    expect(await validateLaunch({ idToken: forged })).toEqual({
+      ok: false,
+      reason: 'bad-signature',
     });
   });
 
@@ -215,7 +239,7 @@ describe('a launch that must be refused', () => {
       .sign(platformKeys.privateKey);
 
     // Never matches a registration, so it cannot even reach signature verification.
-    expect(await validateLaunch({ idToken: token })).toEqual({
+    expect(await validateLaunch({ idToken: token })).toMatchObject({
       ok: false,
       reason: 'unregistered-platform',
     });
@@ -224,7 +248,7 @@ describe('a launch that must be refused', () => {
   it('claiming a deployment that is not the registered one', async () => {
     const token = await launchToken({ [`${CLAIM}/deployment_id`]: 'deploy-somewhere-else' });
 
-    expect(await validateLaunch({ idToken: token })).toEqual({
+    expect(await validateLaunch({ idToken: token })).toMatchObject({
       ok: false,
       reason: 'unregistered-platform',
     });
