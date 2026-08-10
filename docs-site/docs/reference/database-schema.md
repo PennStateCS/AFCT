@@ -52,6 +52,18 @@ erDiagram
   DateTime createdAt
   DateTime lastSignInAt "nullable"
 }
+"LtiPlatform" {
+  String id PK
+  String name
+  String issuer
+  String clientId
+  String deploymentId
+  String authLoginUrl
+  String tokenUrl
+  String keysetUrl
+  DateTime createdAt
+  DateTime updatedAt
+}
 "SingleUseToken" {
   String id PK
   String tokenHash UK
@@ -154,6 +166,32 @@ Properties as follows:
 - `linkedVia`: How the link came to exist.
 - `createdAt`: When this record was created.
 - `lastSignInAt`: Last time somebody signed in through it, so a stale link can be spotted.
+
+### `LtiPlatform`
+
+An LMS that may launch into AFCT.
+
+Registration is mutual and manual: an administrator creates a developer key in the LMS, and
+pastes what it gives back into AFCT. There is no client secret, because LTI 1.3 does not use
+one; AFCT proves who it is by signing with its own key.
+
+Keyed on the **triple** of issuer, client id and deployment id rather than on the issuer
+alone. One LMS can deploy the same tool more than once (a sub-account, a second course set),
+and each deployment is a distinct registration even though the issuer and client id repeat.
+Treating the issuer as the key is the classic way to make two deployments collide.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `name`: What an administrator calls this LMS, for screens. Never used for matching.
+- `issuer`: The platform's own issuer identifier, which appears as `iss` in every launch.
+- `clientId`: What the LMS calls AFCT. Appears as `aud` in a launch.
+- `deploymentId`: Which deployment of AFCT within that LMS this is.
+- `authLoginUrl`: Where AFCT sends the person to start a launch (the platform's OIDC authorization endpoint).
+- `tokenUrl`: Where AFCT asks for access tokens, for grade passback and roster sync.
+- `keysetUrl`: Where AFCT fetches the platform's public keys, to verify that a launch really came from it.
+- `createdAt`: When this record was created.
+- `updatedAt`: When it was last changed.
 
 ### `SingleUseToken`
 
