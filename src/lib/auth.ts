@@ -9,11 +9,23 @@ import { getClientIp } from '@/lib/security/rate-limiter';
 import { verifyCredentials } from '@/lib/credentials';
 import { requireAuthSecret } from '@/lib/auth-secret';
 import { buildJwtToken, buildSession } from '@/lib/auth-callbacks';
+import { buildOidcProvider, getOidcConfig, OIDC_PROVIDER_ID } from '@/lib/oidc-provider';
+import { resolveOidcSignIn } from '@/lib/oidc-signin';
 import type { Adapter } from 'next-auth/adapters';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+/**
+ * The config is a function rather than an object because institutional sign-in is configured by
+ * an administrator at runtime, not at build time. NextAuth calls this per request, so turning
+ * the provider on takes effect without a restart, and an install that never configures one
+ * simply has no such provider.
+ */
+export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
+  const oidc = await getOidcConfig();
+
+  return {
   adapter: PrismaAdapter(prisma) as unknown as Adapter,
   providers: [
+    ...(oidc ? [buildOidcProvider(oidc)] : []),
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -51,6 +63,56 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    /**
+     * Decides who an institutional sign-in is, and whether it is allowed at all.
+     *
+     * Only the OIDC provider goes through here. The credentials provider has already done its
+     * own checking in `verifyCredentials`, and re-deciding it here would mean two places that
+     * have to agree about who may sign in.
+     *
+     * Returning a string redirects with a reason the sign-in page can explain. Returning false
+     * would show NextAuth's generic error, which tells somebody nothing about what to do.
+     */
+    async signIn({ user, account, profile }) {
+      if (account?.provider !== OIDC_PROVIDER_ID) return true;
+
+      const config = await getOidcConfig();
+      // The provider cannot have produced this callback if it is not configured, so this is a
+      // race with an admin switching it off mid-sign-in rather than a state worth explaining.
+      if (!config) return `/login?error=oidc`;
+
+      const claims = profile as Record<string, unknown> | undefined;
+      const { ipAddress, userAgent } = await getRequestContext();
+
+      const outcome = await resolveOidcSignIn({
+        claims: {
+          issuer: config.issuer,
+          subject: String(claims?.sub ?? account.providerAccountId),
+          email: (claims?.email as string | undefined) ?? user?.email ?? null,
+          emailVerified: claims?.email_verified === true,
+          firstName: (claims?.given_name as string | undefined) ?? null,
+          lastName: (claims?.family_name as string | undefined) ?? null,
+        },
+        trustEmail: config.trustEmail,
+        context: { ipAddress, userAgent },
+      });
+
+      if (!outcome.ok) {
+        await createEnhancedActivityLog(prisma, { ipAddress, userAgent }, {
+          userId: null,
+          action: 'OIDC_SIGN_IN_DENIED',
+          severity: 'SECURITY',
+          category: 'USER',
+          metadata: { issuer: config.issuer, reason: outcome.reason },
+        });
+        return `/login?error=oidc&reason=${outcome.reason}`;
+      }
+
+      // The account this sign-in belongs to, which is not necessarily the one NextAuth would
+      // have inferred: it resolves by identity, and by email only the first time.
+      user.id = outcome.userId;
+      return true;
+    },
     // Both live in lib/auth-callbacks so they can be unit-tested directly; importing
     // this module would otherwise pull in all of NextAuth's initialization.
     jwt: buildJwtToken,
@@ -124,6 +186,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     maxAge: 24 * 60 * 60, // 24 hours
   },
   secret: requireAuthSecret(),
+  };
 });
 
 /**
