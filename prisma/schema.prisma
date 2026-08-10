@@ -90,6 +90,10 @@ enum SingleUseTokenPurpose {
   /// The `nonce` AFCT puts in an LTI login request and requires back in the launch token.
   /// Single use is the whole point: it is what stops a captured launch being replayed.
   LTI_LAUNCH_NONCE
+  /// The `state` AFCT puts in an LTI login request and requires back with the launch. Paired
+  /// with a cookie, this is what ties a launch to the browser that started it, so somebody
+  /// cannot post their own launch into another person's browser and sign them in as themselves.
+  LTI_LAUNCH_STATE
 }
 
 // What kind of system vouched for an identity. Descriptive rather than structural: a single

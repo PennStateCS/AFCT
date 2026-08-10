@@ -2422,6 +2422,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lti/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Start an LTI launch (platforms that initiate with GET)
+         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/login/route.ts)
+         */
+        get: operations["getLtiLogin"];
+        put?: never;
+        /**
+         * Start an LTI launch (platforms that initiate with POST)
+         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/login/route.ts)
+         */
+        post: operations["postLtiLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/assignments": {
         parameters: {
             query?: never;
@@ -10964,6 +10988,78 @@ export interface operations {
             };
             /** @description Health check failed. */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getLtiLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the platform's authorization endpoint. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request did not say which LMS it came from. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No registration matches, or more than one does. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postLtiLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the platform's authorization endpoint. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request did not say which LMS it came from. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No registration matches, or more than one does. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

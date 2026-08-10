@@ -35,6 +35,10 @@ const PUBLIC_API_PREFIXES = [
   // is intentional: the cookie/idle-timeout logic doesn't apply to token clients,
   // and every /api/client route enforces its own token auth.
   '/api/client',
+  // Where an LMS sends the browser to start a launch. Necessarily public: the whole point is
+  // that nobody is signed in yet. It reveals nothing and only mints a state and nonce that are
+  // useless unless the LMS then signs a token.
+  '/api/lti/login',
 ] as const;
 
 function isPublicApi(pathname: string): boolean {

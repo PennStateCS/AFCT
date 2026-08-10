@@ -60,6 +60,8 @@ describe('proxy', () => {
       '/api/auth/signup',
       '/api/health',
       '/api/system-settings/public',
+      // Nobody is signed in yet when an LMS starts a launch.
+      '/api/lti/login',
     ])('lets %s through without reading a token', async (path) => {
       const res = await proxy(req(path));
       expect(res.status).toBe(200);
@@ -71,6 +73,16 @@ describe('proxy', () => {
       getTokenMock.mockResolvedValue(null);
       const res = await proxy(req('/api/healthz'));
       expect(res.status).toBe(401);
+    });
+
+    /**
+     * Only the named LTI entry points are public. An allowlist entry of `/api/lti` would have
+     * quietly opened the platform registration routes that live alongside them.
+     */
+    it('does not make the rest of /api/lti public', async () => {
+      getTokenMock.mockResolvedValue(null);
+
+      expect((await proxy(req('/api/lti/platforms'))).status).toBe(401);
     });
   });
 
