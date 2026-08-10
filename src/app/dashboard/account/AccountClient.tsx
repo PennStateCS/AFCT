@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { KeyRound, UserRound } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { TabBar } from '@/components/course/course-tabs';
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { PasswordSection } from '@/components/account/PasswordSection';
 import { useChangePassword } from '@/hooks/use-change-password';
@@ -46,35 +48,45 @@ export default function AccountClient({ user }: { user: ProfileUser }) {
     }
   };
 
+  // Same shape as System Settings and the course pages: one card, its title as the page
+  // heading, tabs inside it. TabBar rather than a hand-rolled TabsList, because it is what
+  // swaps the underline strip for a select below `md`; rolling our own left this page with no
+  // usable tabs on a phone.
+  const tabs = [
+    { value: 'profile', label: 'Profile', Icon: UserRound },
+    { value: 'password', label: 'Password', Icon: KeyRound },
+  ] as const;
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+    <Card className="p-4">
+      <CardHeader className="pb-2">
+        <CardTitle role="heading" aria-level={1} className="text-2xl">
+          Account
+        </CardTitle>
         <p className="text-muted-foreground text-sm">
           Your profile and how you sign in. Only you can see this page.
         </p>
-      </div>
+      </CardHeader>
 
-      <Tabs value={tab} onValueChange={onTabChange}>
-        <TabsList>
-          <TabsTrigger value="profile">
-            <UserRound className="h-4 w-4" aria-hidden="true" />
-            Profile
-          </TabsTrigger>
-          <TabsTrigger value="password">
-            <KeyRound className="h-4 w-4" aria-hidden="true" />
-            Password
-          </TabsTrigger>
-        </TabsList>
+      <CardContent>
+        <Tabs value={tab} onValueChange={onTabChange} className="w-full gap-6">
+          <TabBar
+            ariaLabel="Account sections"
+            selectId="account-tab-select"
+            value={tab}
+            onValueChange={onTabChange}
+            tabs={tabs}
+          />
 
-        <TabsContent value="profile" className="pt-4">
-          <ProfileSection user={user} />
-        </TabsContent>
+          <TabsContent value="profile">
+            <ProfileSection user={user} />
+          </TabsContent>
 
-        <TabsContent value="password" className="pt-4">
-          <PasswordSection onChangePassword={changePassword} />
-        </TabsContent>
-      </Tabs>
-    </div>
+          <TabsContent value="password">
+            <PasswordSection onChangePassword={changePassword} />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 }
