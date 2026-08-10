@@ -82,9 +82,20 @@ erDiagram
   DateTime usedAt "nullable"
   DateTime createdAt
 }
+"LtiContextLink" {
+  String id PK
+  String platformId FK
+  String contextId
+  String contextTitle "nullable"
+  String courseId FK
+  String linkedByUserId FK "nullable"
+  DateTime createdAt
+}
 "ClientApiToken" }o--|| "User" : user
 "LinkedIdentity" }o--|| "User" : user
 "SingleUseToken" }o--o| "User" : user
+"LtiContextLink" }o--|| "LtiPlatform" : platform
+"LtiContextLink" }o--o| "User" : linkedBy
 ```
 
 ### `User`
@@ -259,6 +270,28 @@ Properties as follows:
   > (an LTI launch nonce, for instance, is issued before anyone is identified).
 - `expiresAt`: When the token stops working.
 - `usedAt`: When it was spent. Once set, the token is refused.
+- `createdAt`: When this record was created.
+
+### `LtiContextLink`
+
+Which AFCT course an LMS course opens into.
+
+Created the first time somebody who can link launches from an unlinked LMS course, and
+remembered afterwards so nobody is asked twice.
+
+**Many LMS courses may point at one AFCT course.** Cross-listed sections are separate courses
+in the LMS and one course to the department, and forcing them apart would split one roster in
+two. The reverse is refused by the unique constraint: one LMS course opening two AFCT courses
+has no answer to "which one did they mean".
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `platformId`: Which registration the launch came through.
+- `contextId`: The LMS's own identifier for its course, from the launch's context claim.
+- `contextTitle`: What the LMS calls it, kept for screens so an admin can recognise a link.
+- `courseId`: The AFCT course it opens.
+- `linkedByUserId`: Who decided this. Null once that account is gone; the link outlives the person.
 - `createdAt`: When this record was created.
 
 ## Courses

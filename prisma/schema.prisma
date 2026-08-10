@@ -196,6 +196,7 @@ model User {
   overridesCreated    AssignmentOverride[]     @relation("OverrideCreatedBy") // overrides this user created
   submissionGrants    SubmissionGrant[]        @relation("SubmissionGrantTarget") // extra-submission grants targeting this student
   grantsCreated       SubmissionGrant[]        @relation("SubmissionGrantCreatedBy") // grants this user created
+  ltiLinksCreated     LtiContextLink[] // LMS course links this user decided
 
   @@index([isAdmin])
   @@index([inactive])
@@ -311,6 +312,9 @@ model LtiPlatform {
   createdAt DateTime @default(now())
   /// When it was last changed.
   updatedAt DateTime @updatedAt
+
+  /// The LMS courses that open into AFCT through this registration.
+  contextLinks LtiContextLink[]
 
   /// The triple that identifies a registration. Also what a launch is matched against.
   @@unique([issuer, clientId, deploymentId])
@@ -448,6 +452,7 @@ model Course {
   submissions  Submission[]
   groupSets    GroupSet[]
   activityLogs ActivityLog[]
+  ltiLinks     LtiContextLink[] // LMS courses that open into this one
 
   @@index([isPublished])
   @@index([createdAt])
@@ -1300,6 +1305,46 @@ model SystemSettings {
 // app's runtime: postinstall, both images and the container entrypoint all run
 // `prisma generate --generator client`, so nothing outside a developer machine or CI
 // does documentation work.
+/// Which AFCT course an LMS course opens into.
+///
+/// Created the first time somebody who can link launches from an unlinked LMS course, and
+/// remembered afterwards so nobody is asked twice.
+///
+/// **Many LMS courses may point at one AFCT course.** Cross-listed sections are separate courses
+/// in the LMS and one course to the department, and forcing them apart would split one roster in
+/// two. The reverse is refused by the unique constraint: one LMS course opening two AFCT courses
+/// has no answer to "which one did they mean".
+///
+/// @namespace Identity
+model LtiContextLink {
+  /// Unique identifier.
+  id String @id @default(cuid())
+
+  platform   LtiPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  /// Which registration the launch came through.
+  platformId String
+
+  /// The LMS's own identifier for its course, from the launch's context claim.
+  contextId    String
+  /// What the LMS calls it, kept for screens so an admin can recognise a link.
+  contextTitle String?
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  /// The AFCT course it opens.
+  courseId String
+
+  linkedBy   User?   @relation(fields: [linkedByUserId], references: [id], onDelete: SetNull)
+  /// Who decided this. Null once that account is gone; the link outlives the person.
+  linkedByUserId String?
+
+  /// When this record was created.
+  createdAt DateTime @default(now())
+
+  /// One AFCT course per LMS course. Not the other way round: see the note above.
+  @@unique([platformId, contextId])
+  @@index([courseId])
+}
+
 generator erd {
   provider = "prisma-markdown"
   output   = "../docs-site/docs/reference/database-schema.md"
