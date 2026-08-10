@@ -194,6 +194,7 @@ export const apiPaths = {
   // --- Comments / submissions ---------------------------------------------
   comments: (opts?: { commentId?: string }) => `/api/comments${qs({ commentId: opts?.commentId })}`,
   submissions: () => '/api/submissions',
+  submission: (id: string) => `/api/submissions/${id}`,
   submissionRerun: (id: string) => `/api/submissions/${id}/rerun`,
   courseSubmissionsRerun: (id: string) => `/api/courses/${id}/submissions/rerun`,
 

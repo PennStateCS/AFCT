@@ -2532,6 +2532,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/submissions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * PATCH /api/submissions/{id}
+         * @description **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/submissions/[id]/route.ts)
+         */
+        patch: operations["patchSubmissionsById"];
+        trace?: never;
+    };
     "/api/submissions": {
         parameters: {
             query?: never;
@@ -11014,6 +11036,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Error"];
                 };
+            };
+        };
+    };
+    patchSubmissionsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
