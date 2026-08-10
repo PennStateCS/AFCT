@@ -55,6 +55,12 @@ export type SystemSettingsResponse = {
   smtpPasswordConfigured: boolean;
   smtpFromAddress: string;
   smtpFromName: string;
+  oidcEnabled: boolean;
+  oidcIssuer: string;
+  oidcClientId: string;
+  oidcClientSecretConfigured: boolean;
+  oidcButtonLabel: string;
+  oidcTrustEmail: boolean;
 };
 
 // Fields covered by the main Save (used for unsaved-changes tracking).
@@ -85,6 +91,11 @@ export type FormSnapshot = {
   smtpUsername: string;
   smtpFromAddress: string;
   smtpFromName: string;
+  oidcEnabled: boolean;
+  oidcIssuer: string;
+  oidcClientId: string;
+  oidcButtonLabel: string;
+  oidcTrustEmail: boolean;
 };
 
 /** Typed single-field updater the field JSX calls. */
@@ -295,6 +306,10 @@ const SETTINGS_FIELD_LABELS: Record<string, string> = {
   smtpPassword: 'Password',
   smtpFromAddress: 'From address',
   smtpFromName: 'From name',
+  oidcIssuer: 'Issuer URL',
+  oidcClientId: 'Client ID',
+  oidcClientSecret: 'Client secret',
+  oidcButtonLabel: 'Button wording',
 };
 
 /** "From address: Enter an address like afct@your-university.edu." */
@@ -313,6 +328,7 @@ export const SETTINGS_TABS = [
   'queue',
   'backups',
   'email',
+  'sign-in',
   'captcha',
   'tls',
   'updates',
@@ -360,6 +376,11 @@ export function buildSettingsSnapshot(data: SystemSettingsResponse): FormSnapsho
     smtpUsername: data.smtpUsername ?? '',
     smtpFromAddress: data.smtpFromAddress ?? '',
     smtpFromName: data.smtpFromName ?? '',
+    oidcEnabled: data.oidcEnabled ?? false,
+    oidcIssuer: data.oidcIssuer ?? '',
+    oidcClientId: data.oidcClientId ?? '',
+    oidcButtonLabel: data.oidcButtonLabel ?? '',
+    oidcTrustEmail: data.oidcTrustEmail ?? false,
   };
 }
 
@@ -405,4 +426,9 @@ export const EMPTY_FORM: FormSnapshot = {
   smtpUsername: '',
   smtpFromAddress: '',
   smtpFromName: '',
+  oidcEnabled: false,
+  oidcIssuer: '',
+  oidcClientId: '',
+  oidcButtonLabel: '',
+  oidcTrustEmail: false,
 };

@@ -1147,6 +1147,28 @@ model SystemSettings {
   /// Private hCaptcha key. Never sent to the browser.
   hcaptchaSecretKey String?
 
+  /// Whether people may sign in with an institutional account. Off until an admin configures a
+  /// provider and turns it on, so an install using only local accounts is unchanged.
+  oidcEnabled      Boolean @default(false)
+  /// The provider's issuer URL. Everything else is discovered from it.
+  oidcIssuer       String?
+  /// The client id the provider gave for this AFCT install.
+  oidcClientId     String?
+  /// The client secret. Encrypted at rest (see `lib/secret-encryption`) and never returned to
+  /// the browser; the API reports only whether one is stored.
+  oidcClientSecret String?
+  /// Wording on the sign-in button, so it can say what the institution calls its login.
+  oidcButtonLabel  String?
+  /// Whether to treat this provider's email claim as verified even when it does not say so.
+  ///
+  /// Off by default, and deliberately per-provider rather than global. Auto-linking normally
+  /// requires an asserted `email_verified`, but Entra and Azure AD frequently omit that claim
+  /// altogether, and they are what most campuses run. Without this switch auto-linking would
+  /// silently never fire at those institutions; with it on for a provider that lets people
+  /// choose their own address, an email becomes a way to reach somebody else's account. Hence
+  /// an explicit, logged decision by an administrator rather than a default either way.
+  oidcTrustEmail   Boolean @default(false)
+
   /// Whether AFCT may send email at all. Off until an admin configures a server and turns it
   /// on, so an install that does not want mail behaves exactly as it did before.
   smtpEnabled     Boolean      @default(false)

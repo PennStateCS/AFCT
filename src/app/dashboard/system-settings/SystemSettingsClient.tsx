@@ -29,6 +29,7 @@ import {
   SlidersHorizontal,
   Cpu,
   DatabaseBackup,
+  LogIn,
   Mail,
   ShieldCheck,
   Lock,
@@ -50,6 +51,7 @@ import {
 import { DEFAULT_SMTP_PORT } from '@/lib/system-settings';
 import { GeneralTab } from './GeneralTab';
 import { EmailTab } from './EmailTab';
+import { SignInTab } from './SignInTab';
 import { EvaluatorTab } from './EvaluatorTab';
 import { BackupsTab } from './BackupsTab';
 import { CaptchaTab } from './CaptchaTab';
@@ -121,6 +123,11 @@ export default function SystemSettingsClient() {
     smtpUsername,
     smtpFromAddress,
     smtpFromName,
+    oidcEnabled,
+    oidcIssuer,
+    oidcClientId,
+    oidcButtonLabel,
+    oidcTrustEmail,
   } = form;
 
   // hCaptcha secret is write-only (we only know whether one is set), so it stays local
@@ -140,6 +147,13 @@ export default function SystemSettingsClient() {
   );
   const [smtpPasswordClear, setSmtpPasswordClear] = useState(false);
 
+  // The OIDC client secret is write-only for the same reason as the two above.
+  const [oidcClientSecret, setOidcClientSecret] = useState('');
+  const [oidcClientSecretConfigured, setOidcClientSecretConfigured] = useState(() =>
+    Boolean(settingsData?.oidcClientSecretConfigured),
+  );
+  const [oidcClientSecretClear, setOidcClientSecretClear] = useState(false);
+
   // Baseline of saved values, for unsaved-changes detection. Seeded synchronously
   // on a warm cache so `loading` (below) is false immediately: no disabled flash.
   const [baseline, setBaseline] = useState<FormSnapshot | null>(initialSeed);
@@ -157,6 +171,9 @@ export default function SystemSettingsClient() {
     setSmtpPasswordConfigured(Boolean(settingsData.smtpPasswordConfigured));
     setSmtpPassword('');
     setSmtpPasswordClear(false);
+    setOidcClientSecretConfigured(Boolean(settingsData.oidcClientSecretConfigured));
+    setOidcClientSecret('');
+    setOidcClientSecretClear(false);
     setBaseline(norm);
   }, [settingsData, baseline]);
 
@@ -264,6 +281,16 @@ export default function SystemSettingsClient() {
         : smtpPassword.trim()
           ? { smtpPassword: smtpPassword.trim() }
           : {}),
+      oidcEnabled,
+      oidcIssuer: oidcIssuer.trim(),
+      oidcClientId: oidcClientId.trim(),
+      oidcButtonLabel: oidcButtonLabel.trim(),
+      oidcTrustEmail,
+      ...(oidcClientSecretClear
+        ? { oidcClientSecretClear: true }
+        : oidcClientSecret.trim()
+          ? { oidcClientSecret: oidcClientSecret.trim() }
+          : {}),
     });
     if (!parsedSettings.success) {
       const issue = parsedSettings.error.issues[0];
@@ -315,12 +342,26 @@ export default function SystemSettingsClient() {
         smtpUsername: smtpUsername.trim(),
         smtpFromAddress: smtpFromAddress.trim(),
         smtpFromName: smtpFromName.trim(),
+        oidcEnabled,
+        oidcIssuer: oidcIssuer.trim(),
+        oidcClientId: oidcClientId.trim(),
+        oidcButtonLabel: oidcButtonLabel.trim(),
+        oidcTrustEmail,
       };
       dispatchForm({ type: 'reset', snapshot: savedSnapshot });
       setBaseline(savedSnapshot);
       setHcaptchaSecretConfigured(
         hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
       );
+      setOidcClientSecretConfigured(
+        oidcClientSecretClear
+          ? false
+          : oidcClientSecret.trim()
+            ? true
+            : oidcClientSecretConfigured,
+      );
+      setOidcClientSecret('');
+      setOidcClientSecretClear(false);
       setHcaptchaSecretKey('');
       setHcaptchaSecretClear(false);
       // Keep the read cache consistent with what we just saved so a later revisit
@@ -355,6 +396,14 @@ export default function SystemSettingsClient() {
               smtpUsername: smtpUsername.trim(),
               smtpFromAddress: smtpFromAddress.trim(),
               smtpFromName: smtpFromName.trim(),
+              oidcEnabled,
+              oidcIssuer: oidcIssuer.trim(),
+              oidcClientId: oidcClientId.trim(),
+              oidcButtonLabel: oidcButtonLabel.trim(),
+              oidcTrustEmail,
+              oidcClientSecretConfigured: oidcClientSecretClear
+                ? false
+                : oidcClientSecret.trim() !== '' || oidcClientSecretConfigured,
               // A password that was just set is now stored; a cleared one is not.
               smtpPasswordConfigured: smtpPasswordClear
                 ? false
@@ -406,6 +455,7 @@ export default function SystemSettingsClient() {
     { value: 'queue', label: 'Evaluator', Icon: Cpu },
     { value: 'backups', label: 'Backups', Icon: DatabaseBackup },
     { value: 'email', label: 'Email', Icon: Mail },
+    { value: 'sign-in', label: 'Sign-in', Icon: LogIn },
     { value: 'captcha', label: 'Captcha', Icon: ShieldCheck },
     { value: 'tls', label: 'TLS Certificate', Icon: Lock },
     { value: 'updates', label: 'Updates', Icon: RefreshCw },
@@ -480,6 +530,26 @@ export default function SystemSettingsClient() {
                 setPasswordClear={setSmtpPasswordClear}
                 savedHost={settingsData?.smtpHost}
                 dirty={isDirty}
+              />
+            </TabsContent>
+
+            <TabsContent value="sign-in">
+              <SignInTab
+                enabled={oidcEnabled}
+                issuer={oidcIssuer}
+                clientId={oidcClientId}
+                buttonLabel={oidcButtonLabel}
+                trustEmail={oidcTrustEmail}
+                setField={setField}
+                disabled={disabled}
+                clientSecret={oidcClientSecret}
+                setClientSecret={setOidcClientSecret}
+                clientSecretConfigured={oidcClientSecretConfigured}
+                clientSecretClear={oidcClientSecretClear}
+                setClientSecretClear={setOidcClientSecretClear}
+                // Derived from the site URL the installer set, so an admin can hand it to IT
+                // without guessing at the path.
+                redirectUri={`${(settingsData?.configuredUrl ?? '').replace(/\/+$/, '')}/api/auth/callback/oidc`}
               />
             </TabsContent>
 
