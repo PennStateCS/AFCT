@@ -67,6 +67,16 @@ Deactivated accounts are never sent a reset link, so deactivating someone closes
 well as the sign-in page.
 :::
 
+## Desktop client tokens
+
+The AFCT desktop client signs in with a token rather than a password. Anyone can create their
+own from **Account → App tokens**, name it so they can tell their machines apart, and revoke it
+when they stop using one.
+
+A token is shown once, when it is created. If someone loses it, they create another and revoke
+the old one; there is no way to look it up again. Changing or resetting a password revokes every
+token issued beforehand.
+
 ## Locked accounts
 
 AFCT temporarily locks an account after too many failed sign-in attempts, to slow down password guessing. The lock expires on its own after the configured window, so most locks clear without any action.
