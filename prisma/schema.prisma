@@ -87,6 +87,9 @@ enum GradeSource {
 // those wrong once is better than getting them wrong three times.
 enum SingleUseTokenPurpose {
   PASSWORD_RESET
+  /// The `nonce` AFCT puts in an LTI login request and requires back in the launch token.
+  /// Single use is the whole point: it is what stops a captured launch being replayed.
+  LTI_LAUNCH_NONCE
 }
 
 // What kind of system vouched for an identity. Descriptive rather than structural: a single
@@ -264,6 +267,46 @@ model LinkedIdentity {
   /// and stops one identity quietly moving between accounts.
   @@unique([issuer, subject])
   @@index([userId])
+}
+
+/// An LMS that may launch into AFCT.
+///
+/// Registration is mutual and manual: an administrator creates a developer key in the LMS, and
+/// pastes what it gives back into AFCT. There is no client secret, because LTI 1.3 does not use
+/// one; AFCT proves who it is by signing with its own key.
+///
+/// Keyed on the **triple** of issuer, client id and deployment id rather than on the issuer
+/// alone. One LMS can deploy the same tool more than once (a sub-account, a second course set),
+/// and each deployment is a distinct registration even though the issuer and client id repeat.
+/// Treating the issuer as the key is the classic way to make two deployments collide.
+///
+/// @namespace Identity
+model LtiPlatform {
+  /// Unique identifier.
+  id           String @id @default(cuid())
+  /// What an administrator calls this LMS, for screens. Never used for matching.
+  name         String
+  /// The platform's own issuer identifier, which appears as `iss` in every launch.
+  issuer       String
+  /// What the LMS calls AFCT. Appears as `aud` in a launch.
+  clientId     String
+  /// Which deployment of AFCT within that LMS this is.
+  deploymentId String
+
+  /// Where AFCT sends the person to start a launch (the platform's OIDC authorization endpoint).
+  authLoginUrl String
+  /// Where AFCT asks for access tokens, for grade passback and roster sync.
+  tokenUrl     String
+  /// Where AFCT fetches the platform's public keys, to verify that a launch really came from it.
+  keysetUrl    String
+
+  /// When this record was created.
+  createdAt DateTime @default(now())
+  /// When it was last changed.
+  updatedAt DateTime @updatedAt
+
+  /// The triple that identifies a registration. Also what a launch is matched against.
+  @@unique([issuer, clientId, deploymentId])
 }
 
 /// AFCT's own signing keypair, used to sign the token requests it makes to an LMS.
