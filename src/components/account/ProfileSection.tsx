@@ -1,16 +1,9 @@
+'use client';
+
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { AvatarCrop, type AvatarCropRef } from '../AvatarCrop';
+import { AvatarCrop, type AvatarCropRef } from '@/components/AvatarCrop';
 import { Trash2, Upload } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 
@@ -42,13 +35,18 @@ type ProfileUser = SessionUser & {
   zoom?: number;
 };
 
-type EditProfileDialog = {
+type ProfileSectionProps = {
   user: ProfileUser;
-  open: boolean;
-  setOpen: (open: boolean) => void;
   onSave?: (updatedUser: Partial<ProfileUser>) => Promise<void>;
 };
-export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
+
+/**
+ * Your name, timezone and avatar, on the account page.
+ *
+ * Moved here from a dialog. The avatar cropping and the seeding rule came with it unchanged in
+ * substance; see the comment on the seeding effect for the one thing that had to be rethought.
+ */
+export function ProfileSection({ user, onSave }: ProfileSectionProps) {
   // Local preview state (keep separate from RHF file)
   const queryClient = useQueryClient();
   // The navbar/sidebar avatars read from the NextAuth session; update() re-runs the
@@ -101,47 +99,24 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     reValidateMode: 'onChange',
   });
 
-  // Sync the form from the user ONLY on an open/close transition — never on a mere
-  // re-render while the dialog is already open. The parent rebuilds the `user` object on
-  // every render, so without this guard a background refetch or session update mid-edit
-  // would re-run this effect and clobber the in-progress avatar position/zoom (the
-  // "X/Y position doesn't save" bug).
-  const wasOpenRef = useRef(false);
+  // Seed once, on mount. The dialog this replaced seeded on an open/close transition for a
+  // specific reason: the parent rebuilds the `user` object on every render, so re-seeding on
+  // any re-render let a background refetch or session update clobber an in-progress avatar
+  // position or zoom (the "X/Y position doesn't save" bug). A page has no open transition, so
+  // the equivalent guard is to seed exactly once and never again.
+  const seededRef = useRef(false);
   useEffect(() => {
-    const justOpened = open && !wasOpenRef.current;
-    wasOpenRef.current = open;
+    if (seededRef.current) return;
+    seededRef.current = true;
 
-    // Already open and merely re-rendered: keep whatever the user is editing.
-    if (open && !justOpened) return;
-
-    if (open) {
-      reset(defaults, {
-        keepDirty: false,
-        keepErrors: false,
-        keepTouched: false,
-        keepValues: false,
-      });
-      // Reset preview from current user
-      setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
-      setAvatarCrop({
-        cropX: user.cropX ?? 0.5,
-        cropY: user.cropY ?? 0.5,
-        zoom: user.zoom ?? 1,
-      });
-    } else {
-      reset(defaults, {
-        keepDirty: false,
-        keepTouched: false,
-        keepErrors: false,
-        keepValues: false,
-      });
-      setAvatarCrop({
-        cropX: user.cropX ?? 0.5,
-        cropY: user.cropY ?? 0.5,
-        zoom: user.zoom ?? 1,
-      });
-    }
-  }, [open, defaults, reset, user.avatar, user.cropX, user.cropY, user.zoom]);
+    reset(defaults, { keepDirty: false, keepErrors: false, keepTouched: false, keepValues: false });
+    setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
+    setAvatarCrop({
+      cropX: user.cropX ?? 0.5,
+      cropY: user.cropY ?? 0.5,
+      zoom: user.zoom ?? 1,
+    });
+  }, [defaults, reset, user.avatar, user.cropX, user.cropY, user.zoom]);
 
   const handleAvatarUpload = (file?: File) => {
     // Update RHF state and local state
@@ -214,7 +189,6 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       await queryClient.invalidateQueries({ queryKey: ['profile'] });
 
       showToast.updated('Profile');
-      setOpen(false);
     } catch {
       showToast.error('Could not save your profile. Check your connection and try again.');
     } finally {
@@ -224,23 +198,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(val) => {
-        setOpen(val);
-        // Prevent “red fields on cancel”: clear RHF UI state on close
-        if (!val) {
-          resetForm();
-        }
-      }}
-    >
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Edit Profile</DialogTitle>
-          <DialogDescription>Update your personal information.</DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="max-w-md space-y-4">
           {/* Avatar */}
           <div className="flex flex-col items-center gap-3">
             <Label className="w-full text-center">Avatar Image</Label>
@@ -370,22 +328,20 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
           {/* Hidden deleteAvatar flag (driven by Delete button) */}
           <Controller control={control} name="deleteAvatar" render={() => <></>} />
 
-          <DialogFooter className="mt-4">
-            <DialogClose asChild>
-              <Button type="button" variant="secondary" onClick={resetForm} disabled={isSubmitting}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button
-              type="submit"
-              disabled={!isValid || isSubmitting}
-              title={!isValid ? 'Fix validation errors to save' : undefined}
-            >
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <div className="mt-4 flex gap-2">
+          <Button
+            type="submit"
+            disabled={!isValid || isSubmitting}
+            title={!isValid ? 'Fix validation errors to save' : undefined}
+          >
+            {isSubmitting ? 'Saving...' : 'Save changes'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={resetForm} disabled={isSubmitting}>
+            Reset
+          </Button>
+        </div>
+      </form>
   );
 }
+
+export default ProfileSection;
