@@ -1,16 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { KeyRound, UserRound } from 'lucide-react';
+import { KeyRound, Terminal, UserRound } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar } from '@/components/course/course-tabs';
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { PasswordSection } from '@/components/account/PasswordSection';
+import { TokensSection } from '@/components/account/TokensSection';
 import { useChangePassword } from '@/hooks/use-change-password';
 import type { SessionUser } from '@/types/next-auth';
 
-export const ACCOUNT_TABS = ['profile', 'password'] as const;
+export const ACCOUNT_TABS = ['profile', 'password', 'tokens'] as const;
 const TAB_KEY = 'afct.accountTab';
 
 type ProfileUser = SessionUser & { cropX?: number; cropY?: number; zoom?: number };
@@ -55,6 +56,7 @@ export default function AccountClient({ user }: { user: ProfileUser }) {
   const tabs = [
     { value: 'profile', label: 'Profile', Icon: UserRound },
     { value: 'password', label: 'Password', Icon: KeyRound },
+    { value: 'tokens', label: 'App tokens', Icon: Terminal },
   ] as const;
 
   return (
@@ -84,6 +86,10 @@ export default function AccountClient({ user }: { user: ProfileUser }) {
 
           <TabsContent value="password">
             <PasswordSection onChangePassword={changePassword} />
+          </TabsContent>
+
+          <TabsContent value="tokens">
+            <TokensSection />
           </TabsContent>
         </Tabs>
       </CardContent>

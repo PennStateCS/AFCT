@@ -2446,6 +2446,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/client-tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke one of my client tokens
+         * @description Revokes one of the caller's own tokens.   Scoped to the session in the `where`, not checked first and deleted after: a token id  belonging to someone else matches nothing rather than revoking their access. Marked revoked  rather than deleted, so a token that turns up in the log later can still be accounted for.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/client-tokens/[id]/route.ts)
+         */
+        delete: operations["deleteMeClientTokensById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/client-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my client tokens
+         * @description The signed-in user's own tokens for the desktop client.   Scoped to the caller throughout: there is no user id in the path, and every query is keyed on  the session. A token is a way into someone's account, so listing or revoking another person's  is not something this route can be asked to do by mistake.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/client-tokens/route.ts)
+         */
+        get: operations["getMeClientTokens"];
+        put?: never;
+        /**
+         * Issue a client token
+         * @description Issues a token for the desktop client.   The plaintext is returned exactly once, here, and never stored. That is the whole reason this  endpoint exists: without it, the only way to get a token is the client's email-and-password  login, which an account with no local password cannot use.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/client-tokens/route.ts)
+         */
+        post: operations["postMeClientTokens"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/courses": {
         parameters: {
             query?: never;
@@ -10964,6 +11020,114 @@ export interface operations {
             };
             /** @description Server error. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteMeClientTokensById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The token was revoked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such token belonging to the caller. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getMeClientTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's tokens. The token values themselves are never returned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postMeClientTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description A name to recognise this token by */
+                    label?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The new token. This is the only time its value is returned. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
