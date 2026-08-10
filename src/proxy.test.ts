@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const getTokenMock = vi.hoisted(() => vi.fn());
@@ -13,6 +13,38 @@ beforeEach(() => {
 });
 
 describe('proxy', () => {
+  /**
+   * NextAuth names the session cookie from the URL scheme: on https it uses the `__Secure-`
+   * prefix. Reading that from NODE_ENV instead means an https deployment that is not a
+   * production build looks signed out to the edge, and every API call 401s while pages keep
+   * working, because pages read the cookie server-side rather than here. That combination is
+   * genuinely confusing to debug, which is why it is pinned.
+   */
+  describe('which session cookie it looks for', () => {
+    const original = process.env.NEXTAUTH_URL;
+    afterEach(() => {
+      if (original === undefined) delete process.env.NEXTAUTH_URL;
+      else process.env.NEXTAUTH_URL = original;
+    });
+
+    it('expects the secure cookie when the app is served over https', async () => {
+      process.env.NEXTAUTH_URL = 'https://afct.example.edu';
+      getTokenMock.mockResolvedValue({ isAdmin: false });
+
+      await proxy(req('/api/courses'));
+
+      expect(getTokenMock).toHaveBeenCalledWith(expect.objectContaining({ secureCookie: true }));
+    });
+
+    it('expects the plain cookie over http', async () => {
+      process.env.NEXTAUTH_URL = 'http://localhost:3000';
+      getTokenMock.mockResolvedValue({ isAdmin: false });
+
+      await proxy(req('/api/courses'));
+
+      expect(getTokenMock).toHaveBeenCalledWith(expect.objectContaining({ secureCookie: false }));
+    });
+  });
   describe('/api/admin/*', () => {
     it('403s a positively-confirmed non-admin', async () => {
       getTokenMock.mockResolvedValue({ isAdmin: false });

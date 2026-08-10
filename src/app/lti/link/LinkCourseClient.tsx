@@ -39,8 +39,11 @@ export default function LinkCourseClient({
       const data = (await res.json().catch(() => ({}))) as { courseId?: string; error?: string };
       if (!res.ok) {
         showToast.error(data.error ?? 'Could not link that course. Try again.');
+        setSaving(false);
         return;
       }
+      // Deliberately leaves the button disabled: the browser is on its way to the course, and
+      // re-enabling it invites a second click that would fail as already-linked.
       window.location.replace(`/dashboard/courses/${data.courseId}`);
     } catch {
       showToast.error('Could not link that course. Try again.');

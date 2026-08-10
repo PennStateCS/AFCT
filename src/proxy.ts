@@ -44,6 +44,16 @@ const PUBLIC_API_PREFIXES = [
   '/api/lti/launch',
 ] as const;
 
+/**
+ * Whether NextAuth will have used the `__Secure-` cookie prefix, which it does whenever the
+ * app's own URL is https, regardless of build type.
+ */
+function usesSecureCookies(): boolean {
+  const url = process.env.NEXTAUTH_URL?.trim();
+  if (url) return url.startsWith('https://');
+  return process.env.NODE_ENV === 'production';
+}
+
 function isPublicApi(pathname: string): boolean {
   return PUBLIC_API_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -132,7 +142,11 @@ export async function proxy(req: NextRequest) {
   const token = await getToken({
     req,
     secret: requireAuthSecret(),
-    secureCookie: process.env.NODE_ENV === 'production',
+    // NextAuth names the session cookie from the URL scheme, not from NODE_ENV: on https it
+    // sets `__Secure-next-auth.session-token`. Keying this off NODE_ENV alone means any https
+    // deployment that is not a production build looks signed out to the edge, and every API
+    // call 401s while pages still work, because pages read the cookie server-side instead.
+    secureCookie: usesSecureCookies(),
   });
 
   // Idle-timeout backstop: reject a signed-in token whose activity window has
