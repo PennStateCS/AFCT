@@ -41,6 +41,19 @@ async function seedFixtures() {
   });
 }
 
+/**
+ * The stored hash, asserted present.
+ *
+ * `User.password` is optional now, because an account can be vouched for by an identity
+ * provider instead. None of these fixtures is such an account, so a missing hash here would
+ * itself be the bug, and asserting it says so rather than quietly coercing the type away.
+ */
+const storedHash = async (userId: string): Promise<string> => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  expect(user?.password).toBeTruthy();
+  return user!.password!;
+};
+
 /** The token out of the most recent email, which is the only place it ever exists. */
 const tokenFromLastEmail = (): string => {
   const body = sendMailMock.mock.calls.at(-1)?.[0]?.text as string;
@@ -118,8 +131,7 @@ describe('completing a reset', () => {
     const result = await completePasswordReset(await requestToken(), NEW_PASSWORD);
 
     expect(result).toMatchObject({ ok: true });
-    const user = await prisma.user.findUnique({ where: { id: ids.user } });
-    expect(await bcrypt.compare(NEW_PASSWORD, user!.password)).toBe(true);
+    expect(await bcrypt.compare(NEW_PASSWORD, await storedHash(ids.user))).toBe(true);
   });
 
   it('refuses a link that has already been used', async () => {
@@ -192,8 +204,7 @@ describe('completing a reset', () => {
 
     expect(await completePasswordReset(token, NEW_PASSWORD)).toMatchObject({ ok: false });
 
-    const user = await prisma.user.findUnique({ where: { id: ids.user } });
-    expect(await bcrypt.compare(NEW_PASSWORD, user!.password)).toBe(false);
+    expect(await bcrypt.compare(NEW_PASSWORD, await storedHash(ids.user))).toBe(false);
   });
 
   /**
@@ -203,7 +214,6 @@ describe('completing a reset', () => {
   it('leaves the password untouched when the link is rejected', async () => {
     await completePasswordReset('never-issued', NEW_PASSWORD);
 
-    const user = await prisma.user.findUnique({ where: { id: ids.user } });
-    expect(await bcrypt.compare('OldPassw0rd!', user!.password)).toBe(true);
+    expect(await bcrypt.compare('OldPassw0rd!', await storedHash(ids.user))).toBe(true);
   });
 });
