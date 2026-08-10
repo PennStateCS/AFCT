@@ -11,6 +11,7 @@
 // System Settings form.
 import { z } from 'zod';
 import { SmtpSettingsSchema } from '@/schemas/smtp';
+import { OidcSettingsSchema } from '@/schemas/identity';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import {
   clampUploadSizeMb,
@@ -94,6 +95,15 @@ export const SystemSettingsUpdateSchema = z.object({
   smtpPasswordClear: SmtpSettingsSchema.shape.smtpPasswordClear,
   smtpFromAddress: SmtpSettingsSchema.shape.smtpFromAddress,
   smtpFromName: SmtpSettingsSchema.shape.smtpFromName,
+
+  // Institutional sign-in. Same write-only rule for the client secret.
+  oidcEnabled: OidcSettingsSchema.shape.oidcEnabled,
+  oidcIssuer: OidcSettingsSchema.shape.oidcIssuer,
+  oidcClientId: OidcSettingsSchema.shape.oidcClientId,
+  oidcClientSecret: OidcSettingsSchema.shape.oidcClientSecret,
+  oidcClientSecretClear: OidcSettingsSchema.shape.oidcClientSecretClear,
+  oidcButtonLabel: OidcSettingsSchema.shape.oidcButtonLabel,
+  oidcTrustEmail: OidcSettingsSchema.shape.oidcTrustEmail,
 });
 
 /** Raw form/request input (pre-coercion). */

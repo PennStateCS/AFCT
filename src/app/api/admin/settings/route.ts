@@ -158,6 +158,14 @@ export const GET = withAdminAuth(
       smtpPasswordConfigured: Boolean(settings?.smtpPassword),
       smtpFromAddress: settings?.smtpFromAddress ?? '',
       smtpFromName: settings?.smtpFromName ?? '',
+      // Institutional sign-in. The client secret follows the same rule as the others: never
+      // returned, only whether one is stored.
+      oidcEnabled: settings?.oidcEnabled ?? false,
+      oidcIssuer: settings?.oidcIssuer ?? '',
+      oidcClientId: settings?.oidcClientId ?? '',
+      oidcClientSecretConfigured: Boolean(settings?.oidcClientSecret),
+      oidcButtonLabel: settings?.oidcButtonLabel ?? '',
+      oidcTrustEmail: settings?.oidcTrustEmail ?? false,
     });
   },
   { deniedAction: 'SYSTEM_SETTINGS_VIEW_DENIED' },
@@ -313,6 +321,34 @@ export const PUT = withAdminAuth(
       }
     }
 
+    // Institutional sign-in, same write-only rule for the secret as the two above.
+    const oidcData: Record<string, unknown> = {};
+    if (typeof body.oidcEnabled === 'boolean') oidcData.oidcEnabled = body.oidcEnabled;
+    if (typeof body.oidcIssuer === 'string') oidcData.oidcIssuer = body.oidcIssuer.trim() || null;
+    if (typeof body.oidcClientId === 'string')
+      oidcData.oidcClientId = body.oidcClientId.trim() || null;
+    if (typeof body.oidcButtonLabel === 'string')
+      oidcData.oidcButtonLabel = body.oidcButtonLabel.trim() || null;
+    if (typeof body.oidcTrustEmail === 'boolean') oidcData.oidcTrustEmail = body.oidcTrustEmail;
+
+    if (body.oidcClientSecretClear === true) {
+      oidcData.oidcClientSecret = null;
+    } else if (typeof body.oidcClientSecret === 'string' && body.oidcClientSecret.trim() !== '') {
+      try {
+        oidcData.oidcClientSecret = encryptSecret(body.oidcClientSecret.trim());
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error:
+              error instanceof SecretKeyError
+                ? `The sign-in client secret cannot be saved. ${error.message}`
+                : 'The sign-in client secret could not be saved.',
+          },
+          { status: 500 },
+        );
+      }
+    }
+
     const updateData: {
       timezone: string;
       maxUploadSizeMb: number;
@@ -327,6 +363,7 @@ export const PUT = withAdminAuth(
       ...backupData,
       ...hcaptchaData,
       ...smtpData,
+      ...oidcData,
       ...signupData,
     };
     if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
@@ -348,6 +385,7 @@ export const PUT = withAdminAuth(
       ...backupData,
       ...hcaptchaData,
       ...smtpData,
+      ...oidcData,
       ...signupData,
     };
     if (hasAllowSignup) createData.allowSignup = body.allowSignup;
@@ -450,6 +488,12 @@ export const PUT = withAdminAuth(
       smtpPasswordConfigured: Boolean(settings.smtpPassword),
       smtpFromAddress: settings.smtpFromAddress ?? '',
       smtpFromName: settings.smtpFromName ?? '',
+      oidcEnabled: settings.oidcEnabled ?? false,
+      oidcIssuer: settings.oidcIssuer ?? '',
+      oidcClientId: settings.oidcClientId ?? '',
+      oidcClientSecretConfigured: Boolean(settings.oidcClientSecret),
+      oidcButtonLabel: settings.oidcButtonLabel ?? '',
+      oidcTrustEmail: settings.oidcTrustEmail ?? false,
     });
   },
   { deniedAction: 'SYSTEM_SETTINGS_UPDATE_DENIED' },

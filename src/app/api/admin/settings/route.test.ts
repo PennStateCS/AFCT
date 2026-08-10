@@ -80,6 +80,14 @@ describe('GET /api/system-settings', () => {
       smtpPasswordConfigured: false,
       smtpFromAddress: '',
       smtpFromName: '',
+      // Institutional sign-in is off until an admin configures a provider, and the client
+      // secret is never returned, only whether one is stored.
+      oidcEnabled: false,
+      oidcIssuer: '',
+      oidcClientId: '',
+      oidcClientSecretConfigured: false,
+      oidcButtonLabel: '',
+      oidcTrustEmail: false,
     });
   });
 
@@ -136,6 +144,14 @@ describe('GET /api/system-settings', () => {
       smtpPasswordConfigured: false,
       smtpFromAddress: '',
       smtpFromName: '',
+      // Institutional sign-in is off until an admin configures a provider, and the client
+      // secret is never returned, only whether one is stored.
+      oidcEnabled: false,
+      oidcIssuer: '',
+      oidcClientId: '',
+      oidcClientSecretConfigured: false,
+      oidcButtonLabel: '',
+      oidcTrustEmail: false,
     });
   });
 });
@@ -274,6 +290,14 @@ describe('PUT /api/system-settings', () => {
       smtpPasswordConfigured: false,
       smtpFromAddress: '',
       smtpFromName: '',
+      // Institutional sign-in is off until an admin configures a provider, and the client
+      // secret is never returned, only whether one is stored.
+      oidcEnabled: false,
+      oidcIssuer: '',
+      oidcClientId: '',
+      oidcClientSecretConfigured: false,
+      oidcButtonLabel: '',
+      oidcTrustEmail: false,
     });
   });
 

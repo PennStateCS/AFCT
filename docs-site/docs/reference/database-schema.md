@@ -729,6 +729,12 @@ erDiagram
   Int submissionAnalyzerLimit
   String hcaptchaSiteKey "nullable"
   String hcaptchaSecretKey "nullable"
+  Boolean oidcEnabled
+  String oidcIssuer "nullable"
+  String oidcClientId "nullable"
+  String oidcClientSecret "nullable"
+  String oidcButtonLabel "nullable"
+  Boolean oidcTrustEmail
   Boolean smtpEnabled
   String smtpHost "nullable"
   Int smtpPort "nullable"
@@ -799,6 +805,24 @@ Properties as follows:
   > Public hCaptcha key used on the sign-in page. Empty falls back to the value supplied by the
   > environment, and then to having no captcha.
 - `hcaptchaSecretKey`: Private hCaptcha key. Never sent to the browser.
+- `oidcEnabled`
+  > Whether people may sign in with an institutional account. Off until an admin configures a
+  > provider and turns it on, so an install using only local accounts is unchanged.
+- `oidcIssuer`: The provider's issuer URL. Everything else is discovered from it.
+- `oidcClientId`: The client id the provider gave for this AFCT install.
+- `oidcClientSecret`
+  > The client secret. Encrypted at rest (see `lib/secret-encryption`) and never returned to
+  > the browser; the API reports only whether one is stored.
+- `oidcButtonLabel`: Wording on the sign-in button, so it can say what the institution calls its login.
+- `oidcTrustEmail`
+  > Whether to treat this provider's email claim as verified even when it does not say so.
+  >
+  > Off by default, and deliberately per-provider rather than global. Auto-linking normally
+  > requires an asserted `email_verified`, but Entra and Azure AD frequently omit that claim
+  > altogether, and they are what most campuses run. Without this switch auto-linking would
+  > silently never fire at those institutions; with it on for a provider that lets people
+  > choose their own address, an email becomes a way to reach somebody else's account. Hence
+  > an explicit, logged decision by an administrator rather than a default either way.
 - `smtpEnabled`
   > Whether AFCT may send email at all. Off until an admin configures a server and turns it
   > on, so an install that does not want mail behaves exactly as it did before.

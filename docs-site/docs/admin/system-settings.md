@@ -89,6 +89,32 @@ database, so a copy of the database alone cannot reveal it. See
 [Backups and recovery](../operations/backups.md) for what that means when restoring onto a
 different machine.
 
+## Sign-in
+
+The **Sign-in** tab lets people use their institution's account instead of an AFCT password. It
+is off until you configure a provider and turn it on, and **AFCT passwords keep working either
+way**, so a misconfigured provider cannot lock you out of your own site.
+
+Your IT department gives you the issuer URL, a client ID and a client secret, and needs the
+redirect URL shown on the tab. Registration usually fails without that URL, with an error about
+a mismatched redirect.
+
+### Matching people to existing accounts
+
+When somebody signs in for the first time, AFCT attaches their institutional identity to an
+existing account with the same email address, but only when the provider states that the address
+is verified.
+
+:::warning Trusting a provider's email addresses
+Some providers, Microsoft Entra among them, never mark addresses as verified, so nobody at those
+institutions is matched automatically. **Trust this provider's email addresses** overrides that.
+
+Only turn it on if your provider controls the addresses it reports. At a provider where people
+can choose their own address, it would let someone reach an account that is not theirs.
+Administrator accounts are never matched automatically either way: an administrator connects
+their institutional login deliberately, from their own account page.
+:::
+
 ## Captcha
 
 The **Captcha** tab stores the optional hCaptcha site key and secret key used to protect sign-in and signup flows.
