@@ -60,6 +60,8 @@ describe('proxy', () => {
       '/api/auth/signup',
       '/api/health',
       '/api/system-settings/public',
+      // Fetched by an LMS's servers, which have no AFCT session and never will.
+      '/api/lti/jwks',
       // Nobody is signed in yet when an LMS starts a launch.
       '/api/lti/login',
     ])('lets %s through without reading a token', async (path) => {
@@ -77,11 +79,12 @@ describe('proxy', () => {
 
     /**
      * Only the named LTI entry points are public. An allowlist entry of `/api/lti` would have
-     * quietly opened the platform registration routes that live alongside them.
+     * quietly opened everything else under it.
      */
     it('does not make the rest of /api/lti public', async () => {
       getTokenMock.mockResolvedValue(null);
 
+      expect((await proxy(req('/api/lti/launch'))).status).toBe(401);
       expect((await proxy(req('/api/lti/platforms'))).status).toBe(401);
     });
   });

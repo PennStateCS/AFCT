@@ -21,3 +21,13 @@ if (dbName !== 'afct_test') {
 }
 
 process.env.DATABASE_URL = url;
+
+/**
+ * A secret-encryption key for the suite, so tests can exercise the encrypted columns (the OIDC
+ * client secret, the LTI private key) rather than skipping the encryption entirely.
+ *
+ * A fixed throwaway value on purpose. It protects nothing: the database it unlocks is deleted
+ * between runs, and a test that needs to prove behaviour *without* a key sets and unsets the
+ * variable itself. Any real deployment gets a generated one from the installer.
+ */
+process.env.AFCT_SECRET_KEY ??= 'test-only-secret-encryption-key-not-used-anywhere-real';
