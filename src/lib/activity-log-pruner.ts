@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { purgeExpiredSingleUseTokens } from '@/lib/single-use-token';
+import { purgeExpiredPendingLinks } from '@/lib/lti/course-link';
 import {
   DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
   clampActivityLogRetentionDays,
@@ -57,9 +58,23 @@ async function purgeTokensOnce(): Promise<void> {
   }
 }
 
+// Launches from an unlinked LMS course where nobody chose a course. Same daily pass and the
+// same swallow-and-continue rule as the sweeps above.
+async function purgePendingLinksOnce(): Promise<void> {
+  try {
+    const count = await purgeExpiredPendingLinks();
+    if (count > 0) {
+      console.log(`[lti] deleted ${count} expired pending course links`);
+    }
+  } catch (error) {
+    console.error('[lti] pending-link purge failed:', error);
+  }
+}
+
 async function loop(): Promise<void> {
   await pruneOnce();
   await purgeTokensOnce();
+  await purgePendingLinksOnce();
   setTimeout(() => void loop(), PRUNE_INTERVAL_MS);
 }
 

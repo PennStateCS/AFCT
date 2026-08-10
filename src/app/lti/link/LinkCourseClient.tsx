@@ -24,11 +24,21 @@ export default function LinkCourseClient({
   courses?: CourseChoice[];
   notReady?: boolean;
 }) {
-  const [selected, setSelected] = useState<string>('');
+  /**
+   * Preselected when there is only one course, which is the common case: most faculty run one
+   * course per LMS course. Asking somebody to choose from a list of one reads as a puzzle.
+   */
+  const [selected, setSelected] = useState<string>(
+    courses.length === 1 ? (courses[0]?.id ?? '') : '',
+  );
   const [saving, setSaving] = useState(false);
 
   const link = async () => {
-    if (!selected || !pendingId) return;
+    if (!selected) {
+      showToast.error('Choose a course first.');
+      return;
+    }
+    if (!pendingId) return;
     setSaving(true);
     try {
       const res = await fetch('/api/lti/link', {
@@ -105,7 +115,12 @@ export default function LinkCourseClient({
                 ))}
               </fieldset>
 
-              <Button className="mt-4" onClick={link} disabled={!selected || saving}>
+              {/*
+               * Left enabled with nothing chosen, deliberately. A disabled button that does
+               * nothing when clicked gives no reason and no way forward; this says what is
+               * missing. Only `saving` disables it, to stop a double submit.
+               */}
+              <Button className="mt-4" onClick={link} disabled={saving}>
                 {saving ? 'Connecting...' : 'Connect this course'}
               </Button>
             </>
