@@ -6,20 +6,19 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { EditProfileDialog } from './EditProfileDialog';
+import { ProfileSection } from './ProfileSection';
 
 const renderWithClient = (ui: React.ReactElement) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
 vi.mock('@/components/ui/InputGroup', () =>
   import('@/test/mocks/ui').then((mod) => mod.inputGroupMock),
 );
 vi.mock('@/components/ui/select', () => import('@/test/mocks/ui').then((mod) => mod.selectMock));
 // The crop editor is drag/pointer-driven and irrelevant to these form tests; stub it.
-vi.mock('../AvatarCrop', () => ({ AvatarCrop: () => null }));
+vi.mock('@/components/AvatarCrop', () => ({ AvatarCrop: () => null }));
 
 const { updateSession } = vi.hoisted(() => ({ updateSession: vi.fn() }));
 vi.mock('next-auth/react', () => ({
@@ -58,7 +57,7 @@ const user = {
 const originalFetch = global.fetch;
 const fetchMock = vi.fn();
 
-describe('EditProfileDialog', () => {
+describe('ProfileSection', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -73,7 +72,6 @@ describe('EditProfileDialog', () => {
 
   it('updates profile fields and notifies parent', async () => {
     const userEvents = userEvent.setup();
-    const setOpen = vi.fn();
     const onSave = vi.fn().mockResolvedValue(undefined);
 
     fetchMock.mockImplementation((_url: string) => {
@@ -88,14 +86,14 @@ describe('EditProfileDialog', () => {
       } as Response);
     });
 
-    renderWithClient(<EditProfileDialog user={user} open setOpen={setOpen} onSave={onSave} />);
+    renderWithClient(<ProfileSection user={user} onSave={onSave} />);
 
     await userEvents.clear(screen.getByLabelText('First Name'));
     await userEvents.type(screen.getByLabelText('First Name'), 'Ada');
     await userEvents.clear(screen.getByLabelText('Last Name'));
     await userEvents.type(screen.getByLabelText('Last Name'), 'Lovelace');
 
-    await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await userEvents.click(screen.getByRole('button', { name: 'Save changes' }));
 
     // Expect 1 call for saving profile (useMaxUploadSize is mocked and doesn't fetch)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -125,7 +123,6 @@ describe('EditProfileDialog', () => {
       cropY: 0.5,
       zoom: 1,
     });
-    expect(setOpen).toHaveBeenCalledWith(false);
     expect(toastMock.updated).toHaveBeenCalledWith('Profile');
     // The session is refreshed so navbar/sidebar avatars update without a reload.
     expect(updateSession).toHaveBeenCalled();
@@ -133,7 +130,6 @@ describe('EditProfileDialog', () => {
 
   it('clears the timezone override when Automatic is chosen', async () => {
     const userEvents = userEvent.setup();
-    const setOpen = vi.fn();
     const onSave = vi.fn().mockResolvedValue(undefined);
 
     fetchMock.mockResolvedValue({
@@ -142,10 +138,10 @@ describe('EditProfileDialog', () => {
     } as Response);
 
     const zonedUser = { ...user, timezone: 'America/New_York' };
-    renderWithClient(<EditProfileDialog user={zonedUser} open setOpen={setOpen} onSave={onSave} />);
+    renderWithClient(<ProfileSection user={zonedUser} onSave={onSave} />);
 
     await userEvents.click(screen.getByRole('button', { name: 'Automatic (detect from browser)' }));
-    await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await userEvents.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
@@ -156,29 +152,26 @@ describe('EditProfileDialog', () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ timezone: undefined }));
   });
 
-  it('shows an error and keeps the dialog open when the save fails', async () => {
+  it('shows an error and keeps what was entered when the save fails', async () => {
     const userEvents = userEvent.setup();
-    const setOpen = vi.fn();
 
     fetchMock.mockResolvedValue({ ok: false, json: async () => ({}) } as Response);
 
-    renderWithClient(<EditProfileDialog user={user} open setOpen={setOpen} />);
+    renderWithClient(<ProfileSection user={user} />);
 
-    await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await userEvents.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() =>
       expect(toastError).toHaveBeenCalledWith(
         'Could not save your profile. Check your connection and try again.',
       ),
     );
-    // Dialog stays open and the session is not refreshed on a failed save.
-    expect(setOpen).not.toHaveBeenCalledWith(false);
+    // The session is not refreshed on a failed save.
     expect(updateSession).not.toHaveBeenCalled();
   });
 
   it('sends deleteAvatar and no file when the avatar is removed', async () => {
     const userEvents = userEvent.setup();
-    const setOpen = vi.fn();
     const avatarUser = { ...user, avatar: 'pic.png' };
 
     fetchMock.mockResolvedValue({
@@ -186,10 +179,10 @@ describe('EditProfileDialog', () => {
       json: async () => ({ firstName: 'Test', lastName: 'User', avatar: null, timezone: 'UTC' }),
     } as Response);
 
-    renderWithClient(<EditProfileDialog user={avatarUser} open setOpen={setOpen} />);
+    renderWithClient(<ProfileSection user={avatarUser} />);
 
     await userEvents.click(screen.getByRole('button', { name: /Delete Avatar/i }));
-    await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await userEvents.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];

@@ -8,10 +8,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { cn } from '@/lib/utils';
-import { useChangePassword } from '@/hooks/use-change-password';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
-import dynamic from 'next/dynamic';
 import { safeSignOut } from '@/lib/safe-signout';
 import { getCourseDateBucket } from '@/lib/course-status';
 import CollapsedCoursesFlyout from '@/components/CollapsedCoursesFlyout';
@@ -24,14 +22,6 @@ import CollapsedCoursesFlyout from '@/components/CollapsedCoursesFlyout';
  * The mount flags below are load-bearing: `next/dynamic` fetches as soon as the component
  * renders, so rendering these with `open={false}` would defeat it.
  */
-const ChangePasswordDialog = dynamic(
-  () => import('./dialogs/ChangePasswordDialog').then((m) => m.ChangePasswordDialog),
-  { ssr: false },
-);
-const EditProfileDialog = dynamic(
-  () => import('./dialogs/EditProfileDialog').then((m) => m.EditProfileDialog),
-  { ssr: false },
-);
 
 import {
   SidebarContent,
@@ -66,7 +56,6 @@ import {
   CircleCheckBig,
   LogOut,
   Logs,
-  LockKeyhole,
   UserPen,
   ChevronUp,
   ChevronDown,
@@ -301,21 +290,6 @@ function SidebarNavItem({
 export default function DashboardSidebarMenu() {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const changePassword = useChangePassword();
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
-  // Set on first open and never cleared: see the dynamic imports above.
-  const [changePasswordMounted, setChangePasswordMounted] = useState(false);
-  const [editProfileMounted, setEditProfileMounted] = useState(false);
-  const openChangePassword = () => {
-    setChangePasswordMounted(true);
-    setChangePasswordOpen(true);
-  };
-  const openEditProfile = () => {
-    setEditProfileMounted(true);
-    setEditProfileOpen(true);
-  };
-
   // Cached courses list for sidebar nav, fetched client-side and revalidated.
   const {
     data: courses = [],
@@ -647,13 +621,11 @@ export default function DashboardSidebarMenu() {
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="cursor-pointer" onClick={openEditProfile}>
-                  <UserPen className="h-4 w-4" />
-                  Edit Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer" onClick={openChangePassword}>
-                  <LockKeyhole className="h-4 w-4" />
-                  Change Password
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href="/dashboard/account">
+                    <UserPen className="h-4 w-4" />
+                    Account
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -669,19 +641,6 @@ export default function DashboardSidebarMenu() {
         </SidebarMenu>
       </SidebarFooter>
 
-      {/* Modals, mounted on first use. Rendering them unconditionally would fetch their chunk
-          on every page load and undo the point of the dynamic import above. */}
-      {changePasswordMounted && (
-        <ChangePasswordDialog
-          open={changePasswordOpen}
-          setOpen={setChangePasswordOpen}
-          onChangePassword={changePassword}
-        />
-      )}
-
-      {editProfileMounted && (
-        <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
-      )}
     </>
   );
 }

@@ -109,19 +109,6 @@ vi.mock('@/components/ui/tooltip', () => {
   };
 });
 
-const ChangePasswordDialogMock = vi.fn((_props: unknown) => (
-  <div data-testid="change-password-dialog" />
-));
-const EditProfileDialogMock = vi.fn((_props: unknown) => <div data-testid="edit-profile-dialog" />);
-
-vi.mock('./dialogs/ChangePasswordDialog', () => ({
-  ChangePasswordDialog: (props: unknown) => ChangePasswordDialogMock(props),
-}));
-
-vi.mock('./dialogs/EditProfileDialog', () => ({
-  EditProfileDialog: (props: unknown) => EditProfileDialogMock(props),
-}));
-
 vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 import DashboardSidebarMenu from './DashboardSidebarMenu';
@@ -147,33 +134,19 @@ describe('DashboardSidebarMenu', () => {
     vi.unstubAllEnvs();
   });
 
-  it('routes the password dialog through the shared hook (calls the API and refreshes the session)', async () => {
-    const updateSpy = vi.fn();
-    useSessionMock.mockReturnValue({
-      data: { user: { id: 'user-1', email: 'user@example.com', role: 'ADMIN', isAdmin: true } },
-      update: updateSpy,
-    });
-    setNavCourses([]); // any password fetch resolves ok; the hook ignores the body on success
-
+  /**
+   * Profile and password used to be two dialogs opened from here. They are one page now, so
+   * what this menu owes is a way to reach it; the wiring behind the forms is proved by the
+   * account page's own tests.
+   */
+  it('links to the account page instead of opening dialogs', () => {
     renderWithClient(<DashboardSidebarMenu />);
 
-    // The dialog is loaded on demand and only rendered once opened, so it does not exist until
-    // the menu item is used. That is what keeps zod out of every dashboard route's bundle.
-    expect(ChangePasswordDialogMock).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText('Change Password'));
-    await waitFor(() => expect(ChangePasswordDialogMock).toHaveBeenCalled());
-
-    const props = ChangePasswordDialogMock.mock.calls.at(-1)?.[0] as {
-      onChangePassword: (oldP: string, newP: string) => Promise<void>;
-    };
-    expect(props.onChangePassword).toBeTypeOf('function');
-    await props.onChangePassword('OldPass1!', 'NewPass1!');
-
-    expect(global.fetch).toHaveBeenCalledWith(
-      '/api/me/password',
-      expect.objectContaining({ method: 'POST' }),
-    );
-    expect(updateSpy).toHaveBeenCalledWith({ refreshCredentials: true });
+    // Exact, because the admin navigation also has a "User Accounts" link.
+    const link = screen.getByRole('link', { name: 'Account' });
+    expect(link).toHaveAttribute('href', '/dashboard/account');
+    expect(screen.queryByText('Change Password')).not.toBeInTheDocument();
+    expect(screen.queryByText('Edit Profile')).not.toBeInTheDocument();
   });
 
   it('renders admin navigation links for privileged users', () => {

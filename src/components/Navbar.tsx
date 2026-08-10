@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
+import React, { useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, UserRound, UserPen, LockKeyhole, LogOut } from 'lucide-react';
+import Link from 'next/link';
+import { Moon, Sun, UserRound, UserPen, LogOut } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { useNavbarBreadcrumbs } from '@/components/navbar/NavbarBreadcrumbContext';
 import type { SessionUser } from '@/types/next-auth';
@@ -25,15 +25,6 @@ import { safeSignOut } from '@/lib/safe-signout';
  * much as the import: rendering these unconditionally with `open={false}`, which is what the
  * navbar used to do, would fetch them on mount and change nothing.
  */
-const ChangePasswordDialog = dynamic(
-  () => import('@/components/dialogs/ChangePasswordDialog').then((m) => m.ChangePasswordDialog),
-  { ssr: false },
-);
-const EditProfileDialog = dynamic(
-  () => import('@/components/dialogs/EditProfileDialog').then((m) => m.EditProfileDialog),
-  { ssr: false },
-);
-import { useChangePassword } from '@/hooks/use-change-password';
 
 // UI Components
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -66,21 +57,6 @@ const Navbar: React.FC = () => {
   const { data, status } = useSession();
   const pathname = usePathname();
   const { courseLabel, assignmentLabel } = useNavbarBreadcrumbs();
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  // Set on first open and never cleared: it is what actually defers the dynamic import, and
-  // keeping the dialog mounted afterwards leaves Radix its closing animation.
-  const [editProfileMounted, setEditProfileMounted] = useState(false);
-  const [changePasswordMounted, setChangePasswordMounted] = useState(false);
-  const openEditProfile = () => {
-    setEditProfileMounted(true);
-    setEditProfileOpen(true);
-  };
-  const openChangePassword = () => {
-    setChangePasswordMounted(true);
-    setChangePasswordOpen(true);
-  };
-  const changePassword = useChangePassword();
 
   const crumbs = useMemo(() => {
     const toTitleCase = (value: string) =>
@@ -233,19 +209,11 @@ const Navbar: React.FC = () => {
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="cursor-pointer"
-              onClick={openEditProfile}
-            >
-              <UserPen className="h-4 w-4" />
-              Edit Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="cursor-pointer"
-              onClick={openChangePassword}
-            >
-              <LockKeyhole className="h-4 w-4" />
-              Change Password
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href="/dashboard/account">
+                <UserPen className="h-4 w-4" />
+                Account
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -280,12 +248,6 @@ const Navbar: React.FC = () => {
         </DropdownMenu>
       </div>
     </header>
-    {changePasswordMounted && (
-      <ChangePasswordDialog open={changePasswordOpen} setOpen={setChangePasswordOpen} onChangePassword={changePassword} />
-    )}
-    {editProfileMounted && (
-      <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
-    )}
   </div>
   );
 };
