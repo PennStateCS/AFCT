@@ -7,6 +7,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getClientIpFromHeaders } from '@/lib/ip-utils';
 import { getClientIp } from '@/lib/security/rate-limiter';
 import { verifyCredentials } from '@/lib/credentials';
+import { redeemSessionTicket } from '@/lib/lti/session-ticket';
 import { requireAuthSecret } from '@/lib/auth-secret';
 import { buildJwtToken, buildSession } from '@/lib/auth-callbacks';
 import { buildOidcProvider, getOidcConfig, OIDC_PROVIDER_ID } from '@/lib/oidc-provider';
@@ -27,6 +28,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
   adapter: PrismaAdapter(prisma) as unknown as Adapter,
   providers: [
     ...(oidc ? [buildOidcProvider(oidc)] : []),
+    /**
+     * Completing an LTI launch. Not a password: the launch endpoint has already verified a
+     * signed token, and this only spends the single-use ticket it handed out.
+     */
+    CredentialsProvider({
+      id: 'lti-launch',
+      name: 'LTI launch',
+      credentials: { ticket: { label: 'Ticket', type: 'text' } },
+      async authorize(credentials) {
+        const raw = credentials as Record<string, unknown> | undefined;
+        return await redeemSessionTicket(raw?.ticket as string | undefined);
+      },
+    }),
     CredentialsProvider({
       name: 'credentials',
       credentials: {

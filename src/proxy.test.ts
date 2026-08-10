@@ -62,6 +62,9 @@ describe('proxy', () => {
       '/api/system-settings/public',
       // Fetched by an LMS's servers, which have no AFCT session and never will.
       '/api/lti/jwks',
+      // The launch round trip. Nobody is signed in yet, which is the point of it.
+      '/api/lti/login',
+      '/api/lti/launch',
     ])('lets %s through without reading a token', async (path) => {
       const res = await proxy(req(path));
       expect(res.status).toBe(200);
@@ -76,13 +79,12 @@ describe('proxy', () => {
     });
 
     /**
-     * Only the keyset is public. The launch endpoints that will live alongside it are not, and
-     * an allowlist entry of `/api/lti` would have quietly made them so.
+     * Only the named LTI entry points are public. An allowlist entry of `/api/lti` would have
+     * quietly opened the platform registration routes that live alongside them.
      */
     it('does not make the rest of /api/lti public', async () => {
       getTokenMock.mockResolvedValue(null);
 
-      expect((await proxy(req('/api/lti/launch'))).status).toBe(401);
       expect((await proxy(req('/api/lti/platforms'))).status).toBe(401);
     });
   });
