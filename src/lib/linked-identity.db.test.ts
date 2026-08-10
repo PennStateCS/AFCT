@@ -23,6 +23,8 @@ const SUFFIX = 'lidint';
 const ids = { user: `u-${SUFFIX}`, other: `u2-${SUFFIX}`, admin: `ua-${SUFFIX}` };
 
 const ISSUER = 'https://idp.example.test';
+/** Stands in for a request, which the audit trail needs and these tests do not otherwise have. */
+const CONTEXT = { ipAddress: '10.0.0.1', userAgent: 'test' };
 const ref = (subject = 'sub-1') => ({ kind: 'OIDC' as const, issuer: ISSUER, subject });
 
 async function destroyFixtures() {
@@ -57,7 +59,13 @@ afterAll(async () => {
 
 describe('linking', () => {
   it('attaches an identity to an account', async () => {
-    const result = await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    const result = await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
 
     expect(result).toEqual({ ok: true, created: true });
     expect((await findUserByIdentity(ref()))?.userId).toBe(ids.user);
@@ -65,9 +73,21 @@ describe('linking', () => {
 
   // A repeated sign-in must not be an error.
   it('is idempotent for the account that already owns it', async () => {
-    await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
 
-    const again = await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    const again = await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
 
     expect(again).toEqual({ ok: true, created: false });
     expect(await prisma.linkedIdentity.count({ where: { issuer: ISSUER } })).toBe(1);
@@ -78,9 +98,21 @@ describe('linking', () => {
    * person to look at it rather than happening as a side effect of signing in.
    */
   it('refuses an identity that already belongs to someone else', async () => {
-    await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
 
-    const result = await linkIdentity({ ref: ref(), userId: ids.other, via: 'AUTO_VERIFIED_EMAIL' });
+    const result = await linkIdentity({
+      ref: ref(),
+      userId: ids.other,
+      via: 'AUTO_VERIFIED_EMAIL',
+      actorUserId: ids.other,
+      context: CONTEXT,
+    });
 
     expect(result).toEqual({ ok: false, reason: 'already-linked-elsewhere' });
     expect((await findUserByIdentity(ref()))?.userId).toBe(ids.user);
@@ -89,7 +121,13 @@ describe('linking', () => {
   it('refuses to attach anything to a disabled account', async () => {
     await prisma.user.update({ where: { id: ids.user }, data: { inactive: true } });
 
-    const result = await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    const result = await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
 
     expect(result).toEqual({ ok: false, reason: 'account-inactive' });
   });
@@ -103,7 +141,13 @@ describe('linking', () => {
 describe('administrator accounts', () => {
   it('refuses an automatic link to an administrator', async () => {
     for (const via of ['AUTO_VERIFIED_EMAIL', 'JUST_IN_TIME'] as const) {
-      const result = await linkIdentity({ ref: ref(via), userId: ids.admin, via });
+      const result = await linkIdentity({
+        ref: ref(via),
+        userId: ids.admin,
+        via,
+        actorUserId: ids.admin,
+        context: CONTEXT,
+      });
 
       expect(result).toEqual({ ok: false, reason: 'admin-requires-deliberate-link' });
     }
@@ -113,8 +157,20 @@ describe('administrator accounts', () => {
   // The rule is about automatic linking, not about administrators. An admin attaching their own
   // identity deliberately is exactly how they are meant to get one.
   it('allows an administrator to link deliberately', async () => {
-    const self = await linkIdentity({ ref: ref('a'), userId: ids.admin, via: 'SELF_SERVICE' });
-    const byAdmin = await linkIdentity({ ref: ref('b'), userId: ids.admin, via: 'ADMIN' });
+    const self = await linkIdentity({
+      ref: ref('a'),
+      userId: ids.admin,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.admin,
+      context: CONTEXT,
+    });
+    const byAdmin = await linkIdentity({
+      ref: ref('b'),
+      userId: ids.admin,
+      via: 'ADMIN',
+      actorUserId: ids.admin,
+      context: CONTEXT,
+    });
 
     expect(self).toEqual({ ok: true, created: true });
     expect(byAdmin).toEqual({ ok: true, created: true });
@@ -127,7 +183,13 @@ describe('the unique identity', () => {
    * racing would both pass a read-then-write check.
    */
   it('cannot be inserted twice, even bypassing the library', async () => {
-    await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
 
     await expect(
       prisma.linkedIdentity.create({
@@ -144,12 +206,20 @@ describe('the unique identity', () => {
 
   // Same subject at a different provider is a different person as far as we can tell.
   it('is scoped to the issuer, so the same subject elsewhere is separate', async () => {
-    await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
 
     const result = await linkIdentity({
       ref: { kind: 'LTI', issuer: 'https://canvas.example.test', subject: 'sub-1' },
       userId: ids.other,
       via: 'SELF_SERVICE',
+      actorUserId: ids.other,
+      context: CONTEXT,
     });
 
     expect(result).toEqual({ ok: true, created: true });
@@ -158,19 +228,45 @@ describe('the unique identity', () => {
 
 describe('unlinking', () => {
   it('detaches an identity from its account', async () => {
-    await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
     const [link] = await listIdentitiesForUser(ids.user);
 
-    expect(await unlinkIdentity({ id: link!.id, userId: ids.user })).toBe(true);
+    expect(
+      await unlinkIdentity({
+        id: link!.id,
+        userId: ids.user,
+        actorUserId: ids.user,
+        context: CONTEXT,
+      }),
+    ).toBe(true);
     expect(await findUserByIdentity(ref())).toBeNull();
   });
 
   // Scoped to the owner, so a caller passing an id it does not own removes nothing.
   it('will not remove an identity belonging to another account', async () => {
-    await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
     const [link] = await listIdentitiesForUser(ids.user);
 
-    expect(await unlinkIdentity({ id: link!.id, userId: ids.other })).toBe(false);
+    expect(
+      await unlinkIdentity({
+        id: link!.id,
+        userId: ids.other,
+        actorUserId: ids.other,
+        context: CONTEXT,
+      }),
+    ).toBe(false);
     expect(await findUserByIdentity(ref())).not.toBeNull();
   });
 });
@@ -181,7 +277,13 @@ describe('unlinking', () => {
  */
 describe('the cascade', () => {
   it('removes identities when the account is deleted', async () => {
-    await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
 
     await prisma.user.delete({ where: { id: ids.user } });
 
@@ -191,7 +293,13 @@ describe('the cascade', () => {
 
 describe('recording a sign-in', () => {
   it('notes when an identity was last used', async () => {
-    await linkIdentity({ ref: ref(), userId: ids.user, via: 'SELF_SERVICE' });
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
     const [link] = await listIdentitiesForUser(ids.user);
     expect(link!.lastSignInAt).toBeNull();
 
@@ -204,5 +312,86 @@ describe('recording a sign-in', () => {
   // Best-effort: a sign-in that has otherwise succeeded must not fail on a bookkeeping write.
   it('does not throw for an identity that no longer exists', async () => {
     await expect(recordIdentitySignIn('does-not-exist')).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Linking changes who can sign in as an account, and for a student that is who can reach their
+ * records. It is an education-record disclosure under FERPA, so it is logged with the actor,
+ * the subject, and a severity that reflects what happened.
+ */
+describe('the audit trail', () => {
+  const entries = (action: string) =>
+    prisma.activityLog.findMany({ where: { action }, orderBy: { timestamp: 'desc' } });
+
+  beforeEach(async () => {
+    await prisma.activityLog.deleteMany({
+      where: { action: { in: ['IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IDENTITY_LINK_DENIED'] } },
+    });
+  });
+
+  it('records a link with who did it and whose account it was', async () => {
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'ADMIN',
+      // The case a defaulted actor would get wrong: an administrator acting on someone else.
+      actorUserId: ids.admin,
+      context: CONTEXT,
+    });
+
+    const [entry] = await entries('IDENTITY_LINKED');
+    expect(entry?.userId).toBe(ids.admin);
+    expect(entry?.metadata).toMatchObject({ targetUserId: ids.user, issuer: ISSUER });
+  });
+
+  it('records a refusal as a security event', async () => {
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.admin,
+      via: 'AUTO_VERIFIED_EMAIL',
+      actorUserId: ids.admin,
+      context: CONTEXT,
+    });
+
+    const [entry] = await entries('IDENTITY_LINK_DENIED');
+    expect(entry?.severity).toBe('SECURITY');
+    expect(entry?.metadata).toMatchObject({ reason: 'admin-requires-deliberate-link' });
+  });
+
+  it('records an unlink', async () => {
+    await linkIdentity({
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
+    const [link] = await listIdentitiesForUser(ids.user);
+
+    await unlinkIdentity({
+      id: link!.id,
+      userId: ids.user,
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
+
+    expect(await entries('IDENTITY_UNLINKED')).toHaveLength(1);
+  });
+
+  // A repeated sign-in through an identity that is already attached is not a change, and
+  // logging it would bury the links that are.
+  it('does not record anything when the link already exists', async () => {
+    const args = {
+      ref: ref(),
+      userId: ids.user,
+      via: 'SELF_SERVICE' as const,
+      actorUserId: ids.user,
+      context: CONTEXT,
+    };
+    await linkIdentity(args);
+    await linkIdentity(args);
+
+    expect(await entries('IDENTITY_LINKED')).toHaveLength(1);
   });
 });

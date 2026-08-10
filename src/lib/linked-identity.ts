@@ -12,7 +12,14 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import type { IdentityLinkMethod, IdentityProviderKind, Prisma } from '@prisma/client';
+
+/**
+ * Where the request came from, for the audit trail. A `Request` in a route, or a pre-resolved
+ * pair where there is none (a sign-in callback, for instance).
+ */
+export type AuditContext = Request | { ipAddress?: string | null; userAgent?: string | null };
 
 export type { IdentityLinkMethod, IdentityProviderKind };
 
@@ -34,9 +41,7 @@ export type LinkRefusal =
   /** The account is disabled, so nothing may be attached to it. */
   | 'account-inactive';
 
-export type LinkResult =
-  | { ok: true; created: boolean }
-  | { ok: false; reason: LinkRefusal };
+export type LinkResult = { ok: true; created: boolean } | { ok: false; reason: LinkRefusal };
 
 /** The methods that happen without a person deciding, and therefore need the guardrails. */
 const AUTOMATIC: IdentityLinkMethod[] = ['AUTO_VERIFIED_EMAIL', 'JUST_IN_TIME'];
@@ -76,6 +81,13 @@ export async function linkIdentity(opts: {
   ref: IdentityRef;
   userId: string;
   via: IdentityLinkMethod;
+  /**
+   * Who performed the link. Required, not defaulted to `userId`: an administrator attaching an
+   * identity to somebody else's account is the case where actor and subject differ, and that
+   * is exactly the case a defaulted actor would record wrongly. See the activity-log rules.
+   */
+  actorUserId: string;
+  context: AuditContext;
   tx?: Prisma.TransactionClient;
 }): Promise<LinkResult> {
   const client = opts.tx ?? prisma;
@@ -92,20 +104,47 @@ export async function linkIdentity(opts: {
     }),
   ]);
 
-  if (!user || user.inactive) return { ok: false, reason: 'account-inactive' };
+  // A refusal is a security event, not a validation error: each one is an attempt to attach a
+  // sign-in to an account it should not reach. `_DENIED` also classifies as SECURITY by the
+  // action-naming convention, so the two agree.
+  const refuse = async (reason: LinkRefusal): Promise<LinkResult> => {
+    await createEnhancedActivityLog(prisma, opts.context, {
+      userId: opts.actorUserId,
+      action: 'IDENTITY_LINK_DENIED',
+      severity: 'SECURITY',
+      category: 'USER',
+      metadata: { targetUserId: opts.userId, issuer, via: opts.via, reason },
+    });
+    return { ok: false, reason };
+  };
+
+  if (!user || user.inactive) return refuse('account-inactive');
 
   if (existing) {
-    if (existing.userId !== opts.userId) return { ok: false, reason: 'already-linked-elsewhere' };
+    if (existing.userId !== opts.userId) return refuse('already-linked-elsewhere');
+    // Already ours: a repeated sign-in, not a change worth a log entry of its own.
     return { ok: true, created: false };
   }
 
   if (user.isAdmin && AUTOMATIC.includes(opts.via)) {
-    return { ok: false, reason: 'admin-requires-deliberate-link' };
+    return refuse('admin-requires-deliberate-link');
   }
 
   await client.linkedIdentity.create({
     data: { kind, issuer, subject, userId: opts.userId, linkedVia: opts.via },
   });
+
+  // Linking changes who can sign in as this account, and for a student account that is who can
+  // reach their records. The subject is recorded because it, with the issuer, is the identity;
+  // no other identifying detail from the provider is.
+  await createEnhancedActivityLog(prisma, opts.context, {
+    userId: opts.actorUserId,
+    action: 'IDENTITY_LINKED',
+    severity: 'INFO',
+    category: 'USER',
+    metadata: { targetUserId: opts.userId, issuer, subject, kind, via: opts.via },
+  });
+
   return { ok: true, created: true };
 }
 
@@ -136,11 +175,25 @@ export async function listIdentitiesForUser(userId: string) {
  * That depends on whether they have a local password and on what else is attached, which is a
  * question for the surface doing the unlinking, where it can offer to set one.
  */
-export async function unlinkIdentity(opts: { id: string; userId: string }): Promise<boolean> {
+export async function unlinkIdentity(opts: {
+  id: string;
+  userId: string;
+  actorUserId: string;
+  context: AuditContext;
+}): Promise<boolean> {
   const { count } = await prisma.linkedIdentity.deleteMany({
     where: { id: opts.id, userId: opts.userId },
   });
-  return count > 0;
+  if (count === 0) return false;
+
+  await createEnhancedActivityLog(prisma, opts.context, {
+    userId: opts.actorUserId,
+    action: 'IDENTITY_UNLINKED',
+    severity: 'INFO',
+    category: 'USER',
+    metadata: { targetUserId: opts.userId, identityId: opts.id },
+  });
+  return true;
 }
 
 /**
