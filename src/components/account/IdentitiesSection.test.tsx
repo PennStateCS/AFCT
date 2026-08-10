@@ -1,0 +1,174 @@
+/** @vitest-environment jsdom */
+
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { IdentitiesSection } from './IdentitiesSection';
+
+/**
+ * The connected-accounts tab.
+ *
+ * jsdom does no layout, so these prove wiring: that Connect starts a real provider sign-in
+ * rather than posting a form, and that somebody whose only way in is an identity cannot remove
+ * it. The second is enforced by the route as well, and is repeated here because a disabled
+ * button is the difference between a refusal and a dead end.
+ */
+
+const signIn = vi.hoisted(() => vi.fn());
+vi.mock('next-auth/react', () => ({ signIn }));
+
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('@/lib/toast', () => ({ showToast: toast }));
+
+vi.mock('@/hooks/use-effective-timezone', () => ({
+  useEffectiveTimezone: () => ({ timezone: 'UTC', hour12: false }),
+}));
+
+const identity = {
+  id: 'li-1',
+  kind: 'OIDC',
+  issuer: 'https://idp.example.test',
+  subject: 'sub-1',
+  linkedVia: 'SELF_SERVICE',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  lastSignInAt: null,
+};
+
+const respond = (body: unknown, ok = true) =>
+  Promise.resolve({ ok, status: ok ? 200 : 409, json: () => Promise.resolve(body) } as Response);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.history.replaceState({}, '', '/dashboard/account');
+});
+
+describe('the list', () => {
+  it('shows a connected account with how it was connected', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [identity], hasPassword: true })),
+    );
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+
+    expect(await screen.findByText('Penn State')).toBeInTheDocument();
+    expect(screen.getByText(/You connected this/)).toBeInTheDocument();
+  });
+
+  it('says so when nothing is connected', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [], hasPassword: true })),
+    );
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+
+    expect(
+      await screen.findByText(/have not connected an institutional account/),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('connecting', () => {
+  /**
+   * The point of the whole tab. Only the provider can say the account over there belongs to
+   * whoever is signed in here, so this must be a real sign-in and not a form post.
+   */
+  it('starts a provider sign-in that returns to this tab', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [], hasPassword: true })),
+    );
+    const user = userEvent.setup();
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+    await user.click(await screen.findByRole('button', { name: /Connect Penn State/ }));
+
+    expect(signIn).toHaveBeenCalledWith('oidc', {
+      callbackUrl: '/dashboard/account?tab=accounts',
+    });
+  });
+});
+
+describe('disconnecting', () => {
+  it('asks first, then removes it', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) =>
+      init?.method === 'DELETE'
+        ? respond({ success: true })
+        : respond({ identities: [identity], hasPassword: true }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+    await user.click(await screen.findByRole('button', { name: /Disconnect/ }));
+
+    // Asserted before confirming, because both buttons are named "Disconnect": without this the
+    // test would pass just as well if the dialog never opened and the list button ran the action.
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(/Disconnect this account\?/);
+
+    await user.click(await within(dialog).findByRole('button', { name: 'Disconnect' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/me/identities/li-1', { method: 'DELETE' }),
+    );
+  });
+
+  /**
+   * Somebody with no password and one identity would lock themselves out. The route refuses
+   * too; this stops them reaching a refusal they cannot do anything about.
+   */
+  it('is not offered when it is the only way in', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [identity], hasPassword: false })),
+    );
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+
+    expect(await screen.findByRole('button', { name: /Disconnect/ })).toBeDisabled();
+    expect(screen.getByText(/only way to sign in/)).toBeInTheDocument();
+  });
+
+  it('is offered when a password exists', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [identity], hasPassword: true })),
+    );
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+
+    expect(await screen.findByRole('button', { name: /Disconnect/ })).toBeEnabled();
+  });
+});
+
+describe('coming back from the provider', () => {
+  it('reports a successful connection', async () => {
+    window.history.replaceState({}, '', '/dashboard/account?linked=1');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [identity], hasPassword: true })),
+    );
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    // Stripped, so a reload does not repeat the message.
+    expect(window.location.search).toBe('?tab=accounts');
+  });
+
+  it('explains an identity that belongs to somebody else', async () => {
+    window.history.replaceState({}, '', '/dashboard/account?error=already-linked-elsewhere');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [], hasPassword: true })),
+    );
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('different AFCT account')),
+    );
+  });
+});

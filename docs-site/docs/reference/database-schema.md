@@ -64,6 +64,15 @@ erDiagram
   DateTime createdAt
   DateTime updatedAt
 }
+"LtiKeyPair" {
+  String id PK
+  String kid UK
+  String publicKey
+  String privateKey
+  DateTime signingFrom
+  DateTime createdAt
+  DateTime retiredAt "nullable"
+}
 "SingleUseToken" {
   String id PK
   String tokenHash UK
@@ -192,6 +201,43 @@ Properties as follows:
 - `keysetUrl`: Where AFCT fetches the platform's public keys, to verify that a launch really came from it.
 - `createdAt`: When this record was created.
 - `updatedAt`: When it was last changed.
+
+### `LtiKeyPair`
+
+AFCT's own signing keypair, used to sign the token requests it makes to an LMS.
+
+This is the one secret whose loss is not just a re-typing job. An LMS is registered against
+the public half, which it fetches from AFCT's JWKS endpoint and caches, so losing the private
+half means generating a new keypair and re-registering AFCT with every platform.
+
+Several rows can be published at once, which is what makes rotation possible without an
+outage: a new key is published and given time to be picked up before anything is signed with
+it, and the old one stays published until nothing signed by it is still in flight.
+
+Which key signs is **derived, not stored**: it is the newest published row whose
+`signingFrom` has passed. There is deliberately no "is the signing key" flag, because a flag
+would be an invariant needing a database guard and two concurrent rotations could break it.
+Nothing here can disagree with itself.
+
+The private half is encrypted at rest like every other secret. The public half is not,
+because publishing it is the entire point.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `kid`
+  > The `kid` in the published JWKS and in the header of every token AFCT signs. This is how
+  > a platform decides which published key to verify a token against, so it never changes.
+- `publicKey`: PEM, published to anyone who asks.
+- `privateKey`: PEM, encrypted at rest. Never leaves the server.
+- `signingFrom`
+  > When this key becomes eligible to sign. Set ahead of time to give platforms a chance to
+  > fetch it first; a platform that has not refreshed its cache cannot verify a token signed
+  > by a key it has never seen.
+- `createdAt`: When this record was created.
+- `retiredAt`
+  > When it stopped being published. Set rather than deleted, so a token still in flight can
+  > be traced to the key that signed it.
 
 ### `SingleUseToken`
 
