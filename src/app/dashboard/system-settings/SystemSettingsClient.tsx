@@ -32,6 +32,7 @@ import {
   LogIn,
   Mail,
   ShieldCheck,
+  Link2,
   Lock,
   RefreshCw,
 } from 'lucide-react';
@@ -52,6 +53,7 @@ import { DEFAULT_SMTP_PORT } from '@/lib/system-settings';
 import { GeneralTab } from './GeneralTab';
 import { EmailTab } from './EmailTab';
 import { SignInTab } from './SignInTab';
+import { LtiTab } from './LtiTab';
 import { EvaluatorTab } from './EvaluatorTab';
 import { BackupsTab } from './BackupsTab';
 import { CaptchaTab } from './CaptchaTab';
@@ -354,11 +356,7 @@ export default function SystemSettingsClient() {
         hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
       );
       setOidcClientSecretConfigured(
-        oidcClientSecretClear
-          ? false
-          : oidcClientSecret.trim()
-            ? true
-            : oidcClientSecretConfigured,
+        oidcClientSecretClear ? false : oidcClientSecret.trim() ? true : oidcClientSecretConfigured,
       );
       setOidcClientSecret('');
       setOidcClientSecretClear(false);
@@ -456,6 +454,7 @@ export default function SystemSettingsClient() {
     { value: 'backups', label: 'Backups', Icon: DatabaseBackup },
     { value: 'email', label: 'Email', Icon: Mail },
     { value: 'sign-in', label: 'Sign-in', Icon: LogIn },
+    { value: 'lti', label: 'LTI', Icon: Link2 },
     { value: 'captcha', label: 'Captcha', Icon: ShieldCheck },
     { value: 'tls', label: 'TLS Certificate', Icon: Lock },
     { value: 'updates', label: 'Updates', Icon: RefreshCw },
@@ -551,6 +550,11 @@ export default function SystemSettingsClient() {
                 // without guessing at the path.
                 redirectUri={`${(settingsData?.configuredUrl ?? '').replace(/\/+$/, '')}/api/auth/callback/oidc`}
               />
+            </TabsContent>
+
+            <TabsContent value="lti">
+              {/* Same source as the OIDC redirect URL: the site URL the installer set. */}
+              <LtiTab siteUrl={settingsData?.configuredUrl ?? ''} />
             </TabsContent>
 
             <TabsContent value="captcha">
