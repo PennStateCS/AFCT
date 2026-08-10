@@ -2422,6 +2422,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lti/jwks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * AFCT's public keys, for an LMS to verify tokens AFCT signed
+         * @description AFCT's public keyset, for platforms to verify the tokens AFCT signs.   Deliberately public and unauthenticated: a public key is public, and the platform fetching it  is a server that has no AFCT session and never will. This is one of the few routes past the  edge net, and it is safe because it exposes only the half of each keypair that is meant to be  handed out.   **Reached from the platform's servers, not a browser.** Nothing in a launch touches it, so an  instance the LMS cannot reach looks entirely healthy until the first grade fails to post.   Returns an empty key list rather than an error when no key exists. That is a real state, not a  fault: an install that has never registered an LMS has never needed a key. A platform reading  an empty set gets the same answer as one reading a set with no key it recognises.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/jwks/route.ts)
+         */
+        get: operations["getLtiJwks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/assignments": {
         parameters: {
             query?: never;
@@ -2542,6 +2564,54 @@ export interface paths {
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/enrollments/route.ts)
          */
         get: operations["getMeEnrollments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/identities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect an institutional sign-in from my account
+         * @description Disconnect one of the caller's own institutional sign-ins.   Refuses to remove the last way into an account. Somebody with no password whose only  identity is this one would be locked out by their own click, and recovering that needs an  administrator, so it is worth one refusal here. `unlinkIdentity` is scoped to the owning  account, so an id belonging to somebody else removes nothing rather than removing theirs.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/identities/[id]/route.ts)
+         */
+        delete: operations["deleteMeIdentitiesById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the institutional sign-ins connected to my account
+         * @description The institutional sign-ins attached to the caller's own account.   Also reports whether they have a local password, because that is what decides if the last  identity can be removed. The page needs both to say anything useful, and one request that  answers the question beats two that each answer half of it.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/identities/route.ts)
+         */
+        get: operations["getMeIdentities"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10973,6 +11043,24 @@ export interface operations {
             };
         };
     };
+    getLtiJwks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A JWKS document. Empty when no key has been created yet. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     postMeAssignments: {
         parameters: {
             query?: never;
@@ -11211,6 +11299,80 @@ export interface operations {
             };
             /** @description Query failed. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteMeIdentitiesById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The identity was disconnected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such identity on this account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description That is the only way to sign in to this account. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getMeIdentities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's linked identities, and whether they have a password. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

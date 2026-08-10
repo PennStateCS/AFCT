@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { getOidcConfig } from '@/lib/oidc-provider';
 import AccountClient from './AccountClient';
 
 export const metadata: Metadata = {
@@ -21,5 +22,15 @@ export default async function AccountPage() {
     redirect('/login');
   }
 
-  return <AccountClient user={session.user} />;
+  // Read here rather than in the component so the Connected accounts tab is right on first
+  // paint, instead of appearing a moment after the page settles.
+  const oidc = await getOidcConfig();
+
+  return (
+    <AccountClient
+      user={session.user}
+      oidcAvailable={oidc !== null}
+      oidcLabel={oidc?.buttonLabel ?? null}
+    />
+  );
 }

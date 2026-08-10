@@ -1,17 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { KeyRound, Terminal, UserRound } from 'lucide-react';
+import { KeyRound, Link2, Terminal, UserRound } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar } from '@/components/course/course-tabs';
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { PasswordSection } from '@/components/account/PasswordSection';
 import { TokensSection } from '@/components/account/TokensSection';
+import { IdentitiesSection } from '@/components/account/IdentitiesSection';
 import { useChangePassword } from '@/hooks/use-change-password';
 import type { SessionUser } from '@/types/next-auth';
 
-export const ACCOUNT_TABS = ['profile', 'password', 'tokens'] as const;
+export const ACCOUNT_TABS = ['profile', 'password', 'accounts', 'tokens'] as const;
 const TAB_KEY = 'afct.accountTab';
 
 type ProfileUser = SessionUser & { cropX?: number; cropY?: number; zoom?: number };
@@ -25,13 +26,36 @@ type ProfileUser = SessionUser & { cropX?: number; cropY?: number; zoom?: number
  * Tabbed rather than one long page, matching System Settings and the course pages, so there is
  * nothing new to learn.
  */
-export default function AccountClient({ user }: { user: ProfileUser }) {
+export default function AccountClient({
+  user,
+  oidcLabel,
+  oidcAvailable,
+}: {
+  user: ProfileUser;
+  /** What the institution's sign-in is called, when one is configured. */
+  oidcLabel: string | null;
+  /** Whether institutional sign-in is switched on at all. The tab does not exist otherwise. */
+  oidcAvailable: boolean;
+}) {
   const changePassword = useChangePassword();
   const [tab, setTab] = useState<string>('profile');
 
   // Remember the last tab, the way System Settings does, so returning after a save lands where
   // you were rather than back at the top.
   useEffect(() => {
+    // Coming back from the provider lands here with a result on the URL, so that wins over the
+    // remembered tab: the answer to what you just did should be the thing you are looking at.
+    const params = new URLSearchParams(window.location.search);
+    const asked = params.get('tab');
+    if (asked && (ACCOUNT_TABS as readonly string[]).includes(asked)) {
+      setTab(asked);
+      return;
+    }
+    if (params.has('linked') || params.has('error')) {
+      setTab('accounts');
+      return;
+    }
+
     try {
       const saved = window.localStorage.getItem(TAB_KEY);
       if (saved && (ACCOUNT_TABS as readonly string[]).includes(saved)) setTab(saved);
@@ -56,8 +80,11 @@ export default function AccountClient({ user }: { user: ProfileUser }) {
   const tabs = [
     { value: 'profile', label: 'Profile', Icon: UserRound },
     { value: 'password', label: 'Password', Icon: KeyRound },
+    // Only when an administrator has set institutional sign-in up. An install using local
+    // accounts alone should not carry a tab whose every answer is "not available".
+    ...(oidcAvailable ? [{ value: 'accounts', label: 'Connected accounts', Icon: Link2 }] : []),
     { value: 'tokens', label: 'App tokens', Icon: Terminal },
-  ] as const;
+  ];
 
   return (
     <Card className="p-4">
@@ -87,6 +114,12 @@ export default function AccountClient({ user }: { user: ProfileUser }) {
           <TabsContent value="password">
             <PasswordSection onChangePassword={changePassword} />
           </TabsContent>
+
+          {oidcAvailable && (
+            <TabsContent value="accounts">
+              <IdentitiesSection providerLabel={oidcLabel} />
+            </TabsContent>
+          )}
 
           <TabsContent value="tokens">
             <TokensSection />

@@ -309,6 +309,51 @@ model LtiPlatform {
   @@unique([issuer, clientId, deploymentId])
 }
 
+/// AFCT's own signing keypair, used to sign the token requests it makes to an LMS.
+///
+/// This is the one secret whose loss is not just a re-typing job. An LMS is registered against
+/// the public half, which it fetches from AFCT's JWKS endpoint and caches, so losing the private
+/// half means generating a new keypair and re-registering AFCT with every platform.
+///
+/// Several rows can be published at once, which is what makes rotation possible without an
+/// outage: a new key is published and given time to be picked up before anything is signed with
+/// it, and the old one stays published until nothing signed by it is still in flight.
+///
+/// Which key signs is **derived, not stored**: it is the newest published row whose
+/// `signingFrom` has passed. There is deliberately no "is the signing key" flag, because a flag
+/// would be an invariant needing a database guard and two concurrent rotations could break it.
+/// Nothing here can disagree with itself.
+///
+/// The private half is encrypted at rest like every other secret. The public half is not,
+/// because publishing it is the entire point.
+///
+/// @namespace Identity
+model LtiKeyPair {
+  /// Unique identifier.
+  id         String  @id @default(cuid())
+  /// The `kid` in the published JWKS and in the header of every token AFCT signs. This is how
+  /// a platform decides which published key to verify a token against, so it never changes.
+  kid        String  @unique
+  /// PEM, published to anyone who asks.
+  publicKey  String
+  /// PEM, encrypted at rest. Never leaves the server.
+  privateKey String
+  /// When this key becomes eligible to sign. Set ahead of time to give platforms a chance to
+  /// fetch it first; a platform that has not refreshed its cache cannot verify a token signed
+  /// by a key it has never seen.
+  signingFrom DateTime @default(now())
+
+  /// When this record was created.
+  createdAt DateTime  @default(now())
+  /// When it stopped being published. Set rather than deleted, so a token still in flight can
+  /// be traced to the key that signed it.
+  retiredAt DateTime?
+
+  /// Published keys, which is what the JWKS endpoint reads, and what choosing a signing key
+  /// orders over.
+  @@index([retiredAt, signingFrom])
+}
+
 /// A token that works exactly once, within a time window: the password-reset link today, and
 /// the shape anything similar should reuse.
 ///
