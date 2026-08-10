@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { AuthPageBackground } from '@/components/auth/AuthPageBackground';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import InputGroup from '@/components/ui/InputGroup';
@@ -53,8 +54,9 @@ export default function ForgotPasswordPage() {
   // <main> is a flex item and shrinks to its content width without it, which leaves the
   // card pinned to the left however it is centred inside.
   return (
-    <main className="flex min-h-screen w-full items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-md">
+    <main className="relative flex min-h-screen w-full items-center justify-center px-4 py-12">
+      <AuthPageBackground />
+      <Card className="relative z-10 w-full max-w-md">
         <CardHeader>
           <CardTitle aria-level={1}>Reset your password</CardTitle>
         </CardHeader>

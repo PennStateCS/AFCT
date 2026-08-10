@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
+import { AuthPageBackground } from '@/components/auth/AuthPageBackground';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { LazyMotion, m, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -384,9 +385,7 @@ export default function LoginForm({
 
   return (
     <div className="relative flex min-h-dvh w-full items-start justify-center overflow-x-hidden pt-24 md:pt-[14vh]">
-      {/* Background */}
-      <div className="fixed inset-0 z-0 bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A]" />
-      <div className="fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_70%)]" />
+      <AuthPageBackground />
 
       {/* DEV BADGE */}
       {isDev && (
