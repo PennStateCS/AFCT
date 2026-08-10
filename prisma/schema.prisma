@@ -89,6 +89,29 @@ enum SingleUseTokenPurpose {
   PASSWORD_RESET
 }
 
+// What kind of system vouched for an identity. Descriptive rather than structural: a single
+// issuer can be both (Canvas is an LTI platform and can be an OIDC provider), and when it is,
+// the same person is the same person.
+enum IdentityProviderKind {
+  OIDC
+  LTI
+}
+
+// How a link came to exist. Kept on the row because it is a property of the link itself, and
+// because "was this attached automatically or did a person do it deliberately" is the first
+// question anyone asks when a link turns out to be wrong. Who did it lives in the activity log,
+// which is the audit trail for everything else too.
+enum IdentityLinkMethod {
+  /// Matched to an existing account by an email the provider asserted as verified.
+  AUTO_VERIFIED_EMAIL
+  /// The account was created for this identity at first sign-in.
+  JUST_IN_TIME
+  /// The signed-in user attached it themselves.
+  SELF_SERVICE
+  /// An administrator attached it to an account.
+  ADMIN
+}
+
 /// A person with an account: student, teaching assistant, faculty member or system
 /// administrator. One account is used across every course; what a person may do in a given
 /// course comes from their Roster row, not from this record.
@@ -157,6 +180,7 @@ model User {
   commentsAuthored    Comment[]                @relation("CommentAuthor") // Comments this user wrote
   clientTokens        ClientApiToken[] // Bearer tokens issued to the native (Java) client
   singleUseTokens     SingleUseToken[] // Password-reset and similar one-shot links
+  linkedIdentities    LinkedIdentity[] // Institutional sign-ins and LMS launches mapped to this account
   assignmentAssignees AssignmentAssignee[]     @relation("AssigneeTarget") // assignments this student is individually assigned
   assignmentOverrides AssignmentOverride[]     @relation("OverrideTarget") // deadline overrides targeting this student
   overridesCreated    AssignmentOverride[]     @relation("OverrideCreatedBy") // overrides this user created
@@ -201,6 +225,44 @@ model ClientApiToken {
   /// When the token was withdrawn. Once set, the token is refused.
   revokedAt  DateTime?
 
+  @@index([userId])
+}
+
+/// An institutional identity mapped to an AFCT account: an OIDC sign-in, or a person arriving
+/// through an LMS launch.
+///
+/// Accounts stay the unit of identity in AFCT. This does not become a parallel user table; it
+/// records that some outside system vouches for a person who already has an account here.
+///
+/// **Keyed on issuer plus subject, never email.** The subject is the provider's stable
+/// identifier for a person, so a link survives a name change, a marriage, or a department
+/// moving someone's address. Email is used once, to *find* the account to attach to, and is
+/// not what holds the link together afterwards.
+///
+/// @namespace Identity
+model LinkedIdentity {
+  /// Unique identifier.
+  id      String               @id @default(cuid())
+  kind    IdentityProviderKind
+  /// The provider's own name for itself: an OIDC issuer URL, or an LTI platform issuer.
+  issuer  String
+  /// The provider's stable identifier for this person (the `sub` claim). Never an email.
+  subject String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The AFCT account this identity signs in as.
+  userId String
+
+  /// How the link came to exist.
+  linkedVia IdentityLinkMethod
+  /// When this record was created.
+  createdAt DateTime           @default(now())
+  /// Last time somebody signed in through it, so a stale link can be spotted.
+  lastSignInAt DateTime?
+
+  /// One account per identity. This is the constraint that stops two people sharing a sign-in
+  /// and stops one identity quietly moving between accounts.
+  @@unique([issuer, subject])
   @@index([userId])
 }
 
