@@ -60,8 +60,11 @@ describe('proxy', () => {
       '/api/auth/signup',
       '/api/health',
       '/api/system-settings/public',
-      // Nobody is signed in yet when an LMS starts a launch.
+      // Fetched by an LMS's servers, which have no AFCT session and never will.
+      '/api/lti/jwks',
+      // The launch round trip. Nobody is signed in yet, which is the point of it.
       '/api/lti/login',
+      '/api/lti/launch',
     ])('lets %s through without reading a token', async (path) => {
       const res = await proxy(req(path));
       expect(res.status).toBe(200);

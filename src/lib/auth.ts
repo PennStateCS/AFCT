@@ -7,10 +7,12 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getClientIpFromHeaders } from '@/lib/ip-utils';
 import { getClientIp } from '@/lib/security/rate-limiter';
 import { verifyCredentials } from '@/lib/credentials';
+import { redeemSessionTicket } from '@/lib/lti/session-ticket';
 import { requireAuthSecret } from '@/lib/auth-secret';
 import { buildJwtToken, buildSession } from '@/lib/auth-callbacks';
 import { buildOidcProvider, getOidcConfig, OIDC_PROVIDER_ID } from '@/lib/oidc-provider';
 import { resolveOidcSignIn } from '@/lib/oidc-signin';
+import { linkIdentity } from '@/lib/linked-identity';
 import type { Adapter } from 'next-auth/adapters';
 
 /**
@@ -26,6 +28,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
   adapter: PrismaAdapter(prisma) as unknown as Adapter,
   providers: [
     ...(oidc ? [buildOidcProvider(oidc)] : []),
+    /**
+     * Completing an LTI launch. Not a password: the launch endpoint has already verified a
+     * signed token, and this only spends the single-use ticket it handed out.
+     */
+    CredentialsProvider({
+      id: 'lti-launch',
+      name: 'LTI launch',
+      credentials: { ticket: { label: 'Ticket', type: 'text' } },
+      async authorize(credentials) {
+        const raw = credentials as Record<string, unknown> | undefined;
+        return await redeemSessionTicket(raw?.ticket as string | undefined);
+      },
+    }),
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -83,11 +98,35 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
 
       const claims = profile as Record<string, unknown> | undefined;
       const { ipAddress, userAgent } = await getRequestContext();
+      const subject = String(claims?.sub ?? account.providerAccountId);
+
+      /**
+       * Already signed in, so this is somebody connecting their institution rather than
+       * signing in with it. That is the only way an administrator ever gets an identity,
+       * since automatic linking refuses them by design.
+       *
+       * Safe because both halves are proved in the same moment: the session says who they
+       * are here, the provider has just said who they are there, and `linkIdentity` still
+       * refuses an identity that belongs to a different account.
+       */
+      const current = await auth();
+      if (current?.user?.id && !current.user.inactive) {
+        const linked = await linkIdentity({
+          ref: { kind: 'OIDC', issuer: config.issuer, subject },
+          userId: current.user.id,
+          via: 'SELF_SERVICE',
+          actorUserId: current.user.id,
+          context: { ipAddress, userAgent },
+        });
+        return linked.ok
+          ? '/dashboard/account?linked=1'
+          : `/dashboard/account?error=${linked.reason}`;
+      }
 
       const outcome = await resolveOidcSignIn({
         claims: {
           issuer: config.issuer,
-          subject: String(claims?.sub ?? account.providerAccountId),
+          subject,
           email: (claims?.email as string | undefined) ?? user?.email ?? null,
           emailVerified: claims?.email_verified === true,
           firstName: (claims?.given_name as string | undefined) ?? null,

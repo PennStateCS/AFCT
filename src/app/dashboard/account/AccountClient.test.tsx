@@ -42,17 +42,35 @@ afterEach(() => {
 
 describe('AccountClient', () => {
   it('opens on the profile tab', () => {
-    render(<AccountClient user={user} />);
+    render(<AccountClient user={user} oidcAvailable={false} oidcLabel={null} />);
 
     expect(screen.getByTestId('profile-section')).toBeInTheDocument();
   });
 
   it('remembers the tab you were last on', async () => {
     const person = userEvent.setup();
-    render(<AccountClient user={user} />);
+    render(<AccountClient user={user} oidcAvailable={false} oidcLabel={null} />);
     await person.click(screen.getByRole('tab', { name: /password/i }));
 
     expect(localStorage.getItem('afct.accountTab')).toBe('password');
+  });
+
+  /**
+   * The tab only exists when an administrator has set institutional sign-in up. An install
+   * using local accounts alone should not carry a tab whose every answer is "not available".
+   */
+  describe('the connected-accounts tab', () => {
+    it('is absent when institutional sign-in is off', () => {
+      render(<AccountClient user={user} oidcAvailable={false} oidcLabel={null} />);
+
+      expect(screen.queryByRole('tab', { name: /connected accounts/i })).not.toBeInTheDocument();
+    });
+
+    it('is there once it is configured', () => {
+      render(<AccountClient user={user} oidcAvailable oidcLabel="Penn State" />);
+
+      expect(screen.getByRole('tab', { name: /connected accounts/i })).toBeInTheDocument();
+    });
   });
 
   /**
@@ -66,7 +84,7 @@ describe('AccountClient', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       const person = userEvent.setup();
-      render(<AccountClient user={user} />);
+      render(<AccountClient user={user} oidcAvailable={false} oidcLabel={null} />);
       // Tab panels mount on demand, so the password form does not exist until its tab opens.
       await person.click(screen.getByRole('tab', { name: /password/i }));
       await waitFor(() => expect(capturedOnChangePassword).toBeTypeOf('function'));
@@ -93,7 +111,7 @@ describe('AccountClient', () => {
       );
 
       const person = userEvent.setup();
-      render(<AccountClient user={user} />);
+      render(<AccountClient user={user} oidcAvailable={false} oidcLabel={null} />);
       await person.click(screen.getByRole('tab', { name: /password/i }));
       await waitFor(() => expect(capturedOnChangePassword).toBeTypeOf('function'));
 

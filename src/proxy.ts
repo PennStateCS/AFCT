@@ -35,10 +35,13 @@ const PUBLIC_API_PREFIXES = [
   // is intentional: the cookie/idle-timeout logic doesn't apply to token clients,
   // and every /api/client route enforces its own token auth.
   '/api/client',
-  // Where an LMS sends the browser to start a launch. Necessarily public: the whole point is
-  // that nobody is signed in yet. It reveals nothing and only mints a state and nonce that are
-  // useless unless the LMS then signs a token.
+  // AFCT's public keyset, fetched by an LMS's servers, which have no AFCT session and never
+  // will. Publishes only public keys.
+  '/api/lti/jwks',
+  // The launch round trip: the LMS sends the browser here, and posts the signed token back.
+  // Nobody is signed in yet, which is the point of a launch. Both verify what they are handed.
   '/api/lti/login',
+  '/api/lti/launch',
 ] as const;
 
 function isPublicApi(pathname: string): boolean {
