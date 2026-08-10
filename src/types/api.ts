@@ -2550,6 +2550,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/identities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect an institutional sign-in from my account
+         * @description Disconnect one of the caller's own institutional sign-ins.   Refuses to remove the last way into an account. Somebody with no password whose only  identity is this one would be locked out by their own click, and recovering that needs an  administrator, so it is worth one refusal here. `unlinkIdentity` is scoped to the owning  account, so an id belonging to somebody else removes nothing rather than removing theirs.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/identities/[id]/route.ts)
+         */
+        delete: operations["deleteMeIdentitiesById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the institutional sign-ins connected to my account
+         * @description The institutional sign-ins attached to the caller's own account.   Also reports whether they have a local password, because that is what decides if the last  identity can be removed. The page needs both to say anything useful, and one request that  answers the question beats two that each answer half of it.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/identities/route.ts)
+         */
+        get: operations["getMeIdentities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/manageable-courses": {
         parameters: {
             query?: never;
@@ -11211,6 +11259,80 @@ export interface operations {
             };
             /** @description Query failed. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteMeIdentitiesById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The identity was disconnected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such identity on this account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description That is the only way to sign in to this account. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getMeIdentities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's linked identities, and whether they have a password. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
