@@ -1,26 +1,16 @@
 /**
- * Deciding which AFCT account an institutional sign-in belongs to.
+ * Deciding which AFCT account an institutional (OIDC) sign-in belongs to.
  *
- * Kept apart from the NextAuth wiring because every rule that matters is here, and none of them
- * needs a provider, a request or a session to test. The wiring calls this and does what it says.
- *
- * The order is the point:
- *
- *   1. **A known identity wins.** Issuer plus subject is the durable key, so somebody whose
- *      address changed is still themselves.
- *   2. **Otherwise match on a trusted email**, and attach the identity so step 1 answers next
- *      time. Email is used exactly once, here, and never again for that person.
- *   3. **Otherwise create an account**, which is what makes a first sign-in work at all.
- *
- * "Trusted" means the provider asserted the address as verified, or an administrator has said
- * this provider's addresses can be believed. Without that, neither 2 nor 3 may happen: matching
- * on an unverified address hands over an existing account, and *creating* on one lets somebody
- * squat an address before its owner ever arrives, which is the same takeover a step later.
+ * The rules live in {@link resolveFederatedSignIn}, shared with LTI. What is specific to OIDC is
+ * when an address may be believed: the provider must assert it as verified, or an administrator
+ * must have vouched for the provider. That escape hatch exists because some providers, Entra
+ * among them, never send the claim at all.
  */
 
-import { prisma } from '@/lib/prisma';
-import { linkIdentity, findUserByIdentity, recordIdentitySignIn } from '@/lib/linked-identity';
+import { resolveFederatedSignIn } from '@/lib/federated-signin';
 import type { AuditContext } from '@/lib/linked-identity';
+export type { SignInRefusal, SignInOutcome } from '@/lib/federated-signin';
+import type { SignInOutcome, SignInRefusal } from '@/lib/federated-signin';
 
 /** What the provider told us about the person signing in. */
 export type OidcClaims = {
@@ -34,22 +24,6 @@ export type OidcClaims = {
   lastName?: string | null;
 };
 
-export type SignInRefusal =
-  /** The provider sent no address, so there is nothing to match or create against. */
-  | 'no-email'
-  /** The address is not one we are allowed to believe. */
-  | 'email-not-verified'
-  /** The account exists but has been switched off. */
-  | 'account-inactive'
-  /** An administrator account, which is never attached automatically. */
-  | 'admin-requires-deliberate-link'
-  /** The identity is already attached to a different account. */
-  | 'already-linked-elsewhere';
-
-export type SignInOutcome =
-  | { ok: true; userId: string; created: boolean }
-  | { ok: false; reason: SignInRefusal };
-
 export async function resolveOidcSignIn(opts: {
   claims: OidcClaims;
   /** Whether an administrator has said this provider's addresses can be believed. */
@@ -57,104 +31,19 @@ export async function resolveOidcSignIn(opts: {
   context: AuditContext;
 }): Promise<SignInOutcome> {
   const { claims, trustEmail, context } = opts;
-  const ref = { kind: 'OIDC' as const, issuer: claims.issuer, subject: claims.subject };
 
-  // 1. A known identity. Nothing about the email matters here: this person has signed in before
-  //    and we already decided who they are.
-  const existing = await findUserByIdentity(ref);
-  if (existing) {
-    if (existing.user?.inactive) return { ok: false, reason: 'account-inactive' };
-    await recordIdentitySignIn(existing.id);
-    return { ok: true, userId: existing.userId, created: false };
-  }
-
-  const email = claims.email?.trim().toLowerCase();
-  if (!email) return { ok: false, reason: 'no-email' };
-  if (!claims.emailVerified && !trustEmail) return { ok: false, reason: 'email-not-verified' };
-
-  // 2. An existing account with that address. `linkIdentity` holds the guardrails, including
-  //    the one that refuses to attach automatically to an administrator.
-  const match = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, inactive: true },
-  });
-
-  if (match) {
-    if (match.inactive) return { ok: false, reason: 'account-inactive' };
-
-    const linked = await linkIdentity({
-      ref,
-      userId: match.id,
-      via: 'AUTO_VERIFIED_EMAIL',
-      actorUserId: match.id,
-      context,
-    });
-    if (!linked.ok) {
-      return {
-        ok: false,
-        reason:
-          linked.reason === 'already-linked-elsewhere'
-            ? 'already-linked-elsewhere'
-            : linked.reason === 'admin-requires-deliberate-link'
-              ? 'admin-requires-deliberate-link'
-              : 'account-inactive',
-      };
-    }
-    return { ok: true, userId: match.id, created: false };
-  }
-
-  // 3. Nobody here yet. Create the account and attach the identity in one transaction, so a
-  //    failure cannot leave an account nobody can sign in to.
-  const userId = await prisma.$transaction(async (tx) => {
-    const created = await tx.user.create({
-      data: {
-        email,
-        firstName: claims.firstName ?? null,
-        lastName: claims.lastName ?? null,
-        // No local password. This account exists because a provider vouched for it, and
-        // `User.password` is optional for exactly this case.
-        password: null,
-      },
-      select: { id: true },
-    });
-    await tx.linkedIdentity.create({
-      data: { ...ref, userId: created.id, linkedVia: 'JUST_IN_TIME' },
-    });
-    return created.id;
-  });
-
-  // Logged outside the transaction: the audit write must not be able to roll the account back,
-  // and a person who exists without a log entry is better than one who does not exist at all.
-  await linkIdentityAudit(userId, ref, context);
-
-  return { ok: true, userId, created: true };
-}
-
-/**
- * The audit entry for an account created by a sign-in.
- *
- * `linkIdentity` writes its own, but the just-in-time path creates the link inside the
- * transaction rather than through it, so the entry is written here instead.
- */
-async function linkIdentityAudit(
-  userId: string,
-  ref: { issuer: string; subject: string; kind: 'OIDC' },
-  context: AuditContext,
-): Promise<void> {
-  const { createEnhancedActivityLog } = await import('@/lib/activity-log-utils');
-  await createEnhancedActivityLog(prisma, context, {
-    userId,
-    action: 'IDENTITY_LINKED',
-    severity: 'INFO',
-    category: 'USER',
-    metadata: {
-      targetUserId: userId,
-      issuer: ref.issuer,
-      subject: ref.subject,
-      kind: ref.kind,
-      via: 'JUST_IN_TIME',
-      accountCreated: true,
+  return resolveFederatedSignIn({
+    claims: {
+      kind: 'OIDC',
+      issuer: claims.issuer,
+      subject: claims.subject,
+      email: claims.email,
+      // The OIDC-specific rule, decided here and passed on as a plain answer.
+      emailTrusted: Boolean(claims.emailVerified) || trustEmail,
+      firstName: claims.firstName,
+      lastName: claims.lastName,
     },
+    context,
   });
 }
 
