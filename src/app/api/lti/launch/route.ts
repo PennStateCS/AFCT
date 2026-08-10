@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { validateLaunch, launchRefusalMessage } from '@/lib/lti/launch';
+import type { LaunchIdentity } from '@/lib/lti/launch';
 import { resolveLaunchSignIn, launchSignInRefusalMessage } from '@/lib/lti/lti-signin';
 import { LTI_STATE_COOKIE } from '@/lib/lti/login-init';
 import { consumeSingleUseToken, issueSingleUseToken } from '@/lib/single-use-token';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { resolveLaunchTarget, enrolFromLaunch } from '@/lib/lti/course-link';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -19,6 +21,9 @@ import { prisma } from '@/lib/prisma';
 
 /** Long enough to redirect and sign in, short enough to be useless if it leaks. */
 const TICKET_TTL_MS = 60 * 1000;
+
+/** Long enough for somebody to read the picker and choose. */
+const PENDING_LINK_TTL_MS = 30 * 60 * 1000;
 
 function refuse(message: string, status: number) {
   // Plain text: a person is reading this inside an LMS frame, not code.
@@ -102,6 +107,10 @@ export async function POST(request: Request) {
     return refuse(launchSignInRefusalMessage(signIn.reason), 403);
   }
 
+  // Where this person ends up, decided here because this is the last point that holds the
+  // verified launch. Everything after it is a browser following a link.
+  const destination = await decideDestination(verified.identity, signIn.userId);
+
   const { token: ticket } = await issueSingleUseToken({
     purpose: 'LTI_SESSION_TICKET',
     userId: signIn.userId,
@@ -110,9 +119,44 @@ export async function POST(request: Request) {
 
   const next = new URL('/lti/complete', request.url);
   next.searchParams.set('ticket', ticket);
+  next.searchParams.set('next', destination);
 
   const response = NextResponse.redirect(next, 303);
   // Spent, so it cannot be replayed even though the token behind it is already consumed.
   response.cookies.delete(LTI_STATE_COOKIE);
   return response;
+}
+
+/**
+ * Where a verified launch should land.
+ *
+ * A launch from a linked LMS course goes to that course, enrolling the person on the way. One
+ * from an unlinked course goes to the picker if they may link it, and to an explanation if they
+ * may not, which for a student means their instructor has not finished setting it up.
+ */
+async function decideDestination(identity: LaunchIdentity, userId: string): Promise<string> {
+  const target = await resolveLaunchTarget({ identity, userId });
+
+  if (target.status === 'linked') {
+    await enrolFromLaunch({ courseId: target.courseId, userId, roles: identity.roles });
+    return `/dashboard/courses/${target.courseId}`;
+  }
+
+  if (target.status === 'needs-link') {
+    const pending = await prisma.ltiPendingLink.create({
+      data: {
+        platformId: identity.platformId,
+        contextId: identity.contextId!,
+        contextTitle: identity.contextTitle,
+        userId,
+        expiresAt: new Date(Date.now() + PENDING_LINK_TTL_MS),
+      },
+      select: { id: true },
+    });
+    return `/lti/link?pending=${pending.id}`;
+  }
+
+  // Nothing to link, or nothing this person may do about it. The dashboard is a truthful
+  // landing place: they are signed in, just not anywhere specific.
+  return target.status === 'not-set-up' ? '/lti/link?notReady=1' : '/dashboard';
 }

@@ -13,6 +13,15 @@ import { signIn } from 'next-auth/react';
 export default function CompleteLaunchClient() {
   const params = useSearchParams();
   const ticket = params.get('ticket');
+  /**
+   * Where to go once signed in, chosen by the launch endpoint.
+   *
+   * Only a path on this site is accepted. The value reaches here through the browser, so
+   * without this check a crafted link would turn a launch into an open redirect, which is worth
+   * something to anyone phishing a university.
+   */
+  const requested = params.get('next');
+  const next = requested && /^\/(?!\/)/.test(requested) ? requested : '/dashboard';
   const started = useRef(false);
   const [failed, setFailed] = useState(false);
 
@@ -32,9 +41,9 @@ export default function CompleteLaunchClient() {
         setFailed(true);
         return;
       }
-      window.location.replace('/dashboard');
+      window.location.replace(next);
     });
-  }, [ticket]);
+  }, [ticket, next]);
 
   return (
     <main className="flex min-h-screen w-full items-center justify-center p-6">

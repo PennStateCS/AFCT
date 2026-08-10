@@ -41,7 +41,10 @@ describe('starting a launch', () => {
     expect(res.headers.get('location')).toBe(REDIRECT);
     expect(beginLaunch).toHaveBeenCalledWith(
       expect.objectContaining({
-        params: expect.objectContaining({ iss: 'https://canvas.example.test', login_hint: 'user-1' }),
+        params: expect.objectContaining({
+          iss: 'https://canvas.example.test',
+          login_hint: 'user-1',
+        }),
       }),
     );
   });

@@ -28,14 +28,15 @@ const USER_ID = 'u-ltilaunch';
 
 const identity = {
   platformId: 'ltip-1',
+  // A launch normally carries the course it came from.
   issuer: 'https://canvas.example.test',
   subject: 'lms-user-1',
   email: 'student@example.test',
   firstName: 'Ada',
   lastName: 'Lovelace',
   roles: [],
-  contextId: null,
-  contextTitle: null,
+  contextId: 'ctx-1',
+  contextTitle: 'Theory of Computation',
   resourceLinkId: null,
   targetLinkUri: null,
 };
@@ -57,6 +58,11 @@ function post(opts: { state?: string; cookieState?: string; idToken?: string }) 
 
 async function destroyFixtures() {
   await prisma.activityLog.deleteMany({ where: { action: 'LTI_LAUNCH_DENIED' } });
+  await prisma.ltiPendingLink.deleteMany({});
+  await prisma.ltiContextLink.deleteMany({});
+  await prisma.roster.deleteMany({ where: { courseId: 'c-launch-dest' } });
+  await prisma.course.deleteMany({ where: { id: 'c-launch-dest' } });
+  await prisma.ltiPlatform.deleteMany({ where: { id: 'ltip-1' } });
   await prisma.singleUseToken.deleteMany({
     where: { purpose: { in: ['LTI_LAUNCH_STATE', 'LTI_SESSION_TICKET'] } },
   });
@@ -85,6 +91,81 @@ beforeEach(async () => {
 afterAll(async () => {
   await destroyFixtures();
   await prisma.$disconnect();
+});
+
+/**
+ * Where a verified launch sends the person. Decided in the endpoint, because it is the last
+ * point that still holds the verified launch: everything after is a browser following a link.
+ */
+describe('where a launch lands', () => {
+  const COURSE = 'c-launch-dest';
+  const PLATFORM_ID = 'ltip-1';
+
+  const withCourse = async () => {
+    await prisma.ltiPlatform.create({
+      data: {
+        id: PLATFORM_ID,
+        name: 'Test Canvas',
+        issuer: 'https://canvas.example.test',
+        clientId: 'c1',
+        deploymentId: 'd1',
+        authLoginUrl: 'https://canvas.example.test/auth',
+        tokenUrl: 'https://canvas.example.test/token',
+        keysetUrl: 'https://canvas.example.test/jwks',
+      },
+    });
+    await prisma.course.create({
+      data: {
+        id: COURSE,
+        name: 'Theory of Computation',
+        code: 'CMPSC 464',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: new Date('2026-08-24T00:00:00Z'),
+        endDate: new Date('2026-12-18T00:00:00Z'),
+      },
+    });
+  };
+
+  const nextOf = (res: Response) => new URL(res.headers.get('location')!).searchParams.get('next');
+
+  it('goes to the course when the LMS course is linked', async () => {
+    await withCourse();
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+
+    const res = await post(await goodLaunch());
+
+    expect(nextOf(res)).toBe(`/dashboard/courses/${COURSE}`);
+  });
+
+  it('enrols the person on the way in', async () => {
+    await withCourse();
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+
+    await post(await goodLaunch());
+
+    const row = await prisma.roster.findFirstOrThrow({
+      where: { courseId: COURSE, userId: USER_ID },
+    });
+    expect(row.role).toBe('STUDENT');
+  });
+
+  /**
+   * A student cannot fix an unlinked course and must not be asked to. Faculty get the picker,
+   * which is covered where the rule lives.
+   */
+  it('tells somebody who cannot link that it is not ready', async () => {
+    await withCourse();
+
+    const res = await post(await goodLaunch());
+
+    expect(nextOf(res)).toBe('/lti/link?notReady=1');
+    expect(await prisma.ltiPendingLink.count()).toBe(0);
+  });
 });
 
 describe('a launch that works', () => {
