@@ -164,11 +164,25 @@ Then read the mail at **http://localhost:8025**. Use **Send a test message** to 
 plumbing, and request a password reset to see the real thing and click the link.
 
 :::warning What Mailpit does not prove
-Mailpit speaks neither STARTTLS nor authentication out of the box, so the encryption-plus-
-credentials path a real campus server uses is **not** exercised by it. Prove that separately
-against [Ethereal](https://ethereal.email), which hands out throwaway SMTP accounts that do
-both and shows you the captured mail. It takes about a minute and is worth doing once before
-trusting the feature against an institutional server.
+Mailpit as configured here speaks neither STARTTLS nor authentication, so the
+encryption-plus-credentials path a real campus server uses is **not** exercised by it.
+
+It can be told to (`--smtp-require-starttls`, `--smtp-tls-cert`, `--smtp-auth-accept-any`), but
+only with a self-signed certificate, and AFCT does not disable certificate verification. Making
+that work locally would mean adding a switch that weakens TLS validation, and a switch like that
+eventually gets found enabled somewhere it should not be. So we do not.
+
+Prove that path against [Ethereal](https://ethereal.email) instead. It hands out throwaway SMTP
+accounts with a **real** certificate, so STARTTLS and authentication work end to end with nothing
+weakened. A minute of setup, worth doing once before trusting this against an institutional
+server.
+:::
+
+:::danger Never point a populated instance at Ethereal
+Ethereal is a third party and receives whatever you send it. That is fine for a dev database of
+invented people. It is not fine for anything holding real names or addresses, and it is never
+fine for production. Mailpit is the default here precisely because nothing leaves the machine,
+which is the right posture for a system holding education records.
 :::
 
 ### The database test job
