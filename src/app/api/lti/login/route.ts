@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { beginLaunch, loginInitRefusalMessage, LTI_STATE_COOKIE } from '@/lib/lti/login-init';
 import type { LoginInitParams } from '@/lib/lti/login-init';
+import { publicUrl } from '@/lib/lti/public-url';
 
 /**
  * Where an LMS sends the browser to start a launch.
@@ -30,7 +31,9 @@ function paramsFrom(source: URLSearchParams | FormData): LoginInitParams {
 }
 
 async function handle(request: Request, params: LoginInitParams) {
-  const redirectUri = new URL('/api/lti/launch', request.url).toString();
+  // Built from the configured public URL: the platform compares this literally against the
+  // registration, and behind a proxy the request's own host is an internal address.
+  const redirectUri = publicUrl('/api/lti/launch', request);
   const result = await beginLaunch({ params, redirectUri });
 
   if (!result.ok) {

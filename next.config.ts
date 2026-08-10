@@ -6,7 +6,24 @@ import type { NextConfig } from 'next';
 // CSP_ENFORCE=true. The static security headers below don't need a nonce, so they
 // stay here.
 
+/**
+ * Hosts allowed to reach the dev server from an origin other than localhost.
+ *
+ * Next refuses dev requests, including the hot-reload WebSocket, from an origin it does not
+ * recognise: the upgrade is answered with `Unauthorized`, the client retries for ever, and the
+ * page reloads itself trying to recover. That breaks any flow with a redirect in it.
+ *
+ * Only relevant when the dev server is reached through something else, which today means the
+ * tunnel used for LTI testing. Read from the environment rather than hard-coded, because a
+ * quick tunnel gets a new hostname every time it starts.
+ */
+const devOrigins = (process.env.AFCT_DEV_ORIGINS ?? '')
+  .split(',')
+  .map((host) => host.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
+  ...(devOrigins.length ? { allowedDevOrigins: devOrigins } : {}),
   // Next 16 no longer runs ESLint during `next build` (lint is enforced via the
   // `lint` script / CI), so the old `eslint.ignoreDuringBuilds` key is gone.
   turbopack: {

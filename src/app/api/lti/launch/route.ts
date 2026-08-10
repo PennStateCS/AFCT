@@ -7,6 +7,7 @@ import { consumeSingleUseToken, issueSingleUseToken } from '@/lib/single-use-tok
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { resolveLaunchTarget, enrolFromLaunch } from '@/lib/lti/course-link';
 import { prisma } from '@/lib/prisma';
+import { publicUrl } from '@/lib/lti/public-url';
 
 /**
  * Where the LMS posts the signed launch token.
@@ -119,7 +120,9 @@ export async function POST(request: Request) {
     ttlMs: TICKET_TTL_MS,
   });
 
-  const next = new URL('/lti/complete', request.url);
+  // Same reason as the redirect_uri: the request's host is internal behind a proxy, and a
+  // browser sent there lands nowhere.
+  const next = new URL(publicUrl('/lti/complete', request));
   next.searchParams.set('ticket', ticket);
   next.searchParams.set('next', destination);
 
