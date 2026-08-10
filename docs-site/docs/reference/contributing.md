@@ -144,6 +144,33 @@ already are. The dev stack must be running (`npm run docker:dev`) for these to w
 container, the regenerated file appears on your host too, so you can commit it normally.
 :::
 
+### Testing email locally
+
+The dev stack includes **Mailpit**, a local mail server that catches everything AFCT sends and
+shows it in a web UI. Nothing leaves your machine, which matters: a dev database full of test
+accounts must never be able to mail real people.
+
+Configure it in **System Settings → Email**:
+
+| Field | Value |
+| --- | --- |
+| Mail server | `mailpit` |
+| Port | `1025` |
+| Encryption | **None** |
+| Username and password | leave blank |
+| From address | anything, for example `afct@localhost` |
+
+Then read the mail at **http://localhost:8025**. Use **Send a test message** to check the
+plumbing, and request a password reset to see the real thing and click the link.
+
+:::warning What Mailpit does not prove
+Mailpit speaks neither STARTTLS nor authentication out of the box, so the encryption-plus-
+credentials path a real campus server uses is **not** exercised by it. Prove that separately
+against [Ethereal](https://ethereal.email), which hands out throwaway SMTP accounts that do
+both and shows you the captured mail. It takes about a minute and is worth doing once before
+trusting the feature against an institutional server.
+:::
+
 ### The database test job
 
 `npm run test:db` runs tests against a **real** Postgres database named `afct_test`. It is
