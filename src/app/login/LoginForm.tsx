@@ -47,6 +47,8 @@ type LoginFormProps = {
   hcaptchaSiteKey?: string;
   /** Whether the site can send email, so the reset link is only offered when it works. */
   mailConfigured?: boolean;
+  /** Wording for the institutional sign-in button, or null when none is configured. */
+  oidcButtonLabel?: string | null;
 };
 
 /* ================================================= */
@@ -55,6 +57,7 @@ export default function LoginForm({
   allowSignup,
   hcaptchaSiteKey,
   mailConfigured = false,
+  oidcButtonLabel = null,
 }: LoginFormProps) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
 
@@ -471,6 +474,27 @@ export default function LoginForm({
                 >
                   {loading ? 'Logging in...' : 'Sign In'}
                 </Button>
+
+                {/* Shown only when a provider is configured, so the button never leads
+                    somewhere that cannot work. Local sign-in stays above it and keeps working
+                    whatever is configured here. */}
+                {oidcButtonLabel ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <span className="h-px flex-1 bg-gray-200" />
+                      or
+                      <span className="h-px flex-1 bg-gray-200" />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => void signIn('oidc', { callbackUrl: '/dashboard' })}
+                    >
+                      {oidcButtonLabel}
+                    </Button>
+                  </div>
+                ) : null}
 
                 {/* Only offered where the site can actually send it. Without mail configured
                     this link leads to a page that can only apologise. */}
