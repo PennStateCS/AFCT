@@ -183,6 +183,23 @@ export async function verifyCredentials(params: {
     return { ok: false, reason: 'rate_limited', retryAfterMs };
   }
 
+  // An account can exist without a local password (one vouched for by an identity provider or
+  // an LMS launch). There is nothing to compare against, so the attempt is refused before
+  // bcrypt sees it: `bcrypt.compare` against null throws, and a throw here would be an
+  // unhandled 500 that also tells the caller the address exists.
+  //
+  // Reported exactly like a wrong password, because the difference between "no such account",
+  // "wrong password" and "that account does not use a password" is precisely what an attacker
+  // would like to learn.
+  if (!user.password) {
+    void logLoginSecurityEvent(
+      'LOGIN_FAILED',
+      { ip: ipAddress, identifier: emailInput, reason: 'account has no local password' },
+      user.id,
+    );
+    return { ok: false, reason: 'invalid' };
+  }
+
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) {
     void logLoginSecurityEvent(

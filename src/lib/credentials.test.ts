@@ -141,3 +141,57 @@ describe('verifyCredentials account lockout', () => {
     expect(prismaMock.user.updateMany).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * An account can exist without a local password: one vouched for by an identity provider or an
+ * LMS launch rather than one that chose a password here. Nothing creates such an account yet,
+ * but the sign-in path has to refuse it correctly from the moment the column allows it.
+ *
+ * Two things must hold. It must never succeed, and it must fail the same way a wrong password
+ * does, because "that account exists but does not use a password" is exactly what an attacker
+ * would like to be told.
+ */
+describe('an account with no local password', () => {
+  beforeEach(() => {
+    prismaMock.user.findFirst.mockResolvedValue(activeUser({ password: null }));
+  });
+
+  it('cannot sign in, whatever password is offered', async () => {
+    const result = await call();
+
+    expect(result.ok).toBe(false);
+  });
+
+  // The guard has to come first: bcrypt.compare against null throws, and a throw here is an
+  // unhandled 500 that also confirms the address exists.
+  it('never reaches the password comparison', async () => {
+    await call();
+
+    expect(bcryptMock.compare).not.toHaveBeenCalled();
+  });
+
+  // Belt and braces rather than a test of the guard: an empty password is refused by input
+  // validation before this code is reached. Kept because "send nothing and see" is the first
+  // thing anyone tries against an account that has no password.
+  it('is refused when an empty password is sent', async () => {
+    const result = await verifyCredentials({
+      email: 'ada@example.com',
+      password: '',
+      ipAddress: '1.2.3.4',
+    });
+
+    expect(result.ok).toBe(false);
+  });
+
+  // Indistinguishable from a wrong password, so the response cannot be used to sort accounts
+  // into "has a password" and "does not".
+  it('fails exactly like a wrong password does', async () => {
+    const noPassword = await call();
+
+    prismaMock.user.findFirst.mockResolvedValue(activeUser());
+    bcryptMock.compare.mockResolvedValue(false);
+    const wrongPassword = await call();
+
+    expect(noPassword).toEqual(wrongPassword);
+  });
+});

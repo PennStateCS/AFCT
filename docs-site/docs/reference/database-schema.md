@@ -17,7 +17,7 @@ erDiagram
   String email UK
   String firstName "nullable"
   String lastName "nullable"
-  String password
+  String password "nullable"
   Boolean temporaryPassword
   Boolean isAdmin
   String avatar "nullable"
@@ -67,7 +67,14 @@ Properties as follows:
 - `email`: Sign-in address, and the identifier the institution's systems recognise.
 - `firstName`: Given name.
 - `lastName`: Family name.
-- `password`: Hashed password. The plain password is never stored.
+- `password`
+  > bcrypt hash of the local password, or null for an account that has none. The plain
+  > password is never stored.
+  >
+  > Optional because an account will be able to exist without one: an identity provider or an
+  > LMS launch can vouch for someone who never chose an AFCT password. Nothing creates such an
+  > account yet, but every reader must already treat null as "cannot sign in with a password"
+  > rather than assume a string is there.
 - `temporaryPassword`: Whether the current password was issued by an administrator and must be changed at next sign-in.
 - `isAdmin`
   > Whether this account administers the installation. What a person may do inside a particular

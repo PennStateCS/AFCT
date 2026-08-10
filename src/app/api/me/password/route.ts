@@ -73,9 +73,22 @@ export async function POST(req: NextRequest) {
       select: { password: true, temporaryPassword: true },
     });
 
-    if (!user?.password) {
+    if (!user) {
       console.error('[CHANGE_PASSWORD] User not found in database');
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Exists, but has no local password to change: an account vouched for by an identity
+    // provider or an LMS launch rather than one that chose a password here. Reporting this as
+    // "user not found" would be false and would send someone looking for a deleted account.
+    if (!user.password) {
+      return NextResponse.json(
+        {
+          error:
+            'This account does not have a password yet. Use the password reset link on the sign-in page to choose one.',
+        },
+        { status: 400 },
+      );
     }
 
     const isValid = await bcrypt.compare(oldPassword, user.password);
