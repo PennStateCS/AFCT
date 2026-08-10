@@ -138,6 +138,7 @@
     "next": "^16.2.11",
     "next-auth": "^5.0.0-beta.32",
     "next-themes": "^0.4.6",
+    "nodemailer": "^9.0.5",
     "openapi-fetch": "^0.17.0",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
@@ -170,6 +171,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.20.1",
+    "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
@@ -202,6 +204,7 @@
     },
     "@redocly/openapi-core": {
       "js-yaml": "4.3.1"
-    }
+    },
+    "nodemailer": "$nodemailer"
   }
 }

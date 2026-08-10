@@ -1,3 +1,4 @@
+import type { SmtpSecurity } from '@/schemas/smtp';
 import {
   clampSessionTimeoutMinutes,
   clampBackupHour,
@@ -11,6 +12,7 @@ import {
   DEFAULT_LOGIN_LOCKOUT_MINUTES,
   DEFAULT_BACKUP_ENABLED,
   DEFAULT_BACKUP_HOUR,
+  DEFAULT_SMTP_PORT,
   DEFAULT_BACKUP_RETENTION_DAYS,
   DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
   DEFAULT_SYSTEM_TIMEZONE,
@@ -45,6 +47,14 @@ export type SystemSettingsResponse = {
   activityLogRetentionDays: number;
   hcaptchaSiteKey: string;
   hcaptchaSecretConfigured: boolean;
+  smtpEnabled: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecurity: SmtpSecurity;
+  smtpUsername: string;
+  smtpPasswordConfigured: boolean;
+  smtpFromAddress: string;
+  smtpFromName: string;
 };
 
 // Fields covered by the main Save (used for unsaved-changes tracking).
@@ -68,6 +78,13 @@ export type FormSnapshot = {
   backupRetentionDays: number | '';
   activityLogRetentionDays: number | '';
   hcaptchaSiteKey: string;
+  smtpEnabled: boolean;
+  smtpHost: string;
+  smtpPort: number | '';
+  smtpSecurity: SmtpSecurity;
+  smtpUsername: string;
+  smtpFromAddress: string;
+  smtpFromName: string;
 };
 
 /** Typed single-field updater the field JSX calls. */
@@ -246,7 +263,15 @@ export function deriveAcmeSteps(phase: string | undefined | null): UpgradeStep[]
 }
 
 export const SETTINGS_TAB_KEY = 'afct.systemSettingsTab';
-export const SETTINGS_TABS = ['general', 'queue', 'backups', 'captcha', 'tls', 'updates'];
+export const SETTINGS_TABS = [
+  'general',
+  'queue',
+  'backups',
+  'email',
+  'captcha',
+  'tls',
+  'updates',
+];
 
 // Normalize a raw settings response into the editable form snapshot (defaults,
 // clamping, ms→sec conversions). Shared so the form can be seeded both
@@ -283,6 +308,13 @@ export function buildSettingsSnapshot(data: SystemSettingsResponse): FormSnapsho
       Number(data.activityLogRetentionDays) || DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
     ),
     hcaptchaSiteKey: data.hcaptchaSiteKey ?? '',
+    smtpEnabled: data.smtpEnabled ?? false,
+    smtpHost: data.smtpHost ?? '',
+    smtpPort: data.smtpPort ?? DEFAULT_SMTP_PORT,
+    smtpSecurity: data.smtpSecurity ?? 'STARTTLS',
+    smtpUsername: data.smtpUsername ?? '',
+    smtpFromAddress: data.smtpFromAddress ?? '',
+    smtpFromName: data.smtpFromName ?? '',
   };
 }
 
@@ -321,4 +353,11 @@ export const EMPTY_FORM: FormSnapshot = {
   backupRetentionDays: '',
   activityLogRetentionDays: '',
   hcaptchaSiteKey: '',
+  smtpEnabled: false,
+  smtpHost: '',
+  smtpPort: DEFAULT_SMTP_PORT,
+  smtpSecurity: 'STARTTLS',
+  smtpUsername: '',
+  smtpFromAddress: '',
+  smtpFromName: '',
 };

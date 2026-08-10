@@ -10,6 +10,7 @@
 // Shared by the route (server-side validation) and available to the admin
 // System Settings form.
 import { z } from 'zod';
+import { SmtpSettingsSchema } from '@/schemas/smtp';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import {
   clampUploadSizeMb,
@@ -80,6 +81,19 @@ export const SystemSettingsUpdateSchema = z.object({
   hcaptchaSiteKey: z.string().optional(),
   hcaptchaSecretKey: z.string().optional(),
   hcaptchaSecretClear: z.boolean().optional(),
+
+  // Mail server. Same write-only rule for the password as the hCaptcha secret above: empty
+  // means keep, and clearing is explicit. Shapes live in `schemas/smtp` so the Email tab and
+  // this route validate identically.
+  smtpEnabled: SmtpSettingsSchema.shape.smtpEnabled,
+  smtpHost: SmtpSettingsSchema.shape.smtpHost,
+  smtpPort: SmtpSettingsSchema.shape.smtpPort,
+  smtpSecurity: SmtpSettingsSchema.shape.smtpSecurity,
+  smtpUsername: SmtpSettingsSchema.shape.smtpUsername,
+  smtpPassword: SmtpSettingsSchema.shape.smtpPassword,
+  smtpPasswordClear: SmtpSettingsSchema.shape.smtpPasswordClear,
+  smtpFromAddress: SmtpSettingsSchema.shape.smtpFromAddress,
+  smtpFromName: SmtpSettingsSchema.shape.smtpFromName,
 });
 
 /** Raw form/request input (pre-coercion). */

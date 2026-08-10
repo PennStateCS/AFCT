@@ -687,6 +687,14 @@ erDiagram
   Int submissionAnalyzerLimit
   String hcaptchaSiteKey "nullable"
   String hcaptchaSecretKey "nullable"
+  Boolean smtpEnabled
+  String smtpHost "nullable"
+  Int smtpPort "nullable"
+  SmtpSecurity smtpSecurity
+  String smtpUsername "nullable"
+  String smtpPassword "nullable"
+  String smtpFromAddress "nullable"
+  String smtpFromName "nullable"
   DateTime createdAt
   DateTime updatedAt
 }
@@ -749,5 +757,17 @@ Properties as follows:
   > Public hCaptcha key used on the sign-in page. Empty falls back to the value supplied by the
   > environment, and then to having no captcha.
 - `hcaptchaSecretKey`: Private hCaptcha key. Never sent to the browser.
+- `smtpEnabled`
+  > Whether AFCT may send email at all. Off until an admin configures a server and turns it
+  > on, so an install that does not want mail behaves exactly as it did before.
+- `smtpHost`: Mail server hostname.
+- `smtpPort`: Mail server port. 587 with STARTTLS is the usual institutional answer.
+- `smtpSecurity`:
+- `smtpUsername`: Username for the mail server, when it requires one.
+- `smtpPassword`
+  > Password for the mail server. Encrypted at rest (see `lib/secret-encryption`) and never
+  > returned to the browser; the API reports only whether one is stored.
+- `smtpFromAddress`: Address mail is sent from. Institutions usually require this to be one they host.
+- `smtpFromName`: Display name shown beside the from address.
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.

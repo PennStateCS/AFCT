@@ -69,6 +69,17 @@ describe('GET /api/system-settings', () => {
       activityLogRetentionDays: 365,
       hcaptchaSiteKey: '',
       hcaptchaSecretConfigured: false,
+      // Mail is off until an admin configures it, so a site that never touches these behaves
+      // exactly as it did before they existed. The password is never returned, only whether
+      // one is stored.
+      smtpEnabled: false,
+      smtpHost: '',
+      smtpPort: 587,
+      smtpSecurity: 'STARTTLS',
+      smtpUsername: '',
+      smtpPasswordConfigured: false,
+      smtpFromAddress: '',
+      smtpFromName: '',
     });
   });
 
@@ -114,6 +125,17 @@ describe('GET /api/system-settings', () => {
       activityLogRetentionDays: 365,
       hcaptchaSiteKey: '',
       hcaptchaSecretConfigured: false,
+      // Mail is off until an admin configures it, so a site that never touches these behaves
+      // exactly as it did before they existed. The password is never returned, only whether
+      // one is stored.
+      smtpEnabled: false,
+      smtpHost: '',
+      smtpPort: 587,
+      smtpSecurity: 'STARTTLS',
+      smtpUsername: '',
+      smtpPasswordConfigured: false,
+      smtpFromAddress: '',
+      smtpFromName: '',
     });
   });
 });
@@ -241,6 +263,17 @@ describe('PUT /api/system-settings', () => {
       submissionMaxAttempts: 3,
       hcaptchaSiteKey: '',
       hcaptchaSecretConfigured: false,
+      // Mail is off until an admin configures it, so a site that never touches these behaves
+      // exactly as it did before they existed. The password is never returned, only whether
+      // one is stored.
+      smtpEnabled: false,
+      smtpHost: '',
+      smtpPort: 587,
+      smtpSecurity: 'STARTTLS',
+      smtpUsername: '',
+      smtpPasswordConfigured: false,
+      smtpFromAddress: '',
+      smtpFromName: '',
     });
   });
 

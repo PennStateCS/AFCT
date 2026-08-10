@@ -5,11 +5,13 @@ import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
+import { encryptSecret, SecretKeyError } from '@/lib/secret-encryption';
 import {
   DEFAULT_LOGIN_MAX_ATTEMPTS,
   DEFAULT_LOGIN_LOCKOUT_MINUTES,
   DEFAULT_BACKUP_ENABLED,
   DEFAULT_BACKUP_HOUR,
+  DEFAULT_SMTP_PORT,
   DEFAULT_BACKUP_RETENTION_DAYS,
   DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
   DEFAULT_ALLOW_SIGNUP,
@@ -146,6 +148,16 @@ export const GET = withAdminAuth(
       // Public site key is returned; the secret is never sent, only whether it's set.
       hcaptchaSiteKey: settings?.hcaptchaSiteKey ?? '',
       hcaptchaSecretConfigured: Boolean(settings?.hcaptchaSecretKey),
+      // Mail settings. The password follows the hCaptcha secret's pattern: never returned,
+      // only whether one is stored.
+      smtpEnabled: settings?.smtpEnabled ?? false,
+      smtpHost: settings?.smtpHost ?? '',
+      smtpPort: settings?.smtpPort ?? DEFAULT_SMTP_PORT,
+      smtpSecurity: settings?.smtpSecurity ?? 'STARTTLS',
+      smtpUsername: settings?.smtpUsername ?? '',
+      smtpPasswordConfigured: Boolean(settings?.smtpPassword),
+      smtpFromAddress: settings?.smtpFromAddress ?? '',
+      smtpFromName: settings?.smtpFromName ?? '',
     });
   },
   { deniedAction: 'SYSTEM_SETTINGS_VIEW_DENIED' },
@@ -266,6 +278,41 @@ export const PUT = withAdminAuth(
       hcaptchaData.hcaptchaSecretKey = body.hcaptchaSecretKey.trim();
     }
 
+    // Mail settings. The password is encrypted before it is stored, and follows the same
+    // write-only rule as the hCaptcha secret: an empty value means "keep what is there", so
+    // saving the form without retyping the password does not wipe it.
+    const smtpData: Record<string, unknown> = {};
+    if (typeof body.smtpEnabled === 'boolean') smtpData.smtpEnabled = body.smtpEnabled;
+    if (typeof body.smtpHost === 'string') smtpData.smtpHost = body.smtpHost.trim() || null;
+    if (typeof body.smtpPort === 'number') smtpData.smtpPort = body.smtpPort;
+    if (typeof body.smtpSecurity === 'string') smtpData.smtpSecurity = body.smtpSecurity;
+    if (typeof body.smtpUsername === 'string')
+      smtpData.smtpUsername = body.smtpUsername.trim() || null;
+    if (typeof body.smtpFromAddress === 'string')
+      smtpData.smtpFromAddress = body.smtpFromAddress.trim() || null;
+    if (typeof body.smtpFromName === 'string')
+      smtpData.smtpFromName = body.smtpFromName.trim() || null;
+
+    if (body.smtpPasswordClear === true) {
+      smtpData.smtpPassword = null;
+    } else if (typeof body.smtpPassword === 'string' && body.smtpPassword.trim() !== '') {
+      try {
+        smtpData.smtpPassword = encryptSecret(body.smtpPassword.trim());
+      } catch (error) {
+        // No key means the password cannot be stored safely, and storing it in the clear to
+        // be helpful would defeat the point of encrypting it at all.
+        return NextResponse.json(
+          {
+            error:
+              error instanceof SecretKeyError
+                ? `The mail password cannot be saved. ${error.message}`
+                : 'The mail password could not be saved.',
+          },
+          { status: 500 },
+        );
+      }
+    }
+
     const updateData: {
       timezone: string;
       maxUploadSizeMb: number;
@@ -279,6 +326,7 @@ export const PUT = withAdminAuth(
       ...loginData,
       ...backupData,
       ...hcaptchaData,
+      ...smtpData,
       ...signupData,
     };
     if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
@@ -299,6 +347,7 @@ export const PUT = withAdminAuth(
       ...loginData,
       ...backupData,
       ...hcaptchaData,
+      ...smtpData,
       ...signupData,
     };
     if (hasAllowSignup) createData.allowSignup = body.allowSignup;
@@ -341,7 +390,20 @@ export const PUT = withAdminAuth(
       !hcaptchaSecretCleared &&
       typeof body.hcaptchaSecretKey === 'string' &&
       body.hcaptchaSecretKey.trim() !== '';
-    if (Object.keys(changes).length || hcaptchaSecretUpdated || hcaptchaSecretCleared) {
+    // The mail password is not an audited field (its value must never reach the log), so
+    // record that it changed the same way the hCaptcha secret does.
+    const smtpPasswordCleared = body.smtpPasswordClear === true;
+    const smtpPasswordUpdated =
+      !smtpPasswordCleared &&
+      typeof body.smtpPassword === 'string' &&
+      body.smtpPassword.trim() !== '';
+    if (
+      Object.keys(changes).length ||
+      hcaptchaSecretUpdated ||
+      hcaptchaSecretCleared ||
+      smtpPasswordUpdated ||
+      smtpPasswordCleared
+    ) {
       await safeAuditLog('system-settings', req, {
         userId: user.id,
         action: 'SYSTEM_SETTINGS_UPDATED',
@@ -353,6 +415,8 @@ export const PUT = withAdminAuth(
           changes,
           hcaptchaSecretUpdated,
           hcaptchaSecretCleared,
+          smtpPasswordUpdated,
+          smtpPasswordCleared,
         },
       });
     }
@@ -378,6 +442,14 @@ export const PUT = withAdminAuth(
       activityLogRetentionDays: settings.activityLogRetentionDays,
       hcaptchaSiteKey: settings.hcaptchaSiteKey ?? '',
       hcaptchaSecretConfigured: Boolean(settings.hcaptchaSecretKey),
+      smtpEnabled: settings.smtpEnabled ?? false,
+      smtpHost: settings.smtpHost ?? '',
+      smtpPort: settings.smtpPort ?? DEFAULT_SMTP_PORT,
+      smtpSecurity: settings.smtpSecurity ?? 'STARTTLS',
+      smtpUsername: settings.smtpUsername ?? '',
+      smtpPasswordConfigured: Boolean(settings.smtpPassword),
+      smtpFromAddress: settings.smtpFromAddress ?? '',
+      smtpFromName: settings.smtpFromName ?? '',
     });
   },
   { deniedAction: 'SYSTEM_SETTINGS_UPDATE_DENIED' },

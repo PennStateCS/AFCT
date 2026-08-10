@@ -50,6 +50,40 @@ The **Backups** tab enables scheduled backups, sets the daily UTC hour, and cont
 
 Keep the database dump and uploaded-file archive together. See [Backups and recovery](../operations/backups.md) for off-host copies and restore procedures.
 
+## Email
+
+The **Email** tab holds the mail server AFCT sends from. It is used for password reset links, so
+people can recover their own accounts without an administrator doing it for them.
+
+Email is off until you configure a server and switch it on. A site that leaves it off behaves
+exactly as it did before: passwords can still be reset by an administrator, and nothing else
+changes.
+
+You will need these from your IT department:
+
+| Field | What to enter |
+| --- | --- |
+| Mail server | Your institution's SMTP server, for example `smtp.your-university.edu`. |
+| Port | 587 for STARTTLS, 465 for TLS. |
+| Encryption | STARTTLS suits most institutional servers. |
+| Username and password | Leave blank if your server does not require sign-in. |
+| From address | Institutions usually require an address they host. |
+| From name | Shown beside the address in the recipient's inbox. |
+
+The password is write-only: it is encrypted before it is stored and never shown again. Saving
+without retyping it keeps the stored one. Use **Remove saved password** to clear it.
+
+:::tip Send a test message
+Use **Send a test message** as soon as you save. It sends using the stored settings, so it proves
+what the site will actually do. Finding out that mail is misconfigured now is much better than
+finding out when a student cannot get back into their account.
+:::
+
+The encryption that protects the stored password uses a key held on the server rather than in the
+database, so a copy of the database alone cannot reveal it. See
+[Backups and recovery](../operations/backups.md) for what that means when restoring onto a
+different machine.
+
 ## Captcha
 
 The **Captcha** tab stores the optional hCaptcha site key and secret key used to protect sign-in and signup flows.

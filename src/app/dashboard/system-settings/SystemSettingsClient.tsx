@@ -25,7 +25,15 @@ import {
 } from '@/lib/system-settings';
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
-import { SlidersHorizontal, Cpu, DatabaseBackup, ShieldCheck, Lock, RefreshCw } from 'lucide-react';
+import {
+  SlidersHorizontal,
+  Cpu,
+  DatabaseBackup,
+  Mail,
+  ShieldCheck,
+  Lock,
+  RefreshCw,
+} from 'lucide-react';
 import {
   buildSettingsSnapshot,
   formReducer,
@@ -38,7 +46,9 @@ import {
   type FormSnapshot,
   type FormAction,
 } from './system-settings-shared';
+import { DEFAULT_SMTP_PORT } from '@/lib/system-settings';
 import { GeneralTab } from './GeneralTab';
+import { EmailTab } from './EmailTab';
 import { EvaluatorTab } from './EvaluatorTab';
 import { BackupsTab } from './BackupsTab';
 import { CaptchaTab } from './CaptchaTab';
@@ -103,6 +113,13 @@ export default function SystemSettingsClient() {
     backupRetentionDays,
     activityLogRetentionDays,
     hcaptchaSiteKey,
+    smtpEnabled,
+    smtpHost,
+    smtpPort,
+    smtpSecurity,
+    smtpUsername,
+    smtpFromAddress,
+    smtpFromName,
   } = form;
 
   // hCaptcha secret is write-only (we only know whether one is set), so it stays local
@@ -113,6 +130,14 @@ export default function SystemSettingsClient() {
     Boolean(settingsData?.hcaptchaSecretConfigured),
   );
   const [hcaptchaSecretClear, setHcaptchaSecretClear] = useState(false);
+
+  // The mail password is write-only for the same reason as the hCaptcha secret: the server
+  // only ever tells us whether one is stored.
+  const [smtpPassword, setSmtpPassword] = useState('');
+  const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(() =>
+    Boolean(settingsData?.smtpPasswordConfigured),
+  );
+  const [smtpPasswordClear, setSmtpPasswordClear] = useState(false);
 
   // Baseline of saved values, for unsaved-changes detection. Seeded synchronously
   // on a warm cache so `loading` (below) is false immediately: no disabled flash.
@@ -128,6 +153,9 @@ export default function SystemSettingsClient() {
     setHcaptchaSecretConfigured(Boolean(settingsData.hcaptchaSecretConfigured));
     setHcaptchaSecretKey('');
     setHcaptchaSecretClear(false);
+    setSmtpPasswordConfigured(Boolean(settingsData.smtpPasswordConfigured));
+    setSmtpPassword('');
+    setSmtpPasswordClear(false);
     setBaseline(norm);
   }, [settingsData, baseline]);
 
@@ -174,6 +202,8 @@ export default function SystemSettingsClient() {
 
     const clampedSize = Math.max(1, Math.min(50, Math.trunc(Number(maxUploadSizeMb) || 0)));
     const clampedTimeout = clampSessionTimeoutMinutes(Number(sessionTimeoutMinutes));
+    // The field can be emptied while typing; fall back rather than sending NaN.
+    const smtpPortValue = Number(smtpPort) || DEFAULT_SMTP_PORT;
     const evalTimeoutMs = clampSubmissionEvalTimeoutMs(secToMs(Number(evalTimeoutSec)));
     const resubmitCooldownMs = clampSubmissionResubmitCooldownMs(
       secToMs(Number(resubmitCooldownSec)),
@@ -220,6 +250,19 @@ export default function SystemSettingsClient() {
         : hcaptchaSecretKey.trim()
           ? { hcaptchaSecretKey: hcaptchaSecretKey.trim() }
           : {}),
+      smtpEnabled,
+      smtpHost: smtpHost.trim(),
+      smtpPort: smtpPortValue,
+      smtpSecurity,
+      smtpUsername: smtpUsername.trim(),
+      smtpFromAddress: smtpFromAddress.trim(),
+      smtpFromName: smtpFromName.trim(),
+      // Same write-only rule as the hCaptcha secret: send nothing to keep what is stored.
+      ...(smtpPasswordClear
+        ? { smtpPasswordClear: true }
+        : smtpPassword.trim()
+          ? { smtpPassword: smtpPassword.trim() }
+          : {}),
     });
     if (!parsedSettings.success) {
       showToast.error(
@@ -263,6 +306,13 @@ export default function SystemSettingsClient() {
         backupRetentionDays: bkpRetention,
         activityLogRetentionDays: logRetention,
         hcaptchaSiteKey: savedSiteKey,
+        smtpEnabled,
+        smtpHost: smtpHost.trim(),
+        smtpPort,
+        smtpSecurity,
+        smtpUsername: smtpUsername.trim(),
+        smtpFromAddress: smtpFromAddress.trim(),
+        smtpFromName: smtpFromName.trim(),
       };
       dispatchForm({ type: 'reset', snapshot: savedSnapshot });
       setBaseline(savedSnapshot);
@@ -296,6 +346,17 @@ export default function SystemSettingsClient() {
               backupRetentionDays: bkpRetention,
               activityLogRetentionDays: logRetention,
               hcaptchaSiteKey: savedSiteKey,
+              smtpEnabled,
+              smtpHost: smtpHost.trim(),
+              smtpPort: smtpPortValue,
+              smtpSecurity,
+              smtpUsername: smtpUsername.trim(),
+              smtpFromAddress: smtpFromAddress.trim(),
+              smtpFromName: smtpFromName.trim(),
+              // A password that was just set is now stored; a cleared one is not.
+              smtpPasswordConfigured: smtpPasswordClear
+                ? false
+                : smtpPassword.trim() !== '' || smtpPasswordConfigured,
               hcaptchaSecretConfigured: hcaptchaSecretClear
                 ? false
                 : hcaptchaSecretKey.trim()
@@ -342,6 +403,7 @@ export default function SystemSettingsClient() {
     { value: 'general', label: 'General', Icon: SlidersHorizontal },
     { value: 'queue', label: 'Evaluator', Icon: Cpu },
     { value: 'backups', label: 'Backups', Icon: DatabaseBackup },
+    { value: 'email', label: 'Email', Icon: Mail },
     { value: 'captcha', label: 'Captcha', Icon: ShieldCheck },
     { value: 'tls', label: 'TLS Certificate', Icon: Lock },
     { value: 'updates', label: 'Updates', Icon: RefreshCw },
@@ -396,6 +458,27 @@ export default function SystemSettingsClient() {
 
             <TabsContent value="backups">
               <BackupsTab form={form} setField={setField} disabled={disabled} />
+            </TabsContent>
+
+            <TabsContent value="email">
+              <EmailTab
+                enabled={smtpEnabled}
+                host={smtpHost}
+                port={typeof smtpPort === 'number' ? smtpPort : DEFAULT_SMTP_PORT}
+                security={smtpSecurity}
+                username={smtpUsername}
+                fromAddress={smtpFromAddress}
+                fromName={smtpFromName}
+                setField={setField}
+                disabled={disabled}
+                password={smtpPassword}
+                setPassword={setSmtpPassword}
+                passwordConfigured={smtpPasswordConfigured}
+                passwordClear={smtpPasswordClear}
+                setPasswordClear={setSmtpPasswordClear}
+                savedHost={settingsData?.smtpHost}
+                dirty={isDirty}
+              />
             </TabsContent>
 
             <TabsContent value="captcha">
