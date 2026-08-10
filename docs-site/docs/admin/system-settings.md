@@ -79,6 +79,11 @@ what the site will actually do. Finding out that mail is misconfigured now is mu
 finding out when a student cannot get back into their account.
 :::
 
+Once email works, a **Forgot your password?** link appears on the sign-in page. People can then
+recover their own accounts: they receive a link that works once and expires in an hour, and using
+it signs them out everywhere else. Until email is configured that link is not shown, because it
+would lead to a page that could only apologise.
+
 The encryption that protects the stored password uses a key held on the server rather than in the
 database, so a copy of the database alone cannot reveal it. See
 [Backups and recovery](../operations/backups.md) for what that means when restoring onto a

@@ -708,6 +708,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a password reset
+         * @description Follows a reset link and sets a new password.   Unauthenticated, because the token is the authentication. Succeeding here ends every existing  session and refuses every client token issued earlier, on the reasoning that a reset usually  means the account was compromised and a stolen token that outlives it defeats the point.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/auth/password-reset/confirm/route.ts)
+         */
+        post: operations["postAuthPasswordResetConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a password reset link
+         * @description Asks for a password-reset link.   Unauthenticated by necessity: whoever needs this cannot sign in. **The response is identical  every time**, whether the address has an account, belongs to a disabled one, or was never  heard of. Anything else makes this a way to ask whether a person has an account here, which  at a university is a roster nobody agreed to publish.   That rule holds through every branch below, including rate limiting and send failures. The  only place the difference shows is the mailbox itself.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/auth/password-reset/route.ts)
+         */
+        post: operations["postAuthPasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/signup": {
         parameters: {
             query?: never;
@@ -4521,6 +4565,93 @@ export interface operations {
                         /** @description Milliseconds until the challenge/block clears (0 when ok) */
                         retryAfterMs?: number;
                     };
+                };
+            };
+        };
+    };
+    postAuthPasswordResetConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    newPassword: string;
+                    confirmNewPassword: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The password was changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad body, or the link is invalid, expired or already used. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAuthPasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Always, when the request is well formed. Reveals nothing about the address. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Email is not configured on this site. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

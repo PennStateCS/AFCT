@@ -57,6 +57,16 @@ Select **Reset Password**, enter and confirm the new password, then choose wheth
 
 Send the new password through an appropriate private channel. AFCT does not show it again after the reset.
 
+:::tip People can reset their own passwords
+If [email is configured](system-settings.md#email), a **Forgot your password?** link appears on
+the sign-in page and people can recover their own accounts without you. The link they receive
+works once and expires in an hour, and using it signs them out of AFCT everywhere else. That is
+usually better than relaying a password by hand.
+
+Deactivated accounts are never sent a reset link, so deactivating someone closes that route as
+well as the sign-in page.
+:::
+
 ## Locked accounts
 
 AFCT temporarily locks an account after too many failed sign-in attempts, to slow down password guessing. The lock expires on its own after the configured window, so most locks clear without any action.

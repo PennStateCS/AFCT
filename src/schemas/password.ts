@@ -37,3 +37,27 @@ export const ResetPasswordSchema = z
   });
 
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+
+/**
+ * Asking for a reset link. Only an address, because that is all the endpoint is willing to
+ * learn: the response is identical whether or not it belongs to an account.
+ */
+export const RequestPasswordResetSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address.').max(255),
+});
+
+export type RequestPasswordResetInput = z.infer<typeof RequestPasswordResetSchema>;
+
+/** Following the link and choosing a new password. Same strength rules as everywhere else. */
+export const CompletePasswordResetSchema = z
+  .object({
+    token: z.string().min(1),
+    newPassword: StrongPassword,
+    confirmNewPassword: z.string().min(1, 'Please confirm your new password.'),
+  })
+  .refine((d) => d.newPassword === d.confirmNewPassword, {
+    path: ['confirmNewPassword'],
+    message: 'Passwords do not match.',
+  });
+
+export type CompletePasswordResetInput = z.infer<typeof CompletePasswordResetSchema>;
