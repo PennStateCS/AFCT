@@ -42,6 +42,16 @@ erDiagram
   DateTime expiresAt "nullable"
   DateTime revokedAt "nullable"
 }
+"LinkedIdentity" {
+  String id PK
+  IdentityProviderKind kind
+  String issuer
+  String subject
+  String userId FK
+  IdentityLinkMethod linkedVia
+  DateTime createdAt
+  DateTime lastSignInAt "nullable"
+}
 "SingleUseToken" {
   String id PK
   String tokenHash UK
@@ -52,6 +62,7 @@ erDiagram
   DateTime createdAt
 }
 "ClientApiToken" }o--|| "User" : user
+"LinkedIdentity" }o--|| "User" : user
 "SingleUseToken" }o--o| "User" : user
 ```
 
@@ -112,6 +123,30 @@ Properties as follows:
 - `lastUsedAt`: When the token was last used, so unused tokens can be spotted.
 - `expiresAt`: When the token stops working. Empty means it does not expire on its own.
 - `revokedAt`: When the token was withdrawn. Once set, the token is refused.
+
+### `LinkedIdentity`
+
+An institutional identity mapped to an AFCT account: an OIDC sign-in, or a person arriving
+through an LMS launch.
+
+Accounts stay the unit of identity in AFCT. This does not become a parallel user table; it
+records that some outside system vouches for a person who already has an account here.
+
+**Keyed on issuer plus subject, never email.** The subject is the provider's stable
+identifier for a person, so a link survives a name change, a marriage, or a department
+moving someone's address. Email is used once, to *find* the account to attach to, and is
+not what holds the link together afterwards.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `kind`:
+- `issuer`: The provider's own name for itself: an OIDC issuer URL, or an LTI platform issuer.
+- `subject`: The provider's stable identifier for this person (the `sub` claim). Never an email.
+- `userId`: The AFCT account this identity signs in as.
+- `linkedVia`: How the link came to exist.
+- `createdAt`: When this record was created.
+- `lastSignInAt`: Last time somebody signed in through it, so a stale link can be spotted.
 
 ### `SingleUseToken`
 
