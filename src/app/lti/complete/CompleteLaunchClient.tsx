@@ -36,13 +36,21 @@ export default function CompleteLaunchClient() {
 
     // `redirect: false` so a bad ticket lands back here with a message, rather than bouncing to
     // NextAuth's own error page, which says nothing useful to somebody inside an LMS.
-    void signIn('lti-launch', { ticket, redirect: false }).then((result) => {
-      if (result?.error) {
+    void signIn('lti-launch', { ticket, redirect: false })
+      .then((result) => {
+        if (result?.error) {
+          setFailed(true);
+          return;
+        }
+        window.location.replace(next);
+      })
+      // Without this, a rejected sign-in leaves the page saying "Opening AFCT..." for ever,
+      // which is the worst of the possible failures: it looks like a hang rather than an error,
+      // and there is nothing on screen to report.
+      .catch((error) => {
+        console.error('[lti] could not complete the launch:', error);
         setFailed(true);
-        return;
-      }
-      window.location.replace(next);
-    });
+      });
   }, [ticket, next]);
 
   return (
