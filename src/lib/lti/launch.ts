@@ -75,8 +75,16 @@ export type LaunchIdentity = {
   targetLinkUri: string | null;
 };
 
+/**
+ * What the token claimed to be, for the one refusal where knowing is the difference between a
+ * five-minute fix and an afternoon. Unverified by definition: no registration matched, so no key
+ * verified it. Diagnostic only, and never used to decide anything.
+ */
+export type ObservedClaims = { issuer: string; clientId: string; deploymentId: string };
+
 export type LaunchResult =
-  { ok: true; identity: LaunchIdentity } | { ok: false; reason: LaunchRefusal };
+  | { ok: true; identity: LaunchIdentity }
+  | { ok: false; reason: LaunchRefusal; observed?: ObservedClaims };
 
 /**
  * Remote keysets, cached per platform.
@@ -175,7 +183,16 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
 
   // No registration means nobody has told AFCT this LMS is allowed to launch into it. Refusing
   // by default is the whole point of registration being mutual.
-  if (!platform) return { ok: false, reason: 'unregistered-platform' };
+  if (!platform) {
+    // The values are echoed back so an administrator can compare them against the registration
+    // they typed. Getting one character wrong here is the most common setup failure, and
+    // without this the only symptom is a refusal that names nothing.
+    return {
+      ok: false,
+      reason: 'unregistered-platform',
+      observed: { issuer, clientId: audience, deploymentId },
+    };
+  }
 
   let payload: JWTPayload;
   try {
