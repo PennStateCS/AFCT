@@ -161,3 +161,17 @@ export async function enrolFromLaunch(opts: {
 
   return { created: true, role };
 }
+
+/**
+ * Delete pending links that were never acted on.
+ *
+ * A launch from an unlinked LMS course leaves one of these behind whenever somebody closes the
+ * tab instead of choosing. They are short-lived and scoped to one person, so nothing depends on
+ * them surviving, but without a sweep they accumulate for ever.
+ */
+export async function purgeExpiredPendingLinks(now = new Date()): Promise<number> {
+  const { count } = await prisma.ltiPendingLink.deleteMany({
+    where: { expiresAt: { lt: now } },
+  });
+  return count;
+}

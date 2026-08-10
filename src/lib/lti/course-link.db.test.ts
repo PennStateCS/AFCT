@@ -1,6 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { mapLtiRoles, resolveLaunchTarget, linkLaunchCourse, enrolFromLaunch } from './course-link';
+import {
+  mapLtiRoles,
+  resolveLaunchTarget,
+  linkLaunchCourse,
+  enrolFromLaunch,
+  purgeExpiredPendingLinks,
+} from './course-link';
 import type { LaunchIdentity } from './launch';
 
 /**
@@ -40,6 +46,7 @@ const identity = (over: Partial<LaunchIdentity> = {}): LaunchIdentity => ({
 });
 
 async function destroyFixtures() {
+  await prisma.ltiPendingLink.deleteMany({ where: { platformId: PLATFORM } });
   await prisma.ltiContextLink.deleteMany({ where: { platformId: PLATFORM } });
   await prisma.roster.deleteMany({ where: { courseId: { in: [COURSE, OTHER_COURSE] } } });
   await prisma.ltiPlatform.deleteMany({ where: { id: PLATFORM } });
@@ -305,5 +312,38 @@ describe('enrolling from a launch', () => {
     });
 
     expect(result).toEqual({ created: true, role: 'FACULTY' });
+  });
+});
+
+/**
+ * A launch from an unlinked course leaves a pending link behind whenever somebody closes the
+ * tab instead of choosing. Nothing depends on them surviving, but without a sweep they
+ * accumulate for ever.
+ */
+describe('sweeping pending links', () => {
+  const pending = (id: string, expiresAt: Date) =>
+    prisma.ltiPendingLink.create({
+      data: {
+        id,
+        platformId: PLATFORM,
+        contextId: 'ctx-1',
+        userId: ids.faculty,
+        expiresAt,
+      },
+    });
+
+  it('deletes ones that have expired', async () => {
+    await pending('pl-old', new Date(Date.now() - 1000));
+
+    expect(await purgeExpiredPendingLinks()).toBe(1);
+    expect(await prisma.ltiPendingLink.count()).toBe(0);
+  });
+
+  // Somebody may be reading the picker right now.
+  it('leaves ones still in their window alone', async () => {
+    await pending('pl-live', new Date(Date.now() + 60_000));
+
+    expect(await purgeExpiredPendingLinks()).toBe(0);
+    expect(await prisma.ltiPendingLink.count()).toBe(1);
   });
 });
