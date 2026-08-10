@@ -139,8 +139,11 @@ function ResetPasswordForm() {
  * needs a Suspense boundary.
  */
 export default function ResetPasswordPage() {
+  // `w-full` is load-bearing: the root layout puts `flex` on <body>, so a top-level
+  // <main> is a flex item and shrinks to its content width without it, which leaves the
+  // card pinned to the left however it is centred inside.
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-12">
+    <main className="flex min-h-screen w-full items-center justify-center px-4 py-12">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle aria-level={1}>Choose a new password</CardTitle>

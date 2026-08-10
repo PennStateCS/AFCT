@@ -8,6 +8,7 @@ import {
   parseBackupTs,
   formatBackupTsLocal,
   downgradeRefusedForSafetyBackup,
+  describeSettingsIssue,
 } from './system-settings-shared';
 
 describe('parseBackupTs', () => {
@@ -135,5 +136,29 @@ describe('upgradePhaseLabel', () => {
   it('maps known phases and humanizes unknown ones', () => {
     expect(upgradePhaseLabel('rolled_back')).toBe('Rolled back');
     expect(upgradePhaseLabel('some_new_phase')).toBe('some new phase');
+  });
+});
+
+/**
+ * A settings page with thirty fields across seven tabs cannot report "Invalid email address"
+ * and leave someone to find which one. The person reading it is a professor, not the author.
+ */
+describe('describeSettingsIssue', () => {
+  it('names the field a message belongs to', () => {
+    expect(
+      describeSettingsIssue({ path: ['smtpFromAddress'], message: 'Enter an address.' }),
+    ).toBe('From address: Enter an address.');
+  });
+
+  it('falls back to the key rather than losing the field entirely', () => {
+    expect(describeSettingsIssue({ path: ['someNewSetting'], message: 'Too big.' })).toBe(
+      'someNewSetting: Too big.',
+    );
+  });
+
+  it('still returns something for an issue with no path', () => {
+    expect(describeSettingsIssue({ path: [], message: 'Something is wrong.' })).toBe(
+      'Something is wrong.',
+    );
   });
 });
