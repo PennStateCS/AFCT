@@ -70,6 +70,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/lti/platforms/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a registered LMS platform
+         * @description Remove a registration, which stops that LMS launching into AFCT.   A hard delete rather than a soft one, unlike most of AFCT. There is nothing here worth  keeping: the row is configuration an administrator typed, it holds no student record, and a  registration that still exists is one that still works. Who removed it is in the activity log,  which is where that question belongs.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/lti/platforms/[id]/route.ts)
+         */
+        delete: operations["deleteAdminLtiPlatformsById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/lti/platforms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List registered LMS platforms
+         * @description The LMSs registered to launch into AFCT.   Registration is deliberately an admin-only act: adding one grants that LMS the ability to  assert who somebody is, so it is closer to adding an identity provider than to editing a  setting.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/lti/platforms/route.ts)
+         */
+        get: operations["getAdminLtiPlatforms"];
+        put?: never;
+        /**
+         * Register an LMS platform
+         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/lti/platforms/route.ts)
+         */
+        post: operations["postAdminLtiPlatforms"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/reset-password": {
         parameters: {
             query?: never;
@@ -3036,6 +3084,116 @@ export interface operations {
             };
             /** @description Query failed. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAdminLtiPlatformsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such registration. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminLtiPlatforms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The registered platforms. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminLtiPlatforms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A value was missing or malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not an administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description That issuer, client ID and deployment ID are already registered. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
