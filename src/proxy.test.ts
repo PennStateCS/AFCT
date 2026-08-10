@@ -60,6 +60,8 @@ describe('proxy', () => {
       '/api/auth/signup',
       '/api/health',
       '/api/system-settings/public',
+      // Fetched by an LMS's servers, which have no AFCT session and never will.
+      '/api/lti/jwks',
     ])('lets %s through without reading a token', async (path) => {
       const res = await proxy(req(path));
       expect(res.status).toBe(200);
@@ -71,6 +73,17 @@ describe('proxy', () => {
       getTokenMock.mockResolvedValue(null);
       const res = await proxy(req('/api/healthz'));
       expect(res.status).toBe(401);
+    });
+
+    /**
+     * Only the keyset is public. The launch endpoints that will live alongside it are not, and
+     * an allowlist entry of `/api/lti` would have quietly made them so.
+     */
+    it('does not make the rest of /api/lti public', async () => {
+      getTokenMock.mockResolvedValue(null);
+
+      expect((await proxy(req('/api/lti/launch'))).status).toBe(401);
+      expect((await proxy(req('/api/lti/platforms'))).status).toBe(401);
     });
   });
 
