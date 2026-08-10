@@ -6,6 +6,7 @@ import { readJson } from '@/lib/api/request';
 import { apiError } from '@/lib/api/http';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { LtiPlatformSchema } from '@/schemas/lti';
+import { ensureSigningKey } from '@/lib/lti/keys';
 
 /**
  * The LMSs registered to launch into AFCT.
@@ -40,6 +41,16 @@ export const POST = withAdminAuth(
   async (req, _ctx, { session }) => {
     const body = await readJson(req, LtiPlatformSchema);
     if (!body.ok) return body.response;
+
+    /**
+     * Make sure AFCT has a keypair before the first LMS is registered.
+     *
+     * Keys are created on demand so an install that never touches LTI never carries one, but
+     * "on demand" has to mean something. Registering is the moment: an LMS fetches the keyset
+     * while being set up, and an empty one either fails there or, worse, much later when the
+     * first grade fails to post.
+     */
+    await ensureSigningKey();
 
     let platform;
     try {

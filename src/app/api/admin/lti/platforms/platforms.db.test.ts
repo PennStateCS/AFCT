@@ -47,6 +47,7 @@ const del = (id: string) =>
   );
 
 async function destroyFixtures() {
+  await prisma.ltiKeyPair.deleteMany({});
   await prisma.activityLog.deleteMany({ where: { userId: { in: [ADMIN, FACULTY] } } });
   await prisma.ltiPlatform.deleteMany({ where: { issuer: ISSUER } });
   await prisma.user.deleteMany({ where: { id: { in: [ADMIN, FACULTY] } } });
@@ -112,6 +113,25 @@ describe('registering an LMS', () => {
     const res = await post({ ...valid, tokenUrl: 'http://canvas.example.test/token' });
 
     expect(res.status).toBe(400);
+  });
+
+  /**
+   * The LMS fetches AFCT's keyset while being set up. An empty one either fails there, or
+   * fails much later when the first grade cannot be signed, which is far harder to trace.
+   */
+  it('makes sure AFCT has a keypair to publish', async () => {
+    expect(await prisma.ltiKeyPair.count()).toBe(0);
+
+    await post(valid);
+
+    expect(await prisma.ltiKeyPair.count()).toBe(1);
+  });
+
+  it('does not mint a second key for a second LMS', async () => {
+    await post(valid);
+    await post({ ...valid, deploymentId: 'deploy-2' });
+
+    expect(await prisma.ltiKeyPair.count()).toBe(1);
   });
 
   it('is recorded, because it grants an LMS the power to say who people are', async () => {
