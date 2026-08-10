@@ -91,11 +91,22 @@ erDiagram
   String linkedByUserId FK "nullable"
   DateTime createdAt
 }
+"LtiPendingLink" {
+  String id PK
+  String platformId FK
+  String contextId
+  String contextTitle "nullable"
+  String userId FK
+  DateTime expiresAt
+  DateTime createdAt
+}
 "ClientApiToken" }o--|| "User" : user
 "LinkedIdentity" }o--|| "User" : user
 "SingleUseToken" }o--o| "User" : user
 "LtiContextLink" }o--|| "LtiPlatform" : platform
 "LtiContextLink" }o--o| "User" : linkedBy
+"LtiPendingLink" }o--|| "LtiPlatform" : platform
+"LtiPendingLink" }o--|| "User" : user
 ```
 
 ### `User`
@@ -292,6 +303,29 @@ Properties as follows:
 - `contextTitle`: What the LMS calls it, kept for screens so an admin can recognise a link.
 - `courseId`: The AFCT course it opens.
 - `linkedByUserId`: Who decided this. Null once that account is gone; the link outlives the person.
+- `createdAt`: When this record was created.
+
+### `LtiPendingLink`
+
+A launch that arrived from an LMS course nobody has linked yet, waiting for someone to say
+which AFCT course it is.
+
+The launch details live here rather than travelling through the browser in a URL. If they
+were in the URL, faculty could edit the LMS course identifier and pre-link a *different*
+LMS course to their own AFCT course, capturing every launch from it afterwards. Held here,
+the identifier is the one the platform actually signed.
+
+Short-lived, and scoped to the person the launch signed in: this is a step in a flow, not a
+record of anything.
+
+Properties as follows:
+
+- `id`: Unique identifier, and what the browser is handed to name this pending link.
+- `platformId`: Which registration the launch came through.
+- `contextId`: The LMS's own identifier for its course, exactly as the platform signed it.
+- `contextTitle`: What the LMS calls it, shown on the picker so faculty know what they are linking.
+- `userId`: Who the launch signed in. Only they can act on it.
+- `expiresAt`: When this stops being usable.
 - `createdAt`: When this record was created.
 
 ## Courses

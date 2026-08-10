@@ -197,6 +197,7 @@ model User {
   submissionGrants    SubmissionGrant[]        @relation("SubmissionGrantTarget") // extra-submission grants targeting this student
   grantsCreated       SubmissionGrant[]        @relation("SubmissionGrantCreatedBy") // grants this user created
   ltiLinksCreated     LtiContextLink[] // LMS course links this user decided
+  ltiPendingLinks     LtiPendingLink[] // launches waiting for this user to pick a course
 
   @@index([isAdmin])
   @@index([inactive])
@@ -315,6 +316,8 @@ model LtiPlatform {
 
   /// The LMS courses that open into AFCT through this registration.
   contextLinks LtiContextLink[]
+  /// Launches waiting for somebody to say which AFCT course they open.
+  pendingLinks LtiPendingLink[]
 
   /// The triple that identifies a registration. Also what a launch is matched against.
   @@unique([issuer, clientId, deploymentId])
@@ -1343,6 +1346,45 @@ model LtiContextLink {
   /// One AFCT course per LMS course. Not the other way round: see the note above.
   @@unique([platformId, contextId])
   @@index([courseId])
+}
+
+/// A launch that arrived from an LMS course nobody has linked yet, waiting for someone to say
+/// which AFCT course it is.
+///
+/// The launch details live here rather than travelling through the browser in a URL. If they
+/// were in the URL, faculty could edit the LMS course identifier and pre-link a *different*
+/// LMS course to their own AFCT course, capturing every launch from it afterwards. Held here,
+/// the identifier is the one the platform actually signed.
+///
+/// Short-lived, and scoped to the person the launch signed in: this is a step in a flow, not a
+/// record of anything.
+///
+/// @namespace Identity
+model LtiPendingLink {
+  /// Unique identifier, and what the browser is handed to name this pending link.
+  id String @id @default(cuid())
+
+  platform   LtiPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  /// Which registration the launch came through.
+  platformId String
+
+  /// The LMS's own identifier for its course, exactly as the platform signed it.
+  contextId    String
+  /// What the LMS calls it, shown on the picker so faculty know what they are linking.
+  contextTitle String?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Who the launch signed in. Only they can act on it.
+  userId String
+
+  /// When this stops being usable.
+  expiresAt DateTime
+  /// When this record was created.
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  /// Expired rows are swept with the other short-lived tokens.
+  @@index([expiresAt])
 }
 
 generator erd {

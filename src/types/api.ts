@@ -2464,6 +2464,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lti/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link the LMS course from a pending launch to an AFCT course
+         * @description Say which AFCT course an LMS course opens.   The LMS course identifier comes from the stored pending link, never from the request. That is  the whole point of storing it: if the caller supplied it, somebody could name a *different*  LMS course and capture its launches.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/link/route.ts)
+         */
+        post: operations["postLtiLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lti/login": {
         parameters: {
             query?: never;
@@ -11132,6 +11156,51 @@ export interface operations {
             };
             /** @description The launch could not be verified. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postLtiLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Linked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The pending launch has expired or is not yours. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description You do not run that course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description That LMS course is already linked to another AFCT course. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
