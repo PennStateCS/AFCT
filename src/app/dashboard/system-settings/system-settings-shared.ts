@@ -262,6 +262,51 @@ export function deriveAcmeSteps(phase: string | undefined | null): UpgradeStep[]
   }));
 }
 
+/**
+ * Field names as they appear on screen, for error messages.
+ *
+ * This page has around thirty fields across seven tabs, and a validation failure used to
+ * surface as the bare Zod message ("Invalid email address") with nothing saying which field
+ * or which tab. That is unusable: the person reading it is a professor looking at a wall of
+ * settings. Anything not listed falls back to its key, which is still better than nothing.
+ */
+const SETTINGS_FIELD_LABELS: Record<string, string> = {
+  timezone: 'Timezone',
+  maxUploadSizeMb: 'Maximum upload size',
+  signupAllowedDomains: 'Allowed signup domains',
+  sessionTimeoutMinutes: 'Session timeout',
+  submissionEvalTimeoutMs: 'Evaluation timeout',
+  submissionEvalMaxMemoryMb: 'Evaluator memory limit',
+  submissionResubmitCooldownMs: 'Resubmit cooldown',
+  submissionMaxConcurrent: 'Concurrent evaluations',
+  submissionMaxAttempts: 'Evaluation attempts',
+  submissionAnalyzerLimit: 'Analyzer limit',
+  loginMaxAttempts: 'Failed sign-in attempts',
+  loginLockoutMinutes: 'Lockout duration',
+  backupHour: 'Backup hour',
+  backupRetentionDays: 'Backup retention',
+  activityLogRetentionDays: 'Activity log retention',
+  hcaptchaSiteKey: 'hCaptcha site key',
+  hcaptchaSecretKey: 'hCaptcha secret key',
+  smtpHost: 'Mail server',
+  smtpPort: 'Port',
+  smtpSecurity: 'Encryption',
+  smtpUsername: 'Username',
+  smtpPassword: 'Password',
+  smtpFromAddress: 'From address',
+  smtpFromName: 'From name',
+};
+
+/** "From address: Enter an address like afct@your-university.edu." */
+export function describeSettingsIssue(issue: {
+  path: PropertyKey[];
+  message: string;
+}): string {
+  const key = String(issue.path[0] ?? '');
+  const label = SETTINGS_FIELD_LABELS[key] ?? key;
+  return label ? `${label}: ${issue.message}` : issue.message;
+}
+
 export const SETTINGS_TAB_KEY = 'afct.systemSettingsTab';
 export const SETTINGS_TABS = [
   'general',

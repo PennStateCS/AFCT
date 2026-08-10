@@ -70,6 +70,30 @@ const CHECK_EMAIL_IP_CONFIG: BucketConfig = {
   frictionDelayMs: 0,
 };
 
+// Password-reset requests. Two limits, because they stop different things: per address it
+// stops one mailbox being flooded by whoever knows it, and per IP it stops a sweep across many
+// addresses. Deliberately unchallengeable, because the response is identical whether or not
+// the address exists and a captcha would break that.
+const PASSWORD_RESET_IP_CONFIG: BucketConfig = {
+  windowMs: 15 * 60 * 1000,
+  maxAttempts: 20,
+  frictionThreshold: Number.MAX_SAFE_INTEGER,
+  challengeThreshold: Number.MAX_SAFE_INTEGER,
+  challengeCooldownMs: 0,
+  blockDurationMs: 15 * 60 * 1000,
+  frictionDelayMs: 0,
+};
+
+const PASSWORD_RESET_IDENTIFIER_CONFIG: BucketConfig = {
+  windowMs: 15 * 60 * 1000,
+  maxAttempts: 5,
+  frictionThreshold: Number.MAX_SAFE_INTEGER,
+  challengeThreshold: Number.MAX_SAFE_INTEGER,
+  challengeCooldownMs: 0,
+  blockDurationMs: 15 * 60 * 1000,
+  frictionDelayMs: 0,
+};
+
 // Per-user cap on avatar replacements. Generous enough for normal edits, but it
 // stops one account from churning many multi-MB uploads (each replacement writes a
 // file to private storage). Keyed on the actor's user id; never challenges.
@@ -410,6 +434,36 @@ export const evaluateSignupRateLimit = (params: {
   }
 
   return ensureEvaluations(configs, params.interactionMs);
+};
+
+/**
+ * Limits for a password-reset request, keyed on both the IP and the address asked about.
+ *
+ * A blocked request must still answer exactly as an allowed one does. The whole design of this
+ * endpoint is that its response never reveals whether an address has an account, and a
+ * different answer when rate-limited would give that away for free.
+ */
+export const evaluatePasswordResetRateLimit = (params: {
+  ip?: string;
+  identifier?: string;
+}): RateLimitDecision => {
+  const configs = [
+    {
+      key: bucketKey('password-reset:ip', params.ip),
+      config: PASSWORD_RESET_IP_CONFIG,
+      reason: 'ip' as LimitReason,
+    },
+  ];
+
+  if (params.identifier) {
+    configs.push({
+      key: bucketKey('password-reset:identifier', params.identifier),
+      config: PASSWORD_RESET_IDENTIFIER_CONFIG,
+      reason: 'account',
+    });
+  }
+
+  return ensureEvaluations(configs);
 };
 
 /**

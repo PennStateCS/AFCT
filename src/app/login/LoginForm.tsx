@@ -1,8 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
+import { AuthPageBackground } from '@/components/auth/AuthPageBackground';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { LazyMotion, m, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -43,11 +45,17 @@ type LoginFormProps = {
   /** Read on the server, so the signup link and captcha are correct on the first paint. */
   allowSignup: boolean;
   hcaptchaSiteKey?: string;
+  /** Whether the site can send email, so the reset link is only offered when it works. */
+  mailConfigured?: boolean;
 };
 
 /* ================================================= */
 
-export default function LoginForm({ allowSignup, hcaptchaSiteKey }: LoginFormProps) {
+export default function LoginForm({
+  allowSignup,
+  hcaptchaSiteKey,
+  mailConfigured = false,
+}: LoginFormProps) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
 
   // Honor the OS "reduce motion" preference for the panel transitions (the global
@@ -377,9 +385,7 @@ export default function LoginForm({ allowSignup, hcaptchaSiteKey }: LoginFormPro
 
   return (
     <div className="relative flex min-h-dvh w-full items-start justify-center overflow-x-hidden pt-24 md:pt-[14vh]">
-      {/* Background */}
-      <div className="fixed inset-0 z-0 bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A]" />
-      <div className="fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_70%)]" />
+      <AuthPageBackground />
 
       {/* DEV BADGE */}
       {isDev && (
@@ -465,6 +471,19 @@ export default function LoginForm({ allowSignup, hcaptchaSiteKey }: LoginFormPro
                 >
                   {loading ? 'Logging in...' : 'Sign In'}
                 </Button>
+
+                {/* Only offered where the site can actually send it. Without mail configured
+                    this link leads to a page that can only apologise. */}
+                {mailConfigured ? (
+                  <div className="text-center text-sm">
+                    <Link
+                      href="/forgot-password"
+                      className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
+                    >
+                      Forgot your password?
+                    </Link>
+                  </div>
+                ) : null}
 
                 {allowSignup ? (
                   <div className="text-center text-sm text-gray-600">

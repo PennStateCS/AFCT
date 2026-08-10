@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_ALLOW_SIGNUP } from '@/lib/system-settings';
 import { getHcaptchaSiteKey } from '@/lib/hcaptcha';
+import { isMailConfigured } from '@/lib/mailer';
 import LoginForm from './LoginForm';
 
 /**
@@ -17,22 +18,33 @@ import LoginForm from './LoginForm';
 export default async function LoginPage() {
   let allowSignup = DEFAULT_ALLOW_SIGNUP;
   let hcaptchaSiteKey: string | undefined;
+  // Offering "forgot your password" on a site that cannot send mail leads to a page that can
+  // only apologise, so the link appears only where it works.
+  let mailConfigured = false;
 
   // A database blip must not take the login page down: fall back to the defaults and let
   // people sign in, which is the same posture the public settings route takes.
   try {
-    const [settings, siteKey] = await Promise.all([
+    const [settings, siteKey, mailReady] = await Promise.all([
       prisma.systemSettings.findUnique({
         where: { id: 1 },
         select: { allowSignup: true },
       }),
       getHcaptchaSiteKey(),
+      isMailConfigured(),
     ]);
     allowSignup = settings?.allowSignup ?? DEFAULT_ALLOW_SIGNUP;
     hcaptchaSiteKey = siteKey ?? undefined;
+    mailConfigured = mailReady;
   } catch (error) {
     console.error('login page settings read failed:', error);
   }
 
-  return <LoginForm allowSignup={allowSignup} hcaptchaSiteKey={hcaptchaSiteKey} />;
+  return (
+    <LoginForm
+      allowSignup={allowSignup}
+      hcaptchaSiteKey={hcaptchaSiteKey}
+      mailConfigured={mailConfigured}
+    />
+  );
 }

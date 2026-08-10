@@ -39,7 +39,21 @@ export const SmtpSettingsSchema = z.object({
    */
   smtpPassword: z.string().optional(),
   smtpPasswordClear: z.boolean().optional(),
-  smtpFromAddress: z.string().trim().email().max(255).optional().or(z.literal('')),
+  /**
+   * Deliberately more permissive than a strict email check: `afct@localhost` is a real,
+   * usable address, and it is what a local mail catcher wants. Requiring a dotted domain
+   * rejected legitimate setups while catching almost nothing worth catching, since a typo in
+   * a real domain passes either way. The mail server has the final say, and a sender it
+   * refuses comes back as a message that names the problem.
+   */
+  smtpFromAddress: z
+    .string()
+    .trim()
+    .max(255)
+    .refine((v) => v === '' || /^[^\s@]+@[^\s@]+$/.test(v), {
+      message: 'Enter an address like afct@your-university.edu.',
+    })
+    .optional(),
   smtpFromName: trimmedOptional,
 });
 

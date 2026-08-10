@@ -42,6 +42,7 @@ import {
   EMPTY_FORM,
   SETTINGS_TAB_KEY,
   SETTINGS_TABS,
+  describeSettingsIssue,
   type SystemSettingsResponse,
   type FormSnapshot,
   type FormAction,
@@ -265,8 +266,9 @@ export default function SystemSettingsClient() {
           : {}),
     });
     if (!parsedSettings.success) {
+      const issue = parsedSettings.error.issues[0];
       showToast.error(
-        parsedSettings.error.issues[0]?.message ?? 'Please review the settings and try again.',
+        issue ? describeSettingsIssue(issue) : 'Please review the settings and try again.',
       );
       return;
     }

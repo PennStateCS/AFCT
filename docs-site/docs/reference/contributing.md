@@ -144,6 +144,47 @@ already are. The dev stack must be running (`npm run docker:dev`) for these to w
 container, the regenerated file appears on your host too, so you can commit it normally.
 :::
 
+### Testing email locally
+
+The dev stack includes **Mailpit**, a local mail server that catches everything AFCT sends and
+shows it in a web UI. Nothing leaves your machine, which matters: a dev database full of test
+accounts must never be able to mail real people.
+
+Configure it in **System Settings → Email**:
+
+| Field | Value |
+| --- | --- |
+| Mail server | `mailpit` |
+| Port | `1025` |
+| Encryption | **None** |
+| Username and password | leave blank |
+| From address | anything, for example `afct@localhost` |
+
+Then read the mail at **http://localhost:8025**. Use **Send a test message** to check the
+plumbing, and request a password reset to see the real thing and click the link.
+
+:::warning What Mailpit does not prove
+Mailpit as configured here speaks neither STARTTLS nor authentication, so the
+encryption-plus-credentials path a real campus server uses is **not** exercised by it.
+
+It can be told to (`--smtp-require-starttls`, `--smtp-tls-cert`, `--smtp-auth-accept-any`), but
+only with a self-signed certificate, and AFCT does not disable certificate verification. Making
+that work locally would mean adding a switch that weakens TLS validation, and a switch like that
+eventually gets found enabled somewhere it should not be. So we do not.
+
+Prove that path against [Ethereal](https://ethereal.email) instead. It hands out throwaway SMTP
+accounts with a **real** certificate, so STARTTLS and authentication work end to end with nothing
+weakened. A minute of setup, worth doing once before trusting this against an institutional
+server.
+:::
+
+:::danger Never point a populated instance at Ethereal
+Ethereal is a third party and receives whatever you send it. That is fine for a dev database of
+invented people. It is not fine for anything holding real names or addresses, and it is never
+fine for production. Mailpit is the default here precisely because nothing leaves the machine,
+which is the right posture for a system holding education records.
+:::
+
 ### The database test job
 
 `npm run test:db` runs tests against a **real** Postgres database named `afct_test`. It is

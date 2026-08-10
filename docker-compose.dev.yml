@@ -258,6 +258,26 @@ services:
       - .:/app:cached
       - afct-dev-node-modules:/app/node_modules
 
+  # A local mail server for development. Catches every message AFCT sends and shows it in a
+  # web UI at http://localhost:8025, so the password-reset link can actually be clicked rather
+  # than guessed at. Nothing leaves this machine, which is the point: a dev database full of
+  # test accounts must never be able to mail real people.
+  #
+  # Configure it on the Email tab as host `mailpit`, port 1025, encryption **None**. Mailpit
+  # speaks neither STARTTLS nor authentication out of the box, so the STARTTLS-plus-credentials
+  # path that a real campus server uses is not exercised here. Prove that separately against
+  # Ethereal (https://ethereal.email), which hands out throwaway accounts that do both.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: afct-dev-mailpit
+    restart: unless-stopped
+    logging: *default-logging
+
+    ports:
+      # 1025 SMTP (what AFCT connects to), 8025 web UI (where you read the mail).
+      - '1025:1025'
+      - '8025:8025'
+
 volumes:
   postgres_dev_data:
   nginx_certs:
