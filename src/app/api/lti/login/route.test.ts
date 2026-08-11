@@ -15,12 +15,25 @@ vi.mock('@/lib/lti/login-init', async (importOriginal) => ({
   beginLaunch,
 }));
 
+const rateLimit = vi.hoisted(() =>
+  vi.fn<() => import('@/lib/security/rate-limiter').RateLimitDecision>(() => ({
+    status: 'ok',
+    applyFriction: false,
+    frictionDelayMs: 0,
+  })),
+);
+vi.mock('@/lib/security/rate-limiter', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security/rate-limiter')>()),
+  evaluateLtiLoginRateLimit: rateLimit,
+}));
+
 const { GET, POST } = await import('./route');
 
 const REDIRECT = 'https://canvas.example.test/api/lti/authorize_redirect?state=s';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  rateLimit.mockReturnValue({ status: 'ok', applyFriction: false, frictionDelayMs: 0 });
   beginLaunch.mockResolvedValue({ ok: true, redirectUrl: REDIRECT, state: 'state-value' });
 });
 
@@ -117,5 +130,35 @@ describe('when the launch cannot be started', () => {
     beginLaunch.mockResolvedValue({ ok: false, reason: 'missing-issuer' });
 
     expect((await get('')).status).toBe(400);
+  });
+});
+
+/**
+ * Public by necessity, and it writes two single-use rows per request, so an open endpoint is an
+ * invitation to fill a table. The limit is generous: a class opening an assignment together is
+ * ordinary traffic and a campus can share one address.
+ */
+describe('when a network floods it', () => {
+  it('refuses without starting a launch', async () => {
+    rateLimit.mockReturnValue({ status: 'blocked', retryAfterMs: 60_000, reason: 'ip' });
+
+    const res = await get('iss=https%3A%2F%2Fcanvas.example.test');
+
+    expect(res.status).toBe(429);
+    expect(beginLaunch).not.toHaveBeenCalled();
+  });
+
+  it('says when to come back', async () => {
+    rateLimit.mockReturnValue({ status: 'blocked', retryAfterMs: 60_000, reason: 'ip' });
+
+    const res = await get('iss=https%3A%2F%2Fcanvas.example.test');
+
+    expect(res.headers.get('Retry-After')).toBeTruthy();
+  });
+
+  it('lets ordinary traffic through', async () => {
+    const res = await get('iss=https%3A%2F%2Fcanvas.example.test');
+
+    expect(res.status).toBe(302);
   });
 });

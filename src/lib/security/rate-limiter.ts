@@ -57,6 +57,21 @@ const SIGNUP_IDENTIFIER_CONFIG: BucketConfig = {
   frictionDelayMs: 750,
 };
 
+// Starting an LTI launch is unauthenticated by necessity and writes two single-use rows per
+// request, so an open endpoint is an invitation to fill a table. Sized for a real class rather
+// than a login form: a lecture theatre opening AFCT at once is normal traffic, and one IP is
+// often a whole campus behind NAT. Only "ok" or "blocked": there is no person here to challenge,
+// the caller is an LMS following a redirect.
+const LTI_LOGIN_IP_CONFIG: BucketConfig = {
+  windowMs: 5 * 60 * 1000,
+  maxAttempts: 300,
+  frictionThreshold: Number.MAX_SAFE_INTEGER,
+  challengeThreshold: Number.MAX_SAFE_INTEGER,
+  challengeCooldownMs: 0,
+  blockDurationMs: 10 * 60 * 1000,
+  frictionDelayMs: 0,
+};
+
 // Email-availability checks are a legitimate signup-form affordance, so the limit is
 // generous, but it caps bulk account enumeration from one IP. Only "ok" or "blocked"
 // (thresholds above maxAttempts disable friction/challenge for this background call).
@@ -476,6 +491,22 @@ export const evaluateCheckEmailRateLimit = (params: { ip?: string }): RateLimitD
     {
       key: bucketKey('check-email:ip', params.ip),
       config: CHECK_EMAIL_IP_CONFIG,
+      reason: 'ip' as LimitReason,
+    },
+  ]);
+
+/**
+ * Per-IP limit on starting an LTI launch.
+ *
+ * Generous on purpose: a class opening an assignment together is ordinary, and a campus can
+ * share one address. It exists to stop an endpoint that writes rows on an unauthenticated
+ * request from being used to fill a table, not to police students.
+ */
+export const evaluateLtiLoginRateLimit = (params: { ip?: string }): RateLimitDecision =>
+  ensureEvaluations([
+    {
+      key: bucketKey('lti-login:ip', params.ip),
+      config: LTI_LOGIN_IP_CONFIG,
       reason: 'ip' as LimitReason,
     },
   ]);

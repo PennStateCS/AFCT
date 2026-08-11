@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { beginLaunch, loginInitRefusalMessage, LTI_STATE_COOKIE } from '@/lib/lti/login-init';
 import type { LoginInitParams } from '@/lib/lti/login-init';
 import { publicUrl } from '@/lib/lti/public-url';
+import {
+  evaluateLtiLoginRateLimit,
+  formatRetryAfterSeconds,
+  getClientIp,
+} from '@/lib/security/rate-limiter';
 
 /**
  * Where an LMS sends the browser to start a launch.
@@ -30,7 +35,26 @@ function paramsFrom(source: URLSearchParams | FormData): LoginInitParams {
   };
 }
 
+/** Plain text, because a person reads this inside an LMS frame rather than code. */
+function refuse(message: string, status: number, headers: Record<string, string> = {}) {
+  return new NextResponse(message, {
+    status,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', ...headers },
+  });
+}
+
 async function handle(request: Request, params: LoginInitParams) {
+  // Unauthenticated and it writes rows, so it is capped per address. Generous enough that a
+  // class opening an assignment together is unaffected.
+  const limit = evaluateLtiLoginRateLimit({ ip: getClientIp(request) });
+  if (limit.status === 'blocked') {
+    return refuse(
+      'Too many launches from this network just now. Try again in a few minutes.',
+      429,
+      { 'Retry-After': formatRetryAfterSeconds(limit.retryAfterMs) },
+    );
+  }
+
   // Built from the configured public URL: the platform compares this literally against the
   // registration, and behind a proxy the request's own host is an internal address.
   const redirectUri = publicUrl('/api/lti/launch', request);
