@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       resourceLinkId: null,
       lineItemsUrl: null,
       membershipsUrl: null,
+      deepLink: null,
       targetLinkUri: null,
     },
     courseId: body.data.courseId,
