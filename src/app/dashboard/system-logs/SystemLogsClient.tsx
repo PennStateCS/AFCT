@@ -28,6 +28,7 @@ function useMountedOnce(open: boolean): boolean {
 }
 import { apiPaths } from '@/lib/api-paths';
 import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
+import { describeActivity, formatActivityDetails } from '@/lib/activity-log-summary';
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
 
@@ -146,7 +147,13 @@ export default function SystemLogsClient() {
   const loading = isLoading;
 
   const handleViewerOpen = useCallback((row: LogRow) => {
-    setSelectedData(JSON.stringify(row, null, 2));
+    // Readable rather than the raw row: what happened, then who and where, then the rest.
+    setSelectedData(
+      formatActivityDetails({
+        ...row,
+        metadata: row.metadata as Record<string, unknown> | null,
+      }),
+    );
     const formatted = new Date(row.timestamp).toLocaleString(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short',
@@ -212,6 +219,17 @@ export default function SystemLogsClient() {
           ((getValue() as string) || '').replace(/_/g, ' '),
       },
       {
+        id: 'summary',
+        header: 'What happened',
+        meta: { priority: 2 },
+        enableSorting: false,
+        cell: ({ row }: { row: { original: LogRow } }) =>
+          describeActivity(
+            row.original.action,
+            row.original.metadata as Record<string, unknown> | null,
+          ) ?? '—',
+      },
+      {
         accessorKey: 'userLastName',
         header: 'Last Name',
         meta: { priority: 2 },
@@ -259,8 +277,8 @@ export default function SystemLogsClient() {
 
       <CardContent>
         {isError ? (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2">
-            <p role="alert" className="text-sm text-status-danger">
+          <div className="border-status-danger-border bg-status-danger-bg mb-4 flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+            <p role="alert" className="text-status-danger text-sm">
               Failed to load logs. Please try again.
             </p>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
@@ -271,6 +289,9 @@ export default function SystemLogsClient() {
 
         <DataTable
           columns={columns}
+          // Off by default: it is a wide column and most rows have nothing to say. Somebody
+          // hunting a specific change turns it on, or opens Full Log.
+          defaultColumnVisibility={{ summary: false }}
           data={logs}
           loading={loading}
           tableLabel="System logs table"
@@ -332,8 +353,8 @@ export default function SystemLogsClient() {
           title={title}
         />
         {downloadMounted && (
-        <DownloadLogsDialog open={downloadOpen} onOpenChange={setDownloadOpen} />
-      )}
+          <DownloadLogsDialog open={downloadOpen} onOpenChange={setDownloadOpen} />
+        )}
       </CardContent>
     </Card>
   );

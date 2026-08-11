@@ -46,6 +46,16 @@ export async function applyRosterChanges(opts: {
     accountsCreated: 0,
   };
 
+  /**
+   * One entry per person, written after the roster is committed.
+   *
+   * Counts alone cannot answer "was this student dropped, and when", which is the question both
+   * a support request and a FERPA disclosure record turn on. These use the same actions as a
+   * roster change made by hand, so a drop reads the same however it happened, with the source
+   * in the metadata.
+   */
+  const events: { action: string; targetUserId: string; extra?: Record<string, unknown> }[] = [];
+
   await prisma.$transaction(async (tx) => {
     for (const change of changes) {
       switch (change.kind) {
@@ -60,11 +70,19 @@ export async function applyRosterChanges(opts: {
             // Already there: re-enrol rather than change a role somebody set here on purpose.
             update: { status: 'ENROLLED' },
           });
-          await ensureIdentity(
-            tx,
-            { userId, issuer, subject: change.member.ltiUserId },
-            () => result.identitiesLinked++,
-          );
+          await ensureIdentity(tx, { userId, issuer, subject: change.member.ltiUserId }, () => {
+            result.identitiesLinked++;
+            events.push({
+              action: 'IDENTITY_LINKED',
+              targetUserId: userId,
+              extra: { kind: 'LTI', issuer, subject: change.member.ltiUserId, via: 'ADMIN' },
+            });
+          });
+          events.push({
+            action: 'ENROLL_USER',
+            targetUserId: userId,
+            extra: { role: change.role, email: change.member.email },
+          });
           result.added++;
           break;
         }
@@ -75,6 +93,7 @@ export async function applyRosterChanges(opts: {
             where: { courseId, userId: change.userId, status: 'ENROLLED' },
             data: { status: 'DROPPED', droppedAt: new Date() },
           });
+          events.push({ action: 'DROP_FROM_COURSE', targetUserId: change.userId });
           result.dropped++;
           break;
         }
@@ -84,6 +103,7 @@ export async function applyRosterChanges(opts: {
             where: { courseId, userId: change.userId },
             data: { status: 'ENROLLED', droppedAt: null },
           });
+          events.push({ action: 'REENROLL_IN_COURSE', targetUserId: change.userId });
           result.restored++;
           break;
         }
@@ -92,7 +112,14 @@ export async function applyRosterChanges(opts: {
           await ensureIdentity(
             tx,
             { userId: change.userId, issuer, subject: change.ltiUserId },
-            () => result.identitiesLinked++,
+            () => {
+              result.identitiesLinked++;
+              events.push({
+                action: 'IDENTITY_LINKED',
+                targetUserId: change.userId,
+                extra: { kind: 'LTI', issuer, subject: change.ltiUserId, via: 'ADMIN' },
+              });
+            },
           );
           break;
         }
@@ -100,8 +127,21 @@ export async function applyRosterChanges(opts: {
     }
   });
 
-  // Outside the transaction: an audit write must not be able to roll a roster back, and this is
-  // a privileged change to who can see student work, so it is recorded whatever else happens.
+  // All outside the transaction: an audit write must not be able to roll a roster back, and
+  // this is a privileged change to who can see student work, so it is recorded whatever else
+  // happens.
+  for (const event of events) {
+    await createEnhancedActivityLog(prisma, opts.context, {
+      userId: actorUserId,
+      courseId,
+      action: event.action,
+      severity: 'INFO',
+      category: 'COURSE',
+      // `via` marks it as a sync rather than somebody working through the roster by hand.
+      metadata: { targetUserId: event.targetUserId, via: 'LTI_ROSTER_SYNC', ...event.extra },
+    });
+  }
+
   await createEnhancedActivityLog(prisma, opts.context, {
     userId: actorUserId,
     courseId,
