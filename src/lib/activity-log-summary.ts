@@ -87,6 +87,26 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       return describeChanges(metadata);
     }
 
+    case 'UPDATE_ASSIGNMENT_PROBLEM_SETTINGS':
+      return describeChanges(metadata);
+
+    case 'UPDATE_GROUP_SET_MEMBERSHIPS': {
+      const assigned = num(metadata, 'assignedCount');
+      const removed = num(metadata, 'removedCount');
+      const parts: string[] = [];
+      if (assigned > 0) parts.push(`${assigned} moved into a group`);
+      if (removed > 0) parts.push(`${removed} taken out`);
+      return parts.length > 0 ? parts.join(', ') : 'nothing changed';
+    }
+
+    case 'UPDATE_ASSIGNMENT_AUDIENCE': {
+      if (metadata?.assignedToEveryone === true) return 'assigned to everyone';
+      const count = num(metadata, 'assigneeCount');
+      const kind = str(metadata, 'assigneeKind');
+      const noun = kind === 'group' ? 'group' : 'student';
+      return `assigned to ${count} ${count === 1 ? noun : `${noun}s`}`;
+    }
+
     case 'CHANGE_COURSE_ROLE': {
       const from = str(metadata, 'previousRole');
       const to = str(metadata, 'newRole');

@@ -168,6 +168,11 @@ export const POST = withCourseAuth(
         metadata: {
           courseId,
           groupSetId: setId,
+          // Who, not just how many. Group membership decides whose work a group grade lands
+          // on, so "why did this student get that mark" has to be answerable from the log.
+          // Capped: a whole-course reshuffle should not write an unbounded row.
+          assigned: assigns.slice(0, 100),
+          removed: removes.slice(0, 100),
           assignedCount: assigns.length,
           removedCount: removes.length,
         },

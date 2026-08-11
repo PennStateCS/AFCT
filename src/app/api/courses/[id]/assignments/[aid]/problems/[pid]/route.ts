@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
-import { logError } from '@/lib/api/activity';
+import { diffFields, logError } from '@/lib/api/activity';
 import {
   AssignmentProblemSettingsSchema,
   type AssignmentProblemSettingsInput,
@@ -121,6 +121,13 @@ export const PUT = withCourseAuth(
             assignmentId,
             problemId,
             courseId,
+            // Points especially: changing them rescales every grade already given for this
+            // problem, so "what was it worth before" has to be answerable.
+            changes: diffFields(
+              link as unknown as Record<string, unknown>,
+              updated as unknown as Record<string, unknown>,
+              ['maxPoints', 'maxSubmissions', 'autograderEnabled'],
+            ),
             maxPoints: payload.maxPoints,
             maxSubmissions: payload.maxSubmissions,
             autograderEnabled: payload.autograderEnabled,
@@ -149,5 +156,9 @@ export const PUT = withCourseAuth(
       );
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED', blockWhenArchived: true },
+  {
+    access: 'manage',
+    deniedAction: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED',
+    blockWhenArchived: true,
+  },
 );

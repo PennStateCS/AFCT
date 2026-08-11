@@ -93,6 +93,45 @@ describe('a grade change', () => {
   });
 });
 
+describe('an audience change', () => {
+  it('says when everybody gets it', () => {
+    expect(describeActivity('UPDATE_ASSIGNMENT_AUDIENCE', { assignedToEveryone: true })).toBe(
+      'assigned to everyone',
+    );
+  });
+
+  it('counts the people it was narrowed to', () => {
+    const summary = describeActivity('UPDATE_ASSIGNMENT_AUDIENCE', {
+      assignedToEveryone: false,
+      assigneeCount: 3,
+      assigneeKind: 'student',
+    });
+
+    expect(summary).toBe('assigned to 3 students');
+  });
+
+  it('reads properly for one', () => {
+    const summary = describeActivity('UPDATE_ASSIGNMENT_AUDIENCE', {
+      assignedToEveryone: false,
+      assigneeCount: 1,
+      assigneeKind: 'group',
+    });
+
+    expect(summary).toBe('assigned to 1 group');
+  });
+});
+
+describe('a group membership change', () => {
+  it('says how many moved each way', () => {
+    const summary = describeActivity('UPDATE_GROUP_SET_MEMBERSHIPS', {
+      assignedCount: 4,
+      removedCount: 2,
+    });
+
+    expect(summary).toBe('4 moved into a group, 2 taken out');
+  });
+});
+
 describe('a role change', () => {
   it('gives both roles', () => {
     expect(describeActivity('CHANGE_COURSE_ROLE', { previousRole: 'STUDENT', newRole: 'TA' })).toBe(
