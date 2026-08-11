@@ -198,6 +198,7 @@ model User {
   grantsCreated       SubmissionGrant[]        @relation("SubmissionGrantCreatedBy") // grants this user created
   ltiLinksCreated     LtiContextLink[] // LMS course links this user decided
   ltiPendingLinks     LtiPendingLink[] // launches waiting for this user to pick a course
+  ltiScores           LtiScoreQueue[] // their grades queued for an LMS gradebook
 
   @@index([isAdmin])
   @@index([inactive])
@@ -564,6 +565,7 @@ model Assignment {
   assignees    AssignmentAssignee[]
   overrides    AssignmentOverride[]
   ltiLineItems LtiLineItem[] // gradebook columns in linked LMS courses
+  ltiScores    LtiScoreQueue[] // grades queued for an LMS gradebook
 
   @@index([courseId])
   @@index([isPublished])
@@ -1422,6 +1424,64 @@ model LtiLineItem {
   /// One column per assignment per LMS course.
   @@unique([contextLinkId, assignmentId])
   @@index([assignmentId])
+}
+
+/// Where a grade is on its way to the LMS.
+enum LtiScoreState {
+  /// Waiting to be sent, or waiting to be retried.
+  PENDING
+  /// The LMS accepted it.
+  SENT
+  /// Given up on. Needs somebody to look.
+  FAILED
+}
+
+/// A grade on its way to an LMS gradebook.
+///
+/// Written in the same breath as the grade itself and sent afterwards, rather than posted
+/// inline. An LMS that is slow, down or rate-limiting must never make grading fail or hang, and
+/// a grade that did not arrive has to be visible rather than lost in a log.
+///
+/// One row per assignment per student: a regrade replaces the pending row instead of queueing a
+/// second, so the LMS receives the current grade rather than a history of edits.
+///
+/// @namespace Identity
+model LtiScoreQueue {
+  /// Unique identifier.
+  id String @id @default(cuid())
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  /// The assignment being scored.
+  assignmentId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The student whose grade this is.
+  userId String
+
+  /// The grade, and what it is out of, captured when it was queued.
+  scoreGiven   Float
+  scoreMaximum Float
+
+  state LtiScoreState @default(PENDING)
+  /// How many times sending has been tried. Drives the backoff and the give-up point.
+  attempts Int @default(0)
+  /// Why the last attempt failed, for the screen that shows faculty what happened.
+  lastError String?
+
+  /// Not before this time. Set into the future to back off after a failure.
+  nextAttemptAt DateTime @default(now())
+  /// When the LMS accepted it.
+  sentAt        DateTime?
+
+  /// When this record was created.
+  createdAt DateTime @default(now())
+  /// When it was last changed.
+  updatedAt DateTime @updatedAt
+
+  /// One pending grade per student per assignment; a regrade replaces it.
+  @@unique([assignmentId, userId])
+  /// What the sender reads: everything due, oldest first.
+  @@index([state, nextAttemptAt])
 }
 
 generator erd {
