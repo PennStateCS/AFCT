@@ -63,16 +63,22 @@ export async function resolveLaunchTarget(opts: {
     where: {
       platformId_contextId: { platformId: identity.platformId, contextId: identity.contextId },
     },
-    select: { id: true, courseId: true, lineItemsUrl: true },
+    select: { id: true, courseId: true, lineItemsUrl: true, membershipsUrl: true },
   });
 
   if (link) {
     // Refreshed per launch: the endpoint can move, and a stale one fails only when a grade is
     // eventually sent, long after anyone would connect the two.
-    if (identity.lineItemsUrl && identity.lineItemsUrl !== link.lineItemsUrl) {
+    const moved =
+      (identity.lineItemsUrl && identity.lineItemsUrl !== link.lineItemsUrl) ||
+      (identity.membershipsUrl && identity.membershipsUrl !== link.membershipsUrl);
+    if (moved) {
       await prisma.ltiContextLink.update({
         where: { id: link.id },
-        data: { lineItemsUrl: identity.lineItemsUrl },
+        data: {
+          lineItemsUrl: identity.lineItemsUrl ?? link.lineItemsUrl,
+          membershipsUrl: identity.membershipsUrl ?? link.membershipsUrl,
+        },
       });
     }
     return { status: 'linked', courseId: link.courseId };
@@ -127,6 +133,7 @@ export async function linkLaunchCourse(opts: {
         contextTitle: identity.contextTitle,
         courseId,
         lineItemsUrl: identity.lineItemsUrl,
+        membershipsUrl: identity.membershipsUrl,
         linkedByUserId: userId,
       },
     });
