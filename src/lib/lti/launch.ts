@@ -57,6 +57,24 @@ export type LaunchRefusal =
   /** The platform sent no email, so AFCT cannot identify or create a person. */
   | 'no-email';
 
+/**
+ * What a deep-linking launch is asking for.
+ *
+ * The platform is not opening AFCT for a student; it is asking a member of staff to choose
+ * something, and telling us where to send the answer.
+ */
+export type DeepLinkRequest = {
+  /** Where the chosen items are posted back. Signed by us, submitted by the browser. */
+  returnUrl: string;
+  /**
+   * Opaque platform state that must come back untouched. Canvas uses it to know which
+   * placement asked, and a response without it is rejected.
+   */
+  data: string | null;
+  /** Whether the platform will accept more than one item. */
+  multiple: boolean;
+};
+
 export type LaunchIdentity = {
   platformId: string;
   /** The platform's stable identifier for this person. Never an email. */
@@ -77,6 +95,8 @@ export type LaunchIdentity = {
   lineItemsUrl: string | null;
   /** Where to read the course roster. Absent when the platform granted no roster scope. */
   membershipsUrl: string | null;
+  /** Set when the platform is asking staff to choose content, rather than opening it. */
+  deepLink: DeepLinkRequest | null;
 };
 
 /**
@@ -225,12 +245,22 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
     return { ok: false, reason: 'deployment-mismatch' };
   }
 
+  const messageType = payload[`${CLAIM}/message_type`];
+  const isDeepLink = messageType === 'LtiDeepLinkingRequest';
   if (
-    payload[`${CLAIM}/message_type`] !== 'LtiResourceLinkRequest' ||
+    (messageType !== 'LtiResourceLinkRequest' && !isDeepLink) ||
     payload[`${CLAIM}/version`] !== '1.3.0'
   ) {
     return { ok: false, reason: 'wrong-message-type' };
   }
+
+  /**
+   * A deep-linking request with nowhere to send the answer cannot be completed, and a tool that
+   * pretended otherwise would leave staff picking something that silently goes nowhere.
+   */
+  const settings = claimObject(payload, 'deep_linking_settings', 'lti-dl');
+  const returnUrl = settings ? claimString(settings.deep_link_return_url) : null;
+  if (isDeepLink && !returnUrl) return { ok: false, reason: 'wrong-message-type' };
 
   // Consumed rather than compared, so a captured launch replayed a second time finds the nonce
   // already spent. This is the only check here that changes state, and it is deliberately last
@@ -271,6 +301,14 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
         const nrps = claimObject(payload, 'namesroleservice', 'lti-nrps');
         return nrps ? claimString(nrps.context_memberships_url) : null;
       })(),
+      deepLink:
+        isDeepLink && returnUrl
+          ? {
+              returnUrl,
+              data: settings ? claimString(settings.data) : null,
+              multiple: settings?.accept_multiple === true,
+            }
+          : null,
       targetLinkUri: claimString(payload[`${CLAIM}/target_link_uri`]),
     },
   };
