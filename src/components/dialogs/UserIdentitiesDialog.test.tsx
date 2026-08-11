@@ -7,12 +7,8 @@ import { toastMock, resetToastMock } from '@/test/mocks/toast';
 import { UserIdentitiesDialog } from './UserIdentitiesDialog';
 
 /**
- * What an administrator sees when asking how somebody signs in.
- *
- * jsdom does no layout, so these prove wiring and the one rule that matters: an account with no
- * password and a single connected method must not be able to have it detached, because that
- * leaves a person locked out of a system they are enrolled in. The route enforces it too; a
- * disabled button is the difference between a refusal and a dead end.
+ * An administrator's view of how somebody signs in. The guard: the last sign-in method on an
+ * account with no password cannot be detached, or nobody can get in. The route checks too.
  */
 
 vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));

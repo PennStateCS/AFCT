@@ -7,11 +7,8 @@ import { toastMock, resetToastMock } from '@/test/mocks/toast';
 import { RosterSyncDialog } from './RosterSyncDialog';
 
 /**
- * The preview shown before an LMS roster is applied.
- *
- * This decides who can read student work, so the rule it exists to enforce is that nothing is
- * written until somebody has seen the list and chosen to apply it. What each change means is
- * spelled out in words rather than conveyed by colour, which these check by reading the text.
+ * The roster preview. Nothing may be written until the list has been seen and applied, which
+ * is what most of these check.
  */
 
 vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
@@ -148,7 +145,7 @@ describe('applying', () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 
-  // The server's wording is the specific one, so it wins over the written-out fallback.
+  // Prefer the server's message; it is the specific one.
   it('shows the reason the server gave for refusing', async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(ok(diff));
     fetchMock.mockReturnValueOnce(

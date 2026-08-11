@@ -7,12 +7,8 @@ import { toastMock, resetToastMock } from '@/test/mocks/toast';
 import { GradeSyncCard } from './GradeSyncCard';
 
 /**
- * Grade sync for one assignment, in its three placements.
- *
- * The two things worth pinning are that nothing about an LMS appears on a course that has no
- * LMS, and that the automatic-sync switch puts itself back if the server refuses. An optimistic
- * toggle that silently keeps a setting it failed to save would tell faculty their grades are
- * going out when they are not.
+ * Grade sync for one assignment, in its three placements. The switch saves optimistically and
+ * has to roll back on failure, or faculty think grades are going out when they are not.
  */
 
 vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));

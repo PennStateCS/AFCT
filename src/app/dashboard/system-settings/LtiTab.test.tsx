@@ -7,12 +7,8 @@ import { toastMock, resetToastMock } from '@/test/mocks/toast';
 import { LtiTab } from './LtiTab';
 
 /**
- * Registering an LMS, from the administrator's side.
- *
- * Setting LTI up means copying values between two screens, so the half AFCT has to hand over is
- * as load-bearing as the half it asks for. These check that both halves are present, that the
- * URLs given out are built from the site's real address, and that a rejected registration says
- * what the server said rather than a generic failure.
+ * Registering an LMS: the values AFCT hands over, and the ones it takes back. Both halves have
+ * to be right or nothing launches.
  */
 
 vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));

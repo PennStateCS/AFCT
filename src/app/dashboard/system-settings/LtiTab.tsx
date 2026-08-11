@@ -33,8 +33,7 @@ const EMPTY = {
  * LTI tab: which LMSs may open AFCT.
  *
  * Registration is mutual, so the tab has two halves. The values AFCT needs go in the form; the
- * values the LMS needs are listed above it, ready to copy. Setting this up means going back and
- * forth between two screens, and having half of it missing is what makes that painful.
+ * values the LMS needs are listed above it, ready to copy.
  */
 export function LtiTab({ siteUrl }: { siteUrl: string }) {
   const base = siteUrl.replace(/\/+$/, '');

@@ -79,9 +79,7 @@ export function withClientAuth<Ctx = unknown, R extends Response = Response>(
     if (!raw) return apiError(401, 'Unauthorized');
     const resolved = await resolveClientTokenDetailed(raw);
     if (!resolved.ok) {
-      // A token was presented but didn't resolve: log it (throttled) as a security event,
-      // with the reason, since "expired" and "revoked" call for different answers to the
-      // student asking why their client stopped working.
+      // A token was presented but didn't resolve: log it (throttled) as a security event.
       void logRejectedToken(req, resolved.reason);
       return apiError(401, 'Unauthorized');
     }

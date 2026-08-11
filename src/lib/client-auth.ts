@@ -60,9 +60,8 @@ export type ClientTokenUser = {
 export type ResolvedClientToken = { tokenId: string; user: ClientTokenUser };
 
 /**
- * Why a bearer token was turned away. A rejection used to be a bare `null`, so the audit entry
- * could say a token failed but never which of these it was, and "students cannot submit" reads
- * the same whether a token expired or an account was locked.
+ * Why a bearer token was turned away. Logged on rejection: an expired token and a locked
+ * account both look like "the client stopped working" and need different answers.
  */
 export type ClientTokenRejection =
   | 'unknown token'
@@ -88,9 +87,8 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
 }
 
 /**
- * The same check, saying why it failed. Kept separate from {@link resolveClientToken} so the
- * plain null contract stays as it is: a caller that tested truthiness against a result object
- * would let a rejected token through, and that is not a mistake worth leaving available.
+ * The same check, saying why it failed. Separate from {@link resolveClientToken} so that one
+ * keeps returning null: `if (!result)` against a result object would let a rejected token in.
  */
 export async function resolveClientTokenDetailed(rawToken: string): Promise<ClientTokenResult> {
   if (!rawToken) return { ok: false, reason: 'unknown token' };

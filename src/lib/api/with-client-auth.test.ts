@@ -57,8 +57,7 @@ describe('withClientAuth', () => {
       expect.objectContaining({
         action: 'CLIENT_TOKEN_REJECTED',
         severity: 'SECURITY',
-        // Which rejection it was: "expired" and "revoked" need different answers when a
-        // student reports their client has stopped working.
+        // Which rejection it was: expired and revoked need different answers.
         metadata: { reason: 'expired' },
       }),
     );
@@ -95,10 +94,7 @@ describe('withClientAuth', () => {
     expect(await res.text()).toBe('ok');
   });
 
-  /**
-   * Reporting a reason must not become a way in. Every rejection shape has to end the request,
-   * which is the risk in returning an object where the old code returned null.
-   */
+  // Returning an object where the old code returned null: every shape must still 401.
   it.each([
     'unknown token',
     'revoked',

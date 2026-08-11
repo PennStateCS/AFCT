@@ -136,10 +136,7 @@ describe('withCourseAuth', () => {
     );
   });
 
-  /**
-   * A denial is a SECURITY record and used to carry an empty metadata object, so the log could
-   * say somebody was refused but never why. The role is read at the time because it changes.
-   */
+  // The role is read at denial time because roles change.
   it('records why the refusal happened, with the role at the time', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     canManageMock.mockResolvedValue(false);
@@ -179,7 +176,7 @@ describe('withCourseAuth', () => {
     expect(createLogMock.mock.calls[0][2].metadata.reason).toBe('dropped from this course');
   });
 
-  // The log must not be the reason a refusal turns into a 500.
+  // A failed lookup must not turn the 403 into a 500.
   it('still refuses when the role lookup fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     canManageMock.mockResolvedValue(false);

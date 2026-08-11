@@ -30,13 +30,9 @@ const HOW_LINKED: Record<string, string> = {
 /**
  * The institutional sign-ins connected to your own account.
  *
- * Connecting is a real sign-in to the provider, not a form: the point is to prove the account
- * over there belongs to whoever is signed in over here, and only the provider can say that.
- * So the button starts an ordinary OIDC flow and the callback attaches the result to the
- * current session.
- *
- * This is also the only route by which an administrator ever gets one, since automatic linking
- * refuses admin accounts by design.
+ * Connect starts a real OIDC sign-in rather than posting a form: only the provider can prove
+ * the account over there belongs to whoever is signed in here. It is also the only way an
+ * admin gets one, since automatic linking refuses admin accounts.
  */
 export function IdentitiesSection({ providerLabel }: { providerLabel: string | null }) {
   const { timezone, hour12 } = useEffectiveTimezone();
