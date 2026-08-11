@@ -116,6 +116,14 @@ async function drain(limit = 50): Promise<void> {
 }
 
 async function loop(): Promise<void> {
+  // Pick up grades changed since the last pass, for assignments set to sync automatically.
+  try {
+    const { queueAutomaticAssignments } = await import('@/lib/lti/grade-sync');
+    await queueAutomaticAssignments();
+  } catch (error) {
+    console.error('[lti-scores] could not queue automatic grades:', error);
+  }
+
   await drain();
   setTimeout(() => void loop(), SEND_INTERVAL_MS);
 }

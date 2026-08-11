@@ -688,6 +688,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assignments/{id}/lti-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How this assignment's grades are syncing to the LMS
+         * @description **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/assignments/[id]/lti-sync/route.ts)
+         */
+        get: operations["getAssignmentsByIdLtiSync"];
+        put?: never;
+        /**
+         * Send this assignment's grades to the LMS
+         * @description Queue every grade that has changed since it was last sent.   Queues rather than sends: the sender delivers them, so a slow LMS cannot make this request  hang or fail.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/assignments/[id]/lti-sync/route.ts)
+         */
+        post: operations["postAssignmentsByIdLtiSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Turn automatic grade sync on or off for this assignment
+         * @description **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/assignments/[id]/lti-sync/route.ts)
+         */
+        patch: operations["patchAssignmentsByIdLtiSync"];
+        trace?: never;
+    };
     "/api/assignments/{id}/problems": {
         parameters: {
             query?: never;
@@ -4779,6 +4815,93 @@ export interface operations {
             };
             /** @description Server error. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAssignmentsByIdLtiSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync state for the assignment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description You do not manage this course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAssignmentsByIdLtiSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many grades were queued. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description You do not manage this course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patchAssignmentsByIdLtiSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description You do not manage this course. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

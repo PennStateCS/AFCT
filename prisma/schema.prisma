@@ -564,6 +564,9 @@ model Assignment {
   activityLogs ActivityLog[]
   assignees    AssignmentAssignee[]
   overrides    AssignmentOverride[]
+  /// Send grades to the LMS as they change. Off means faculty send them by hand. Only has any
+  /// effect when the course is linked to an LMS.
+  ltiAutoSync  Boolean         @default(true)
   ltiLineItems LtiLineItem[] // gradebook columns in linked LMS courses
   ltiScores    LtiScoreQueue[] // grades queued for an LMS gradebook
 
