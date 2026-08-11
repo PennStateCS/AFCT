@@ -95,6 +95,9 @@ export async function GET(req: Request) {
             },
           },
         },
+        // Only whether an LMS opens this course, and which. The list needs the fact, not the
+        // endpoints, so nothing about the integration's plumbing is sent to a table.
+        ltiLinks: { select: { platform: { select: { name: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -114,8 +117,14 @@ export async function GET(req: Request) {
       });
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { roster, assignments, ...rest } = c;
-      return { ...rest, enrolled, assignments: assignmentsWithDerivedPoints };
+      const { roster, assignments, ltiLinks, ...rest } = c;
+      return {
+        ...rest,
+        enrolled,
+        assignments: assignmentsWithDerivedPoints,
+        // Defensive: a caller that selects a narrower shape should not make this throw.
+        lmsNames: [...new Set((ltiLinks ?? []).map((link) => link.platform.name))],
+      };
     });
 
     return NextResponse.json(formatted, { status: 200 });

@@ -12,7 +12,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Trash2, BookOpen, ChevronDown, Copy, Archive, ArchiveRestore, Settings } from 'lucide-react';
+import {
+  Trash2,
+  BookOpen,
+  ChevronDown,
+  Copy,
+  Archive,
+  ArchiveRestore,
+  Settings,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
@@ -45,6 +53,8 @@ function useMountedOnce(open: boolean): boolean {
 }
 
 type CourseWithFaculty = Course & {
+  /** The LMSs that open this course, empty when none does. */
+  lmsNames?: string[];
   // Enrolled list (user objects with courseRole and flags)
   enrolled?: {
     id: string;
@@ -205,6 +215,24 @@ export const columns = (
         .map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim())
         .filter(Boolean)
         .join(', ');
+    },
+  },
+  {
+    id: 'lms',
+    accessorFn: (row) => (row.lmsNames?.length ? row.lmsNames.join(', ') : ''),
+    // Shown from `lg` up, like the other secondary columns: it is useful context rather than
+    // something you scan a course list for, and it is meaningless at an institution with no LMS.
+    meta: { priority: 3 },
+    enableSorting: true,
+    header: 'LMS',
+    cell: ({ row }) => {
+      const names = row.original.lmsNames ?? [];
+      if (names.length === 0) {
+        return <span className="text-muted-foreground italic">Not connected</span>;
+      }
+      // Named rather than a tick: which LMS matters when an institution runs more than one,
+      // and a word reads the same to everybody.
+      return names.join(', ');
     },
   },
   {
@@ -369,7 +397,7 @@ function CourseActionsCell({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setConfirmOpen(true)}
-                className="hover:bg-secondary flex items-center gap-2 text-destructive focus:text-destructive"
+                className="hover:bg-secondary text-destructive focus:text-destructive flex items-center gap-2"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Course

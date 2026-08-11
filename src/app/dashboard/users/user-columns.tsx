@@ -44,9 +44,20 @@ function useMountedOnce(open: boolean): boolean {
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Pencil, Trash2, Lock, LockOpen, ChevronDown, Mail, UserX, UserCheck } from 'lucide-react';
+import {
+  Pencil,
+  Trash2,
+  Lock,
+  LockOpen,
+  ChevronDown,
+  Mail,
+  UserX,
+  UserCheck,
+  KeyRound,
+} from 'lucide-react';
 import { CompactDate } from '@/components/ui/CompactDate';
 
+import { UserIdentitiesDialog } from '@/components/dialogs/UserIdentitiesDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -260,11 +271,13 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
   const [unlockConfirmOpen, setUnlockConfirmOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
+  const [identitiesOpen, setIdentitiesOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
   const editUserMounted = useMountedOnce(editUserOpen);
   const resetMounted = useMountedOnce(resetOpen);
   const changeEmailMounted = useMountedOnce(changeEmailOpen);
+  const identitiesMounted = useMountedOnce(identitiesOpen);
 
   const fullName = `${user.firstName} ${user.lastName}`;
 
@@ -387,6 +400,19 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
 
   const safeItems = [
     {
+      label: 'Sign-in Methods',
+      node: (
+        <DropdownMenuItem
+          key="identities"
+          onClick={() => setIdentitiesOpen(true)}
+          className="hover:bg-secondary flex items-center gap-2"
+        >
+          <KeyRound className="h-4 w-4" />
+          Sign-in Methods
+        </DropdownMenuItem>
+      ),
+    },
+    {
       label: 'Change Email Address',
       node: (
         <DropdownMenuItem
@@ -461,6 +487,15 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
           setOpen={setResetOpen}
           onResetPassword={handlePasswordReset}
           targetUserName={fullName}
+        />
+      )}
+
+      {identitiesMounted && (
+        <UserIdentitiesDialog
+          open={identitiesOpen}
+          setOpen={setIdentitiesOpen}
+          userId={user.id}
+          userName={fullName}
         />
       )}
 
