@@ -37,6 +37,14 @@ When published, enrolled students can see the course. When unpublished, only cou
 
 AFCT will not let you unpublish a course that already has submissions or grades. If the switch cannot be turned off, preserve the course as published or ask a site administrator to help with the intended workflow.
 
+## Connected LMS
+
+When the course has been opened from a connected LMS, the **Course status** card beside the
+settings form names the LMS course it is linked to, offers **Sync roster from your LMS**, and lets
+you **Disconnect**. Disconnecting stops grades being sent and removes the sync option; nothing
+already in AFCT or already in your gradebook is removed. See
+[Grades and rosters from your LMS](lms.md).
+
 ## Archived courses
 
 An archived course is read-only. Its settings and publication switch cannot be changed. Archiving and restoring are site administrator actions and are available from the course list, not from this page.

@@ -85,6 +85,7 @@ const sidebars: SidebarsConfig = {
                 'faculty/grades',
                 'faculty/groups',
                 'faculty/problems',
+                'faculty/lms',
                 'faculty/roster',
                 'faculty/settings',
               ],
@@ -101,6 +102,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'admin/courses',
             'admin/development-tests',
+            'admin/lms-connection',
             'admin/submissions',
             'admin/system-logs',
             'admin/system-settings',

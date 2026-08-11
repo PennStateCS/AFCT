@@ -53,6 +53,12 @@ Releasing a score does not change who is credited with it. A score you entered s
 
 You can also grade from the assignment's [Submissions](submissions.md) tab. That view is better when you need to inspect files, autograder feedback, or discussion before entering a score.
 
+## Send grades to your LMS
+
+Exporting is not the only way out. If the course is connected to an LMS, grades can go straight to
+its gradebook, either automatically as you award them or on demand per assignment. See
+[Grades and rosters from your LMS](lms.md).
+
 ## Export grades
 
 The grade export currently appears only for site administrators. It can produce CSV files for Canvas, Blackboard, Brightspace, Moodle, or a generic gradebook. Faculty and TAs who need an LMS export should contact their site administrator.

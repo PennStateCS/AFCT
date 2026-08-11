@@ -115,6 +115,16 @@ Administrator accounts are never matched automatically either way: an administra
 their institutional login deliberately, from their own account page.
 :::
 
+## LTI
+
+The **LTI** tab is where you register the LMSs allowed to open AFCT, so students can reach their
+assignments from Canvas, D2L Brightspace or Blackboard without signing in again, and grades can
+go back to the LMS gradebook.
+
+Registration is mutual: the tab lists the values your LMS needs from AFCT, and the form takes the
+values it gives back. See [Connecting an LMS](lms-connection.md) for the whole procedure, the
+values by their LMS names, and what the launch errors mean.
+
 ## Captcha
 
 The **Captcha** tab stores the optional hCaptcha site key and secret key used to protect sign-in and signup flows.

@@ -42,6 +42,13 @@ Self-registration works only when:
 
 Faculty and TAs can still enroll an existing account directly when self-registration is closed.
 
+## Bring the roster in from your LMS
+
+If the course is connected to an LMS, you can sync the roster instead of enrolling people by
+hand: AFCT asks your LMS who is in the course and shows what would change before applying it.
+Students the LMS no longer lists are marked dropped rather than deleted, and course staff are
+never dropped. See [Grades and rosters from your LMS](lms.md).
+
 ## Manage roles and membership
 
 Faculty can use the edit action beside a roster member to change that person's course role. A course must always have at least one Faculty member, so AFCT will not allow the only Faculty member to be demoted.
