@@ -73,6 +73,8 @@ export type LaunchIdentity = {
   /** The specific link clicked, which is what maps to an AFCT assignment. */
   resourceLinkId: string | null;
   targetLinkUri: string | null;
+  /** Where to create gradebook columns. Absent when the platform granted no grade scopes. */
+  lineItemsUrl: string | null;
 };
 
 /**
@@ -129,8 +131,14 @@ function namesFrom(payload: JWTPayload): { firstName: string | null; lastName: s
   return { firstName: full.slice(0, cut), lastName: full.slice(cut + 1) };
 }
 
-function claimObject(payload: JWTPayload, name: string): Record<string, unknown> | null {
-  const value = payload[`${CLAIM}/${name}`];
+// Services live under sibling namespaces (`lti-ags`, `lti-nrps`), not under `lti`. Getting that
+// wrong produces a claim that is silently always absent.
+function claimObject(
+  payload: JWTPayload,
+  name: string,
+  namespace = 'lti',
+): Record<string, unknown> | null {
+  const value = payload[`https://purl.imsglobal.org/spec/${namespace}/claim/${name}`];
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
 }
 
@@ -253,6 +261,10 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
       contextId: context ? claimString(context.id) : null,
       contextTitle: context ? (claimString(context.title) ?? claimString(context.label)) : null,
       resourceLinkId: resourceLink ? claimString(resourceLink.id) : null,
+      lineItemsUrl: (() => {
+        const ags = claimObject(payload, 'endpoint', 'lti-ags');
+        return ags ? claimString(ags.lineitems) : null;
+      })(),
       targetLinkUri: claimString(payload[`${CLAIM}/target_link_uri`]),
     },
   };
