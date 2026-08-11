@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Unlink } from 'lucide-react';
+import { RefreshCw, Unlink } from 'lucide-react';
+import { RosterSyncDialog } from '@/components/course/RosterSyncDialog';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
@@ -28,6 +29,7 @@ export function CourseLmsSection({ courseId }: { courseId: string }) {
   const { timezone, hour12 } = useEffectiveTimezone();
   const [links, setLinks] = useState<Link[] | null>(null);
   const [removing, setRemoving] = useState<Link | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -98,6 +100,13 @@ export function CourseLmsSection({ courseId }: { courseId: string }) {
           </li>
         ))}
       </ul>
+
+      <Button variant="outline" size="sm" onClick={() => setSyncing(true)}>
+        <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+        Sync roster from your LMS
+      </Button>
+
+      <RosterSyncDialog courseId={courseId} open={syncing} onOpenChange={setSyncing} />
 
       <ConfirmDialog
         open={removing !== null}
