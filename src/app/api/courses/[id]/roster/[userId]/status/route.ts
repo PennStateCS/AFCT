@@ -90,7 +90,12 @@ export const PATCH = withCourseAuth(
         severity: 'INFO',
         category: 'COURSE',
         courseId,
-        metadata: { targetUserId: userId, previousStatus: target.status, newStatus },
+        metadata: {
+          targetUserId: userId,
+          changes: { status: { from: target.status, to: newStatus } },
+          previousStatus: target.status,
+          newStatus,
+        },
       });
 
       return NextResponse.json({ success: true, status: newStatus, changed: true });

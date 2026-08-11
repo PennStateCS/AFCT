@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { logError } from '@/lib/api/activity';
+import { diffFields, logError } from '@/lib/api/activity';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { resolveOverrideFields } from '@/lib/assignment-overrides';
 import { OverrideUpdateApiSchema } from '@/schemas/assignment';
@@ -102,6 +102,11 @@ export const PATCH = withCourseAuth(
         metadata: {
           overrideId: oid,
           targetUserId: existing.userId,
+          changes: diffFields(
+            existing as unknown as Record<string, unknown>,
+            updated as unknown as Record<string, unknown>,
+            ['dueDate', 'unlockAt', 'lateCutoff', 'allowLateSubmissions'],
+          ),
           previousDueDate: existing.dueDate ? existing.dueDate.toISOString() : null,
           dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
           unlockAt: updated.unlockAt ? updated.unlockAt.toISOString() : null,
@@ -166,6 +171,13 @@ export const DELETE = withCourseAuth(
         metadata: {
           overrideId: oid,
           targetUserId: existing.userId,
+          // A deletion has no "to": what matters is what was removed, so the exception can be
+          // reconstructed if somebody asks why a deadline moved back.
+          removed: {
+            dueDate: existing.dueDate ? existing.dueDate.toISOString() : null,
+            unlockAt: existing.unlockAt ? existing.unlockAt.toISOString() : null,
+            lateCutoff: existing.lateCutoff ? existing.lateCutoff.toISOString() : null,
+          },
           previousDueDate: existing.dueDate ? existing.dueDate.toISOString() : null,
         },
       });

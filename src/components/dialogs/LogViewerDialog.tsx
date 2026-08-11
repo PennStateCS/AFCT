@@ -53,7 +53,7 @@ export function LogViewerDialog({
           role="region"
           aria-label="Log contents"
           tabIndex={0}
-          className="themed-scroll focus-visible:ring-ring min-h-0 flex-1 overflow-y-auto text-left font-mono text-sm whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none"
+          className="themed-scroll focus-visible:ring-ring min-h-0 flex-1 overflow-y-auto text-left font-mono text-sm break-words whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none"
         >
           {data || ''}
         </div>

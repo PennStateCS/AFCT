@@ -75,6 +75,18 @@ export function describeActivity(action: string, metadata: Metadata): string | n
     case 'PROBLEM_GRADE_CLEARED':
       return 'grade removed';
 
+    // Enrolment, group sets, overrides: all record the standard shape now.
+    case 'UPDATE_ASSIGNMENT_OVERRIDE':
+    case 'UPDATE_GROUP_SET':
+      return describeChanges(metadata);
+
+    case 'DROP_FROM_COURSE':
+    case 'REENROLL_IN_COURSE': {
+      const via = str(metadata, 'via');
+      if (via === 'LTI_ROSTER_SYNC') return 'from an LMS roster sync';
+      return describeChanges(metadata);
+    }
+
     case 'CHANGE_COURSE_ROLE': {
       const from = str(metadata, 'previousRole');
       const to = str(metadata, 'newRole');
@@ -86,9 +98,7 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       // actions as a roster change made by hand, so it can be searched and filtered like one.
       return counts(metadata);
 
-    case 'ENROLL_USER':
-    case 'DROP_FROM_COURSE':
-    case 'REENROLL_IN_COURSE': {
+    case 'ENROLL_USER': {
       const via = str(metadata, 'via');
       return via === 'LTI_ROSTER_SYNC' ? 'from an LMS roster sync' : null;
     }

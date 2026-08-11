@@ -158,7 +158,12 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', roles: ['FACULTY'], blockWhenArchived: true, deniedAction: 'ROSTER_REMOVE_DENIED' },
+  {
+    access: 'manage',
+    roles: ['FACULTY'],
+    blockWhenArchived: true,
+    deniedAction: 'ROSTER_REMOVE_DENIED',
+  },
 );
 
 /**
@@ -325,6 +330,9 @@ export const PATCH = withCourseAuth(
         courseId,
         metadata: {
           targetUserId: userId,
+          // The standard shape every change is recorded in. The named fields below it are kept
+          // so entries written before this keep reading the same way.
+          changes: { role: { from: target.role, to: newRole } },
           previousRole: target.role,
           newRole,
         },
@@ -343,5 +351,10 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', roles: ['FACULTY'], blockWhenArchived: true, deniedAction: 'ROSTER_UPDATE_DENIED' },
+  {
+    access: 'manage',
+    roles: ['FACULTY'],
+    blockWhenArchived: true,
+    deniedAction: 'ROSTER_UPDATE_DENIED',
+  },
 );
