@@ -2,13 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { createPrivateKey, createPublicKey, createSign, createVerify } from 'node:crypto';
 import type { JsonWebKey as CryptoJwk } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
-import {
-  createKeyPair,
-  listPublicJwks,
-  getSigningKey,
-  retireKey,
-  ensureSigningKey,
-} from './keys';
+import { createKeyPair, listPublicJwks, getSigningKey, retireKey, ensureSigningKey } from './keys';
 
 /**
  * AFCT's signing keypair, against a real Postgres.

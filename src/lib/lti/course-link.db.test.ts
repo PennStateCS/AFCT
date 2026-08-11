@@ -29,6 +29,7 @@ const COURSE = 'c-cl-1';
 const OTHER_COURSE = 'c-cl-2';
 
 const R = 'http://purl.imsglobal.org/vocab/lis/v2/membership';
+const CTX = { ipAddress: '10.0.0.1', userAgent: 'test' };
 
 const identity = (over: Partial<LaunchIdentity> = {}): LaunchIdentity => ({
   platformId: PLATFORM,
@@ -43,7 +44,7 @@ const identity = (over: Partial<LaunchIdentity> = {}): LaunchIdentity => ({
   resourceLinkId: 'rl-1',
   targetLinkUri: null,
   lineItemsUrl: null,
-      membershipsUrl: null,
+  membershipsUrl: null,
   ...over,
 });
 
@@ -129,7 +130,12 @@ describe('mapping LTI roles', () => {
 
 describe('where a launch lands', () => {
   it('goes to the linked course once somebody has linked it', async () => {
-    await linkLaunchCourse({ identity: identity(), courseId: COURSE, userId: ids.faculty });
+    await linkLaunchCourse({
+      identity: identity(),
+      courseId: COURSE,
+      userId: ids.faculty,
+      context: CTX,
+    });
 
     const target = await resolveLaunchTarget({ identity: identity(), userId: ids.student });
 
@@ -181,6 +187,7 @@ describe('who may link a course', () => {
       identity: identity(),
       courseId: COURSE,
       userId: ids.faculty,
+      context: CTX,
     });
 
     expect(result).toEqual({ ok: true });
@@ -195,6 +202,7 @@ describe('who may link a course', () => {
       identity: identity(),
       courseId: COURSE,
       userId: ids.otherFaculty,
+      context: CTX,
     });
 
     expect(result).toEqual({ ok: false, reason: 'not-allowed' });
@@ -206,6 +214,7 @@ describe('who may link a course', () => {
       identity: identity(),
       courseId: COURSE,
       userId: ids.ta,
+      context: CTX,
     });
 
     expect(result).toEqual({ ok: false, reason: 'not-allowed' });
@@ -216,6 +225,7 @@ describe('who may link a course', () => {
       identity: identity(),
       courseId: COURSE,
       userId: ids.student,
+      context: CTX,
     });
 
     expect(result).toEqual({ ok: false, reason: 'not-allowed' });
@@ -226,6 +236,7 @@ describe('who may link a course', () => {
       identity: identity(),
       courseId: OTHER_COURSE,
       userId: ids.admin,
+      context: CTX,
     });
 
     expect(result).toEqual({ ok: true });
@@ -238,12 +249,18 @@ describe('what may be linked to what', () => {
    * them apart would split one roster in two.
    */
   it('lets two LMS courses open the same AFCT course', async () => {
-    await linkLaunchCourse({ identity: identity(), courseId: COURSE, userId: ids.faculty });
+    await linkLaunchCourse({
+      identity: identity(),
+      courseId: COURSE,
+      userId: ids.faculty,
+      context: CTX,
+    });
 
     const second = await linkLaunchCourse({
       identity: identity({ contextId: 'ctx-2' }),
       courseId: COURSE,
       userId: ids.faculty,
+      context: CTX,
     });
 
     expect(second).toEqual({ ok: true });
@@ -251,12 +268,18 @@ describe('what may be linked to what', () => {
 
   // There is no answer to "which one did they mean".
   it('refuses one LMS course opening two AFCT courses', async () => {
-    await linkLaunchCourse({ identity: identity(), courseId: COURSE, userId: ids.admin });
+    await linkLaunchCourse({
+      identity: identity(),
+      courseId: COURSE,
+      userId: ids.admin,
+      context: CTX,
+    });
 
     const second = await linkLaunchCourse({
       identity: identity(),
       courseId: OTHER_COURSE,
       userId: ids.admin,
+      context: CTX,
     });
 
     expect(second).toEqual({ ok: false, reason: 'already-linked' });

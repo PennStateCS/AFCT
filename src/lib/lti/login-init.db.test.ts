@@ -31,7 +31,10 @@ const platform = (over: Record<string, string> = {}) => ({
 });
 
 const begin = (params: Record<string, string> = {}) =>
-  beginLaunch({ params: { iss: ISSUER, login_hint: 'lms-user-1', ...params }, redirectUri: REDIRECT });
+  beginLaunch({
+    params: { iss: ISSUER, login_hint: 'lms-user-1', ...params },
+    redirectUri: REDIRECT,
+  });
 
 /** The query the browser is sent on with. */
 const queryOf = (url: string) => new URL(url).searchParams;

@@ -54,7 +54,13 @@ export async function queueChangedGrades(
 
   let count = 0;
   for (const total of totals) {
-    const scoreGiven = total._sum.grade ?? 0;
+    /**
+     * Held to the range the column accepts. Extra credit can push a total past the maximum and
+     * a correction can leave it negative; platforms reject the whole request for either, which
+     * would strand every grade in the batch rather than the one odd score.
+     */
+    const raw = total._sum.grade ?? 0;
+    const scoreGiven = Math.min(Math.max(raw, 0), scoreMaximum);
     const existing = known.get(total.studentId);
 
     /**

@@ -159,6 +159,21 @@ describe('queueing what has changed', () => {
     expect((await prisma.ltiScoreQueue.findFirstOrThrow()).state).toBe('PENDING');
   });
 
+  /**
+   * Extra credit can push a total past the maximum and a correction can leave it negative.
+   * Platforms reject the whole request for either, which would strand every grade in the batch
+   * rather than the one odd score.
+   */
+  it('holds a score to the range the LMS will accept', async () => {
+    await grade(130);
+    await queueChangedGrades(ASSIGNMENT);
+    expect((await prisma.ltiScoreQueue.findFirstOrThrow()).scoreGiven).toBe(100);
+
+    await grade(-5);
+    await queueChangedGrades(ASSIGNMENT);
+    expect((await prisma.ltiScoreQueue.findFirstOrThrow()).scoreGiven).toBe(0);
+  });
+
   it('does nothing for a course with no LMS', async () => {
     await grade(88);
     await prisma.ltiContextLink.deleteMany({});

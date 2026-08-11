@@ -62,6 +62,7 @@ export async function POST(request: Request) {
     },
     courseId: body.data.courseId,
     userId: session.user.id,
+    context: request,
   });
 
   if (!result.ok) {

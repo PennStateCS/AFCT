@@ -9,6 +9,8 @@
 import { prisma } from '@/lib/prisma';
 import type { CourseRole } from '@prisma/client';
 import type { LaunchIdentity } from '@/lib/lti/launch';
+import type { AuditContext } from '@/lib/linked-identity';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 /** LTI role URIs, which are long and repetitive, matched on their last segment. */
 const ROLE_SUFFIX: Record<string, CourseRole> = {
@@ -113,8 +115,9 @@ export async function linkLaunchCourse(opts: {
   identity: LaunchIdentity;
   courseId: string;
   userId: string;
+  context: AuditContext;
 }): Promise<{ ok: true } | { ok: false; reason: LinkRefusal }> {
-  const { identity, courseId, userId } = opts;
+  const { identity, courseId, userId, context } = opts;
   if (!identity.contextId) return { ok: false, reason: 'no-context' };
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
@@ -142,6 +145,17 @@ export async function linkLaunchCourse(opts: {
     // could both pass.
     return { ok: false, reason: 'already-linked' };
   }
+
+  // Logged to match unlinking: deciding which AFCT course an LMS opens governs whose grades
+  // flow where, and only one half of that was recorded before.
+  await createEnhancedActivityLog(prisma, context, {
+    userId,
+    courseId,
+    action: 'LTI_COURSE_LINKED',
+    severity: 'WARNING',
+    category: 'COURSE',
+    metadata: { platformId: identity.platformId, contextId: identity.contextId },
+  });
 
   return { ok: true };
 }

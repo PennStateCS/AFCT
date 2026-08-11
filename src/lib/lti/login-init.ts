@@ -50,8 +50,7 @@ export type LoginInitRefusal =
   | 'ambiguous-platform';
 
 export type LoginInitResult =
-  | { ok: true; redirectUrl: string; state: string }
-  | { ok: false; reason: LoginInitRefusal };
+  { ok: true; redirectUrl: string; state: string } | { ok: false; reason: LoginInitRefusal };
 
 /**
  * Work out where to send the browser next, and mint the state and nonce for the launch.
