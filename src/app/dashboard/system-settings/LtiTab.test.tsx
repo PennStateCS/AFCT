@@ -3,6 +3,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toastMock, resetToastMock } from '@/test/mocks/toast';
 import { LtiTab } from './LtiTab';
 
 /**
@@ -14,8 +15,7 @@ import { LtiTab } from './LtiTab';
  * what the server said rather than a generic failure.
  */
 
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/lib/toast', () => ({ showToast: toast }));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 const platform = {
   id: 'p-1',
@@ -61,6 +61,7 @@ async function fillForm(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetToastMock();
   vi.unstubAllGlobals();
 });
 
@@ -112,7 +113,7 @@ describe('the registered list', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     render(<LtiTab siteUrl="https://afct.test" />);
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
   });
 });
 
@@ -126,7 +127,7 @@ describe('registering one', () => {
     await user.click(screen.getByRole('button', { name: /^Register$/ }));
 
     // Rejected next to the fields, without a round trip.
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -138,7 +139,7 @@ describe('registering one', () => {
     await fillForm(user);
     await user.click(screen.getByRole('button', { name: /^Register$/ }));
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('LMS registered.'));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('LMS registered'));
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/admin/lti/platforms',
       expect.objectContaining({ method: 'POST' }),
@@ -169,7 +170,7 @@ describe('registering one', () => {
     await user.click(screen.getByRole('button', { name: /^Register$/ }));
 
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith('That LMS is already registered.'),
+      expect(toastMock.error).toHaveBeenCalledWith('That LMS is already registered.'),
     );
   });
 });
@@ -194,7 +195,7 @@ describe('removing one', () => {
     await user.click(await screen.findByRole('button', { name: 'Remove Canvas' }));
     await user.click(await screen.findByRole('button', { name: /^Remove$/ }));
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Registration removed.'));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Registration removed'));
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/admin/lti/platforms/p-1',
       expect.objectContaining({ method: 'DELETE' }),

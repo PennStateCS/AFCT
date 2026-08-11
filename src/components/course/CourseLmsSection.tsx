@@ -52,11 +52,11 @@ export function CourseLmsSection({ courseId }: { courseId: string }) {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error();
-      showToast.success('Disconnected from that LMS course.');
+      showToast.success('Disconnected from that LMS course');
       setRemoving(null);
       await load();
     } catch {
-      showToast.error('Could not disconnect that. Try again.');
+      showToast.error('Could not disconnect that LMS course. Check your connection and try again.');
     }
   };
 

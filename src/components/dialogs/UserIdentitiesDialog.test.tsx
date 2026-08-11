@@ -3,6 +3,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toastMock, resetToastMock } from '@/test/mocks/toast';
 import { UserIdentitiesDialog } from './UserIdentitiesDialog';
 
 /**
@@ -14,8 +15,7 @@ import { UserIdentitiesDialog } from './UserIdentitiesDialog';
  * disabled button is the difference between a refusal and a dead end.
  */
 
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/lib/toast', () => ({ showToast: toast }));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC', hour12: false }),
@@ -46,6 +46,7 @@ function show(body: unknown, ok = true) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetToastMock();
   vi.unstubAllGlobals();
 });
 
@@ -88,7 +89,7 @@ describe('what it shows', () => {
       <UserIdentitiesDialog userId="u-1" userName="Ada Lovelace" open={true} setOpen={vi.fn()} />,
     );
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
   });
 });
 
@@ -126,7 +127,7 @@ describe('detaching', () => {
 
     await user.click(await screen.findByRole('button', { name: /Detach/ }));
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Sign-in method detached.'));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Sign-in method detached'));
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/users/u-1/identities?identityId=li-1',
       expect.objectContaining({ method: 'DELETE' }),
@@ -149,6 +150,6 @@ describe('detaching', () => {
 
     await user.click(await screen.findByRole('button', { name: /Detach/ }));
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('That is their only way in.'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('That is their only way in.'));
   });
 });

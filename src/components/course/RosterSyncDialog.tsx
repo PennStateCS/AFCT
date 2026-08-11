@@ -98,16 +98,19 @@ export function RosterSyncDialog({
         error?: string;
       };
       if (!res.ok) {
-        showToast.error(body.error ?? 'Could not sync the roster. Try again.');
+        showToast.error(
+          body.error ?? 'Could not sync the roster. Check your connection and try again.',
+        );
         return;
       }
-      showToast.success(
-        `Roster synced. ${body.added ?? 0} added, ${body.dropped ?? 0} marked dropped.`,
-      );
+      // Counts go in the description: the headline says what happened, the detail says how much.
+      showToast.success('Roster synced', {
+        description: `${body.added ?? 0} added, ${body.dropped ?? 0} marked dropped.`,
+      });
       onOpenChange(false);
       onApplied?.();
     } catch {
-      showToast.error('Could not sync the roster. Try again.');
+      showToast.error('Could not sync the roster. Check your connection and try again.');
     } finally {
       setApplying(false);
     }

@@ -83,7 +83,7 @@ export function GradeSyncCard({
       if (!res.ok) throw new Error();
     } catch {
       setState({ ...state, autoSync: !autoSync });
-      showToast.error('Could not change that. Try again.');
+      showToast.error('Could not change that setting. Check your connection and try again.');
     }
   };
 
@@ -100,7 +100,7 @@ export function GradeSyncCard({
       );
       await load();
     } catch {
-      showToast.error('Could not send those grades. Try again.');
+      showToast.error('Could not send those grades. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
