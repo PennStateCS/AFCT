@@ -198,6 +198,7 @@ model User {
   grantsCreated       SubmissionGrant[]        @relation("SubmissionGrantCreatedBy") // grants this user created
   ltiLinksCreated     LtiContextLink[] // LMS course links this user decided
   ltiPendingLinks     LtiPendingLink[] // launches waiting for this user to pick a course
+  ltiPendingDeepLinks LtiPendingDeepLink[] // deep-linking requests waiting on this user
   ltiScores           LtiScoreQueue[] // their grades queued for an LMS gradebook
 
   @@index([isAdmin])
@@ -319,6 +320,8 @@ model LtiPlatform {
   contextLinks LtiContextLink[]
   /// Launches waiting for somebody to say which AFCT course they open.
   pendingLinks LtiPendingLink[]
+  /// Deep-linking requests waiting for somebody to choose an assignment.
+  pendingDeepLinks LtiPendingDeepLink[]
 
   /// The triple that identifies a registration. Also what a launch is matched against.
   @@unique([issuer, clientId, deploymentId])
@@ -1495,6 +1498,42 @@ model LtiScoreQueue {
   @@unique([assignmentId, userId])
   /// What the sender reads: everything due, oldest first.
   @@index([state, nextAttemptAt])
+}
+
+/// A deep-linking request waiting for somebody to choose an assignment.
+///
+/// The return URL and the platform's opaque state are held here rather than passed through the
+/// browser. In a URL, somebody could change where AFCT posts its signed answer, and AFCT signs
+/// that answer with its own key.
+///
+/// @namespace Identity
+model LtiPendingDeepLink {
+  /// Unique identifier, and what the browser is handed to name this pending choice.
+  id String @id @default(cuid())
+
+  platform   LtiPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  /// Which registration asked.
+  platformId String
+
+  /// The LMS course it was asked from, so the picker can offer that course's assignments.
+  contextId String?
+
+  /// Where the signed answer is posted, exactly as the platform gave it.
+  returnUrl String
+  /// The platform's own opaque state, returned untouched or the response is rejected.
+  data      String?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Who the launch signed in. Only they can answer it.
+  userId String
+
+  /// When this stops being usable.
+  expiresAt DateTime
+  /// When this record was created.
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 generator erd {

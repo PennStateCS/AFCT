@@ -2568,6 +2568,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lti/deep-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Return a chosen assignment to the LMS as a deep link
+         * @description **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/deep-link/route.ts)
+         */
+        post: operations["postLtiDeepLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lti/jwks": {
         parameters: {
             query?: never;
@@ -11634,6 +11656,42 @@ export interface operations {
             };
             /** @description Health check failed. */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postLtiDeepLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page that posts the signed response back to the LMS. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request has expired or is not yours. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description You do not run that course. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
