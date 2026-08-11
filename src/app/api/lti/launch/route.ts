@@ -164,6 +164,23 @@ async function decideDestination(identity: LaunchIdentity, userId: string): Prom
 
   if (target.status === 'linked') {
     await enrolFromLaunch({ courseId: target.courseId, userId, roles: identity.roles });
+
+    /**
+     * A deep link names the assignment it was created for, so it opens there rather than at the
+     * course. Checked against this course before it is used: the claim travels through the
+     * platform and could name an assignment somewhere else, and landing somebody on another
+     * course's assignment would be a way to read work they should not see.
+     */
+    if (identity.assignmentId) {
+      const assignment = await prisma.assignment.findFirst({
+        where: { id: identity.assignmentId, courseId: target.courseId },
+        select: { id: true },
+      });
+      if (assignment) {
+        return `/dashboard/courses/${target.courseId}/${assignment.id}`;
+      }
+    }
+
     return `/dashboard/courses/${target.courseId}`;
   }
 
