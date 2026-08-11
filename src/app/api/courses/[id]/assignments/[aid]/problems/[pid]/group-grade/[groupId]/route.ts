@@ -183,6 +183,9 @@ export const POST = withCourseAuth(
           groupName: group.name,
           grade,
           memberIds,
+          // The marks this replaced. A group grade overwriting somebody's individual mark is
+          // exactly the case a student queries, and the old value was being thrown away.
+          overwrote: conflicts.map((c) => ({ studentId: c.studentId, from: c.grade, to: grade })),
           overwroteDiffering: conflicts.map((c) => c.studentId),
         },
       });

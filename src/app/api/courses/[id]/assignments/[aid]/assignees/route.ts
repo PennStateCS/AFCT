@@ -157,8 +157,16 @@ export const PUT = withCourseAuth(
         if (!assignedToEveryone) {
           await tx.assignmentAssignee.createMany({
             data: isGroup
-              ? groupIds.map((groupId) => ({ assignmentId: aid, targetType: 'GROUP' as const, groupId }))
-              : userIds.map((userId) => ({ assignmentId: aid, targetType: 'STUDENT' as const, userId })),
+              ? groupIds.map((groupId) => ({
+                  assignmentId: aid,
+                  targetType: 'GROUP' as const,
+                  groupId,
+                }))
+              : userIds.map((userId) => ({
+                  assignmentId: aid,
+                  targetType: 'STUDENT' as const,
+                  userId,
+                })),
           });
           // Drop overrides for targets that are no longer assigned.
           if (isGroup) {
@@ -183,6 +191,10 @@ export const PUT = withCourseAuth(
         assignmentId: aid,
         metadata: {
           assignedToEveryone,
+          // Who it is for, not just how many. This decides who can see the assignment at all,
+          // and a count cannot answer "was this student meant to have it".
+          assignees: (isGroup ? groupIds : userIds).slice(0, 100),
+          assigneeKind: isGroup ? 'group' : 'student',
           assigneeCount: isGroup ? groupIds.length : userIds.length,
         },
       });

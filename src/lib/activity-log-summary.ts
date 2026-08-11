@@ -56,6 +56,13 @@ function describeChanges(metadata: Metadata): string | null {
     .join('; ');
 }
 
+// Every failing action already records why it failed, under `reason` when a guard turned it
+// down and `error` when logError caught a throw. Nothing was reading either, so the rows most
+// worth reading while debugging were also the ones showing nothing. Handled ahead of the
+// switch so a new failure action is covered the day it is written rather than when somebody
+// remembers to add a case.
+const FAILURE = /_(ERROR|DENIED|FAILED|REJECTED|INVALID)$/;
+
 export function describeActivity(action: string, metadata: Metadata): string | null {
   switch (action) {
     // Updates that record old and new. The change itself is the whole point of the entry.
@@ -85,6 +92,26 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       const via = str(metadata, 'via');
       if (via === 'LTI_ROSTER_SYNC') return 'from an LMS roster sync';
       return describeChanges(metadata);
+    }
+
+    case 'UPDATE_ASSIGNMENT_PROBLEM_SETTINGS':
+      return describeChanges(metadata);
+
+    case 'UPDATE_GROUP_SET_MEMBERSHIPS': {
+      const assigned = num(metadata, 'assignedCount');
+      const removed = num(metadata, 'removedCount');
+      const parts: string[] = [];
+      if (assigned > 0) parts.push(`${assigned} moved into a group`);
+      if (removed > 0) parts.push(`${removed} taken out`);
+      return parts.length > 0 ? parts.join(', ') : 'nothing changed';
+    }
+
+    case 'UPDATE_ASSIGNMENT_AUDIENCE': {
+      if (metadata?.assignedToEveryone === true) return 'assigned to everyone';
+      const count = num(metadata, 'assigneeCount');
+      const kind = str(metadata, 'assigneeKind');
+      const noun = kind === 'group' ? 'group' : 'student';
+      return `assigned to ${count} ${count === 1 ? noun : `${noun}s`}`;
     }
 
     case 'CHANGE_COURSE_ROLE': {
@@ -142,7 +169,9 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       return str(metadata, 'issuer');
 
     default:
-      return null;
+      // The two failure actions with their own cases add context to the reason, so they keep
+      // them; this covers every other failing action.
+      return FAILURE.test(action) ? (str(metadata, 'reason') ?? str(metadata, 'error')) : null;
   }
 }
 
