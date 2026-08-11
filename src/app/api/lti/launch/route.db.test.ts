@@ -37,6 +37,7 @@ const identity = {
   roles: [],
   contextId: 'ctx-1',
   contextTitle: 'Theory of Computation',
+  assignmentId: null,
   resourceLinkId: null,
   targetLinkUri: null,
 };
@@ -61,7 +62,10 @@ async function destroyFixtures() {
   await prisma.ltiPendingLink.deleteMany({});
   await prisma.ltiContextLink.deleteMany({});
   await prisma.roster.deleteMany({ where: { courseId: 'c-launch-dest' } });
-  await prisma.course.deleteMany({ where: { id: 'c-launch-dest' } });
+  await prisma.assignment.deleteMany({
+    where: { courseId: { in: ['c-launch-dest', 'c-elsewhere'] } },
+  });
+  await prisma.course.deleteMany({ where: { id: { in: ['c-launch-dest', 'c-elsewhere'] } } });
   await prisma.ltiPlatform.deleteMany({ where: { id: 'ltip-1' } });
   await prisma.singleUseToken.deleteMany({
     where: { purpose: { in: ['LTI_LAUNCH_STATE', 'LTI_SESSION_TICKET'] } },
@@ -133,6 +137,65 @@ describe('where a launch lands', () => {
     await withCourse();
     await prisma.ltiContextLink.create({
       data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+
+    const res = await post(await goodLaunch());
+
+    expect(nextOf(res)).toBe(`/dashboard/courses/${COURSE}`);
+  });
+
+  /**
+   * A deep link names the assignment it was made for, so it opens there rather than at the
+   * course. The path is the one the course page links to; an invented one would 404 and look
+   * like a broken launch.
+   */
+  it('opens the assignment a deep link names', async () => {
+    await withCourse();
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+    await prisma.assignment.create({
+      data: { id: 'a-deep', courseId: COURSE, title: 'Linked', dueDate: new Date() },
+    });
+    validateLaunch.mockResolvedValue({
+      ok: true,
+      identity: { ...identity, assignmentId: 'a-deep' },
+    });
+
+    const res = await post(await goodLaunch());
+
+    expect(nextOf(res)).toBe(`/dashboard/courses/${COURSE}/a-deep`);
+  });
+
+  /**
+   * The claim travels through the platform, so it could name an assignment in another course.
+   * Landing somebody there would be a way to read work they should not see.
+   */
+  it('ignores an assignment that belongs to a different course', async () => {
+    await withCourse();
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+    // A real assignment, in a course this launch has nothing to do with. It has to exist, or
+    // the lookup returns nothing whether the course is checked or not and the test proves
+    // nothing.
+    await prisma.course.create({
+      data: {
+        id: 'c-elsewhere',
+        name: 'Another course',
+        code: 'CMPSC 999',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: new Date('2026-08-24T00:00:00Z'),
+        endDate: new Date('2026-12-18T00:00:00Z'),
+      },
+    });
+    await prisma.assignment.create({
+      data: { id: 'a-elsewhere', courseId: 'c-elsewhere', title: 'Not yours', dueDate: new Date() },
+    });
+    validateLaunch.mockResolvedValue({
+      ok: true,
+      identity: { ...identity, assignmentId: 'a-elsewhere' },
     });
 
     const res = await post(await goodLaunch());
