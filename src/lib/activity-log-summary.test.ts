@@ -249,3 +249,38 @@ describe('the readable detail view', () => {
     expect(text).toContain('Count');
   });
 });
+
+/**
+ * Why something failed is already in the metadata of every failing action, so reading it needs
+ * no per-action case. These are the rows somebody is looking at when they are debugging, and
+ * they were the ones showing nothing.
+ */
+describe('a failed action', () => {
+  it('reads the reason a guard turned it down', () => {
+    expect(describeActivity('COURSE_UPDATE_DENIED', { reason: 'not course staff' })).toBe(
+      'not course staff',
+    );
+  });
+
+  it('falls back to the caught error when there is no reason', () => {
+    expect(describeActivity('ASSIGNMENT_UPDATE_ERROR', { error: 'connection lost' })).toBe(
+      'connection lost',
+    );
+  });
+
+  it('prefers the reason, which is the deliberate one', () => {
+    const text = describeActivity('X_DENIED', { reason: 'archived', error: 'ignored' });
+
+    expect(text).toBe('archived');
+  });
+
+  // The suffix is what makes this safe to apply blind: a successful action that happens to
+  // carry a `reason` must not be described as though it failed.
+  it('does not fire on an action that did not fail', () => {
+    expect(describeActivity('CREATE_COURSE', { reason: 'because I wanted to' })).toBeNull();
+  });
+
+  it('says nothing when the action failed without recording why', () => {
+    expect(describeActivity('SOMETHING_ERROR', { courseId: 'c-1' })).toBeNull();
+  });
+});

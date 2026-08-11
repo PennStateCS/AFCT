@@ -56,6 +56,13 @@ function describeChanges(metadata: Metadata): string | null {
     .join('; ');
 }
 
+// Every failing action already records why it failed, under `reason` when a guard turned it
+// down and `error` when logError caught a throw. Nothing was reading either, so the rows most
+// worth reading while debugging were also the ones showing nothing. Handled ahead of the
+// switch so a new failure action is covered the day it is written rather than when somebody
+// remembers to add a case.
+const FAILURE = /_(ERROR|DENIED|FAILED|REJECTED|INVALID)$/;
+
 export function describeActivity(action: string, metadata: Metadata): string | null {
   switch (action) {
     // Updates that record old and new. The change itself is the whole point of the entry.
@@ -162,7 +169,9 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       return str(metadata, 'issuer');
 
     default:
-      return null;
+      // The two failure actions with their own cases add context to the reason, so they keep
+      // them; this covers every other failing action.
+      return FAILURE.test(action) ? (str(metadata, 'reason') ?? str(metadata, 'error')) : null;
   }
 }
 
