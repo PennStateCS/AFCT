@@ -1425,6 +1425,12 @@ model LtiLineItem {
   /// The platform's URL for this column, used to post scores.
   url String
 
+  /// What the column was last told it is called and worth. Kept so a renamed assignment, or one
+  /// whose points changed, can be corrected in the LMS: a score is scaled against the column's
+  /// maximum, so a stale one silently misreports every grade.
+  label        String?
+  scoreMaximum Float?
+
   /// When this record was created.
   createdAt DateTime @default(now())
 

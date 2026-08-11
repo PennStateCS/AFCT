@@ -125,9 +125,21 @@ export async function ensureLineItem(opts: {
         assignmentId: opts.assignmentId,
       },
     },
-    select: { url: true },
+    select: { url: true, label: true, scoreMaximum: true },
   });
-  if (existing) return { ok: true, value: existing.url };
+
+  if (existing) {
+    /**
+     * Correct the column if the assignment has been renamed or re-pointed since.
+     *
+     * The maximum matters more than the name: a platform scales a score against the column's
+     * own maximum, so an assignment that grew from 100 to 150 points would have every grade
+     * silently misreported until this catches up.
+     */
+    const stale = existing.label !== opts.label || existing.scoreMaximum !== opts.scoreMaximum;
+    if (stale) await updateLineItem(existing.url, opts);
+    return { ok: true, value: existing.url };
+  }
 
   if (!opts.lineItemsUrl) return { ok: false, reason: 'no-line-items-endpoint' };
 
@@ -135,7 +147,12 @@ export async function ensureLineItem(opts: {
   if (!token.ok) return { ok: false, reason: 'no-token', detail: token.reason };
 
   const already = await findLineItem(opts.lineItemsUrl, token.token, opts.assignmentId);
-  if (already) return remember(opts.contextLinkId, opts.assignmentId, already);
+  if (already) {
+    return remember(opts.contextLinkId, opts.assignmentId, already, {
+      label: opts.label,
+      scoreMaximum: opts.scoreMaximum,
+    });
+  }
 
   const created = await call(opts.lineItemsUrl, token.token, LINE_ITEM_TYPE, {
     scoreMaximum: opts.scoreMaximum,
@@ -159,7 +176,56 @@ export async function ensureLineItem(opts: {
     return { ok: false, reason: 'rejected', detail: 'the platform returned no line item id' };
   }
 
-  return remember(opts.contextLinkId, opts.assignmentId, url);
+  return remember(opts.contextLinkId, opts.assignmentId, url, {
+    label: opts.label,
+    scoreMaximum: opts.scoreMaximum,
+  });
+}
+
+/**
+ * Tell the platform the column's new name or maximum.
+ *
+ * Best effort: a failure here leaves the stored shape unchanged, so the next grade tries again
+ * rather than assuming it worked. Sending the score anyway is better than refusing to grade
+ * because a title is out of date.
+ */
+async function updateLineItem(
+  url: string,
+  opts: {
+    platform: PlatformRef;
+    contextLinkId: string;
+    assignmentId: string;
+    label: string;
+    scoreMaximum: number;
+  },
+): Promise<void> {
+  const token = await authorised(opts.platform);
+  if (!token.ok) return;
+
+  try {
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token.token}`, 'Content-Type': LINE_ITEM_TYPE },
+      body: JSON.stringify({
+        scoreMaximum: opts.scoreMaximum,
+        label: opts.label,
+        resourceId: opts.assignmentId,
+      }),
+    });
+    if (!response.ok) return;
+  } catch {
+    return;
+  }
+
+  await prisma.ltiLineItem.update({
+    where: {
+      contextLinkId_assignmentId: {
+        contextLinkId: opts.contextLinkId,
+        assignmentId: opts.assignmentId,
+      },
+    },
+    data: { label: opts.label, scoreMaximum: opts.scoreMaximum },
+  });
 }
 
 /** Record the column so the next grade skips all of the above. */
@@ -167,11 +233,12 @@ async function remember(
   contextLinkId: string,
   assignmentId: string,
   url: string,
+  shape: { label: string; scoreMaximum: number },
 ): Promise<AgsResult<string>> {
   await prisma.ltiLineItem.upsert({
     where: { contextLinkId_assignmentId: { contextLinkId, assignmentId } },
-    create: { contextLinkId, assignmentId, url },
-    update: { url },
+    create: { contextLinkId, assignmentId, url, ...shape },
+    update: { url, ...shape },
   });
   return { ok: true, value: url };
 }

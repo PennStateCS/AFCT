@@ -23,13 +23,18 @@ const json = (body: unknown, status = 200) =>
 
 /** A platform that hands out a token and accepts whatever it is sent. */
 function acceptingPlatform() {
-  const calls: { url: string; body: unknown; headers: Record<string, string> }[] = [];
+  const calls: {
+    url: string;
+    body: unknown;
+    headers: Record<string, string>;
+    method: string;
+  }[] = [];
   const mock = vi.fn(async (url: string, init: RequestInit) => {
     const headers = (init?.headers ?? {}) as Record<string, string>;
     if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
     // A platform with no column for this assignment yet. Only writes are recorded.
     if (!init?.method || init.method === 'GET') return json([]);
-    calls.push({ url, body: JSON.parse(String(init.body)), headers });
+    calls.push({ url, body: JSON.parse(String(init.body)), headers, method: init.method ?? 'GET' });
     return json({ id: `${LINE_ITEMS_URL}/42` });
   });
   vi.stubGlobal('fetch', mock);
@@ -173,6 +178,38 @@ describe('the gradebook column', () => {
 
     expect(await ensure()).toEqual({ ok: true, value: `${LINE_ITEMS_URL}/existing` });
     expect(posts).toHaveLength(0);
+  });
+
+  /**
+   * A platform scales a score against the column's own maximum, so an assignment that grew
+   * from 100 points to 150 would have every grade silently misreported until the column
+   * catches up. The name matters far less, and is corrected at the same time.
+   */
+  it('corrects the column when the assignment is re-pointed', async () => {
+    const calls = acceptingPlatform();
+    await ensure();
+
+    await ensureLineItem({
+      platform: PLATFORM,
+      contextLinkId,
+      lineItemsUrl: LINE_ITEMS_URL,
+      assignmentId: ASSIGNMENT,
+      label: 'Problem set 1 (revised)',
+      scoreMaximum: 150,
+    });
+
+    const update = calls.find((c) => c.method === 'PUT');
+    expect(update?.body).toMatchObject({ scoreMaximum: 150, label: 'Problem set 1 (revised)' });
+    const row = await prisma.ltiLineItem.findFirstOrThrow();
+    expect(row.scoreMaximum).toBe(150);
+  });
+
+  it('leaves an unchanged column alone', async () => {
+    const calls = acceptingPlatform();
+    await ensure();
+    await ensure();
+
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(0);
   });
 
   it('says so when the platform granted no grade scopes', async () => {

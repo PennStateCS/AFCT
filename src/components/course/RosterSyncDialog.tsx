@@ -123,7 +123,14 @@ export function RosterSyncDialog({
           <DialogDescription>Nothing changes until you choose to apply it.</DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-96 overflow-y-auto" tabIndex={0}>
+        {/* Focusable so it can be scrolled by keyboard, and named so that focus stop means
+            something when announced. */}
+        <div
+          className="max-h-96 overflow-y-auto"
+          tabIndex={0}
+          role="group"
+          aria-label="Roster changes"
+        >
           {error && (
             <p role="alert" className="text-destructive text-sm">
               {error}

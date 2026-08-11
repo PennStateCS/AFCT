@@ -107,6 +107,8 @@ erDiagram
   String contextLinkId FK
   String assignmentId FK
   String url
+  String label "nullable"
+  Float scoreMaximum "nullable"
   DateTime createdAt
 }
 "LtiScoreQueue" {
@@ -372,6 +374,11 @@ Properties as follows:
 - `contextLinkId`: The LMS course this column lives in.
 - `assignmentId`: The AFCT assignment it scores.
 - `url`: The platform's URL for this column, used to post scores.
+- `label`
+  > What the column was last told it is called and worth. Kept so a renamed assignment, or one
+  > whose points changed, can be corrected in the LMS: a score is scaled against the column's
+  > maximum, so a stale one silently misreports every grade.
+- `scoreMaximum`:
 - `createdAt`: When this record was created.
 
 ### `LtiScoreQueue`
