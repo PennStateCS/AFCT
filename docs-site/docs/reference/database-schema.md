@@ -108,6 +108,20 @@ erDiagram
   String url
   DateTime createdAt
 }
+"LtiScoreQueue" {
+  String id PK
+  String assignmentId FK
+  String userId FK
+  Float scoreGiven
+  Float scoreMaximum
+  LtiScoreState state
+  Int attempts
+  String lastError "nullable"
+  DateTime nextAttemptAt
+  DateTime sentAt "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+}
 "ClientApiToken" }o--|| "User" : user
 "LinkedIdentity" }o--|| "User" : user
 "SingleUseToken" }o--o| "User" : user
@@ -116,6 +130,7 @@ erDiagram
 "LtiPendingLink" }o--|| "LtiPlatform" : platform
 "LtiPendingLink" }o--|| "User" : user
 "LtiLineItem" }o--|| "LtiContextLink" : contextLink
+"LtiScoreQueue" }o--|| "User" : user
 ```
 
 ### `User`
@@ -354,6 +369,32 @@ Properties as follows:
 - `assignmentId`: The AFCT assignment it scores.
 - `url`: The platform's URL for this column, used to post scores.
 - `createdAt`: When this record was created.
+
+### `LtiScoreQueue`
+
+A grade on its way to an LMS gradebook.
+
+Written in the same breath as the grade itself and sent afterwards, rather than posted
+inline. An LMS that is slow, down or rate-limiting must never make grading fail or hang, and
+a grade that did not arrive has to be visible rather than lost in a log.
+
+One row per assignment per student: a regrade replaces the pending row instead of queueing a
+second, so the LMS receives the current grade rather than a history of edits.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `assignmentId`: The assignment being scored.
+- `userId`: The student whose grade this is.
+- `scoreGiven`: The grade, and what it is out of, captured when it was queued.
+- `scoreMaximum`:
+- `state`:
+- `attempts`: How many times sending has been tried. Drives the backoff and the give-up point.
+- `lastError`: Why the last attempt failed, for the screen that shows faculty what happened.
+- `nextAttemptAt`: Not before this time. Set into the future to back off after a failure.
+- `sentAt`: When the LMS accepted it.
+- `createdAt`: When this record was created.
+- `updatedAt`: When it was last changed.
 
 ## Courses
 
