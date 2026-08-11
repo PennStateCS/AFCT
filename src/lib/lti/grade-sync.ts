@@ -20,7 +20,10 @@ export async function courseIsLinked(courseId: string): Promise<boolean> {
  *
  * Returns how many were queued, which is what the "send grades now" button reports.
  */
-export async function queueChangedGrades(assignmentId: string): Promise<number> {
+export async function queueChangedGrades(
+  assignmentId: string,
+  opts: { retryFailed?: boolean } = {},
+): Promise<number> {
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
     select: {
@@ -54,16 +57,17 @@ export async function queueChangedGrades(assignmentId: string): Promise<number> 
     const scoreGiven = total._sum.grade ?? 0;
     const existing = known.get(total.studentId);
 
-    // Already queued or delivered with the same numbers: nothing to do. A FAILED row is
-    // deliberately not retried here; that needs somebody to fix the cause first.
-    if (
-      existing &&
-      existing.scoreGiven === scoreGiven &&
-      existing.scoreMaximum === scoreMaximum &&
-      existing.state !== 'FAILED'
-    ) {
-      continue;
-    }
+    /**
+     * Already queued or delivered with the same numbers: nothing to do.
+     *
+     * A failed one stays failed. Retrying automatically means retrying every minute for ever,
+     * against a cause only a person can fix, and each attempt can leave litter behind: an
+     * earlier version of this re-queued failed rows and produced a duplicate gradebook column
+     * per attempt. Faculty retry deliberately with "send grades now".
+     */
+    const unchanged =
+      existing && existing.scoreGiven === scoreGiven && existing.scoreMaximum === scoreMaximum;
+    if (unchanged && (existing.state !== 'FAILED' || !opts.retryFailed)) continue;
 
     await queueScore({
       assignmentId,

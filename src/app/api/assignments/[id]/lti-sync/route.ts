@@ -83,7 +83,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const gate = await staffFor(id);
   if (!gate.ok) return gate.response;
 
-  const queued = await queueChangedGrades(id);
+  // Deliberate, so this is the one place a failed grade is tried again.
+  const queued = await queueChangedGrades(id, { retryFailed: true });
 
   return NextResponse.json({ queued });
 }

@@ -136,6 +136,29 @@ describe('queueing what has changed', () => {
     });
   });
 
+  /**
+   * The loop this prevents: a failed grade re-queued every pass, retried against a cause only
+   * a person can fix, littering the LMS with a duplicate column each time. Seen for real.
+   */
+  it('leaves a failed grade alone rather than retrying for ever', async () => {
+    await grade(88);
+    await queueChangedGrades(ASSIGNMENT);
+    await prisma.ltiScoreQueue.updateMany({ data: { state: 'FAILED', lastError: 'refused' } });
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(0);
+    expect((await prisma.ltiScoreQueue.findFirstOrThrow()).state).toBe('FAILED');
+  });
+
+  // "Send grades now" is the one place a failed grade is tried again.
+  it('retries a failed grade when asked deliberately', async () => {
+    await grade(88);
+    await queueChangedGrades(ASSIGNMENT);
+    await prisma.ltiScoreQueue.updateMany({ data: { state: 'FAILED', lastError: 'refused' } });
+
+    expect(await queueChangedGrades(ASSIGNMENT, { retryFailed: true })).toBe(1);
+    expect((await prisma.ltiScoreQueue.findFirstOrThrow()).state).toBe('PENDING');
+  });
+
   it('does nothing for a course with no LMS', async () => {
     await grade(88);
     await prisma.ltiContextLink.deleteMany({});
