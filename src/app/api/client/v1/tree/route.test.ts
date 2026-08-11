@@ -8,7 +8,15 @@ const prismaMock = vi.hoisted(() => ({
   groupMembership: { findMany: vi.fn() },
 }));
 
-vi.mock('@/lib/client-auth', () => ({ resolveClientToken: resolveMock }));
+vi.mock('@/lib/client-auth', () => ({
+  resolveClientToken: resolveMock,
+  // The routes go through withClientAuth, which asks for the reason. Derived from the same
+  // mock so these tests keep describing token resolution one way.
+  resolveClientTokenDetailed: async (t: string) => {
+    const r = await resolveMock(t);
+    return r ? { ok: true, token: r } : { ok: false, reason: 'unknown token' };
+  },
+}));
 vi.mock('@/lib/courses-list', () => ({ getCoursesListForUser: getCoursesMock }));
 vi.mock('@/lib/student-assignments', () => ({ getStudentCourseAssignments: getAssignmentsMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));

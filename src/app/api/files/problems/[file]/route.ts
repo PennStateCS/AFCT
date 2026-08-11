@@ -56,6 +56,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
         action: 'PROBLEM_FILE_ACCESS_DENIED',
         category: 'PROBLEM',
         courseId: problem.courseId,
+        metadata: { reason: 'not course staff', problemId: problem.id },
       });
     }
 

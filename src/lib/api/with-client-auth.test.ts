@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const resolveMock = vi.hoisted(() => vi.fn());
 const logMock = vi.hoisted(() => vi.fn());
 let clientIp = '10.0.0.1';
-vi.mock('@/lib/client-auth', () => ({ resolveClientToken: resolveMock }));
+vi.mock('@/lib/client-auth', () => ({ resolveClientTokenDetailed: resolveMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: logMock }));
 vi.mock('@/lib/security/rate-limiter', () => ({ getClientIp: () => clientIp }));
@@ -43,7 +43,7 @@ describe('withClientAuth', () => {
   });
 
   it('401 and a SECURITY log when a presented token does not resolve', async () => {
-    resolveMock.mockResolvedValue(null);
+    resolveMock.mockResolvedValue({ ok: false, reason: 'expired' });
     const handler = vi.fn();
     const res = await withClientAuth(handler)(makeReq('Bearer bad'), ctx);
     expect(res.status).toBe(401);
@@ -54,12 +54,18 @@ describe('withClientAuth', () => {
     expect(logMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      expect.objectContaining({ action: 'CLIENT_TOKEN_REJECTED', severity: 'SECURITY' }),
+      expect.objectContaining({
+        action: 'CLIENT_TOKEN_REJECTED',
+        severity: 'SECURITY',
+        // Which rejection it was: "expired" and "revoked" need different answers when a
+        // student reports their client has stopped working.
+        metadata: { reason: 'expired' },
+      }),
     );
   });
 
   it('throttles the rejected-token log per IP', async () => {
-    resolveMock.mockResolvedValue(null);
+    resolveMock.mockResolvedValue({ ok: false, reason: 'revoked' });
     const handler = vi.fn();
     const wrapped = withClientAuth(handler);
     await wrapped(makeReq('Bearer bad'), ctx);
@@ -72,8 +78,11 @@ describe('withClientAuth', () => {
 
   it('runs the handler with the resolved user for a valid token', async () => {
     resolveMock.mockResolvedValue({
-      tokenId: 't1',
-      user: { id: 'u1', isAdmin: false, email: 'a@b.c', firstName: null, lastName: null },
+      ok: true,
+      token: {
+        tokenId: 't1',
+        user: { id: 'u1', isAdmin: false, email: 'a@b.c', firstName: null, lastName: null },
+      },
     });
     const handler = vi.fn().mockResolvedValue(new Response('ok'));
 
@@ -84,5 +93,27 @@ describe('withClientAuth', () => {
       tokenId: 't1',
     });
     expect(await res.text()).toBe('ok');
+  });
+
+  /**
+   * Reporting a reason must not become a way in. Every rejection shape has to end the request,
+   * which is the risk in returning an object where the old code returned null.
+   */
+  it.each([
+    'unknown token',
+    'revoked',
+    'expired',
+    'past maximum age',
+    'account disabled',
+    'password changed since the token was issued',
+    'account locked',
+  ] as const)('still refuses a token rejected as %s', async (reason) => {
+    resolveMock.mockResolvedValue({ ok: false, reason });
+    const handler = vi.fn();
+
+    const res = await withClientAuth(handler)(makeReq('Bearer bad'), ctx);
+
+    expect(res.status).toBe(401);
+    expect(handler).not.toHaveBeenCalled();
   });
 });

@@ -132,7 +132,12 @@ export const POST = withCourseAuth(
             severity: 'WARNING',
             category: 'COURSE',
             courseId,
-            metadata: { courseId, groupSetId: setId },
+            metadata: {
+              courseId,
+              groupSetId: setId,
+              reason: 'group set changed by someone else while this edit was open',
+              memberCount: current.length,
+            },
           });
           return NextResponse.json(
             {

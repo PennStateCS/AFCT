@@ -1,7 +1,11 @@
 // src/lib/api/with-client-auth.ts
 import type { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { resolveClientToken, type ClientTokenUser } from '@/lib/client-auth';
+import {
+  resolveClientTokenDetailed,
+  type ClientTokenRejection,
+  type ClientTokenUser,
+} from '@/lib/client-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getClientIp } from '@/lib/security/rate-limiter';
 import { apiError } from './http';
@@ -15,7 +19,7 @@ import { apiError } from './http';
 const REJECT_LOG_WINDOW_MS = 5 * 60 * 1000;
 const lastRejectLogByIp = new Map<string, number>();
 
-async function logRejectedToken(req: Request): Promise<void> {
+async function logRejectedToken(req: Request, reason: ClientTokenRejection): Promise<void> {
   const ip = getClientIp(req) || 'unknown';
   const now = Date.now();
   const last = lastRejectLogByIp.get(ip);
@@ -33,6 +37,7 @@ async function logRejectedToken(req: Request): Promise<void> {
       action: 'CLIENT_TOKEN_REJECTED',
       severity: 'SECURITY',
       category: 'SYSTEM',
+      metadata: { reason },
     });
   } catch (error) {
     console.error('[client-auth] rejected-token log failure', error);
@@ -72,12 +77,14 @@ export function withClientAuth<Ctx = unknown, R extends Response = Response>(
   return async (req: Request, ctx: Ctx) => {
     const raw = extractBearer(req);
     if (!raw) return apiError(401, 'Unauthorized');
-    const resolved = await resolveClientToken(raw);
-    if (!resolved) {
-      // A token was presented but didn't resolve: log it (throttled) as a security event.
-      void logRejectedToken(req);
+    const resolved = await resolveClientTokenDetailed(raw);
+    if (!resolved.ok) {
+      // A token was presented but didn't resolve: log it (throttled) as a security event,
+      // with the reason, since "expired" and "revoked" call for different answers to the
+      // student asking why their client stopped working.
+      void logRejectedToken(req, resolved.reason);
       return apiError(401, 'Unauthorized');
     }
-    return handler(req, ctx, { user: resolved.user, tokenId: resolved.tokenId });
+    return handler(req, ctx, { user: resolved.token.user, tokenId: resolved.token.tokenId });
   };
 }

@@ -75,6 +75,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
         action: 'SUBMISSION_FILE_ACCESS_DENIED',
         category: 'SUBMISSION',
         courseId: submission.courseId,
+        // Whose file was reached for is the subject of this record, and it is not the actor.
+        // A refused attempt on another student's work is the case the log exists to answer.
+        metadata: {
+          reason: 'not the owning student or course staff',
+          targetUserId: submission.studentId,
+          submissionId: submission.id,
+        },
       });
     }
 

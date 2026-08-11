@@ -4,6 +4,7 @@ const authMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   course: { findUnique: vi.fn() },
   assignment: { findFirst: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 const createLogMock = vi.hoisted(() => vi.fn());
 const canManageMock = vi.hoisted(() => vi.fn());
@@ -133,6 +134,61 @@ describe('withCourseAuth', () => {
       req,
       expect.objectContaining({ action: 'C_DENIED', severity: 'SECURITY', courseId: 'c1' }),
     );
+  });
+
+  /**
+   * A denial is a SECURITY record and used to carry an empty metadata object, so the log could
+   * say somebody was refused but never why. The role is read at the time because it changes.
+   */
+  it('records why the refusal happened, with the role at the time', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    canManageMock.mockResolvedValue(false);
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', status: 'ENROLLED' });
+
+    await withCourseAuth(vi.fn(), manage)(new Request('http://localhost/x'), ctx());
+
+    expect(createLogMock.mock.calls[0][2].metadata).toEqual({
+      reason: 'student, needs faculty or ta',
+      required: 'FACULTY or TA',
+      role: 'STUDENT',
+      status: 'ENROLLED',
+    });
+  });
+
+  it('says so when the caller is not on the roster at all', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    canManageMock.mockResolvedValue(false);
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    await withCourseAuth(vi.fn(), manage)(new Request('http://localhost/x'), ctx());
+
+    expect(createLogMock.mock.calls[0][2].metadata).toMatchObject({
+      reason: 'not enrolled in this course',
+      role: null,
+    });
+  });
+
+  // A dropped student is not the same event as a student who never enrolled.
+  it('tells a dropped student apart from a stranger', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    canManageMock.mockResolvedValue(false);
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', status: 'DROPPED' });
+
+    await withCourseAuth(vi.fn(), manage)(new Request('http://localhost/x'), ctx());
+
+    expect(createLogMock.mock.calls[0][2].metadata.reason).toBe('dropped from this course');
+  });
+
+  // The log must not be the reason a refusal turns into a 500.
+  it('still refuses when the role lookup fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    canManageMock.mockResolvedValue(false);
+    prismaMock.roster.findFirst.mockRejectedValue(new Error('db down'));
+
+    const res = await withCourseAuth(vi.fn(), manage)(new Request('http://localhost/x'), ctx());
+
+    expect(res.status).toBe(403);
+    expect(createLogMock.mock.calls[0][2].metadata.reason).toBe('not enrolled in this course');
   });
 
   it('uses canAccessCourse for read access', async () => {

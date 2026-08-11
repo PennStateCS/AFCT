@@ -319,6 +319,7 @@ export async function DELETE(request: NextRequest) {
         category: 'ASSIGNMENT',
         courseId: comment.assignment.courseId,
         assignmentId: comment.assignmentId,
+        metadata: { reason: 'comments are staff-only to delete', commentId },
       });
     }
 
