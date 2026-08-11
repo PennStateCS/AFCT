@@ -16,5 +16,9 @@ export async function register() {
 
     const { startTlsRenewal } = await import('./lib/tls-renewal');
     startTlsRenewal();
+
+    // Grade passback also needs egress, so it belongs here rather than in the worker.
+    const { startScoreSender } = await import('./lib/lti/score-sender');
+    startScoreSender();
   }
 }
