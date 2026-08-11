@@ -140,6 +140,26 @@ export async function POST(request: Request) {
  * may not, which for a student means their instructor has not finished setting it up.
  */
 async function decideDestination(identity: LaunchIdentity, userId: string): Promise<string> {
+  /**
+   * A deep-linking launch is not somebody opening a course, it is staff being asked to choose.
+   * The return URL is stored rather than carried in the browser: in a URL it could be changed,
+   * and AFCT signs what it sends there with its own key.
+   */
+  if (identity.deepLink) {
+    const pending = await prisma.ltiPendingDeepLink.create({
+      data: {
+        platformId: identity.platformId,
+        contextId: identity.contextId,
+        returnUrl: identity.deepLink.returnUrl,
+        data: identity.deepLink.data,
+        userId,
+        expiresAt: new Date(Date.now() + PENDING_LINK_TTL_MS),
+      },
+      select: { id: true },
+    });
+    return `/lti/deep-link?pending=${pending.id}`;
+  }
+
   const target = await resolveLaunchTarget({ identity, userId });
 
   if (target.status === 'linked') {

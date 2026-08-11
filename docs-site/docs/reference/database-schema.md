@@ -125,6 +125,16 @@ erDiagram
   DateTime createdAt
   DateTime updatedAt
 }
+"LtiPendingDeepLink" {
+  String id PK
+  String platformId FK
+  String contextId "nullable"
+  String returnUrl
+  String data "nullable"
+  String userId FK
+  DateTime expiresAt
+  DateTime createdAt
+}
 "ClientApiToken" }o--|| "User" : user
 "LinkedIdentity" }o--|| "User" : user
 "SingleUseToken" }o--o| "User" : user
@@ -134,6 +144,8 @@ erDiagram
 "LtiPendingLink" }o--|| "User" : user
 "LtiLineItem" }o--|| "LtiContextLink" : contextLink
 "LtiScoreQueue" }o--|| "User" : user
+"LtiPendingDeepLink" }o--|| "LtiPlatform" : platform
+"LtiPendingDeepLink" }o--|| "User" : user
 ```
 
 ### `User`
@@ -406,6 +418,25 @@ Properties as follows:
 - `sentAt`: When the LMS accepted it.
 - `createdAt`: When this record was created.
 - `updatedAt`: When it was last changed.
+
+### `LtiPendingDeepLink`
+
+A deep-linking request waiting for somebody to choose an assignment.
+
+The return URL and the platform's opaque state are held here rather than passed through the
+browser. In a URL, somebody could change where AFCT posts its signed answer, and AFCT signs
+that answer with its own key.
+
+Properties as follows:
+
+- `id`: Unique identifier, and what the browser is handed to name this pending choice.
+- `platformId`: Which registration asked.
+- `contextId`: The LMS course it was asked from, so the picker can offer that course's assignments.
+- `returnUrl`: Where the signed answer is posted, exactly as the platform gave it.
+- `data`: The platform's own opaque state, returned untouched or the response is rejected.
+- `userId`: Who the launch signed in. Only they can answer it.
+- `expiresAt`: When this stops being usable.
+- `createdAt`: When this record was created.
 
 ## Courses
 
