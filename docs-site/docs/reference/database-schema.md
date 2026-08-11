@@ -88,6 +88,7 @@ erDiagram
   String contextId
   String contextTitle "nullable"
   String courseId FK
+  String lineItemsUrl "nullable"
   String linkedByUserId FK "nullable"
   DateTime createdAt
 }
@@ -100,6 +101,13 @@ erDiagram
   DateTime expiresAt
   DateTime createdAt
 }
+"LtiLineItem" {
+  String id PK
+  String contextLinkId FK
+  String assignmentId FK
+  String url
+  DateTime createdAt
+}
 "ClientApiToken" }o--|| "User" : user
 "LinkedIdentity" }o--|| "User" : user
 "SingleUseToken" }o--o| "User" : user
@@ -107,6 +115,7 @@ erDiagram
 "LtiContextLink" }o--o| "User" : linkedBy
 "LtiPendingLink" }o--|| "LtiPlatform" : platform
 "LtiPendingLink" }o--|| "User" : user
+"LtiLineItem" }o--|| "LtiContextLink" : contextLink
 ```
 
 ### `User`
@@ -302,6 +311,9 @@ Properties as follows:
 - `contextId`: The LMS's own identifier for its course, from the launch's context claim.
 - `contextTitle`: What the LMS calls it, kept for screens so an admin can recognise a link.
 - `courseId`: The AFCT course it opens.
+- `lineItemsUrl`
+  > Where to create gradebook columns for this LMS course, from the launch's AGS claim.
+  > Null when the platform granted no grade scopes. Refreshed on each launch.
 - `linkedByUserId`: Who decided this. Null once that account is gone; the link outlives the person.
 - `createdAt`: When this record was created.
 
@@ -326,6 +338,21 @@ Properties as follows:
 - `contextTitle`: What the LMS calls it, shown on the picker so faculty know what they are linking.
 - `userId`: Who the launch signed in. Only they can act on it.
 - `expiresAt`: When this stops being usable.
+- `createdAt`: When this record was created.
+
+### `LtiLineItem`
+
+One AFCT assignment's gradebook column in an LMS course.
+
+Created on demand the first time a grade is sent, and remembered so later grades go to the
+same column instead of making a new one each time.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `contextLinkId`: The LMS course this column lives in.
+- `assignmentId`: The AFCT assignment it scores.
+- `url`: The platform's URL for this column, used to post scores.
 - `createdAt`: When this record was created.
 
 ## Courses

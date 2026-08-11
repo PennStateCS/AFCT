@@ -42,6 +42,7 @@ const identity = (over: Partial<LaunchIdentity> = {}): LaunchIdentity => ({
   contextTitle: 'Theory of Computation',
   resourceLinkId: 'rl-1',
   targetLinkUri: null,
+  lineItemsUrl: null,
   ...over,
 });
 
