@@ -49,6 +49,13 @@ export async function POST(req: NextRequest) {
       action: 'SUBMISSION_UNAUTHORIZED',
       severity: 'SECURITY',
       category: 'SUBMISSION',
+      // Two different events shared this entry and read identically. A disabled account still
+      // holding a valid session is worth telling apart from nobody being signed in, and the id
+      // goes in the metadata rather than the userId column because the row may be gone.
+      metadata: {
+        reason: session?.user ? 'account is disabled or deleted' : 'not signed in',
+        attemptedUserId: session?.user?.id ?? null,
+      },
     });
 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

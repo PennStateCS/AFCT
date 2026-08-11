@@ -12,7 +12,15 @@ const prismaMock = vi.hoisted(() => ({
 
 const resolveGroupMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/lib/client-auth', () => ({ resolveClientToken: resolveMock }));
+vi.mock('@/lib/client-auth', () => ({
+  resolveClientToken: resolveMock,
+  // The routes go through withClientAuth, which asks for the reason. Derived from the same
+  // mock so these tests keep describing token resolution one way.
+  resolveClientTokenDetailed: async (t: string) => {
+    const r = await resolveMock(t);
+    return r ? { ok: true, token: r } : { ok: false, reason: 'unknown token' };
+  },
+}));
 vi.mock('@/lib/create-submission', () => ({ createSubmission: createSubmissionMock }));
 vi.mock('@/lib/permissions', () => ({
   canAccessCourse: canAccessMock,

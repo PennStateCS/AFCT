@@ -283,4 +283,46 @@ describe('a failed action', () => {
   it('says nothing when the action failed without recording why', () => {
     expect(describeActivity('SOMETHING_ERROR', { courseId: 'c-1' })).toBeNull();
   });
+
+  // The updater reports its outcome under `message`, the same fact by another name.
+  it('reads a failed update outcome', () => {
+    const text = describeActivity('SYSTEM_UPDATE_FAILED', {
+      phase: 'failed',
+      message: 'health check timed out',
+    });
+
+    expect(text).toBe('health check timed out');
+  });
+});
+
+/**
+ * The refusal cases the auth wrappers log. These are SECURITY entries and used to record an
+ * empty metadata object, so the security-relevant half of the log said nothing at all.
+ */
+describe('a refused request', () => {
+  it('describes a course refusal from the standard wrapper metadata', () => {
+    const text = describeActivity('ROSTER_VIEW_DENIED', {
+      reason: 'student, needs faculty or ta',
+      required: 'FACULTY or TA',
+      role: 'STUDENT',
+    });
+
+    expect(text).toBe('student, needs faculty or ta');
+  });
+
+  it('describes an admin refusal', () => {
+    expect(describeActivity('ADMIN_BACKUPS_VIEW_DENIED', { reason: 'not an administrator' })).toBe(
+      'not an administrator',
+    );
+  });
+
+  // Not every failure ends in _ERROR or _DENIED, and these two were being missed.
+  it('covers the failures whose names do not end in the usual way', () => {
+    expect(describeActivity('SUBMISSION_UNAUTHORIZED', { reason: 'not signed in' })).toBe(
+      'not signed in',
+    );
+    expect(
+      describeActivity('GROUP_SET_MEMBERSHIP_CONFLICT', { reason: 'group set changed' }),
+    ).toBe('group set changed');
+  });
 });

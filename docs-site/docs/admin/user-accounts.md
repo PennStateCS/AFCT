@@ -77,6 +77,20 @@ A token is shown once, when it is created. If someone loses it, they create anot
 the old one; there is no way to look it up again. Changing or resetting a password revokes every
 token issued beforehand.
 
+## Sign-in methods
+
+An account can have an AFCT password, an institutional sign-in, an LMS identity, or several at
+once. Open the account's menu and choose **Sign-in Methods** to see what is attached, when each
+was connected, and when it was last used. This is the quickest answer to "why can this person not
+get in".
+
+You can detach one from the same dialog. An account with no AFCT password and only one connected
+method cannot have that one detached, because it would leave the person unable to sign in; give
+them a password first.
+
+LMS identities are attached automatically the first time somebody opens AFCT from a connected
+LMS. See [Connecting an LMS](lms-connection.md).
+
 ## Locked accounts
 
 AFCT temporarily locks an account after too many failed sign-in attempts, to slow down password guessing. The lock expires on its own after the configured window, so most locks clear without any action.

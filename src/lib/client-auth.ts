@@ -60,12 +60,40 @@ export type ClientTokenUser = {
 export type ResolvedClientToken = { tokenId: string; user: ClientTokenUser };
 
 /**
+ * Why a bearer token was turned away. A rejection used to be a bare `null`, so the audit entry
+ * could say a token failed but never which of these it was, and "students cannot submit" reads
+ * the same whether a token expired or an account was locked.
+ */
+export type ClientTokenRejection =
+  | 'unknown token'
+  | 'revoked'
+  | 'expired'
+  | 'past maximum age'
+  | 'account disabled'
+  | 'password changed since the token was issued'
+  | 'account locked';
+
+export type ClientTokenResult =
+  | { ok: true; token: ResolvedClientToken }
+  | { ok: false; reason: ClientTokenRejection };
+
+/**
  * Resolve a raw bearer token to its active user, or `null` if the token is unknown,
  * expired, revoked, or the user is missing/inactive. Bumps `lastUsedAt` (throttled,
  * best-effort; a write failure never fails the request).
  */
 export async function resolveClientToken(rawToken: string): Promise<ResolvedClientToken | null> {
-  if (!rawToken) return null;
+  const result = await resolveClientTokenDetailed(rawToken);
+  return result.ok ? result.token : null;
+}
+
+/**
+ * The same check, saying why it failed. Kept separate from {@link resolveClientToken} so the
+ * plain null contract stays as it is: a caller that tested truthiness against a result object
+ * would let a rejected token through, and that is not a mistake worth leaving available.
+ */
+export async function resolveClientTokenDetailed(rawToken: string): Promise<ClientTokenResult> {
+  if (!rawToken) return { ok: false, reason: 'unknown token' };
   const row = await prisma.clientApiToken.findUnique({
     where: { tokenHash: hashToken(rawToken) },
     select: {
@@ -88,19 +116,19 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
       },
     },
   });
-  if (!row) return null;
+  if (!row) return { ok: false, reason: 'unknown token' };
 
   const now = Date.now();
-  if (row.revokedAt) return null;
-  if (row.expiresAt && row.expiresAt.getTime() <= now) return null;
+  if (row.revokedAt) return { ok: false, reason: 'revoked' };
+  if (row.expiresAt && row.expiresAt.getTime() <= now) return { ok: false, reason: 'expired' };
   // Absolute lifetime cap from issue time: sliding expiration must never keep a token
   // alive past createdAt + MAX_AGE (defensive `Infinity` if createdAt is somehow
   // absent, which can't happen for a persisted row).
   const absoluteExpiry = row.createdAt
     ? row.createdAt.getTime() + CLIENT_TOKEN_MAX_AGE_MS
     : Infinity;
-  if (now >= absoluteExpiry) return null;
-  if (!row.user || row.user.inactive) return null;
+  if (now >= absoluteExpiry) return { ok: false, reason: 'past maximum age' };
+  if (!row.user || row.user.inactive) return { ok: false, reason: 'account disabled' };
 
   // A password change (self-service or admin reset) must kill tokens issued beforehand,
   // mirroring the browser session's revoke-on-password-change. `createdAt` is the issue
@@ -111,11 +139,12 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
     row.createdAt &&
     row.user.passwordChangedAt.getTime() > row.createdAt.getTime()
   ) {
-    return null;
+    return { ok: false, reason: 'password changed since the token was issued' };
   }
   // A locked-out account (failed-login lockout) must not authenticate via a bearer token
   // any more than through the credential login gate.
-  if (row.user.lockedUntil && row.user.lockedUntil.getTime() > now) return null;
+  if (row.user.lockedUntil && row.user.lockedUntil.getTime() > now)
+    return { ok: false, reason: 'account locked' };
 
   // Sliding expiration: any authenticated request pushes the expiry out to
   // `now + TTL`, so an actively-used token stays valid and only genuine inactivity
@@ -133,7 +162,7 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
   }
 
   const { inactive: _inactive, passwordChangedAt: _pca, lockedUntil: _lu, ...user } = row.user;
-  return { tokenId: row.id, user };
+  return { ok: true, token: { tokenId: row.id, user } };
 }
 
 /** Revoke a token by id (idempotent; a no-op if already revoked/gone). */

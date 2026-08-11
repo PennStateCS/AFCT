@@ -51,6 +51,12 @@ Releasing a score does not change who is credited with it. If you entered the sc
 
 Nothing appears on a problem that is not automatically graded. Re-running the evaluator there produces feedback for the student and never writes a grade, so there is nothing to protect against.
 
+## Check a grade reached your LMS
+
+When the course is connected to an LMS, the **LMS Sync** section beside the grade shows whether
+that assignment's grades are waiting, sent, or failed, and **Send grades now** pushes anything
+outstanding immediately. See [Grades and rosters from your LMS](lms.md).
+
 ## Grant extra submissions
 
 Each problem has a shared submission limit set in the assignment's problem settings.

@@ -55,7 +55,7 @@ export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
         severity: 'SECURITY',
         // Admin-gate denials are system-level unless the caller says otherwise.
         category: opts.deniedCategory ?? 'SYSTEM',
-        metadata: {},
+        metadata: { reason: 'not an administrator', required: 'admin' },
       });
       return apiError(403, 'Forbidden');
     }
@@ -135,6 +135,34 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
         : await canAccessCourse(session.user, courseId);
 
     if (!allowed) {
+      // A refusal is a security record, so it has to say why it was refused. The caller's
+      // standing in the course is that answer, and it is read here rather than later because
+      // roles and enrolment change: looking it up next week gives a different one. Costs a
+      // query only on the denial path, which is rare by definition.
+      let membership: { role?: CourseRole | null; status?: string | null } | null = null;
+      try {
+        membership = await prisma.roster.findFirst({
+          where: { courseId, userId: session.user.id },
+          select: { role: true, status: true },
+        });
+      } catch {
+        // Never let the audit lookup turn a clean 403 into a 500. An entry that cannot say
+        // why is still better than losing the refusal itself.
+      }
+      const required =
+        opts.access === 'manage' ? (opts.roles ?? ['FACULTY', 'TA']).join(' or ') : 'enrolled';
+      // Read defensively: this runs on a path that is already failing, and a surprise shape
+      // must not turn the audit entry into a second error.
+      const role = membership?.role ?? null;
+      const status = membership?.status ?? null;
+      const reason = !membership
+        ? 'not enrolled in this course'
+        : status && status !== 'ENROLLED'
+          ? `${status.toLowerCase()} from this course`
+          : role
+            ? `${role.toLowerCase()}, needs ${required.toLowerCase()}`
+            : `needs ${required.toLowerCase()}`;
+
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: opts.deniedAction,
@@ -142,7 +170,7 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
         // Course-gate denials are course-level unless the caller says otherwise.
         category: opts.deniedCategory ?? 'COURSE',
         courseId,
-        metadata: {},
+        metadata: { reason, required, role, status },
       });
       return apiError(403, 'Forbidden');
     }

@@ -60,6 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
         action: 'SOLUTION_ACCESS_DENIED',
         category: 'PROBLEM',
         courseId: problem.courseId,
+        metadata: { reason: 'not course staff', problemId: problem.id },
       });
     }
 

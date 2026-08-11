@@ -17,6 +17,8 @@ New courses begin unpublished. Open the course after creation to add students an
 
 The table includes the course name, code, credits, semester, registration status and code, dates, and assigned Faculty. Select the course name to open it.
 
+The **LMS** column names the LMS that opens each course, or reads **Not connected**. It is useful when a grade is not reaching a gradebook and you are working out whether the course was ever linked, and it names the LMS rather than showing a tick because an institution can run more than one. The column appears on wider screens, alongside the other secondary columns. Faculty link their own courses; see [Connecting an LMS](lms-connection.md).
+
 Use the table search, sorting, filters, and column controls when the installation contains many courses.
 
 ## Duplicate a course
