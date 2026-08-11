@@ -50,6 +50,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { asRichDescription } from '@/lib/rich-description';
 import { RichDescription } from '@/components/rich-description/RichDescription';
 import { buildProblemColumns } from './problem-columns';
+import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
 
 /**
  * The dialogs and the settings tab load on demand. Between them they were the only things
@@ -202,6 +203,9 @@ export default function AssignmentDashboardPage({
       lateCutoff: toDate(assignment.lateCutoff),
       unlockAt: toDate(assignment.unlockAt),
       assignedToEveryone: assignment.assignedToEveryone ?? true,
+      // Carried through like the description fields: the settings card does not edit it, but
+      // the Assignment type requires it.
+      ltiAutoSync: true,
     };
   }, [assignment]);
 
@@ -643,6 +647,10 @@ export default function AssignmentDashboardPage({
               </div>
             </TabsContent>
             <TabsContent value="submissions">
+              {/* Renders nothing unless the course is linked to an LMS. */}
+              <div className="mb-4">
+                <GradeSyncCard assignmentId={aid} />
+              </div>
               <AssignmentSubmissions
                 courseIsArchived={courseIsArchived}
                 courseId={id}

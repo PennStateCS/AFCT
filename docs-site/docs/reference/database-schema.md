@@ -577,6 +577,7 @@ erDiagram
   DateTime createdAt
   DateTime updatedAt
   String courseId FK
+  Boolean ltiAutoSync
 }
 "AssignmentAssignee" {
   String id PK
@@ -671,6 +672,9 @@ Properties as follows:
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
 - `courseId`: The course this assignment belongs to.
+- `ltiAutoSync`
+  > Send grades to the LMS as they change. Off means faculty send them by hand. Only has any
+  > effect when the course is linked to an LMS.
 
 ### `AssignmentAssignee`
 
