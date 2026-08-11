@@ -402,7 +402,7 @@ describe('PrivilegeAssignmentView — tabs', () => {
     );
   });
 
-  it('orders the tabs Details, Type, Assign To, Problems, Submissions, Statistics, Similarity', () => {
+  it('orders the tabs Details, Type, Assign To, Problems, Submissions, Statistics, Similarity, Settings', () => {
     renderView();
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent?.trim());
     expect(tabs).toEqual([
@@ -413,6 +413,7 @@ describe('PrivilegeAssignmentView — tabs', () => {
       'Submissions',
       'Statistics',
       'Similarity',
+      'Settings',
     ]);
   });
 
