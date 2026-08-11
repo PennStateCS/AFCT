@@ -97,6 +97,12 @@ export type LaunchIdentity = {
   membershipsUrl: string | null;
   /** Set when the platform is asking staff to choose content, rather than opening it. */
   deepLink: DeepLinkRequest | null;
+  /**
+   * The AFCT assignment this link was created for, from the custom claim AFCT put on it during
+   * deep linking. Absent on a plain course link, which is why it only ever narrows where a
+   * launch lands and never decides whether it is allowed.
+   */
+  assignmentId: string | null;
 };
 
 /**
@@ -300,6 +306,10 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
       membershipsUrl: (() => {
         const nrps = claimObject(payload, 'namesroleservice', 'lti-nrps');
         return nrps ? claimString(nrps.context_memberships_url) : null;
+      })(),
+      assignmentId: (() => {
+        const custom = claimObject(payload, 'custom');
+        return custom ? claimString(custom.afct_assignment_id) : null;
       })(),
       deepLink:
         isDeepLink && returnUrl
