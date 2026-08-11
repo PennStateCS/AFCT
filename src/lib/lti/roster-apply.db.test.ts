@@ -192,6 +192,52 @@ describe('what it refuses to decide', () => {
   });
 });
 
+/**
+ * Counts alone cannot answer "was this student dropped, and when", which is what both a support
+ * request and a FERPA disclosure record turn on.
+ */
+describe('the record it leaves for each person', () => {
+  it('names who was added, using the same action as enrolling by hand', async () => {
+    await sync([member()]);
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: 'new@example.test' } });
+    const entry = await prisma.activityLog.findFirstOrThrow({
+      where: { action: 'ENROLL_USER', courseId: COURSE },
+    });
+    expect(entry.metadata).toMatchObject({ targetUserId: user.id, via: 'LTI_ROSTER_SYNC' });
+  });
+
+  it('names who was dropped', async () => {
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.student, role: 'STUDENT' },
+    });
+
+    await sync([]);
+
+    const entry = await prisma.activityLog.findFirstOrThrow({
+      where: { action: 'DROP_FROM_COURSE', courseId: COURSE },
+    });
+    expect(entry.metadata).toMatchObject({ targetUserId: ids.student, via: 'LTI_ROSTER_SYNC' });
+  });
+
+  it('names whose sign-in was connected', async () => {
+    await sync([member({ email: 'existing@example.test', ltiUserId: 'lms-e' })]);
+
+    const entry = await prisma.activityLog.findFirstOrThrow({
+      where: { action: 'IDENTITY_LINKED', courseId: COURSE },
+    });
+    expect(entry.metadata).toMatchObject({ targetUserId: ids.existing, subject: 'lms-e' });
+  });
+
+  // The administrator ran the sync; the student is who it was about.
+  it('records the person who ran it as the actor throughout', async () => {
+    await sync([member()]);
+
+    const entries = await prisma.activityLog.findMany({ where: { courseId: COURSE } });
+    expect(entries.every((e) => e.userId === ids.actor)).toBe(true);
+  });
+});
+
 /** A privileged change to who can see student work, so it is always recorded. */
 describe('the record it leaves', () => {
   it('logs the sync against the person who ran it', async () => {
