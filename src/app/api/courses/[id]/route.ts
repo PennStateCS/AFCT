@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { CourseRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { logError } from '@/lib/api/activity';
+import { diffFields, logError } from '@/lib/api/activity';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
 import { isAdmin, canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -601,17 +601,13 @@ export const PUT = withCourseAuth(
         'registrationOpenAt',
         'registrationCloseAt',
       ] as const;
-      const toComparable = (v: unknown): string | number | boolean | null =>
-        v instanceof Date ? v.toISOString() : ((v as string | number | boolean | null) ?? null);
-      const changes: Record<
-        string,
-        { from: string | number | boolean | null; to: string | number | boolean | null }
-      > = {};
-      for (const field of AUDITED_COURSE_FIELDS) {
-        const from = toComparable((before as Record<string, unknown> | null)?.[field]);
-        const to = toComparable((updatedCourse as Record<string, unknown>)[field]);
-        if (from !== to) changes[field] = { from, to };
-      }
+      // Was hand-rolled here; now the shared one, so an update logs the same shape wherever
+      // it happens.
+      const changes = diffFields(
+        (before ?? {}) as Record<string, unknown>,
+        updatedCourse as unknown as Record<string, unknown>,
+        AUDITED_COURSE_FIELDS,
+      );
 
       // Log the update action to ActivityLog
       await createEnhancedActivityLog(prisma, req, {

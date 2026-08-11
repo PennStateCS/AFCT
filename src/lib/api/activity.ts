@@ -178,3 +178,44 @@ export async function logMutation(
     metadata: metadata as EnhancedActivityLogData['metadata'],
   });
 }
+
+/** What a changed field can be recorded as. Scalars only: this goes in a JSON column. */
+type LoggableValue = string | number | boolean | null;
+
+/**
+ * What actually changed, as old and new values side by side.
+ *
+ * The recurring gap in AFCT's logs: an update records which fields moved and what they are
+ * now, so "who changed the due date" is answerable and "from when" is not. Accountability
+ * needs both halves, and so does anybody debugging a complaint about a deadline.
+ *
+ * Only fields that really differ are included, so a save that touched nothing logs nothing.
+ * Dates are compared by value rather than identity, or every save would look like a change.
+ */
+export function diffFields(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  /** Which fields to compare. Defaults to whatever is being written. */
+  fields: readonly string[] = Object.keys(after),
+): Record<string, { from: LoggableValue; to: LoggableValue }> {
+  const changes: Record<string, { from: LoggableValue; to: LoggableValue }> = {};
+
+  // Kept JSON-safe, because this ends up in a metadata column. Anything richer than a scalar
+  // is rendered rather than stored raw: a log is for reading, not for reconstructing objects.
+  const normalise = (value: unknown): LoggableValue => {
+    if (value instanceof Date) return value.toISOString();
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return value;
+    }
+    return String(value);
+  };
+
+  for (const key of fields) {
+    const from = normalise(before[key]);
+    const to = normalise(after[key]);
+    if (from !== to) changes[key] = { from, to };
+  }
+
+  return changes;
+}
