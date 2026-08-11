@@ -11,6 +11,7 @@ import { getAccessToken } from '@/lib/lti/access-token';
 
 /** Content types AGS defines for its two endpoints. */
 const LINE_ITEM_TYPE = 'application/vnd.ims.lis.v2.lineitem+json';
+const LINE_ITEM_CONTAINER_TYPE = 'application/vnd.ims.lis.v2.lineitemcontainer+json';
 const SCORE_TYPE = 'application/vnd.ims.lis.v1.score+json';
 
 export type AgsFailure =
@@ -72,6 +73,39 @@ async function call(
 }
 
 /**
+ * Ask the platform whether it already has a column for this assignment.
+ *
+ * Filtering by `resource_id` is how AGS says to find your own column. Doing this before
+ * creating one is what stops a second column appearing when AFCT has forgotten the first: a
+ * duplicate in somebody's gradebook is confusing and awkward to clean up.
+ */
+async function findLineItem(
+  lineItemsUrl: string,
+  token: string,
+  resourceId: string,
+): Promise<string | null> {
+  try {
+    const url = new URL(lineItemsUrl);
+    url.searchParams.set('resource_id', resourceId);
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}`, Accept: LINE_ITEM_CONTAINER_TYPE },
+    });
+    if (!response.ok) return null;
+
+    const body = (await response.json().catch(() => null)) as unknown;
+    const items = Array.isArray(body) ? body : [];
+    for (const item of items) {
+      const id = (item as { id?: unknown })?.id;
+      if (typeof id === 'string') return id;
+    }
+    return null;
+  } catch {
+    // Only ever an optimisation: creating still works if this fails.
+    return null;
+  }
+}
+
+/**
  * The gradebook column for an assignment, creating it if this is the first grade.
  *
  * Remembered afterwards, so a later grade goes to the same column rather than making another.
@@ -100,6 +134,9 @@ export async function ensureLineItem(opts: {
   const token = await authorised(opts.platform);
   if (!token.ok) return { ok: false, reason: 'no-token', detail: token.reason };
 
+  const already = await findLineItem(opts.lineItemsUrl, token.token, opts.assignmentId);
+  if (already) return remember(opts.contextLinkId, opts.assignmentId, already);
+
   const created = await call(opts.lineItemsUrl, token.token, LINE_ITEM_TYPE, {
     scoreMaximum: opts.scoreMaximum,
     label: opts.label,
@@ -110,14 +147,32 @@ export async function ensureLineItem(opts: {
   if (!created.ok) return created;
 
   const body = (await created.value.json().catch(() => null)) as { id?: unknown } | null;
-  const url = typeof body?.id === 'string' ? body.id : null;
-  if (!url)
+  // The spec says the created line item comes back as JSON. Not every platform obliges: the
+  // 1EdTech reference implementation answers with an HTML page. Asking for the column we just
+  // made is the reliable way to learn its URL.
+  const url =
+    typeof body?.id === 'string'
+      ? body.id
+      : await findLineItem(opts.lineItemsUrl, token.token, opts.assignmentId);
+
+  if (!url) {
     return { ok: false, reason: 'rejected', detail: 'the platform returned no line item id' };
+  }
 
-  await prisma.ltiLineItem.create({
-    data: { contextLinkId: opts.contextLinkId, assignmentId: opts.assignmentId, url },
+  return remember(opts.contextLinkId, opts.assignmentId, url);
+}
+
+/** Record the column so the next grade skips all of the above. */
+async function remember(
+  contextLinkId: string,
+  assignmentId: string,
+  url: string,
+): Promise<AgsResult<string>> {
+  await prisma.ltiLineItem.upsert({
+    where: { contextLinkId_assignmentId: { contextLinkId, assignmentId } },
+    create: { contextLinkId, assignmentId, url },
+    update: { url },
   });
-
   return { ok: true, value: url };
 }
 

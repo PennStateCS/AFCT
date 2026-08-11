@@ -25,8 +25,10 @@ const json = (body: unknown, status = 200) =>
 function acceptingPlatform() {
   const calls: { url: string; body: unknown; headers: Record<string, string> }[] = [];
   const mock = vi.fn(async (url: string, init: RequestInit) => {
-    const headers = init.headers as Record<string, string>;
+    const headers = (init?.headers ?? {}) as Record<string, string>;
     if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+    // A platform with no column for this assignment yet. Only writes are recorded.
+    if (!init?.method || init.method === 'GET') return json([]);
     calls.push({ url, body: JSON.parse(String(init.body)), headers });
     return json({ id: `${LINE_ITEMS_URL}/42` });
   });
@@ -131,6 +133,46 @@ describe('the gradebook column', () => {
     await ensure();
 
     expect(calls[0]?.body).toMatchObject({ resourceId: ASSIGNMENT });
+  });
+
+  /**
+   * The reference implementation answers a line-item creation with an HTML page rather than
+   * the JSON the spec asks for. Reading the id back is what makes that survivable, and it is
+   * how the first real grade passback failed.
+   */
+  it('finds the column when the platform answers with something other than JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        if (url.endsWith('/token')) return json({ access_token: 'tok', expires_in: 3600 });
+        if (init?.method === 'POST') return new Response('<html>created</html>', { status: 200 });
+        return json([{ resourceid: ASSIGNMENT, id: `${LINE_ITEMS_URL}/55020` }]);
+      }),
+    );
+
+    expect(await ensure()).toEqual({ ok: true, value: `${LINE_ITEMS_URL}/55020` });
+  });
+
+  /**
+   * A duplicate column in somebody's gradebook is confusing and awkward to remove, and AFCT
+   * forgetting its own record must not cause one.
+   */
+  it('adopts a column the platform already has instead of making another', async () => {
+    const posts: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        if (url.endsWith('/token')) return json({ access_token: 'tok', expires_in: 3600 });
+        if (init?.method === 'POST') {
+          posts.push(url);
+          return json({ id: `${LINE_ITEMS_URL}/new` });
+        }
+        return json([{ resourceid: ASSIGNMENT, id: `${LINE_ITEMS_URL}/existing` }]);
+      }),
+    );
+
+    expect(await ensure()).toEqual({ ok: true, value: `${LINE_ITEMS_URL}/existing` });
+    expect(posts).toHaveLength(0);
   });
 
   it('says so when the platform granted no grade scopes', async () => {
