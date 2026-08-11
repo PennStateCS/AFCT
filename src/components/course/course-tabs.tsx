@@ -2,15 +2,7 @@
 
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import {
-  Activity,
-  BookOpen,
-  FileText,
-  GraduationCap,
-  Settings,
-  Table,
-  Users,
-} from 'lucide-react';
+import { Activity, BookOpen, FileText, GraduationCap, Settings, Table, Users } from 'lucide-react';
 
 import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { TabType } from '@/types/course';
@@ -53,16 +45,33 @@ export const TAB_BAR_LIST_CLASS =
 // container and produce a phantom vertical scrollbar.
 export const TAB_BAR_TRIGGER_CLASS = [
   'text-muted-foreground hover:text-foreground',
-  // Active label + underline use the --tab-active brand token (teal-700 in light, chosen
-  // so 14px text clears WCAG AA 4.5:1 on the card; teal-400 in dark). It carries its own
-  // dark value, so no dark: variant is needed. Interim brand accent until the redesign.
-  'data-[state=active]:text-tab-active data-[state=active]:font-semibold',
-  'inline-flex h-auto lg:min-w-36 flex-none items-center justify-center gap-1.5 whitespace-nowrap',
-  'rounded-none border-0 border-b-2 border-transparent bg-transparent px-2 py-3 text-sm font-medium lg:px-1',
+  // Active tab: the sidebar's own charcoal, a white label, and the brand teal underline that
+  // matches the header bar. The sidebar token rather than a literal, so the active tab follows
+  // the sidebar in both themes instead of drifting from it; white on that charcoal is
+  // comfortably past AA. The underline is decoration, so the lighter teal is fine there.
+  'data-[state=active]:text-white data-[state=active]:font-semibold',
+  // `group` so the count badge can react to the tab's own active state.
+  'group inline-flex h-auto items-center justify-center gap-1.5 whitespace-nowrap',
+  'rounded-none border-0 border-b-4 border-transparent bg-transparent px-2 py-3 text-sm font-medium lg:px-1',
   'transition-colors',
-  'data-[state=active]:border-tab-active',
-  'data-[state=active]:bg-transparent data-[state=active]:shadow-none',
+  'data-[state=active]:border-brand-teal',
+  // Set for both themes explicitly. The base trigger fills only in dark
+  // (`dark:data-[state=active]:bg-input/30`), which the old `bg-transparent` never cancelled,
+  // so light mode showed the card straight through and the two themes disagreed.
+  'data-[state=active]:bg-sidebar dark:data-[state=active]:bg-sidebar',
+  'data-[state=active]:shadow-none',
 ].join(' ');
+
+/**
+ * Width behaviour for the strip.
+ *
+ * `fill` shares the width evenly, which suits a bar of six or more tabs: it uses the space the
+ * card already has instead of huddling the tabs at the left. With only a few tabs it looks
+ * wrong, stretching three items across a wide card, so those pass `fill={false}` and keep their
+ * natural width.
+ */
+const FILL_TRIGGER_CLASS = 'flex-1 min-w-0';
+const NATURAL_TRIGGER_CLASS = 'lg:min-w-36 flex-none';
 
 /** Counts rendered as a small subtle badge next to the label. Absent → none. */
 type TabCounts = Partial<Record<TabType, number>>;
@@ -134,6 +143,7 @@ export function TabBar({
   ariaLabel,
   selectId,
   linkPanels = false,
+  fill = true,
 }: {
   tabs: readonly TabBarTab[];
   value: string;
@@ -143,6 +153,8 @@ export function TabBar({
   /** Unique id for the mobile select (so its hidden label associates). */
   selectId: string;
   linkPanels?: boolean;
+  /** Share the full width between tabs. Turn off for a bar with only a few. */
+  fill?: boolean;
 }) {
   return (
     <>
@@ -158,16 +170,23 @@ export function TabBar({
           <TabsTrigger
             key={tabValue}
             value={tabValue}
-            className={TAB_BAR_TRIGGER_CLASS}
+            className={`${TAB_BAR_TRIGGER_CLASS} ${fill ? FILL_TRIGGER_CLASS : NATURAL_TRIGGER_CLASS}`}
             // With a count, spell it into the accessible name; otherwise the visible
             // label already names the tab.
             aria-label={count === undefined ? undefined : `${label}, ${count}`}
             {...(linkPanels ? { id: `tab-${tabValue}`, 'aria-controls': `panel-${tabValue}` } : {})}
           >
-            {Icon ? <Icon className="size-3.5 opacity-70" aria-hidden="true" /> : null}
-            {label}
+            {/*
+             * Hidden between `md` and `lg`, where the strip is tight enough that the icons
+             * cost more room than they add meaning. Below `md` the select replaces the strip
+             * entirely, so there is nothing to hide there.
+             */}
+            {Icon ? (
+              <Icon className="hidden size-3.5 opacity-70 lg:inline" aria-hidden="true" />
+            ) : null}
+            <span className="truncate">{label}</span>
             {count !== undefined ? (
-              <span className="bg-tab-active-bg text-tab-active ml-0.5 rounded-full px-1.5 py-0.5 text-xs leading-none font-medium">
+              <span className="bg-tab-active-bg text-tab-active group-data-[state=active]:bg-background ml-0.5 rounded-full px-1.5 py-0.5 text-xs leading-none font-medium">
                 {count}
               </span>
             ) : null}

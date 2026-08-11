@@ -198,149 +198,156 @@ export function ProfileSection({ user, onSave }: ProfileSectionProps) {
   };
 
   return (
-      <form onSubmit={handleSubmit(onSubmit)} className="max-w-md space-y-4">
-          {/* Avatar */}
-          <div className="flex flex-col items-center gap-3">
-            <Label className="w-full text-center">Avatar Image</Label>
-            {/* No separate preview: the crop editor below shows the current image. */}
-            <input
-              id={avatarUploadId}
-              ref={avatarInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              aria-invalid={errors.avatarFile?.message ? true : undefined}
+    <form onSubmit={handleSubmit(onSubmit)} className="max-w-md space-y-4">
+      {/* Avatar */}
+      <div className="flex flex-col items-center gap-3">
+        <Label className="w-full text-center">Avatar Image</Label>
+        {/* No separate preview: the crop editor below shows the current image. */}
+        <input
+          id={avatarUploadId}
+          ref={avatarInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          aria-invalid={errors.avatarFile?.message ? true : undefined}
+          aria-describedby={errors.avatarFile?.message ? avatarErrorId : undefined}
+          onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
+        />
+        {/*
+         * One button at a time: upload when there is no picture, delete when there is.
+         * Offering both invites "upload" to mean "replace", which it does not; the
+         * picture has to be removed first.
+         */}
+        <div className="flex w-full gap-3">
+          {!avatarPreview && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => avatarInputRef.current?.click()}
               aria-describedby={errors.avatarFile?.message ? avatarErrorId : undefined}
-              onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
-            />
-            <div className="flex w-full gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => avatarInputRef.current?.click()}
-                aria-describedby={errors.avatarFile?.message ? avatarErrorId : undefined}
-                className="flex flex-1 items-center justify-center gap-2"
-              >
-                <Upload className="h-4 w-4" />
-                Upload Avatar
-              </Button>
-              {avatarPreview && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-destructive text-destructive hover:bg-destructive/10 flex flex-1 items-center justify-center gap-2"
-                  onClick={handleDeleteAvatar}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete Avatar
-                </Button>
-              )}
-            </div>
-            {errors.avatarFile?.message && (
-              <p id={avatarErrorId} role="alert" className="text-destructive text-xs">
-                {typeof errors.avatarFile?.message === 'string'
-                  ? errors.avatarFile.message
-                  : String(errors.avatarFile?.message)}
-              </p>
-            )}
-          </div>
-
-          {avatarPreview ? (
-            <AvatarCrop
-              avatarPreview={avatarPreview}
-              editorRef={avatarEditorRef}
-              cropX={avatarCrop.cropX}
-              cropY={avatarCrop.cropY}
-              zoom={avatarCrop.zoom}
-              onPositionChange={(position) =>
-                setAvatarCrop((prev) => ({ ...prev, cropX: position.x, cropY: position.y }))
-              }
-              onZoomChange={(zoom) => setAvatarCrop((prev) => ({ ...prev, zoom }))}
-            />
-          ) : null}
-
-          {/* First + last name sit side by side to save vertical space, and stack
-              on very small screens. */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Controller
-              name="firstName"
-              control={control}
-              render={({ field }) => (
-                <InputGroup
-                  label="First Name"
-                  name="firstName"
-                  fieldProps={field}
-                  error={errors.firstName?.message}
-                />
-              )}
-            />
-
-            <Controller
-              name="lastName"
-              control={control}
-              render={({ field }) => (
-                <InputGroup
-                  label="Last Name"
-                  name="lastName"
-                  fieldProps={field}
-                  error={errors.lastName?.message}
-                />
-              )}
-            />
-          </div>
-
-          {/* Timezone */}
-          <Controller
-            name="timezone"
-            control={control}
-            render={({ field }) => (
-              <SelectField
-                label="Timezone"
-                name="timezone"
-                id="timezone"
-                // Empty override renders as "Automatic". Radix needs a non-empty
-                // item value, so map '' <-> AUTO_TIMEZONE across the boundary.
-                value={field.value ? field.value : AUTO_TIMEZONE}
-                onValueChange={(v) => field.onChange(v === AUTO_TIMEZONE ? '' : v)}
-                placeholder="Select timezone"
-                description={`Automatic follows this device's timezone (currently ${browserTimezone}).`}
-                options={[
-                  { value: AUTO_TIMEZONE, label: 'Automatic (detect from browser)' },
-                  ...COMMON_TIMEZONES.map((tz) => ({
-                    value: tz,
-                    label: formatTimezoneLabel(tz),
-                  })),
-                ]}
-              />
-            )}
-          />
-
-          {/* Email (read-only) */}
-          <InputGroup
-            label="Email"
-            name="email"
-            value={user.email}
-            type="email"
-            disabled
-            description="Email cannot be changed."
-          />
-
-          {/* Hidden deleteAvatar flag (driven by Delete button) */}
-          <Controller control={control} name="deleteAvatar" render={() => <></>} />
-
-        <div className="mt-4 flex gap-2">
-          <Button
-            type="submit"
-            disabled={!isValid || isSubmitting}
-            title={!isValid ? 'Fix validation errors to save' : undefined}
-          >
-            {isSubmitting ? 'Saving...' : 'Save changes'}
-          </Button>
-          <Button type="button" variant="secondary" onClick={resetForm} disabled={isSubmitting}>
-            Reset
-          </Button>
+              className="flex flex-1 items-center justify-center gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              Upload Avatar
+            </Button>
+          )}
+          {avatarPreview && (
+            <Button
+              type="button"
+              variant="outline"
+              className="border-destructive text-destructive hover:bg-destructive/10 flex flex-1 items-center justify-center gap-2"
+              onClick={handleDeleteAvatar}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Avatar
+            </Button>
+          )}
         </div>
-      </form>
+        {errors.avatarFile?.message && (
+          <p id={avatarErrorId} role="alert" className="text-destructive text-xs">
+            {typeof errors.avatarFile?.message === 'string'
+              ? errors.avatarFile.message
+              : String(errors.avatarFile?.message)}
+          </p>
+        )}
+      </div>
+
+      {avatarPreview ? (
+        <AvatarCrop
+          avatarPreview={avatarPreview}
+          editorRef={avatarEditorRef}
+          cropX={avatarCrop.cropX}
+          cropY={avatarCrop.cropY}
+          zoom={avatarCrop.zoom}
+          onPositionChange={(position) =>
+            setAvatarCrop((prev) => ({ ...prev, cropX: position.x, cropY: position.y }))
+          }
+          onZoomChange={(zoom) => setAvatarCrop((prev) => ({ ...prev, zoom }))}
+        />
+      ) : null}
+
+      {/* First + last name sit side by side to save vertical space, and stack
+              on very small screens. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Controller
+          name="firstName"
+          control={control}
+          render={({ field }) => (
+            <InputGroup
+              label="First Name"
+              name="firstName"
+              fieldProps={field}
+              error={errors.firstName?.message}
+            />
+          )}
+        />
+
+        <Controller
+          name="lastName"
+          control={control}
+          render={({ field }) => (
+            <InputGroup
+              label="Last Name"
+              name="lastName"
+              fieldProps={field}
+              error={errors.lastName?.message}
+            />
+          )}
+        />
+      </div>
+
+      {/* Timezone */}
+      <Controller
+        name="timezone"
+        control={control}
+        render={({ field }) => (
+          <SelectField
+            label="Timezone"
+            name="timezone"
+            id="timezone"
+            // Empty override renders as "Automatic". Radix needs a non-empty
+            // item value, so map '' <-> AUTO_TIMEZONE across the boundary.
+            value={field.value ? field.value : AUTO_TIMEZONE}
+            onValueChange={(v) => field.onChange(v === AUTO_TIMEZONE ? '' : v)}
+            placeholder="Select timezone"
+            description={`Automatic follows this device's timezone (currently ${browserTimezone}).`}
+            options={[
+              { value: AUTO_TIMEZONE, label: 'Automatic (detect from browser)' },
+              ...COMMON_TIMEZONES.map((tz) => ({
+                value: tz,
+                label: formatTimezoneLabel(tz),
+              })),
+            ]}
+          />
+        )}
+      />
+
+      {/* Email (read-only) */}
+      <InputGroup
+        label="Email"
+        name="email"
+        value={user.email}
+        type="email"
+        disabled
+        description="Email cannot be changed."
+      />
+
+      {/* Hidden deleteAvatar flag (driven by Delete button) */}
+      <Controller control={control} name="deleteAvatar" render={() => <></>} />
+
+      <div className="mt-4 flex gap-2">
+        <Button
+          type="submit"
+          disabled={!isValid || isSubmitting}
+          title={!isValid ? 'Fix validation errors to save' : undefined}
+        >
+          {isSubmitting ? 'Saving...' : 'Save changes'}
+        </Button>
+        <Button type="button" variant="secondary" onClick={resetForm} disabled={isSubmitting}>
+          Reset
+        </Button>
+      </div>
+    </form>
   );
 }
 

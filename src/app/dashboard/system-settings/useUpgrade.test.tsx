@@ -164,9 +164,7 @@ describe('useUpgrade', () => {
 
     // The cached status becomes a non-terminal phase immediately, so the panel and
     // poll start without a manual refresh. The server still reports status: null here.
-    await waitFor(() =>
-      expect(isUpgradeInProgress(result.current.info?.status)).toBe(true),
-    );
+    await waitFor(() => expect(isUpgradeInProgress(result.current.info?.status)).toBe(true));
     expect(result.current.info?.status?.toTag).toBe('v1.1.0');
   });
 

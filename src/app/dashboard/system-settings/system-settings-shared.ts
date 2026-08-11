@@ -313,10 +313,7 @@ const SETTINGS_FIELD_LABELS: Record<string, string> = {
 };
 
 /** "From address: Enter an address like afct@your-university.edu." */
-export function describeSettingsIssue(issue: {
-  path: PropertyKey[];
-  message: string;
-}): string {
+export function describeSettingsIssue(issue: { path: PropertyKey[]; message: string }): string {
   const key = String(issue.path[0] ?? '');
   const label = SETTINGS_FIELD_LABELS[key] ?? key;
   return label ? `${label}: ${issue.message}` : issue.message;
@@ -432,3 +429,11 @@ export const EMPTY_FORM: FormSnapshot = {
   oidcButtonLabel: '',
   oidcTrustEmail: false,
 };
+
+/**
+ * The outlined box each settings tab groups its fields in.
+ *
+ * One constant rather than a class repeated per tab: the tabs are meant to look like one
+ * screen with sections, and the quickest way to lose that is for each to drift on its own.
+ */
+export const SETTINGS_BOX_CLASS = 'space-y-5 rounded-md border p-4';

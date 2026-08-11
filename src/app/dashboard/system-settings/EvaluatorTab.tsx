@@ -1,5 +1,6 @@
 'use client';
 
+import { SETTINGS_BOX_CLASS } from './system-settings-shared';
 import InputGroup from '@/components/ui/InputGroup';
 import {
   MIN_SUBMISSION_EVAL_TIMEOUT_MS,
@@ -32,7 +33,7 @@ export function EvaluatorTab({
       <p className="text-muted-foreground mb-4 text-sm">
         How the autograder evaluates and rate-limits submissions.
       </p>
-      <div className="max-w-md space-y-5">
+      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
         <InputGroup
           label="Evaluation timeout (seconds)"
           name="evalTimeoutSec"

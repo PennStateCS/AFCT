@@ -73,7 +73,7 @@ export function UpgradeLiveLog({ active }: { active: boolean }) {
         aria-live="off"
         aria-label="Live upgrade log"
         tabIndex={0}
-        className="max-h-80 overflow-auto px-3 py-2 font-mono text-xs leading-relaxed text-zinc-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 focus-visible:outline-none"
+        className="max-h-80 overflow-auto px-3 py-2 font-mono text-xs leading-relaxed text-zinc-100 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none focus-visible:ring-inset"
       >
         {lines.map((line, i) => (
           <div key={i} className="break-words whitespace-pre-wrap">

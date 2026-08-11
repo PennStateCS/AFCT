@@ -154,7 +154,9 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
         </div>
       </div>
 
-      <div className="mb-3 flex items-center justify-between">
+      {/* Button beside the heading rather than pushed to the far edge, where it reads as
+          belonging to the page rather than to this list. */}
+      <div className="mb-3 flex items-center gap-3">
         <h2 className="text-sm font-medium">Registered LMSs</h2>
         {!adding && (
           <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
