@@ -4,9 +4,10 @@ import type { Course } from '@prisma/client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import SwitchField from '@/components/ui/SwitchField';
+import { CourseLmsSection } from '@/components/course/CourseLmsSection';
 
 type CourseStatusCardProps = {
-  course: Pick<Course, 'isPublished' | 'isArchived'>;
+  course: Pick<Course, 'id' | 'isPublished' | 'isArchived'>;
   onPublishToggle: (checked: boolean) => void;
   className?: string;
 };
@@ -35,6 +36,9 @@ export function CourseStatusCard({ course, onPublishToggle, className }: CourseS
           description="When on, enrolled students can see the course."
           disabled={course.isArchived}
         />
+
+        {/* Renders nothing unless an LMS opens this course. */}
+        <CourseLmsSection courseId={course.id} />
       </CardContent>
     </Card>
   );

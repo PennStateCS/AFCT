@@ -135,8 +135,7 @@ export default function AssignmentSubmissions({
     lateCutoff?: string | Date | null;
   }>({
     queryKey: queryKeys.assignment.shell(courseId, assignmentId),
-    queryFn: () =>
-      fetchJson(apiPaths.assignment(courseId, assignmentId, { view: 'problems' })),
+    queryFn: () => fetchJson(apiPaths.assignment(courseId, assignmentId, { view: 'problems' })),
     enabled: !!assignmentId,
     staleTime: 30_000,
   });
@@ -188,7 +187,6 @@ export default function AssignmentSubmissions({
 
   // All assignment problems are visible.
   const visibleProblems = assignmentProblems;
-
 
   const {
     selectedIndex,
@@ -336,7 +334,9 @@ export default function AssignmentSubmissions({
   );
 
   const goPrev = () =>
-    setSelectedIndex((prev) => (students.length === 0 ? -1 : prev <= 0 ? students.length - 1 : prev - 1));
+    setSelectedIndex((prev) =>
+      students.length === 0 ? -1 : prev <= 0 ? students.length - 1 : prev - 1,
+    );
   const goNext = () =>
     setSelectedIndex((prev) =>
       students.length === 0 ? -1 : prev >= students.length - 1 ? 0 : prev + 1,
@@ -525,6 +525,7 @@ export default function AssignmentSubmissions({
 
                 const workspace = (
                   <ProblemWorkspace
+                    assignmentId={assignmentId}
                     // The header shows the cap the SELECTED student is working against
                     // (base plus any grants), not just the shared base value.
                     problem={

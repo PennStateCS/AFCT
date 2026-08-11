@@ -29,20 +29,14 @@ import { GradeHoldControl } from '@/components/GradeHoldControl';
 import { DataTableLoading } from '@/components/ui/data-table-status';
 import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
 import type { GradeAudience } from '@/components/ProblemGradeForm';
-import type {
-  Comment as DiscussionComment,
-  CommentAudience,
-} from '@/components/DiscussionPanel';
+import type { Comment as DiscussionComment, CommentAudience } from '@/components/DiscussionPanel';
 import type { StudentProblemComment } from '@/lib/assignment-details';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import { apiPaths } from '@/lib/api-paths';
-import {
-  getTimingStatusChip,
-  getReviewStatusChip,
-  type StatusChip,
-} from '@/lib/submission-status';
+import { getTimingStatusChip, getReviewStatusChip, type StatusChip } from '@/lib/submission-status';
 import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
 
 type Problem = {
   id: string;
@@ -105,6 +99,8 @@ export type ProblemWorkspaceProps = {
   isSavingGrade?: boolean;
   isLoadingGrade?: boolean;
   isPrivilegedUser: boolean;
+  /** Set by the staff view only. Enables the LMS grade entry below the grade form. */
+  assignmentId?: string;
   submissionsLoading?: boolean;
   commentsLoading?: boolean;
 };
@@ -115,7 +111,7 @@ const normalizeComments = (comments: ProblemWorkspaceComment[]): DiscussionComme
       return comment;
     }
 
-  const [firstName, ...rest] = (comment.authorName ?? '').split(' ');
+    const [firstName, ...rest] = (comment.authorName ?? '').split(' ');
     return {
       id: comment.id,
       content: comment.content,
@@ -164,6 +160,7 @@ export default function ProblemWorkspace({
   isSavingGrade = false,
   isLoadingGrade = false,
   isPrivilegedUser,
+  assignmentId,
   submissionsLoading = false,
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
@@ -247,7 +244,7 @@ export default function ProblemWorkspace({
             {isLate ? (
               <Badge
                 variant="secondary"
-                className="mt-1 inline-flex items-center rounded-full bg-status-warning-bg px-2 py-1 text-xs font-semibold text-status-warning shadow-sm"
+                className="bg-status-warning-bg text-status-warning mt-1 inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold shadow-sm"
               >
                 Late
               </Badge>
@@ -316,7 +313,7 @@ export default function ProblemWorkspace({
         // TableCell bakes in whitespace-nowrap; override it here so long evaluator
         // output wraps (and keeps its own line breaks) inside a bounded width.
         return (
-          <div className="max-w-[28rem] text-xs whitespace-pre-wrap break-words">
+          <div className="max-w-[28rem] text-xs break-words whitespace-pre-wrap">
             {String(feedback)}
           </div>
         );
@@ -387,187 +384,189 @@ export default function ProblemWorkspace({
   ];
 
   return (
-    <div className="grid items-start gap-4 lg:items-stretch lg:grid-cols-[minmax(0,70fr)_minmax(0,30fr)] print:block print:space-y-2">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,70fr)_minmax(0,30fr)] lg:items-stretch print:block print:space-y-2">
       {/* Two matching cards: what the problem is and the work submitted for it, beside what
           you are doing about it. */}
       <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4 lg:h-full">
-          <div className="flex items-center gap-2">
-            <FileText className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-            <h3 className="text-sm font-medium">Problem Attempts</h3>
-            {/* Across from the heading, matching the menu opposite in Problem Grade. */}
-            {isPrivilegedUser ? <div className="ml-auto">{submissionsAction}</div> : null}
-          </div>
-          <ProblemHeader
-            className="min-w-0"
-            action={
-              isPrivilegedUser ? null : (
-                <div className="border-border text-foreground inline-flex items-center gap-2 rounded-full border bg-transparent px-3 py-2 text-xs whitespace-nowrap">
-                  <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
-                  <span>
-                    {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
-                  </span>
-                </div>
-              )
-            }
-            title={problem.title}
-            description={problem.description ?? undefined}
-            descriptionJson={(problem as { descriptionJson?: unknown }).descriptionJson}
-            type={problem.type ?? undefined}
-            maxStates={problem.maxStates ?? undefined}
-            isDeterministic={problem.isDeterministic ?? undefined}
-            maxSubmissions={problem.maxSubmissions ?? undefined}
-            autograderEnabled={problem.autograderEnabled ?? undefined}
-          />
+        <div className="flex items-center gap-2">
+          <FileText className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+          <h3 className="text-sm font-medium">Problem Attempts</h3>
+          {/* Across from the heading, matching the menu opposite in Problem Grade. */}
+          {isPrivilegedUser ? <div className="ml-auto">{submissionsAction}</div> : null}
+        </div>
+        <ProblemHeader
+          className="min-w-0"
+          action={
+            isPrivilegedUser ? null : (
+              <div className="border-border text-foreground inline-flex items-center gap-2 rounded-full border bg-transparent px-3 py-2 text-xs whitespace-nowrap">
+                <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
+                <span>
+                  {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
+                </span>
+              </div>
+            )
+          }
+          title={problem.title}
+          description={problem.description ?? undefined}
+          descriptionJson={(problem as { descriptionJson?: unknown }).descriptionJson}
+          type={problem.type ?? undefined}
+          maxStates={problem.maxStates ?? undefined}
+          isDeterministic={problem.isDeterministic ?? undefined}
+          maxSubmissions={problem.maxSubmissions ?? undefined}
+          autograderEnabled={problem.autograderEnabled ?? undefined}
+        />
 
-          {/* No panel around the table: it carries its own toolbar, column headers and pager,
+        {/* No panel around the table: it carries its own toolbar, column headers and pager,
               so a band above it repeating "Submissions" on the Submissions tab added a frame
               and a word without adding information. `tableLabel` still names it for assistive
               tech, and the grant action sits with the table's other controls. */}
-          {submissionsLoading ? (
-            <DataTableLoading message="Loading submissions, please wait..." className="min-h-[320px]" />
-          ) : sortedSubmissions.length > 0 ? (
-            <DataTable
-              columns={submissionColumns}
-              data={sortedSubmissions}
-              storageKey="problem-submissions"
-              tableLabel="Problem attempts"
-              // A handful of attempts for one student on one problem: search, filters and a
-              // column picker are more chrome than the data underneath them.
-              showToolbar={false}
-              showExportButton={false}
-              defaultSorting={[{ id: 'submitted', desc: true }]}
-              emptyTitle="No attempts match the filters"
-              emptyDescription="Adjust the filters to see more."
-              emptyIcon={FileText}
-            />
-          ) : (
-            <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
-              No attempts yet.
-            </div>
-          )}
+        {submissionsLoading ? (
+          <DataTableLoading
+            message="Loading submissions, please wait..."
+            className="min-h-[320px]"
+          />
+        ) : sortedSubmissions.length > 0 ? (
+          <DataTable
+            columns={submissionColumns}
+            data={sortedSubmissions}
+            storageKey="problem-submissions"
+            tableLabel="Problem attempts"
+            // A handful of attempts for one student on one problem: search, filters and a
+            // column picker are more chrome than the data underneath them.
+            showToolbar={false}
+            showExportButton={false}
+            defaultSorting={[{ id: 'submitted', desc: true }]}
+            emptyTitle="No attempts match the filters"
+            emptyDescription="Adjust the filters to see more."
+            emptyIcon={FileText}
+          />
+        ) : (
+          <div className="text-muted-foreground rounded-md border border-dashed p-4 text-sm">
+            No attempts yet.
+          </div>
+        )}
       </div>
 
-          {/* Right column: what you are doing about this student's work. */}
-          <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4 lg:h-full">
-            {isPrivilegedUser && onGradeInputChange && onSaveGrade ? (
-              <div className="flex flex-col gap-2 border-b pb-4">
-                <div className="flex items-center gap-2">
-                  <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-                  <h3 className="text-sm font-medium">Problem Grade</h3>
-                </div>
-                <ProblemGradeForm
-                  value={gradeInput}
-                  currentGrade={currentGrade}
-                  maxPoints={problem.maxPoints}
-                  disabled={courseIsArchived}
-                  isSaving={isSavingGrade}
-                  isLoading={isLoadingGrade}
-                  error={gradeError}
-                  onChange={onGradeInputChange}
-                  onSubmit={onSaveGrade}
-                  audience={gradeAudience}
-                  groupGradeValue={groupGradeValue}
-                />
-                {/* Under the grade rather than beside the heading: it needs a sentence to
-                    mean anything, and the sentence is the part the old switch was missing. */}
-                {onManualHoldChange ? (
-                  <GradeHoldControl
-                    autograderEnabled={!!problem.autograderEnabled}
-                    gradeSource={gradeSource}
-                    gradedManually={gradedManually}
-                    hasGrade={currentGrade !== null && currentGrade !== undefined}
-                    onChange={onManualHoldChange}
-                    disabled={courseIsArchived}
-                    className="mt-1"
-                  />
-                ) : null}
-              </div>
-            ) : null}
-            {group ? (
-              <div className="flex flex-col gap-1 border-b pb-4">
-                <div className="flex items-center gap-2">
-                  <Users className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-                  <h3 className="text-sm font-medium">
-                    {group.name} · {(groupMembers?.length ?? 0) + 1}{' '}
-                    {(groupMembers?.length ?? 0) + 1 === 1 ? 'member' : 'members'}
-                  </h3>
-                  {/* Collapsed by default: the count in the heading answers the usual
-                      question, and the names are only needed when something looks wrong. */}
-                  <button
-                    type="button"
-                    onClick={() => setMembersOpen((open) => !open)}
-                    aria-expanded={membersOpen}
-                    aria-controls="group-members"
-                    className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
-                  >
-                    <ChevronUp
-                      className={`h-4 w-4 transition-transform ${membersOpen ? '' : 'rotate-180'}`}
-                      aria-hidden="true"
-                    />
-                    <span className="sr-only">
-                      {membersOpen ? 'Collapse members' : 'Expand members'}
-                    </span>
-                  </button>
-                </div>
-                {/* The whole group, the student under review included: a list that omitted
-                    them would read as "everyone else", which is not who the grade and the
-                    thread apply to. */}
-                <p id="group-members" hidden={!membersOpen} className="text-muted-foreground text-xs">
-                  {[
-                    subjectName ?? 'This student',
-                    ...(groupMembers ?? []).map(
-                      (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student',
-                    ),
-                  ].join(', ')}
-                </p>
-              </div>
-            ) : null}
+      {/* Right column: what you are doing about this student's work. */}
+      <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4 lg:h-full">
+        {isPrivilegedUser && onGradeInputChange && onSaveGrade ? (
+          <div className="flex flex-col gap-2 border-b pb-4">
             <div className="flex items-center gap-2">
-              <MessageSquare className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+              <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+              <h3 className="text-sm font-medium">Problem Grade</h3>
+            </div>
+            <ProblemGradeForm
+              value={gradeInput}
+              currentGrade={currentGrade}
+              maxPoints={problem.maxPoints}
+              disabled={courseIsArchived}
+              isSaving={isSavingGrade}
+              isLoading={isLoadingGrade}
+              error={gradeError}
+              onChange={onGradeInputChange}
+              onSubmit={onSaveGrade}
+              audience={gradeAudience}
+              groupGradeValue={groupGradeValue}
+            />
+            {/* Renders nothing unless the course is linked to an LMS. */}
+            {assignmentId ? <GradeSyncCard assignmentId={assignmentId} variant="inline" /> : null}
+            {/* Under the grade rather than beside the heading: it needs a sentence to
+                    mean anything, and the sentence is the part the old switch was missing. */}
+            {onManualHoldChange ? (
+              <GradeHoldControl
+                autograderEnabled={!!problem.autograderEnabled}
+                gradeSource={gradeSource}
+                gradedManually={gradedManually}
+                hasGrade={currentGrade !== null && currentGrade !== undefined}
+                onChange={onManualHoldChange}
+                disabled={courseIsArchived}
+                className="mt-1"
+              />
+            ) : null}
+          </div>
+        ) : null}
+        {group ? (
+          <div className="flex flex-col gap-1 border-b pb-4">
+            <div className="flex items-center gap-2">
+              <Users className="text-muted-foreground h-4 w-4" aria-hidden="true" />
               <h3 className="text-sm font-medium">
-                Problem Discussion ({normalizedComments.length})
+                {group.name} · {(groupMembers?.length ?? 0) + 1}{' '}
+                {(groupMembers?.length ?? 0) + 1 === 1 ? 'member' : 'members'}
               </h3>
-              {/* Collapsing gets the composer out of the way when a grader is reading rather
-                  than replying. aria-expanded and aria-controls carry the state, so it is not
-                  a chevron whose meaning only a sighted user can infer. */}
+              {/* Collapsed by default: the count in the heading answers the usual
+                      question, and the names are only needed when something looks wrong. */}
               <button
                 type="button"
-                onClick={() => setDiscussionOpen((open) => !open)}
-                aria-expanded={discussionOpen}
-                aria-controls="problem-discussion"
+                onClick={() => setMembersOpen((open) => !open)}
+                aria-expanded={membersOpen}
+                aria-controls="group-members"
                 className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
               >
                 <ChevronUp
-                  className={`h-4 w-4 transition-transform ${discussionOpen ? '' : 'rotate-180'}`}
+                  className={`h-4 w-4 transition-transform ${membersOpen ? '' : 'rotate-180'}`}
                   aria-hidden="true"
                 />
                 <span className="sr-only">
-                  {discussionOpen ? 'Collapse discussion' : 'Expand discussion'}
+                  {membersOpen ? 'Collapse members' : 'Expand members'}
                 </span>
               </button>
             </div>
-            <div id="problem-discussion" hidden={!discussionOpen}>
-            {commentsLoading ? (
-              <div role="status" className="text-muted-foreground text-sm">
-                Loading discussion...
-              </div>
-            ) : (
-              <ProblemDiscussionPanel
-                courseIsArchived={courseIsArchived}
-                audience={commentAudience}
-                subjectName={subjectName}
-                comments={normalizedComments}
-                commentText={commentText}
-                onCommentTextChange={onCommentTextChange}
-                onSaveComment={onSaveComment}
-                onDeleteComment={handleDeleteComment}
-                isSaving={isSaving}
-                deletingComments={deletingComments}
-              />
-            )}
-            </div>
+            {/* The whole group, the student under review included: a list that omitted
+                    them would read as "everyone else", which is not who the grade and the
+                    thread apply to. */}
+            <p id="group-members" hidden={!membersOpen} className="text-muted-foreground text-xs">
+              {[
+                subjectName ?? 'This student',
+                ...(groupMembers ?? []).map(
+                  (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student',
+                ),
+              ].join(', ')}
+            </p>
           </div>
-
+        ) : null}
+        <div className="flex items-center gap-2">
+          <MessageSquare className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+          <h3 className="text-sm font-medium">Problem Discussion ({normalizedComments.length})</h3>
+          {/* Collapsing gets the composer out of the way when a grader is reading rather
+                  than replying. aria-expanded and aria-controls carry the state, so it is not
+                  a chevron whose meaning only a sighted user can infer. */}
+          <button
+            type="button"
+            onClick={() => setDiscussionOpen((open) => !open)}
+            aria-expanded={discussionOpen}
+            aria-controls="problem-discussion"
+            className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
+          >
+            <ChevronUp
+              className={`h-4 w-4 transition-transform ${discussionOpen ? '' : 'rotate-180'}`}
+              aria-hidden="true"
+            />
+            <span className="sr-only">
+              {discussionOpen ? 'Collapse discussion' : 'Expand discussion'}
+            </span>
+          </button>
+        </div>
+        <div id="problem-discussion" hidden={!discussionOpen}>
+          {commentsLoading ? (
+            <div role="status" className="text-muted-foreground text-sm">
+              Loading discussion...
+            </div>
+          ) : (
+            <ProblemDiscussionPanel
+              courseIsArchived={courseIsArchived}
+              audience={commentAudience}
+              subjectName={subjectName}
+              comments={normalizedComments}
+              commentText={commentText}
+              onCommentTextChange={onCommentTextChange}
+              onSaveComment={onSaveComment}
+              onDeleteComment={handleDeleteComment}
+              isSaving={isSaving}
+              deletingComments={deletingComments}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

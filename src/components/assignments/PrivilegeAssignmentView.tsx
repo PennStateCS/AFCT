@@ -12,6 +12,7 @@ import {
   Shapes,
   User,
   Users,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
@@ -456,11 +457,12 @@ export default function AssignmentDashboardPage({
   const assignmentTabs = [
     { value: 'description', label: 'Details', Icon: AlignLeft },
     { value: 'type', label: 'Type', Icon: Shapes },
-    { value: 'settings', label: 'Assign To', Icon: Users },
+    { value: 'assign-to', label: 'Assign To', Icon: Users },
     { value: 'problems', label: 'Problems', Icon: FileText },
     { value: 'submissions', label: 'Submissions', Icon: Package },
     { value: 'statistics', label: 'Statistics', Icon: BarChart3 },
     { value: 'similarity', label: 'Similarity', Icon: Fingerprint },
+    { value: 'settings', label: 'Settings', Icon: SlidersHorizontal },
   ] as const;
 
   return (
@@ -647,10 +649,6 @@ export default function AssignmentDashboardPage({
               </div>
             </TabsContent>
             <TabsContent value="submissions">
-              {/* Renders nothing unless the course is linked to an LMS. */}
-              <div className="mb-4">
-                <GradeSyncCard assignmentId={aid} />
-              </div>
               <AssignmentSubmissions
                 courseIsArchived={courseIsArchived}
                 courseId={id}
@@ -666,6 +664,10 @@ export default function AssignmentDashboardPage({
               <AssignmentSimilarityPanel />
             </TabsContent>
             <TabsContent value="settings">
+              <GradeSyncCard assignmentId={aid} variant="settings" />
+            </TabsContent>
+
+            <TabsContent value="assign-to">
               {settingsAssignment ? (
                 <AssignmentSettingsCard
                   courseId={id}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Send } from 'lucide-react';
+import { ChevronUp, RefreshCw, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import SwitchField from '@/components/ui/SwitchField';
 import { showToast } from '@/lib/toast';
@@ -18,15 +18,23 @@ type SyncState = {
 };
 
 /**
- * Whether this assignment's grades are reaching the LMS.
+ * Grade sync for one assignment. Renders nothing unless the course is linked to an LMS.
  *
- * Only appears when the course is linked to one. Says what happened in words rather than a
- * colour, because "did my grades arrive" must be answerable by anyone.
+ * Split across two tabs on purpose: `settings` configures whether grades go, and `status` shows
+ * whether they arrived, next to the grades themselves. Configure where you configure things,
+ * check where you look at the work.
  */
-export function GradeSyncCard({ assignmentId }: { assignmentId: string }) {
+export function GradeSyncCard({
+  assignmentId,
+  variant,
+}: {
+  assignmentId: string;
+  variant: 'settings' | 'status' | 'inline';
+}) {
   const { timezone, hour12 } = useEffectiveTimezone();
   const [state, setState] = useState<SyncState | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -42,7 +50,27 @@ export function GradeSyncCard({ assignmentId }: { assignmentId: string }) {
     void load();
   }, [load]);
 
-  if (!state?.linked) return null;
+  const statusText = !state?.linked
+    ? ''
+    : state.failed > 0
+      ? `${state.failed} ${state.failed === 1 ? 'grade' : 'grades'} could not be sent to your LMS.`
+      : state.pending > 0
+        ? `${state.pending} ${state.pending === 1 ? 'grade is' : 'grades are'} waiting to be sent to your LMS.`
+        : state.sent > 0
+          ? 'All grades for this assignment have been sent to your LMS.'
+          : 'No grades have been sent to your LMS yet.';
+
+  if (!state?.linked) {
+    // The Settings tab is a real destination, so it explains itself rather than being blank.
+    // The Submissions tab is not: nothing to say there when no LMS is involved.
+    return variant === 'settings' ? (
+      <p className="text-muted-foreground max-w-2xl text-sm">
+        This course is not connected to an LMS, so there are no grade settings to change. Once
+        somebody opens AFCT from your LMS and connects the course, this is where you choose whether
+        grades are sent automatically.
+      </p>
+    ) : null;
+  }
 
   const setAuto = async (autoSync: boolean) => {
     setState({ ...state, autoSync });
@@ -78,6 +106,72 @@ export function GradeSyncCard({ assignmentId }: { assignmentId: string }) {
     }
   };
 
+  // A section of the grading panel, styled like the ones around it rather than as its own
+  // card. This is the only place the state appears: it belongs next to the grade being given.
+  if (variant === 'inline') {
+    return (
+      // Separated from the grade form above it, the way the panel's other sections are.
+      <div className="flex flex-col gap-2 border-t pt-4">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+          <h3 className="text-sm font-medium">LMS Sync</h3>
+          {/* Open by default: whether grades reached the LMS is worth seeing without asking. */}
+          <button
+            type="button"
+            onClick={() => setOpen((current) => !current)}
+            aria-expanded={open}
+            aria-controls="lms-sync"
+            className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
+          >
+            <ChevronUp
+              className={`h-4 w-4 transition-transform ${open ? '' : 'rotate-180'}`}
+              aria-hidden="true"
+            />
+            <span className="sr-only">{open ? 'Collapse LMS sync' : 'Expand LMS sync'}</span>
+          </button>
+        </div>
+        {open && (
+          <div id="lms-sync" className="flex flex-col gap-2">
+            <p className="text-muted-foreground text-xs" role="status">
+              {statusText}
+            </p>
+            {state.lastSentAt && (
+              <p className="text-muted-foreground text-xs">
+                Last sent {formatDateTimeInTimeZone(state.lastSentAt, timezone, hour12)}
+              </p>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-fit"
+              onClick={() => void sendNow()}
+              disabled={busy}
+            >
+              <Send className="mr-2 h-4 w-4" aria-hidden="true" />
+              {busy ? 'Sending...' : 'Send grades now'}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (variant === 'settings') {
+    return (
+      <div className="max-w-2xl space-y-4 rounded-md border p-4">
+        <h2 className="text-sm font-medium">Grades in your LMS</h2>
+        <SwitchField
+          name="ltiAutoSync"
+          label="Send grades automatically"
+          description="Grades go to your LMS as you award and change them."
+          checked={state.autoSync}
+          onCheckedChange={(value) => void setAuto(value)}
+          descriptionPlacement="inline"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl space-y-4 rounded-md border p-4">
       <div>
@@ -97,15 +191,6 @@ export function GradeSyncCard({ assignmentId }: { assignmentId: string }) {
           </p>
         )}
       </div>
-
-      <SwitchField
-        name="ltiAutoSync"
-        label="Send grades automatically"
-        description="Grades go to your LMS as you award and change them."
-        checked={state.autoSync}
-        onCheckedChange={(value) => void setAuto(value)}
-        descriptionPlacement="inline"
-      />
 
       <Button variant="outline" size="sm" onClick={() => void sendNow()} disabled={busy}>
         <Send className="mr-2 h-4 w-4" aria-hidden="true" />

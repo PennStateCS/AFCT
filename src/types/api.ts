@@ -1954,6 +1954,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/lti-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The LMS courses linked to this course
+         * @description Which LMS courses open this AFCT course.   More than one is normal: cross-listed sections are separate courses in the LMS and one  course to the department.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/lti-link/route.ts)
+         */
+        get: operations["getCoursesByIdLtiLink"];
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect an LMS course from this course
+         * @description Disconnect an LMS course from this one.   Removes the link and the gradebook columns AFCT remembers, not any grade already sent. A  later launch from that LMS course asks which AFCT course it is, as if for the first time.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/lti-link/route.ts)
+         */
+        delete: operations["deleteCoursesByIdLtiLink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/problems/{pid}/duplicate": {
         parameters: {
             query?: never;
@@ -9414,6 +9446,73 @@ export interface operations {
             };
             /** @description Server error. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdLtiLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The links, empty when none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description You do not manage this course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteCoursesByIdLtiLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description You do not manage this course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such link on this course. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
