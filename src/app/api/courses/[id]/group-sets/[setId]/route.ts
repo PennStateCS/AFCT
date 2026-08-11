@@ -7,7 +7,11 @@ import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
 import { RenameGroupSetSchema } from '@/schemas/group-set';
 import { normalizeName } from '@/lib/group-sets';
-import { findGroupSet, groupSetDeletionBlockers, loadGroupSetDetail } from '@/lib/group-set-service';
+import {
+  findGroupSet,
+  groupSetDeletionBlockers,
+  loadGroupSetDetail,
+} from '@/lib/group-set-service';
 
 /**
  * Full detail for one group set: its groups, each group's members (with an
@@ -104,7 +108,13 @@ export const PATCH = withCourseAuth(
         severity: 'INFO',
         category: 'COURSE',
         courseId,
-        metadata: { courseId, groupSetId: setId, name, previousName: set.name },
+        metadata: {
+          courseId,
+          groupSetId: setId,
+          changes: { name: { from: set.name, to: name } },
+          name,
+          previousName: set.name,
+        },
       });
 
       return NextResponse.json(updated);
