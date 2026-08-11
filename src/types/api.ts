@@ -3008,6 +3008,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/{id}/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The sign-in methods attached to a user's account
+         * @description How somebody signs in, for an administrator looking at their account.   The question this answers is "why can this person not get in", which today can only be  answered by reading the database. Shows what is attached and how it came to be, never  anything secret: an issuer and a subject identify a person to a provider, they do not  authenticate anyone.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/users/[id]/identities/route.ts)
+         */
+        get: operations["getUsersByIdIdentities"];
+        put?: never;
+        post?: never;
+        /**
+         * Detach a sign-in method from a user's account
+         * @description Detach one of somebody's sign-in methods.   Refuses to remove their last way in, exactly as the self-service page does: an account with  no password and no identity can only be recovered by changing the database, and an  administrator helping with a sign-in problem should not be able to create a worse one.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/users/[id]/identities/route.ts)
+         */
+        delete: operations["deleteUsersByIdIdentities"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{id}": {
         parameters: {
             query?: never;
@@ -12582,6 +12610,91 @@ export interface operations {
                         sessionTimeoutMinutes?: number;
                         hcaptchaSiteKey?: string;
                     };
+                };
+            };
+        };
+    };
+    getUsersByIdIdentities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Their linked identities, and whether they have a password. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such user. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteUsersByIdIdentities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Detached. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such identity on that account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description That is the only way to sign in to the account. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
