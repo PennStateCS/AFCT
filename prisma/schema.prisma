@@ -563,6 +563,7 @@ model Assignment {
   activityLogs ActivityLog[]
   assignees    AssignmentAssignee[]
   overrides    AssignmentOverride[]
+  ltiLineItems LtiLineItem[] // gradebook columns in linked LMS courses
 
   @@index([courseId])
   @@index([isPublished])
@@ -1336,12 +1337,19 @@ model LtiContextLink {
   /// The AFCT course it opens.
   courseId String
 
+  /// Where to create gradebook columns for this LMS course, from the launch's AGS claim.
+  /// Null when the platform granted no grade scopes. Refreshed on each launch.
+  lineItemsUrl String?
+
   linkedBy   User?   @relation(fields: [linkedByUserId], references: [id], onDelete: SetNull)
   /// Who decided this. Null once that account is gone; the link outlives the person.
   linkedByUserId String?
 
   /// When this record was created.
   createdAt DateTime @default(now())
+
+  /// Gradebook columns created in this LMS course.
+  lineItems LtiLineItem[]
 
   /// One AFCT course per LMS course. Not the other way round: see the note above.
   @@unique([platformId, contextId])
@@ -1385,6 +1393,35 @@ model LtiPendingLink {
   @@index([userId])
   /// Expired rows are swept with the other short-lived tokens.
   @@index([expiresAt])
+}
+
+/// One AFCT assignment's gradebook column in an LMS course.
+///
+/// Created on demand the first time a grade is sent, and remembered so later grades go to the
+/// same column instead of making a new one each time.
+///
+/// @namespace Identity
+model LtiLineItem {
+  /// Unique identifier.
+  id String @id @default(cuid())
+
+  contextLink   LtiContextLink @relation(fields: [contextLinkId], references: [id], onDelete: Cascade)
+  /// The LMS course this column lives in.
+  contextLinkId String
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  /// The AFCT assignment it scores.
+  assignmentId String
+
+  /// The platform's URL for this column, used to post scores.
+  url String
+
+  /// When this record was created.
+  createdAt DateTime @default(now())
+
+  /// One column per assignment per LMS course.
+  @@unique([contextLinkId, assignmentId])
+  @@index([assignmentId])
 }
 
 generator erd {
