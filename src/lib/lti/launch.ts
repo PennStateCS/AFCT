@@ -75,6 +75,8 @@ export type LaunchIdentity = {
   targetLinkUri: string | null;
   /** Where to create gradebook columns. Absent when the platform granted no grade scopes. */
   lineItemsUrl: string | null;
+  /** Where to read the course roster. Absent when the platform granted no roster scope. */
+  membershipsUrl: string | null;
 };
 
 /**
@@ -264,6 +266,10 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
       lineItemsUrl: (() => {
         const ags = claimObject(payload, 'endpoint', 'lti-ags');
         return ags ? claimString(ags.lineitems) : null;
+      })(),
+      membershipsUrl: (() => {
+        const nrps = claimObject(payload, 'namesroleservice', 'lti-nrps');
+        return nrps ? claimString(nrps.context_memberships_url) : null;
       })(),
       targetLinkUri: claimString(payload[`${CLAIM}/target_link_uri`]),
     },

@@ -89,6 +89,7 @@ erDiagram
   String contextTitle "nullable"
   String courseId FK
   String lineItemsUrl "nullable"
+  String membershipsUrl "nullable"
   String linkedByUserId FK "nullable"
   DateTime createdAt
 }
@@ -329,6 +330,9 @@ Properties as follows:
 - `lineItemsUrl`
   > Where to create gradebook columns for this LMS course, from the launch's AGS claim.
   > Null when the platform granted no grade scopes. Refreshed on each launch.
+- `membershipsUrl`
+  > Where to read this LMS course's membership, from the launch's NRPS claim. Null when the
+  > platform granted no roster scope. Refreshed on each launch.
 - `linkedByUserId`: Who decided this. Null once that account is gone; the link outlives the person.
 - `createdAt`: When this record was created.
 

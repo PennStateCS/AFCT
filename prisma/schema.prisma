@@ -1346,6 +1346,10 @@ model LtiContextLink {
   /// Null when the platform granted no grade scopes. Refreshed on each launch.
   lineItemsUrl String?
 
+  /// Where to read this LMS course's membership, from the launch's NRPS claim. Null when the
+  /// platform granted no roster scope. Refreshed on each launch.
+  membershipsUrl String?
+
   linkedBy   User?   @relation(fields: [linkedByUserId], references: [id], onDelete: SetNull)
   /// Who decided this. Null once that account is gone; the link outlives the person.
   linkedByUserId String?
