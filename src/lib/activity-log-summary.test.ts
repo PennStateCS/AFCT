@@ -51,6 +51,56 @@ describe('an enrolment change', () => {
   });
 });
 
+/**
+ * The gap the audit found: an update recorded which fields moved and what they are now, so
+ * "who changed the due date" was answerable and "from when" was not.
+ */
+describe('an update', () => {
+  it('says what moved and what it moved from', () => {
+    const summary = describeActivity('UPDATE_ASSIGNMENT', {
+      changes: { dueDate: { from: '2026-08-24', to: '2026-09-01' } },
+    });
+
+    expect(summary).toBe('Due date: 2026-08-24 to 2026-09-01');
+  });
+
+  it('says when something was set for the first time', () => {
+    const summary = describeActivity('UPDATE_COURSE', {
+      changes: { lateCutoff: { from: null, to: '2026-09-01' } },
+    });
+
+    expect(summary).toBe('Late cutoff: nothing to 2026-09-01');
+  });
+
+  // A save that changed nothing should not claim otherwise.
+  it('says nothing when nothing moved', () => {
+    expect(describeActivity('UPDATE_ASSIGNMENT', { changes: {} })).toBeNull();
+  });
+});
+
+describe('a grade change', () => {
+  it('gives the old mark and the new one', () => {
+    expect(describeActivity('PROBLEM_GRADE_UPDATED', { previousGrade: 80, grade: 95 })).toBe(
+      '80 to 95',
+    );
+  });
+
+  // "null to 95" reads as a bug; it was simply not graded before.
+  it('reads plainly for a first grade', () => {
+    expect(describeActivity('PROBLEM_GRADE_UPDATED', { previousGrade: null, grade: 95 })).toBe(
+      'graded 95',
+    );
+  });
+});
+
+describe('a role change', () => {
+  it('gives both roles', () => {
+    expect(describeActivity('CHANGE_COURSE_ROLE', { previousRole: 'STUDENT', newRole: 'TA' })).toBe(
+      'STUDENT to TA',
+    );
+  });
+});
+
 describe('a refused launch', () => {
   it('gives the reason', () => {
     expect(describeActivity('LTI_LAUNCH_DENIED', { reason: 'bad-signature' })).toBe(

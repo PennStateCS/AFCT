@@ -17,6 +17,7 @@ import { toEndOfDayInTimezone } from '@/lib/date-convert';
 import { computeLateSubmissionState, resolveUnlockAt } from '@/lib/assignment-late-window';
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { overridesForStudentWhere } from '@/lib/assignment-visibility';
+import { diffFields } from '@/lib/api/activity';
 
 // Types
 interface AssignmentWithProblemsAndCourse {
@@ -90,7 +91,10 @@ async function assertAssignmentMutable(
         assignmentId,
         metadata: { reason: 'has submissions' },
       });
-      return NextResponse.json({ error: 'Assignment must not have any submissions' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Assignment must not have any submissions' },
+        { status: 403 },
+      );
     }
 
     if (hasGrade) {
@@ -615,13 +619,14 @@ export const PATCH = withCourseAuth(
           userId: user.id,
           courseId,
           assignmentId: id,
+          // Old and new side by side. The names alone answered "what moved" but never "from
+          // what", which is the half a complaint about a deadline turns on.
+          changes: diffFields(
+            existing as unknown as Record<string, unknown>,
+            updateData as Record<string, unknown>,
+          ),
           changedFields: Object.keys(updateData),
           title: updated.title,
-          isPublished: updated.isPublished,
-          dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
-          unlockAt: updated.unlockAt ? updated.unlockAt.toISOString() : null,
-          allowLateSubmissions: updated.allowLateSubmissions,
-          lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
         },
       });
 

@@ -39,8 +39,48 @@ const VIA: Record<string, string> = {
   ADMIN: 'connected by an administrator',
 };
 
+/** "due date 24 Aug to 1 Sep" — the change itself, which is what a reader is looking for. */
+function describeChanges(metadata: Metadata): string | null {
+  const changes = metadata?.changes as Record<string, { from: unknown; to: unknown }> | undefined;
+  if (!changes || Object.keys(changes).length === 0) return null;
+
+  const shorten = (value: unknown) => {
+    if (value === null || value === undefined) return 'nothing';
+    const text = String(value);
+    // Long values ruin a table row, and the detail view has the whole thing.
+    return text.length > 40 ? `${text.slice(0, 40)}...` : text;
+  };
+
+  return Object.entries(changes)
+    .map(([field, change]) => `${label(field)}: ${shorten(change.from)} to ${shorten(change.to)}`)
+    .join('; ');
+}
+
 export function describeActivity(action: string, metadata: Metadata): string | null {
   switch (action) {
+    // Updates that record old and new. The change itself is the whole point of the entry.
+    case 'UPDATE_COURSE':
+    case 'UPDATE_ASSIGNMENT':
+      return describeChanges(metadata);
+
+    case 'PROBLEM_GRADE_UPDATED': {
+      const before = metadata?.previousGrade;
+      const after = metadata?.grade;
+      if (after === undefined) return null;
+      return before === null || before === undefined
+        ? `graded ${String(after)}`
+        : `${String(before)} to ${String(after)}`;
+    }
+
+    case 'PROBLEM_GRADE_CLEARED':
+      return 'grade removed';
+
+    case 'CHANGE_COURSE_ROLE': {
+      const from = str(metadata, 'previousRole');
+      const to = str(metadata, 'newRole');
+      return from && to ? `${from} to ${to}` : null;
+    }
+
     case 'LTI_ROSTER_SYNCED':
       // The headline only. Who was added or dropped has an entry of its own, using the same
       // actions as a roster change made by hand, so it can be searched and filtered like one.
@@ -115,8 +155,12 @@ const FIELD_LABELS: Record<string, string> = {
 
 const label = (key: string) =>
   FIELD_LABELS[key] ??
-  // camelCase to words, capitalised once: "scoreMaximum" becomes "Score maximum".
-  key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
+  // camelCase to sentence case: "dueDate" becomes "Due date", not "Due Date". Explicit labels
+  // above are left alone, so "Client ID" keeps its capitals.
+  key
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .replace(/^./, (c) => c.toUpperCase());
 
 const render = (value: unknown): string => {
   if (value === null || value === undefined) return 'none';
