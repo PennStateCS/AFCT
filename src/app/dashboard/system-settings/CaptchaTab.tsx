@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
+import { SETTINGS_BOX_CLASS } from './system-settings-shared';
 import type { SetField } from './system-settings-shared';
 
 /** Captcha tab: hCaptcha keys + a live "test my keys" flow. */
@@ -76,7 +77,7 @@ export function CaptchaTab({
         </div>
       </div>
 
-      <div className="max-w-md space-y-5">
+      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
         <InputGroup
           label="hCaptcha site key"
           name="hcaptchaSiteKey"

@@ -7,6 +7,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
 import { SMTP_SECURITY, SMTP_SECURITY_LABELS, type SmtpSecurity } from '@/schemas/smtp';
+import { SETTINGS_BOX_CLASS } from './system-settings-shared';
 import type { SetField } from './system-settings-shared';
 
 type TestState =
@@ -80,8 +81,8 @@ export function EmailTab({
   return (
     <>
       <p className="text-muted-foreground mb-4 text-sm">
-        The mail server AFCT sends from. Used for password reset links, so people can recover
-        their own accounts without an administrator.
+        The mail server AFCT sends from. Used for password reset links, so people can recover their
+        own accounts without an administrator.
       </p>
 
       <div className="mb-5 space-y-2">
@@ -98,7 +99,7 @@ export function EmailTab({
         </div>
       </div>
 
-      <div className="max-w-md space-y-5">
+      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
         <SwitchField
           id="smtp-enabled"
           name="smtp-enabled"
@@ -197,9 +198,11 @@ export function EmailTab({
         {savedHost ? (
           <>
             <p className="text-muted-foreground text-xs">
-              Sends a message using the saved settings, so you can confirm email works before
-              anyone needs it.
-              {dirty ? ' Save your changes first: this uses what is stored, not what you typed.' : ''}
+              Sends a message using the saved settings, so you can confirm email works before anyone
+              needs it.
+              {dirty
+                ? ' Save your changes first: this uses what is stored, not what you typed.'
+                : ''}
             </p>
             <InputGroup
               label="Send to"

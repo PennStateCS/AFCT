@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { DEFAULT_OIDC_BUTTON_LABEL } from '@/schemas/identity';
+import { SETTINGS_BOX_CLASS } from './system-settings-shared';
 import type { SetField } from './system-settings-shared';
 
 /**
@@ -63,7 +64,7 @@ export function SignInTab({
         </div>
       </div>
 
-      <div className="max-w-md space-y-5">
+      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
         <SwitchField
           id="oidc-enabled"
           name="oidc-enabled"
@@ -128,8 +129,8 @@ export function SignInTab({
       <div className="mt-6 max-w-md space-y-3 border-t pt-5">
         <h2 className="text-sm font-medium">Give this to your IT department</h2>
         <p className="text-muted-foreground text-xs">
-          The redirect URL AFCT will use. Registration usually fails without it, with an error
-          about a mismatched redirect.
+          The redirect URL AFCT will use. Registration usually fails without it, with an error about
+          a mismatched redirect.
         </p>
         <InputGroup
           label="Redirect URL"
@@ -143,9 +144,9 @@ export function SignInTab({
       <div className="mt-6 max-w-md space-y-3 border-t pt-5">
         <h2 className="text-sm font-medium">Matching people to accounts</h2>
         <p className="text-muted-foreground text-xs">
-          When somebody signs in for the first time, AFCT attaches their institutional identity
-          to an existing account with the same email address, but only if the provider states
-          that the address is verified.
+          When somebody signs in for the first time, AFCT attaches their institutional identity to
+          an existing account with the same email address, but only if the provider states that the
+          address is verified.
         </p>
         <SwitchField
           id="oidc-trust-email"
@@ -161,10 +162,10 @@ export function SignInTab({
             somebody another person's account, and the reason it exists at all is that the
             common case (Microsoft) omits the claim. */}
         <p className="text-muted-foreground text-xs">
-          Some providers, including Microsoft Entra, never mark addresses as verified. Without
-          this, nobody at those institutions is matched automatically. With it on at a provider
-          where people can choose their own address, someone could reach an account that is not
-          theirs. Administrator accounts are never matched automatically either way.
+          Some providers, including Microsoft Entra, never mark addresses as verified. Without this,
+          nobody at those institutions is matched automatically. With it on at a provider where
+          people can choose their own address, someone could reach an account that is not theirs.
+          Administrator accounts are never matched automatically either way.
         </p>
       </div>
     </>

@@ -1,5 +1,6 @@
 'use client';
 
+import { SETTINGS_BOX_CLASS } from './system-settings-shared';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
@@ -37,7 +38,7 @@ export function GeneralTab({
         Server defaults for time, uploads, and sign-in.
       </p>
       {/* All General fields stacked in a single, consistently-sized column. */}
-      <div className="max-w-md space-y-5">
+      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
         {/* Read-only: NEXTAUTH_URL is a server-level env var, not a stored
             setting. Shown for reference with instructions to change it. */}
         <div className="space-y-1">

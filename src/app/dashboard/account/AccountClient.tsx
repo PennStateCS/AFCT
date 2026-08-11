@@ -104,6 +104,9 @@ export default function AccountClient({
             selectId="account-tab-select"
             value={tab}
             onValueChange={onTabChange}
+            // Only three or four sections here. Spreading them across the card reads as a
+            // layout accident rather than a choice.
+            fill={false}
             tabs={tabs}
           />
 

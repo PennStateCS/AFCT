@@ -74,7 +74,7 @@ export function BackupsTab({
           row.original.encrypted ? (
             <span className="whitespace-nowrap">Encrypted</span>
           ) : (
-            <span className="whitespace-nowrap text-status-warning">Not encrypted</span>
+            <span className="text-status-warning whitespace-nowrap">Not encrypted</span>
           ),
         meta: { priority: 2 },
       },
