@@ -31,6 +31,13 @@ function counts(meta: Metadata): string {
   return parts.length > 0 ? parts.join(', ') : 'nothing changed';
 }
 
+/** How somebody signed in, by the provider id NextAuth reports. */
+const SIGN_IN: Record<string, string> = {
+  credentials: 'with an AFCT password',
+  'lti-launch': 'from an LMS',
+  oidc: 'with institutional sign-in',
+};
+
 /** How an identity came to be attached, in the words a person would use. */
 const VIA: Record<string, string> = {
   SELF_SERVICE: 'connected by the account holder',
@@ -158,6 +165,22 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       const how = via ? (VIA[via] ?? via) : null;
       const parts = [kind, how].filter(Boolean).join(', ');
       return parts ? `${parts}${created ? ', new account' : ''}` : null;
+    }
+
+    case 'LOGIN_SUCCESS':
+    case 'CLIENT_LOGIN': {
+      // How somebody got in. The rows are otherwise identical, and "signed in from an LMS"
+      // against "signed in with a password" is the difference somebody is looking for.
+      const how = SIGN_IN[str(metadata, 'provider') ?? ''] ?? null;
+      const temporary = metadata?.temporaryPasswordLogin === true;
+      if (!how) return temporary ? 'with a temporary password' : null;
+      return temporary ? `${how}, temporary password` : how;
+    }
+
+    case 'LTI_DEEP_LINK_RETURNED': {
+      // Which assignment the LMS link now opens, which is the whole of what happened.
+      const assignment = str(metadata, 'assignmentTitle');
+      return assignment ? `linked to ${assignment}` : null;
     }
 
     case 'IDENTITY_LINK_DENIED':

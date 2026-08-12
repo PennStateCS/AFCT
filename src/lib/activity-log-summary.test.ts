@@ -316,3 +316,49 @@ describe('a refused request', () => {
     ).toBe('group set changed');
   });
 });
+
+/** How somebody got in. Otherwise every sign-in row reads the same. */
+describe('a sign-in', () => {
+  it('tells an LMS launch apart from a password', () => {
+    expect(describeActivity('LOGIN_SUCCESS', { provider: 'lti-launch' })).toBe('from an LMS');
+    expect(describeActivity('LOGIN_SUCCESS', { provider: 'credentials' })).toBe(
+      'with an AFCT password',
+    );
+    expect(describeActivity('LOGIN_SUCCESS', { provider: 'oidc' })).toBe(
+      'with institutional sign-in',
+    );
+  });
+
+  it('says when a temporary password was used', () => {
+    const text = describeActivity('LOGIN_SUCCESS', {
+      provider: 'credentials',
+      temporaryPasswordLogin: true,
+    });
+
+    expect(text).toBe('with an AFCT password, temporary password');
+  });
+
+  // A provider added later should not read as though nothing happened.
+  it('says nothing for a provider it does not know', () => {
+    expect(describeActivity('LOGIN_SUCCESS', { provider: 'saml' })).toBeNull();
+  });
+
+  it('covers the native client the same way', () => {
+    expect(describeActivity('CLIENT_LOGIN', { provider: 'credentials' })).toBe(
+      'with an AFCT password',
+    );
+  });
+});
+
+/** A deep link is only interesting for which assignment it points at. */
+describe('a deep link returned to the LMS', () => {
+  it('names the assignment', () => {
+    expect(
+      describeActivity('LTI_DEEP_LINK_RETURNED', { assignmentTitle: 'LMS sync demo' }),
+    ).toBe('linked to LMS sync demo');
+  });
+
+  it('says nothing when the title was not recorded', () => {
+    expect(describeActivity('LTI_DEEP_LINK_RETURNED', { issuer: 'Client' })).toBeNull();
+  });
+});
