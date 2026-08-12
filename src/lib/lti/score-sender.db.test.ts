@@ -204,3 +204,66 @@ describe('a grade that cannot be sent', () => {
     expect(queued.lastError).not.toBeNull();
   });
 });
+
+/**
+ * Cross-listed sections: one AFCT course opened from several LMS courses.
+ *
+ * The student's own membership decides where the grade goes. It used to try each LMS course in
+ * turn, but creating the gradebook column comes before finding out whether the student is
+ * there, so a section B student left an AFCT column in section A.
+ */
+describe('when the course is open from more than one LMS course', () => {
+  const SECOND_LINK = 'ltil-second';
+
+  /** A second LMS course on the same platform, pointing at the same AFCT course. */
+  const withSecondSection = async () =>
+    prisma.ltiContextLink.create({
+      data: {
+        id: SECOND_LINK,
+        platformId: PLATFORM,
+        contextId: 'ctx-2',
+        courseId: COURSE,
+        lineItemsUrl: `${ISSUER}/ctx-2/line_items`,
+      },
+    });
+
+  it('refuses rather than guessing when nothing says which one the student is in', async () => {
+    await seed();
+    await withSecondSection();
+
+    const outcome = await sendOneScore();
+
+    expect(outcome).toEqual({ status: 'failed', reason: 'ambiguous-context' });
+    // Nothing was created in either gradebook.
+    expect(await prisma.ltiLineItem.count()).toBe(0);
+  });
+
+  it('sends to the section the student was recorded in', async () => {
+    await seed();
+    const second = await withSecondSection();
+    await prisma.ltiContextMember.create({
+      data: { contextLinkId: second.id, userId: USER, ltiUserId: 'lms-user-1' },
+    });
+    workingPlatform();
+
+    expect(await sendOneScore()).toEqual({ status: 'sent' });
+
+    const created = await prisma.ltiLineItem.findFirstOrThrow();
+    expect(created.contextLinkId).toBe(second.id);
+  });
+
+  // Being in both is a real cross-listing state, and there is still no single right gradebook.
+  it('refuses when the student is recorded in both', async () => {
+    await seed();
+    const second = await withSecondSection();
+    const first = await prisma.ltiContextLink.findFirstOrThrow({ where: { contextId: 'ctx-1' } });
+    await prisma.ltiContextMember.createMany({
+      data: [
+        { contextLinkId: first.id, userId: USER, ltiUserId: 'lms-user-1' },
+        { contextLinkId: second.id, userId: USER, ltiUserId: 'lms-user-1' },
+      ],
+    });
+
+    expect(await sendOneScore()).toEqual({ status: 'failed', reason: 'ambiguous-context' });
+  });
+});

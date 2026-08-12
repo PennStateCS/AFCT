@@ -54,12 +54,28 @@ export async function sendOneScore(): Promise<SendOutcome> {
    * and says so rather than guessing. Recording the context per student at launch and on roster
    * sync is the real fix and is not done yet.
    */
-  const links = await prisma.ltiContextLink.findMany({
+  const allLinks = await prisma.ltiContextLink.findMany({
     where: { courseId: claimed.assignment.courseId },
     include: { platform: { select: { id: true, clientId: true, tokenUrl: true, issuer: true } } },
   });
-  if (links.length === 0) return fail('no-line-items-endpoint');
-  if (links.length > 1) return fail('ambiguous-context');
+  if (allLinks.length === 0) return fail('no-line-items-endpoint');
+
+  /**
+   * With one LMS course there is nothing to choose. With several, the student's own membership
+   * decides, recorded when they launched or when the roster was synced. If nothing says which
+   * course they are in, this refuses: creating a column in the wrong section, or posting a
+   * grade to whichever link came back first, is worse than saying so.
+   */
+  let links = allLinks;
+  if (allLinks.length > 1) {
+    const memberships = await prisma.ltiContextMember.findMany({
+      where: { userId: claimed.userId, contextLinkId: { in: allLinks.map((l) => l.id) } },
+      select: { contextLinkId: true },
+    });
+    const belongs = new Set(memberships.map((m) => m.contextLinkId));
+    links = allLinks.filter((l) => belongs.has(l.id));
+    if (links.length !== 1) return fail('ambiguous-context');
+  }
 
   let lastReason: AgsFailure = 'rejected';
   let lastDetail: string | undefined;

@@ -39,7 +39,30 @@ vi.mock('jose', async (importOriginal) => {
 });
 
 const { prisma } = await import('@/lib/prisma');
-const { validateLaunch, issueLaunchNonce } = await import('./launch');
+const { validateLaunch } = await import('./launch');
+const { startLaunch } = await import('./launch-transaction');
+
+const TARGET_LINK_URI = 'https://afct.example.test/api/lti/launch';
+
+/**
+ * The state of the launch each fixture started. A launch is now one record holding both
+ * secrets, so a token is only valid alongside the state it was issued with.
+ */
+let lastState = '';
+
+/** Start a launch and hand back the nonce its token must carry. */
+async function beginFixture(targetLinkUri: string | null = TARGET_LINK_URI): Promise<string> {
+  try {
+    const started = await startLaunch({ platformId, targetLinkUri });
+    lastState = started.state;
+    return started.nonce;
+  } catch {
+    // Some cases delete the registration before building a token. Those launches are refused
+    // for being unregistered, long before the launch record is read, so any value serves.
+    lastState = 'no-launch-was-started';
+    return 'no-nonce-was-issued';
+  }
+}
 
 const platformId = 'ltip-test';
 
@@ -55,11 +78,11 @@ async function launchToken(
     [`${CLAIM}/roles`]: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
     [`${CLAIM}/context`]: { id: 'ctx-1', title: 'Theory of Computation' },
     [`${CLAIM}/resource_link`]: { id: 'rl-1' },
-    [`${CLAIM}/target_link_uri`]: 'https://afct.example.test/api/lti/launch',
+    [`${CLAIM}/target_link_uri`]: TARGET_LINK_URI,
     email: 'Student@example.test',
     given_name: 'Ada',
     family_name: 'Lovelace',
-    nonce: await issueLaunchNonce(),
+    nonce: typeof over.nonce === 'string' ? over.nonce : await beginFixture(),
     ...over,
   };
 
@@ -101,7 +124,7 @@ afterAll(async () => {
 
 describe('a launch that should work', () => {
   it('is accepted and says who it is for', async () => {
-    const result = await validateLaunch({ idToken: await launchToken() });
+    const result = await validateLaunch({ idToken: await launchToken(), state: lastState });
 
     expect(result).toMatchObject({
       ok: true,
@@ -116,7 +139,7 @@ describe('a launch that should work', () => {
   });
 
   it('carries the course and the link that was clicked', async () => {
-    const result = await validateLaunch({ idToken: await launchToken() });
+    const result = await validateLaunch({ idToken: await launchToken(), state: lastState });
 
     expect(result).toMatchObject({
       ok: true,
@@ -129,7 +152,7 @@ describe('a launch that should work', () => {
   });
 
   it('passes the LTI roles through untranslated', async () => {
-    const result = await validateLaunch({ idToken: await launchToken() });
+    const result = await validateLaunch({ idToken: await launchToken(), state: lastState });
 
     expect(result.ok && result.identity.roles).toEqual([
       'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
@@ -148,10 +171,10 @@ describe('a launch that should work', () => {
       [`${CLAIM}/version`]: '1.3.0',
       email: 'student@example.test',
       azp: CLIENT_ID,
-      nonce: await issueLaunchNonce(),
+      nonce: await beginFixture(),
       // The claims Core requires of a resource link launch. Not what this test is about, but a
       // launch without them is refused, and a fixture that could not happen proves nothing.
-      [`${CLAIM}/target_link_uri`]: 'https://afct.test/api/lti/launch',
+      [`${CLAIM}/target_link_uri`]: TARGET_LINK_URI,
       [`${CLAIM}/resource_link`]: { id: 'rl-azp' },
       [`${CLAIM}/roles`]: [],
     })
@@ -163,7 +186,7 @@ describe('a launch that should work', () => {
       .setExpirationTime('5m')
       .sign(platformKeys.privateKey);
 
-    expect((await validateLaunch({ idToken: token })).ok).toBe(true);
+    expect((await validateLaunch({ idToken: token, state: lastState })).ok).toBe(true);
   });
 
   // Some platforms send only `name`. Used to prefill a profile the person can correct.
@@ -174,7 +197,7 @@ describe('a launch that should work', () => {
       name: 'Grace Hopper',
     });
 
-    const result = await validateLaunch({ idToken: token });
+    const result = await validateLaunch({ idToken: token, state: lastState });
 
     expect(result).toMatchObject({
       ok: true,
@@ -191,7 +214,7 @@ describe('a launch that must be refused', () => {
   it('signed by the wrong key', async () => {
     const forged = await launchToken({}, attackerKeys.privateKey);
 
-    expect(await validateLaunch({ idToken: forged })).toEqual({
+    expect(await validateLaunch({ idToken: forged, state: lastState })).toEqual({
       ok: false,
       reason: 'bad-signature',
     });
@@ -200,7 +223,7 @@ describe('a launch that must be refused', () => {
   it('from an LMS nobody registered', async () => {
     await prisma.ltiPlatform.deleteMany({ where: { issuer: ISSUER } });
 
-    expect(await validateLaunch({ idToken: await launchToken() })).toMatchObject({
+    expect(await validateLaunch({ idToken: await launchToken(), state: lastState })).toMatchObject({
       ok: false,
       reason: 'unregistered-platform',
     });
@@ -213,7 +236,7 @@ describe('a launch that must be refused', () => {
   it('reports what the unregistered launch claimed to be', async () => {
     await prisma.ltiPlatform.deleteMany({ where: { issuer: ISSUER } });
 
-    const result = await validateLaunch({ idToken: await launchToken() });
+    const result = await validateLaunch({ idToken: await launchToken(), state: lastState });
 
     expect(result).toMatchObject({
       observed: { issuer: ISSUER, clientId: CLIENT_ID, deploymentId: DEPLOYMENT_ID },
@@ -224,7 +247,7 @@ describe('a launch that must be refused', () => {
   it('reports nothing of the sort for a forged signature', async () => {
     const forged = await launchToken({}, attackerKeys.privateKey);
 
-    expect(await validateLaunch({ idToken: forged })).toEqual({
+    expect(await validateLaunch({ idToken: forged, state: lastState })).toEqual({
       ok: false,
       reason: 'bad-signature',
     });
@@ -233,7 +256,7 @@ describe('a launch that must be refused', () => {
   it('addressed to a different tool', async () => {
     const token = await new SignJWT({
       [`${CLAIM}/deployment_id`]: DEPLOYMENT_ID,
-      nonce: await issueLaunchNonce(),
+      nonce: await beginFixture(),
     })
       .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
       .setIssuer(ISSUER)
@@ -244,7 +267,7 @@ describe('a launch that must be refused', () => {
       .sign(platformKeys.privateKey);
 
     // Never matches a registration, so it cannot even reach signature verification.
-    expect(await validateLaunch({ idToken: token })).toMatchObject({
+    expect(await validateLaunch({ idToken: token, state: lastState })).toMatchObject({
       ok: false,
       reason: 'unregistered-platform',
     });
@@ -253,7 +276,7 @@ describe('a launch that must be refused', () => {
   it('claiming a deployment that is not the registered one', async () => {
     const token = await launchToken({ [`${CLAIM}/deployment_id`]: 'deploy-somewhere-else' });
 
-    expect(await validateLaunch({ idToken: token })).toMatchObject({
+    expect(await validateLaunch({ idToken: token, state: lastState })).toMatchObject({
       ok: false,
       reason: 'unregistered-platform',
     });
@@ -265,7 +288,7 @@ describe('a launch that must be refused', () => {
       [`${CLAIM}/message_type`]: 'LtiResourceLinkRequest',
       [`${CLAIM}/version`]: '1.3.0',
       email: 'student@example.test',
-      nonce: await issueLaunchNonce(),
+      nonce: await beginFixture(),
     })
       .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
       .setIssuer(ISSUER)
@@ -275,27 +298,27 @@ describe('a launch that must be refused', () => {
       .setExpirationTime(Math.floor(Date.now() / 1000) - 600)
       .sign(platformKeys.privateKey);
 
-    expect(await validateLaunch({ idToken: token })).toEqual({ ok: false, reason: 'expired' });
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({ ok: false, reason: 'expired' });
   });
 
   /** The replay case: a captured launch URL, opened a second time. */
   it('replayed with a nonce that has already been spent', async () => {
     const token = await launchToken();
 
-    expect((await validateLaunch({ idToken: token })).ok).toBe(true);
-    expect(await validateLaunch({ idToken: token })).toEqual({ ok: false, reason: 'replayed' });
+    expect((await validateLaunch({ idToken: token, state: lastState })).ok).toBe(true);
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({ ok: false, reason: 'replayed' });
   });
 
   it('carrying a nonce AFCT never issued', async () => {
     const token = await launchToken({ nonce: 'a-nonce-nobody-issued' });
 
-    expect(await validateLaunch({ idToken: token })).toEqual({ ok: false, reason: 'replayed' });
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({ ok: false, reason: 'replayed' });
   });
 
   it('that is not a resource link launch', async () => {
     const token = await launchToken({ [`${CLAIM}/message_type`]: 'LtiDeepLinkingRequest' });
 
-    expect(await validateLaunch({ idToken: token })).toEqual({
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
       ok: false,
       reason: 'wrong-message-type',
     });
@@ -304,7 +327,7 @@ describe('a launch that must be refused', () => {
   it('that is not LTI 1.3', async () => {
     const token = await launchToken({ [`${CLAIM}/version`]: '1.2.0' });
 
-    expect(await validateLaunch({ idToken: token })).toEqual({
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
       ok: false,
       reason: 'wrong-message-type',
     });
@@ -314,11 +337,11 @@ describe('a launch that must be refused', () => {
   it('carrying no email address', async () => {
     const token = await launchToken({ email: undefined });
 
-    expect(await validateLaunch({ idToken: token })).toEqual({ ok: false, reason: 'no-email' });
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({ ok: false, reason: 'no-email' });
   });
 
   it('that is not a token at all', async () => {
-    expect(await validateLaunch({ idToken: 'not-a-jwt' })).toEqual({
+    expect(await validateLaunch({ idToken: 'not-a-jwt', state: lastState })).toEqual({
       ok: false,
       reason: 'malformed',
     });
@@ -329,16 +352,97 @@ describe('a launch that must be refused', () => {
  * A launch that fails for another reason must not burn the nonce, or one clock-skew failure
  * would make the retry fail as a replay and there would be no way out.
  */
+/** The record that ties the state, the nonce, the registration and the target link URI. */
+describe('the launch it belongs to', () => {
+  it('refuses a state naming no launch at all', async () => {
+    const token = await launchToken();
+
+    expect(await validateLaunch({ idToken: token, state: 'a-state-nobody-issued' })).toEqual({
+      ok: false,
+      reason: 'replayed',
+    });
+  });
+
+  // The check two loose tokens could not make: a token is only good for its own launch.
+  it('refuses a token carrying another launch’s nonce', async () => {
+    const other = await beginFixture();
+    const token = await launchToken({ nonce: other });
+    // A second launch, whose state does not go with that nonce.
+    await beginFixture();
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'replayed',
+    });
+  });
+
+  /**
+   * A launch started against one registration cannot be finished by a token belonging to
+   * another, even when both tokens verify. Otherwise a second registration on the same LMS
+   * would let one launch be completed against the wrong deployment.
+   */
+  it('refuses a token whose registration is not the one the launch started against', async () => {
+    const other = await prisma.ltiPlatform.create({
+      data: {
+        id: 'ltip-other',
+        name: 'Another registration',
+        issuer: ISSUER,
+        clientId: CLIENT_ID,
+        deploymentId: 'deploy-elsewhere',
+        authLoginUrl: `${ISSUER}/api/lti/authorize_redirect`,
+        tokenUrl: `${ISSUER}/login/oauth2/token`,
+        keysetUrl: KEYSET_URL,
+      },
+    });
+    // Started against the other registration; the token below is for the first one.
+    const started = await startLaunch({ platformId: other.id, targetLinkUri: TARGET_LINK_URI });
+    const token = await launchToken({ nonce: started.nonce });
+
+    expect(await validateLaunch({ idToken: token, state: started.state })).toEqual({
+      ok: false,
+      reason: 'deployment-mismatch',
+    });
+  });
+
+  /** Core: the signed target link URI must equal the one the login endpoint was given. */
+  it('refuses a target link uri that is not the one asked for', async () => {
+    const nonce = await beginFixture('https://afct.example.test/somewhere-else');
+    const token = await launchToken({ nonce });
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  it('accepts one that matches', async () => {
+    const nonce = await beginFixture(TARGET_LINK_URI);
+    const token = await launchToken({ nonce });
+
+    expect((await validateLaunch({ idToken: token, state: lastState })).ok).toBe(true);
+  });
+
+  // A platform need not send one to the login endpoint, and then there is nothing to match.
+  it('does not ask for a match when the login named no target', async () => {
+    const nonce = await beginFixture(null);
+    const token = await launchToken({ nonce });
+
+    expect((await validateLaunch({ idToken: token, state: lastState })).ok).toBe(true);
+  });
+});
+
 describe('the nonce', () => {
   it('survives a launch that failed before it was checked', async () => {
-    const nonce = await issueLaunchNonce();
+    const nonce = await beginFixture();
+    const state = lastState;
     const rejected = await launchToken({ nonce, [`${CLAIM}/version`]: '1.2.0' });
 
-    await validateLaunch({ idToken: rejected });
+    await validateLaunch({ idToken: rejected, state });
 
-    // The same nonce, now on a good token, still works.
+    // The same launch, now on a good token, still works: a failure before the checks that
+    // spend it must not cost the person their launch.
     const good = await launchToken({ nonce });
-    expect((await validateLaunch({ idToken: good })).ok).toBe(true);
+    expect((await validateLaunch({ idToken: good, state })).ok).toBe(true);
   });
 });
 
@@ -355,9 +459,9 @@ describe('claims a launch must carry', () => {
       [`${CLAIM}/version`]: '1.3.0',
       [`${CLAIM}/roles`]: [],
       [`${CLAIM}/resource_link`]: { id: 'rl-1' },
-      [`${CLAIM}/target_link_uri`]: 'https://afct.example.test/api/lti/launch',
+      [`${CLAIM}/target_link_uri`]: TARGET_LINK_URI,
       email: 'student@example.test',
-      nonce: await issueLaunchNonce(),
+      nonce: await beginFixture(),
       ...claims,
     })
       .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
@@ -375,7 +479,7 @@ describe('claims a launch must carry', () => {
    * as whoever got there first.
    */
   it('refuses a token with no subject', async () => {
-    expect(await validateLaunch({ idToken: await signed({}, 'sub') })).toEqual({
+    expect(await validateLaunch({ idToken: await signed({}, 'sub'), state: lastState })).toEqual({
       ok: false,
       reason: 'missing-claims',
     });
@@ -383,14 +487,14 @@ describe('claims a launch must carry', () => {
 
   // jose validates `exp` only when it is there, so a token without one never expires.
   it('refuses a token that never expires', async () => {
-    expect(await validateLaunch({ idToken: await signed({}, 'exp') })).toEqual({
+    expect(await validateLaunch({ idToken: await signed({}, 'exp'), state: lastState })).toEqual({
       ok: false,
       reason: 'missing-claims',
     });
   });
 
   it('refuses a token with no issued-at', async () => {
-    expect(await validateLaunch({ idToken: await signed({}, 'iat') })).toEqual({
+    expect(await validateLaunch({ idToken: await signed({}, 'iat'), state: lastState })).toEqual({
       ok: false,
       reason: 'missing-claims',
     });
@@ -399,7 +503,7 @@ describe('claims a launch must carry', () => {
   it('refuses a resource link launch with no resource link id', async () => {
     const token = await signed({ [`${CLAIM}/resource_link`]: {} }, null);
 
-    expect(await validateLaunch({ idToken: token })).toEqual({
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
       ok: false,
       reason: 'missing-claims',
     });
@@ -408,7 +512,7 @@ describe('claims a launch must carry', () => {
   it('refuses a launch with no target link uri', async () => {
     const token = await signed({ [`${CLAIM}/target_link_uri`]: undefined }, null);
 
-    expect(await validateLaunch({ idToken: token })).toEqual({
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
       ok: false,
       reason: 'missing-claims',
     });
@@ -417,7 +521,7 @@ describe('claims a launch must carry', () => {
   it('refuses a launch with no roles claim', async () => {
     const token = await signed({ [`${CLAIM}/roles`]: undefined }, null);
 
-    expect(await validateLaunch({ idToken: token })).toEqual({
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
       ok: false,
       reason: 'missing-claims',
     });
@@ -425,7 +529,7 @@ describe('claims a launch must carry', () => {
 
   // Required to be present, allowed to be empty: an LMS may send no roles for a person.
   it('accepts an empty roles list', async () => {
-    const result = await validateLaunch({ idToken: await signed({}, null) });
+    const result = await validateLaunch({ idToken: await signed({}, null), state: lastState });
 
     expect(result.ok).toBe(true);
   });
@@ -445,6 +549,6 @@ describe('claims a launch must carry', () => {
       null,
     );
 
-    expect((await validateLaunch({ idToken: token })).ok).toBe(true);
+    expect((await validateLaunch({ idToken: token, state: lastState })).ok).toBe(true);
   });
 });

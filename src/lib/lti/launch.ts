@@ -22,7 +22,7 @@
 import { decodeJwt, jwtVerify, createRemoteJWKSet, errors as joseErrors } from 'jose';
 import type { JWTPayload } from 'jose';
 import { prisma } from '@/lib/prisma';
-import { consumeSingleUseToken, issueSingleUseToken } from '@/lib/single-use-token';
+import { consumeLaunch, findLaunch, nonceMatches } from '@/lib/lti/launch-transaction';
 
 /** LTI puts its claims under this prefix. Spelled out once rather than inline everywhere. */
 const CLAIM = 'https://purl.imsglobal.org/spec/lti/claim';
@@ -75,6 +75,13 @@ export type DeepLinkRequest = {
   data: string | null;
   /** Whether the platform will accept more than one item. */
   multiple: boolean;
+  /**
+   * The content types the platform said it will take. Empty when it did not say, which the
+   * spec treats as no restriction rather than as nothing being allowed.
+   */
+  acceptTypes: string[];
+  /** Whether a gradebook column may come with the link. Platforms may say they take none. */
+  acceptLineItem: boolean;
 };
 
 export type LaunchIdentity = {
@@ -136,15 +143,6 @@ function keysetFor(url: string) {
   return keyset;
 }
 
-/** Issue the nonce for a login request. Single use is what makes a replayed launch fail. */
-export async function issueLaunchNonce(): Promise<string> {
-  const { token } = await issueSingleUseToken({
-    purpose: 'LTI_LAUNCH_NONCE',
-    ttlMs: LAUNCH_NONCE_TTL_MS,
-  });
-  return token;
-}
-
 /** First and last name, from whichever claims the platform chose to send. */
 function namesFrom(payload: JWTPayload): { firstName: string | null; lastName: string | null } {
   const given = typeof payload.given_name === 'string' ? payload.given_name : null;
@@ -183,8 +181,12 @@ function claimString(value: unknown): string | null {
  * token twice fails the second time. That is the replay case, and it is why this returns a
  * refusal rather than being a pure function.
  */
-export async function validateLaunch(opts: { idToken: string }): Promise<LaunchResult> {
-  const { idToken } = opts;
+export async function validateLaunch(opts: {
+  idToken: string;
+  /** The state posted back with the token, naming the launch this belongs to. */
+  state: string;
+}): Promise<LaunchResult> {
+  const { idToken, state } = opts;
 
   // Unverified, and used for nothing except finding the registration whose key we then verify
   // against. Every one of these claims is proved again below.
@@ -281,8 +283,6 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
   // among the token checks: a launch that fails for another reason should not burn the nonce.
   const nonce = claimString(payload.nonce);
   if (!nonce) return { ok: false, reason: 'replayed' };
-  const consumed = await consumeSingleUseToken({ token: nonce, purpose: 'LTI_LAUNCH_NONCE' });
-  if (!consumed) return { ok: false, reason: 'replayed' };
 
   /**
    * The claims LTI Core requires of a launch, checked after the signature rather than read
@@ -294,6 +294,23 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
   if (!subject || !targetLinkUri || !Array.isArray(rolesClaim)) {
     return { ok: false, reason: 'missing-claims' };
   }
+
+  /**
+   * Everything about this launch has to belong to the login that started it: the same
+   * registration, the same nonce, and the same target link URI the platform asked for. Two
+   * loose single-use tokens could not express that, which is what this record is for.
+   */
+  const transaction = await findLaunch(state);
+  if (!transaction) return { ok: false, reason: 'replayed' };
+  if (transaction.platformId !== platform.id) return { ok: false, reason: 'deployment-mismatch' };
+  if (!nonceMatches(transaction, nonce)) return { ok: false, reason: 'replayed' };
+  // Core: the token's target link URI must equal the one given to the login endpoint. Only
+  // checked when the platform sent one, since it is optional on the login request.
+  if (transaction.targetLinkUri && transaction.targetLinkUri !== targetLinkUri) {
+    return { ok: false, reason: 'missing-claims' };
+  }
+  // Spent last, and conditionally, so two copies of one launch cannot both succeed.
+  if (!(await consumeLaunch(transaction.id))) return { ok: false, reason: 'replayed' };
 
   const email = claimString(payload.email)?.trim().toLowerCase();
   // Canvas can be configured not to share an address. There is nothing AFCT can do with a person
@@ -336,6 +353,11 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
               returnUrl,
               data: settings ? claimString(settings.data) : null,
               multiple: settings?.accept_multiple === true,
+              acceptTypes: Array.isArray(settings?.accept_types)
+                ? settings.accept_types.filter((t): t is string => typeof t === 'string')
+                : [],
+              // Only false when the platform actually says so; absent means no restriction.
+              acceptLineItem: settings?.accept_lineitem !== false,
             }
           : null,
       targetLinkUri,

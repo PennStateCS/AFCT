@@ -31,7 +31,10 @@ export type DeepLinkItem = {
 };
 
 export type DeepLinkResponse =
-  { ok: true; returnUrl: string; jwt: string } | { ok: false; reason: 'no-signing-key' };
+  | { ok: true; returnUrl: string; jwt: string }
+  | { ok: false; reason: 'no-signing-key' }
+  /** The platform said it will not take the kind of thing AFCT has to offer. */
+  | { ok: false; reason: 'type-not-accepted' };
 
 /**
  * Sign the chosen items for return to the platform.
@@ -44,7 +47,21 @@ export async function buildDeepLinkResponse(opts: {
   returnUrl: string;
   data: string | null;
   items: DeepLinkItem[];
+  /** What the request said it will take. Empty means it did not say, so nothing is ruled out. */
+  acceptTypes?: string[];
+  /** False only when the request said it will not take a gradebook column. */
+  acceptLineItem?: boolean;
 }): Promise<DeepLinkResponse> {
+  /**
+   * The platform states what it will accept and the tool is expected to honour it. AFCT has
+   * only assignments to offer, so if a link to one is not on the list there is nothing to send
+   * and saying so beats posting something that will be refused.
+   */
+  const accepts = opts.acceptTypes ?? [];
+  if (accepts.length > 0 && !accepts.includes('ltiResourceLink')) {
+    return { ok: false, reason: 'type-not-accepted' };
+  }
+
   const signing = await getSigningKey();
   if (!signing) return { ok: false, reason: 'no-signing-key' };
 
@@ -57,7 +74,8 @@ export async function buildDeepLinkResponse(opts: {
     // Carried back on every launch through this link, which is how AFCT knows which assignment
     // a click means without asking again.
     custom: { afct_assignment_id: item.assignmentId },
-    ...(item.scoreMaximum
+    // A column only when the assignment is worth something and the platform will take one.
+    ...(item.scoreMaximum && opts.acceptLineItem !== false
       ? { lineItem: { scoreMaximum: item.scoreMaximum, label: item.title } }
       : {}),
   }));

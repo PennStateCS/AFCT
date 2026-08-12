@@ -15,6 +15,7 @@ import type { Prisma } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import type { AuditContext } from '@/lib/linked-identity';
 import type { RosterChange } from '@/lib/lti/roster-diff';
+import { rememberContextMember } from '@/lib/lti/course-link';
 
 export type ApplyResult = {
   added: number;
@@ -36,8 +37,10 @@ export async function applyRosterChanges(opts: {
   changes: RosterChange[];
   actorUserId: string;
   context: AuditContext;
+  /** The LMS course this roster came from, so who belongs where is recorded as it is read. */
+  contextLinkId?: string;
 }): Promise<ApplyResult> {
-  const { courseId, issuer, changes, actorUserId } = opts;
+  const { courseId, issuer, changes, actorUserId, contextLinkId } = opts;
   const result: ApplyResult = {
     added: 0,
     dropped: 0,
@@ -63,6 +66,17 @@ export async function applyRosterChanges(opts: {
           const userId =
             change.existingUserId ??
             (await createAccount(tx, change, () => result.accountsCreated++));
+
+          // The LMS has just told us they are in this course, which is what decides where
+          // their grade goes when several LMS courses open this one.
+          if (contextLinkId) {
+            await rememberContextMember({
+              contextLinkId,
+              userId,
+              ltiUserId: change.member.ltiUserId,
+              tx,
+            });
+          }
 
           await tx.roster.upsert({
             where: { courseId_userId: { courseId, userId } },

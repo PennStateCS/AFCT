@@ -113,6 +113,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     changes: result.diff.changes,
     actorUserId: allowed.userId,
     context: request,
+    contextLinkId: allowed.link.id,
   });
 
   return NextResponse.json(applied);

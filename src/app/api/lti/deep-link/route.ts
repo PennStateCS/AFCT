@@ -94,9 +94,21 @@ export async function POST(request: Request) {
         assignmentId: assignment.id,
       },
     ],
+    acceptTypes: pending.acceptTypes,
+    acceptLineItem: pending.acceptLineItem,
   });
 
   if (!response.ok) {
+    // Two different problems, and an administrator can only act on one of them.
+    if (response.reason === 'type-not-accepted') {
+      return page(
+        message(
+          'Your LMS will not take an assignment link here',
+          'This placement accepts other kinds of content. Add the AFCT link from a place that takes an external tool link, such as an assignment or a module item.',
+        ),
+        400,
+      );
+    }
     return page(
       message(
         'AFCT could not sign the response',

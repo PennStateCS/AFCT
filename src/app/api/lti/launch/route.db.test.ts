@@ -1,7 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { issueSingleUseToken } from '@/lib/single-use-token';
-import { LTI_STATE_COOKIE } from '@/lib/lti/login-init';
+import { stateCookieName } from '@/lib/lti/login-init';
 
 /**
  * Receiving a launch, against a real Postgres.
@@ -52,7 +51,10 @@ function post(opts: { state?: string; cookieState?: string; idToken?: string }) 
     new Request('https://afct.example.test/api/lti/launch', {
       method: 'POST',
       body,
-      headers: opts.cookieState ? { cookie: `${LTI_STATE_COOKIE}=${opts.cookieState}` } : undefined,
+      // Named from the state, so two launches at once do not share one cookie.
+      headers: opts.cookieState
+        ? { cookie: `${stateCookieName(opts.state ?? opts.cookieState)}=${opts.cookieState}` }
+        : undefined,
     }),
   );
 }
@@ -73,12 +75,12 @@ async function destroyFixtures() {
   await prisma.user.deleteMany({ where: { id: USER_ID } });
 }
 
-/** A launch that is going to work: valid state, cookie that matches, token that verifies. */
+/**
+ * A launch that is going to work: a state, a cookie that matches, and a token that verifies.
+ * `validateLaunch` is mocked here, so the launch record it would read lives in its own suite.
+ */
 async function goodLaunch() {
-  const { token: state } = await issueSingleUseToken({
-    purpose: 'LTI_LAUNCH_STATE',
-    ttlMs: 60_000,
-  });
+  const state = `state-${Math.random().toString(36).slice(2)}`;
   return { state, cookieState: state, idToken: 'a-token' };
 }
 
@@ -263,7 +265,7 @@ describe('a launch that works', () => {
   it('clears the state cookie behind it', async () => {
     const res = await post(await goodLaunch());
 
-    expect(res.headers.get('set-cookie') ?? '').toContain(`${LTI_STATE_COOKIE}=`);
+    expect(res.headers.get('set-cookie') ?? '').toContain('afct.lti.state.');
   });
 });
 
@@ -291,18 +293,20 @@ describe('the state check', () => {
     expect(validateLaunch).not.toHaveBeenCalled();
   });
 
-  it('refuses a state AFCT never issued, even with a matching cookie', async () => {
-    const res = await post({ state: 'made-up', cookieState: 'made-up', idToken: 'a-token' });
-
-    expect(res.status).toBe(400);
-    expect(validateLaunch).not.toHaveBeenCalled();
-  });
-
-  it('refuses the same launch a second time', async () => {
+  /**
+   * Whether the state names a launch AFCT started, and whether that launch has been spent, are
+   * decided in `validateLaunch` against the launch record. The endpoint's job is to prove the
+   * browser is the one that started it, and to hand both values over.
+   */
+  it('gives the state to the launch check along with the token', async () => {
     const launch = await goodLaunch();
 
-    expect((await post(launch)).status).toBe(303);
-    expect((await post(launch)).status).toBe(400);
+    await post(launch);
+
+    expect(validateLaunch).toHaveBeenCalledWith({
+      idToken: launch.idToken,
+      state: launch.state,
+    });
   });
 
   it('refuses a launch missing its token', async () => {
