@@ -3,19 +3,15 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toastMock, resetToastMock } from '@/test/mocks/toast';
 import { UserIdentitiesDialog } from './UserIdentitiesDialog';
 
 /**
- * What an administrator sees when asking how somebody signs in.
- *
- * jsdom does no layout, so these prove wiring and the one rule that matters: an account with no
- * password and a single connected method must not be able to have it detached, because that
- * leaves a person locked out of a system they are enrolled in. The route enforces it too; a
- * disabled button is the difference between a refusal and a dead end.
+ * An administrator's view of how somebody signs in. The guard: the last sign-in method on an
+ * account with no password cannot be detached, or nobody can get in. The route checks too.
  */
 
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/lib/toast', () => ({ showToast: toast }));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC', hour12: false }),
@@ -46,6 +42,7 @@ function show(body: unknown, ok = true) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetToastMock();
   vi.unstubAllGlobals();
 });
 
@@ -88,7 +85,7 @@ describe('what it shows', () => {
       <UserIdentitiesDialog userId="u-1" userName="Ada Lovelace" open={true} setOpen={vi.fn()} />,
     );
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
   });
 });
 
@@ -126,7 +123,7 @@ describe('detaching', () => {
 
     await user.click(await screen.findByRole('button', { name: /Detach/ }));
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Sign-in method detached.'));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Sign-in method detached'));
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/users/u-1/identities?identityId=li-1',
       expect.objectContaining({ method: 'DELETE' }),
@@ -149,6 +146,6 @@ describe('detaching', () => {
 
     await user.click(await screen.findByRole('button', { name: /Detach/ }));
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('That is their only way in.'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('That is their only way in.'));
   });
 });

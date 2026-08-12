@@ -33,8 +33,7 @@ const EMPTY = {
  * LTI tab: which LMSs may open AFCT.
  *
  * Registration is mutual, so the tab has two halves. The values AFCT needs go in the form; the
- * values the LMS needs are listed above it, ready to copy. Setting this up means going back and
- * forth between two screens, and having half of it missing is what makes that painful.
+ * values the LMS needs are listed above it, ready to copy.
  */
 export function LtiTab({ siteUrl }: { siteUrl: string }) {
   const base = siteUrl.replace(/\/+$/, '');
@@ -52,7 +51,7 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
       setPlatforms(data.platforms);
     } catch {
       setPlatforms([]);
-      showToast.error('Could not load the registered LMSs. Reload the page to try again.');
+      showToast.error('Could not load the registered LMSs. Refresh the page to try again.');
     }
   }, []);
 
@@ -78,15 +77,17 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        showToast.error(data.error ?? 'Could not register that LMS. Try again.');
+        showToast.error(
+          data.error ?? 'Could not register that LMS. Check your connection and try again.',
+        );
         return;
       }
-      showToast.success('LMS registered.');
+      showToast.success('LMS registered');
       setDraft(EMPTY);
       setAdding(false);
       await load();
     } catch {
-      showToast.error('Could not register that LMS. Try again.');
+      showToast.error('Could not register that LMS. Check your connection and try again.');
     } finally {
       setSaving(false);
     }
@@ -97,11 +98,11 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
     try {
       const res = await fetch(`/api/admin/lti/platforms/${removing.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
-      showToast.success('Registration removed.');
+      showToast.success('Registration removed');
       setRemoving(null);
       await load();
     } catch {
-      showToast.error('Could not remove that registration. Try again.');
+      showToast.error('Could not remove that registration. Check your connection and try again.');
     }
   };
 

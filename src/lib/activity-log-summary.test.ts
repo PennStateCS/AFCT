@@ -147,10 +147,8 @@ describe('a refused launch', () => {
     );
   });
 
-  /**
-   * The claimed issuer is exactly what an administrator compares against the registration, so
-   * it belongs on the row rather than inside a dialog.
-   */
+  // The claimed issuer is what an administrator compares against the registration, so it
+  // belongs on the row rather than inside a dialog.
   it('adds the issuer the token claimed, when there is one', () => {
     const summary = describeActivity('LTI_LAUNCH_DENIED', {
       reason: 'unregistered-platform',
@@ -250,11 +248,7 @@ describe('the readable detail view', () => {
   });
 });
 
-/**
- * Why something failed is already in the metadata of every failing action, so reading it needs
- * no per-action case. These are the rows somebody is looking at when they are debugging, and
- * they were the ones showing nothing.
- */
+/** Failing actions already carry the reason, so this needs no per-action case. */
 describe('a failed action', () => {
   it('reads the reason a guard turned it down', () => {
     expect(describeActivity('COURSE_UPDATE_DENIED', { reason: 'not course staff' })).toBe(
@@ -274,8 +268,7 @@ describe('a failed action', () => {
     expect(text).toBe('archived');
   });
 
-  // The suffix is what makes this safe to apply blind: a successful action that happens to
-  // carry a `reason` must not be described as though it failed.
+  // The suffix gate: a successful action carrying a `reason` must not read as a failure.
   it('does not fire on an action that did not fail', () => {
     expect(describeActivity('CREATE_COURSE', { reason: 'because I wanted to' })).toBeNull();
   });
@@ -284,7 +277,7 @@ describe('a failed action', () => {
     expect(describeActivity('SOMETHING_ERROR', { courseId: 'c-1' })).toBeNull();
   });
 
-  // The updater reports its outcome under `message`, the same fact by another name.
+  // The updater reports its outcome under `message`.
   it('reads a failed update outcome', () => {
     const text = describeActivity('SYSTEM_UPDATE_FAILED', {
       phase: 'failed',
@@ -295,10 +288,7 @@ describe('a failed action', () => {
   });
 });
 
-/**
- * The refusal cases the auth wrappers log. These are SECURITY entries and used to record an
- * empty metadata object, so the security-relevant half of the log said nothing at all.
- */
+/** The refusals the auth wrappers log. SECURITY entries, so they have to say why. */
 describe('a refused request', () => {
   it('describes a course refusal from the standard wrapper metadata', () => {
     const text = describeActivity('ROSTER_VIEW_DENIED', {
@@ -316,7 +306,7 @@ describe('a refused request', () => {
     );
   });
 
-  // Not every failure ends in _ERROR or _DENIED, and these two were being missed.
+  // Not every failure name ends in _ERROR or _DENIED.
   it('covers the failures whose names do not end in the usual way', () => {
     expect(describeActivity('SUBMISSION_UNAUTHORIZED', { reason: 'not signed in' })).toBe(
       'not signed in',

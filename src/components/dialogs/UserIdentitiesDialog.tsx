@@ -71,7 +71,9 @@ export function UserIdentitiesDialog({
       setHasPassword(data.hasPassword);
     } catch {
       setIdentities([]);
-      showToast.error('Could not load their sign-in methods.');
+      showToast.error(
+        'Could not load their sign-in methods. Close and reopen this dialog to try again.',
+      );
     }
   }, [userId]);
 
@@ -87,13 +89,16 @@ export function UserIdentitiesDialog({
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        showToast.error(data.error ?? 'Could not detach that. Try again.');
+        showToast.error(
+          data.error ??
+            'Could not detach that sign-in method. Check your connection and try again.',
+        );
         return;
       }
-      showToast.success('Sign-in method detached.');
+      showToast.success('Sign-in method detached');
       await load();
     } catch {
-      showToast.error('Could not detach that. Try again.');
+      showToast.error('Could not detach that sign-in method. Check your connection and try again.');
     } finally {
       setBusy(null);
     }

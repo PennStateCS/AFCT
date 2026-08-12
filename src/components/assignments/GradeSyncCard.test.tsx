@@ -3,19 +3,15 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toastMock, resetToastMock } from '@/test/mocks/toast';
 import { GradeSyncCard } from './GradeSyncCard';
 
 /**
- * Grade sync for one assignment, in its three placements.
- *
- * The two things worth pinning are that nothing about an LMS appears on a course that has no
- * LMS, and that the automatic-sync switch puts itself back if the server refuses. An optimistic
- * toggle that silently keeps a setting it failed to save would tell faculty their grades are
- * going out when they are not.
+ * Grade sync for one assignment, in its three placements. The switch saves optimistically and
+ * has to roll back on failure, or faculty think grades are going out when they are not.
  */
 
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock('@/lib/toast', () => ({ showToast: toast }));
+vi.mock('@/lib/toast', () => import('@/test/mocks/toast').then((m) => m.toastModuleMock));
 
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC', hour12: false }),
@@ -42,6 +38,7 @@ function show(state: Partial<typeof linked>, variant: 'settings' | 'status' | 'i
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetToastMock();
   vi.unstubAllGlobals();
 });
 
@@ -140,7 +137,7 @@ describe('the automatic-sync switch', () => {
     const toggle = await screen.findByRole('switch');
     await user.click(toggle);
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
     expect(toggle).not.toBeChecked();
   });
 });
@@ -156,7 +153,7 @@ describe('sending grades now', () => {
     await user.click(await screen.findByRole('button', { name: /Send grades now/ }));
 
     await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('3 grades are on their way to your LMS.'),
+      expect(toastMock.success).toHaveBeenCalledWith('3 grades are on their way to your LMS.'),
     );
     // Third call is the reload, so the counts shown are the server's, not a guess.
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -172,7 +169,7 @@ describe('sending grades now', () => {
     await user.click(await screen.findByRole('button', { name: /Send grades now/ }));
 
     await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('Every grade is already up to date in your LMS.'),
+      expect(toastMock.success).toHaveBeenCalledWith('Every grade is already up to date in your LMS.'),
     );
   });
 
@@ -186,7 +183,7 @@ describe('sending grades now', () => {
     const button = await screen.findByRole('button', { name: /Send grades now/ });
     await user.click(button);
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
     expect(button).toBeEnabled();
   });
 });

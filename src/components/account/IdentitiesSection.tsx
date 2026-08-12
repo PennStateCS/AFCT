@@ -30,13 +30,9 @@ const HOW_LINKED: Record<string, string> = {
 /**
  * The institutional sign-ins connected to your own account.
  *
- * Connecting is a real sign-in to the provider, not a form: the point is to prove the account
- * over there belongs to whoever is signed in over here, and only the provider can say that.
- * So the button starts an ordinary OIDC flow and the callback attaches the result to the
- * current session.
- *
- * This is also the only route by which an administrator ever gets one, since automatic linking
- * refuses admin accounts by design.
+ * Connect starts a real OIDC sign-in rather than posting a form: only the provider can prove
+ * the account over there belongs to whoever is signed in here. It is also the only way an
+ * admin gets one, since automatic linking refuses admin accounts.
  */
 export function IdentitiesSection({ providerLabel }: { providerLabel: string | null }) {
   const { timezone, hour12 } = useEffectiveTimezone();
@@ -54,7 +50,7 @@ export function IdentitiesSection({ providerLabel }: { providerLabel: string | n
       setHasPassword(data.hasPassword);
     } catch {
       setIdentities([]);
-      showToast.error('Could not load your connected accounts. Reload the page to try again.');
+      showToast.error('Could not load your connected accounts. Refresh the page to try again.');
     }
   }, []);
 
@@ -74,11 +70,13 @@ export function IdentitiesSection({ providerLabel }: { providerLabel: string | n
     if (!linked && !error) return;
 
     if (linked) {
-      showToast.success('Account connected. You can sign in with it from now on.');
+      showToast.success('Account connected', {
+        description: 'You can sign in with it from now on.',
+      });
     } else if (error === 'already-linked-elsewhere') {
       showToast.error('That institutional login is already connected to a different AFCT account.');
     } else {
-      showToast.error('That account could not be connected. Try again.');
+      showToast.error('That account could not be connected. Check your connection and try again.');
     }
     window.history.replaceState({}, '', window.location.pathname + '?tab=accounts');
     void load();
@@ -91,14 +89,16 @@ export function IdentitiesSection({ providerLabel }: { providerLabel: string | n
       const res = await fetch(`/api/me/identities/${unlinking.id}`, { method: 'DELETE' });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        showToast.error(data.error ?? 'Could not disconnect that account. Try again.');
+        showToast.error(
+          data.error ?? 'Could not disconnect that account. Check your connection and try again.',
+        );
         return;
       }
-      showToast.success('Account disconnected.');
+      showToast.success('Account disconnected');
       setUnlinking(null);
       await load();
     } catch {
-      showToast.error('Could not disconnect that account. Try again.');
+      showToast.error('Could not disconnect that account. Check your connection and try again.');
     } finally {
       setBusy(false);
     }

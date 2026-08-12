@@ -56,11 +56,9 @@ function describeChanges(metadata: Metadata): string | null {
     .join('; ');
 }
 
-// Every failing action already records why it failed, under `reason` when a guard turned it
-// down, `error` when logError caught a throw, and `message` when it came back from the
-// updater. Nothing was reading any of them, so the rows most worth reading while debugging
-// were also the ones showing nothing. Matched on the name so a new failure action is covered
-// the day it is written rather than when somebody remembers to add a case.
+// Failing actions record why under `reason` (a guard refused), `error` (logError caught a
+// throw) or `message` (from the updater). Matched on the name so a new failure action is
+// covered without adding a case for it.
 const FAILURE = /_(ERROR|DENIED|FAILED|REJECTED|INVALID|UNAUTHORIZED|CONFLICT)$/;
 
 export function describeActivity(action: string, metadata: Metadata): string | null {
@@ -169,8 +167,7 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       return str(metadata, 'issuer');
 
     default:
-      // The two failure actions with their own cases add context to the reason, so they keep
-      // them; this covers every other failing action.
+      // The two failure actions with their own cases add context to the reason.
       return FAILURE.test(action)
         ? (str(metadata, 'reason') ?? str(metadata, 'error') ?? str(metadata, 'message'))
         : null;

@@ -82,9 +82,8 @@ export async function linkIdentity(opts: {
   userId: string;
   via: IdentityLinkMethod;
   /**
-   * Who performed the link. Required, not defaulted to `userId`: an administrator attaching an
-   * identity to somebody else's account is the case where actor and subject differ, and that
-   * is exactly the case a defaulted actor would record wrongly. See the activity-log rules.
+   * Who performed the link. Required rather than defaulted to `userId`, so an admin attaching
+   * an identity to somebody else's account is logged as the actor. See the activity-log rules.
    */
   actorUserId: string;
   context: AuditContext;

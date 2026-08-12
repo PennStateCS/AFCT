@@ -135,10 +135,8 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
         : await canAccessCourse(session.user, courseId);
 
     if (!allowed) {
-      // A refusal is a security record, so it has to say why it was refused. The caller's
-      // standing in the course is that answer, and it is read here rather than later because
-      // roles and enrolment change: looking it up next week gives a different one. Costs a
-      // query only on the denial path, which is rare by definition.
+      // Read the caller's standing now, not when somebody reads the log: roles and enrolment
+      // change. One extra query, on the denial path only.
       let membership: { role?: CourseRole | null; status?: string | null } | null = null;
       try {
         membership = await prisma.roster.findFirst({
@@ -146,13 +144,11 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
           select: { role: true, status: true },
         });
       } catch {
-        // Never let the audit lookup turn a clean 403 into a 500. An entry that cannot say
-        // why is still better than losing the refusal itself.
+        // A failed lookup must not turn the 403 into a 500; log the refusal without the role.
       }
       const required =
         opts.access === 'manage' ? (opts.roles ?? ['FACULTY', 'TA']).join(' or ') : 'enrolled';
-      // Read defensively: this runs on a path that is already failing, and a surprise shape
-      // must not turn the audit entry into a second error.
+      // Defensive: this path is already failing, so an unexpected shape must not throw.
       const role = membership?.role ?? null;
       const status = membership?.status ?? null;
       const reason = !membership
