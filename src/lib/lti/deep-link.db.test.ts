@@ -147,3 +147,60 @@ describe('the returning page', () => {
     expect(html).toContain('&quot;');
   });
 });
+
+/**
+ * The platform states what it will take back, and a tool is expected to honour it rather than
+ * send what it likes and hope.
+ */
+describe('what the platform said it would accept', () => {
+  it('leaves out the gradebook column when the platform takes none', async () => {
+    await createKeyPair();
+    const result = await build({ acceptLineItem: false });
+    if (!result.ok) return;
+
+    const keyset = createLocalJWKSet({ keys: (await listPublicJwks()) as unknown as JWK[] });
+    const { payload } = await jwtVerify(result.jwt, keyset, {
+      issuer: PLATFORM.clientId,
+      audience: PLATFORM.issuer,
+    });
+    const items = payload['https://purl.imsglobal.org/spec/lti-dl/claim/content_items'] as {
+      lineItem?: unknown;
+    }[];
+
+    expect(items[0]?.lineItem).toBeUndefined();
+  });
+
+  it('still sends one when the platform did not object', async () => {
+    await createKeyPair();
+    const result = await build({ acceptTypes: ['ltiResourceLink'] });
+    if (!result.ok) return;
+
+    const keyset = createLocalJWKSet({ keys: (await listPublicJwks()) as unknown as JWK[] });
+    const { payload } = await jwtVerify(result.jwt, keyset, {
+      issuer: PLATFORM.clientId,
+      audience: PLATFORM.issuer,
+    });
+    const items = payload['https://purl.imsglobal.org/spec/lti-dl/claim/content_items'] as {
+      lineItem?: { scoreMaximum: number };
+    }[];
+
+    expect(items[0]?.lineItem?.scoreMaximum).toBe(100);
+  });
+
+  // AFCT has only assignments to offer, so a placement that takes none has nothing to receive.
+  it('refuses when a link to an assignment is not on the list', async () => {
+    await createKeyPair();
+
+    expect(await build({ acceptTypes: ['html', 'image'] })).toEqual({
+      ok: false,
+      reason: 'type-not-accepted',
+    });
+  });
+
+  // Saying nothing is not the same as refusing everything.
+  it('treats an empty list as no restriction', async () => {
+    await createKeyPair();
+
+    expect((await build({ acceptTypes: [] })).ok).toBe(true);
+  });
+});

@@ -132,6 +132,8 @@ erDiagram
   String contextId "nullable"
   String returnUrl
   String data "nullable"
+  String acceptTypes
+  Boolean acceptLineItem
   String userId FK
   DateTime expiresAt
   DateTime createdAt
@@ -435,6 +437,14 @@ Properties as follows:
 - `contextId`: The LMS course it was asked from, so the picker can offer that course's assignments.
 - `returnUrl`: Where the signed answer is posted, exactly as the platform gave it.
 - `data`: The platform's own opaque state, returned untouched or the response is rejected.
+- `acceptTypes`
+  > What the platform said it will accept, from the deep linking settings claim. AFCT only
+  > offers assignments, so the question is whether a link to one is acceptable at all, and
+  > whether a gradebook column may come with it. Null means the platform did not say, which
+  > the spec leaves as no restriction.
+- `acceptLineItem`
+  > False when the platform said it will not take a line item, in which case the response
+  > leaves one out rather than sending something that was refused in advance.
 - `userId`: Who the launch signed in. Only they can answer it.
 - `expiresAt`: When this stops being usable.
 - `createdAt`: When this record was created.
@@ -1118,6 +1128,13 @@ erDiagram
   DateTime usedAt "nullable"
   DateTime createdAt
 }
+"LtiContextMember" {
+  String id PK
+  String contextLinkId FK
+  String userId FK
+  String ltiUserId
+  DateTime seenAt
+}
 ```
 
 ### `LtiLaunchTransaction`
@@ -1142,3 +1159,22 @@ Properties as follows:
 - `expiresAt`: When the launch stops being completable.
 - `usedAt`: When it was spent. Once set, the launch is refused as a replay.
 - `createdAt`: When this record was created.
+
+### `LtiContextMember`
+
+Which LMS course a person is in, so a grade goes to the right gradebook.
+
+One AFCT course can be opened from several LMS courses (cross-listed sections). Without
+this, grade passback had to guess: it tried each link in turn and let the platform refuse
+the wrong ones, but the first thing it does is create a gradebook column, so a student from
+one section could put an AFCT column in another, and a student in both got their grade
+wherever the query happened to order first. Recorded on every launch and on every roster
+sync, which are the two moments the LMS tells AFCT who is in which course.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `contextLinkId`: The LMS course this membership is in.
+- `userId`: The AFCT account.
+- `ltiUserId`: The LMS's own id for this person in this context, which is what a score is posted against.
+- `seenAt`: When AFCT last saw evidence they belong here, from a launch or a roster read.

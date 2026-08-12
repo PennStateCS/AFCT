@@ -7,7 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import type { CourseRole } from '@prisma/client';
+import type { CourseRole, Prisma } from '@prisma/client';
 import type { LaunchIdentity } from '@/lib/lti/launch';
 import type { AuditContext } from '@/lib/linked-identity';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -89,10 +89,48 @@ export async function resolveLaunchTarget(opts: {
         },
       });
     }
+    // A launch is the LMS saying this person is in this course. Recorded so a grade can be
+    // sent to the right gradebook when the AFCT course is open from more than one LMS course.
+    await rememberContextMember({
+      contextLinkId: link.id,
+      userId,
+      ltiUserId: identity.subject,
+    });
+
     return { status: 'linked', courseId: link.courseId };
   }
 
   return (await canLinkCourses(userId)) ? { status: 'needs-link' } : { status: 'not-set-up' };
+}
+
+/**
+ * Note that somebody belongs to an LMS course.
+ *
+ * Best effort: a launch that works must not fail because this write did. The worst case is a
+ * grade that cannot be placed later, which reports itself.
+ */
+export async function rememberContextMember(opts: {
+  contextLinkId: string;
+  userId: string;
+  ltiUserId: string;
+  tx?: Prisma.TransactionClient;
+}): Promise<void> {
+  const client = opts.tx ?? prisma;
+  try {
+    await client.ltiContextMember.upsert({
+      where: {
+        contextLinkId_userId: { contextLinkId: opts.contextLinkId, userId: opts.userId },
+      },
+      create: {
+        contextLinkId: opts.contextLinkId,
+        userId: opts.userId,
+        ltiUserId: opts.ltiUserId,
+      },
+      update: { ltiUserId: opts.ltiUserId, seenAt: new Date() },
+    });
+  } catch (error) {
+    console.error('[lti] could not record context membership:', error);
+  }
 }
 
 /**

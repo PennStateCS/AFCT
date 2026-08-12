@@ -198,6 +198,7 @@ model User {
   ltiLinksCreated     LtiContextLink[] // LMS course links this user decided
   ltiPendingLinks     LtiPendingLink[] // launches waiting for this user to pick a course
   ltiPendingDeepLinks LtiPendingDeepLink[] // deep-linking requests waiting on this user
+  ltiContextMembers   LtiContextMember[] // the LMS courses this person has been seen in
   ltiScores           LtiScoreQueue[] // their grades queued for an LMS gradebook
 
   @@index([isAdmin])
@@ -1355,6 +1356,9 @@ model LtiContextLink {
   /// platform granted no roster scope. Refreshed on each launch.
   membershipsUrl String?
 
+  /// Who AFCT has seen in this LMS course.
+  members LtiContextMember[]
+
   linkedBy   User?   @relation(fields: [linkedByUserId], references: [id], onDelete: SetNull)
   /// Who decided this. Null once that account is gone; the link outlives the person.
   linkedByUserId String?
@@ -1525,6 +1529,15 @@ model LtiPendingDeepLink {
   /// The platform's own opaque state, returned untouched or the response is rejected.
   data      String?
 
+  /// What the platform said it will accept, from the deep linking settings claim. AFCT only
+  /// offers assignments, so the question is whether a link to one is acceptable at all, and
+  /// whether a gradebook column may come with it. Null means the platform did not say, which
+  /// the spec leaves as no restriction.
+  acceptTypes    String[]
+  /// False when the platform said it will not take a line item, in which case the response
+  /// leaves one out rather than sending something that was refused in advance.
+  acceptLineItem Boolean  @default(true)
+
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Who the launch signed in. Only they can answer it.
   userId String
@@ -1578,4 +1591,35 @@ model LtiLaunchTransaction {
   @@index([platformId])
   /// Expired rows are swept periodically; this is the index that sweep reads.
   @@index([expiresAt])
+}
+
+/// Which LMS course a person is in, so a grade goes to the right gradebook.
+///
+/// One AFCT course can be opened from several LMS courses (cross-listed sections). Without
+/// this, grade passback had to guess: it tried each link in turn and let the platform refuse
+/// the wrong ones, but the first thing it does is create a gradebook column, so a student from
+/// one section could put an AFCT column in another, and a student in both got their grade
+/// wherever the query happened to order first. Recorded on every launch and on every roster
+/// sync, which are the two moments the LMS tells AFCT who is in which course.
+model LtiContextMember {
+  /// Unique identifier.
+  id String @id @default(cuid())
+
+  contextLink   LtiContextLink @relation(fields: [contextLinkId], references: [id], onDelete: Cascade)
+  /// The LMS course this membership is in.
+  contextLinkId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The AFCT account.
+  userId String
+
+  /// The LMS's own id for this person in this context, which is what a score is posted against.
+  ltiUserId String
+
+  /// When AFCT last saw evidence they belong here, from a launch or a roster read.
+  seenAt DateTime @default(now())
+
+  /// One row per person per LMS course; seeing them again updates it rather than adding.
+  @@unique([contextLinkId, userId])
+  @@index([userId])
 }

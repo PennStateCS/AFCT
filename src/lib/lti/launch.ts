@@ -75,6 +75,13 @@ export type DeepLinkRequest = {
   data: string | null;
   /** Whether the platform will accept more than one item. */
   multiple: boolean;
+  /**
+   * The content types the platform said it will take. Empty when it did not say, which the
+   * spec treats as no restriction rather than as nothing being allowed.
+   */
+  acceptTypes: string[];
+  /** Whether a gradebook column may come with the link. Platforms may say they take none. */
+  acceptLineItem: boolean;
 };
 
 export type LaunchIdentity = {
@@ -346,6 +353,11 @@ export async function validateLaunch(opts: {
               returnUrl,
               data: settings ? claimString(settings.data) : null,
               multiple: settings?.accept_multiple === true,
+              acceptTypes: Array.isArray(settings?.accept_types)
+                ? settings.accept_types.filter((t): t is string => typeof t === 'string')
+                : [],
+              // Only false when the platform actually says so; absent means no restriction.
+              acceptLineItem: settings?.accept_lineitem !== false,
             }
           : null,
       targetLinkUri,
