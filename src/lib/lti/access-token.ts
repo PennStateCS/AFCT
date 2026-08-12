@@ -13,6 +13,7 @@
 
 import { SignJWT, importPKCS8 } from 'jose';
 import { getSigningKey, LTI_SIGNING_ALG } from '@/lib/lti/keys';
+import { prisma } from '@/lib/prisma';
 
 /** The AGS scopes AFCT asks for. Only what grade passback needs. */
 export const AGS_SCOPES = [
@@ -60,11 +61,19 @@ async function buildAssertion(opts: {
   tokenUrl: string;
   kid: string;
   privateKey: string;
+  deploymentId?: string;
 }): Promise<string> {
   const key = await importPKCS8(opts.privateKey, LTI_SIGNING_ALG);
 
   return (
-    new SignJWT({})
+    // Core 6.2.1 says the assertion SHOULD carry the deployment id. It is optional, and AFCT
+    // was conformant without it, but a platform may scope the token it hands back to one
+    // deployment and some refuse the request when it is absent.
+    new SignJWT(
+      opts.deploymentId
+        ? { 'https://purl.imsglobal.org/spec/lti/claim/deployment_id': opts.deploymentId }
+        : {},
+    )
       .setProtectedHeader({ alg: LTI_SIGNING_ALG, kid: opts.kid })
       .setIssuer(opts.clientId)
       .setSubject(opts.clientId)
@@ -87,6 +96,7 @@ export async function getAccessToken(opts: {
   platformId: string;
   clientId: string;
   tokenUrl: string;
+  deploymentId?: string;
   scopes?: readonly string[];
   now?: number;
 }): Promise<AccessTokenResult> {
@@ -102,11 +112,23 @@ export async function getAccessToken(opts: {
   const signing = await getSigningKey();
   if (!signing) return { ok: false, reason: 'no-signing-key' };
 
+  // Read here rather than threaded through every caller: this runs only on a cache miss, and
+  // the alternative is widening the platform shape passed around by AGS and NRPS.
+  const deploymentId =
+    opts.deploymentId ??
+    (
+      await prisma.ltiPlatform.findUnique({
+        where: { id: opts.platformId },
+        select: { deploymentId: true },
+      })
+    )?.deploymentId;
+
   const assertion = await buildAssertion({
     clientId: opts.clientId,
     tokenUrl: opts.tokenUrl,
     kid: signing.kid,
     privateKey: signing.privateKey,
+    deploymentId,
   });
 
   let response: Response;

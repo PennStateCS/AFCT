@@ -71,15 +71,21 @@ export async function resolveLaunchTarget(opts: {
   if (link) {
     // Refreshed per launch: the endpoint can move, and a stale one fails only when a grade is
     // eventually sent, long after anyone would connect the two.
-    const moved =
-      (identity.lineItemsUrl && identity.lineItemsUrl !== link.lineItemsUrl) ||
-      (identity.membershipsUrl && identity.membershipsUrl !== link.membershipsUrl);
-    if (moved) {
+    /**
+     * The launch's own service claims say what AFCT may use for this context, so an endpoint
+     * that has stopped being advertised is cleared rather than kept. Keeping it meant a
+     * revoked grade or roster permission went on being used until the platform refused, which
+     * surfaces much later and nowhere near the cause.
+     */
+    const changed =
+      identity.lineItemsUrl !== link.lineItemsUrl ||
+      identity.membershipsUrl !== link.membershipsUrl;
+    if (changed) {
       await prisma.ltiContextLink.update({
         where: { id: link.id },
         data: {
-          lineItemsUrl: identity.lineItemsUrl ?? link.lineItemsUrl,
-          membershipsUrl: identity.membershipsUrl ?? link.membershipsUrl,
+          lineItemsUrl: identity.lineItemsUrl,
+          membershipsUrl: identity.membershipsUrl,
         },
       });
     }

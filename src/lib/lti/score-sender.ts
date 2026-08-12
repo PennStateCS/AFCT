@@ -45,15 +45,21 @@ export async function sendOneScore(): Promise<SendOutcome> {
    * Which LMS course to send to.
    *
    * Cross-listed sections mean several LMS courses can open one AFCT course, and AFCT does not
-   * record which one a given student came through. Each is tried in turn: the platform refuses
-   * a student who is not in that course, so the right one wins. Recording it per student at
-   * launch would be better and belongs with roster sync.
+   * yet record which one a given student came through. It used to try each in turn and let the
+   * platform refuse the wrong ones, but the first thing tried is creating a gradebook column,
+   * so a section B student put an AFCT column in section A; and a student in both sections got
+   * their grade wherever the query happened to order first.
+   *
+   * Grades are the thing this system must not get wrong, so with more than one link it refuses
+   * and says so rather than guessing. Recording the context per student at launch and on roster
+   * sync is the real fix and is not done yet.
    */
   const links = await prisma.ltiContextLink.findMany({
     where: { courseId: claimed.assignment.courseId },
     include: { platform: { select: { id: true, clientId: true, tokenUrl: true, issuer: true } } },
   });
   if (links.length === 0) return fail('no-line-items-endpoint');
+  if (links.length > 1) return fail('ambiguous-context');
 
   let lastReason: AgsFailure = 'rejected';
   let lastDetail: string | undefined;

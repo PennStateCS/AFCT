@@ -55,7 +55,9 @@ export type LaunchRefusal =
   /** The deployment id in the token disagrees with the registration matched. */
   | 'deployment-mismatch'
   /** The platform sent no email, so AFCT cannot identify or create a person. */
-  | 'no-email';
+  | 'no-email'
+  /** A claim LTI Core requires is missing, so the launch is not one AFCT can trust. */
+  | 'missing-claims';
 
 /**
  * What a deep-linking launch is asking for.
@@ -236,11 +238,17 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
       issuer: platform.issuer,
       audience: platform.clientId,
       clockTolerance: CLOCK_TOLERANCE_S,
+      // jose checks these only when they are present, so a token with no `exp` would otherwise
+      // verify and never expire. `sub` is here because it names the person: without it the
+      // identity below was built from the string "undefined", which every such launch shares.
+      requiredClaims: ['exp', 'iat', 'sub', 'nonce'],
     }));
   } catch (error) {
     if (error instanceof joseErrors.JWTExpired) return { ok: false, reason: 'expired' };
     if (error instanceof joseErrors.JWTClaimValidationFailed) {
-      return { ok: false, reason: 'bad-signature' };
+      // A claim that is absent is a different problem from one that disagrees, and an
+      // administrator chasing a launch needs to be told which.
+      return { ok: false, reason: error.reason === 'missing' ? 'missing-claims' : 'bad-signature' };
     }
     return { ok: false, reason: 'bad-signature' };
   }
@@ -276,6 +284,17 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
   const consumed = await consumeSingleUseToken({ token: nonce, purpose: 'LTI_LAUNCH_NONCE' });
   if (!consumed) return { ok: false, reason: 'replayed' };
 
+  /**
+   * The claims LTI Core requires of a launch, checked after the signature rather than read
+   * hopefully. A signed token is only as good as what it actually says.
+   */
+  const subject = claimString(payload.sub);
+  const targetLinkUri = claimString(payload[`${CLAIM}/target_link_uri`]);
+  const rolesClaim = payload[`${CLAIM}/roles`];
+  if (!subject || !targetLinkUri || !Array.isArray(rolesClaim)) {
+    return { ok: false, reason: 'missing-claims' };
+  }
+
   const email = claimString(payload.email)?.trim().toLowerCase();
   // Canvas can be configured not to share an address. There is nothing AFCT can do with a person
   // it cannot name, so this refuses rather than inventing one.
@@ -283,22 +302,22 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
 
   const context = claimObject(payload, 'context');
   const resourceLink = claimObject(payload, 'resource_link');
-  const rawRoles = payload[`${CLAIM}/roles`];
+  const resourceLinkId = resourceLink ? claimString(resourceLink.id) : null;
+  // Required for a resource link launch, and meaningless on a deep linking one.
+  if (!isDeepLink && !resourceLinkId) return { ok: false, reason: 'missing-claims' };
 
   return {
     ok: true,
     identity: {
       platformId: platform.id,
-      subject: String(payload.sub),
+      subject,
       issuer: platform.issuer,
       email,
       ...namesFrom(payload),
-      roles: Array.isArray(rawRoles)
-        ? rawRoles.filter((r): r is string => typeof r === 'string')
-        : [],
+      roles: rolesClaim.filter((r): r is string => typeof r === 'string'),
       contextId: context ? claimString(context.id) : null,
       contextTitle: context ? (claimString(context.title) ?? claimString(context.label)) : null,
-      resourceLinkId: resourceLink ? claimString(resourceLink.id) : null,
+      resourceLinkId,
       lineItemsUrl: (() => {
         const ags = claimObject(payload, 'endpoint', 'lti-ags');
         return ags ? claimString(ags.lineitems) : null;
@@ -319,7 +338,7 @@ export async function validateLaunch(opts: { idToken: string }): Promise<LaunchR
               multiple: settings?.accept_multiple === true,
             }
           : null,
-      targetLinkUri: claimString(payload[`${CLAIM}/target_link_uri`]),
+      targetLinkUri,
     },
   };
 }
@@ -337,6 +356,8 @@ export function launchRefusalMessage(reason: LaunchRefusal): string {
       return 'Your LMS did not share an email address with AFCT, so you cannot be signed in. An administrator needs to allow AFCT to see email addresses in the LMS privacy settings.';
     case 'deployment-mismatch':
       return 'The launch came from a different deployment than the one registered. Check the deployment id in the registration.';
+    case 'missing-claims':
+      return 'The launch was missing information LTI requires, so AFCT could not trust it. An administrator needs to check what the LMS is configured to send.';
     case 'wrong-message-type':
       return 'AFCT can only be opened as an assignment or link from your LMS.';
     case 'bad-signature':

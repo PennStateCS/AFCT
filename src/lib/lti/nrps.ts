@@ -30,7 +30,13 @@ export type Member = {
   active: boolean;
 };
 
-export type NrpsFailure = 'no-token' | 'no-endpoint' | 'rejected' | 'unreachable';
+export type NrpsFailure =
+  | 'no-token'
+  | 'no-endpoint'
+  | 'rejected'
+  | 'unreachable'
+  /** More pages remained than we will follow, so the roster read is incomplete. */
+  | 'incomplete';
 
 export type NrpsResult =
   { ok: true; members: Member[] } | { ok: false; reason: NrpsFailure; detail?: string };
@@ -86,8 +92,14 @@ export async function fetchMembership(opts: {
 
   const members: Member[] = [];
   let url: string | null = opts.membershipsUrl;
+  // A platform that points a page back at one already read would otherwise loop until the page
+  // cap and return a roster full of duplicates.
+  const seen = new Set<string>();
 
   for (let page = 0; url && page < MAX_PAGES; page++) {
+    if (seen.has(url)) return { ok: false, reason: 'incomplete', detail: 'the roster pages repeat' };
+    seen.add(url);
+
     let response: Response;
     try {
       response = await fetch(url, {
@@ -116,6 +128,15 @@ export async function fetchMembership(opts: {
     url = nextPage(response);
   }
 
+  /**
+   * Fail closed. A `rel="next"` still outstanding means the LMS has more people to give, and
+   * returning what we have would look identical to a complete roster. The caller diffs this
+   * against AFCT's own roster, so a truncated read proposes dropping everyone past the cut.
+   */
+  if (url) {
+    return { ok: false, reason: 'incomplete', detail: `more than ${MAX_PAGES} pages of members` };
+  }
+
   return { ok: true, members };
 }
 
@@ -128,6 +149,8 @@ export function nrpsFailureMessage(reason: NrpsFailure): string {
       return 'AFCT could not authenticate with your LMS. Check the LTI registration in System Settings.';
     case 'unreachable':
       return 'AFCT could not reach your LMS. Try again shortly.';
+    case 'incomplete':
+      return 'AFCT could not read your whole course roster from your LMS, so it has not changed anything. Try again shortly, and tell an administrator if it keeps happening.';
     case 'rejected':
     default:
       return 'Your LMS refused to share this course’s roster. Check that AFCT is still installed in that course.';

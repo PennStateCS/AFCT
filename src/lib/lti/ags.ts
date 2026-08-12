@@ -24,7 +24,12 @@ export type AgsFailure =
   /** The platform could not be reached. */
   | 'unreachable'
   /** This person has never launched, so the LMS user id is unknown. */
-  | 'no-lms-identity';
+  | 'no-lms-identity'
+  /**
+   * The AFCT course is open from several LMS courses and AFCT cannot tell which one this
+   * student belongs to, so it will not guess which gradebook to write to.
+   */
+  | 'ambiguous-context';
 
 export type AgsResult<T> =
   { ok: true; value: T } | { ok: false; reason: AgsFailure; detail?: string };
@@ -79,24 +84,53 @@ async function call(
  * creating one is what stops a second column appearing when AFCT has forgotten the first: a
  * duplicate in somebody's gradebook is confusing and awkward to clean up.
  */
+/** Stop following pages after this many, so a broken platform cannot loop for ever. */
+const MAX_LINE_ITEM_PAGES = 20;
+
+/** The next page, from the `Link` header. AGS pages line items the same way NRPS pages members. */
+function nextPage(response: Response): string | null {
+  const link = response.headers.get('link');
+  if (!link) return null;
+  for (const part of link.split(',')) {
+    const [urlPart, ...params] = part.split(';');
+    if (params.some((p) => p.trim() === 'rel="next"')) {
+      return urlPart?.trim().replace(/^<|>$/g, '') ?? null;
+    }
+  }
+  return null;
+}
+
 async function findLineItem(
   lineItemsUrl: string,
   token: string,
   resourceId: string,
 ): Promise<string | null> {
   try {
-    const url = new URL(lineItemsUrl);
-    url.searchParams.set('resource_id', resourceId);
-    const response = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}`, Accept: LINE_ITEM_CONTAINER_TYPE },
-    });
-    if (!response.ok) return null;
+    const first = new URL(lineItemsUrl);
+    first.searchParams.set('resource_id', resourceId);
 
-    const body = (await response.json().catch(() => null)) as unknown;
-    const items = Array.isArray(body) ? body : [];
-    for (const item of items) {
-      const id = (item as { id?: unknown })?.id;
-      if (typeof id === 'string') return id;
+    // AGS lets a platform page the line items even when filtering, so the column may not be on
+    // the first page. Concluding "not there" from page one creates a second column.
+    let next: string | null = first.toString();
+    const seen = new Set<string>();
+
+    for (let page = 0; next && page < MAX_LINE_ITEM_PAGES; page++) {
+      if (seen.has(next)) break;
+      seen.add(next);
+
+      const response: Response = await fetch(next, {
+        headers: { Authorization: `Bearer ${token}`, Accept: LINE_ITEM_CONTAINER_TYPE },
+      });
+      if (!response.ok) return null;
+
+      const body = (await response.json().catch(() => null)) as unknown;
+      const items = Array.isArray(body) ? body : [];
+      for (const item of items) {
+        const id = (item as { id?: unknown })?.id;
+        if (typeof id === 'string') return id;
+      }
+
+      next = nextPage(response);
     }
     return null;
   } catch {
@@ -202,11 +236,33 @@ async function updateLineItem(
   const token = await authorised(opts.platform);
   if (!token.ok) return;
 
+  /**
+   * PUT replaces the line item, so anything the platform keeps on it (dates, tags, release
+   * settings) would be dropped by sending only our three fields. Read it first and change the
+   * two that are ours. A read that fails falls back to the minimal body: a stale maximum
+   * misreports every grade on the column, so it is worth the trade.
+   */
+  let existing: Record<string, unknown> = {};
+  try {
+    const current = await fetch(url, {
+      headers: { Authorization: `Bearer ${token.token}`, Accept: LINE_ITEM_TYPE },
+    });
+    if (current.ok) {
+      const body = (await current.json().catch(() => null)) as unknown;
+      if (body && typeof body === 'object' && !Array.isArray(body)) {
+        existing = body as Record<string, unknown>;
+      }
+    }
+  } catch {
+    // Ignored: fall through to the minimal body below.
+  }
+
   try {
     const response = await fetch(url, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token.token}`, 'Content-Type': LINE_ITEM_TYPE },
       body: JSON.stringify({
+        ...existing,
         scoreMaximum: opts.scoreMaximum,
         label: opts.label,
         resourceId: opts.assignmentId,
@@ -306,6 +362,8 @@ export function agsFailureMessage(reason: AgsFailure): string {
       return 'AFCT could not authenticate with your LMS. Check the LTI registration in System Settings.';
     case 'unreachable':
       return 'AFCT could not reach your LMS. Grades will be sent again when it is available.';
+    case 'ambiguous-context':
+      return 'This AFCT course is connected to more than one LMS course, and AFCT cannot tell which one this student is in, so it has not sent the grade anywhere. Sync the roster from the LMS course this student belongs to.';
     case 'rejected':
     default:
       return 'Your LMS refused the grade. Check that the assignment still exists there.';
