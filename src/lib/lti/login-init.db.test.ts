@@ -30,9 +30,17 @@ const platform = (over: Record<string, string> = {}) => ({
   ...over,
 });
 
+/** What the platform says it wants opened; the launch remembers it to check the token against. */
+const TARGET_LINK_URI = 'https://afct.example.test/api/lti/launch';
+
 const begin = (params: Record<string, string> = {}) =>
   beginLaunch({
-    params: { iss: ISSUER, login_hint: 'lms-user-1', ...params },
+    params: {
+      iss: ISSUER,
+      login_hint: 'lms-user-1',
+      target_link_uri: TARGET_LINK_URI,
+      ...params,
+    },
     redirectUri: REDIRECT,
   });
 
@@ -99,11 +107,25 @@ describe('the two secrets it mints', () => {
     expect(query.get('state')).not.toBe(query.get('nonce'));
   });
 
-  it('records them so they can be spent exactly once', async () => {
+  it('records them on one launch, so the pair can be checked against each other', async () => {
     await begin();
 
-    expect(await prisma.singleUseToken.count({ where: { purpose: 'LTI_LAUNCH_STATE' } })).toBe(1);
-    expect(await prisma.singleUseToken.count({ where: { purpose: 'LTI_LAUNCH_NONCE' } })).toBe(1);
+    const launches = await prisma.ltiLaunchTransaction.findMany();
+    expect(launches).toHaveLength(1);
+    // Hashes, never the values themselves: the state travels in the browser and the nonce in
+    // the id_token, so a leaked database must not let either be forged.
+    expect(launches[0]?.stateHash).toHaveLength(64);
+    expect(launches[0]?.nonceHash).toHaveLength(64);
+    expect(launches[0]?.usedAt).toBeNull();
+  });
+
+  /** The binding that two loose tokens could not express. */
+  it('remembers the registration and the target link uri it was asked for', async () => {
+    await begin();
+
+    const launch = await prisma.ltiLaunchTransaction.findFirstOrThrow();
+    expect(launch.platformId).toBeTruthy();
+    expect(launch.targetLinkUri).toBe(TARGET_LINK_URI);
   });
 
   it('gives every launch its own pair', async () => {
@@ -117,10 +139,8 @@ describe('the two secrets it mints', () => {
   it('expires them within minutes, not hours', async () => {
     await begin();
 
-    const token = await prisma.singleUseToken.findFirstOrThrow({
-      where: { purpose: 'LTI_LAUNCH_STATE' },
-    });
-    const lifetime = token.expiresAt.getTime() - token.createdAt.getTime();
+    const launch = await prisma.ltiLaunchTransaction.findFirstOrThrow();
+    const lifetime = launch.expiresAt.getTime() - launch.createdAt.getTime();
     expect(lifetime).toBeLessThanOrEqual(LAUNCH_STATE_TTL_MS + 1000);
   });
 });

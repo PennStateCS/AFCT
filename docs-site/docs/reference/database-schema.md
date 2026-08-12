@@ -7,6 +7,7 @@
 - [Assignments](#assignments)
 - [Submissions](#submissions)
 - [System](#system)
+- [default](#default)
 
 ## Identity
 
@@ -1102,3 +1103,42 @@ Properties as follows:
 - `smtpFromName`: Display name shown beside the from address.
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
+
+## default
+
+```mermaid
+erDiagram
+"LtiLaunchTransaction" {
+  String id PK
+  String stateHash UK
+  String nonceHash UK
+  String platformId FK
+  String targetLinkUri "nullable"
+  DateTime expiresAt
+  DateTime usedAt "nullable"
+  DateTime createdAt
+}
+```
+
+### `LtiLaunchTransaction`
+
+One LTI launch, from the login the platform initiates to the token it posts back.
+
+The state and the nonce used to be two unrelated single-use tokens, which proved each was
+AFCT's and unspent but never that they belonged to the same launch. Holding them on one row
+with the platform and the target link URI is what lets the returning token be checked
+against the login that started it, which LTI Core requires and which two loose tokens
+cannot express. Consuming the row is also the single point at which a launch is spent.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `stateHash`: sha256(state), never the plaintext. The value handed to the browser and posted back.
+- `nonceHash`: sha256(nonce), never the plaintext. The value the platform copies into the id_token.
+- `platformId`: The registration this launch was started against; the token must match it.
+- `targetLinkUri`
+  > The target link URI the platform sent to the login endpoint, when it sent one. Core says
+  > the signed token's own target link URI must equal this.
+- `expiresAt`: When the launch stops being completable.
+- `usedAt`: When it was spent. Once set, the launch is refused as a replay.
+- `createdAt`: When this record was created.

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { beginLaunch, loginInitRefusalMessage, LTI_STATE_COOKIE } from '@/lib/lti/login-init';
+import { beginLaunch, loginInitRefusalMessage, stateCookieName } from '@/lib/lti/login-init';
 import type { LoginInitParams } from '@/lib/lti/login-init';
 import { publicUrl } from '@/lib/lti/public-url';
 import {
@@ -83,7 +83,7 @@ async function handle(request: Request, params: LoginInitParams) {
    * it outright needs LTI's own postMessage storage, or a break-out to a top-level window. That
    * is deliberately not built yet, and it is the piece to test in Safari first.
    */
-  response.cookies.set(LTI_STATE_COOKIE, result.state, {
+  response.cookies.set(stateCookieName(result.state), result.state, {
     httpOnly: true,
     secure: true,
     sameSite: 'none',

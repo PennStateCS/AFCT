@@ -87,12 +87,11 @@ enum GradeSource {
 // those wrong once is better than getting them wrong three times.
 enum SingleUseTokenPurpose {
   PASSWORD_RESET
-  /// The `nonce` AFCT puts in an LTI login request and requires back in the launch token.
-  /// Single use is the whole point: it is what stops a captured launch being replayed.
+  /// Superseded by LtiLaunchTransaction, which holds the nonce and the state on one row so
+  /// they can be checked against each other. Kept because old rows still carry these values;
+  /// nothing issues them any more.
   LTI_LAUNCH_NONCE
-  /// The `state` AFCT puts in an LTI login request and requires back with the launch. Paired
-  /// with a cookie, this is what ties a launch to the browser that started it, so somebody
-  /// cannot post their own launch into another person's browser and sign them in as themselves.
+  /// Superseded by LtiLaunchTransaction. See LTI_LAUNCH_NONCE.
   LTI_LAUNCH_STATE
   /// Handed to the browser once a launch is verified, and spent immediately to create the
   /// session. Exists because sessions are minted by NextAuth, not by the launch endpoint.
@@ -322,6 +321,9 @@ model LtiPlatform {
   pendingLinks LtiPendingLink[]
   /// Deep-linking requests waiting for somebody to choose an assignment.
   pendingDeepLinks LtiPendingDeepLink[]
+
+  /// Launches started against this registration.
+  launches LtiLaunchTransaction[]
 
   /// The triple that identifies a registration. Also what a launch is matched against.
   @@unique([issuer, clientId, deploymentId])
@@ -1540,4 +1542,40 @@ generator erd {
   provider = "prisma-markdown"
   output   = "../docs-site/docs/reference/database-schema.md"
   title    = "Database schema"
+}
+
+/// One LTI launch, from the login the platform initiates to the token it posts back.
+///
+/// The state and the nonce used to be two unrelated single-use tokens, which proved each was
+/// AFCT's and unspent but never that they belonged to the same launch. Holding them on one row
+/// with the platform and the target link URI is what lets the returning token be checked
+/// against the login that started it, which LTI Core requires and which two loose tokens
+/// cannot express. Consuming the row is also the single point at which a launch is spent.
+model LtiLaunchTransaction {
+  /// Unique identifier.
+  id String @id @default(cuid())
+
+  /// sha256(state), never the plaintext. The value handed to the browser and posted back.
+  stateHash String @unique
+  /// sha256(nonce), never the plaintext. The value the platform copies into the id_token.
+  nonceHash String @unique
+
+  platform   LtiPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  /// The registration this launch was started against; the token must match it.
+  platformId String
+
+  /// The target link URI the platform sent to the login endpoint, when it sent one. Core says
+  /// the signed token's own target link URI must equal this.
+  targetLinkUri String?
+
+  /// When the launch stops being completable.
+  expiresAt DateTime
+  /// When it was spent. Once set, the launch is refused as a replay.
+  usedAt    DateTime?
+  /// When this record was created.
+  createdAt DateTime  @default(now())
+
+  @@index([platformId])
+  /// Expired rows are swept periodically; this is the index that sweep reads.
+  @@index([expiresAt])
 }

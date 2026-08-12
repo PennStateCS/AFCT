@@ -17,15 +17,27 @@
  *    cannot catch that, because such a launch is fresh rather than replayed.
  */
 
+import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
-import { issueSingleUseToken } from '@/lib/single-use-token';
-import { issueLaunchNonce } from '@/lib/lti/launch';
+import { startLaunch, LAUNCH_TTL_MS } from '@/lib/lti/launch-transaction';
 
-/** The cookie holding the state value, matched when the launch comes back. */
+/** The prefix of the cookie holding the state value, matched when the launch comes back. */
 export const LTI_STATE_COOKIE = 'afct.lti.state';
 
+/**
+ * One cookie per launch, named from the state it holds.
+ *
+ * A single fixed name meant opening two LMS links at once made the second overwrite the first,
+ * and whichever came back second was refused. The name is derived from the state, which comes
+ * back in the form post, so the right cookie can still be found without guessing.
+ */
+export function stateCookieName(state: string): string {
+  const suffix = crypto.createHash('sha256').update(state).digest('hex').slice(0, 16);
+  return `${LTI_STATE_COOKIE}.${suffix}`;
+}
+
 /** Short: this covers one redirect to the LMS and back, not a sign-in session. */
-export const LAUNCH_STATE_TTL_MS = 10 * 60 * 1000;
+export const LAUNCH_STATE_TTL_MS = LAUNCH_TTL_MS;
 
 /** What the platform sends to start a launch. All of it is unverified. */
 export type LoginInitParams = {
@@ -88,10 +100,11 @@ export async function beginLaunch(opts: {
   // case that happens.
   if (!platform) return { ok: false, reason: 'unregistered-platform' };
 
-  const nonce = await issueLaunchNonce();
-  const { token: state } = await issueSingleUseToken({
-    purpose: 'LTI_LAUNCH_STATE',
-    ttlMs: LAUNCH_STATE_TTL_MS,
+  // One record holds both secrets, the registration and the target link URI, so the token that
+  // comes back can be checked against the login that asked for it.
+  const { state, nonce } = await startLaunch({
+    platformId: platform.id,
+    targetLinkUri: params.target_link_uri,
   });
 
   const url = new URL(platform.authLoginUrl);

@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { validateLaunch, launchRefusalMessage } from '@/lib/lti/launch';
 import type { LaunchIdentity } from '@/lib/lti/launch';
 import { resolveLaunchSignIn, launchSignInRefusalMessage } from '@/lib/lti/lti-signin';
-import { LTI_STATE_COOKIE } from '@/lib/lti/login-init';
-import { consumeSingleUseToken, issueSingleUseToken } from '@/lib/single-use-token';
+import { stateCookieName } from '@/lib/lti/login-init';
+import { issueSingleUseToken } from '@/lib/single-use-token';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { resolveLaunchTarget, enrolFromLaunch } from '@/lib/lti/course-link';
 import { prisma } from '@/lib/prisma';
@@ -62,12 +62,13 @@ export async function POST(request: Request) {
    *
    * Consuming the stored token proves AFCT issued this state and that it has not been used.
    */
+  const cookieName = stateCookieName(state);
   const cookieState = request.headers
     .get('cookie')
     ?.split(';')
     .map((part) => part.trim())
-    .find((part) => part.startsWith(`${LTI_STATE_COOKIE}=`))
-    ?.slice(LTI_STATE_COOKIE.length + 1);
+    .find((part) => part.startsWith(`${cookieName}=`))
+    ?.slice(cookieName.length + 1);
 
   if (!cookieState || cookieState !== state) {
     return refuse(
@@ -76,15 +77,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const spent = await consumeSingleUseToken({ token: state, purpose: 'LTI_LAUNCH_STATE' });
-  if (!spent) {
-    return refuse(
-      'This launch has already been used. Go back to your LMS and click the link again.',
-      400,
-    );
-  }
-
-  const verified = await validateLaunch({ idToken });
+  // The launch itself is spent inside validateLaunch, once the token has proved out, so a
+  // launch that fails for another reason can be retried rather than burned.
+  const verified = await validateLaunch({ idToken, state });
   if (!verified.ok) {
     await createEnhancedActivityLog(prisma, request, {
       userId: null,
@@ -128,7 +123,7 @@ export async function POST(request: Request) {
 
   const response = NextResponse.redirect(next, 303);
   // Spent, so it cannot be replayed even though the token behind it is already consumed.
-  response.cookies.delete(LTI_STATE_COOKIE);
+  response.cookies.delete(cookieName);
   return response;
 }
 

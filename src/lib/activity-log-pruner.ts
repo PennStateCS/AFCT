@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { purgeExpiredSingleUseTokens } from '@/lib/single-use-token';
+import { purgeExpiredLaunches } from '@/lib/lti/launch-transaction';
 import { purgeExpiredPendingLinks } from '@/lib/lti/course-link';
 import {
   DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
@@ -55,6 +56,16 @@ async function purgeTokensOnce(): Promise<void> {
     }
   } catch (error) {
     console.error('[single-use-token] purge failed:', error);
+  }
+
+  // Spent and abandoned launches, on the same schedule and the same swallow-and-continue rule.
+  try {
+    const count = await purgeExpiredLaunches();
+    if (count > 0) {
+      console.log(`[lti] deleted ${count} finished launches`);
+    }
+  } catch (error) {
+    console.error('[lti] launch purge failed:', error);
   }
 }
 
