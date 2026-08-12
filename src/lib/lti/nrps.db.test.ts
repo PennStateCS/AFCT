@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { createKeyPair } from './keys';
-import { fetchMembership } from './nrps';
+import { fetchMembership, nrpsFailureMessage } from './nrps';
 
 /**
  * Reading a course roster from an LMS, against a real Postgres.
@@ -174,5 +174,59 @@ describe('when the roster cannot be read', () => {
     );
 
     expect(await fetchIt()).toMatchObject({ ok: false, reason: 'unreachable' });
+  });
+});
+
+/**
+ * A partial roster is worse than no roster. The caller diffs this against AFCT's own roster and
+ * proposes dropping anyone the LMS did not mention, so a read that stopped early would propose
+ * dropping everybody past the point it stopped.
+ */
+describe('a roster that cannot be read in full', () => {
+  it('refuses when pages remain after the limit', async () => {
+    // Every page says there is another, so the limit is always reached with more to come.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+        const n = Number(new URL(url).searchParams.get('p') ?? '0');
+        return json(
+          { members: [{ user_id: `u-${n}`, email: `u${n}@example.test` }] },
+          { link: `<${MEMBERSHIPS_URL}?p=${n + 1}>; rel="next"` },
+        );
+      }),
+    );
+
+    expect(await fetchIt()).toMatchObject({ ok: false, reason: 'incomplete' });
+  });
+
+  // A platform pointing back at a page already read would otherwise spin to the page cap and
+  // return the same people several times over.
+  it('refuses when the pages loop', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+        return json({ members: [{ user_id: 'u-1' }] }, { link: `<${MEMBERSHIPS_URL}>; rel="next"` });
+      }),
+    );
+
+    expect(await fetchIt()).toMatchObject({ ok: false, reason: 'incomplete' });
+  });
+
+  it('still returns a roster that ends on its own', async () => {
+    platformServing([
+      { body: { members: [{ user_id: 'u-1' }] }, next: `${MEMBERSHIPS_URL}?p=2` },
+      { body: { members: [{ user_id: 'u-2' }] } },
+    ]);
+
+    const result = await fetchIt();
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.members.map((m) => m.ltiUserId)).toEqual(['u-1', 'u-2']);
+  });
+
+  it('says what to do about it', () => {
+    expect(nrpsFailureMessage('incomplete')).toContain('has not changed anything');
   });
 });

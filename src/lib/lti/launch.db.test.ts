@@ -149,6 +149,11 @@ describe('a launch that should work', () => {
       email: 'student@example.test',
       azp: CLIENT_ID,
       nonce: await issueLaunchNonce(),
+      // The claims Core requires of a resource link launch. Not what this test is about, but a
+      // launch without them is refused, and a fixture that could not happen proves nothing.
+      [`${CLAIM}/target_link_uri`]: 'https://afct.test/api/lti/launch',
+      [`${CLAIM}/resource_link`]: { id: 'rl-azp' },
+      [`${CLAIM}/roles`]: [],
     })
       .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
       .setIssuer(ISSUER)
@@ -334,5 +339,112 @@ describe('the nonce', () => {
     // The same nonce, now on a good token, still works.
     const good = await launchToken({ nonce });
     expect((await validateLaunch({ idToken: good })).ok).toBe(true);
+  });
+});
+
+/**
+ * The claims LTI Core requires. A signature proves who sent the token, not that it says enough
+ * to act on, and each of these was previously accepted.
+ */
+describe('claims a launch must carry', () => {
+  /** Builds a signed token with full control, so a claim can be left out entirely. */
+  const signed = async (claims: Record<string, unknown>, omit: 'exp' | 'iat' | 'sub' | null) => {
+    let jwt = new SignJWT({
+      [`${CLAIM}/deployment_id`]: DEPLOYMENT_ID,
+      [`${CLAIM}/message_type`]: 'LtiResourceLinkRequest',
+      [`${CLAIM}/version`]: '1.3.0',
+      [`${CLAIM}/roles`]: [],
+      [`${CLAIM}/resource_link`]: { id: 'rl-1' },
+      [`${CLAIM}/target_link_uri`]: 'https://afct.example.test/api/lti/launch',
+      email: 'student@example.test',
+      nonce: await issueLaunchNonce(),
+      ...claims,
+    })
+      .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
+      .setIssuer(ISSUER)
+      .setAudience(CLIENT_ID);
+    if (omit !== 'sub') jwt = jwt.setSubject('lms-user-1');
+    if (omit !== 'iat') jwt = jwt.setIssuedAt();
+    if (omit !== 'exp') jwt = jwt.setExpirationTime('5m');
+    return jwt.sign(platformKeys.privateKey);
+  };
+
+  /**
+   * The worst of them. `String(payload.sub)` turned a missing subject into the string
+   * "undefined", so every such launch shared one identity and would have signed each person in
+   * as whoever got there first.
+   */
+  it('refuses a token with no subject', async () => {
+    expect(await validateLaunch({ idToken: await signed({}, 'sub') })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  // jose validates `exp` only when it is there, so a token without one never expires.
+  it('refuses a token that never expires', async () => {
+    expect(await validateLaunch({ idToken: await signed({}, 'exp') })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  it('refuses a token with no issued-at', async () => {
+    expect(await validateLaunch({ idToken: await signed({}, 'iat') })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  it('refuses a resource link launch with no resource link id', async () => {
+    const token = await signed({ [`${CLAIM}/resource_link`]: {} }, null);
+
+    expect(await validateLaunch({ idToken: token })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  it('refuses a launch with no target link uri', async () => {
+    const token = await signed({ [`${CLAIM}/target_link_uri`]: undefined }, null);
+
+    expect(await validateLaunch({ idToken: token })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  it('refuses a launch with no roles claim', async () => {
+    const token = await signed({ [`${CLAIM}/roles`]: undefined }, null);
+
+    expect(await validateLaunch({ idToken: token })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  // Required to be present, allowed to be empty: an LMS may send no roles for a person.
+  it('accepts an empty roles list', async () => {
+    const result = await validateLaunch({ idToken: await signed({}, null) });
+
+    expect(result.ok).toBe(true);
+  });
+
+  /**
+   * A deep linking request has no resource link, so requiring one would refuse every deep link.
+   */
+  it('does not ask a deep linking request for a resource link', async () => {
+    const token = await signed(
+      {
+        [`${CLAIM}/message_type`]: 'LtiDeepLinkingRequest',
+        [`${CLAIM}/resource_link`]: undefined,
+        'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': {
+          deep_link_return_url: 'https://lms.test/deep_links',
+        },
+      },
+      null,
+    );
+
+    expect((await validateLaunch({ idToken: token })).ok).toBe(true);
   });
 });
