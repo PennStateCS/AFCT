@@ -21,6 +21,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Trash2 } from 'lucide-react';
 import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
 import SelectField from '@/components/ui/SelectField';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 import { apiPaths } from '@/lib/api-paths';
 import { CourseRoleChangeSchema } from '@/schemas/user';
 
@@ -224,7 +225,7 @@ export function EditRoleDialog({
 
         <div className="mt-4">
           {loading ? (
-            <p>Loading…</p>
+            <LoadingSpinner label="Loading" fullScreen={false} className="min-h-40" />
           ) : roster ? (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
