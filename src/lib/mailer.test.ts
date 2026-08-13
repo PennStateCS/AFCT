@@ -10,6 +10,7 @@ const createTransportMock = vi.hoisted(() => vi.fn(() => ({ sendMail: sendMailMo
 vi.mock('nodemailer', () => ({ default: { createTransport: createTransportMock } }));
 
 import {
+  canSendPasswordReset,
   getSmtpConfig,
   isMailConfigured,
   isRetryableMailFailure,
@@ -350,5 +351,119 @@ describe('deciding whether to try again', () => {
   // Mail switched off, or a configuration that cannot be used. Retrying changes neither.
   it('gives up when mail is not usable at all', () => {
     expect(isRetryableMailFailure(new MailError('Email is not switched on'))).toBe(false);
+  });
+});
+
+/**
+ * Retryability has to survive being wrapped.
+ *
+ * `sendMail` turns the transport's error into a `MailError` so the message is safe to show and
+ * to store, and in doing so it discards the `code` and `responseCode` that say whether waiting
+ * would help. Classifying after the wrap therefore saw nothing and called everything permanent,
+ * which made the queue's whole backoff schedule decorative: the first timeout gave up.
+ *
+ * These go through `sendMail`, deliberately. Asserting on the classifier alone is what missed it.
+ */
+describe('what the queue is told after a real send fails', () => {
+  const failWith = async (transportError: unknown) => {
+    sendMailMock.mockRejectedValue(transportError);
+    return sendMail({ to: 'a@b.test', subject: 's', text: 't' }).catch((error: unknown) => error);
+  };
+
+  const withCode = (code: string) => Object.assign(new Error('nope'), { code });
+  const withReply = (responseCode: number) => Object.assign(new Error('reply'), { responseCode });
+
+  it('retries a timeout', async () => {
+    expect(isRetryableMailFailure(await failWith(withCode('ETIMEDOUT')))).toBe(true);
+  });
+
+  it('retries a refused connection', async () => {
+    expect(isRetryableMailFailure(await failWith(withCode('ECONNREFUSED')))).toBe(true);
+  });
+
+  it('retries a name that would not resolve', async () => {
+    expect(isRetryableMailFailure(await failWith(withCode('ENOTFOUND')))).toBe(true);
+  });
+
+  // SMTP 4xx is "not now"; the schedule exists for exactly this.
+  it('retries a temporary SMTP reply', async () => {
+    expect(isRetryableMailFailure(await failWith(withReply(451)))).toBe(true);
+  });
+
+  it('does not retry a rejected password', async () => {
+    expect(isRetryableMailFailure(await failWith(withCode('EAUTH')))).toBe(false);
+  });
+
+  it('does not retry a rejected sender or recipient', async () => {
+    expect(isRetryableMailFailure(await failWith(withCode('EENVELOPE')))).toBe(false);
+  });
+
+  it('does not retry a permanent SMTP reply', async () => {
+    expect(isRetryableMailFailure(await failWith(withReply(550)))).toBe(false);
+  });
+
+  // Mail switched off is a configuration problem, and no amount of waiting fixes it.
+  it('does not retry mail being switched off', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(settings({ smtpEnabled: false }));
+
+    const error = await sendMail({ to: 'a@b.test', subject: 's', text: 't' }).catch(
+      (e: unknown) => e,
+    );
+
+    expect(isRetryableMailFailure(error)).toBe(false);
+  });
+});
+
+/**
+ * Whether a reset can actually be delivered, which is a different question from whether the
+ * Email tab should show its settings.
+ *
+ * `isMailConfigured` answers a broken configuration with "available" on purpose, so an
+ * administrator sees the feature and its error. Asked whether a reset link can be sent, that
+ * answer queues a message that can never go out and leaves somebody waiting for it.
+ */
+describe('whether a password reset can be delivered', () => {
+  beforeEach(() => {
+    process.env.NEXTAUTH_URL = 'https://afct.example.edu';
+  });
+
+  it('says yes when mail and the address are both usable', async () => {
+    await expect(canSendPasswordReset()).resolves.toEqual({ ok: true });
+  });
+
+  it('says no when mail is switched off', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(settings({ smtpEnabled: false }));
+
+    await expect(canSendPasswordReset()).resolves.toMatchObject({ ok: false });
+  });
+
+  /**
+   * The case that made this worth separating. A stored password that will not decrypt throws,
+   * and `isMailConfigured` reports that as available.
+   */
+  it('says no when the stored password cannot be read', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      settings({ smtpPassword: encryptSecret('s') }),
+    );
+    process.env[SECRET_KEY_ENV] = 'a-completely-different-key-of-the-right-length';
+
+    const result = await canSendPasswordReset();
+
+    expect(result.ok).toBe(false);
+    // Still the admin-facing wording rather than a decryption error.
+    expect(result.ok === false && result.reason).toMatch(/mail password|mail settings/i);
+  });
+
+  it('says no when the configuration is half filled in', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(settings({ smtpHost: null }));
+
+    await expect(canSendPasswordReset()).resolves.toMatchObject({ ok: false });
+  });
+
+  // The other half: a working mail server is no use without an address for the link.
+  it('says no when the site does not know its own address', async () => {
+    delete process.env.NEXTAUTH_URL;
+
+    await expect(canSendPasswordReset()).resolves.toMatchObject({ ok: false });
   });
 });
