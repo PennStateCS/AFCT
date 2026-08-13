@@ -1626,3 +1626,63 @@ model LtiContextMember {
   @@unique([contextLinkId, userId])
   @@index([userId])
 }
+
+/// Whether a queued message has gone out yet.
+enum MailState {
+  /// Waiting to be sent, or waiting to be retried.
+  PENDING
+  /// The mail server accepted it.
+  SENT
+  /// Given up on. Needs somebody to look.
+  FAILED
+}
+
+/// A message waiting to go out.
+///
+/// The password-reset endpoint must answer in the same time whether or not the address has an
+/// account, and it cannot do that while it is holding a TCP connection open to a mail server.
+/// Queueing turns a variable multi-second SMTP conversation into a row insert, which is what
+/// closes the timing side channel: the work that differs between the two cases now happens after
+/// the response has gone.
+model MailQueue {
+  /// Unique identifier.
+  id String @id @default(cuid())
+
+  /// Who it goes to. Not a foreign key: the queue outlives the reason it was made, and a reset
+  /// for an address with no account is never queued at all.
+  toAddress String
+  subject   String
+
+  /// The body, encrypted at rest with the same key as the other stored secrets.
+  ///
+  /// A reset link is a working key to somebody's account for as long as it lasts, so it must not
+  /// sit in a table in plain text where a backup or a stray query would expose it. The plaintext
+  /// exists in memory for as long as it takes to hand to the mail server.
+  bodyEncrypted String
+
+  /// sha256 of the single-use token this message carries, when it carries one.
+  ///
+  /// Not a secret: the same hash is already the only stored form of the token. It is here so a
+  /// retry can check the token is still unspent and unexpired before sending, rather than
+  /// mailing somebody a link that stopped working an hour ago.
+  tokenHash String?
+
+  state MailState @default(PENDING)
+  /// How many times sending has been tried. Drives the backoff and the give-up point.
+  attempts Int @default(0)
+  /// Why the last attempt failed. Sanitised: never a password, never a token.
+  lastError String?
+
+  /// Not before this time. Set into the future to back off after a failure.
+  nextAttemptAt DateTime @default(now())
+  /// When the mail server accepted it.
+  sentAt        DateTime?
+
+  /// When this record was created.
+  createdAt DateTime @default(now())
+  /// When it was last changed.
+  updatedAt DateTime @updatedAt
+
+  /// The order the sender reads in.
+  @@index([state, nextAttemptAt])
+}
