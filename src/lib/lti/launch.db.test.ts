@@ -139,7 +139,6 @@ async function signed(
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 async function destroyFixtures() {
-  await prisma.singleUseToken.deleteMany({ where: { purpose: 'LTI_LAUNCH_NONCE' } });
   await prisma.ltiPlatform.deleteMany({ where: { issuer: ISSUER } });
 }
 
@@ -679,11 +678,11 @@ describe('deliberately malformed launches', () => {
     });
 
     /**
-     * The launch record's own window, which is shorter than anything the token says. A launch
-     * left open for an hour is refused as a replay: the advice is the same either way, which is
-     * to go back to the LMS and click the link again.
+     * The launch record's own window, which is shorter than anything the token says. Reported as
+     * a timeout rather than a replay: the person is told the same thing either way, but an
+     * administrator reading the log needs to know that nobody is replaying anything.
      */
-    it('refuses a launch whose window has closed', async () => {
+    it('calls a launch whose window has closed a timeout, not a replay', async () => {
       const started = await startLaunch({
         platformId,
         targetLinkUri: TARGET_LINK_URI,
@@ -692,6 +691,22 @@ describe('deliberately malformed launches', () => {
       const token = await signed({ nonce: started.nonce });
 
       expect(await validateLaunch({ idToken: token, state: started.state })).toEqual({
+        ok: false,
+        reason: 'expired',
+      });
+    });
+
+    /**
+     * A launch that was genuinely spent, and one whose state nobody issued, both stay replays.
+     * Only the timeout above moved, so this pins that the split did not take the replay case
+     * with it.
+     */
+    it('still calls a spent launch a replay', async () => {
+      const token = await signed();
+      const state = lastState;
+
+      expect((await validateLaunch({ idToken: token, state })).ok).toBe(true);
+      expect(await validateLaunch({ idToken: token, state })).toEqual({
         ok: false,
         reason: 'replayed',
       });

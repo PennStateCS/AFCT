@@ -312,8 +312,14 @@ export async function validateLaunch(opts: {
    * registration, the same nonce, and the same target link URI the platform asked for. Two
    * loose single-use tokens could not express that, which is what this record is for.
    */
-  const transaction = await findLaunch(state);
-  if (!transaction) return { ok: false, reason: 'replayed' };
+  const found = await findLaunch(state);
+  if (!found.ok) {
+    // A launch left open too long is a slow sign-in, not a replay. Both tell the person to go
+    // back and click the link again, so the difference only shows in the log, which is where an
+    // administrator works out whether anything is actually wrong.
+    return { ok: false, reason: found.reason === 'timed-out' ? 'expired' : 'replayed' };
+  }
+  const transaction = found.launch;
   if (transaction.platformId !== platform.id) return { ok: false, reason: 'deployment-mismatch' };
   if (!nonceMatches(transaction, nonce)) return { ok: false, reason: 'replayed' };
   // Core: the token's target link URI must equal the one given to the login endpoint. Only

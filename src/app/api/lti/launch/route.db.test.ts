@@ -70,7 +70,7 @@ async function destroyFixtures() {
   await prisma.course.deleteMany({ where: { id: { in: ['c-launch-dest', 'c-elsewhere'] } } });
   await prisma.ltiPlatform.deleteMany({ where: { id: 'ltip-1' } });
   await prisma.singleUseToken.deleteMany({
-    where: { purpose: { in: ['LTI_LAUNCH_STATE', 'LTI_SESSION_TICKET'] } },
+    where: { purpose: 'LTI_SESSION_TICKET' },
   });
   await prisma.user.deleteMany({ where: { id: USER_ID } });
 }

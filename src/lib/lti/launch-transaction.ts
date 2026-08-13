@@ -53,12 +53,26 @@ export type LaunchTransaction = {
 };
 
 /**
+ * Why a state did not name a launch that can still be completed.
+ *
+ * Three situations, and the difference matters to whoever has to fix it. A launch left open too
+ * long is somebody signing in slowly; a spent one is the same launch arriving twice; a state
+ * nobody issued is neither of those. What the person is told to do is the same either way, but
+ * the log has to be able to tell them apart.
+ */
+export type LaunchLookupFailure = 'unknown' | 'spent' | 'timed-out';
+
+export type FoundLaunch =
+  | { ok: true; launch: LaunchTransaction }
+  | { ok: false; reason: LaunchLookupFailure };
+
+/**
  * The launch this state belongs to, if it is one AFCT started and has not finished.
  *
  * Read rather than spent: the caller has more to check, and a launch that fails one of those
  * checks should be retryable rather than burned.
  */
-export async function findLaunch(state: string): Promise<LaunchTransaction | null> {
+export async function findLaunch(state: string): Promise<FoundLaunch> {
   const row = await prisma.ltiLaunchTransaction.findUnique({
     where: { stateHash: hash(state) },
     select: {
@@ -70,12 +84,17 @@ export async function findLaunch(state: string): Promise<LaunchTransaction | nul
       expiresAt: true,
     },
   });
-  if (!row || row.usedAt || row.expiresAt.getTime() <= Date.now()) return null;
+  if (!row) return { ok: false, reason: 'unknown' };
+  if (row.usedAt) return { ok: false, reason: 'spent' };
+  if (row.expiresAt.getTime() <= Date.now()) return { ok: false, reason: 'timed-out' };
   return {
-    id: row.id,
-    platformId: row.platformId,
-    nonceHash: row.nonceHash,
-    targetLinkUri: row.targetLinkUri,
+    ok: true,
+    launch: {
+      id: row.id,
+      platformId: row.platformId,
+      nonceHash: row.nonceHash,
+      targetLinkUri: row.targetLinkUri,
+    },
   };
 }
 

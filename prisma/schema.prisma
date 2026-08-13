@@ -87,12 +87,6 @@ enum GradeSource {
 // those wrong once is better than getting them wrong three times.
 enum SingleUseTokenPurpose {
   PASSWORD_RESET
-  /// Superseded by LtiLaunchTransaction, which holds the nonce and the state on one row so
-  /// they can be checked against each other. Kept because old rows still carry these values;
-  /// nothing issues them any more.
-  LTI_LAUNCH_NONCE
-  /// Superseded by LtiLaunchTransaction. See LTI_LAUNCH_NONCE.
-  LTI_LAUNCH_STATE
   /// Handed to the browser once a launch is verified, and spent immediately to create the
   /// session. Exists because sessions are minted by NextAuth, not by the launch endpoint.
   LTI_SESSION_TICKET
