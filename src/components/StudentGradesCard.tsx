@@ -7,9 +7,10 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, Loader2, Table } from 'lucide-react';
+import { ChevronDown, ChevronRight, Table } from 'lucide-react';
 import { formatDateInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 import { apiPaths } from '@/lib/api-paths';
 
 type StudentGradesResponse = {
@@ -96,9 +97,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
       </CardHeader>
       <CardContent className="space-y-2 px-3 py-3">
         {loading ? (
-          <div className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading grades...
-          </div>
+          <LoadingSpinner label="Loading grades" fullScreen={false} className="min-h-32" />
         ) : error ? (
           <div role="alert" className="text-destructive text-sm">
           {error}

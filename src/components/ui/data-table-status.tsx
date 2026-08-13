@@ -1,7 +1,7 @@
 'use client';
 
 import type { ComponentType, ReactNode } from 'react';
-import { PulseLoader } from 'react-spinners';
+import Spinner from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 /**
@@ -22,9 +22,7 @@ export function DataTableLoading({ message, className }: { message: string; clas
       )}
       role="status"
     >
-      <span aria-hidden="true" className="text-brand-teal">
-        <PulseLoader color="currentColor" size={8} margin={3} speedMultiplier={0.65} />
-      </span>
+      <Spinner />
       {/* Centered for the same reason as the empty state's description: on a narrow
           screen the message wraps, and left-aligned lines under a centered spinner
           read as a misalignment. */}

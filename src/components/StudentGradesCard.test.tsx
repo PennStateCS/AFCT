@@ -86,7 +86,9 @@ describe('StudentGradesCard', () => {
 
     renderWithClient(<StudentGradesCard courseId="c1" />);
 
-    expect(screen.getByText('Loading grades...')).toBeInTheDocument();
+    // The shared spinner announces through a live region, so this checks the thing a screen
+    // reader is actually given rather than the bare string.
+    expect(screen.getByRole('status')).toHaveTextContent('Loading grades');
   });
 
   it('surfaces an error message when the fetch fails', async () => {

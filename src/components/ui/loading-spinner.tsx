@@ -1,4 +1,7 @@
-import React from 'react';
+'use client';
+
+import Spinner from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 
 type Props = {
   label?: string;
@@ -6,23 +9,32 @@ type Props = {
   className?: string;
 };
 
+/**
+ * A centred wait, for a page or a section that has nothing to show yet.
+ *
+ * The animation itself comes from [Spinner], which is also what a data table uses, so a page and
+ * the table on it do not wait in two different ways.
+ *
+ * `cn` rather than a template string: several callers pass their own `min-h-*` to make the block
+ * shorter than the default, and without merging both heights are emitted and which one wins is
+ * down to the order the classes happen to sit in the stylesheet.
+ */
 export default function LoadingSpinner({
   label = 'Loading',
   fullScreen = true,
-  className = '',
+  className,
 }: Props) {
-  const heightClass = fullScreen ? 'min-h-screen' : 'min-h-[50vh]';
-
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`flex ${heightClass} flex-col items-center justify-center gap-3 ${className}`}
+      className={cn(
+        'flex flex-col items-center justify-center gap-3',
+        fullScreen ? 'min-h-screen' : 'min-h-[50vh]',
+        className,
+      )}
     >
-      <div
-        aria-hidden="true"
-        className="border-muted-foreground/30 border-t-primary h-10 w-10 animate-spin rounded-full border-[5px]"
-      />
+      <Spinner />
       <div className="text-muted-foreground text-sm">{label}</div>
     </div>
   );
