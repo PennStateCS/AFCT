@@ -84,6 +84,9 @@ export async function POST(request: Request) {
     platform: pending.platform,
     returnUrl: pending.returnUrl,
     data: pending.data,
+    // AFCT returns one assignment per deep linking response. `pending.acceptMultiple` records
+    // whether the platform would take several, and is preserved for future multi-selection
+    // support rather than read here: it permits more than one, it does not ask for more than one.
     items: [
       {
         // Where the platform sends people. The launch endpoint, as always: the assignment is

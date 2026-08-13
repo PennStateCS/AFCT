@@ -1535,6 +1535,11 @@ model LtiPendingDeepLink {
   /// about the support of line items", so it is not the same as true and AFCT sends a line item
   /// only when the platform has said so outright.
   acceptLineItem                    Boolean?
+  /// Whether the platform will take more than one item back, with null for a request that did
+  /// not say. AFCT returns one assignment per response, so this changes nothing today; it is
+  /// stored because it is the platform's own statement of what it supports, and multi-assignment
+  /// selection would need it.
+  acceptMultiple                    Boolean?
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Who the launch signed in. Only they can answer it.
