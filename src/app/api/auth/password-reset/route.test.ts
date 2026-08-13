@@ -8,7 +8,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 const logMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: logMock }));
 
-const mailerMock = vi.hoisted(() => ({ isMailConfigured: vi.fn() }));
+const mailerMock = vi.hoisted(() => ({ canSendPasswordReset: vi.fn() }));
 vi.mock('@/lib/mailer', () => mailerMock);
 
 const resetMock = vi.hoisted(() => ({ requestPasswordReset: vi.fn() }));
@@ -33,7 +33,7 @@ const post = (body: unknown) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mailerMock.isMailConfigured.mockResolvedValue(true);
+  mailerMock.canSendPasswordReset.mockResolvedValue({ ok: true });
   resetMock.requestPasswordReset.mockResolvedValue({ sent: true });
   rateMock.evaluatePasswordResetRateLimit.mockReturnValue({ status: 'ok' });
   logMock.mockResolvedValue(undefined);
@@ -90,7 +90,7 @@ describe('rate limiting', () => {
 describe('when the site cannot send email', () => {
   // Not a secret, and more useful than a reassuring message about mail that is never coming.
   it('says so plainly rather than pretending a link is on its way', async () => {
-    mailerMock.isMailConfigured.mockResolvedValue(false);
+    mailerMock.canSendPasswordReset.mockResolvedValue({ ok: false, reason: 'no mail server' });
 
     const res = await post({ email: 'someone@example.edu' });
 
@@ -112,7 +112,7 @@ describe('logging', () => {
       expect.anything(),
       expect.objectContaining({
         action: 'PASSWORD_RESET_REQUESTED',
-        metadata: expect.objectContaining({ email: 'nobody@example.edu', delivered: false }),
+        metadata: expect.objectContaining({ email: 'nobody@example.edu', queued: false }),
       }),
     );
   });

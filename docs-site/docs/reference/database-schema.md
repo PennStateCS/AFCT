@@ -1146,6 +1146,20 @@ erDiagram
   String ltiUserId
   DateTime seenAt
 }
+"MailQueue" {
+  String id PK
+  String toAddress
+  String subject
+  String bodyEncrypted
+  String tokenHash "nullable"
+  MailState state
+  Int attempts
+  String lastError "nullable"
+  DateTime nextAttemptAt
+  DateTime sentAt "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+}
 ```
 
 ### `LtiLaunchTransaction`
@@ -1189,3 +1203,40 @@ Properties as follows:
 - `userId`: The AFCT account.
 - `ltiUserId`: The LMS's own id for this person in this context, which is what a score is posted against.
 - `seenAt`: When AFCT last saw evidence they belong here, from a launch or a roster read.
+
+### `MailQueue`
+
+A message waiting to go out.
+
+The password-reset endpoint must answer in the same time whether or not the address has an
+account, and it cannot do that while it is holding a TCP connection open to a mail server.
+Queueing turns a variable multi-second SMTP conversation into a row insert, which is what
+closes the timing side channel: the work that differs between the two cases now happens after
+the response has gone.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `toAddress`
+  > Who it goes to. Not a foreign key: the queue outlives the reason it was made, and a reset
+  > for an address with no account is never queued at all.
+- `subject`:
+- `bodyEncrypted`
+  > The body, encrypted at rest with the same key as the other stored secrets.
+  >
+  > A reset link is a working key to somebody's account for as long as it lasts, so it must not
+  > sit in a table in plain text where a backup or a stray query would expose it. The plaintext
+  > exists in memory for as long as it takes to hand to the mail server.
+- `tokenHash`
+  > sha256 of the single-use token this message carries, when it carries one.
+  >
+  > Not a secret: the same hash is already the only stored form of the token. It is here so a
+  > retry can check the token is still unspent and unexpired before sending, rather than
+  > mailing somebody a link that stopped working an hour ago.
+- `state`:
+- `attempts`: How many times sending has been tried. Drives the backoff and the give-up point.
+- `lastError`: Why the last attempt failed. Sanitised: never a password, never a token.
+- `nextAttemptAt`: Not before this time. Set into the future to back off after a failure.
+- `sentAt`: When the mail server accepted it.
+- `createdAt`: When this record was created.
+- `updatedAt`: When it was last changed.

@@ -20,5 +20,7 @@ export async function register() {
     // Grade passback also needs egress, so it belongs here rather than in the worker.
     const { startScoreSender } = await import('./lib/lti/score-sender');
     startScoreSender();
+    const { startMailSender } = await import('./lib/mail-sender');
+    startMailSender();
   }
 }

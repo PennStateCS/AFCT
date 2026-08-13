@@ -15,7 +15,8 @@
 
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
-import { sendMail } from '@/lib/mailer';
+import { queueMail } from '@/lib/mail-queue';
+import { publicAppUrl } from '@/lib/public-app-url';
 import {
   consumeSingleUseToken,
   issueSingleUseToken,
@@ -24,10 +25,15 @@ import {
 } from '@/lib/single-use-token';
 import { invalidateSessionUser } from '@/lib/session-user-cache';
 
-/** How the reset link is built. The app's public URL is set by the installer. */
+/**
+ * How the reset link is built.
+ *
+ * From the configured public address and never from the request, which is the difference between
+ * a link to AFCT and a link to wherever the sender of a forged `Host` header wanted the token to
+ * go. Throws when that address is unusable rather than producing a relative URL nobody can open.
+ */
 function resetUrl(token: string): string {
-  const base = (process.env.NEXTAUTH_URL ?? '').trim().replace(/\/+$/, '');
-  return `${base}/reset-password?token=${encodeURIComponent(token)}`;
+  return publicAppUrl(`/reset-password?token=${encodeURIComponent(token)}`);
 }
 
 function minutes(ms: number): number {
@@ -37,9 +43,8 @@ function minutes(ms: number): number {
 /**
  * Handle a reset request for an address.
  *
- * Returns nothing: the caller must answer identically regardless, so there is deliberately no
- * result to branch on. Failures are swallowed and logged by the caller rather than surfaced,
- * for the same reason.
+ * The caller must answer identically regardless, so `sent` says only whether a message was
+ * queued and is for the audit log, never for the response body.
  */
 export async function requestPasswordReset(email: string): Promise<{ sent: boolean }> {
   const user = await prisma.user.findUnique({
@@ -51,30 +56,50 @@ export async function requestPasswordReset(email: string): Promise<{ sent: boole
   // turned it off, and a reset link would be a way back in.
   if (!user || user.inactive) return { sent: false };
 
-  // Any earlier link stops working the moment a new one is asked for, so a forwarded or
-  // intercepted older email cannot still be used.
-  await revokeSingleUseTokens({ userId: user.id, purpose: 'PASSWORD_RESET' });
+  /**
+   * Earlier links are deliberately left alone.
+   *
+   * This used to revoke them, on the reasoning that an intercepted older email should stop
+   * working. The effect was the opposite of hardening: the endpoint is unauthenticated, so
+   * anyone who knew an address could destroy that person's working recovery link by asking for
+   * another one, over and over, and never need access to the mailbox. It was worse when the
+   * replacement failed to send, which left somebody with a link that had been revoked and no
+   * email to replace it.
+   *
+   * Several links may therefore be live at once, each for its own short life. That is a much
+   * smaller exposure than it sounds: they all belong to the same mailbox, and the *first* one
+   * used revokes the rest, which is the property that actually matters.
+   */
+  const issued = await prisma.$transaction(async (tx) => {
+    const { token } = await issueSingleUseToken({
+      purpose: 'PASSWORD_RESET',
+      userId: user.id,
+      ttlMs: PASSWORD_RESET_TTL_MS,
+      tx,
+    });
 
-  const { token } = await issueSingleUseToken({
-    purpose: 'PASSWORD_RESET',
-    userId: user.id,
-    ttlMs: PASSWORD_RESET_TTL_MS,
+    const greeting = user.firstName ? `Hello ${user.firstName},` : 'Hello,';
+    // Queued rather than sent. The caller must answer in the same time whether or not this
+    // address has an account, and it cannot do that while holding an SMTP conversation open.
+    // Written in the same transaction as the token, so neither can exist without the other.
+    await queueMail({
+      to: user.email,
+      subject: 'Reset your AFCT password',
+      text:
+        `${greeting}\n\n` +
+        'Someone asked to reset the password for your AFCT account. To choose a new one, open:\n\n' +
+        `${resetUrl(token)}\n\n` +
+        `This link works once and expires in ${minutes(PASSWORD_RESET_TTL_MS)} minutes.\n\n` +
+        'If you did not ask for this, you can ignore this message. Your password will not change ' +
+        'and nobody has been given access to your account.\n',
+      token,
+      tx,
+    });
+
+    return true;
   });
 
-  const greeting = user.firstName ? `Hello ${user.firstName},` : 'Hello,';
-  await sendMail({
-    to: user.email,
-    subject: 'Reset your AFCT password',
-    text:
-      `${greeting}\n\n` +
-      'Someone asked to reset the password for your AFCT account. To choose a new one, open:\n\n' +
-      `${resetUrl(token)}\n\n` +
-      `This link works once and expires in ${minutes(PASSWORD_RESET_TTL_MS)} minutes.\n\n` +
-      'If you did not ask for this, you can ignore this message. Your password will not change ' +
-      'and nobody has been given access to your account.\n',
-  });
-
-  return { sent: true };
+  return { sent: issued };
 }
 
 export type ResetOutcome =

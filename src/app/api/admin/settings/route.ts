@@ -6,6 +6,7 @@ import { readJson } from '@/lib/api/request';
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import { encryptSecret, SecretKeyError } from '@/lib/secret-encryption';
+import { SMTP_AUTH_NEEDS_TLS } from '@/lib/mailer';
 import {
   DEFAULT_LOGIN_MAX_ATTEMPTS,
   DEFAULT_LOGIN_LOCKOUT_MINUTES,
@@ -301,11 +302,23 @@ export const PUT = withAdminAuth(
     if (typeof body.smtpFromName === 'string')
       smtpData.smtpFromName = body.smtpFromName.trim() || null;
 
+    /**
+     * The password is stored exactly as typed.
+     *
+     * It used to be trimmed, which is right for a hostname and wrong for a secret: a password of
+     * `" hunter2 "` was silently stored as `"hunter2"` and then rejected by the mail server, with
+     * nothing on any screen to explain why. An opaque secret is whatever the other end says it
+     * is, spaces included.
+     *
+     * The empty string still means "keep what is there", so saving the form without retyping the
+     * password does not wipe it. That is a different thing from a password made of spaces, which
+     * is a real value and is kept.
+     */
     if (body.smtpPasswordClear === true) {
       smtpData.smtpPassword = null;
-    } else if (typeof body.smtpPassword === 'string' && body.smtpPassword.trim() !== '') {
+    } else if (typeof body.smtpPassword === 'string' && body.smtpPassword !== '') {
       try {
-        smtpData.smtpPassword = encryptSecret(body.smtpPassword.trim());
+        smtpData.smtpPassword = encryptSecret(body.smtpPassword);
       } catch (error) {
         // No key means the password cannot be stored safely, and storing it in the clear to
         // be helpful would defeat the point of encrypting it at all.
@@ -319,6 +332,33 @@ export const PUT = withAdminAuth(
           { status: 500 },
         );
       }
+    }
+
+    /**
+     * Credentials are not allowed over an unencrypted connection.
+     *
+     * SMTP AUTH on a plain connection puts the username and password on the wire in clear text,
+     * and at most institutions that is a directory account rather than a mail-only one. `NONE`
+     * itself stays supported, because an unauthenticated local relay is a normal thing to have;
+     * what is refused is `NONE` *with* credentials.
+     *
+     * Judged on the configuration this save would produce, not on what the form sent. A request
+     * that changes only the security setting has to be checked against the username and password
+     * already stored, or the rule could be walked around in two saves.
+     */
+    const storedSmtp = await prisma.systemSettings.findUnique({
+      where: { id: 1 },
+      select: { smtpSecurity: true, smtpUsername: true, smtpPassword: true },
+    });
+    const resultingSecurity =
+      typeof smtpData.smtpSecurity === 'string' ? smtpData.smtpSecurity : storedSmtp?.smtpSecurity;
+    const resultingUsername =
+      'smtpUsername' in smtpData ? smtpData.smtpUsername : (storedSmtp?.smtpUsername ?? null);
+    const resultingPassword =
+      'smtpPassword' in smtpData ? smtpData.smtpPassword : (storedSmtp?.smtpPassword ?? null);
+
+    if (resultingSecurity === 'NONE' && (resultingUsername || resultingPassword)) {
+      return NextResponse.json({ error: SMTP_AUTH_NEEDS_TLS }, { status: 400 });
     }
 
     // Institutional sign-in, same write-only rule for the secret as the two above.
