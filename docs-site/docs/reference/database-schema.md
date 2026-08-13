@@ -135,6 +135,7 @@ erDiagram
   String acceptTypes
   String acceptPresentationDocumentTargets
   Boolean acceptLineItem "nullable"
+  Boolean acceptMultiple "nullable"
   String userId FK
   DateTime expiresAt
   DateTime createdAt
@@ -450,6 +451,11 @@ Properties as follows:
   > one: Deep Linking 2.0 says that when accept_lineitem is absent "no assumption can be made
   > about the support of line items", so it is not the same as true and AFCT sends a line item
   > only when the platform has said so outright.
+- `acceptMultiple`
+  > Whether the platform will take more than one item back, with null for a request that did
+  > not say. AFCT returns one assignment per response, so this changes nothing today; it is
+  > stored because it is the platform's own statement of what it supports, and multi-assignment
+  > selection would need it.
 - `userId`: Who the launch signed in. Only they can answer it.
 - `expiresAt`: When this stops being usable.
 - `createdAt`: When this record was created.

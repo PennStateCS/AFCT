@@ -87,8 +87,17 @@ export type DeepLinkRequest = {
    * placement asked, and a response without it is rejected.
    */
   data: string | null;
-  /** Whether the platform will accept more than one item. */
-  multiple: boolean;
+  /**
+   * Whether the platform will take more than one item back: true, false, or null for a request
+   * that did not say. DL 2.0 gives it no default when absent, so it gets the same three states
+   * as `acceptLineItem` rather than a guess.
+   *
+   * AFCT returns one assignment per deep linking response. This says what the platform *permits*,
+   * not what AFCT has to send, so it changes nothing about the current single-selection picker;
+   * it is kept and stored because it is the platform's own statement of what it supports, and
+   * multi-assignment selection would need it.
+   */
+  acceptMultiple: boolean | null;
   /** The content types the platform will take. Required by DL 2.0, so never empty here. */
   acceptTypes: string[];
   /**
@@ -303,9 +312,7 @@ function readDeepLinkSettings(
     request: {
       returnUrl,
       data: claimString(settings.data),
-      // Absent leaves the platform's position unstated. AFCT returns one item whatever the
-      // answer, so the conservative reading costs nothing here.
-      multiple: acceptMultiple.value === true,
+      acceptMultiple: acceptMultiple.value,
       acceptTypes,
       acceptPresentationDocumentTargets: targets,
       // Three states. `true` and `false` are what the platform said; `null` is that it did not
@@ -462,14 +469,30 @@ export async function validateLaunch(opts: {
   if (!targetLinkUri) return { ok: false, reason: 'missing-claims' };
 
   const subject = claimString(payload.sub);
-  const rolesClaim = payload[`${CLAIM}/roles`];
   const resourceLink = claimObject(payload, 'resource_link');
   const resourceLinkId = resourceLink ? claimString(resourceLink.id) : null;
 
+  /**
+   * Roles, which are required of a resource link launch and optional on a deep linking one, and
+   * strictly typed on both.
+   *
+   * The shape is checked the same way the deep linking arrays are. Filtering
+   * `["Learner", 123]` down to `["Learner"]` would answer with a list the platform did not send,
+   * and roles decide what somebody gets when their roster entry is first created.
+   *
+   * Only the *shape* is judged here. An unrecognised role URI is perfectly legal, and platforms
+   * carry vocabularies AFCT has never heard of, so the values go through untouched and
+   * `mapLtiRoles` treats anything it does not know as a student.
+   */
+  const rolesClaim = payload[`${CLAIM}/roles`];
+  const roles = strictStringList(rolesClaim);
+  // Present and not an array of strings is a broken message, whichever kind it is.
+  if (rolesClaim !== undefined && roles === null) return { ok: false, reason: 'missing-claims' };
+
   if (!isDeepLink) {
-    // Core makes all three required of a resource link launch. Roles may be an empty array,
-    // but the claim itself has to be there.
-    if (!Array.isArray(rolesClaim) || !resourceLinkId) {
+    // Core requires both of a resource link launch. Roles may be an empty array, but the claim
+    // itself has to be there.
+    if (roles === null || !resourceLinkId) {
       return { ok: false, reason: 'missing-claims' };
     }
   }
@@ -525,9 +548,7 @@ export async function validateLaunch(opts: {
       email,
       ...namesFrom(payload),
       // Optional on a deep linking request, so an absent claim is no roles rather than a refusal.
-      roles: Array.isArray(rolesClaim)
-        ? rolesClaim.filter((r): r is string => typeof r === 'string')
-        : [],
+      roles: roles ?? [],
       contextId: context ? claimString(context.id) : null,
       contextTitle: context ? (claimString(context.title) ?? claimString(context.label)) : null,
       resourceLinkId,
