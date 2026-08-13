@@ -73,6 +73,9 @@ If a launch fails, open [System Logs](system-logs.md) and filter for `LTI_LAUNCH
 | `replayed` | The same launch was presented twice. Opening a cached page again can do this; try a fresh launch. |
 | `expired` | Either the launch sat unopened for more than ten minutes, or the clocks on the two servers disagree. One person seeing it once is a slow sign-in and needs nothing. Everybody seeing it is a clock, so check the server time. |
 | `no-email` | The LMS did not send an email address. AFCT needs one to create or match an account, so release it in the LMS privacy settings for the key. |
+| `anonymous-launch` | The LMS opened AFCT without saying who the person is. Same fix as `no-email`: the key has to be allowed to share the user identity. |
+| `deep-link-settings` | Somebody chose AFCT while adding content, but the LMS did not say where to send the answer or what it will accept. Check how the AFCT placement is configured. |
+| `content-type-not-accepted` | AFCT was offered somewhere that does not take a link to an external tool, which is the only thing AFCT can add. Add it somewhere that does. |
 | `malformed` or `wrong-message-type` | The request was not a launch AFCT understands. Check that the link points at the target link URI above. |
 
 If the link shows an empty box or a message about the page refusing to connect, **and nothing appears in the log at all**, the launch is not reaching AFCT: the link is opening it inside the LMS page. Set it to open in a new tab, as above.
