@@ -197,10 +197,37 @@ function claimString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-/** The strings in an array claim, ignoring anything in it that is not one. */
-function stringList(value: unknown): string[] | null {
+/**
+ * The strings in an array claim, or null if it is not one.
+ *
+ * All or nothing, deliberately. This used to filter out whatever was not a string, so
+ * `["ltiResourceLink", 123]` became `["ltiResourceLink"]` and a broken request was answered as
+ * though it had been well formed. A platform that sends a list it did not mean should be told,
+ * not quietly corrected: the whole point of reading these is to do what the platform asked, and
+ * a value AFCT had to repair is not what it asked.
+ */
+function strictStringList(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
-  return value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+  if (!value.every((entry) => typeof entry === 'string')) return null;
+  return value as string[];
+}
+
+/**
+ * An optional boolean setting, kept honest about which of its three states it is in.
+ *
+ * `ok: false` is a value that is present and is not a boolean. It has to be told apart from
+ * absence, because `settings.x === true` reads `"true"`, `1` and `{}` all as `false`, and
+ * `settings.x !== false` reads them all as `true`. Either way a malformed request is answered
+ * with a guess, and for `accept_lineitem` that guess decides whether a gradebook column is
+ * created.
+ */
+function strictOptionalBoolean(
+  value: unknown,
+): { ok: true; value: boolean | null } | { ok: false } {
+  if (value === undefined) return { ok: true, value: null };
+  if (typeof value === 'boolean') return { ok: true, value };
+  // Includes JSON `null`, which is a value the platform sent rather than one it left out.
+  return { ok: false };
 }
 
 /** The only content type AFCT has to offer, so a platform that will not take it cannot be served. */
@@ -220,14 +247,38 @@ function readDeepLinkSettings(
   const settings = claimObject(payload, 'deep_linking_settings', 'lti-dl');
   if (!settings) return { ok: false, reason: 'deep-link-settings' };
 
-  // Required. Without it there is nowhere to send the answer, and staff would pick an assignment
-  // that silently goes nowhere.
+  // Required, and declared a string. Without it there is nowhere to send the answer, and staff
+  // would pick an assignment that silently goes nowhere.
   const returnUrl = claimString(settings.deep_link_return_url);
-  // Required. Both are arrays of strings, and an empty one says the platform will take nothing.
-  const acceptTypes = stringList(settings.accept_types);
-  const targets = stringList(settings.accept_presentation_document_targets);
+  // Required, and both declared arrays of strings. An empty one says the platform will take
+  // nothing, which AFCT cannot serve either; the spec sets no minimum length, so refusing an
+  // empty list is AFCT reading "required" as "meaningfully present" rather than a stated rule.
+  const acceptTypes = strictStringList(settings.accept_types);
+  const targets = strictStringList(settings.accept_presentation_document_targets);
 
   if (!returnUrl || !acceptTypes?.length || !targets?.length) {
+    return { ok: false, reason: 'deep-link-settings' };
+  }
+
+  /**
+   * The optional settings AFCT reads. Present and the wrong type is a broken request, not a
+   * silent no: `"true"` is a string, and reading it as either boolean answers a platform with
+   * something it never said.
+   *
+   * Only the ones AFCT actually uses are checked. `title`, `text`, `auto_create` and
+   * `accept_media_types` are not read anywhere, and refusing a launch over the shape of a value
+   * that changes nothing would cost interoperability and buy nothing.
+   */
+  const acceptMultiple = strictOptionalBoolean(settings.accept_multiple);
+  const acceptLineItem = strictOptionalBoolean(settings.accept_lineitem);
+  if (!acceptMultiple.ok || !acceptLineItem.ok) {
+    return { ok: false, reason: 'deep-link-settings' };
+  }
+
+  // Declared a string, and it has to come back to the platform exactly as it arrived. A value of
+  // another type cannot be returned faithfully, and platforms reject a response whose `data`
+  // does not match, so sending the choice on and having it refused would be the worse outcome.
+  if (settings.data !== undefined && claimString(settings.data) === null) {
     return { ok: false, reason: 'deep-link-settings' };
   }
 
@@ -242,12 +293,14 @@ function readDeepLinkSettings(
     request: {
       returnUrl,
       data: claimString(settings.data),
-      multiple: settings.accept_multiple === true,
+      // Absent leaves the platform's position unstated. AFCT returns one item whatever the
+      // answer, so the conservative reading costs nothing here.
+      multiple: acceptMultiple.value === true,
       acceptTypes,
       acceptPresentationDocumentTargets: targets,
       // Three states. `true` and `false` are what the platform said; `null` is that it did not
       // say, which DL 2.0 leaves as unknown rather than as permission.
-      acceptLineItem: typeof settings.accept_lineitem === 'boolean' ? settings.accept_lineitem : null,
+      acceptLineItem: acceptLineItem.value,
     },
   };
 }
