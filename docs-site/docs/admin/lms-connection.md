@@ -46,6 +46,19 @@ Registration is mutual: your LMS needs four values from AFCT, and AFCT needs six
 
 AFCT identifies an LMS by the combination of **issuer, client ID and deployment ID**. Registering the same three twice is refused. If your LMS issues a separate deployment ID per sub-account or per course, register each one.
 
+## Set AFCT to open in a new tab
+
+**AFCT has to open in its own tab rather than inside a panel on the LMS page.** Set this while you are creating the registration, because it is easier than explaining it to every member of faculty afterwards.
+
+Where it lives depends on the LMS:
+
+- **Canvas**: **Load In New Tab**, on the developer key's placements, and again on an individual link if somebody adds one by hand.
+- **Brightspace** and **Blackboard**: an equivalent option on the link or the tool configuration, usually worded as opening in a new window.
+
+The reason is that browsers no longer let a site keep somebody signed in while it is being displayed inside another site's page. Firefox and Safari have blocked it for some time and Chrome is going the same way, so a link that opens AFCT in a panel will show an empty box or a message about the page refusing to connect. It is a browser rule rather than an AFCT setting, and there is nothing to turn on in AFCT that changes it.
+
+Faculty adding their own links need the same setting, which is covered in [Grades and rosters from your LMS](../faculty/lms.md).
+
 ## Check that it works
 
 Ask someone with a course in the LMS to add an AFCT link and open it. On a first launch AFCT asks them which of their AFCT courses this LMS course is, and they choose it once.
@@ -58,9 +71,11 @@ If a launch fails, open [System Logs](system-logs.md) and filter for `LTI_LAUNCH
 | `deployment-mismatch` | The issuer and client ID matched, but the deployment ID did not. If your LMS issues one per sub-account, register that one too. |
 | `bad-signature` | AFCT could not verify the launch against the LMS keyset. Usually the public keyset URL is wrong or unreachable from the server. |
 | `replayed` | The same launch was presented twice. Opening a cached page again can do this; try a fresh launch. |
-| `expired` | The launch took too long to arrive. Check that the clocks on both servers are right. |
+| `expired` | Either the launch sat unopened for more than ten minutes, or the clocks on the two servers disagree. One person seeing it once is a slow sign-in and needs nothing. Everybody seeing it is a clock, so check the server time. |
 | `no-email` | The LMS did not send an email address. AFCT needs one to create or match an account, so release it in the LMS privacy settings for the key. |
 | `malformed` or `wrong-message-type` | The request was not a launch AFCT understands. Check that the link points at the target link URI above. |
+
+If the link shows an empty box or a message about the page refusing to connect, **and nothing appears in the log at all**, the launch is not reaching AFCT: the link is opening it inside the LMS page. Set it to open in a new tab, as above.
 
 ## What faculty can do once it is connected
 

@@ -13,8 +13,9 @@ If none of this appears, your institution has not registered an LMS yet. Ask you
 ## Link your course
 
 1. In your LMS course, add a link to AFCT. What this is called varies: an external tool, an app, or an LTI link.
-2. Open that link.
-3. The first time, AFCT asks which of your AFCT courses this is. Pick it and confirm.
+2. **Set the link to open in a new tab.** Canvas calls this **Load In New Tab**; other systems word it as opening in a new window. AFCT will not open inside a panel on the LMS page, and a link left on the default setting shows students an empty box instead.
+3. Open that link.
+4. The first time, AFCT asks which of your AFCT courses this is. Pick it and confirm.
 
 You only do this once per course. Everyone who opens the link afterwards lands in the right AFCT course.
 
@@ -59,7 +60,7 @@ Syncing is always something you ask for. AFCT does not quietly change your roste
 
 Some LMSs let you pick the AFCT assignment while adding the link, so students land on that assignment rather than on the AFCT course. If yours supports it, choosing AFCT while adding an assignment or module item shows a list of the assignments in your linked AFCT course, and the one you pick becomes the link.
 
-The course has to be linked first, and you have to be the one who runs it.
+The course has to be linked first, and you have to be the one who runs it. These links need to open in a new tab as well, so check that setting on the assignment or module item once it has been added.
 
 ## Disconnecting
 
