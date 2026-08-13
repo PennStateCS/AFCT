@@ -59,15 +59,16 @@ export async function sendOneScore(): Promise<SendOutcome> {
   /**
    * Which LMS course to send to.
    *
-   * Cross-listed sections mean several LMS courses can open one AFCT course, and AFCT does not
-   * yet record which one a given student came through. It used to try each in turn and let the
-   * platform refuse the wrong ones, but the first thing tried is creating a gradebook column,
-   * so a section B student put an AFCT column in section A; and a student in both sections got
-   * their grade wherever the query happened to order first.
+   * Cross-listed sections mean several LMS courses can open one AFCT course. This used to try
+   * each in turn and let the platform refuse the wrong ones, but the first thing tried is
+   * creating a gradebook column, so a section B student put an AFCT column in section A; and a
+   * student in both sections got their grade wherever the query happened to order first.
    *
-   * Grades are the thing this system must not get wrong, so with more than one link it refuses
-   * and says so rather than guessing. Recording the context per student at launch and on roster
-   * sync is the real fix and is not done yet.
+   * Which section a student is in is now recorded as `LtiContextMember`, written both when they
+   * launch and when a roster is synced, and that is what the lookup below reads. It can still
+   * come up empty, for a student who has neither launched nor been synced, and grades are the
+   * thing this system must not get wrong: with more than one link and nothing saying which, it
+   * refuses and says so rather than guessing.
    */
   const allLinks = await prisma.ltiContextLink.findMany({
     where: { courseId: claimed.assignment.courseId },
