@@ -9,7 +9,14 @@ const sendMailMock = vi.hoisted(() => vi.fn());
 const createTransportMock = vi.hoisted(() => vi.fn(() => ({ sendMail: sendMailMock })));
 vi.mock('nodemailer', () => ({ default: { createTransport: createTransportMock } }));
 
-import { getSmtpConfig, isMailConfigured, MailError, sendMail, sendTestEmail } from './mailer';
+import {
+  getSmtpConfig,
+  isMailConfigured,
+  isRetryableMailFailure,
+  MailError,
+  sendMail,
+  sendTestEmail,
+} from './mailer';
 import { encryptSecret, SECRET_KEY_ENV } from './secret-encryption';
 
 const KEY = 'k'.repeat(48);
@@ -200,5 +207,148 @@ describe('the test message', () => {
     const sent = sendMailMock.mock.calls[0][0];
     expect(sent.to).toBe('admin@example.edu');
     expect(sent.text).toMatch(/password reset links/);
+  });
+});
+
+/**
+ * Credentials over an unencrypted connection.
+ *
+ * SMTP AUTH on a plain connection puts the username and password on the wire in clear text, and
+ * at most institutions the mail account is a directory account rather than a mail-only one, so
+ * what leaks is not just email. `NONE` itself stays supported: a local relay that wants no
+ * sign-in is a normal thing to have, and quietly upgrading the transport an administrator chose
+ * would be its own kind of wrong.
+ */
+describe('what may be sent over an unencrypted connection', () => {
+  it('allows a plain connection with no credentials', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      settings({ smtpSecurity: 'NONE', smtpUsername: null, smtpPassword: null, smtpPort: 25 }),
+    );
+
+    await expect(getSmtpConfig()).resolves.toMatchObject({ security: 'NONE', username: null });
+  });
+
+  it('refuses a plain connection carrying a username', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      settings({ smtpSecurity: 'NONE', smtpUsername: 'afct', smtpPassword: null }),
+    );
+
+    await expect(getSmtpConfig()).rejects.toThrow(/requires STARTTLS or TLS/);
+  });
+
+  // A stored password with no username is still a credential somebody meant to use.
+  it('refuses a plain connection carrying a password', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      settings({ smtpSecurity: 'NONE', smtpUsername: null, smtpPassword: encryptSecret('s3cret') }),
+    );
+
+    await expect(getSmtpConfig()).rejects.toThrow(/requires STARTTLS or TLS/);
+  });
+
+  it('allows credentials over STARTTLS', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      settings({ smtpSecurity: 'STARTTLS', smtpUsername: 'afct', smtpPassword: encryptSecret('s') }),
+    );
+
+    await expect(getSmtpConfig()).resolves.toMatchObject({ security: 'STARTTLS', password: 's' });
+  });
+
+  it('allows credentials over TLS', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      settings({
+        smtpSecurity: 'TLS',
+        smtpPort: 465,
+        smtpUsername: 'afct',
+        smtpPassword: encryptSecret('s'),
+      }),
+    );
+
+    await expect(getSmtpConfig()).resolves.toMatchObject({ security: 'TLS', password: 's' });
+  });
+});
+
+/**
+ * A password is an opaque secret and goes to the server exactly as it was stored, spaces and all.
+ * It used to be trimmed on the way in, which produced a login failure with nothing on any screen
+ * to explain it.
+ */
+describe('the password that reaches the server', () => {
+  it('keeps leading and trailing spaces', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      settings({ smtpPassword: encryptSecret('  spaced secret  ') }),
+    );
+
+    await expect(getSmtpConfig()).resolves.toMatchObject({ password: '  spaced secret  ' });
+  });
+
+  it('keeps a password made entirely of spaces', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      settings({ smtpPassword: encryptSecret('   ') }),
+    );
+
+    await expect(getSmtpConfig()).resolves.toMatchObject({ password: '   ' });
+  });
+});
+
+/**
+ * What ends up in an activity log or on an admin's screen after a failed send.
+ *
+ * The transport's own message is worth quoting, since it is often the only thing that says what
+ * a particular server objected to. It is also written by a library holding the credentials, so
+ * they are struck out of it rather than trusted not to appear.
+ */
+describe('what a failure is allowed to say', () => {
+  it('does not repeat the password back', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      settings({ smtpUsername: 'afct-mailer', smtpPassword: encryptSecret('hunter2secret') }),
+    );
+    sendMailMock.mockRejectedValue(new Error('login failed for afct-mailer/hunter2secret'));
+
+    await expect(sendMail({ to: 'a@b.test', subject: 's', text: 't' })).rejects.toThrow(
+      /\[removed\]/,
+    );
+    const thrown = await sendMail({ to: 'a@b.test', subject: 's', text: 't' }).catch(
+      (error: Error) => error.message,
+    );
+    expect(thrown).not.toContain('hunter2secret');
+    expect(thrown).not.toContain('afct-mailer');
+  });
+});
+
+/**
+ * Whether waiting helps. A rejected password will be rejected again in five minutes and needs
+ * somebody to change a setting; a connection that timed out is worth another go.
+ */
+describe('deciding whether to try again', () => {
+  const withCode = (code: string) => Object.assign(new Error('nope'), { code });
+
+  it('gives up on a rejected password', () => {
+    expect(isRetryableMailFailure(withCode('EAUTH'))).toBe(false);
+  });
+
+  it('gives up on a refused sender or recipient', () => {
+    expect(isRetryableMailFailure(withCode('EENVELOPE'))).toBe(false);
+  });
+
+  it('waits on a connection that could not be made', () => {
+    expect(isRetryableMailFailure(withCode('ECONNREFUSED'))).toBe(true);
+  });
+
+  // SMTP says the same thing in its reply codes: 4xx is temporary, 5xx is not.
+  it('waits on a temporary reply code', () => {
+    expect(isRetryableMailFailure(Object.assign(new Error('busy'), { responseCode: 451 }))).toBe(
+      true,
+    );
+  });
+
+  it('gives up on a permanent reply code', () => {
+    expect(isRetryableMailFailure(Object.assign(new Error('no'), { responseCode: 550 }))).toBe(
+      false,
+    );
+  });
+
+  // Mail switched off, or a configuration that cannot be used. Retrying changes neither.
+  it('gives up when mail is not usable at all', () => {
+    expect(isRetryableMailFailure(new MailError('Email is not switched on'))).toBe(false);
   });
 });

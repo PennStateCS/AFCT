@@ -138,7 +138,7 @@ export function EmailTab({
             value,
             label: SMTP_SECURITY_LABELS[value],
           }))}
-          description="STARTTLS suits most institutional servers."
+          description="STARTTLS suits most institutional servers. Choose None only for a server that needs no sign-in: a username and password cannot be sent over an unencrypted connection."
         />
         <InputGroup
           label="Username"
@@ -146,7 +146,7 @@ export function EmailTab({
           value={username}
           setValue={(v) => setField('smtpUsername', v)}
           disabled={disabled}
-          description="Leave blank if your server does not require sign-in."
+          description="Leave blank if your server does not require sign-in. Needs STARTTLS or TLS."
         />
         <InputGroup
           label="Password"
@@ -157,7 +157,7 @@ export function EmailTab({
           setValue={setPassword}
           disabled={disabled || passwordClear}
           placeholder={passwordConfigured ? 'Saved — leave blank to keep' : 'Enter password'}
-          description="Stored encrypted, never shown again."
+          description="Stored encrypted, never shown again. Saved exactly as typed, spaces included."
         />
         {passwordConfigured && (
           <SwitchField

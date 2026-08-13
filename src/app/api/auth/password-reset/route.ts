@@ -4,7 +4,7 @@ import { readJson } from '@/lib/api/request';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getClientIp, evaluatePasswordResetRateLimit } from '@/lib/security/rate-limiter';
 import { requestPasswordReset } from '@/lib/password-reset';
-import { isMailConfigured } from '@/lib/mailer';
+import { canSendPasswordReset } from '@/lib/mailer';
 import { RequestPasswordResetSchema } from '@/schemas/password';
 
 /**
@@ -38,9 +38,18 @@ export async function POST(req: Request) {
   if (!parsed.ok) return parsed.response;
   const { email } = parsed.data;
 
-  // Not a secret, and telling someone to contact an administrator is more useful than a
-  // reassuring message about an email that is never coming.
-  if (!(await isMailConfigured())) {
+  /**
+   * Not a secret, and telling someone to contact an administrator is more useful than a
+   * reassuring message about an email that is never coming.
+   *
+   * This now also covers a site that can reach a mail server but does not know its own address,
+   * which used to send a link reading `/reset-password?token=...`. The reason is deliberately
+   * not passed on: an administrator needs it, the person locked out does not, and it would
+   * describe the server's configuration to anyone who asked.
+   */
+  const deliverable = await canSendPasswordReset();
+  if (!deliverable.ok) {
+    console.error('POST /api/auth/password-reset unavailable:', deliverable.reason);
     return NextResponse.json(
       {
         error:
@@ -64,9 +73,10 @@ export async function POST(req: Request) {
         severity: 'INFO',
         category: 'USER',
         // The address is recorded because this is an account-recovery attempt and the log is
-        // where an administrator would look after one. `delivered` says whether a link was
-        // actually sent, which is what distinguishes a real request from a probe.
-        metadata: { email, delivered: sent },
+        // where an administrator would look after one. `queued` says whether a link was made
+        // for it, which is what distinguishes a real request from a probe. It is not whether
+        // the message was *delivered*: that happens later, and the mail queue records it.
+        metadata: { email, queued: sent },
       });
     } catch (error) {
       // A mail failure is ours, not the caller's, and telling them would also tell them the

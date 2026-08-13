@@ -2,9 +2,10 @@
  * Sending mail.
  *
  * One message type today (the password-reset link), behind an interface that does not assume
- * one, so adding notifications later does not mean rewriting this. No queue yet: a reset is
- * sent in response to a person clicking a button, and a failure is worth telling them about
- * immediately rather than retrying quietly.
+ * one, so adding notifications later does not mean rewriting this. Nothing calls `sendMail`
+ * from a request any more except the admin's own test message: everything else goes through
+ * `mail-queue`, so a slow mail server cannot hold a page open or time a request differently
+ * depending on whose account it is about.
  *
  * Mail is **off unless an admin turns it on**. An install that wants nothing to do with email
  * behaves exactly as it did before this existed.
@@ -13,6 +14,7 @@
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
 import { readStoredSecret, SecretKeyError } from '@/lib/secret-encryption';
+import { getPublicAppUrl } from '@/lib/public-app-url';
 
 export type MailMessage = {
   to: string;
@@ -29,6 +31,15 @@ export class MailError extends Error {
     this.name = 'MailError';
   }
 }
+
+/**
+ * What an administrator is told when they try to authenticate over a plain connection.
+ *
+ * One string, exported, so the settings route and the mailer say the same thing rather than two
+ * near-identical sentences that drift.
+ */
+export const SMTP_AUTH_NEEDS_TLS =
+  'SMTP authentication requires STARTTLS or TLS. A username and password sent over an unencrypted connection can be read in transit, so either choose an encrypted connection or leave the username and password blank.';
 
 type SmtpConfig = {
   host: string;
@@ -71,6 +82,22 @@ export async function getSmtpConfig(): Promise<SmtpConfig | null> {
     );
   }
 
+  /**
+   * Credentials require an encrypted connection.
+   *
+   * SMTP AUTH over a plain connection puts the username and password on the wire in the clear,
+   * and for most institutions that is a directory account rather than a mail-only one. The
+   * settings route refuses to save such a combination; this is the check that matters if one
+   * arrives another way, such as a database edited by hand or a restored backup from before the
+   * rule existed.
+   *
+   * `NONE` itself stays supported. An unauthenticated local relay is a normal thing to have, and
+   * quietly upgrading the administrator's chosen transport would be its own kind of wrong.
+   */
+  if (s.smtpSecurity === 'NONE' && (s.smtpUsername || s.smtpPassword)) {
+    throw new MailError(SMTP_AUTH_NEEDS_TLS);
+  }
+
   let password: string | null = null;
   try {
     password = readStoredSecret(s.smtpPassword);
@@ -107,6 +134,30 @@ export async function isMailConfigured(): Promise<boolean> {
   }
 }
 
+/**
+ * Whether AFCT can actually deliver a password reset.
+ *
+ * Two things have to be true, and the second used to be assumed. A working mail server is no use
+ * without an address to put in the link: with `NEXTAUTH_URL` unset the email went out carrying
+ * `/reset-password?token=...`, which is not a link once it is in a mail client. Offering a
+ * recovery that cannot work is worse than saying plainly that it is unavailable, because the
+ * person waits for an email instead of asking somebody for help.
+ */
+export async function canSendPasswordReset(): Promise<
+  { ok: true } | { ok: false; reason: string }
+> {
+  const url = getPublicAppUrl();
+  if (!url.ok) return { ok: false, reason: url.message };
+  if (!(await isMailConfigured())) {
+    return {
+      ok: false,
+      reason:
+        'Email is not switched on for this site. An administrator can configure it on the Email tab in System Settings.',
+    };
+  }
+  return { ok: true };
+}
+
 function buildTransport(config: SmtpConfig) {
   return nodemailer.createTransport({
     host: config.host,
@@ -126,9 +177,31 @@ function buildTransport(config: SmtpConfig) {
  * The project's rule is that an error says what to do next rather than what failed internally,
  * and the people reading this are professors, not sysadmins.
  */
-function explain(error: unknown): string {
+/**
+ * Remove anything secret from a message before it is shown or stored.
+ *
+ * The default branch below quotes the transport's own text, which is worth having: it is often
+ * the only thing that says what a particular server objected to. It is also written by a library
+ * that has the credentials in hand, so it is not AFCT's to promise it never echoes them. Rather
+ * than reason about which nodemailer errors might, the two values are simply struck out of
+ * whatever comes back.
+ */
+function redactCredentials(message: string, config: SmtpConfig): string {
+  let safe = message;
+  for (const secret of [config.password, config.username]) {
+    // A one-character username would match everywhere and redact the whole message; anything
+    // that short is not worth hiding anyway.
+    if (secret && secret.length >= 3) safe = safe.split(secret).join('[removed]');
+  }
+  return safe;
+}
+
+function explain(error: unknown, config: SmtpConfig): string {
   const code = (error as { code?: string })?.code ?? '';
-  const message = error instanceof Error ? error.message : String(error);
+  const message = redactCredentials(
+    error instanceof Error ? error.message : String(error),
+    config,
+  );
 
   switch (code) {
     case 'EAUTH':
@@ -173,8 +246,41 @@ export async function sendMail(message: MailMessage): Promise<void> {
       ...(message.html ? { html: message.html } : {}),
     });
   } catch (error) {
-    throw new MailError(explain(error));
+    throw new MailError(explain(error, config));
   }
+}
+
+/**
+ * Whether trying again later could plausibly work.
+ *
+ * A rejected password or a refused sender address will be rejected again in five minutes and
+ * needs somebody to change a setting; a connection that timed out is worth waiting on. SMTP says
+ * the same thing in its reply codes, so a 4xx is temporary and a 5xx is not.
+ */
+export function isRetryableMailFailure(error: unknown): boolean {
+  const code = (error as { code?: string })?.code ?? '';
+  const responseCode = (error as { responseCode?: number })?.responseCode;
+
+  switch (code) {
+    case 'EAUTH':
+    case 'EENVELOPE':
+      return false;
+    case 'ECONNREFUSED':
+    case 'ENOTFOUND':
+    case 'EAI_AGAIN':
+    case 'ETIMEDOUT':
+    case 'ESOCKET':
+    case 'ECONNECTION':
+      return true;
+    default:
+      break;
+  }
+
+  if (typeof responseCode === 'number') return responseCode < 500;
+  // Mail is off, or the configuration is unusable. Neither improves by being retried, and both
+  // are things an administrator has to act on.
+  if (error instanceof MailError) return false;
+  return true;
 }
 
 /**

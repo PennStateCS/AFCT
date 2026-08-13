@@ -16,6 +16,7 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: auditMock }));
 
 import { GET, PUT } from './route';
+import { decryptSecret } from '@/lib/secret-encryption';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -772,5 +773,157 @@ describe('PUT /api/system-settings', () => {
     const res = await PUT(putBody({ timezone: 'America/New_York' }), routeCtx());
 
     expect(res.status).toBe(200);
+  });
+});
+
+/**
+ * SMTP transport security, enforced where it counts.
+ *
+ * The Email tab explains the rule, but a UI is a suggestion: this is the check that holds when a
+ * request arrives from a script, a stale tab, or a browser with the field disabled. SMTP AUTH on
+ * a plain connection puts the credentials on the wire in clear text, and at most institutions the
+ * mail account is a directory account rather than a mail-only one.
+ */
+describe('PUT /api/system-settings: SMTP transport security', () => {
+  const admin = () => authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+
+  const save = (body: Record<string, unknown>) =>
+    PUT(
+      new Request('http://localhost/api/system-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: 50, ...body }),
+      }),
+      routeCtx(),
+    );
+
+  /** What is already stored, which the rule is judged against as well as the incoming change. */
+  const stored = (over: Record<string, unknown> = {}) => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      smtpSecurity: 'STARTTLS',
+      smtpUsername: null,
+      smtpPassword: null,
+      ...over,
+    });
+    prismaMock.systemSettings.upsert.mockResolvedValue({ id: 1 });
+  };
+
+  beforeEach(() => {
+    admin();
+    process.env.AFCT_SECRET_KEY = 'k'.repeat(48);
+  });
+
+  // A local relay that wants no sign-in. Supported, and deliberately still supported.
+  it('accepts a plain connection with no credentials', async () => {
+    stored();
+
+    const res = await save({
+      smtpSecurity: 'NONE',
+      smtpHost: 'localhost',
+      smtpPort: 25,
+      smtpUsername: '',
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('refuses a plain connection with a username', async () => {
+    stored();
+
+    const res = await save({ smtpSecurity: 'NONE', smtpUsername: 'afct' });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/requires STARTTLS or TLS/);
+  });
+
+  it('refuses a plain connection with a password', async () => {
+    stored();
+
+    const res = await save({ smtpSecurity: 'NONE', smtpPassword: 'hunter2' });
+
+    expect(res.status).toBe(400);
+  });
+
+  /**
+   * The two-save walk-around. Saving credentials over STARTTLS and then switching only the
+   * encryption to None would leave exactly the configuration the rule exists to prevent, so the
+   * check reads what is already stored rather than only what this request changed.
+   */
+  it('refuses switching an already-authenticated server down to a plain connection', async () => {
+    stored({ smtpSecurity: 'STARTTLS', smtpUsername: 'afct', smtpPassword: 'encrypted' });
+
+    const res = await save({ smtpSecurity: 'NONE' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts credentials over STARTTLS', async () => {
+    stored();
+
+    const res = await save({
+      smtpSecurity: 'STARTTLS',
+      smtpHost: 'smtp.example.edu',
+      smtpPort: 587,
+      smtpUsername: 'afct',
+      smtpPassword: 'hunter2',
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('accepts credentials over TLS', async () => {
+    stored();
+
+    const res = await save({
+      smtpSecurity: 'TLS',
+      smtpHost: 'smtp.example.edu',
+      smtpPort: 465,
+      smtpUsername: 'afct',
+      smtpPassword: 'hunter2',
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  /**
+   * A password is an opaque secret. It used to be trimmed on the way in, so `" hunter2 "` was
+   * stored as `"hunter2"` and then rejected by the mail server, with nothing on any screen to
+   * say why.
+   */
+  it('stores a password with its spaces intact', async () => {
+    stored();
+
+    await save({ smtpPassword: '  spaced secret  ' });
+
+    const written = prismaMock.systemSettings.upsert.mock.calls[0]?.[0].update.smtpPassword;
+    expect(decryptSecret(written)).toBe('  spaced secret  ');
+  });
+
+  it('treats a password of only spaces as a real password', async () => {
+    stored();
+
+    await save({ smtpPassword: '   ' });
+
+    const written = prismaMock.systemSettings.upsert.mock.calls[0]?.[0].update.smtpPassword;
+    expect(decryptSecret(written)).toBe('   ');
+  });
+
+  // The write-only rule: saving the form without retyping must not wipe what is stored.
+  it('leaves the stored password alone when the field is empty', async () => {
+    stored();
+
+    await save({ smtpPassword: '' });
+
+    expect(prismaMock.systemSettings.upsert.mock.calls[0]?.[0].update).not.toHaveProperty(
+      'smtpPassword',
+    );
+  });
+
+  it('removes the stored password when asked to clear it', async () => {
+    stored();
+
+    await save({ smtpPasswordClear: true });
+
+    expect(prismaMock.systemSettings.upsert.mock.calls[0]?.[0].update.smtpPassword).toBeNull();
   });
 });
