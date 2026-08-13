@@ -57,3 +57,21 @@ export function getMonthRangeIso(
     endIso: toEndOfDayInTimezone(`${endKey}T23:59`, timezone).toISOString(),
   };
 }
+
+/**
+ * How many assignments a day cell can usefully show at a given viewport width.
+ *
+ * A cell is square, so its height is its width, and the chips inside it are text. Below `sm` a
+ * cell is about 36 pixels: room for the date and nothing else, and a chip there truncates to
+ * three or four characters, which says less than the dot the cell falls back to. The wider tiers
+ * are where a cell is tall enough to stack one, two or three legible lines.
+ *
+ * A function rather than a chain inside the effect, so the breakpoints can be read and tested in
+ * one place. Everything downstream of it is layout, which needs a browser and a person.
+ */
+export function visibleAssignmentsForWidth(width: number): number {
+  if (width < 640) return 0;
+  if (width < 768) return 1;
+  if (width < 1280) return 2;
+  return 3;
+}

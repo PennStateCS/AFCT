@@ -1,3 +1,4 @@
+import { visibleAssignmentsForWidth } from '@/lib/calendar-shared';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
@@ -125,5 +126,47 @@ describe('getAssignmentsForUserRange', () => {
     expect(prismaMock.assignment.findMany.mock.calls[0][0].select.isPublished).toBe(true);
     expect(res).toHaveLength(1);
     expect(res[0].isPublished).toBe(false);
+  });
+});
+
+/**
+ * How much a day cell tries to show at a given viewport width.
+ *
+ * The cell is square, so its height is its width. Below `sm` that is about 36 pixels, which
+ * holds the date and nothing else: a chip there truncates to three or four characters and says
+ * less than the dot the cell falls back to.
+ *
+ * Tested here rather than through the calendar, because this is the part that is a decision. The
+ * rendering it drives is layout, and jsdom does no layout: `CalendarClient.test.tsx` mocks the
+ * calendar away entirely, so no day cell renders there and a test asserting on chips would pass
+ * or fail for reasons unrelated to width.
+ */
+describe('how many assignments fit in a day cell', () => {
+  it('shows none on a phone, where the cell has room for the date alone', () => {
+    expect(visibleAssignmentsForWidth(360)).toBe(0);
+    expect(visibleAssignmentsForWidth(390)).toBe(0);
+  });
+
+  it('shows one on a small tablet', () => {
+    expect(visibleAssignmentsForWidth(640)).toBe(1);
+    expect(visibleAssignmentsForWidth(767)).toBe(1);
+  });
+
+  it('shows two at a normal window size', () => {
+    expect(visibleAssignmentsForWidth(768)).toBe(2);
+    expect(visibleAssignmentsForWidth(1279)).toBe(2);
+  });
+
+  it('shows three on a wide screen', () => {
+    expect(visibleAssignmentsForWidth(1280)).toBe(3);
+    expect(visibleAssignmentsForWidth(2560)).toBe(3);
+  });
+
+  // The boundaries are the whole content of this function, so they are what gets pinned.
+  it('changes exactly at the breakpoints and nowhere else', () => {
+    expect(visibleAssignmentsForWidth(639)).toBe(0);
+    expect(visibleAssignmentsForWidth(640)).toBe(1);
+    expect(visibleAssignmentsForWidth(767)).toBe(1);
+    expect(visibleAssignmentsForWidth(768)).toBe(2);
   });
 });
