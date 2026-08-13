@@ -27,9 +27,6 @@ import { consumeLaunch, findLaunch, nonceMatches } from '@/lib/lti/launch-transa
 /** LTI puts its claims under this prefix. Spelled out once rather than inline everywhere. */
 const CLAIM = 'https://purl.imsglobal.org/spec/lti/claim';
 
-/** How long a login request may sit before its nonce is refused. Generous for a slow sign-in. */
-export const LAUNCH_NONCE_TTL_MS = 10 * 60 * 1000;
-
 /**
  * Clock skew allowed on `exp` and `iat`.
  *
@@ -46,7 +43,7 @@ export type LaunchRefusal =
   | 'unregistered-platform'
   /** The signature did not verify against the platform's published keys. */
   | 'bad-signature'
-  /** Expired, or issued in the future, beyond the allowed clock skew. */
+  /** Expired, not yet valid, or issued in the future, beyond the allowed clock skew. */
   | 'expired'
   /** The nonce is unknown, already spent, or timed out. A replayed launch lands here. */
   | 'replayed'
@@ -250,10 +247,25 @@ export async function validateLaunch(opts: {
     if (error instanceof joseErrors.JWTClaimValidationFailed) {
       // A claim that is absent is a different problem from one that disagrees, and an
       // administrator chasing a launch needs to be told which.
-      return { ok: false, reason: error.reason === 'missing' ? 'missing-claims' : 'bad-signature' };
+      if (error.reason === 'missing') return { ok: false, reason: 'missing-claims' };
+      // A token that is not valid yet is a clock problem, not a forgery. Reported as a bad
+      // signature it sends an administrator to check the registration, which is the wrong
+      // place to look and the hardest kind of wrong to recover from.
+      if (error.claim === 'nbf') return { ok: false, reason: 'expired' };
+      return { ok: false, reason: 'bad-signature' };
     }
     return { ok: false, reason: 'bad-signature' };
   }
+
+  /**
+   * `iat` in the future.
+   *
+   * jose checks `iat` only when `maxTokenAge` is set, so without this a token dated next week
+   * verifies and then lives as long as its own `exp` says, which is however long the sender
+   * decided. Same tolerance as `exp`, since it is the same clock disagreement.
+   */
+  const issuedAt = typeof payload.iat === 'number' ? payload.iat : 0;
+  if (issuedAt > Date.now() / 1000 + CLOCK_TOLERANCE_S) return { ok: false, reason: 'expired' };
 
   // Re-checked against the registration now that the signature is proved. The lookup above used
   // the token's own word for this; this is the check that means something.
