@@ -9,8 +9,14 @@
  * apart with a stopwatch, which turns a deliberately silent endpoint into an account-enumeration
  * oracle.
  *
- * Queueing moves the whole variable part after the response. What is left in the request is a
- * row insert, which is the same work either way.
+ * Queueing moves the expensive, variable part after the response: a network round trip measured
+ * in hundreds of milliseconds becomes a row insert measured in single figures.
+ *
+ * It **reduces** the difference rather than removing it. An address with an account still does
+ * more work than one without: a token is generated and hashed, a row is written, the message is
+ * encrypted and written. That is a small and fairly constant amount, well under the noise of a
+ * network hop, and the per-address and per-IP limits stop anyone collecting the many samples it
+ * would take to see it statistically. Worth knowing rather than claiming otherwise.
  *
  * Shaped after `lti/score-queue`, deliberately: the claim-and-back-off pattern is already in the
  * codebase and there is no reason for a second one that reads differently.
@@ -108,11 +114,35 @@ export async function claimNextMail(now = new Date()) {
     id: claimed.id,
     to: claimed.toAddress,
     subject: claimed.subject,
-    /** Decrypted here and nowhere else. Never logged, never returned by an API. */
-    text: readStoredSecret(claimed.bodyEncrypted) ?? '',
+    /**
+     * Still encrypted. The caller decrypts, inside its own error handling.
+     *
+     * This used to decrypt here, which put the one operation that can throw on a stored value
+     * *outside* everything that could react to it. A body that would not decrypt, after a key
+     * change or a restore with the wrong one, threw past the sender's try block: the row had
+     * already been claimed and leased, so it stayed pending, came back five minutes later, and
+     * did the same thing for ever. `attempts` climbed and the limit that would have stopped it
+     * lives in `markMailFailed`, which never ran.
+     */
+    bodyEncrypted: claimed.bodyEncrypted,
     tokenHash: claimed.tokenHash,
     attempts: claimed.attempts,
   };
+}
+
+/**
+ * The body of a claimed message, or null when it cannot be read.
+ *
+ * Null rather than a throw, because the caller's only sensible response is to abandon the
+ * message, and that is easier to get right than a second try block. Nothing about the failure is
+ * returned: the reason would describe the key, and the ciphertext is not worth logging.
+ */
+export function readQueuedBody(claimed: { bodyEncrypted: string }): string | null {
+  try {
+    return readStoredSecret(claimed.bodyEncrypted) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Mark a queued message as delivered, and drop the body: it has served its purpose. */

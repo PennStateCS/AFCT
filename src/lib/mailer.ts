@@ -24,9 +24,20 @@ export type MailMessage = {
   html?: string;
 };
 
-/** Why a send failed, in terms an admin can act on. */
+/**
+ * Why a send failed, in terms an admin can act on.
+ *
+ * Carries `retryable` because the answer is only knowable here. Wrapping the transport's error
+ * is what makes the message safe to show and to store, and it also throws away the `code` and
+ * `responseCode` that say whether waiting would help. Deciding at the point of the throw, while
+ * the original is still in hand, is the only place that has both.
+ */
 export class MailError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    /** False for a configuration problem somebody has to fix; true for a bad moment. */
+    readonly retryable: boolean = false,
+  ) {
     super(message);
     this.name = 'MailError';
   }
@@ -148,13 +159,32 @@ export async function canSendPasswordReset(): Promise<
 > {
   const url = getPublicAppUrl();
   if (!url.ok) return { ok: false, reason: url.message };
-  if (!(await isMailConfigured())) {
+
+  /**
+   * The configuration itself, not `isMailConfigured`.
+   *
+   * The two answer different questions and only one of them is this one. `isMailConfigured`
+   * reports a broken configuration as *available* on purpose, so an administrator sees the
+   * feature and its error rather than a page pretending mail does not exist. Asked "can this
+   * site actually send a reset", that answer is simply wrong: a stored password that cannot be
+   * decrypted, or a half-filled configuration, would queue a message that can never go out and
+   * leave somebody waiting for it.
+   */
+  try {
+    if (!(await getSmtpConfig())) {
+      return {
+        ok: false,
+        reason:
+          'Email is not switched on for this site. An administrator can configure it on the Email tab in System Settings.',
+      };
+    }
+  } catch (error) {
     return {
       ok: false,
-      reason:
-        'Email is not switched on for this site. An administrator can configure it on the Email tab in System Settings.',
+      reason: error instanceof MailError ? error.message : 'The mail settings could not be read.',
     };
   }
+
   return { ok: true };
 }
 
@@ -232,6 +262,8 @@ export async function sendMail(message: MailMessage): Promise<void> {
   if (!config) {
     throw new MailError(
       'Email is not switched on for this site. An administrator can configure it on the Email tab in System Settings.',
+      // Nothing about this improves by being tried again.
+      false,
     );
   }
 
@@ -246,18 +278,21 @@ export async function sendMail(message: MailMessage): Promise<void> {
       ...(message.html ? { html: message.html } : {}),
     });
   } catch (error) {
-    throw new MailError(explain(error, config));
+    throw new MailError(explain(error, config), isRetryableTransportError(error));
   }
 }
 
 /**
- * Whether trying again later could plausibly work.
+ * Whether a *transport* error is worth another go.
  *
  * A rejected password or a refused sender address will be rejected again in five minutes and
  * needs somebody to change a setting; a connection that timed out is worth waiting on. SMTP says
  * the same thing in its reply codes, so a 4xx is temporary and a 5xx is not.
+ *
+ * Reads the raw error, so it has to be called before that error is wrapped. Everything outside
+ * this file uses `isRetryableMailFailure`.
  */
-export function isRetryableMailFailure(error: unknown): boolean {
+function isRetryableTransportError(error: unknown): boolean {
   const code = (error as { code?: string })?.code ?? '';
   const responseCode = (error as { responseCode?: number })?.responseCode;
 
@@ -277,10 +312,23 @@ export function isRetryableMailFailure(error: unknown): boolean {
   }
 
   if (typeof responseCode === 'number') return responseCode < 500;
-  // Mail is off, or the configuration is unusable. Neither improves by being retried, and both
-  // are things an administrator has to act on.
-  if (error instanceof MailError) return false;
+  // An unrecognised transport failure is more often a bad moment than a permanent refusal, and
+  // the attempt limit stops an optimistic guess from retrying for ever.
   return true;
+}
+
+/**
+ * Whether a failure from `sendMail` is worth another go.
+ *
+ * Reads the answer off the error rather than trying to recover it afterwards. Doing it the other
+ * way round made the backoff decorative: a `MailError` carries none of the transport's fields,
+ * so classifying it after the wrap saw no code and no response code, decided every failure was
+ * permanent, and gave up on the first attempt. The timeouts and 4xx replies the retry schedule
+ * was written for never reached it.
+ */
+export function isRetryableMailFailure(error: unknown): boolean {
+  if (error instanceof MailError) return error.retryable;
+  return isRetryableTransportError(error);
 }
 
 /**
