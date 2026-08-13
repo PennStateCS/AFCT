@@ -250,13 +250,19 @@ function readDeepLinkSettings(
   // Required, and declared a string. Without it there is nowhere to send the answer, and staff
   // would pick an assignment that silently goes nowhere.
   const returnUrl = claimString(settings.deep_link_return_url);
-  // Required, and both declared arrays of strings. An empty one says the platform will take
-  // nothing, which AFCT cannot serve either; the spec sets no minimum length, so refusing an
-  // empty list is AFCT reading "required" as "meaningfully present" rather than a stated rule.
+  /**
+   * Required, and both declared arrays of strings. Present and correctly typed is the whole
+   * structural test: DL 2.0 sets no minimum length on either, and its own migration table maps
+   * the older `none` presentation target onto an empty array, so an empty one is a thing a
+   * conformant platform sends rather than a broken request.
+   *
+   * `=== null` rather than a falsy check, because `[]` is falsy in the ways that matter here and
+   * an empty array has to reach the questions below rather than being refused as malformed.
+   */
   const acceptTypes = strictStringList(settings.accept_types);
   const targets = strictStringList(settings.accept_presentation_document_targets);
 
-  if (!returnUrl || !acceptTypes?.length || !targets?.length) {
+  if (!returnUrl || acceptTypes === null || targets === null) {
     return { ok: false, reason: 'deep-link-settings' };
   }
 
@@ -282,8 +288,12 @@ function readDeepLinkSettings(
     return { ok: false, reason: 'deep-link-settings' };
   }
 
-  // Not malformed: a placement that takes only files or only links is a legitimate thing to
-  // configure. AFCT simply has nothing it can offer such a request.
+  /**
+   * Whether AFCT can answer at all, which is a separate question from whether the request was
+   * well formed. A placement that takes only files, or one that takes nothing, is a legitimate
+   * thing to configure; AFCT simply has nothing it can offer it. An empty list arrives here too,
+   * and lands on the same answer for the same reason.
+   */
   if (!acceptTypes.includes(RESOURCE_LINK_TYPE)) {
     return { ok: false, reason: 'content-type-not-accepted' };
   }
