@@ -1185,3 +1185,126 @@ describe('what the platform said about a gradebook column', () => {
     ).toBe(true);
   });
 });
+
+/**
+ * The roles claim, whose shape is now judged as strictly as the deep linking arrays.
+ *
+ * Roles decide what somebody gets when their roster entry is first created, so a list AFCT had
+ * to repair before using is not one worth acting on. What is *in* the list is a separate matter:
+ * the vocabulary is open, platforms carry role URIs AFCT has never seen, and those go through
+ * untouched to be read conservatively later.
+ */
+describe('the roles claim', () => {
+  const validate = async (claims: Record<string, unknown>) =>
+    validateLaunch({ idToken: await signed(claims), state: lastState });
+
+  const rolesOf = async (claims: Record<string, unknown>) => {
+    const result = await validate(claims);
+    return result.ok ? result.identity.roles : 'refused';
+  };
+
+  it('accepts an empty list', async () => {
+    expect(await rolesOf({ [`${CLAIM}/roles`]: [] })).toEqual([]);
+  });
+
+  it('accepts a list of role URIs', async () => {
+    const roles = [
+      'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+      'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
+    ];
+
+    expect(await rolesOf({ [`${CLAIM}/roles`]: roles })).toEqual(roles);
+  });
+
+  /**
+   * An unrecognised role is not a malformed one. The vocabulary is extensible and platforms
+   * carry their own, so the value survives verification and `mapLtiRoles` decides what to do
+   * with it, which for anything it does not know is to treat the person as a student.
+   */
+  it('accepts a role it has never heard of, and passes it through untranslated', async () => {
+    const roles = ['http://example.test/vocab/SomethingAfctDoesNotKnow'];
+
+    expect(await rolesOf({ [`${CLAIM}/roles`]: roles })).toEqual(roles);
+  });
+
+  /**
+   * The filtering case. Dropping the 123 leaves a list the platform never sent, and doing that
+   * silently to the claim that decides a person's role is the wrong kind of helpful.
+   */
+  it('refuses a list with a non-string in it rather than filtering it', async () => {
+    expect(
+      await validate({ [`${CLAIM}/roles`]: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner', 123] }),
+    ).toEqual({ ok: false, reason: 'missing-claims' });
+  });
+
+  it('refuses a list holding a null', async () => {
+    expect(await validate({ [`${CLAIM}/roles`]: ['Learner', null] })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  it('refuses a bare string where a list belongs', async () => {
+    expect(await validate({ [`${CLAIM}/roles`]: 'Learner' })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  it('refuses an explicit null', async () => {
+    expect(await validate({ [`${CLAIM}/roles`]: null })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  /**
+   * Absent is where the two message types part company. Core makes roles required of a resource
+   * link launch; Deep Linking 2.0 lists them as optional, so a request without them is fine and
+   * arrives with none.
+   */
+  it('is required when it is absent from a resource link launch', async () => {
+    expect(await validate({ [`${CLAIM}/roles`]: undefined })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  it('is not required when it is absent from a deep linking request', async () => {
+    expect(await rolesOf({ ...deepLinkClaims(), [`${CLAIM}/roles`]: undefined })).toEqual([]);
+  });
+
+  // Optional does not mean unchecked: a malformed list is refused on either kind of message.
+  it('is still type-checked on a deep linking request', async () => {
+    expect(
+      await validate({ ...deepLinkClaims(), [`${CLAIM}/roles`]: ['Learner', 123] }),
+    ).toEqual({ ok: false, reason: 'missing-claims' });
+  });
+});
+
+/**
+ * `accept_multiple` says what the platform will take, not what AFCT must send. AFCT returns one
+ * assignment per response either way, so this is carried through to be stored rather than acted
+ * on, and it keeps the same three states as `accept_lineitem` because DL 2.0 gives it no default.
+ */
+describe('whether the platform takes more than one item', () => {
+  const acceptMultipleOf = async (settings: Record<string, unknown>) => {
+    const result = await validateLaunch({
+      idToken: await signed(deepLinkClaims(settings)),
+      state: lastState,
+    });
+    return result.ok ? result.identity.deepLink?.acceptMultiple : 'refused';
+  };
+
+  it('keeps an explicit true', async () => {
+    expect(await acceptMultipleOf(deepLinkSettings({ accept_multiple: true }))).toBe(true);
+  });
+
+  it('keeps an explicit false', async () => {
+    expect(await acceptMultipleOf(deepLinkSettings({ accept_multiple: false }))).toBe(false);
+  });
+
+  it('reads an omitted setting as unknown rather than as a no', async () => {
+    expect(await acceptMultipleOf(deepLinkSettings())).toBeNull();
+  });
+});
