@@ -38,6 +38,13 @@ const SIGN_IN: Record<string, string> = {
   oidc: 'with institutional sign-in',
 };
 
+/** Where a look at somebody's work came from, in words rather than the code's own labels. */
+const VIEW_SOURCE: Record<string, string> = {
+  web: 'the web app',
+  client: 'the desktop client',
+  'review-data': 'the review workspace',
+};
+
 /** How an identity came to be attached, in the words a person would use. */
 const VIA: Record<string, string> = {
   SELF_SERVICE: 'connected by the account holder',
@@ -67,6 +74,41 @@ function describeChanges(metadata: Metadata): string | null {
 // throw) or `message` (from the updater). Matched on the name so a new failure action is
 // covered without adding a case for it.
 const FAILURE = /_(ERROR|DENIED|FAILED|REJECTED|INVALID|UNAUTHORIZED|CONFLICT)$/;
+
+
+/** "3 of 5" style counts, dropping the parts that are zero so nothing reads as a row of noughts. */
+function tally(pairs: Array<[number, string]>): string | null {
+  const parts = pairs.filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`);
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
+/** The first of several keys that carries a string, since the same idea is spelled a few ways. */
+function firstStr(meta: Metadata, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = str(meta, key);
+    if (value) return value;
+  }
+  return null;
+}
+
+/** The first of several keys that carries a number. */
+function firstNum(meta: Metadata, ...keys: string[]): number {
+  for (const key of keys) {
+    if (typeof meta?.[key] === 'number') return meta[key] as number;
+  }
+  return 0;
+}
+
+/** `n thing` / `n things`, so a count reads as English rather than as `1 students`. */
+const plural = (n: number, word: string, plural = `${word}s`) => `${n} ${n === 1 ? word : plural}`;
+
+/** Course code and name, however the call site happened to spell them. */
+function courseNamed(meta: Metadata): string | null {
+  const code = firstStr(meta, 'courseCode', 'code', 'newCourseCode');
+  const name = firstStr(meta, 'courseName', 'name');
+  if (code && name) return `${code}, ${name}`;
+  return code ?? name;
+}
 
 export function describeActivity(action: string, metadata: Metadata): string | null {
   switch (action) {
@@ -188,6 +230,355 @@ export function describeActivity(action: string, metadata: Metadata): string | n
 
     case 'IDENTITY_UNLINKED':
       return str(metadata, 'issuer');
+
+    /**
+     * Somebody looked at a student's work.
+     *
+     * These carry the most weight of anything here. Under FERPA the log is the disclosure
+     * record, and "a member of staff opened something" is weak evidence next to "a member of
+     * staff opened one student's submissions". None of these names the student: the row already
+     * points at them through `targetUserId`, and putting a name in a column that is read over
+     * somebody's shoulder is its own disclosure. Scope is what the summary adds.
+     */
+    case 'VIEW_STUDENT_SUBMISSION':
+    case 'VIEW_STUDENT_REVIEW_DATA': {
+      const source = str(metadata, 'source');
+      const where = source ? (VIEW_SOURCE[source] ?? source) : null;
+      return where ? `one student, from ${where}` : 'one student';
+    }
+
+    case 'VIEW_ASSIGNMENT_SUBMISSIONS': {
+      const student = firstStr(metadata, 'viewedStudentId', 'studentId');
+      return student ? "one student's submissions" : 'the whole assignment';
+    }
+
+    case 'VIEW_STUDENT_PROBLEM_GRADES': {
+      const count = firstNum(metadata, 'problemCount', 'length');
+      return count > 0 ? `${plural(count, 'problem grade')}, one student` : 'one student';
+    }
+
+    case 'COURSE_GRADES_VIEWED': {
+      const students = firstNum(metadata, 'studentCount', 'total');
+      return students > 0 ? plural(students, 'student') : null;
+    }
+
+    case 'GRADES_EXPORTED': {
+      const parts = [
+        firstNum(metadata, 'studentCount') > 0
+          ? plural(firstNum(metadata, 'studentCount'), 'student')
+          : null,
+        metadata?.wholeGradebook === true
+          ? 'whole gradebook'
+          : firstNum(metadata, 'assignmentCount') > 0
+            ? plural(firstNum(metadata, 'assignmentCount'), 'assignment')
+            : null,
+        str(metadata, 'platform') ? `for ${str(metadata, 'platform')}` : null,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(', ') : null;
+    }
+
+    case 'ASSIGNMENT_STATISTICS_VIEWED': {
+      const people = firstNum(metadata, 'participantCount');
+      return people > 0 ? plural(people, 'participant') : null;
+    }
+
+    case 'VIEW_PROBLEM_FILE':
+      return firstStr(metadata, 'originalFileName', 'fileName', 'file');
+
+    // Grades and attempts, where the number is the entry.
+    case 'GROUP_PROBLEM_GRADE_UPDATED': {
+      const group = firstStr(metadata, 'groupName', 'name');
+      const grade = metadata?.grade;
+      const members = Array.isArray(metadata?.memberIds) ? metadata.memberIds.length : 0;
+      const head = [
+        group ? `${group}` : null,
+        grade === undefined ? null : `graded ${String(grade)}`,
+        members > 0 ? plural(members, 'member') : null,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      // Worth saying out loud: this one overwrote marks that were not all the same, so
+      // somebody's individual grade changed as a side effect of grading the group.
+      return metadata?.overwroteDiffering === true
+        ? `${head}, replaced differing marks`
+        : head || null;
+    }
+
+    case 'GRANT_EXTRA_SUBMISSIONS':
+    case 'REVOKE_EXTRA_SUBMISSIONS': {
+      const extra = firstNum(metadata, 'extraSubmissions');
+      const total = firstNum(metadata, 'totalExtraSubmissions');
+      const who = str(metadata, 'targetType') === 'GROUP' ? 'a group' : 'one student';
+      const change =
+        action === 'GRANT_EXTRA_SUBMISSIONS' ? `+${extra}` : `-${extra}`;
+      const reason = str(metadata, 'reason');
+      const head = `${change} ${extra === 1 ? 'attempt' : 'attempts'} for ${who}${
+        total > 0 ? ` (${total} in total)` : ''
+      }`;
+      return reason ? `${head}: ${reason}` : head;
+    }
+
+    case 'SUBMISSION_RERUN': {
+      const status = str(metadata, 'status');
+      return status ? `re-run, now ${status.toLowerCase()}` : 're-run';
+    }
+
+    case 'COURSE_SUBMISSIONS_RERUN': {
+      const count = firstNum(metadata, 'count');
+      return count > 0 ? `${plural(count, 'submission')} re-run` : 'nothing to re-run';
+    }
+
+    // Enrolment done in bulk, or by the student themselves.
+    case 'BULK_ENROLL_USERS':
+      return (
+        tally([
+          [firstNum(metadata, 'enrolledCount', 'count'), 'enrolled'],
+          [firstNum(metadata, 'reEnrolledCount'), 're-enrolled'],
+        ]) ?? 'nobody enrolled'
+      );
+
+    case 'REMOVE_FROM_COURSE': {
+      const count = firstNum(metadata, 'count');
+      return count > 1 ? `${plural(count, 'person', 'people')} removed` : null;
+    }
+
+    case 'COURSE_JOINED': {
+      const course = courseNamed(metadata);
+      const role = str(metadata, 'role');
+      return [course, role ? `as ${role.toLowerCase()}` : null].filter(Boolean).join(', ') || null;
+    }
+
+    // Accounts. Whose account, and what about it changed.
+    case 'CREATE_USER':
+      return firstStr(metadata, 'createdUserEmail', 'email');
+
+    case 'DELETE_USER':
+      return firstStr(metadata, 'deletedUserEmail', 'deletedUserName');
+
+    case 'UPDATE_USER': {
+      const changes = describeChanges(metadata);
+      if (changes) return changes;
+      return metadata?.avatarChanged === true ? 'profile photo' : null;
+    }
+
+    case 'BULK_CREATE_USERS':
+      return (
+        tally([
+          [firstNum(metadata, 'createdCount'), 'created'],
+          [firstNum(metadata, 'failedCount'), 'failed'],
+        ]) ?? 'nothing to create'
+      );
+
+    case 'USER_SIGNUP':
+      return firstStr(metadata, 'email', 'normalizedEmail');
+
+    case 'RESET_PASSWORD':
+    case 'RESET_STUDENT_PASSWORD':
+      return metadata?.temporaryPassword === true ? 'temporary password set' : null;
+
+    case 'CHANGE_PASSWORD':
+      return metadata?.wasTemporaryPassword === true ? 'replaced a temporary password' : null;
+
+    case 'PASSWORD_RESET_REQUESTED':
+      // Whether a link was actually made, which is what separates a real request from a probe
+      // at an address with no account.
+      return metadata?.queued === true || metadata?.sent === true
+        ? 'a link was sent'
+        : 'no account, nothing sent';
+
+    case 'UNLOCK_ACCOUNT':
+      return metadata?.wasLocked === true ? 'was locked out' : 'was not locked';
+
+    case 'CLEAR_RATE_LIMIT': {
+      const scope = str(metadata, 'scope');
+      const target = firstStr(metadata, 'targetIp', 'ip');
+      const attempts = firstNum(metadata, 'attempts', 'attemptsWhileRestricted');
+      return (
+        [scope, target, attempts > 0 ? `after ${plural(attempts, 'attempt')}` : null]
+          .filter(Boolean)
+          .join(', ') || null
+      );
+    }
+
+    case 'PROFILE_UPDATED': {
+      const changed = [
+        firstStr(metadata, 'firstName', 'userFirstName') ? 'name' : null,
+        str(metadata, 'timezone') ? 'time zone' : null,
+        metadata?.avatarUpdated === true ? 'photo' : null,
+        metadata?.avatarDeleted === true ? 'photo removed' : null,
+      ].filter(Boolean);
+      return changed.length > 0 ? changed.join(', ') : null;
+    }
+
+    case 'CLIENT_TOKEN_ISSUED':
+    case 'CLIENT_TOKEN_REVOKED':
+      return str(metadata, 'label');
+
+    // Courses and their contents.
+    case 'CREATE_COURSE':
+      return courseNamed(metadata);
+
+    case 'DELETE_COURSE': {
+      // What went with it. A deleted course takes assignments, problems and enrolments with it,
+      // and the size of that is the thing somebody asking about it wants to know.
+      const took = tally([
+        [firstNum(metadata, 'assignmentCount'), 'assignments'],
+        [firstNum(metadata, 'problemCount'), 'problems'],
+        [firstNum(metadata, 'studentCount'), 'students'],
+      ]);
+      return [courseNamed(metadata), took ? `with ${took}` : null].filter(Boolean).join(', ') || null;
+    }
+
+    case 'COURSE_DUPLICATED': {
+      const mode = firstStr(metadata, 'copyMode', 'mode');
+      return (
+        [courseNamed(metadata), mode ? `copied ${mode.toLowerCase()}` : null]
+          .filter(Boolean)
+          .join(', ') || null
+      );
+    }
+
+    case 'CREATE_ASSIGNMENT': {
+      if (metadata?.assignedToEveryone === true) return 'for everyone';
+      const count = firstNum(metadata, 'assigneeCount');
+      return count > 0 ? `for ${plural(count, 'assignee')}` : null;
+    }
+
+    case 'DELETE_ASSIGNMENT':
+    case 'REMOVE_ASSIGNMENT_PROBLEM':
+    case 'DELETE_PROBLEM':
+    case 'CREATE_PROBLEM':
+      return firstStr(metadata, 'problemTitle', 'title');
+
+    case 'UPDATE_PROBLEM': {
+      const title = firstStr(metadata, 'problemTitle', 'title');
+      const file = metadata?.fileUpdated === true ? 'file replaced' : null;
+      return [title, file].filter(Boolean).join(', ') || null;
+    }
+
+    case 'DUPLICATE_PROBLEM':
+    case 'IMPORT_PROBLEM':
+      return firstStr(metadata, 'title');
+
+    case 'DUPLICATE_ASSIGNMENT':
+    case 'IMPORT_ASSIGNMENT': {
+      const title = firstStr(metadata, 'title');
+      const problems = firstNum(metadata, 'problemCount');
+      return (
+        [title, problems > 0 ? plural(problems, 'problem') : null].filter(Boolean).join(', ') ||
+        null
+      );
+    }
+
+    case 'ADD_ASSIGNMENT_PROBLEMS': {
+      const added = Array.isArray(metadata?.addedProblemIds) ? metadata.addedProblemIds.length : 0;
+      const withWork = firstNum(metadata, 'linksWithSubmissions');
+      return (
+        [
+          added > 0 ? `${plural(added, 'problem')} added` : null,
+          // Adding to an assignment students have already submitted against is worth flagging.
+          withWork > 0 ? `${plural(withWork, 'already has', 'already have')} submissions` : null,
+        ]
+          .filter(Boolean)
+          .join(', ') || null
+      );
+    }
+
+    case 'CHANGE_ASSIGNMENT_TYPE':
+      return metadata?.isGroup === true ? 'to a group assignment' : 'to an individual assignment';
+
+    case 'CREATE_ASSIGNMENT_OVERRIDE':
+    case 'DELETE_ASSIGNMENT_OVERRIDE': {
+      const target = str(metadata, 'targetType');
+      const due = firstStr(metadata, 'dueDate', 'previousDueDate');
+      return (
+        [target ? `for a ${target.toLowerCase()}` : null, due ? `due ${due}` : null]
+          .filter(Boolean)
+          .join(', ') || null
+      );
+    }
+
+    // Group sets.
+    case 'CREATE_GROUP_SET': {
+      const name = str(metadata, 'name');
+      const groups = firstNum(metadata, 'initialGroupCount');
+      return (
+        [name, groups > 0 ? plural(groups, 'group') : null].filter(Boolean).join(', ') || null
+      );
+    }
+
+    case 'DELETE_GROUP_SET':
+    case 'DELETE_GROUP_SET_GROUP':
+      return firstStr(metadata, 'deletedName', 'name');
+
+    case 'CREATE_GROUP_SET_GROUP':
+      return str(metadata, 'name');
+
+    case 'UPDATE_GROUP_SET_GROUP': {
+      const from = str(metadata, 'previousName');
+      const to = str(metadata, 'name');
+      return from && to ? `${from} to ${to}` : (to ?? null);
+    }
+
+    case 'DUPLICATE_GROUP_SET': {
+      const name = str(metadata, 'name');
+      const members = firstNum(metadata, 'copiedMemberCount');
+      return (
+        [name, members > 0 ? `${plural(members, 'membership')} copied` : null]
+          .filter(Boolean)
+          .join(', ') || null
+      );
+    }
+
+    // Feedback on somebody's work.
+    case 'CREATE_COMMENT':
+    case 'DELETE_COMMENT':
+      return metadata?.aboutGroupId ? 'about a group' : 'about one student';
+
+    // The system itself.
+    case 'SYSTEM_SETTINGS_UPDATED': {
+      const changes = describeChanges(metadata);
+      if (changes) return changes;
+      // Secrets are recorded as whether they moved, never as values.
+      const secrets = [
+        metadata?.smtpPasswordUpdated === true ? 'mail password set' : null,
+        metadata?.smtpPasswordCleared === true ? 'mail password cleared' : null,
+        metadata?.hcaptchaSecretUpdated === true ? 'captcha secret set' : null,
+        metadata?.hcaptchaSecretCleared === true ? 'captcha secret cleared' : null,
+      ].filter(Boolean);
+      return secrets.length > 0 ? secrets.join(', ') : null;
+    }
+
+    case 'SYSTEM_UPDATE_REQUESTED':
+    case 'SYSTEM_DOWNGRADE_REQUESTED': {
+      const from = str(metadata, 'fromTag');
+      const to = str(metadata, 'tag');
+      const forced = metadata?.forced === true || metadata?.force === true;
+      const head = from && to ? `${from} to ${to}` : (to ?? null);
+      return head ? `${head}${forced ? ', forced' : ''}` : null;
+    }
+
+    case 'SYSTEM_UPDATER_SELF_UPDATE_REQUESTED':
+      return str(metadata, 'tag');
+
+    case 'SYSTEM_RESTORE_POINT_DELETE_REQUESTED':
+      return firstStr(metadata, 'version', 'restorePoint');
+
+    case 'SYSTEM_BACKUP_DOWNLOADED':
+      return str(metadata, 'file');
+
+    case 'TEST_EMAIL_SENT':
+      return firstStr(metadata, 'recipient', 'to');
+
+    case 'TLS_CERT_RESET':
+      return str(metadata, 'revertedTo');
+
+    case 'ABANDONED_FILE_DELETED':
+      return str(metadata, 'fileName');
+
+    // Not matched by the failure pattern below (it ends in _STRUCTURE) but it is one.
+    case 'PROBLEM_INVALID_FILE_STRUCTURE':
+      return str(metadata, 'error');
 
     default:
       // The two failure actions with their own cases add context to the reason.
