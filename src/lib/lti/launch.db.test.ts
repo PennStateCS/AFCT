@@ -1082,17 +1082,6 @@ describe('deep linking settings of the wrong type', () => {
     expect(await refused(deepLinkSettings({ accept_types: null }))).toEqual(malformed);
   });
 
-  // Required and meaningfully so: a platform that accepts nothing cannot be answered either.
-  it('refuses an empty list of accepted types', async () => {
-    expect(await refused(deepLinkSettings({ accept_types: [] }))).toEqual(malformed);
-  });
-
-  it('refuses an empty list of presentation targets', async () => {
-    expect(await refused(deepLinkSettings({ accept_presentation_document_targets: [] }))).toEqual(
-      malformed,
-    );
-  });
-
   it('refuses a return url that is not a string', async () => {
     expect(await refused(deepLinkSettings({ deep_link_return_url: 42 }))).toEqual(malformed);
   });
@@ -1112,6 +1101,56 @@ describe('deep linking settings of the wrong type', () => {
     const result = await refused(deepLinkSettings({ title: 42, auto_create: 'yes' }));
 
     expect(result.ok).toBe(true);
+  });
+});
+
+/**
+ * An empty list is not a malformed one.
+ *
+ * Both arrays are required and neither has a minimum length, and DL 2.0's own migration table
+ * maps the older `none` presentation target onto an empty array, so a conformant platform does
+ * send these. The two questions have to stay apart: whether the request was well formed, and
+ * whether AFCT has anything to answer it with.
+ */
+describe('deep linking settings that are empty but well formed', () => {
+  const validate = async (settings: Record<string, unknown>) =>
+    validateLaunch({ idToken: await signed(deepLinkClaims(settings)), state: lastState });
+
+  /**
+   * A platform that will display nothing in particular. AFCT does not read the targets when it
+   * builds the resource link, so there is nothing here it cannot do, and inventing a target to
+   * fill the gap would be answering with something the platform never offered.
+   */
+  it('accepts an empty list of presentation targets', async () => {
+    const result = await validate(
+      deepLinkSettings({ accept_presentation_document_targets: [] }),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      identity: { deepLink: { acceptPresentationDocumentTargets: [] } },
+    });
+  });
+
+  /**
+   * A platform that accepts no content type at all. Well formed, and nothing AFCT can satisfy,
+   * so it gets the answer that says so rather than the one that blames the request. The
+   * difference matters to whoever reads the log: one is a placement to reconfigure, the other is
+   * a request to go and repair.
+   */
+  it('calls an empty list of accepted types unsatisfiable, not malformed', async () => {
+    expect(await validate(deepLinkSettings({ accept_types: [] }))).toEqual({
+      ok: false,
+      reason: 'content-type-not-accepted',
+    });
+  });
+
+  // The same answer for a list that is full but has nothing AFCT offers.
+  it('says the same of a list holding only types AFCT cannot return', async () => {
+    expect(await validate(deepLinkSettings({ accept_types: ['file', 'link'] }))).toEqual({
+      ok: false,
+      reason: 'content-type-not-accepted',
+    });
   });
 });
 
