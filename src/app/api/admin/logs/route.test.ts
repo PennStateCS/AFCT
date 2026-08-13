@@ -3,6 +3,12 @@
 const prismaMock = vi.hoisted(() => ({
   user: { findMany: vi.fn() },
   activityLog: { findMany: vi.fn(), count: vi.fn() },
+  // The route names the records an entry points at. Absent from this mock, the tests below
+  // passed only because no fixture carried a courseId, so the lookups short-circuited and the
+  // code that resolves them never ran.
+  course: { findMany: vi.fn() },
+  assignment: { findMany: vi.fn() },
+  problem: { findMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -242,5 +248,107 @@ describe('GET /api/logging', () => {
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
     expect((await GET(request(), routeCtx())).status).toBe(500);
+  });
+});
+
+/**
+ * Naming what an entry is about.
+ *
+ * `courseId` and the rest are columns on the row, and an identifier is no use to somebody
+ * reading an audit trail. The names are resolved per page, batched the same way the author names
+ * are, so this stays a fixed number of queries however large the page is.
+ */
+describe('the records an entry points at', () => {
+  const asAdmin = () =>
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+
+  const withLogs = (logs: Record<string, unknown>[]) => {
+    prismaMock.activityLog.count.mockResolvedValue(logs.length);
+    prismaMock.activityLog.findMany.mockResolvedValue(logs);
+    prismaMock.user.findMany.mockResolvedValue([]);
+  };
+
+  it('names the course, assignment and problem', async () => {
+    asAdmin();
+    withLogs([
+      {
+        id: 'log1',
+        userId: null,
+        action: 'PROBLEM_GRADE_UPDATED',
+        timestamp: new Date(),
+        courseId: 'c1',
+        assignmentId: 'a1',
+        problemId: 'p1',
+        submissionId: 's1',
+      },
+    ]);
+    prismaMock.course.findMany.mockResolvedValue([{ id: 'c1', code: 'CMPSC 464', name: 'Theory' }]);
+    prismaMock.assignment.findMany.mockResolvedValue([{ id: 'a1', title: 'Problem set 1' }]);
+    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1', title: 'DFA' }]);
+
+    const body = await (await GET(request(), routeCtx())).json();
+
+    expect(body.rows[0].related).toEqual({
+      course: 'CMPSC 464, Theory',
+      assignment: 'Problem set 1',
+      problem: 'DFA',
+      submission: 's1',
+    });
+  });
+
+  /**
+   * The relations are `SetNull` on delete, so an id can outlive what it pointed at. A name that
+   * will not resolve becomes nothing rather than a dangling identifier.
+   */
+  it('leaves out a record that has since been deleted', async () => {
+    asAdmin();
+    withLogs([
+      { id: 'log1', userId: null, action: 'A', timestamp: new Date(), courseId: 'gone' },
+    ]);
+    prismaMock.course.findMany.mockResolvedValue([]);
+    prismaMock.assignment.findMany.mockResolvedValue([]);
+    prismaMock.problem.findMany.mockResolvedValue([]);
+
+    const body = await (await GET(request(), routeCtx())).json();
+
+    expect(body.rows[0].related.course).toBeNull();
+  });
+
+  // One query per kind for the whole page, not one per row.
+  it('resolves a page in a fixed number of queries', async () => {
+    asAdmin();
+    withLogs(
+      Array.from({ length: 25 }, (_, i) => ({
+        id: `log${i}`,
+        userId: null,
+        action: 'A',
+        timestamp: new Date(),
+        courseId: i % 2 === 0 ? 'c1' : 'c2',
+      })),
+    );
+    prismaMock.course.findMany.mockResolvedValue([
+      { id: 'c1', code: 'A', name: 'One' },
+      { id: 'c2', code: 'B', name: 'Two' },
+    ]);
+    prismaMock.assignment.findMany.mockResolvedValue([]);
+    prismaMock.problem.findMany.mockResolvedValue([]);
+
+    await GET(request(), routeCtx());
+
+    expect(prismaMock.course.findMany).toHaveBeenCalledTimes(1);
+    // Deduplicated: two distinct courses across twenty-five rows.
+    expect(prismaMock.course.findMany.mock.calls[0][0].where.id.in).toEqual(['c1', 'c2']);
+  });
+
+  // Nothing to resolve should cost nothing.
+  it('asks for nothing when no entry points anywhere', async () => {
+    asAdmin();
+    withLogs([{ id: 'log1', userId: null, action: 'A', timestamp: new Date() }]);
+
+    await GET(request(), routeCtx());
+
+    expect(prismaMock.course.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.assignment.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.problem.findMany).not.toHaveBeenCalled();
   });
 });

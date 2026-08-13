@@ -140,14 +140,70 @@ export const GET = withAdminAuth(
         : [];
       const lookup = Object.fromEntries(users.map((u) => [u.id, u]));
 
+      /**
+       * Names for the records these entries point at.
+       *
+       * The row already carries `courseId`, `assignmentId` and the rest, and an id on screen is
+       * no use to somebody reading an audit trail: "Course ID: cmr7x2..." says nothing that
+       * "CMPSC 464, Theory of Computation" does not say better.
+       *
+       * Batched per page, the same way the author names above are, so this stays four queries
+       * whatever the page size rather than four per row.
+       */
+      const idsOf = (key: 'courseId' | 'assignmentId' | 'problemId' | 'submissionId') => [
+        ...new Set(logs.map((l) => l[key]).filter((id): id is string => !!id)),
+      ];
+
+      const [courses, assignments, problems] = await Promise.all([
+        idsOf('courseId').length
+          ? prisma.course.findMany({
+              where: { id: { in: idsOf('courseId') } },
+              select: { id: true, code: true, name: true },
+            })
+          : [],
+        idsOf('assignmentId').length
+          ? prisma.assignment.findMany({
+              where: { id: { in: idsOf('assignmentId') } },
+              select: { id: true, title: true },
+            })
+          : [],
+        idsOf('problemId').length
+          ? prisma.problem.findMany({
+              where: { id: { in: idsOf('problemId') } },
+              select: { id: true, title: true },
+            })
+          : [],
+      ]);
+
+      const byId = <T extends { id: string }>(rows: T[]) =>
+        Object.fromEntries(rows.map((row) => [row.id, row])) as Record<string, T | undefined>;
+      const courseById = byId(courses);
+      const assignmentById = byId(assignments);
+      const problemById = byId(problems);
+
       const rows = logs.map((log) => {
         const u = log.userId ? lookup[log.userId] : null;
+        const course = log.courseId ? courseById[log.courseId] : null;
+        const assignment = log.assignmentId ? assignmentById[log.assignmentId] : null;
+        const problem = log.problemId ? problemById[log.problemId] : null;
         return {
           ...log,
           // Combined display name kept for the Full Log viewer / back-compat.
           userId: u ? displayName(u) : log.userId,
           userFirstName: u?.firstName ?? null,
           userLastName: u?.lastName ?? null,
+          /**
+           * What the entry is about, named. A record deleted since is simply absent: the
+           * relations are `SetNull` on delete, and an id that no longer resolves says only that
+           * something used to be there.
+           */
+          related: {
+            course: course ? `${course.code}, ${course.name}` : null,
+            assignment: assignment?.title ?? null,
+            problem: problem?.title ?? null,
+            // Submissions have no name of their own; the id is what somebody would search for.
+            submission: log.submissionId ?? null,
+          },
         };
       });
 
