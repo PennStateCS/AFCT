@@ -54,7 +54,24 @@ export type LaunchRefusal =
   /** The platform sent no email, so AFCT cannot identify or create a person. */
   | 'no-email'
   /** A claim LTI Core requires is missing, so the launch is not one AFCT can trust. */
-  | 'missing-claims';
+  | 'missing-claims'
+  /**
+   * A deep linking request whose settings are missing or malformed. Separate from
+   * `missing-claims` because what an administrator has to look at is different: the settings
+   * come from how the placement is configured, not from what the LMS shares about a person.
+   */
+  | 'deep-link-settings'
+  /**
+   * The platform said it will not take a link to a resource, which is the only thing AFCT has
+   * to offer. Not malformed, just a placement AFCT cannot answer.
+   */
+  | 'content-type-not-accepted'
+  /**
+   * The launch identifies nobody. LTI allows this, and AFCT cannot use it: choosing an
+   * assignment means knowing whose courses to offer. An AFCT policy, not a protocol failure,
+   * which is why it is its own reason rather than `missing-claims`.
+   */
+  | 'anonymous-launch';
 
 /**
  * What a deep-linking launch is asking for.
@@ -72,13 +89,22 @@ export type DeepLinkRequest = {
   data: string | null;
   /** Whether the platform will accept more than one item. */
   multiple: boolean;
-  /**
-   * The content types the platform said it will take. Empty when it did not say, which the
-   * spec treats as no restriction rather than as nothing being allowed.
-   */
+  /** The content types the platform will take. Required by DL 2.0, so never empty here. */
   acceptTypes: string[];
-  /** Whether a gradebook column may come with the link. Platforms may say they take none. */
-  acceptLineItem: boolean;
+  /**
+   * How the platform is prepared to display what it is given (`iframe`, `window`, `embed`).
+   * Required by DL 2.0. AFCT has nothing to decide from it yet, but it is kept rather than
+   * dropped: a required part of the request should survive the round trip.
+   */
+  acceptPresentationDocumentTargets: string[];
+  /**
+   * Whether a gradebook column may come with the link.
+   *
+   * Three states, not two. DL 2.0 says of an absent `accept_lineitem` that "no assumption can
+   * be made about the support of line items", so `null` is not the same as `true` and must not
+   * be collapsed into it. AFCT sends a line item only on an explicit `true`.
+   */
+  acceptLineItem: boolean | null;
 };
 
 export type LaunchIdentity = {
@@ -171,6 +197,61 @@ function claimString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/** The strings in an array claim, ignoring anything in it that is not one. */
+function stringList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+}
+
+/** The only content type AFCT has to offer, so a platform that will not take it cannot be served. */
+const RESOURCE_LINK_TYPE = 'ltiResourceLink';
+
+/**
+ * Read the deep linking settings, refusing a request that is missing what DL 2.0 requires.
+ *
+ * The old reading treated every absent field as "no restriction", which is the wrong default
+ * twice over: it accepted a malformed request, and it turned "the platform did not say" into
+ * "the platform said yes". Three of these are required, and the specification is explicit that
+ * an absent `accept_lineitem` licenses no assumption either way.
+ */
+function readDeepLinkSettings(
+  payload: JWTPayload,
+): { ok: true; request: DeepLinkRequest } | { ok: false; reason: LaunchRefusal } {
+  const settings = claimObject(payload, 'deep_linking_settings', 'lti-dl');
+  if (!settings) return { ok: false, reason: 'deep-link-settings' };
+
+  // Required. Without it there is nowhere to send the answer, and staff would pick an assignment
+  // that silently goes nowhere.
+  const returnUrl = claimString(settings.deep_link_return_url);
+  // Required. Both are arrays of strings, and an empty one says the platform will take nothing.
+  const acceptTypes = stringList(settings.accept_types);
+  const targets = stringList(settings.accept_presentation_document_targets);
+
+  if (!returnUrl || !acceptTypes?.length || !targets?.length) {
+    return { ok: false, reason: 'deep-link-settings' };
+  }
+
+  // Not malformed: a placement that takes only files or only links is a legitimate thing to
+  // configure. AFCT simply has nothing it can offer such a request.
+  if (!acceptTypes.includes(RESOURCE_LINK_TYPE)) {
+    return { ok: false, reason: 'content-type-not-accepted' };
+  }
+
+  return {
+    ok: true,
+    request: {
+      returnUrl,
+      data: claimString(settings.data),
+      multiple: settings.accept_multiple === true,
+      acceptTypes,
+      acceptPresentationDocumentTargets: targets,
+      // Three states. `true` and `false` are what the platform said; `null` is that it did not
+      // say, which DL 2.0 leaves as unknown rather than as permission.
+      acceptLineItem: typeof settings.accept_lineitem === 'boolean' ? settings.accept_lineitem : null,
+    },
+  };
+}
+
 /**
  * Verify a launch token and say who it is for.
  *
@@ -237,10 +318,16 @@ export async function validateLaunch(opts: {
       issuer: platform.issuer,
       audience: platform.clientId,
       clockTolerance: CLOCK_TOLERANCE_S,
-      // jose checks these only when they are present, so a token with no `exp` would otherwise
-      // verify and never expire. `sub` is here because it names the person: without it the
-      // identity below was built from the string "undefined", which every such launch shares.
-      requiredClaims: ['exp', 'iat', 'sub', 'nonce'],
+      /**
+       * jose checks these only when they are present, so a token with no `exp` would otherwise
+       * verify and never expire.
+       *
+       * `sub` is deliberately *not* here. It used to be, which made every message without one a
+       * signature-level failure, and Deep Linking 2.0 does not require it. Whether a subject is
+       * needed depends on the message and on what AFCT is going to do with it, so it is decided
+       * further down rather than by the verifier.
+       */
+      requiredClaims: ['exp', 'iat', 'nonce'],
     }));
   } catch (error) {
     if (error instanceof joseErrors.JWTExpired) return { ok: false, reason: 'expired' };
@@ -283,12 +370,16 @@ export async function validateLaunch(opts: {
   }
 
   /**
-   * A deep-linking request with nowhere to send the answer cannot be completed, and a tool that
-   * pretended otherwise would leave staff picking something that silently goes nowhere.
+   * The deep linking settings, which DL 2.0 requires of a deep linking request and which mean
+   * nothing on any other message. Parsed before the launch record is spent, so a placement
+   * configured wrongly can be corrected and tried again rather than burning the launch.
    */
-  const settings = claimObject(payload, 'deep_linking_settings', 'lti-dl');
-  const returnUrl = settings ? claimString(settings.deep_link_return_url) : null;
-  if (isDeepLink && !returnUrl) return { ok: false, reason: 'wrong-message-type' };
+  let deepLink: DeepLinkRequest | null = null;
+  if (isDeepLink) {
+    const parsed = readDeepLinkSettings(payload);
+    if (!parsed.ok) return { ok: false, reason: parsed.reason };
+    deepLink = parsed.request;
+  }
 
   // Consumed rather than compared, so a captured launch replayed a second time finds the nonce
   // already spent. This is the only check here that changes state, and it is deliberately last
@@ -297,14 +388,27 @@ export async function validateLaunch(opts: {
   if (!nonce) return { ok: false, reason: 'replayed' };
 
   /**
-   * The claims LTI Core requires of a launch, checked after the signature rather than read
-   * hopefully. A signed token is only as good as what it actually says.
+   * The claims required of *this* message, which is not the same set for both kinds.
+   *
+   * `target_link_uri` is Core, so both kinds carry it. The rest belong to a resource link
+   * launch: Deep Linking 2.0 dropped `sub` outright ("no longer required for Deep Linking
+   * Launch for the User") and lists roles as optional, so requiring either of a deep linking
+   * request refuses launches a conformant platform is entitled to send.
    */
-  const subject = claimString(payload.sub);
   const targetLinkUri = claimString(payload[`${CLAIM}/target_link_uri`]);
+  if (!targetLinkUri) return { ok: false, reason: 'missing-claims' };
+
+  const subject = claimString(payload.sub);
   const rolesClaim = payload[`${CLAIM}/roles`];
-  if (!subject || !targetLinkUri || !Array.isArray(rolesClaim)) {
-    return { ok: false, reason: 'missing-claims' };
+  const resourceLink = claimObject(payload, 'resource_link');
+  const resourceLinkId = resourceLink ? claimString(resourceLink.id) : null;
+
+  if (!isDeepLink) {
+    // Core makes all three required of a resource link launch. Roles may be an empty array,
+    // but the claim itself has to be there.
+    if (!Array.isArray(rolesClaim) || !resourceLinkId) {
+      return { ok: false, reason: 'missing-claims' };
+    }
   }
 
   /**
@@ -330,16 +434,24 @@ export async function validateLaunch(opts: {
   // Spent last, and conditionally, so two copies of one launch cannot both succeed.
   if (!(await consumeLaunch(transaction.id))) return { ok: false, reason: 'replayed' };
 
+  /**
+   * From here on the checks are AFCT's, not the protocol's, and they are kept apart on purpose.
+   *
+   * LTI allows a launch that identifies nobody: Core says a tool "must interpret the lack of a
+   * `sub` claim as a launch request coming from an anonymous user", and a platform may withhold
+   * the email address as well. AFCT cannot act on either. It signs people in, attaches work to
+   * an account and shows a member of staff their own courses, none of which is possible without
+   * knowing who arrived. So it refuses, under its own names rather than pretending the platform
+   * sent a malformed message.
+   */
+  if (!subject) return { ok: false, reason: 'anonymous-launch' };
+
   const email = claimString(payload.email)?.trim().toLowerCase();
   // Canvas can be configured not to share an address. There is nothing AFCT can do with a person
   // it cannot name, so this refuses rather than inventing one.
   if (!email) return { ok: false, reason: 'no-email' };
 
   const context = claimObject(payload, 'context');
-  const resourceLink = claimObject(payload, 'resource_link');
-  const resourceLinkId = resourceLink ? claimString(resourceLink.id) : null;
-  // Required for a resource link launch, and meaningless on a deep linking one.
-  if (!isDeepLink && !resourceLinkId) return { ok: false, reason: 'missing-claims' };
 
   return {
     ok: true,
@@ -349,7 +461,10 @@ export async function validateLaunch(opts: {
       issuer: platform.issuer,
       email,
       ...namesFrom(payload),
-      roles: rolesClaim.filter((r): r is string => typeof r === 'string'),
+      // Optional on a deep linking request, so an absent claim is no roles rather than a refusal.
+      roles: Array.isArray(rolesClaim)
+        ? rolesClaim.filter((r): r is string => typeof r === 'string')
+        : [],
       contextId: context ? claimString(context.id) : null,
       contextTitle: context ? (claimString(context.title) ?? claimString(context.label)) : null,
       resourceLinkId,
@@ -365,19 +480,7 @@ export async function validateLaunch(opts: {
         const custom = claimObject(payload, 'custom');
         return custom ? claimString(custom.afct_assignment_id) : null;
       })(),
-      deepLink:
-        isDeepLink && returnUrl
-          ? {
-              returnUrl,
-              data: settings ? claimString(settings.data) : null,
-              multiple: settings?.accept_multiple === true,
-              acceptTypes: Array.isArray(settings?.accept_types)
-                ? settings.accept_types.filter((t): t is string => typeof t === 'string')
-                : [],
-              // Only false when the platform actually says so; absent means no restriction.
-              acceptLineItem: settings?.accept_lineitem !== false,
-            }
-          : null,
+      deepLink,
       targetLinkUri,
     },
   };
@@ -398,6 +501,12 @@ export function launchRefusalMessage(reason: LaunchRefusal): string {
       return 'The launch came from a different deployment than the one registered. Check the deployment id in the registration.';
     case 'missing-claims':
       return 'The launch was missing information LTI requires, so AFCT could not trust it. An administrator needs to check what the LMS is configured to send.';
+    case 'deep-link-settings':
+      return 'Your LMS asked AFCT to choose something but did not say where to send the answer or what it will accept. An administrator needs to check how the AFCT placement is configured in the LMS.';
+    case 'content-type-not-accepted':
+      return 'This place in your LMS does not accept links to an assignment, which is the only thing AFCT can add. Add AFCT somewhere that takes an external tool link instead.';
+    case 'anonymous-launch':
+      return 'Your LMS opened AFCT without saying who you are, so AFCT cannot sign you in. An administrator needs to let AFCT see the user identity in the LMS privacy settings.';
     case 'wrong-message-type':
       return 'AFCT can only be opened as an assignment or link from your LMS.';
     case 'bad-signature':

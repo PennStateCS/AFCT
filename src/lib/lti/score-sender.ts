@@ -13,8 +13,23 @@ import type { AgsFailure } from '@/lib/lti/ags';
 /** How often to look for work. */
 const SEND_INTERVAL_MS = 60_000;
 
-/** Failures worth waiting on, as opposed to ones a person has to fix. */
-const RETRYABLE: AgsFailure[] = ['unreachable', 'no-token'];
+/**
+ * Failures worth waiting on, as opposed to ones a person has to fix.
+ *
+ * The line item lookup ones are here because they are transient by nature: the platform was
+ * unreachable, slow, or paging oddly, and none of that is something faculty can act on. They
+ * matter more than most, since the alternative to retrying was creating a duplicate column.
+ *
+ * A failed *update* is deliberately not retryable. It means the platform would not accept the
+ * new maximum, and repeating a request it already refused will not change that: somebody has to
+ * look at the column.
+ */
+const RETRYABLE: AgsFailure[] = [
+  'unreachable',
+  'no-token',
+  'line-item-lookup-incomplete',
+  'line-item-lookup-failed',
+];
 
 let started = false;
 

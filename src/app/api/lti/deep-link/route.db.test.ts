@@ -96,6 +96,11 @@ beforeEach(async () => {
       contextId: 'ctx-1',
       returnUrl: RETURN_URL,
       data: 'platform-state',
+      // What Deep Linking 2.0 requires of the request this row was made from. A pending choice
+      // only exists because a launch was validated, so these are always present in practice.
+      acceptTypes: ['ltiResourceLink'],
+      acceptPresentationDocumentTargets: ['iframe', 'window'],
+      acceptLineItem: true,
       userId: ids.faculty,
       expiresAt: new Date(Date.now() + 60_000),
     },

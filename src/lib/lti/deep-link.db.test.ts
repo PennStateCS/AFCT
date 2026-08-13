@@ -28,6 +28,11 @@ const build = (over: Partial<Parameters<typeof buildDeepLinkResponse>[0]> = {}) 
         assignmentId: 'a-1',
       },
     ],
+    // Deep Linking 2.0 makes accept_types required, and AFCT only sends a line item when the
+    // platform has said it takes one. Both are spelled out here so each case below changes one
+    // thing rather than leaning on a default.
+    acceptTypes: ['ltiResourceLink'],
+    acceptLineItem: true,
     ...over,
   });
 
@@ -170,9 +175,9 @@ describe('what the platform said it would accept', () => {
     expect(items[0]?.lineItem).toBeUndefined();
   });
 
-  it('still sends one when the platform did not object', async () => {
+  it('sends one when the platform said it takes them', async () => {
     await createKeyPair();
-    const result = await build({ acceptTypes: ['ltiResourceLink'] });
+    const result = await build({ acceptLineItem: true });
     if (!result.ok) return;
 
     const keyset = createLocalJWKSet({ keys: (await listPublicJwks()) as unknown as JWK[] });
@@ -197,10 +202,37 @@ describe('what the platform said it would accept', () => {
     });
   });
 
-  // Saying nothing is not the same as refusing everything.
-  it('treats an empty list as no restriction', async () => {
+  /**
+   * This used to assert the opposite, that an empty list meant no restriction. Deep Linking 2.0
+   * makes accept_types required, and an empty array says the platform will take nothing, so
+   * reading it as permission was the wrong way round.
+   */
+  it('refuses an empty list rather than reading it as no restriction', async () => {
     await createKeyPair();
 
-    expect((await build({ acceptTypes: [] })).ok).toBe(true);
+    expect(await build({ acceptTypes: [] })).toEqual({ ok: false, reason: 'type-not-accepted' });
+  });
+
+  /**
+   * The three states of accept_lineitem. DL 2.0 says that when it is absent "no assumption can
+   * be made about the support of line items", so silence must not be read as consent: a
+   * response carrying a line item the platform never agreed to can be rejected outright, which
+   * loses the staff member's whole choice rather than just the column.
+   */
+  it('leaves out the gradebook column when the platform did not say', async () => {
+    await createKeyPair();
+    const result = await build({ acceptLineItem: null });
+    if (!result.ok) return;
+
+    const keyset = createLocalJWKSet({ keys: (await listPublicJwks()) as unknown as JWK[] });
+    const { payload } = await jwtVerify(result.jwt, keyset, {
+      issuer: PLATFORM.clientId,
+      audience: PLATFORM.issuer,
+    });
+    const items = payload['https://purl.imsglobal.org/spec/lti-dl/claim/content_items'] as {
+      lineItem?: unknown;
+    }[];
+
+    expect(items[0]?.lineItem).toBeUndefined();
   });
 });

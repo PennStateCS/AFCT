@@ -21,21 +21,68 @@ let contextLinkId = '';
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-/** A platform that hands out a token and accepts whatever it is sent. */
-function acceptingPlatform() {
+/** The URL the fake platform gives the column it creates. */
+const LINE_ITEM_URL = `${LINE_ITEMS_URL}/42`;
+
+/**
+ * What a platform keeps on a column that AFCT has no business changing.
+ *
+ * AGS says a PUT replaces the whole definition, so these are what a careless update destroys:
+ * the dates the column is available, the platform's own tag, and whatever extensions it hangs
+ * off the line item.
+ */
+const PLATFORM_OWNED = {
+  startDateTime: '2026-01-06T00:00:00Z',
+  endDateTime: '2026-05-01T00:00:00Z',
+  tag: 'week-one',
+  'https://canvas.instructure.com/lti/submission_type': { type: 'external_tool' },
+};
+
+/**
+ * A platform that answers the way AGS says one should.
+ *
+ * The shapes are the point. A line item *container* is a JSON array; a single line item is an
+ * object; a PUT answers with the column as it now stands. The fake this replaced returned the
+ * same body for every GET, so a lookup read a single column as an empty container and an update
+ * read a container as a column, and neither showed up because nothing asserted on what came
+ * back.
+ */
+function acceptingPlatform(opts: { existing?: Record<string, unknown> | null } = {}) {
   const calls: {
     url: string;
     body: unknown;
     headers: Record<string, string>;
     method: string;
   }[] = [];
-  const mock = vi.fn(async (url: string, init: RequestInit) => {
-    const headers = (init?.headers ?? {}) as Record<string, string>;
+  /** The one column this platform knows about, if any. */
+  let stored: Record<string, unknown> | null = opts.existing ?? null;
+
+  const mock = vi.fn(async (url: string, init: RequestInit = {}) => {
+    const headers = (init.headers ?? {}) as Record<string, string>;
+    const method = init.method ?? 'GET';
     if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
-    // A platform with no column for this assignment yet. Only writes are recorded.
-    if (!init?.method || init.method === 'GET') return json([]);
-    calls.push({ url, body: JSON.parse(String(init.body)), headers, method: init.method ?? 'GET' });
-    return json({ id: `${LINE_ITEMS_URL}/42` });
+
+    // Checked before the container, since the column's URL starts with the container's.
+    const isColumn = url.startsWith(LINE_ITEM_URL) && !url.includes('/scores');
+
+    if (method === 'GET') {
+      if (isColumn) return stored ? json(stored) : json({ error: 'gone' }, 404);
+      return json(stored ? [stored] : []);
+    }
+
+    calls.push({ url, body: JSON.parse(String(init.body)), headers, method });
+
+    if (method === 'PUT') {
+      // A real platform returns the updated line item, which is what lets AFCT confirm the
+      // maximum actually took rather than trusting the status code.
+      stored = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return json(stored);
+    }
+    if (method === 'POST' && !url.includes('/scores')) {
+      stored = { ...(JSON.parse(String(init.body)) as object), id: LINE_ITEM_URL };
+      return json(stored);
+    }
+    return json({});
   });
   vi.stubGlobal('fetch', mock);
   return calls;
@@ -342,5 +389,286 @@ describe('finding the LMS id for a person', () => {
     });
 
     expect(await findLtiUserId({ userId: USER, issuer: ISSUER })).toBeNull();
+  });
+});
+
+/**
+ * Whether the column already exists, and what happens when AFCT cannot find out.
+ *
+ * The lookup used to answer `null` both for "there is no column" and for "I could not tell", and
+ * the caller read either as permission to create one. That is how a gradebook ends up with two
+ * columns for one assignment, which is confusing for a student and awkward for faculty to
+ * unpick. Every case below therefore asserts the same thing twice: the outcome, and that nothing
+ * was created.
+ */
+describe('looking for an existing column', () => {
+  /** A platform whose container answers however a test says, with pages if it wants. */
+  function pagingPlatform(pages: Array<{ body: unknown; next?: string; status?: number }>) {
+    const created: string[] = [];
+    let page = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+        if ((init.method ?? 'GET') !== 'GET') {
+          created.push(url);
+          return json({ id: LINE_ITEM_URL });
+        }
+        const answer = pages[Math.min(page, pages.length - 1)];
+        page += 1;
+        if (answer?.status && answer.status >= 400) {
+          return new Response('nope', { status: answer.status });
+        }
+        return new Response(JSON.stringify(answer?.body ?? []), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(answer?.next ? { Link: `<${answer.next}>; rel="next"` } : {}),
+          },
+        });
+      }),
+    );
+    return created;
+  }
+
+  const column = (id: string) => ({ id, label: 'Problem set 1', scoreMaximum: 100 });
+
+  it('finds one on the first page', async () => {
+    const created = pagingPlatform([{ body: [column(LINE_ITEM_URL)] }]);
+
+    expect(await ensure()).toEqual({ ok: true, value: LINE_ITEM_URL });
+    expect(created).toHaveLength(0);
+  });
+
+  // The reason paging is followed at all: stopping at page one creates a second column.
+  it('finds one on a later page', async () => {
+    const created = pagingPlatform([
+      { body: [], next: `${LINE_ITEMS_URL}?page=2` },
+      { body: [], next: `${LINE_ITEMS_URL}?page=3` },
+      { body: [column(LINE_ITEM_URL)] },
+    ]);
+
+    expect(await ensure()).toEqual({ ok: true, value: LINE_ITEM_URL });
+    expect(created).toHaveLength(0);
+  });
+
+  // The one case that may create: every page was read and it genuinely was not there.
+  it('creates one when every page has been read and it is absent', async () => {
+    const created = pagingPlatform([{ body: [] }]);
+
+    expect((await ensure()).ok).toBe(true);
+    expect(created).toHaveLength(1);
+  });
+
+  it('creates nothing when the pages repeat', async () => {
+    const created = pagingPlatform([{ body: [], next: `${LINE_ITEMS_URL}?resource_id=${ASSIGNMENT}` }]);
+
+    expect(await ensure()).toMatchObject({ ok: false, reason: 'line-item-lookup-incomplete' });
+    expect(created).toHaveLength(0);
+  });
+
+  // Twenty-one pages of columns, each pointing at another. The list was never exhausted.
+  it('creates nothing when the page limit is reached with more to come', async () => {
+    let n = 0;
+    const created = pagingPlatform(
+      Array.from({ length: 25 }, () => ({ body: [], next: `${LINE_ITEMS_URL}?page=${(n += 1)}` })),
+    );
+
+    expect(await ensure()).toMatchObject({ ok: false, reason: 'line-item-lookup-incomplete' });
+    expect(created).toHaveLength(0);
+  });
+
+  // A refusal will be a refusal tomorrow, so it is reported as one rather than retried for a day.
+  it('creates nothing when the platform refuses the lookup', async () => {
+    const created = pagingPlatform([{ body: null, status: 403 }]);
+
+    expect(await ensure()).toMatchObject({ ok: false, reason: 'rejected' });
+    expect(created).toHaveLength(0);
+  });
+
+  // A server error is worth waiting on, and still must not create.
+  it('creates nothing when the platform errors, and asks to be retried', async () => {
+    const created = pagingPlatform([{ body: null, status: 503 }]);
+
+    expect(await ensure()).toMatchObject({ ok: false, reason: 'line-item-lookup-failed' });
+    expect(created).toHaveLength(0);
+  });
+
+  /**
+   * AGS says an empty container "MUST just be an empty array". An object is not an empty list,
+   * and reading it as one is exactly the bug: this is what a platform returning an error
+   * document, or an HTML page, looks like from here.
+   */
+  it('creates nothing when the answer is not a list at all', async () => {
+    const created = pagingPlatform([{ body: { error: 'unauthorised' } }]);
+
+    expect(await ensure()).toMatchObject({ ok: false, reason: 'line-item-lookup-failed' });
+    expect(created).toHaveLength(0);
+  });
+
+  it('creates nothing when the platform cannot be reached', async () => {
+    const created: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+        if ((init.method ?? 'GET') !== 'GET') created.push(url);
+        throw new Error('ECONNREFUSED');
+      }),
+    );
+
+    expect(await ensure()).toMatchObject({ ok: false, reason: 'line-item-lookup-failed' });
+    expect(created).toHaveLength(0);
+  });
+
+  /**
+   * The `Link` header is written by the platform and this request carries a bearer token, so a
+   * next page on another host would hand that token to whoever the header named.
+   */
+  it('will not follow a page onto another server', async () => {
+    const created = pagingPlatform([{ body: [], next: 'https://elsewhere.test/line_items?page=2' }]);
+
+    expect(await ensure()).toMatchObject({ ok: false, reason: 'line-item-lookup-failed' });
+    expect(created).toHaveLength(0);
+  });
+});
+
+/**
+ * Changing a column that already exists.
+ *
+ * A platform scales a score against the column's own maximum, so posting 120 to a column still
+ * set out of 100 when the assignment is now out of 150 reports a mark that is simply wrong. The
+ * name is cosmetic and is treated as such.
+ */
+describe('keeping the column in step with the assignment', () => {
+  const repoint = (over: { label?: string; scoreMaximum?: number } = {}) =>
+    ensureLineItem({
+      platform: PLATFORM,
+      contextLinkId,
+      lineItemsUrl: LINE_ITEMS_URL,
+      assignmentId: ASSIGNMENT,
+      label: over.label ?? 'Problem set 1',
+      scoreMaximum: over.scoreMaximum ?? 100,
+    });
+
+  /** A platform that has the column and refuses whatever a test says it should. */
+  function stubbornPlatform(opts: { failGet?: boolean; failPut?: boolean; clampTo?: number }) {
+    const stored: Record<string, unknown> = {
+      id: LINE_ITEM_URL,
+      label: 'Problem set 1',
+      scoreMaximum: 100,
+      ...PLATFORM_OWNED,
+    };
+    const puts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+        const method = init.method ?? 'GET';
+        if (method === 'GET') {
+          if (opts.failGet) return new Response('no', { status: 500 });
+          return json(stored);
+        }
+        if (method === 'PUT') {
+          puts.push(JSON.parse(String(init.body)));
+          if (opts.failPut) return new Response('no', { status: 400 });
+          const sent = JSON.parse(String(init.body)) as Record<string, unknown>;
+          // A platform that quietly keeps its own maximum, which a status code alone hides.
+          return json({ ...sent, ...(opts.clampTo ? { scoreMaximum: opts.clampTo } : {}) });
+        }
+        return json({});
+      }),
+    );
+    return puts;
+  }
+
+  /** Put a column in place, then let a test change what the assignment is worth. */
+  async function withExistingColumn() {
+    acceptingPlatform();
+    await ensure();
+  }
+
+  it('sends the new maximum and records it', async () => {
+    await withExistingColumn();
+    const puts = stubbornPlatform({});
+
+    expect(await repoint({ scoreMaximum: 150 })).toEqual({ ok: true, value: LINE_ITEM_URL });
+    expect(puts[0]).toMatchObject({ scoreMaximum: 150 });
+    expect((await prisma.ltiLineItem.findFirstOrThrow()).scoreMaximum).toBe(150);
+  });
+
+  /**
+   * AGS: a PUT "replaces the line item definition", so everything the platform owns has to go
+   * back with it. Sending only the fields AFCT knows about silently deletes the rest.
+   */
+  it('puts back everything the platform owns', async () => {
+    await withExistingColumn();
+    const puts = stubbornPlatform({});
+
+    await repoint({ scoreMaximum: 150 });
+
+    expect(puts[0]).toMatchObject(PLATFORM_OWNED);
+  });
+
+  /**
+   * The case the whole gate exists for: LMS column out of 100, assignment now out of 150, the
+   * update refused. Sending 120/150 anyway would put a wrong mark in the gradebook.
+   */
+  it('refuses to grade when the maximum could not be changed', async () => {
+    await withExistingColumn();
+    stubbornPlatform({ failPut: true });
+
+    expect(await repoint({ scoreMaximum: 150 })).toMatchObject({
+      ok: false,
+      reason: 'line-item-update-failed',
+    });
+    // Untouched, so the next attempt tries the change again instead of believing it worked.
+    expect((await prisma.ltiLineItem.findFirstOrThrow()).scoreMaximum).toBe(100);
+  });
+
+  /**
+   * A 200 says the platform accepted the request, not that the column now reads 150. One that
+   * keeps its own maximum has to be caught by reading the answer, or the same wrong mark goes
+   * out with nothing to show for it.
+   */
+  it('refuses to grade when the platform says it kept the old maximum', async () => {
+    await withExistingColumn();
+    stubbornPlatform({ clampTo: 100 });
+
+    expect(await repoint({ scoreMaximum: 150 })).toMatchObject({
+      ok: false,
+      reason: 'line-item-update-failed',
+    });
+  });
+
+  /**
+   * There used to be a fallback here: if the read failed, send a minimal replacement anyway.
+   * Since a PUT replaces the whole definition, that discarded everything the platform owned at
+   * exactly the moment AFCT knew least about what it was discarding.
+   */
+  it('sends no replacement at all when the column cannot be read first', async () => {
+    await withExistingColumn();
+    const puts = stubbornPlatform({ failGet: true });
+
+    expect(await repoint({ scoreMaximum: 150 })).toMatchObject({
+      ok: false,
+      reason: 'line-item-update-failed',
+    });
+    expect(puts).toHaveLength(0);
+  });
+
+  /**
+   * A stale name is a blemish, not a wrong grade, so refusing to grade over one would be the
+   * worse trade. The stored copy stays as it was, which is what makes the rename retry later.
+   */
+  it('still grades when only the name could not be changed', async () => {
+    await withExistingColumn();
+    stubbornPlatform({ failPut: true });
+
+    expect(await repoint({ label: 'Problem set 1 (revised)' })).toEqual({
+      ok: true,
+      value: LINE_ITEM_URL,
+    });
+    expect((await prisma.ltiLineItem.findFirstOrThrow()).label).toBe('Problem set 1');
   });
 });

@@ -29,7 +29,20 @@ export type AgsFailure =
    * The AFCT course is open from several LMS courses and AFCT cannot tell which one this
    * student belongs to, so it will not guess which gradebook to write to.
    */
-  | 'ambiguous-context';
+  | 'ambiguous-context'
+  /**
+   * AFCT could not read the whole list of columns, so it does not know whether one already
+   * exists. Distinct from a plain failure because it is the case where creating a column would
+   * duplicate one that is already there, which is the outcome worth avoiding most.
+   */
+  | 'line-item-lookup-incomplete'
+  /** The lookup itself failed. Same consequence as above: do not create, try again later. */
+  | 'line-item-lookup-failed'
+  /**
+   * The column's maximum had to change and the platform would not take the change. Sending the
+   * score anyway would report it against the old maximum, which is a wrong grade.
+   */
+  | 'line-item-update-failed';
 
 export type AgsResult<T> =
   { ok: true; value: T } | { ok: false; reason: AgsFailure; detail?: string };
@@ -100,43 +113,117 @@ function nextPage(response: Response): string | null {
   return null;
 }
 
+/**
+ * What a lookup actually established.
+ *
+ * The point of the four cases is that only one of them may lead to creating a column. Returning
+ * null for both "there is no column" and "I could not find out" is how a gradebook ends up with
+ * two columns for one assignment: every failure read as an invitation to make another.
+ */
+export type LineItemLookup =
+  | { status: 'found'; url: string }
+  /** Every page was read and none of them had it. The only case that may create. */
+  | { status: 'not-found' }
+  /** Pages ran out, or repeated, before the list was exhausted. It may or may not be there. */
+  | { status: 'incomplete'; detail: string }
+  /**
+   * The platform refused, was unreachable, or answered with something unreadable.
+   *
+   * `httpStatus` is carried because it decides whether waiting helps. A 404 or a 403 on the
+   * column list will say the same thing tomorrow and needs somebody to look at the
+   * registration; a 503 or a dropped connection is worth retrying. Both must still fail closed.
+   */
+  | { status: 'error'; detail: string; httpStatus?: number };
+
+/**
+ * A page URL the platform handed back, if it is safe to follow.
+ *
+ * The `Link` header is the platform's to write, and this request carries a bearer token. A next
+ * page pointing somewhere else would send that token to whatever host the header named, so a
+ * page is only followed on the origin the lookup started from.
+ */
+function samePageOrigin(candidate: string, origin: string): string | null {
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.origin === origin ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function findLineItem(
   lineItemsUrl: string,
   token: string,
   resourceId: string,
-): Promise<string | null> {
+): Promise<LineItemLookup> {
+  let first: URL;
   try {
-    const first = new URL(lineItemsUrl);
-    first.searchParams.set('resource_id', resourceId);
+    first = new URL(lineItemsUrl);
+  } catch {
+    return { status: 'error', detail: 'the line items address is not a URL' };
+  }
+  // AGS defines `resource_id` as the filter for finding your own column.
+  first.searchParams.set('resource_id', resourceId);
 
-    // AGS lets a platform page the line items even when filtering, so the column may not be on
-    // the first page. Concluding "not there" from page one creates a second column.
-    let next: string | null = first.toString();
-    const seen = new Set<string>();
+  const origin = first.origin;
+  // AGS lets a platform page the line items even when filtering, so the column may not be on the
+  // first page. Concluding "not there" from page one creates a second column.
+  let next: string | null = first.toString();
+  const seen = new Set<string>();
 
-    for (let page = 0; next && page < MAX_LINE_ITEM_PAGES; page++) {
-      if (seen.has(next)) break;
-      seen.add(next);
+  for (let page = 0; page < MAX_LINE_ITEM_PAGES; page++) {
+    if (seen.has(next)) {
+      return { status: 'incomplete', detail: 'the line item pages repeat' };
+    }
+    seen.add(next);
 
-      const response: Response = await fetch(next, {
+    let response: Response;
+    try {
+      response = await fetch(next, {
         headers: { Authorization: `Bearer ${token}`, Accept: LINE_ITEM_CONTAINER_TYPE },
       });
-      if (!response.ok) return null;
-
-      const body = (await response.json().catch(() => null)) as unknown;
-      const items = Array.isArray(body) ? body : [];
-      for (const item of items) {
-        const id = (item as { id?: unknown })?.id;
-        if (typeof id === 'string') return id;
-      }
-
-      next = nextPage(response);
+    } catch (error) {
+      return {
+        status: 'error',
+        detail: error instanceof Error ? error.message : 'network error',
+      };
     }
-    return null;
-  } catch {
-    // Only ever an optimisation: creating still works if this fails.
-    return null;
+
+    if (!response.ok) {
+      return {
+        status: 'error',
+        detail: `the platform answered ${response.status}`,
+        httpStatus: response.status,
+      };
+    }
+
+    const body = (await response.json().catch(() => undefined)) as unknown;
+    // AGS: a line item container is a JSON array, and an empty result "MUST just be an empty
+    // array". Anything else means the answer was not understood, which is not the same as the
+    // column being absent.
+    if (!Array.isArray(body)) {
+      return { status: 'error', detail: 'the platform did not answer with a line item list' };
+    }
+
+    for (const item of body) {
+      const id = (item as { id?: unknown })?.id;
+      if (typeof id === 'string' && id.length > 0) return { status: 'found', url: id };
+    }
+
+    const advertised = nextPage(response);
+    if (!advertised) return { status: 'not-found' };
+
+    const following = samePageOrigin(advertised, origin);
+    if (!following) {
+      return { status: 'error', detail: 'the next page of line items is not on the same server' };
+    }
+    next = following;
   }
+
+  // The loop ended on the page cap with another page still advertised, so the list was never
+  // exhausted and "not there" was never established.
+  return { status: 'incomplete', detail: `more than ${MAX_LINE_ITEM_PAGES} pages of line items` };
 }
 
 /**
@@ -166,12 +253,23 @@ export async function ensureLineItem(opts: {
     /**
      * Correct the column if the assignment has been renamed or re-pointed since.
      *
-     * The maximum matters more than the name: a platform scales a score against the column's
-     * own maximum, so an assignment that grew from 100 to 150 points would have every grade
-     * silently misreported until this catches up.
+     * The two are not the same kind of change and must not be treated alike. A platform scales
+     * a score against the column's own maximum, so posting 120 to a column still set to 100
+     * when the assignment is now out of 150 reports a wrong grade to the LMS. A stale *name* is
+     * cosmetic, and refusing to grade over one would be worse than the blemish.
      */
-    const stale = existing.label !== opts.label || existing.scoreMaximum !== opts.scoreMaximum;
-    if (stale) await updateLineItem(existing.url, opts);
+    const maximumChanged = existing.scoreMaximum !== opts.scoreMaximum;
+    const labelChanged = existing.label !== opts.label;
+    if (!maximumChanged && !labelChanged) return { ok: true, value: existing.url };
+
+    const updated = await updateLineItem(existing.url, opts);
+    if (!updated.ok) {
+      // Cosmetic: grade against the column as it stands, and try the rename again next time.
+      // The stored copy is deliberately left alone, which is what makes that retry happen.
+      if (!maximumChanged) return { ok: true, value: existing.url };
+      // Not cosmetic. Nothing may be posted against a column whose maximum is still the old one.
+      return updated;
+    }
     return { ok: true, value: existing.url };
   }
 
@@ -181,12 +279,15 @@ export async function ensureLineItem(opts: {
   if (!token.ok) return { ok: false, reason: 'no-token', detail: token.reason };
 
   const already = await findLineItem(opts.lineItemsUrl, token.token, opts.assignmentId);
-  if (already) {
-    return remember(opts.contextLinkId, opts.assignmentId, already, {
+  if (already.status === 'found') {
+    return remember(opts.contextLinkId, opts.assignmentId, already.url, {
       label: opts.label,
       scoreMaximum: opts.scoreMaximum,
     });
   }
+  // Anything short of a completed search leaves the grade queued. Creating here is what would
+  // put a second column in somebody's gradebook, and that is harder to undo than a late grade.
+  if (already.status !== 'not-found') return lookupFailure(already);
 
   const created = await call(opts.lineItemsUrl, token.token, LINE_ITEM_TYPE, {
     scoreMaximum: opts.scoreMaximum,
@@ -198,16 +299,27 @@ export async function ensureLineItem(opts: {
   if (!created.ok) return created;
 
   const body = (await created.value.json().catch(() => null)) as { id?: unknown } | null;
-  // The spec says the created line item comes back as JSON. Not every platform obliges: the
-  // 1EdTech reference implementation answers with an HTML page. Asking for the column we just
-  // made is the reliable way to learn its URL.
-  const url =
-    typeof body?.id === 'string'
-      ? body.id
-      : await findLineItem(opts.lineItemsUrl, token.token, opts.assignmentId);
+  // AGS says the response "MUST be the newly created item, enriched by its URL". Not every
+  // platform obliges: the 1EdTech reference implementation answers with an HTML page. Asking for
+  // the column we just made is the reliable way to learn its URL.
+  let url = typeof body?.id === 'string' && body.id.length > 0 ? body.id : null;
 
   if (!url) {
-    return { ok: false, reason: 'rejected', detail: 'the platform returned no line item id' };
+    // The same explicit handling as above. The column now exists, so a lookup that cannot say
+    // where it is must not be reported as though the platform refused the whole thing: the
+    // grade needs to retry and find it, not create another.
+    const rediscovered = await findLineItem(opts.lineItemsUrl, token.token, opts.assignmentId);
+    if (rediscovered.status === 'found') {
+      url = rediscovered.url;
+    } else if (rediscovered.status === 'not-found') {
+      return {
+        ok: false,
+        reason: 'rejected',
+        detail: 'the platform accepted the new column and then did not list it',
+      };
+    } else {
+      return lookupFailure(rediscovered);
+    }
   }
 
   return remember(opts.contextLinkId, opts.assignmentId, url, {
@@ -216,12 +328,39 @@ export async function ensureLineItem(opts: {
   });
 }
 
+/** Turn a lookup that did not conclude into the matching AGS failure. */
+function lookupFailure(lookup: LineItemLookup): AgsResult<never> {
+  if (lookup.status === 'incomplete') {
+    return { ok: false, reason: 'line-item-lookup-incomplete', detail: lookup.detail };
+  }
+  if (lookup.status === 'error') {
+    // A refusal is a refusal: retrying a 404 or a 403 for a day wastes the time of whoever has
+    // to correct the registration. Anything else is worth waiting on.
+    const refused =
+      lookup.httpStatus !== undefined && lookup.httpStatus >= 400 && lookup.httpStatus < 500;
+    return {
+      ok: false,
+      reason: refused ? 'rejected' : 'line-item-lookup-failed',
+      detail: lookup.detail,
+    };
+  }
+  // Neither of the concluding cases reaches here; the signature is what makes that provable.
+  return { ok: false, reason: 'line-item-lookup-failed' };
+}
+
 /**
  * Tell the platform the column's new name or maximum.
  *
- * Best effort: a failure here leaves the stored shape unchanged, so the next grade tries again
- * rather than assuming it worked. Sending the score anyway is better than refusing to grade
- * because a title is out of date.
+ * AGS is explicit that a PUT "replaces the line item definition with the new, complete
+ * definition provided by the tool", so the only safe way to change two fields is to read the
+ * whole thing and send it back with those two altered. There used to be a fallback that sent a
+ * minimal body when the read failed; that is a destructive write. It silently discarded whatever
+ * the platform keeps on a column (due dates, tags, release settings, grading rules) on exactly
+ * the occasions AFCT knew least about what it was overwriting.
+ *
+ * So a failed read is now a failed update, and the caller decides what that costs. Nothing is
+ * written to AFCT's own copy unless the platform confirmed the change, which is what makes the
+ * next attempt try again instead of believing it already succeeded.
  */
 async function updateLineItem(
   url: string,
@@ -232,46 +371,49 @@ async function updateLineItem(
     label: string;
     scoreMaximum: number;
   },
-): Promise<void> {
+): Promise<AgsResult<null>> {
   const token = await authorised(opts.platform);
-  if (!token.ok) return;
+  if (!token.ok) return { ok: false, reason: 'no-token', detail: token.reason };
 
-  /**
-   * PUT replaces the line item, so anything the platform keeps on it (dates, tags, release
-   * settings) would be dropped by sending only our three fields. Read it first and change the
-   * two that are ours. A read that fails falls back to the minimal body: a stale maximum
-   * misreports every grade on the column, so it is worth the trade.
-   */
-  let existing: Record<string, unknown> = {};
-  try {
-    const current = await fetch(url, {
-      headers: { Authorization: `Bearer ${token.token}`, Accept: LINE_ITEM_TYPE },
-    });
-    if (current.ok) {
-      const body = (await current.json().catch(() => null)) as unknown;
-      if (body && typeof body === 'object' && !Array.isArray(body)) {
-        existing = body as Record<string, unknown>;
-      }
-    }
-  } catch {
-    // Ignored: fall through to the minimal body below.
-  }
+  const current = await readLineItem(url, token.token);
+  if (!current.ok) return current;
 
+  let response: Response;
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token.token}`, 'Content-Type': LINE_ITEM_TYPE },
       body: JSON.stringify({
-        ...existing,
+        // Everything the platform had, with only the two properties AFCT owns changed.
+        // `resourceId` is ours by the spec's own account: the platform "MUST NOT" modify it.
+        ...current.value,
         scoreMaximum: opts.scoreMaximum,
         label: opts.label,
         resourceId: opts.assignmentId,
       }),
     });
-    if (!response.ok) return;
-  } catch {
-    return;
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'unreachable',
+      detail: error instanceof Error ? error.message : 'network error',
+    };
   }
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    return { ok: false, reason: 'line-item-update-failed', detail: detail.slice(0, 500) };
+  }
+
+  /**
+   * Confirm rather than assume.
+   *
+   * A 200 says the platform accepted the request, not that the column now reads 150. Platforms
+   * do clamp or ignore properties. Since a wrong maximum is a wrong grade, the new value has to
+   * be read back from what the platform says the column is now.
+   */
+  const confirmed = await confirmMaximum(response, url, token.token, opts.scoreMaximum);
+  if (!confirmed.ok) return confirmed;
 
   await prisma.ltiLineItem.update({
     where: {
@@ -282,6 +424,77 @@ async function updateLineItem(
     },
     data: { label: opts.label, scoreMaximum: opts.scoreMaximum },
   });
+  return { ok: true, value: null };
+}
+
+/** The column as the platform currently has it, so a PUT can put back what it does not own. */
+async function readLineItem(
+  url: string,
+  token: string,
+): Promise<AgsResult<Record<string, unknown>>> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: LINE_ITEM_TYPE },
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'unreachable',
+      detail: error instanceof Error ? error.message : 'network error',
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      reason: 'line-item-update-failed',
+      detail: `could not read the column before changing it (${response.status})`,
+    };
+  }
+
+  const body = (await response.json().catch(() => null)) as unknown;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return {
+      ok: false,
+      reason: 'line-item-update-failed',
+      detail: 'the platform did not answer with a line item',
+    };
+  }
+  return { ok: true, value: body as Record<string, unknown> };
+}
+
+/**
+ * Check the platform really applied the new maximum.
+ *
+ * AGS says the PUT response is the updated line item, so the usual case needs no extra call.
+ * A platform that answers with something else gets one GET to settle it.
+ */
+async function confirmMaximum(
+  putResponse: Response,
+  url: string,
+  token: string,
+  expected: number,
+): Promise<AgsResult<null>> {
+  const stated = (await putResponse.json().catch(() => null)) as { scoreMaximum?: unknown } | null;
+  if (typeof stated?.scoreMaximum === 'number') {
+    return stated.scoreMaximum === expected
+      ? { ok: true, value: null }
+      : {
+          ok: false,
+          reason: 'line-item-update-failed',
+          detail: `the column is still out of ${stated.scoreMaximum}`,
+        };
+  }
+
+  const reread = await readLineItem(url, token);
+  if (!reread.ok) return reread;
+  if (reread.value.scoreMaximum === expected) return { ok: true, value: null };
+  return {
+    ok: false,
+    reason: 'line-item-update-failed',
+    detail: `the column is still out of ${String(reread.value.scoreMaximum)}`,
+  };
 }
 
 /** Record the column so the next grade skips all of the above. */
@@ -364,6 +577,11 @@ export function agsFailureMessage(reason: AgsFailure): string {
       return 'AFCT could not reach your LMS. Grades will be sent again when it is available.';
     case 'ambiguous-context':
       return 'This AFCT course is connected to more than one LMS course, and AFCT cannot tell which one this student is in, so it has not sent the grade anywhere. Sync the roster from the LMS course this student belongs to.';
+    case 'line-item-lookup-incomplete':
+    case 'line-item-lookup-failed':
+      return 'AFCT could not check whether your LMS already has a column for this assignment, so it has not made one. The grade stays queued and will be sent when the LMS answers.';
+    case 'line-item-update-failed':
+      return 'This assignment is now worth a different number of points and your LMS would not accept the change, so the grade has not been sent. Sending it against the old total would report the wrong mark. Check the column in your LMS gradebook.';
     case 'rejected':
     default:
       return 'Your LMS refused the grade. Check that the assignment still exists there.';

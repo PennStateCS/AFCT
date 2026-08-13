@@ -138,6 +138,28 @@ async function signed(
 /** Seconds since the epoch, which is what the time claims are in. */
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
+const DL_SETTINGS_CLAIM = 'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings';
+
+/**
+ * Deep linking settings with everything DL 2.0 requires present.
+ *
+ * The three required fields are spelled out rather than defaulted, because the cases below work
+ * by removing exactly one of them and a fixture that was already incomplete would prove nothing.
+ */
+const deepLinkSettings = (over: Record<string, unknown> = {}) => ({
+  deep_link_return_url: 'https://lms.test/deep_links',
+  accept_types: ['ltiResourceLink'],
+  accept_presentation_document_targets: ['iframe', 'window'],
+  ...over,
+});
+
+/** A deep linking request, conformant unless a case asks for otherwise. `null` sends no settings. */
+const deepLinkClaims = (settings: Record<string, unknown> | null = deepLinkSettings()) => ({
+  [`${CLAIM}/message_type`]: 'LtiDeepLinkingRequest',
+  [`${CLAIM}/resource_link`]: undefined,
+  [DL_SETTINGS_CLAIM]: settings,
+});
+
 async function destroyFixtures() {
   await prisma.ltiPlatform.deleteMany({ where: { issuer: ISSUER } });
 }
@@ -356,12 +378,16 @@ describe('a launch that must be refused', () => {
     expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({ ok: false, reason: 'replayed' });
   });
 
-  it('that is not a resource link launch', async () => {
+  /**
+   * A deep linking request is a legitimate message, so this is no longer "not a resource link
+   * launch" but "a deep linking request carrying none of the settings that make it one".
+   */
+  it('that says it is deep linking but brings no settings', async () => {
     const token = await launchToken({ [`${CLAIM}/message_type`]: 'LtiDeepLinkingRequest' });
 
     expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
       ok: false,
-      reason: 'wrong-message-type',
+      reason: 'deep-link-settings',
     });
   });
 
@@ -496,12 +522,15 @@ describe('claims a launch must carry', () => {
    * The worst of them. `String(payload.sub)` turned a missing subject into the string
    * "undefined", so every such launch shared one identity and would have signed each person in
    * as whoever got there first.
+   *
+   * Still refused, under its own name. `sub` came out of the verifier's required claims because
+   * Deep Linking does not require it, so this is now AFCT saying it cannot use an anonymous
+   * launch rather than jose saying the token is short of a claim.
    */
   it('refuses a token with no subject', async () => {
-    expect(await validateLaunch({ idToken: await signed({}, { omit: 'sub' }), state: lastState })).toEqual({
-      ok: false,
-      reason: 'missing-claims',
-    });
+    expect(
+      await validateLaunch({ idToken: await signed({}, { omit: 'sub' }), state: lastState }),
+    ).toEqual({ ok: false, reason: 'anonymous-launch' });
   });
 
   // jose validates `exp` only when it is there, so a token without one never expires.
@@ -557,13 +586,7 @@ describe('claims a launch must carry', () => {
    * A deep linking request has no resource link, so requiring one would refuse every deep link.
    */
   it('does not ask a deep linking request for a resource link', async () => {
-    const token = await signed({
-      [`${CLAIM}/message_type`]: 'LtiDeepLinkingRequest',
-      [`${CLAIM}/resource_link`]: undefined,
-      'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': {
-        deep_link_return_url: 'https://lms.test/deep_links',
-      },
-    });
+    const token = await signed(deepLinkClaims());
 
     expect((await validateLaunch({ idToken: token, state: lastState })).ok).toBe(true);
   });
@@ -719,14 +742,20 @@ describe('deliberately malformed launches', () => {
    * platform serialised it correctly.
    */
   describe('claims of the wrong type', () => {
-    // The subject names the person. A number here read as a string once already, which is how
-    // every launch missing a subject came to share one identity.
+    /**
+     * The subject names the person. A number here read as a string once already, which is how
+     * every launch missing a subject came to share one identity.
+     *
+     * Refused as anonymous rather than malformed: Core says a tool "must interpret the lack of a
+     * `sub` claim as a launch request coming from an anonymous user", so the message is not
+     * wrong. AFCT is what cannot use it.
+     */
     it('refuses a subject that is not a string', async () => {
       const token = await signed({ sub: 12345 }, { omit: 'sub' });
 
       expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
         ok: false,
-        reason: 'missing-claims',
+        reason: 'anonymous-launch',
       });
     });
 
@@ -776,14 +805,13 @@ describe('deliberately malformed launches', () => {
      * an assignment and then have the answer go nowhere, with nothing to say why.
      */
     it('refuses a deep linking request with nowhere to send the answer', async () => {
-      const token = await signed({
-        [`${CLAIM}/message_type`]: 'LtiDeepLinkingRequest',
-        'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': { data: 'opaque' },
-      });
+      const token = await signed(
+        deepLinkClaims(deepLinkSettings({ deep_link_return_url: undefined })),
+      );
 
       expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
         ok: false,
-        reason: 'wrong-message-type',
+        reason: 'deep-link-settings',
       });
     });
   });
@@ -818,5 +846,163 @@ describe('deliberately malformed launches', () => {
 
     expect(outcomes.filter((r) => r.ok)).toHaveLength(1);
     expect(outcomes.filter((r) => !r.ok && r.reason === 'replayed')).toHaveLength(1);
+  });
+});
+
+/**
+ * Deep linking is a different message with different rules, and reading Core's requirements onto
+ * it refuses launches a conformant platform is entitled to send.
+ *
+ * The one that matters is `sub`. Deep Linking 2.0 removed it outright ("sub is no longer
+ * required for Deep Linking Launch for the User"), and roles are listed as optional. AFCT still
+ * cannot *use* an anonymous request, but that is AFCT's limit rather than the platform's mistake,
+ * and the two are refused under different names so an administrator is sent to the right place.
+ */
+describe('a deep linking request', () => {
+  it('is accepted when it carries the settings the spec requires', async () => {
+    const result = await validateLaunch({
+      idToken: await signed(deepLinkClaims()),
+      state: lastState,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      identity: {
+        deepLink: {
+          returnUrl: 'https://lms.test/deep_links',
+          acceptTypes: ['ltiResourceLink'],
+          acceptPresentationDocumentTargets: ['iframe', 'window'],
+        },
+      },
+    });
+  });
+
+  /**
+   * The protocol case. A resource link launch without a subject is refused for being anonymous;
+   * so is this one, but only after its own claims have been checked, and never as `missing-claims`
+   * as though the platform had left something out.
+   */
+  it('is not called malformed merely for having no subject', async () => {
+    const token = await signed(deepLinkClaims(), { omit: 'sub' });
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'anonymous-launch',
+    });
+  });
+
+  // Deep Linking 2.0 lists roles as optional, so their absence is not a refusal.
+  it('does not require a roles claim', async () => {
+    const token = await signed({ ...deepLinkClaims(), [`${CLAIM}/roles`]: undefined });
+
+    expect((await validateLaunch({ idToken: token, state: lastState })).ok).toBe(true);
+  });
+
+  // Core keeps requiring it of every message, deep linking included.
+  it('still has to say what it is opening', async () => {
+    const token = await signed({ ...deepLinkClaims(), [`${CLAIM}/target_link_uri`]: undefined });
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  // Both are required by DL 2.0, and an absent one is not "no restriction".
+  it('refuses settings with no accepted types', async () => {
+    const token = await signed(deepLinkClaims(deepLinkSettings({ accept_types: undefined })));
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'deep-link-settings',
+    });
+  });
+
+  it('refuses settings with no presentation targets', async () => {
+    const token = await signed(
+      deepLinkClaims(deepLinkSettings({ accept_presentation_document_targets: undefined })),
+    );
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'deep-link-settings',
+    });
+  });
+
+  it('refuses a deep linking claim with no settings object at all', async () => {
+    const token = await signed(deepLinkClaims(null));
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'deep-link-settings',
+    });
+  });
+
+  /**
+   * A placement that takes files but not links is a legitimate thing to configure. AFCT has
+   * nothing to offer it, which is a different problem from a malformed request and gets said
+   * differently: there is nothing for an administrator to repair.
+   */
+  it('refuses a placement that will not take a link to a resource', async () => {
+    const token = await signed(
+      deepLinkClaims(deepLinkSettings({ accept_types: ['file', 'html'] })),
+    );
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'content-type-not-accepted',
+    });
+  });
+
+  /**
+   * The three states of `accept_lineitem`. The spec says an absent one means "no assumption can
+   * be made about the support of line items", so it has to survive as null rather than being
+   * flattened into either answer.
+   */
+  it('keeps whether the platform takes a gradebook column, including not saying', async () => {
+    const states: Array<[Record<string, unknown>, boolean | null]> = [
+      [deepLinkSettings({ accept_lineitem: true }), true],
+      [deepLinkSettings({ accept_lineitem: false }), false],
+      [deepLinkSettings(), null],
+    ];
+
+    for (const [settings, expected] of states) {
+      const result = await validateLaunch({
+        idToken: await signed(deepLinkClaims(settings)),
+        state: lastState,
+      });
+
+      expect(result.ok && result.identity.deepLink?.acceptLineItem).toBe(expected);
+    }
+  });
+});
+
+/**
+ * A resource link launch keeps every requirement Core puts on it. The point of the split is that
+ * deep linking stopped inheriting these, not that they were relaxed.
+ */
+describe('a resource link launch still requires', () => {
+  it('a subject', async () => {
+    expect(await validateLaunch({ idToken: await signed({}, { omit: 'sub' }), state: lastState })).toEqual(
+      { ok: false, reason: 'anonymous-launch' },
+    );
+  });
+
+  it('a roles claim', async () => {
+    const token = await signed({ [`${CLAIM}/roles`]: undefined });
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
+  });
+
+  it('a resource link id', async () => {
+    const token = await signed({ [`${CLAIM}/resource_link`]: {} });
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+      ok: false,
+      reason: 'missing-claims',
+    });
   });
 });
