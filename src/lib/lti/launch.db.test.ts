@@ -1006,3 +1006,143 @@ describe('a resource link launch still requires', () => {
     });
   });
 });
+
+/**
+ * Settings that are present and the wrong shape.
+ *
+ * These are the cases a lenient reading turns into something plausible instead of refusing:
+ * `"true"` is a non-empty string and so is truthy, `1` is truthy, and filtering a mixed array
+ * leaves a list the platform never sent. Each one ends with AFCT acting on a request nobody
+ * made, and for `accept_lineitem` that decides whether a gradebook column appears.
+ *
+ * All of them are `deep-link-settings`: from an administrator's point of view the fix is the
+ * same, which is to look at how the placement is configured.
+ */
+describe('deep linking settings of the wrong type', () => {
+  const refused = async (settings: Record<string, unknown>) =>
+    validateLaunch({ idToken: await signed(deepLinkClaims(settings)), state: lastState });
+
+  const malformed = { ok: false, reason: 'deep-link-settings' };
+
+  it('refuses a quoted boolean for accept_multiple', async () => {
+    expect(await refused(deepLinkSettings({ accept_multiple: 'true' }))).toEqual(malformed);
+  });
+
+  it('refuses a number for accept_multiple', async () => {
+    expect(await refused(deepLinkSettings({ accept_multiple: 1 }))).toEqual(malformed);
+  });
+
+  it('refuses a quoted boolean for accept_lineitem', async () => {
+    expect(await refused(deepLinkSettings({ accept_lineitem: 'true' }))).toEqual(malformed);
+  });
+
+  it('refuses a number for accept_lineitem', async () => {
+    expect(await refused(deepLinkSettings({ accept_lineitem: 1 }))).toEqual(malformed);
+  });
+
+  /**
+   * JSON null is a value the platform sent, not a field it left out, so it must not arrive at
+   * the same answer as omitting it. The test below on an omitted setting is what that answer is.
+   */
+  it('refuses an explicit null for accept_lineitem', async () => {
+    expect(await refused(deepLinkSettings({ accept_lineitem: null }))).toEqual(malformed);
+  });
+
+  it('refuses an object for accept_lineitem', async () => {
+    expect(await refused(deepLinkSettings({ accept_lineitem: {} }))).toEqual(malformed);
+  });
+
+  /**
+   * The filtering case. Dropping the 123 leaves `["ltiResourceLink"]`, which is a request AFCT
+   * would happily answer and the platform never sent.
+   */
+  it('refuses a mixed-type accept_types rather than filtering it', async () => {
+    expect(await refused(deepLinkSettings({ accept_types: ['ltiResourceLink', 123] }))).toEqual(
+      malformed,
+    );
+  });
+
+  it('refuses a mixed-type presentation target list rather than filtering it', async () => {
+    expect(
+      await refused(deepLinkSettings({ accept_presentation_document_targets: ['window', null] })),
+    ).toEqual(malformed);
+  });
+
+  it('refuses a string where a list of accepted types belongs', async () => {
+    expect(await refused(deepLinkSettings({ accept_types: 'ltiResourceLink' }))).toEqual(malformed);
+  });
+
+  it('refuses an object where a list of presentation targets belongs', async () => {
+    expect(
+      await refused(deepLinkSettings({ accept_presentation_document_targets: { iframe: true } })),
+    ).toEqual(malformed);
+  });
+
+  it('refuses a null where a required list belongs', async () => {
+    expect(await refused(deepLinkSettings({ accept_types: null }))).toEqual(malformed);
+  });
+
+  // Required and meaningfully so: a platform that accepts nothing cannot be answered either.
+  it('refuses an empty list of accepted types', async () => {
+    expect(await refused(deepLinkSettings({ accept_types: [] }))).toEqual(malformed);
+  });
+
+  it('refuses an empty list of presentation targets', async () => {
+    expect(await refused(deepLinkSettings({ accept_presentation_document_targets: [] }))).toEqual(
+      malformed,
+    );
+  });
+
+  it('refuses a return url that is not a string', async () => {
+    expect(await refused(deepLinkSettings({ deep_link_return_url: 42 }))).toEqual(malformed);
+  });
+
+  /**
+   * `data` has to come back to the platform byte for byte or the response is rejected, so a
+   * value that cannot be returned faithfully is refused here rather than after somebody has
+   * chosen an assignment.
+   */
+  it('refuses a data value that is not a string', async () => {
+    expect(await refused(deepLinkSettings({ data: { opaque: true } }))).toEqual(malformed);
+  });
+
+  // Only the settings AFCT reads are type-checked. Refusing a launch over the shape of a value
+  // that changes nothing would cost interoperability and buy nothing.
+  it('ignores the shape of settings it never reads', async () => {
+    const result = await refused(deepLinkSettings({ title: 42, auto_create: 'yes' }));
+
+    expect(result.ok).toBe(true);
+  });
+});
+
+/**
+ * The three states again, now that a malformed value is a fourth outcome rather than being
+ * folded into one of them. These are the cases the strictness above must not have broken.
+ */
+describe('what the platform said about a gradebook column', () => {
+  const acceptLineItemOf = async (settings: Record<string, unknown>) => {
+    const result = await validateLaunch({
+      idToken: await signed(deepLinkClaims(settings)),
+      state: lastState,
+    });
+    return result.ok ? result.identity.deepLink?.acceptLineItem : 'refused';
+  };
+
+  it('keeps an explicit true', async () => {
+    expect(await acceptLineItemOf(deepLinkSettings({ accept_lineitem: true }))).toBe(true);
+  });
+
+  it('keeps an explicit false', async () => {
+    expect(await acceptLineItemOf(deepLinkSettings({ accept_lineitem: false }))).toBe(false);
+  });
+
+  it('reads an omitted setting as unknown, not as either answer', async () => {
+    expect(await acceptLineItemOf(deepLinkSettings())).toBeNull();
+  });
+
+  it('still accepts a request that says everything correctly', async () => {
+    expect(
+      await acceptLineItemOf(deepLinkSettings({ accept_multiple: false, accept_lineitem: true })),
+    ).toBe(true);
+  });
+});

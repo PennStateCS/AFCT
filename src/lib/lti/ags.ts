@@ -515,9 +515,9 @@ async function remember(
 /**
  * Send one student's score.
  *
- * Needs the LMS's own id for that person, which AFCT only learns from a launch. Until roster
- * sync lands, a student who has never opened AFCT from the LMS cannot be sent, and that has to
- * be visible rather than quietly skipped.
+ * Needs the LMS's own id for that person, which AFCT learns either from a launch or from a
+ * roster sync: both attach the LTI identity that `findLtiUserId` reads. A student who has done
+ * neither cannot be sent, and that has to be visible rather than quietly skipped.
  */
 export async function postScore(opts: {
   platform: PlatformRef;
