@@ -13,7 +13,11 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { Button } from '@/components/ui/button';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import type { CalendarAssignment } from '@/lib/calendar-shared';
-import { getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
+import {
+  getDateKeyInTimeZone,
+  getMonthRangeIso,
+  visibleAssignmentsForWidth,
+} from '@/lib/calendar-shared';
 import { apiPaths } from '@/lib/api-paths';
 import { CalendarCourseFilter, type FilterCourse } from './CalendarCourseFilter';
 
@@ -186,8 +190,13 @@ function CalendarDayButton(props: DayButtonProps) {
               aria-hidden={true}
               className="h-2 w-2 self-center justify-self-center rounded-full bg-blue-500"
             ></div>
+            {/* On a phone the cell shows no chips at all, so "N more" would be counting from a
+                number nobody was given. The day's own label already announces the total; this
+                only has to say the cell is not showing it. */}
             <span className="sr-only">
-              {`${hiddenAssignmentCount} more assignment${hiddenAssignmentCount === 1 ? '' : 's'} not shown in cell. Open day to view all assignments.`}
+              {visibleCount === 0
+                ? 'Open day to view assignments.'
+                : `${hiddenAssignmentCount} more assignment${hiddenAssignmentCount === 1 ? '' : 's'} not shown in cell. Open day to view all assignments.`}
             </span>
           </>
         )}
@@ -337,14 +346,7 @@ export default function CalendarClient({
 
   useEffect(() => {
     const updateLimit = () => {
-      const width = window.innerWidth;
-      if (width < 768) {
-        setVisibleAssignmentLimit(1);
-      } else if (width < 1280) {
-        setVisibleAssignmentLimit(2);
-      } else {
-        setVisibleAssignmentLimit(3);
-      }
+      setVisibleAssignmentLimit(visibleAssignmentsForWidth(window.innerWidth));
     };
 
     updateLimit();
@@ -417,7 +419,9 @@ export default function CalendarClient({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <Card className="flex h-full w-full flex-col">
-          <CardContent className="relative flex min-h-0 flex-1 flex-col pt-6">
+          {/* px-2 on a phone: the card's usual px-6 costs 48px, which is most of the
+              difference between a month grid that fits and one that has to be scrolled. */}
+          <CardContent className="relative flex min-h-0 flex-1 flex-col px-2 pt-6 sm:px-6">
             {isError ? (
               <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2">
                 <p role="alert" className="text-sm text-status-danger">
@@ -450,7 +454,7 @@ export default function CalendarClient({
               <div
                 aria-live="polite"
                 aria-atomic="true"
-                className="w-56 px-4 text-center text-lg font-medium"
+                className="min-w-0 flex-1 truncate px-2 text-center text-base font-medium sm:max-w-56 sm:px-4 sm:text-lg"
               >
                 {monthLabel}
               </div>
@@ -487,7 +491,7 @@ export default function CalendarClient({
                     onMonthChange={(month: Date) => {
                       setCurrentMonth(month);
                     }}
-                    className="text-foreground bg-card mx-auto h-full w-full max-w-6xl [--cell-size:3.25rem] sm:[--cell-size:3.5rem]"
+                    className="text-foreground bg-card mx-auto h-full w-full max-w-6xl p-1 [--cell-size:2.25rem] sm:p-3 sm:[--cell-size:3.25rem] md:[--cell-size:3.5rem]"
                     timeZone={timezone}
                     classNames={{
                       nav: 'hidden',
