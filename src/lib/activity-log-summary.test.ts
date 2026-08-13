@@ -418,3 +418,249 @@ describe('the records an entry points at', () => {
     expect(text.indexOf('About')).toBeLessThan(text.indexOf('Details'));
   });
 });
+
+/**
+ * Looking at a student's work.
+ *
+ * These carry the most weight of anything here: under FERPA the log is the disclosure record,
+ * and "a member of staff opened something" is weak evidence next to "a member of staff opened
+ * one student's submissions from the review workspace".
+ */
+describe('access to student records', () => {
+  it('says how much was seen and where from', () => {
+    expect(describeActivity('VIEW_STUDENT_SUBMISSION', { source: 'client' })).toBe(
+      'one student, from the desktop client',
+    );
+    expect(describeActivity('VIEW_STUDENT_REVIEW_DATA', { source: 'review-data' })).toBe(
+      'one student, from the review workspace',
+    );
+  });
+
+  // The code's own label would leak into a sentence a person reads.
+  it('falls back to the raw source rather than dropping it', () => {
+    expect(describeActivity('VIEW_STUDENT_SUBMISSION', { source: 'something-new' })).toBe(
+      'one student, from something-new',
+    );
+  });
+
+  /**
+   * No student is named. The row already points at them through `targetUserId`, and a name in a
+   * column read over somebody's shoulder is its own small disclosure.
+   */
+  it('never names the student', () => {
+    const summary = describeActivity('VIEW_STUDENT_SUBMISSION', {
+      viewedStudentId: 'u-123',
+      studentName: 'Ada Lovelace',
+      source: 'web',
+    });
+
+    expect(summary).not.toContain('Ada');
+    expect(summary).not.toContain('u-123');
+  });
+
+  // One student's work and a whole assignment's are different disclosures.
+  it('tells one student apart from the whole assignment', () => {
+    expect(describeActivity('VIEW_ASSIGNMENT_SUBMISSIONS', { viewedStudentId: 'u-1' })).toBe(
+      "one student's submissions",
+    );
+    expect(describeActivity('VIEW_ASSIGNMENT_SUBMISSIONS', { assignmentId: 'a-1' })).toBe(
+      'the whole assignment',
+    );
+  });
+
+  it('counts an export', () => {
+    expect(
+      describeActivity('GRADES_EXPORTED', {
+        studentCount: 34,
+        assignmentCount: 6,
+        platform: 'canvas',
+      }),
+    ).toBe('34 students, 6 assignments, for canvas');
+  });
+
+  it('says when an export was the whole gradebook', () => {
+    expect(
+      describeActivity('GRADES_EXPORTED', { studentCount: 34, wholeGradebook: true }),
+    ).toBe('34 students, whole gradebook');
+  });
+});
+
+describe('grades and attempts', () => {
+  it('says what a group was given and how many it reached', () => {
+    expect(
+      describeActivity('GROUP_PROBLEM_GRADE_UPDATED', {
+        groupName: 'Group A',
+        grade: 8,
+        memberIds: ['u1', 'u2', 'u3'],
+      }),
+    ).toBe('Group A, graded 8, 3 members');
+  });
+
+  /**
+   * The case worth surfacing: grading a group overwrote marks that were not all the same, so an
+   * individual's grade changed as a side effect. A student disputing theirs needs that visible.
+   */
+  it('flags a group grade that replaced differing marks', () => {
+    const summary = describeActivity('GROUP_PROBLEM_GRADE_UPDATED', {
+      groupName: 'Group A',
+      grade: 8,
+      memberIds: ['u1', 'u2'],
+      overwroteDiffering: true,
+    });
+
+    expect(summary).toContain('replaced differing marks');
+  });
+
+  it('says which way an attempt grant went, and why', () => {
+    expect(
+      describeActivity('GRANT_EXTRA_SUBMISSIONS', {
+        extraSubmissions: 2,
+        totalExtraSubmissions: 5,
+        targetType: 'STUDENT',
+        reason: 'illness',
+      }),
+    ).toBe('+2 attempts for one student (5 in total): illness');
+
+    expect(
+      describeActivity('REVOKE_EXTRA_SUBMISSIONS', { extraSubmissions: 1, targetType: 'GROUP' }),
+    ).toBe('-1 attempt for a group');
+  });
+
+  it('says how many submissions a bulk re-run touched', () => {
+    expect(describeActivity('COURSE_SUBMISSIONS_RERUN', { count: 42 })).toBe(
+      '42 submissions re-run',
+    );
+  });
+});
+
+describe('accounts and enrolment', () => {
+  it('names the account a create or delete was about', () => {
+    expect(describeActivity('CREATE_USER', { createdUserEmail: 'a@b.test' })).toBe('a@b.test');
+    expect(describeActivity('DELETE_USER', { deletedUserEmail: 'gone@b.test' })).toBe(
+      'gone@b.test',
+    );
+  });
+
+  it('counts a bulk enrolment', () => {
+    expect(describeActivity('BULK_ENROLL_USERS', { enrolledCount: 12, reEnrolledCount: 3 })).toBe(
+      '12 enrolled, 3 re-enrolled',
+    );
+  });
+
+  it('says plainly when a bulk enrolment did nothing', () => {
+    expect(describeActivity('BULK_ENROLL_USERS', { enrolledCount: 0 })).toBe('nobody enrolled');
+  });
+
+  // The difference between a real reset request and a probe at an address with no account.
+  it('says whether a reset link was actually sent', () => {
+    expect(describeActivity('PASSWORD_RESET_REQUESTED', { queued: true })).toBe('a link was sent');
+    expect(describeActivity('PASSWORD_RESET_REQUESTED', { queued: false })).toBe(
+      'no account, nothing sent',
+    );
+  });
+
+  it('says whether an unlocked account was locked in the first place', () => {
+    expect(describeActivity('UNLOCK_ACCOUNT', { wasLocked: true })).toBe('was locked out');
+    expect(describeActivity('UNLOCK_ACCOUNT', { wasLocked: false })).toBe('was not locked');
+  });
+});
+
+describe('courses and their contents', () => {
+  /** A deleted course takes its assignments, problems and enrolments with it. */
+  it('says how much a course deletion destroyed', () => {
+    expect(
+      describeActivity('DELETE_COURSE', {
+        courseCode: 'CMPSC 464',
+        courseName: 'Theory',
+        assignmentCount: 8,
+        problemCount: 40,
+        studentCount: 31,
+      }),
+    ).toBe('CMPSC 464, Theory, with 8 assignments, 40 problems, 31 students');
+  });
+
+  // Adding a problem to an assignment students have already worked on is worth flagging.
+  it('flags problems added to an assignment that already has submissions', () => {
+    const summary = describeActivity('ADD_ASSIGNMENT_PROBLEMS', {
+      addedProblemIds: ['p1', 'p2'],
+      linksWithSubmissions: 1,
+    });
+
+    expect(summary).toBe('2 problems added, 1 already has submissions');
+  });
+
+  it('says which way an assignment type changed', () => {
+    expect(describeActivity('CHANGE_ASSIGNMENT_TYPE', { isGroup: true })).toBe(
+      'to a group assignment',
+    );
+    expect(describeActivity('CHANGE_ASSIGNMENT_TYPE', { isGroup: false })).toBe(
+      'to an individual assignment',
+    );
+  });
+
+  it('says what a group was renamed from', () => {
+    expect(
+      describeActivity('UPDATE_GROUP_SET_GROUP', { previousName: 'Group A', name: 'Team A' }),
+    ).toBe('Group A to Team A');
+  });
+});
+
+describe('the system itself', () => {
+  it('says which version an update was going to', () => {
+    expect(describeActivity('SYSTEM_UPDATE_REQUESTED', { fromTag: 'v0.3.0', tag: 'v0.4.0' })).toBe(
+      'v0.3.0 to v0.4.0',
+    );
+  });
+
+  it('marks a forced downgrade as forced', () => {
+    expect(
+      describeActivity('SYSTEM_DOWNGRADE_REQUESTED', {
+        fromTag: 'v0.4.0',
+        tag: 'v0.3.0',
+        forced: true,
+      }),
+    ).toBe('v0.4.0 to v0.3.0, forced');
+  });
+
+  /**
+   * Settings changes record whether a secret moved, never its value. The summary has to keep
+   * that property: it is read by more people than the detail dialog.
+   */
+  it('reports a secret as changed without repeating it', () => {
+    const summary = describeActivity('SYSTEM_SETTINGS_UPDATED', {
+      smtpPasswordUpdated: true,
+      smtpPassword: 'hunter2',
+    });
+
+    expect(summary).toBe('mail password set');
+    expect(summary).not.toContain('hunter2');
+  });
+});
+
+/**
+ * The rule this module is built on: say nothing rather than invent. An action whose metadata
+ * carries no change has no summary, and the column stays empty.
+ */
+describe('what deliberately has no summary', () => {
+  it.each([
+    'LOGOUT',
+    'CLIENT_LOGOUT',
+    'VIEW_USERS',
+    'VIEW_ASSIGNMENT_PROBLEMS',
+    'SYSTEM_BACKUP_REQUESTED',
+    'SYSTEM_UPDATE_COMPLETED',
+  ])('%s says nothing, because there is nothing to add', (action) => {
+    expect(describeActivity(action, { userId: 'u-1' })).toBeNull();
+  });
+
+  it('says nothing for an action it has never heard of', () => {
+    expect(describeActivity('SOME_FUTURE_ACTION', { anything: 'at all' })).toBeNull();
+  });
+
+  // A failure still reports why, matched on the name so a new one needs no case.
+  it('still reports why a failure failed', () => {
+    expect(describeActivity('COURSE_CREATE_ERROR', { error: 'duplicate code' })).toBe(
+      'duplicate code',
+    );
+  });
+});
