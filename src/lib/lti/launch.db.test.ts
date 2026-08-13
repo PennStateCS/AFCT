@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SignJWT, exportJWK, generateKeyPair, createLocalJWKSet } from 'jose';
+import { SignJWT, UnsecuredJWT, exportJWK, generateKeyPair, createLocalJWKSet } from 'jose';
 import type { JWK, KeyObject } from 'jose';
 
 /**
@@ -95,6 +95,48 @@ async function launchToken(
     .setExpirationTime('5m')
     .sign(key);
 }
+
+/**
+ * The same token with everything under control: which claims it carries, which of the ones LTI
+ * requires it leaves out, when it was issued and when it expires, who it is addressed to, what
+ * its header says, and which key signed it.
+ *
+ * `launchToken` above is the shorthand for a launch that should work. This is what the negative
+ * cases use, because each of them is one of these properties turned wrong.
+ */
+async function signed(
+  claims: Record<string, unknown> = {},
+  options: {
+    omit?: 'exp' | 'iat' | 'sub';
+    audience?: string | string[];
+    header?: { alg: string; kid?: string };
+    issuedAt?: number;
+    expiresAt?: number;
+    key?: KeyObject | CryptoKey;
+  } = {},
+) {
+  let jwt = new SignJWT({
+    [`${CLAIM}/deployment_id`]: DEPLOYMENT_ID,
+    [`${CLAIM}/message_type`]: 'LtiResourceLinkRequest',
+    [`${CLAIM}/version`]: '1.3.0',
+    [`${CLAIM}/roles`]: [],
+    [`${CLAIM}/resource_link`]: { id: 'rl-1' },
+    [`${CLAIM}/target_link_uri`]: TARGET_LINK_URI,
+    email: 'student@example.test',
+    nonce: typeof claims.nonce === 'string' ? claims.nonce : await beginFixture(),
+    ...claims,
+  })
+    .setProtectedHeader(options.header ?? { alg: 'RS256', kid: 'platform-key' })
+    .setIssuer(ISSUER)
+    .setAudience(options.audience ?? CLIENT_ID);
+  if (options.omit !== 'sub') jwt = jwt.setSubject('lms-user-1');
+  if (options.omit !== 'iat') jwt = jwt.setIssuedAt(options.issuedAt);
+  if (options.omit !== 'exp') jwt = jwt.setExpirationTime(options.expiresAt ?? '5m');
+  return jwt.sign(options.key ?? platformKeys.privateKey);
+}
+
+/** Seconds since the epoch, which is what the time claims are in. */
+const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 async function destroyFixtures() {
   await prisma.singleUseToken.deleteMany({ where: { purpose: 'LTI_LAUNCH_NONCE' } });
@@ -451,35 +493,13 @@ describe('the nonce', () => {
  * to act on, and each of these was previously accepted.
  */
 describe('claims a launch must carry', () => {
-  /** Builds a signed token with full control, so a claim can be left out entirely. */
-  const signed = async (claims: Record<string, unknown>, omit: 'exp' | 'iat' | 'sub' | null) => {
-    let jwt = new SignJWT({
-      [`${CLAIM}/deployment_id`]: DEPLOYMENT_ID,
-      [`${CLAIM}/message_type`]: 'LtiResourceLinkRequest',
-      [`${CLAIM}/version`]: '1.3.0',
-      [`${CLAIM}/roles`]: [],
-      [`${CLAIM}/resource_link`]: { id: 'rl-1' },
-      [`${CLAIM}/target_link_uri`]: TARGET_LINK_URI,
-      email: 'student@example.test',
-      nonce: await beginFixture(),
-      ...claims,
-    })
-      .setProtectedHeader({ alg: 'RS256', kid: 'platform-key' })
-      .setIssuer(ISSUER)
-      .setAudience(CLIENT_ID);
-    if (omit !== 'sub') jwt = jwt.setSubject('lms-user-1');
-    if (omit !== 'iat') jwt = jwt.setIssuedAt();
-    if (omit !== 'exp') jwt = jwt.setExpirationTime('5m');
-    return jwt.sign(platformKeys.privateKey);
-  };
-
   /**
    * The worst of them. `String(payload.sub)` turned a missing subject into the string
    * "undefined", so every such launch shared one identity and would have signed each person in
    * as whoever got there first.
    */
   it('refuses a token with no subject', async () => {
-    expect(await validateLaunch({ idToken: await signed({}, 'sub'), state: lastState })).toEqual({
+    expect(await validateLaunch({ idToken: await signed({}, { omit: 'sub' }), state: lastState })).toEqual({
       ok: false,
       reason: 'missing-claims',
     });
@@ -487,21 +507,21 @@ describe('claims a launch must carry', () => {
 
   // jose validates `exp` only when it is there, so a token without one never expires.
   it('refuses a token that never expires', async () => {
-    expect(await validateLaunch({ idToken: await signed({}, 'exp'), state: lastState })).toEqual({
+    expect(await validateLaunch({ idToken: await signed({}, { omit: 'exp' }), state: lastState })).toEqual({
       ok: false,
       reason: 'missing-claims',
     });
   });
 
   it('refuses a token with no issued-at', async () => {
-    expect(await validateLaunch({ idToken: await signed({}, 'iat'), state: lastState })).toEqual({
+    expect(await validateLaunch({ idToken: await signed({}, { omit: 'iat' }), state: lastState })).toEqual({
       ok: false,
       reason: 'missing-claims',
     });
   });
 
   it('refuses a resource link launch with no resource link id', async () => {
-    const token = await signed({ [`${CLAIM}/resource_link`]: {} }, null);
+    const token = await signed({ [`${CLAIM}/resource_link`]: {} });
 
     expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
       ok: false,
@@ -510,7 +530,7 @@ describe('claims a launch must carry', () => {
   });
 
   it('refuses a launch with no target link uri', async () => {
-    const token = await signed({ [`${CLAIM}/target_link_uri`]: undefined }, null);
+    const token = await signed({ [`${CLAIM}/target_link_uri`]: undefined });
 
     expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
       ok: false,
@@ -519,7 +539,7 @@ describe('claims a launch must carry', () => {
   });
 
   it('refuses a launch with no roles claim', async () => {
-    const token = await signed({ [`${CLAIM}/roles`]: undefined }, null);
+    const token = await signed({ [`${CLAIM}/roles`]: undefined });
 
     expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
       ok: false,
@@ -529,7 +549,7 @@ describe('claims a launch must carry', () => {
 
   // Required to be present, allowed to be empty: an LMS may send no roles for a person.
   it('accepts an empty roles list', async () => {
-    const result = await validateLaunch({ idToken: await signed({}, null), state: lastState });
+    const result = await validateLaunch({ idToken: await signed(), state: lastState });
 
     expect(result.ok).toBe(true);
   });
@@ -538,17 +558,250 @@ describe('claims a launch must carry', () => {
    * A deep linking request has no resource link, so requiring one would refuse every deep link.
    */
   it('does not ask a deep linking request for a resource link', async () => {
-    const token = await signed(
-      {
-        [`${CLAIM}/message_type`]: 'LtiDeepLinkingRequest',
-        [`${CLAIM}/resource_link`]: undefined,
-        'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': {
-          deep_link_return_url: 'https://lms.test/deep_links',
-        },
+    const token = await signed({
+      [`${CLAIM}/message_type`]: 'LtiDeepLinkingRequest',
+      [`${CLAIM}/resource_link`]: undefined,
+      'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': {
+        deep_link_return_url: 'https://lms.test/deep_links',
       },
-      null,
-    );
+    });
 
     expect((await validateLaunch({ idToken: token, state: lastState })).ok).toBe(true);
+  });
+});
+
+/**
+ * Launches that are deliberately wrong, one property at a time.
+ *
+ * The suite above asks whether a good launch works and whether the obvious forgeries are turned
+ * away. This asks the narrower question a conformance run asks: for each thing LTI Core and the
+ * Security Framework say about a launch token, what happens when a platform gets exactly that
+ * one thing wrong, and does AFCT name the right problem.
+ *
+ * Naming the right problem is half the point. Every refusal here reaches a person as a sentence
+ * telling them what to do next, and sending an administrator to check a registration when the
+ * real fault is a server clock costs an afternoon.
+ */
+describe('deliberately malformed launches', () => {
+  describe('the signature', () => {
+    /**
+     * The classic JWT attack: strip the signature and declare the token unsecured. It has to be
+     * refused by the verifier rather than by anything downstream, because every claim in it is
+     * whatever the sender wanted it to be.
+     */
+    it('refuses an unsecured token', async () => {
+      const nonce = await beginFixture();
+      const token = new UnsecuredJWT({
+        [`${CLAIM}/deployment_id`]: DEPLOYMENT_ID,
+        [`${CLAIM}/message_type`]: 'LtiResourceLinkRequest',
+        [`${CLAIM}/version`]: '1.3.0',
+        [`${CLAIM}/roles`]: [],
+        [`${CLAIM}/resource_link`]: { id: 'rl-1' },
+        [`${CLAIM}/target_link_uri`]: TARGET_LINK_URI,
+        email: 'student@example.test',
+        nonce,
+      })
+        .setIssuer(ISSUER)
+        .setAudience(CLIENT_ID)
+        .setSubject('lms-user-1')
+        .setIssuedAt()
+        .setExpirationTime('5m')
+        .encode();
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'bad-signature',
+      });
+    });
+
+    /**
+     * A real signature, by a real key, that the platform does not publish. Trusting the header's
+     * word for which key to use is how a tool ends up verifying against the attacker's own.
+     */
+    it('refuses a token naming a key the platform does not publish', async () => {
+      const token = await signed({}, { header: { alg: 'RS256', kid: 'a-key-nobody-published' } });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'bad-signature',
+      });
+    });
+  });
+
+  /**
+   * The LMS and AFCT are different machines, so some tolerance is necessary and its size is a
+   * security decision. These pin both sides of it.
+   */
+  describe('the clock', () => {
+    it('accepts a token that expired inside the allowed skew', async () => {
+      const now = nowSeconds();
+      const token = await signed({}, { issuedAt: now - 300, expiresAt: now - 10 });
+
+      expect((await validateLaunch({ idToken: token, state: lastState })).ok).toBe(true);
+    });
+
+    it('refuses one that expired outside it', async () => {
+      const now = nowSeconds();
+      const token = await signed({}, { issuedAt: now - 300, expiresAt: now - 60 });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'expired',
+      });
+    });
+
+    /**
+     * A token dated next week, expiring a week and five minutes from now. jose checks `iat` only
+     * when `maxTokenAge` is set, so before there was an explicit check this verified, and the
+     * sender got to decide how long its own token stayed good for.
+     */
+    it('refuses a token issued in the future', async () => {
+      const future = nowSeconds() + 7 * 24 * 60 * 60;
+      const token = await signed({}, { issuedAt: future, expiresAt: future + 300 });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'expired',
+      });
+    });
+
+    /**
+     * Not yet valid is a clock problem, and reporting it as a bad signature sends an
+     * administrator to check the registration, which is the wrong place to look.
+     */
+    it('calls a token that is not valid yet a clock problem, not a forgery', async () => {
+      const token = await signed({ nbf: nowSeconds() + 3600 }, { expiresAt: nowSeconds() + 7200 });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'expired',
+      });
+    });
+
+    /**
+     * The launch record's own window, which is shorter than anything the token says. A launch
+     * left open for an hour is refused as a replay: the advice is the same either way, which is
+     * to go back to the LMS and click the link again.
+     */
+    it('refuses a launch whose window has closed', async () => {
+      const started = await startLaunch({
+        platformId,
+        targetLinkUri: TARGET_LINK_URI,
+        ttlMs: -1000,
+      });
+      const token = await signed({ nonce: started.nonce });
+
+      expect(await validateLaunch({ idToken: token, state: started.state })).toEqual({
+        ok: false,
+        reason: 'replayed',
+      });
+    });
+  });
+
+  /**
+   * Claims that are present, so nothing that only checks for presence notices, and are not the
+   * kind of thing they are declared to be. A signature proves who sent the token, not that a
+   * platform serialised it correctly.
+   */
+  describe('claims of the wrong type', () => {
+    // The subject names the person. A number here read as a string once already, which is how
+    // every launch missing a subject came to share one identity.
+    it('refuses a subject that is not a string', async () => {
+      const token = await signed({ sub: 12345 }, { omit: 'sub' });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'missing-claims',
+      });
+    });
+
+    // A single role sent as a bare string rather than a one-element list. Filtering it would
+    // silently produce no roles at all, which is a person landing in a course with none.
+    it('refuses a roles claim that is not a list', async () => {
+      const token = await signed({ [`${CLAIM}/roles`]: 'Learner' });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'missing-claims',
+      });
+    });
+
+    it('refuses a nonce that is not a string', async () => {
+      const token = await signed({ nonce: 1234567890 });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'replayed',
+      });
+    });
+
+    // Blank is the same as absent: there is nothing to identify a person by.
+    it('refuses an email that is only whitespace', async () => {
+      const token = await signed({ email: '   ' });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'no-email',
+      });
+    });
+  });
+
+  describe('the shape of the message', () => {
+    it('refuses a token that does not say what kind of message it is', async () => {
+      const token = await signed({ [`${CLAIM}/message_type`]: undefined });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'wrong-message-type',
+      });
+    });
+
+    /**
+     * A deep linking request with settings but no return URL. Accepting it would let staff pick
+     * an assignment and then have the answer go nowhere, with nothing to say why.
+     */
+    it('refuses a deep linking request with nowhere to send the answer', async () => {
+      const token = await signed({
+        [`${CLAIM}/message_type`]: 'LtiDeepLinkingRequest',
+        'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': { data: 'opaque' },
+      });
+
+      expect(await validateLaunch({ idToken: token, state: lastState })).toEqual({
+        ok: false,
+        reason: 'wrong-message-type',
+      });
+    });
+  });
+
+  /**
+   * When a token is addressed to more than one party, OIDC requires `azp` to name the one it is
+   * actually for. Without it there is nothing that says this launch is ours, and guessing at the
+   * list would be the tool deciding a token was addressed to it.
+   */
+  it('refuses several audiences with nothing saying which is ours', async () => {
+    const token = await signed({}, { audience: ['some-other-tool', CLIENT_ID] });
+
+    expect(await validateLaunch({ idToken: token, state: lastState })).toMatchObject({
+      ok: false,
+      reason: 'unregistered-platform',
+    });
+  });
+
+  /**
+   * Two copies of one launch arriving together, which is what a double-clicked link does. The
+   * launch is spent with a conditional update rather than a read followed by a write, so exactly
+   * one of them may pass; a check-then-act would let both through.
+   */
+  it('lets exactly one of two simultaneous copies of a launch through', async () => {
+    const token = await signed();
+    const state = lastState;
+
+    const outcomes = await Promise.all([
+      validateLaunch({ idToken: token, state }),
+      validateLaunch({ idToken: token, state }),
+    ]);
+
+    expect(outcomes.filter((r) => r.ok)).toHaveLength(1);
+    expect(outcomes.filter((r) => !r.ok && r.reason === 'replayed')).toHaveLength(1);
   });
 });
