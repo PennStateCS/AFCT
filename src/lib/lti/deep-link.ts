@@ -47,18 +47,23 @@ export async function buildDeepLinkResponse(opts: {
   returnUrl: string;
   data: string | null;
   items: DeepLinkItem[];
-  /** What the request said it will take. Empty means it did not say, so nothing is ruled out. */
-  acceptTypes?: string[];
-  /** False only when the request said it will not take a gradebook column. */
-  acceptLineItem?: boolean;
+  /** What the request said it will take. Required by DL 2.0, so this is never empty in practice. */
+  acceptTypes: string[];
+  /**
+   * Whether the platform will take a gradebook column: true, false, or null for a request that
+   * did not say. Null is not permission, so it is treated like false here.
+   */
+  acceptLineItem: boolean | null;
 }): Promise<DeepLinkResponse> {
   /**
    * The platform states what it will accept and the tool is expected to honour it. AFCT has
    * only assignments to offer, so if a link to one is not on the list there is nothing to send
    * and saying so beats posting something that will be refused.
+   *
+   * Checked at launch too, which is where somebody finds out before picking anything. This is
+   * the backstop for a pending choice whose stored settings say otherwise.
    */
-  const accepts = opts.acceptTypes ?? [];
-  if (accepts.length > 0 && !accepts.includes('ltiResourceLink')) {
+  if (!opts.acceptTypes.includes('ltiResourceLink')) {
     return { ok: false, reason: 'type-not-accepted' };
   }
 
@@ -74,8 +79,14 @@ export async function buildDeepLinkResponse(opts: {
     // Carried back on every launch through this link, which is how AFCT knows which assignment
     // a click means without asking again.
     custom: { afct_assignment_id: item.assignmentId },
-    // A column only when the assignment is worth something and the platform will take one.
-    ...(item.scoreMaximum && opts.acceptLineItem !== false
+    /**
+     * A column only when the assignment is worth something and the platform has actually said
+     * it takes one. DL 2.0: with `accept_lineitem` absent "no assumption can be made about the
+     * support of line items", so silence is not consent. Sending one anyway risks the platform
+     * rejecting the whole response, which loses the staff member's choice rather than just the
+     * column; a missing column is visible and fixable, a refused response is neither.
+     */
+    ...(item.scoreMaximum && opts.acceptLineItem === true
       ? { lineItem: { scoreMaximum: item.scoreMaximum, label: item.title } }
       : {}),
   }));

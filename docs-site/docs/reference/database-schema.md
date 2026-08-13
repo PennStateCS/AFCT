@@ -133,7 +133,8 @@ erDiagram
   String returnUrl
   String data "nullable"
   String acceptTypes
-  Boolean acceptLineItem
+  String acceptPresentationDocumentTargets
+  Boolean acceptLineItem "nullable"
   String userId FK
   DateTime expiresAt
   DateTime createdAt
@@ -438,13 +439,17 @@ Properties as follows:
 - `returnUrl`: Where the signed answer is posted, exactly as the platform gave it.
 - `data`: The platform's own opaque state, returned untouched or the response is rejected.
 - `acceptTypes`
-  > What the platform said it will accept, from the deep linking settings claim. AFCT only
-  > offers assignments, so the question is whether a link to one is acceptable at all, and
-  > whether a gradebook column may come with it. Null means the platform did not say, which
-  > the spec leaves as no restriction.
+  > What the platform said it will accept, from the deep linking settings claim. Required by
+  > Deep Linking 2.0, so never empty: a request without it is refused at launch.
+- `acceptPresentationDocumentTargets`
+  > How the platform is prepared to display what it is given. Also required by Deep Linking
+  > 2.0. AFCT has nothing to decide from it yet and keeps it anyway, because dropping a
+  > required part of the request would make it unrecoverable if that ever changes.
 - `acceptLineItem`
-  > False when the platform said it will not take a line item, in which case the response
-  > leaves one out rather than sending something that was refused in advance.
+  > Whether a gradebook column may come with the link. Three states, and null is the important
+  > one: Deep Linking 2.0 says that when accept_lineitem is absent "no assumption can be made
+  > about the support of line items", so it is not the same as true and AFCT sends a line item
+  > only when the platform has said so outright.
 - `userId`: Who the launch signed in. Only they can answer it.
 - `expiresAt`: When this stops being usable.
 - `createdAt`: When this record was created.

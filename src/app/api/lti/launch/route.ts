@@ -148,6 +148,7 @@ async function decideDestination(identity: LaunchIdentity, userId: string): Prom
         returnUrl: identity.deepLink.returnUrl,
         data: identity.deepLink.data,
         acceptTypes: identity.deepLink.acceptTypes,
+        acceptPresentationDocumentTargets: identity.deepLink.acceptPresentationDocumentTargets,
         acceptLineItem: identity.deepLink.acceptLineItem,
         userId,
         expiresAt: new Date(Date.now() + PENDING_LINK_TTL_MS),
