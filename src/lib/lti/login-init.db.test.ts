@@ -13,9 +13,9 @@ const ISSUER = 'https://canvas.example.test';
 const REDIRECT = 'https://afct.example.test/api/lti/launch';
 
 async function destroyFixtures() {
-  await prisma.singleUseToken.deleteMany({
-    where: { purpose: { in: ['LTI_LAUNCH_NONCE', 'LTI_LAUNCH_STATE'] } },
-  });
+  // Emptied rather than narrowed, so the "mints nothing" case below can count the whole table.
+  // The database suite runs its files one at a time, so there is nothing else in it to disturb.
+  await prisma.ltiLaunchTransaction.deleteMany({});
   await prisma.ltiPlatform.deleteMany({ where: { issuer: ISSUER } });
 }
 
@@ -178,12 +178,16 @@ describe('picking the registration', () => {
     expect(result).toEqual({ ok: false, reason: 'missing-issuer' });
   });
 
-  // Nothing should be minted for a launch that is not going to happen.
+  /**
+   * Nothing should be minted for a launch that is not going to happen. This counted single-use
+   * tokens until the launch record replaced them, after which it passed without proving
+   * anything: no code has written a token of that purpose since.
+   */
   it('mints nothing when it refuses', async () => {
     await prisma.ltiPlatform.deleteMany({ where: { issuer: ISSUER } });
 
     await begin();
 
-    expect(await prisma.singleUseToken.count({ where: { purpose: 'LTI_LAUNCH_STATE' } })).toBe(0);
+    expect(await prisma.ltiLaunchTransaction.count()).toBe(0);
   });
 });
