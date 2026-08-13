@@ -7,7 +7,13 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { claimNextMail, markMailSent, markMailFailed, abandonMail } from '@/lib/mail-queue';
+import {
+  claimNextMail,
+  markMailSent,
+  markMailFailed,
+  abandonMail,
+  readQueuedBody,
+} from '@/lib/mail-queue';
 import { sendMail, MailError, isRetryableMailFailure } from '@/lib/mailer';
 
 /** How often to look for work. Short: somebody is waiting on a reset link. */
@@ -51,8 +57,23 @@ export async function sendOneMail(): Promise<MailOutcome> {
     }
   }
 
+  /**
+   * A body that cannot be read is finished, not delayed.
+   *
+   * It means the key has changed under it, or a backup was restored with a different one. No
+   * number of retries recovers that, and the row would otherwise be claimed and abandoned every
+   * five minutes for ever, because the attempt limit only applies to failures that get as far as
+   * being recorded.
+   */
+  const text = readQueuedBody(claimed);
+  if (text === null) {
+    const why = 'the queued message could not be read, which usually means the secret key changed';
+    await abandonMail(claimed.id, why);
+    return { status: 'abandoned', reason: why };
+  }
+
   try {
-    await sendMail({ to: claimed.to, subject: claimed.subject, text: claimed.text });
+    await sendMail({ to: claimed.to, subject: claimed.subject, text });
   } catch (error) {
     const retryable = isRetryableMailFailure(error);
     await markMailFailed({
