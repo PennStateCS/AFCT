@@ -21,13 +21,23 @@ const LINE_ITEMS_URL = `${ISSUER}/contexts/1/line_items`;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-/** A platform that issues tokens, creates columns and accepts scores. */
+/**
+ * A platform that issues tokens, creates columns and accepts scores.
+ *
+ * The line item container answers with a JSON array and a created column with an object, as AGS
+ * requires. It used to answer everything with the same object, which a lookup read as "not a
+ * list" and would now refuse; before the lookup told those apart it read as "no columns" and
+ * quietly created one on every attempt.
+ */
 function workingPlatform() {
   const posted: string[] = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init: RequestInit = {}) => {
       if (url.endsWith('/token')) return json({ access_token: 'tok', expires_in: 3600 });
+      const method = init.method ?? 'GET';
+      // No column for this assignment yet, said the way a container says it.
+      if (method === 'GET') return json([]);
       posted.push(url);
       return json({ id: `${LINE_ITEMS_URL}/42` });
     }),
