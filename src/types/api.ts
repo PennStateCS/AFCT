@@ -757,7 +757,7 @@ export interface paths {
         };
         /**
          * Check whether an email is registered
-         * @description Reports whether an email is already registered, so the signup form can warn  before submitting. Unauthenticated by design; it therefore leaks account  existence, which is an accepted trade-off for signup UX, but it is IP rate-limited  so it can't be used to bulk-enumerate accounts, and it only ever returns a boolean.
+         * @description Reports whether an email is already registered.   This was unauthenticated, on the reasoning that a signup form should warn before submitting  and that the leak was a fair price for it. The signup form never used it: the only caller is  the admin-only Change User Email dialog, which needs to know whether an address is taken  before it offers to save. So the trade was being paid for and not spent.   It matters because of what sits next to it. `/api/auth/password-reset` answers identically  for every address and now queues its mail so it answers in the same *time* too, all to avoid  saying whether an account exists. An unauthenticated endpoint that answers that question  outright undoes the lot. Administrators may ask; nobody else needs to.   The IP rate limit stays as defence in depth: an admin session is not a licence to enumerate  the directory at speed, and the limit is what an administrator sees on System Status.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/auth/check-email/route.ts)
          */
@@ -5106,6 +5106,24 @@ export interface operations {
             };
             /** @description The email query parameter is missing. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
