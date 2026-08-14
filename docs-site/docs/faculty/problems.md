@@ -28,6 +28,8 @@ A problem in the bank is only the definition. Points, the accepted-submission li
 
 You can also create a problem from inside an assignment. In that case, AFCT adds the new problem to the problem bank and to the open assignment.
 
+To try an answer file against a sample submission before you build a problem around it, see [Test the Evaluator](evaluator-test.md).
+
 ## Review and edit a problem
 
 The problem table shows the title, type, answer file, state limit, deterministic requirement, and creation date. A **Used** label means the problem belongs to at least one assignment.
