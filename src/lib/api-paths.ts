@@ -201,6 +201,10 @@ export const apiPaths = {
   submissionRerun: (id: string) => `/api/submissions/${id}/rerun`,
   courseSubmissionsRerun: (id: string) => `/api/courses/${id}/submissions/rerun`,
 
+  // --- Evaluator trials (staff dry runs) -----------------------------------
+  evaluatorTrials: () => '/api/evaluator-trials',
+  evaluatorTrial: (id: string) => `/api/evaluator-trials/${id}`,
+
   // --- Account -------------------------------------------------------------
   user: (id: string) => `/api/users/${id}`,
   sessionExtend: () => '/api/session/extend',

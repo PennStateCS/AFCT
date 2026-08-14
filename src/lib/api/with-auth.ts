@@ -9,6 +9,7 @@ import {
   canAccessCourse,
   isCourseArchived,
   isCourseDeleted,
+  isCourseStaffAnywhere,
 } from '@/lib/permissions';
 import { createEnhancedActivityLog, type ActivityCategory } from '@/lib/activity-log-utils';
 import { withServerTiming } from '@/lib/perf-debug';
@@ -56,6 +57,38 @@ export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
         // Admin-gate denials are system-level unless the caller says otherwise.
         category: opts.deniedCategory ?? 'SYSTEM',
         metadata: { reason: 'not an administrator', required: 'admin' },
+      });
+      return apiError(403, 'Forbidden');
+    }
+    return withServerTiming(req, () => handler(req, ctx, { session, user: session.user }));
+  };
+}
+
+/**
+ * Wraps a handler that any course staff member may reach, following the same standard
+ * as {@link withAdminAuth}: 401 unsigned, 403 + SECURITY log for a signed-in caller who
+ * is neither an admin nor FACULTY/TA anywhere.
+ *
+ * For staff tools that belong to no particular course (the evaluator trial page), where
+ * there is no course id to gate on but students must still be kept out. Anything that
+ * touches a course's data belongs behind {@link withCourseAuth} instead.
+ */
+export function withStaffAuth<Ctx = unknown, R extends Response = Response>(
+  handler: (req: Request, ctx: Ctx, auth: AdminAuthContext) => Promise<R> | R,
+  opts: { deniedAction: string; deniedCategory?: ActivityCategory },
+): (req: Request, ctx: Ctx) => Promise<R | NextResponse> {
+  return async (req: Request, ctx: Ctx) => {
+    const session = await auth();
+    if (!session?.user || session.user.inactive) {
+      return apiError(401, 'Unauthorized');
+    }
+    if (!(await isCourseStaffAnywhere(session.user))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: opts.deniedAction,
+        severity: 'SECURITY',
+        category: opts.deniedCategory ?? 'SYSTEM',
+        metadata: { reason: 'not course staff', required: 'faculty, TA or admin' },
       });
       return apiError(403, 'Forbidden');
     }

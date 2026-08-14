@@ -9,6 +9,7 @@ import { execSync } from 'child_process';
 import os from 'os';
 
 import { runEvaluatorJar } from './evaluator-runner';
+import { claimAndRunTrial, reapStuckTrials } from './trial-runner';
 import { getEvaluatorConfig, getQueueSettings, type EvaluatorConfig } from './eval-config';
 import { createEnhancedActivityLog, type LogSeverity } from './activity-log-utils';
 import { errMessage } from './errors';
@@ -240,6 +241,12 @@ async function reapStuckSubmissions() {
       // Stuck PROCESSING rows almost always mean the server died mid-evaluation.
       await logQueueEvent('SUBMISSION_QUEUE_REAPED', 'WARNING', { count: reaped.count });
     }
+
+    // Staff trials get stuck the same way, and are failed rather than retried.
+    const reapedTrials = await reapStuckTrials(cutoff);
+    if (reapedTrials > 0) {
+      console.warn(`[SubmissionWorker] Failed ${reapedTrials} stuck evaluator trial(s)`);
+    }
   } catch (error) {
     console.error('[SubmissionWorker] Reaper error:', error);
     await logQueueEvent('SUBMISSION_QUEUE_REAPER_ERROR', 'ERROR', {
@@ -300,6 +307,14 @@ async function runWorkerLoop() {
   }
 
   try {
+    // Staff evaluator trials come first: somebody is watching that page, and the
+    // ceiling inside claimAndRunTrial is what stops them crowding out grading.
+    if (await claimAndRunTrial(desiredWorkers)) {
+      lastWorkAt = Date.now();
+      scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
+      return;
+    }
+
     // Fairness: a student who already has a submission being processed is skipped
     // so one student cannot occupy multiple worker slots at once.
     const inFlight = await prisma.submission.findMany({

@@ -11,6 +11,15 @@ const prismaMock = vi.hoisted(() => ({
   },
   assignmentProblemGrade: { upsert: vi.fn(), updateMany: vi.fn(), createMany: vi.fn() },
   groupMembership: { findMany: vi.fn() },
+  // The loop checks for a staff evaluator trial before it looks for a submission. Mocked
+  // fully, not just the method the happy path calls: a missing one throws inside the loop
+  // and every assertion about scheduling then measures the error path instead.
+  evaluatorTrial: {
+    findFirst: vi.fn(),
+    count: vi.fn(),
+    updateMany: vi.fn(),
+    findUnique: vi.fn(),
+  },
   // The grade fan-out runs in one transaction; the callback gets the same mock client so the
   // existing assertions on updateMany/createMany still see the calls.
   $transaction: vi.fn(),
@@ -94,6 +103,10 @@ beforeEach(() => {
     calcHashData: 'content-hash-value',
   });
   checkFileStatusMock.mockResolvedValue({ status: 'ok' });
+  // No trial waiting, unless a test says otherwise.
+  prismaMock.evaluatorTrial.findFirst.mockResolvedValue(null);
+  prismaMock.evaluatorTrial.count.mockResolvedValue(0);
+  prismaMock.evaluatorTrial.updateMany.mockResolvedValue({ count: 1 });
   delete process.env.CFGANALYZER_BINARY;
 });
 

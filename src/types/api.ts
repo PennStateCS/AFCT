@@ -2472,6 +2472,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/evaluator-trials/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an evaluator trial
+         * @description The state of one evaluator trial, polled by the page while it runs.   Only the person who started it (or a system admin) may read it back. Reading a  finished trial is also what deletes its uploads: they were somebody's coursework, and  the moment the result exists there is no reason to keep them. The janitor in  `evaluator-trials.ts` is the backstop for a run nobody comes back to.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/evaluator-trials/[id]/route.ts)
+         */
+        get: operations["getEvaluatorTrialsById"];
+        put?: never;
+        post?: never;
+        /**
+         * Discard an evaluator trial
+         * @description Discards a trial: its uploads and its row go now rather than at expiry. The page calls  this when the user clears a result or starts another run.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/evaluator-trials/[id]/route.ts)
+         */
+        delete: operations["deleteEvaluatorTrialsById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evaluator-trials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an evaluator trial
+         * @description Starts an evaluator trial: an answer file and a submitted file, queued to be run  through the real evaluator. Course staff (faculty or TAs) or a system admin.   Nothing here is graded and nothing is kept: the uploads are deleted as soon as the run  finishes and the result expires within the hour. A caller may only have one trial in  flight at a time, which is also what stops the queue filling with them.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/evaluator-trials/route.ts)
+         */
+        post: operations["postEvaluatorTrials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/files/pfps/{file}": {
         parameters: {
             query?: never;
@@ -11405,6 +11455,208 @@ export interface operations {
             };
             /** @description Not signed in. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getEvaluatorTrialsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The trial and its result so far. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such trial, or it belongs to somebody else. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteEvaluatorTrialsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Gone. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such trial, or it belongs to somebody else. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postEvaluatorTrials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** @description Problem type (FA, PDA, RE, CFG, TM) */
+                    type: string;
+                    /** @description FA/PDA only */
+                    maxStates?: string;
+                    /**
+                     * @description FA only
+                     * @enum {string}
+                     */
+                    isDeterministic?: "true" | "false";
+                    /** Format: binary */
+                    answerFile: string;
+                    /** Format: binary */
+                    submissionFile: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The queued trial. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing files, or a file failed structure validation. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The caller already has a trial in flight. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A file exceeds the system upload limit. */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

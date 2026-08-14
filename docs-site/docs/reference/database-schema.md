@@ -1352,6 +1352,28 @@ erDiagram
   DateTime createdAt
   DateTime updatedAt
 }
+"EvaluatorTrial" {
+  String id PK
+  String requestedById FK
+  ProblemType problemType
+  Int maxStates "nullable"
+  Boolean isDeterministic "nullable"
+  String answerFileName "nullable"
+  String submissionFileName "nullable"
+  String answerOriginalName
+  String submissionOriginalName
+  EvaluatorTrialState state
+  Boolean correct "nullable"
+  String feedback "nullable"
+  Json evaluationRaw "nullable"
+  String stderr "nullable"
+  Int durationMs "nullable"
+  DateTime createdAt
+  DateTime startedAt "nullable"
+  DateTime completedAt "nullable"
+  DateTime expiresAt
+  DateTime updatedAt
+}
 "User" {
   String id PK
   String email UK
@@ -1450,6 +1472,7 @@ erDiagram
 "ActivityLog" }o--o| "Assignment" : assignment
 "ActivityLog" }o--o| "Problem" : problem
 "ActivityLog" }o--o| "Submission" : submission
+"EvaluatorTrial" }o--|| "User" : requestedBy
 "Assignment" }o--|| "Course" : course
 "Problem" }o--|| "Course" : course
 "Submission" }o--|| "User" : student
@@ -1582,3 +1605,46 @@ Properties as follows:
 - `sentAt`: When the mail server accepted it.
 - `createdAt`: When this record was created.
 - `updatedAt`: When it was last changed.
+
+### `EvaluatorTrial`
+
+A staff dry run of the evaluator: an answer file and a submitted file, run through the
+real jar, with no grade attached to the result.
+
+Deliberately not a Submission. That table is what grades are computed from, and its
+foreign keys require an assignment, a problem and a student, none of which a trial has.
+
+The uploads are usually a real student's work, being re-run to reproduce a grading
+complaint, so they are education records even though staff uploaded them. Keeping them
+would create a second store of student work outside the submission system and outside
+the access controls around it. That is why the files are deleted the moment the run
+ends and the row itself expires: it is a safety property, not housekeeping.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `requestedById`: Who asked for it.
+- `problemType`
+  > Which mode to run the evaluator in. The CLI arguments differ by type: FA and PDA
+  > carry a state bound, and FA a determinism flag as well.
+- `maxStates`: State bound for FA/PDA, as on the problem itself. Empty means unbounded.
+- `isDeterministic`: Whether an FA answer must be deterministic.
+- `answerFileName`
+  > Stored upload names under the trials directory. Cleared when the files are deleted,
+  > which is what tells the orphan sweep it has nothing left to remove for this row.
+- `submissionFileName`:
+- `answerOriginalName`: What the uploader called the files, kept for display after the uploads are gone.
+- `submissionOriginalName`:
+- `state`: Where the run has got to.
+- `correct`: Whether the evaluator judged the submitted file correct. Empty until it finishes.
+- `feedback`: The evaluator's feedback, or the reason it produced none.
+- `evaluationRaw`: Full evaluator output, which is the point of the page.
+- `stderr`: Anything the jar wrote to stderr, shown as a diagnostic.
+- `durationMs`: How long the jar ran, in milliseconds.
+- `createdAt`: When this record was created.
+- `startedAt`: When a worker claimed it.
+- `completedAt`: When it finished, either way.
+- `expiresAt`
+  > When the row itself may be removed. See the note above: results are short-lived on
+  > purpose, so a trial is never a lasting copy of somebody's work.
+- `updatedAt`: When this record was last changed.
