@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { formBoolean, formBooleanOptional } from './fields';
 import { passwordRules, PASSWORD_MAX_LENGTH } from '@/lib/password-policy';
 import { COURSE_ROLE_VALUES } from '@/lib/course-roles';
+import { ImageFileOptional } from './image-file';
 
 // App-level role set (no Prisma counterpart; the global User.role was dropped).
 export const RoleEnum = z.enum(['ADMIN', 'FACULTY', 'TA', 'STUDENT']);
@@ -58,30 +59,8 @@ export const CreateUserSchema = BaseUserSchema.extend({
   message: 'Passwords must match.',
 });
 
-// Server-side safe image file validation
-const createImageFileSchema = () => {
-  // Check if File constructor is available (browser environment)
-  if (typeof File !== 'undefined') {
-    return z
-      .instanceof(File, { message: 'Invalid file.' })
-      .refine((f) => f.size <= 5 * 1024 * 1024, 'Avatar must be ≤ 5MB.')
-      .refine((f) => f.type.startsWith('image/'), 'Avatar must be an image.')
-      .optional();
-  }
+// The avatar field, and why it carries no size limit, live in one place now.
 
-  // Server-side fallback
-  return z
-    .any()
-    .refine((f) => {
-      if (f && typeof f === 'object' && 'size' in f && 'type' in f) {
-        return f.size <= 5 * 1024 * 1024 && f.type.startsWith('image/');
-      }
-      return true; // Let server handle validation
-    }, 'Avatar must be a valid image ≤ 5MB')
-    .optional();
-};
-
-const ImageFileOptional = createImageFileSchema();
 
 export const UpdateUserSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.').max(60, 'First name is too long.'),

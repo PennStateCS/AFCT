@@ -1,18 +1,20 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
-import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logDenial, logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { canManageCourse } from '@/lib/permissions';
 import { readJson } from '@/lib/api/request';
-import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
-import { descriptionWriteData, descriptionCopyData } from '@/lib/description-write';
+import { descriptionWriteData } from '@/lib/description-write';
 import { AssignmentImportApiSchema } from '@/schemas/assignment';
+import {
+  assignmentProblemSelect,
+  attachCopiedProblems,
+  copyAnswerKeysForProblems,
+  type CopiedAnswerKey,
+} from '@/lib/problem-copy';
 
-// Solution files live here (same as the problem upload / duplicate paths).
-const solutionsDir = path.join('/private', 'uploads', 'solutions');
 
 /**
  * Imports an assignment from ANOTHER course the caller can manage into this course.
@@ -95,59 +97,20 @@ export const POST = withCourseAuth(
           unlockAt: true,
           allowLateSubmissions: true,
           lateCutoff: true,
-          problems: {
-            select: {
-              maxPoints: true,
-              maxSubmissions: true,
-              autograderEnabled: true,
-              problem: {
-                select: {
-                  id: true,
-                  title: true,
-                  description: true,
-                  descriptionFormat: true,
-                  descriptionJson: true,
-                  type: true,
-                  maxStates: true,
-                  isDeterministic: true,
-                  fileName: true,
-                  originalFileName: true,
-                },
-              },
-            },
-          },
+          problems: { select: assignmentProblemSelect },
         },
       });
       if (!source) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
 
-      // Copy each problem's solution file to a fresh name BEFORE the DB transaction, so
-      // the transaction is pure DB writes and a failure can unlink what was copied.
-      // Keyed by source problem id -> {fileName, originalFileName} for the new Problem.
-      const solutionByProblemId = new Map<
-        string,
-        { fileName: string | null; originalFileName: string | null }
-      >();
+      // Copied before the DB transaction so the transaction is pure database writes and a
+      // failure can unlink whatever was already written. See `copyAnswerKeysForProblems`.
+      const solutionByProblemId = new Map<string, CopiedAnswerKey>();
       if (problemMode === 'copy') {
-        for (const link of source.problems) {
-          const p = link.problem;
-          const originalFileName = p.originalFileName ?? null;
-          if (!p.fileName) {
-            solutionByProblemId.set(p.id, { fileName: null, originalFileName });
-            continue;
-          }
-          const src = resolveInsideDir(solutionsDir, p.fileName);
-          if (!fs.existsSync(src)) {
-            solutionByProblemId.set(p.id, { fileName: null, originalFileName });
-            continue;
-          }
-          const newName = safeStoredFilename(p.originalFileName ?? p.fileName);
-          const dest = resolveInsideDir(solutionsDir, newName);
-          await fs.promises.copyFile(src, dest);
-          copiedSolutionFiles.push(dest);
-          solutionByProblemId.set(p.id, { fileName: newName, originalFileName });
-        }
+        const copied = await copyAnswerKeysForProblems(source.problems.map((link) => link.problem));
+        for (const [id, key] of copied.byProblemId) solutionByProblemId.set(id, key);
+        copiedSolutionFiles.push(...copied.copiedPaths);
       }
 
       const created = await prisma.$transaction(async (tx) => {
@@ -173,35 +136,12 @@ export const POST = withCourseAuth(
         });
 
         if (problemMode === 'copy') {
-          for (const l of source.problems) {
-            const p = l.problem;
-            const sol = solutionByProblemId.get(p.id) ?? {
-              fileName: null,
-              originalFileName: p.originalFileName ?? null,
-            };
-            const newProblem = await tx.problem.create({
-              data: {
-                title: p.title,
-                // Carry the rich description verbatim so a copy is not silently downgraded.
-                ...descriptionCopyData(p),
-                type: p.type,
-                maxStates: p.maxStates,
-                isDeterministic: p.isDeterministic,
-                fileName: sol.fileName,
-                originalFileName: sol.originalFileName,
-                courseId,
-              },
-            });
-            await tx.assignmentProblem.create({
-              data: {
-                assignmentId: imported.id,
-                problemId: newProblem.id,
-                maxPoints: l.maxPoints,
-                maxSubmissions: l.maxSubmissions,
-                autograderEnabled: l.autograderEnabled,
-              },
-            });
-          }
+          await attachCopiedProblems(tx, {
+            links: source.problems,
+            assignmentId: imported.id,
+            courseId,
+            answerKeys: solutionByProblemId,
+          });
         }
 
         return imported;

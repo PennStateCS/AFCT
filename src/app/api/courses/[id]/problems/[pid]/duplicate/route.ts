@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import fs from 'fs';
-import path from 'path';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
-import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
-import { descriptionWriteData } from '@/lib/description-write';
+import { copyProblemInto } from '@/lib/problem-copy';
 import { readJson } from '@/lib/api/request';
 import { ProblemDuplicateApiSchema } from '@/schemas/problem';
-
-// Solution files live here; the URL to serve them is /api/files/solutions/[file].
-const uploadsDir = path.join('/private', 'uploads', 'solutions');
 
 /**
  * Duplicate a problem within the same course. The title/description come from the
@@ -44,8 +38,6 @@ const uploadsDir = path.join('/private', 'uploads', 'solutions');
 export const POST = withCourseAuth(
   async (req, ctx, { user, courseId }) => {
     const { pid: problemId } = await ctx.params;
-    // The solution file copied before the DB write, so a failed create can unlink it.
-    let copiedFile: string | null = null;
     try {
       const source = await prisma.problem.findFirst({ where: { id: problemId, courseId } });
       if (!source) {
@@ -56,42 +48,13 @@ export const POST = withCourseAuth(
       if (!parsed.ok) return parsed.response;
       const { title, description, descriptionJson } = parsed.data;
 
-      // Copy the answer-key file to a new name, if the source has one and it's on disk.
-      let newFileName: string | null = null;
-      if (source.fileName) {
-        const src = resolveInsideDir(uploadsDir, source.fileName);
-        if (fs.existsSync(src)) {
-          newFileName = safeStoredFilename(source.originalFileName ?? source.fileName);
-          const dest = resolveInsideDir(uploadsDir, newFileName);
-          await fs.promises.copyFile(src, dest);
-          copiedFile = dest;
-        }
-      }
-
-      let created;
-      try {
-        created = await prisma.problem.create({
-          data: {
-            title,
-            // The dialog can edit the description, so the body wins; rich JSON (when sent)
-            // is authoritative and the plain text is derived from it.
-            ...descriptionWriteData({ description, descriptionJson }),
-            type: source.type,
-            maxStates: source.maxStates,
-            isDeterministic: source.isDeterministic,
-            fileName: newFileName,
-            // Only carry the display name when a file was actually copied.
-            originalFileName: newFileName ? (source.originalFileName ?? null) : null,
-            courseId,
-          },
-        });
-      } catch (dbErr) {
-        // The new row was not created, so the copied file would be orphaned; remove it.
-        if (copiedFile) {
-          await fs.promises.unlink(copiedFile).catch(() => undefined);
-        }
-        throw dbErr;
-      }
+      const { created, copiedFileName } = await copyProblemInto({
+        source,
+        courseId,
+        title,
+        description,
+        descriptionJson,
+      });
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
@@ -106,7 +69,7 @@ export const POST = withCourseAuth(
           sourceProblemId: source.id,
           newProblemId: created.id,
           title: created.title,
-          copiedFile: !!newFileName,
+          copiedFile: !!copiedFileName,
         },
       });
 
