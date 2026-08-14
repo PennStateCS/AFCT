@@ -7,7 +7,6 @@
 - [Assignments](#assignments)
 - [Submissions](#submissions)
 - [System](#system)
-- [default](#default)
 
 ## Identity
 
@@ -140,17 +139,78 @@ erDiagram
   DateTime expiresAt
   DateTime createdAt
 }
+"LtiLaunchTransaction" {
+  String id PK
+  String stateHash UK
+  String nonceHash UK
+  String platformId FK
+  String targetLinkUri "nullable"
+  DateTime expiresAt
+  DateTime usedAt "nullable"
+  DateTime createdAt
+}
+"LtiContextMember" {
+  String id PK
+  String contextLinkId FK
+  String userId FK
+  String ltiUserId
+  DateTime seenAt
+}
+"Course" {
+  String id PK
+  String name
+  String code
+  String regCode UK "nullable"
+  String semester
+  Int credits
+  DateTime startDate
+  DateTime endDate
+  DateTime registrationOpenAt "nullable"
+  DateTime registrationCloseAt "nullable"
+  Boolean isPublished
+  Boolean isArchived
+  DateTime deletedAt "nullable"
+  String timezone
+  EmptyStringNotation emptyStringNotation
+  DateTime createdAt
+  DateTime updatedAt
+}
+"Assignment" {
+  String id PK
+  String title
+  String description "nullable"
+  DescriptionFormat descriptionFormat
+  Json descriptionJson "nullable"
+  DateTime dueDate
+  DateTime unlockAt "nullable"
+  Boolean assignedToEveryone
+  Boolean isPublished
+  String groupSetId FK "nullable"
+  Boolean allowLateSubmissions
+  DateTime lateCutoff "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+  String courseId FK
+  Boolean ltiAutoSync
+}
 "ClientApiToken" }o--|| "User" : user
 "LinkedIdentity" }o--|| "User" : user
 "SingleUseToken" }o--o| "User" : user
 "LtiContextLink" }o--|| "LtiPlatform" : platform
+"LtiContextLink" }o--|| "Course" : course
 "LtiContextLink" }o--o| "User" : linkedBy
 "LtiPendingLink" }o--|| "LtiPlatform" : platform
 "LtiPendingLink" }o--|| "User" : user
 "LtiLineItem" }o--|| "LtiContextLink" : contextLink
+"LtiLineItem" }o--|| "Assignment" : assignment
+"LtiScoreQueue" }o--|| "Assignment" : assignment
 "LtiScoreQueue" }o--|| "User" : user
 "LtiPendingDeepLink" }o--|| "LtiPlatform" : platform
 "LtiPendingDeepLink" }o--|| "User" : user
+"LtiLaunchTransaction" }o--|| "LtiPlatform" : platform
+"LtiContextMember" }o--|| "LtiContextLink" : contextLink
+"LtiContextMember" }o--|| "User" : user
+"Assignment" }o--|| "Course" : course
 ```
 
 ### `User`
@@ -460,6 +520,48 @@ Properties as follows:
 - `expiresAt`: When this stops being usable.
 - `createdAt`: When this record was created.
 
+### `LtiLaunchTransaction`
+
+One LTI launch, from the login the platform initiates to the token it posts back.
+
+The state and the nonce used to be two unrelated single-use tokens, which proved each was
+AFCT's and unspent but never that they belonged to the same launch. Holding them on one row
+with the platform and the target link URI is what lets the returning token be checked
+against the login that started it, which LTI Core requires and which two loose tokens
+cannot express. Consuming the row is also the single point at which a launch is spent.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `stateHash`: sha256(state), never the plaintext. The value handed to the browser and posted back.
+- `nonceHash`: sha256(nonce), never the plaintext. The value the platform copies into the id_token.
+- `platformId`: The registration this launch was started against; the token must match it.
+- `targetLinkUri`
+  > The target link URI the platform sent to the login endpoint, when it sent one. Core says
+  > the signed token's own target link URI must equal this.
+- `expiresAt`: When the launch stops being completable.
+- `usedAt`: When it was spent. Once set, the launch is refused as a replay.
+- `createdAt`: When this record was created.
+
+### `LtiContextMember`
+
+Which LMS course a person is in, so a grade goes to the right gradebook.
+
+One AFCT course can be opened from several LMS courses (cross-listed sections). Without
+this, grade passback had to guess: it tried each link in turn and let the platform refuse
+the wrong ones, but the first thing it does is create a gradebook column, so a student from
+one section could put an AFCT column in another, and a student in both got their grade
+wherever the query happened to order first. Recorded on every launch and on every roster
+sync, which are the two moments the LMS tells AFCT who is in which course.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `contextLinkId`: The LMS course this membership is in.
+- `userId`: The AFCT account.
+- `ltiUserId`: The LMS's own id for this person in this context, which is what a score is posted against.
+- `seenAt`: When AFCT last saw evidence they belong here, from a launch or a roster read.
+
 ## Courses
 
 ```mermaid
@@ -517,7 +619,28 @@ erDiagram
   DateTime createdAt
   DateTime updatedAt
 }
+"User" {
+  String id PK
+  String email UK
+  String firstName "nullable"
+  String lastName "nullable"
+  String password "nullable"
+  Boolean temporaryPassword
+  Boolean isAdmin
+  String avatar "nullable"
+  Float cropX "nullable"
+  Float cropY "nullable"
+  Float zoom "nullable"
+  String timezone "nullable"
+  Boolean inactive
+  DateTime passwordChangedAt "nullable"
+  DateTime lastLogin "nullable"
+  DateTime lockedUntil "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+}
 "Roster" }o--|| "Course" : course
+"Roster" }o--|| "User" : user
 "GroupSet" }o--|| "Course" : course
 "StudentGroup" }o--|| "GroupSet" : groupSet
 "GroupMembership" }o--|| "StudentGroup" : group
@@ -701,11 +824,78 @@ erDiagram
   DateTime createdAt
   DateTime updatedAt
 }
+"User" {
+  String id PK
+  String email UK
+  String firstName "nullable"
+  String lastName "nullable"
+  String password "nullable"
+  Boolean temporaryPassword
+  Boolean isAdmin
+  String avatar "nullable"
+  Float cropX "nullable"
+  Float cropY "nullable"
+  Float zoom "nullable"
+  String timezone "nullable"
+  Boolean inactive
+  DateTime passwordChangedAt "nullable"
+  DateTime lastLogin "nullable"
+  DateTime lockedUntil "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+}
+"Course" {
+  String id PK
+  String name
+  String code
+  String regCode UK "nullable"
+  String semester
+  Int credits
+  DateTime startDate
+  DateTime endDate
+  DateTime registrationOpenAt "nullable"
+  DateTime registrationCloseAt "nullable"
+  Boolean isPublished
+  Boolean isArchived
+  DateTime deletedAt "nullable"
+  String timezone
+  EmptyStringNotation emptyStringNotation
+  DateTime createdAt
+  DateTime updatedAt
+}
+"GroupSet" {
+  String id PK
+  String name
+  String courseId FK
+  DateTime createdAt
+  DateTime updatedAt
+  DateTime lockedAt "nullable"
+}
+"StudentGroup" {
+  String id PK
+  String name
+  String groupSetId FK
+  DateTime createdAt
+  DateTime updatedAt
+}
+"Assignment" }o--o| "GroupSet" : groupSet
+"Assignment" }o--|| "Course" : course
 "AssignmentAssignee" }o--|| "Assignment" : assignment
+"AssignmentAssignee" }o--o| "User" : user
+"AssignmentAssignee" }o--o| "StudentGroup" : studentGroup
 "AssignmentOverride" }o--|| "Assignment" : assignment
+"AssignmentOverride" }o--o| "User" : user
+"AssignmentOverride" }o--o| "StudentGroup" : studentGroup
+"AssignmentOverride" }o--o| "User" : createdBy
+"Problem" }o--|| "Course" : course
 "AssignmentProblem" }o--|| "Assignment" : assignment
 "AssignmentProblem" }o--|| "Problem" : problem
 "SubmissionGrant" }o--|| "AssignmentProblem" : assignmentProblem
+"SubmissionGrant" }o--o| "User" : user
+"SubmissionGrant" }o--o| "StudentGroup" : studentGroup
+"SubmissionGrant" }o--o| "User" : createdBy
+"GroupSet" }o--|| "Course" : course
+"StudentGroup" }o--|| "GroupSet" : groupSet
 ```
 
 ### `Assignment`
@@ -885,6 +1075,121 @@ erDiagram
   String aboutStudentId FK "nullable"
   String aboutGroupId FK "nullable"
 }
+"User" {
+  String id PK
+  String email UK
+  String firstName "nullable"
+  String lastName "nullable"
+  String password "nullable"
+  Boolean temporaryPassword
+  Boolean isAdmin
+  String avatar "nullable"
+  Float cropX "nullable"
+  Float cropY "nullable"
+  Float zoom "nullable"
+  String timezone "nullable"
+  Boolean inactive
+  DateTime passwordChangedAt "nullable"
+  DateTime lastLogin "nullable"
+  DateTime lockedUntil "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+}
+"Course" {
+  String id PK
+  String name
+  String code
+  String regCode UK "nullable"
+  String semester
+  Int credits
+  DateTime startDate
+  DateTime endDate
+  DateTime registrationOpenAt "nullable"
+  DateTime registrationCloseAt "nullable"
+  Boolean isPublished
+  Boolean isArchived
+  DateTime deletedAt "nullable"
+  String timezone
+  EmptyStringNotation emptyStringNotation
+  DateTime createdAt
+  DateTime updatedAt
+}
+"Roster" {
+  String id PK
+  CourseRole role
+  EnrollmentStatus status
+  DateTime droppedAt "nullable"
+  String courseId FK
+  String userId FK
+  DateTime createdAt
+  DateTime updatedAt
+}
+"Assignment" {
+  String id PK
+  String title
+  String description "nullable"
+  DescriptionFormat descriptionFormat
+  Json descriptionJson "nullable"
+  DateTime dueDate
+  DateTime unlockAt "nullable"
+  Boolean assignedToEveryone
+  Boolean isPublished
+  String groupSetId FK "nullable"
+  Boolean allowLateSubmissions
+  DateTime lateCutoff "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+  String courseId FK
+  Boolean ltiAutoSync
+}
+"Problem" {
+  String id PK
+  String title
+  String description "nullable"
+  DescriptionFormat descriptionFormat
+  Json descriptionJson "nullable"
+  String fileName "nullable"
+  String originalFileName "nullable"
+  ProblemType type "nullable"
+  Int maxStates "nullable"
+  Boolean isDeterministic "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+  String courseId FK
+}
+"AssignmentProblem" {
+  String assignmentId FK
+  String problemId FK
+  Float maxPoints
+  Int maxSubmissions
+  Boolean autograderEnabled
+}
+"StudentGroup" {
+  String id PK
+  String name
+  String groupSetId FK
+  DateTime createdAt
+  DateTime updatedAt
+}
+"Submission" }o--|| "AssignmentProblem" : assignmentProblem
+"Submission" }o--|| "User" : student
+"Submission" }o--|| "Course" : course
+"Submission" }o--o| "StudentGroup" : studentGroup
+"AssignmentProblemGrade" }o--|| "AssignmentProblem" : assignmentProblem
+"AssignmentProblemGrade" }o--|| "User" : student
+"AssignmentProblemGrade" }o--o| "StudentGroup" : groupGradeGroup
+"Comment" }o--|| "Assignment" : assignment
+"Comment" }o--|| "Problem" : problem
+"Comment" }o--|| "User" : author
+"Comment" }o--o| "Roster" : roster
+"Comment" }o--o| "User" : aboutStudent
+"Comment" }o--o| "StudentGroup" : aboutGroup
+"Roster" }o--|| "Course" : course
+"Roster" }o--|| "User" : user
+"Assignment" }o--|| "Course" : course
+"Problem" }o--|| "Course" : course
+"AssignmentProblem" }o--|| "Assignment" : assignment
+"AssignmentProblem" }o--|| "Problem" : problem
 ```
 
 ### `Submission`
@@ -1033,6 +1338,122 @@ erDiagram
   DateTime createdAt
   DateTime updatedAt
 }
+"MailQueue" {
+  String id PK
+  String toAddress
+  String subject
+  String bodyEncrypted
+  String tokenHash "nullable"
+  MailState state
+  Int attempts
+  String lastError "nullable"
+  DateTime nextAttemptAt
+  DateTime sentAt "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+}
+"User" {
+  String id PK
+  String email UK
+  String firstName "nullable"
+  String lastName "nullable"
+  String password "nullable"
+  Boolean temporaryPassword
+  Boolean isAdmin
+  String avatar "nullable"
+  Float cropX "nullable"
+  Float cropY "nullable"
+  Float zoom "nullable"
+  String timezone "nullable"
+  Boolean inactive
+  DateTime passwordChangedAt "nullable"
+  DateTime lastLogin "nullable"
+  DateTime lockedUntil "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+}
+"Course" {
+  String id PK
+  String name
+  String code
+  String regCode UK "nullable"
+  String semester
+  Int credits
+  DateTime startDate
+  DateTime endDate
+  DateTime registrationOpenAt "nullable"
+  DateTime registrationCloseAt "nullable"
+  Boolean isPublished
+  Boolean isArchived
+  DateTime deletedAt "nullable"
+  String timezone
+  EmptyStringNotation emptyStringNotation
+  DateTime createdAt
+  DateTime updatedAt
+}
+"Assignment" {
+  String id PK
+  String title
+  String description "nullable"
+  DescriptionFormat descriptionFormat
+  Json descriptionJson "nullable"
+  DateTime dueDate
+  DateTime unlockAt "nullable"
+  Boolean assignedToEveryone
+  Boolean isPublished
+  String groupSetId FK "nullable"
+  Boolean allowLateSubmissions
+  DateTime lateCutoff "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+  String courseId FK
+  Boolean ltiAutoSync
+}
+"Problem" {
+  String id PK
+  String title
+  String description "nullable"
+  DescriptionFormat descriptionFormat
+  Json descriptionJson "nullable"
+  String fileName "nullable"
+  String originalFileName "nullable"
+  ProblemType type "nullable"
+  Int maxStates "nullable"
+  Boolean isDeterministic "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+  String courseId FK
+}
+"Submission" {
+  String id PK
+  String feedback "nullable"
+  Boolean correct "nullable"
+  Json evaluationRaw "nullable"
+  String fileName "nullable"
+  String originalFileName "nullable"
+  String fileHashData "nullable"
+  String calcHashData "nullable"
+  Json similarityReportJson "nullable"
+  DateTime createdAt
+  DateTime updatedAt
+  String assignmentId FK
+  String problemId
+  String studentId FK
+  String courseId FK
+  String studentGroupId FK "nullable"
+  SubmissionStatus status
+  DateTime submittedAt
+  Int attempts
+}
+"ActivityLog" }o--o| "User" : user
+"ActivityLog" }o--o| "Course" : course
+"ActivityLog" }o--o| "Assignment" : assignment
+"ActivityLog" }o--o| "Problem" : problem
+"ActivityLog" }o--o| "Submission" : submission
+"Assignment" }o--|| "Course" : course
+"Problem" }o--|| "Course" : course
+"Submission" }o--|| "User" : student
+"Submission" }o--|| "Course" : course
 ```
 
 ### `ActivityLog`
@@ -1124,85 +1545,6 @@ Properties as follows:
 - `smtpFromName`: Display name shown beside the from address.
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
-
-## default
-
-```mermaid
-erDiagram
-"LtiLaunchTransaction" {
-  String id PK
-  String stateHash UK
-  String nonceHash UK
-  String platformId FK
-  String targetLinkUri "nullable"
-  DateTime expiresAt
-  DateTime usedAt "nullable"
-  DateTime createdAt
-}
-"LtiContextMember" {
-  String id PK
-  String contextLinkId FK
-  String userId FK
-  String ltiUserId
-  DateTime seenAt
-}
-"MailQueue" {
-  String id PK
-  String toAddress
-  String subject
-  String bodyEncrypted
-  String tokenHash "nullable"
-  MailState state
-  Int attempts
-  String lastError "nullable"
-  DateTime nextAttemptAt
-  DateTime sentAt "nullable"
-  DateTime createdAt
-  DateTime updatedAt
-}
-```
-
-### `LtiLaunchTransaction`
-
-One LTI launch, from the login the platform initiates to the token it posts back.
-
-The state and the nonce used to be two unrelated single-use tokens, which proved each was
-AFCT's and unspent but never that they belonged to the same launch. Holding them on one row
-with the platform and the target link URI is what lets the returning token be checked
-against the login that started it, which LTI Core requires and which two loose tokens
-cannot express. Consuming the row is also the single point at which a launch is spent.
-
-Properties as follows:
-
-- `id`: Unique identifier.
-- `stateHash`: sha256(state), never the plaintext. The value handed to the browser and posted back.
-- `nonceHash`: sha256(nonce), never the plaintext. The value the platform copies into the id_token.
-- `platformId`: The registration this launch was started against; the token must match it.
-- `targetLinkUri`
-  > The target link URI the platform sent to the login endpoint, when it sent one. Core says
-  > the signed token's own target link URI must equal this.
-- `expiresAt`: When the launch stops being completable.
-- `usedAt`: When it was spent. Once set, the launch is refused as a replay.
-- `createdAt`: When this record was created.
-
-### `LtiContextMember`
-
-Which LMS course a person is in, so a grade goes to the right gradebook.
-
-One AFCT course can be opened from several LMS courses (cross-listed sections). Without
-this, grade passback had to guess: it tried each link in turn and let the platform refuse
-the wrong ones, but the first thing it does is create a gradebook column, so a student from
-one section could put an AFCT column in another, and a student in both got their grade
-wherever the query happened to order first. Recorded on every launch and on every roster
-sync, which are the two moments the LMS tells AFCT who is in which course.
-
-Properties as follows:
-
-- `id`: Unique identifier.
-- `contextLinkId`: The LMS course this membership is in.
-- `userId`: The AFCT account.
-- `ltiUserId`: The LMS's own id for this person in this context, which is what a score is posted against.
-- `seenAt`: When AFCT last saw evidence they belong here, from a launch or a roster read.
 
 ### `MailQueue`
 
