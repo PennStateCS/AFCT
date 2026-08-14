@@ -45,6 +45,15 @@ const SEP = ':';
 const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12; // 96 bits, the size GCM is defined for
 const KEY_BYTES = 32; // AES-256
+/**
+ * Full-length GCM authentication tag, stated rather than left to the default.
+ *
+ * Node will otherwise accept a short tag on decryption (4 bytes among others), and a short tag
+ * is correspondingly cheaper to forge. Encryption has always written 16, so pinning it here
+ * only closes the reading side: a stored value whose tag has been truncated is now rejected
+ * outright instead of being authenticated against fewer bits than it should be.
+ */
+const TAG_BYTES = 16;
 
 /**
  * Thrown when a secret cannot be read. Deliberately its own type so callers can tell "the key
@@ -121,7 +130,7 @@ export function encryptSecret(plaintext: string): string {
   }
   const key = requireKey();
   const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv(ALGORITHM, key, iv);
+  const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_BYTES });
   const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   return [
@@ -134,7 +143,9 @@ export function encryptSecret(plaintext: string): string {
 
 function decryptWith(material: string, iv: Buffer, tag: Buffer, ciphertext: Buffer): string | null {
   try {
-    const decipher = createDecipheriv(ALGORITHM, deriveKey(material), iv);
+    const decipher = createDecipheriv(ALGORITHM, deriveKey(material), iv, {
+      authTagLength: TAG_BYTES,
+    });
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
   } catch {
