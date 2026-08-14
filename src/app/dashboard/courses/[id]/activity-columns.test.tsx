@@ -276,7 +276,9 @@ describe('activity columns', () => {
         expect(
           screen.getByRole('button', { name: 'Hide activity details' }),
         ).toHaveAttribute('aria-expanded', 'true');
-        expect(screen.getByText(/attempt: 2/)).toBeInTheDocument();
+        // Rendered by the shared formatter now, which labels a field rather than printing the
+        // key: "Attempt  2" instead of "attempt: 2".
+        expect(screen.getByText(/Attempt\s+2/)).toBeInTheDocument();
       });
 
       it('summarises the related entities it was given', async () => {
@@ -290,27 +292,50 @@ describe('activity columns', () => {
 
         await user.click(screen.getByRole('button', { name: 'Show activity details' }));
 
-        expect(screen.getByText(/Course: Theory \(CS 401\)/)).toBeInTheDocument();
-        expect(screen.getByText(/Assignment: Homework 2/)).toBeInTheDocument();
+        expect(screen.getByText(/CS 401, Theory/)).toBeInTheDocument();
+        expect(screen.getByText(/Homework 2/)).toBeInTheDocument();
       });
 
-      it('falls back to the recorded ids when there is no metadata', async () => {
-        // An older row can have the foreign keys without a metadata blob.
+      /**
+       * An older row can carry the foreign key without the relation being included. The id is
+       * worse than a name and much better than nothing: it still says the entry was about
+       * something.
+       */
+      it('falls back to the recorded id when the record was not resolved', async () => {
         const user = userEvent.setup();
         renderCell('metadata', { ...baseRow, metadata: null, courseId: 'course-9' });
 
         await user.click(screen.getByRole('button', { name: 'Show activity details' }));
 
-        expect(screen.getByText(/Course ID: course-9/)).toBeInTheDocument();
+        expect(screen.getByText(/course-9/)).toBeInTheDocument();
       });
 
-      it('serialises nested values rather than printing [object Object]', async () => {
+      // Preferred over the id whenever the relation came back.
+      it('prefers the name over the id', async () => {
+        const user = userEvent.setup();
+        renderCell('metadata', {
+          ...baseRow,
+          courseId: 'course-9',
+          course: { id: 'course-9', name: 'Theory', code: 'CS 401' } as ActivityLog['course'],
+        });
+
+        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
+
+        expect(screen.getByText(/CS 401, Theory/)).toBeInTheDocument();
+        expect(screen.queryByText(/course-9/)).not.toBeInTheDocument();
+      });
+
+      // The point is unchanged; only the shape is. The shared formatter reads a nested value
+      // out as words rather than as JSON, and neither prints [object Object].
+      it('reads nested values out rather than printing [object Object]', async () => {
         const user = userEvent.setup();
         renderCell('metadata', { ...baseRow, metadata: { change: { from: 1, to: 2 } } });
 
         await user.click(screen.getByRole('button', { name: 'Show activity details' }));
 
-        expect(screen.getByText(/"from": 1/)).toBeInTheDocument();
+        const panel = screen.getByText(/From: 1/);
+        expect(panel).toBeInTheDocument();
+        expect(panel.textContent).not.toContain('[object Object]');
       });
 
       it('does not repeat the address and client that have their own handling', async () => {
@@ -324,9 +349,10 @@ describe('activity columns', () => {
 
         await user.click(screen.getByRole('button', { name: 'Show activity details' }));
 
-        // Both appear once, under Enhanced Fields, not again in the metadata list.
-        expect(screen.queryByText(/userAgent: dupe/)).not.toBeInTheDocument();
-        expect(screen.getByText(/User Agent: x{50}\.\.\./)).toBeInTheDocument();
+        // Each appears once, in the block that handles it, not again among the metadata.
+        expect(screen.queryByText(/dupe/)).not.toBeInTheDocument();
+        expect(screen.getByText(/203\.0\.113\.7/)).toBeInTheDocument();
+        expect(screen.getByText(/Browser\s+x{80}/)).toBeInTheDocument();
       });
     });
   });

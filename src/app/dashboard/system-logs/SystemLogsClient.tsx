@@ -160,6 +160,7 @@ export default function SystemLogsClient() {
         ...row,
         metadata: row.metadata as Record<string, unknown> | null,
         related: row.related ?? null,
+        userAgent: row.userAgent ?? null,
       }),
     );
     const formatted = new Date(row.timestamp).toLocaleString(undefined, {
