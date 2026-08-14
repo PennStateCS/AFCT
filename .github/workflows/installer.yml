@@ -1,16 +1,16 @@
 name: Installer
 
 # Release-gate tests for the self-hosted installer (deploy/install.sh). Docker is
-# mocked (deploy/test/mocks), so this validates the installer's own logic — argument
+# mocked (deploy/test/mocks), so this validates the installer's own logic (argument
 # parsing, the interactive/non-interactive split, config writing, the no-secrets-in-
-# the-log guarantee, and the fatal failure paths — with no daemon. Runs only when the
+# the-log guarantee, and the fatal failure paths) with no daemon. Runs only when the
 # deploy bundle changes.
 on:
   push:
     branches: ['main']
-    paths: ['deploy/**', 'docker/updater/**', 'docker/backup/**', '.github/workflows/installer.yml']
+    paths: ['deploy/**', 'docker/**', '.github/workflows/installer.yml']
   pull_request:
-    paths: ['deploy/**', 'docker/updater/**', 'docker/backup/**', '.github/workflows/installer.yml']
+    paths: ['deploy/**', 'docker/**', '.github/workflows/installer.yml']
 
 permissions:
   contents: read
@@ -73,6 +73,13 @@ jobs:
             unix/bin/afctctl unix/lib/*.sh \
             linux/install.sh linux/build-bundle.sh linux/lib/*.sh \
             macos/install.sh macos/build-bundle.sh macos/lib/*.sh
+
+      # The scripts inside the container images. `entrypoint.sh` runs on every start and
+      # does the migrations; `backup.sh` writes and verifies every archive. Neither was
+      # checked by anything until now, and backup.sh has no bats coverage either, so this
+      # is the only automated reading it gets.
+      - name: Shellcheck the container scripts
+        run: shellcheck -s sh docker/entrypoint.sh docker/backup/backup.sh
 
       # The legacy compat shim still ships; keep it advisory alongside the sidecars.
       - name: Shellcheck (advisory)

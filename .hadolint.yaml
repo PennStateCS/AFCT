@@ -1,0 +1,20 @@
+# Dockerfile linting. The value here is not the style rules, most of which are turned off
+# below, but the correctness ones: hadolint runs ShellCheck over every RUN block, and catches
+# things like ADD where COPY belongs, apt-get upgrade in a build, and a missing WORKDIR.
+#
+# Every ignore is a decision, not a shrug:
+ignored:
+  # Pinning apt package versions. Debian removes superseded versions from the archive, so a
+  # pinned build stops working within weeks. The base images are pinned by digest instead,
+  # which is where reproducibility actually comes from here.
+  - DL3008
+  # The same for apk on the Alpine sidecars.
+  - DL3018
+  # Consecutive RUN instructions. Layer count is not the constraint; what a layer *contains*
+  # is, and consolidating these would make the reasoning comments harder to place.
+  - DL3059
+  # Non-numeric user id. The images run as `node`, which the base image creates as uid 1000.
+  # Naming it reads better than the number and is what the COPY --chown lines already use.
+  - DL3066
+
+failure-threshold: warning
