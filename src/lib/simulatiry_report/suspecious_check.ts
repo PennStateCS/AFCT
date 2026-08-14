@@ -45,7 +45,7 @@ export function suspeciousCheck(similarityReportJson: SimilarityReportJsonData):
   }
 
   const isSuspiciousReason = isSuspiciousReasonParts.length
-    ? isSuspiciousReasonParts.join('\n')
+    ? isSuspiciousReasonParts.join(" | ")
     : null;
 
   return { isSuspicious, isSuspiciousOverride, isSuspiciousReason };

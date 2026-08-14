@@ -55,7 +55,10 @@ export const GET = withCourseAuth(
                     assignmentId,
                     courseId,
                     isSuspicious: true,
-                    isSuspiciousOverride: false,
+                    OR: [
+                        { isSuspiciousOverride: null },
+                        { isSuspiciousOverride: false },
+                    ],
                 },
                 orderBy: { submittedAt: 'desc' },
                 select: {

@@ -104,7 +104,7 @@ function SubmissionRow({ submission }: { submission: SuspiciousReportSubmission 
 
 export function ViewSuspiciousReportDialog({ open, onOpenChange, report }: ViewSuspiciousReportDialogProps) {
   const reasons = report?.isSuspiciousReason
-    ? report.isSuspiciousReason.split(/\r?\n/).map((reason) => reason.trim()).filter(Boolean)
+    ? report.isSuspiciousReason.split(" | ")
     : [];
 
   const suspiciousUsers = (() => {
