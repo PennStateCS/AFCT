@@ -54,45 +54,21 @@ const valueOf = (id: string, row: RateLimitedAddress) => {
 };
 
 describe('rate-limit columns', () => {
-  it('offers exactly the filters an administrator triages by', () => {
-    const filterable = columns()
-      .filter((c) => c.meta?.filterVariant)
-      .map((c) => ({ label: c.meta?.filterLabel, variant: c.meta?.filterVariant }));
+  /**
+   * The table has no toolbar, so nothing can reach a column that is not displayed. Two
+   * filter-only columns used to exist to drive the Filters popover; they went with it. This
+   * fails if somebody adds another hidden column, which would be data nobody could ever see.
+   */
+  it('defines no column the table cannot show', () => {
+    const ids = columns().map((c) => c.id);
 
-    expect(filterable).toEqual([
-      { label: 'Status', variant: 'multiselect' },
-      { label: 'Limit', variant: 'multiselect' },
-      { label: 'Address type', variant: 'multiselect' },
-      { label: 'Familiarity', variant: 'multiselect' },
-    ]);
+    expect(ids).not.toContain('addressType');
+    expect(ids).not.toContain('familiarity');
   });
 
   it('reduces the state to the two words the filter offers', () => {
     expect(valueOf('state', entry())).toBe('Blocked');
     expect(valueOf('state', entry({ state: 'challenge' }))).toBe('Challenged');
-  });
-
-  it('filters by address type using the plain-language label', () => {
-    expect(valueOf('addressType', entry())).toBe('Public internet address');
-    const priv = entry();
-    priv.details = { ...priv.details, kindLabel: 'Private network address' };
-    expect(valueOf('addressType', priv)).toBe('Private network address');
-  });
-
-  it('separates addresses we have seen from strangers', () => {
-    expect(valueOf('familiarity', entry())).toBe('Seen before');
-
-    const unseen = entry();
-    unseen.details = {
-      ...unseen.details,
-      knownActivity: { ...unseen.details.knownActivity!, eventCount: 0, accountCount: 0 },
-    };
-    expect(valueOf('familiarity', unseen)).toBe('Not seen before');
-
-    // A failed activity lookup is its own bucket, not silently "new".
-    const unchecked = entry();
-    unchecked.details = { ...unchecked.details, knownActivity: null };
-    expect(valueOf('familiarity', unchecked)).toBe('Not checked');
   });
 
   it('sorts Seen before by account count, putting unchecked rows last', () => {

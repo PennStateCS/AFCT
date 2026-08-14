@@ -113,9 +113,10 @@ export default function SessionsTab({
           data={data.activeSessions}
           storageKey="status-sessions"
           tableLabel="Active sessions table"
-          // Session rows carry IPs and user agents; a CSV export of that isn't something
-          // to offer casually. Search still helps an admin find a user or IP.
-          showExportButton={false}
+          // No toolbar. It is a short list read at a glance, and dropping it takes the CSV
+          // export with it, which is no loss: these rows carry IPs and user agents and were
+          // never something to offer for download casually.
+          showToolbar={false}
           defaultSorting={[{ id: 'lastSeen', desc: true }]}
           emptyTitle="No active sessions"
           emptyDescription="No sessions have been seen in the last 24 hours."

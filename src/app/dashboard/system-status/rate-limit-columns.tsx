@@ -193,26 +193,6 @@ export function getRateLimitColumns({
       header: 'Reason',
       cell: ({ row }) => <Wrap width="max-w-[28ch]">{row.original.reason}</Wrap>,
     },
-    // The next two are filter-only: the IP and Seen before cells already show this
-    // detail, so they are hidden by default and exist to drive the Filters popover
-    // (which reads every leaf column, visible or not).
-    {
-      id: 'addressType',
-      accessorFn: (row) => row.details.kindLabel,
-      meta: { priority: 4, filterVariant: 'multiselect', filterLabel: 'Address type' },
-      header: 'Address type',
-    },
-    {
-      id: 'familiarity',
-      // The triage question: is this an address we have seen before, or a stranger?
-      accessorFn: (row) => {
-        const known = row.details.knownActivity;
-        if (!known) return 'Not checked';
-        return known.eventCount > 0 ? 'Seen before' : 'Not seen before';
-      },
-      meta: { priority: 4, filterVariant: 'multiselect', filterLabel: 'Familiarity' },
-      header: 'Familiarity',
-    },
     {
       id: 'seenBefore',
       // Sort by how many accounts have used the address: the strongest signal that a
