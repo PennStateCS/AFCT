@@ -12,6 +12,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { Badge } from '@/components/ui/badge';
+import { DataTableLoading } from '@/components/ui/data-table-status';
 
 /**
  * Shared query for a status tab: fetches its endpoint only while the tab is the
@@ -56,8 +57,16 @@ export const Skel = ({ w = 'w-24' }: { w?: string }) => (
   <div className={`h-4 ${w} bg-muted animate-pulse rounded`} />
 );
 
+/**
+ * The same loading treatment the data tables use, rather than a second one.
+ *
+ * This was flat text with no animation, so switching to a tab that had to fetch looked like a
+ * page that had stopped. `DataTableLoading` is not table-specific (the card view already reuses
+ * it) and it brings the shared spinner and the `role="status"` announcement with it, which the
+ * text version never had.
+ */
 export const Loading = ({ label = 'Loading…' }: { label?: string }) => (
-  <div className="text-muted-foreground py-8 text-center text-sm">{label}</div>
+  <DataTableLoading message={label} className="py-8 text-sm" />
 );
 
 export const Meter = ({ pct, label }: { pct?: number; label: string }) => {
