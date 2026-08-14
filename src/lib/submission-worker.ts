@@ -8,7 +8,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 import os from 'os';
 
-import JavaRunner from '../../lib/java-runner';
+import { runEvaluatorJar } from './evaluator-runner';
 import { getEvaluatorConfig, getQueueSettings, type EvaluatorConfig } from './eval-config';
 import { createEnhancedActivityLog, type LogSeverity } from './activity-log-utils';
 import { errMessage } from './errors';
@@ -121,7 +121,9 @@ async function logSubmissionActivity(
   >,
   action: string,
   severity: LogSeverity,
-  metadata: Record<string, string | number | boolean | null>,
+  // Nested values are allowed: SUBMISSION_EVALUATION_SUCCESS records the evaluator's
+  // whole JSON verdict, which is research data and must go in unflattened.
+  metadata: Record<string, unknown>,
 ) {
   // Write straight to the DB; we're in the same process, so there's no reason
   // to go back out over HTTP. Only scalar ids are pulled off the submission;
@@ -558,51 +560,6 @@ export const __test__ = {
   },
 };
 
-// The evaluator interface both the constructor and the fallback factory produce,
-// declared once instead of being spelled out at each interop cast site.
-type JavaEvaluator = {
-  execute: (
-    args: string[],
-    options?: { timeout?: number; maxMemoryMb?: number; env?: Record<string, string> },
-  ) => Promise<{ stdout?: string; stderr?: string; exitCode?: number }>;
-};
-
-function getJavaRunnerCtor(): new (jarPath: string) => JavaEvaluator {
-  const maybeCtor =
-    typeof JavaRunner === 'function'
-      ? JavaRunner
-      : (JavaRunner as unknown as { default?: unknown })?.default;
-
-  if (typeof maybeCtor !== 'function') {
-    throw new Error('Java runner constructor is unavailable');
-  }
-
-  return maybeCtor as new (jarPath: string) => JavaEvaluator;
-}
-
-function createJavaRunner(jarPath: string): JavaEvaluator {
-  const JavaRunnerCtor = getJavaRunnerCtor();
-  try {
-    return new JavaRunnerCtor(jarPath);
-  } catch {
-    // Some builds export a plain factory rather than a constructor.
-    return (JavaRunnerCtor as unknown as (path: string) => JavaEvaluator)(jarPath);
-  }
-}
-
-/**
- * Problem-type-specific evaluator CLI args (after the fixed `--json answer upload`):
- * FA/PDA pass a max-states bound, and FA additionally passes the determinism flag.
- */
-function buildEvaluatorArgs(problem: WorkerSubmission['assignmentProblem']['problem']): string[] {
-  if (problem.type !== 'FA' && problem.type !== 'PDA') return [];
-  const args = [String(problem.maxStates ?? -1)];
-  if (problem.type === 'FA') {
-    args.push(String(problem.isDeterministic ?? false));
-  }
-  return args;
-}
-
 async function runJavaEvaluator(
   submission: WorkerSubmission,
   config: EvaluatorConfig,
@@ -675,9 +632,9 @@ async function runJavaEvaluator(
 }
 
 /**
- * Run the evaluator JAR and turn its stdout into a result. Split out of
- * runJavaEvaluator so the file-resolution guards above stay flat: this owns the
- * execute → stderr-log → JSON-parse path and all of its failure modes.
+ * Grade a submission with the evaluator: run the jar, then do the things that only
+ * make sense for a real submission (activity logging, the similarity report). The
+ * jar call itself lives in `evaluator-runner.ts`, shared with the trial page.
  */
 async function evaluateWithJar(
   submission: WorkerSubmission,
@@ -685,164 +642,126 @@ async function evaluateWithJar(
   answerFilePath: string,
   uploadedFilePath: string,
 ): Promise<SubmissionEvaluationResult> {
-  try {
-    const evaluator = createJavaRunner('./jars/afct-evaluator.jar');
-    const args = [
-      '--json',
-      answerFilePath,
-      uploadedFilePath,
-      ...buildEvaluatorArgs(submission.assignmentProblem.problem),
-    ];
+  const run = await runEvaluatorJar({
+    answerFilePath,
+    uploadedFilePath,
+    config,
+    problem: submission.assignmentProblem.problem,
+  });
 
-    // Execute the evaluator with the configured timeout, memory cap, and analyzer
-    // bound (overrides the CFGANALYZER_LIMIT env default). The jar also reads:
-    //   - TIMEOUT_SECONDS: the time budget it uses to early-stop upgraded-feedback
-    //     equivalence checks (without it the jar logs "early stopping disabled");
-    //     derived from the same eval timeout, in whole seconds.
-    //   - UPGRADED_FEEDBACK: the jar defaults this on when unset, but set it
-    //     explicitly so the behavior is deterministic and the "not set" warning stops.
-    const result = await evaluator.execute(args, {
-      timeout: config.timeoutMs,
-      maxMemoryMb: config.maxMemoryMb,
-      env: {
-        CFGANALYZER_LIMIT: String(config.analyzerLimit),
-        TIMEOUT_SECONDS: String(Math.max(1, Math.floor(config.timeoutMs / 1000))),
-        UPGRADED_FEEDBACK: 'true',
-      },
+  if (run.stderr) {
+    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_STDERR', 'WARNING', {
+      stderr: run.stderr.substring(0, 500),
     });
-
-    const stdoutTrimmed = result.stdout?.trim() ?? '';
-    const stderrTrimmed = result.stderr?.trim() ?? '';
-    if (stderrTrimmed) {
-      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_STDERR', 'WARNING', {
-        stderr: stderrTrimmed.substring(0, 500),
-      });
-      console.warn(
-        `[SubmissionWorker] Evaluator stderr for submission ${submission.id}: ${stderrTrimmed.substring(0, 100)}`,
-      );
-    }
-
-    try {
-      // Parse evaluation
-      const evaluation = JSON.parse(stdoutTrimmed);
-
-      if (!evaluation || typeof evaluation !== 'object') {
-        const errorMessage = `Invalid JSON response from evaluator: ${stdoutTrimmed}`;
-        await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
-          error: errorMessage,
-          stdout: stdoutTrimmed,
-        });
-        return {
-          feedback: `ERROR: ${errorMessage}`,
-          correct: undefined,
-          evaluationRaw: evaluation,
-          status: 'FAILED',
-        };
-      }
-
-      /**
-       * The similarity report, which must never cost somebody their grade.
-       *
-       * It runs *after* the evaluator, so by this point the submission has already been marked
-       * right or wrong. Without this guard a report that could not be produced threw, landed in
-       * the evaluator's catch below, and returned `status: 'FAILED'` with `evaluationRaw: null`:
-       * a graded submission discarded and the student shown "Evaluation failed" because a
-       * *reporting* step could not read the file.
-       *
-       * That is reachable from ordinary input. `jflapSimilarityParser` returns null for a path
-       * that is not `.jff`, an empty file or an unreadable one, and leaves `calcHashData`
-       * undefined for a file with no `<structure>` element; `check_file_status` throws on
-       * exactly that. Nothing tested any of it, which is why nobody knew.
-       *
-       * A missing report is a supported state: all three columns are nullable. So a failure here
-       * is logged and the grade stands.
-       */
-      let fileHashData: string | undefined;
-      let calcHashData: string | undefined;
-      let similarityReportJson: FileStatusReturn | undefined;
-      try {
-        const similarityData = await jflapSimilarityParser(uploadedFilePath);
-
-        fileHashData = similarityData?.fileHashData ?? undefined;
-        calcHashData = similarityData?.calcHashData ?? undefined;
-        const fileHashEmail = similarityData?.fileHashEmail ?? undefined;
-
-        similarityReportJson = await check_file_status(
-          fileHashData,
-          calcHashData,
-          fileHashEmail,
-          submission.studentId,
-        );
-      } catch (similarityErr) {
-        // Recorded, because a report that stops being produced should be visible rather than
-        // quietly absent for a term. Severity WARNING, not ERROR: nothing about the grade is
-        // wrong, and the log is read by people deciding what to act on.
-        await logSubmissionActivity(submission, 'SUBMISSION_SIMILARITY_SKIPPED', 'WARNING', {
-          error: errMessage(similarityErr),
-        });
-        console.warn(
-          `[SubmissionWorker] Similarity report skipped for submission ${submission.id}:`,
-          similarityErr,
-        );
-      }
-
-      const correct = typeof evaluation.correct === 'boolean' ? evaluation.correct : undefined;
-      let feedback: string;
-      if (typeof evaluation.feedback === 'string') {
-        const isJavaStreamString = /java\.lang\..*Stream@/i.test(evaluation.feedback);
-        feedback = isJavaStreamString
-          ? `Evaluation completed - correct: ${correct}`
-          : evaluation.feedback;
-      } else {
-        feedback = `Evaluation completed - correct: ${correct}`;
-      }
-
-      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_SUCCESS', 'INFO', {
-        correct: correct ?? false,
-        evaluation,
-      });
-
-      return {
-        feedback,
-        correct,
-        evaluationRaw: evaluation,
-        status: 'COMPLETED',
-        similarityReportJson,
-        fileHashData: fileHashData ?? null,
-        calcHashData: calcHashData ?? null,
-      };
-    } catch (parseErr) {
-      const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
-      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
-        error: errorMessage,
-        parseError: errMessage(parseErr),
-        stdout: stdoutTrimmed,
-      });
-      console.error(
-        `[SubmissionWorker] Failed to parse evaluator output for submission ${submission.id}:`,
-        parseErr,
-      );
-      return {
-        feedback: `ERROR: ${errorMessage}`,
-        correct: undefined,
-        evaluationRaw: stdoutTrimmed || null,
-        status: 'FAILED',
-      };
-    }
-  } catch (evaluatorErr) {
-    const errorMessage = errMessage(evaluatorErr);
-    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
-      error: errorMessage,
-    });
-    console.error(
-      `[SubmissionWorker] Evaluator error for submission ${submission.id}:`,
-      evaluatorErr,
+    console.warn(
+      `[SubmissionWorker] Evaluator stderr for submission ${submission.id}: ${run.stderr.substring(0, 100)}`,
     );
+  }
+
+  if (run.outcome === 'error') {
+    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
+      error: run.error,
+    });
+    console.error(`[SubmissionWorker] Evaluator error for submission ${submission.id}:`, run.error);
     return {
-      feedback: `ERROR: Evaluation failed - ${errorMessage}`,
+      feedback: `ERROR: Evaluation failed - ${run.error}`,
       correct: undefined,
       evaluationRaw: null,
       status: 'FAILED',
     };
   }
+
+  if (run.outcome === 'unparsable') {
+    const errorMessage = `Failed to parse evaluation result - ${run.stdout}`;
+    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
+      error: errorMessage,
+      parseError: run.parseError,
+      stdout: run.stdout,
+    });
+    console.error(
+      `[SubmissionWorker] Failed to parse evaluator output for submission ${submission.id}:`,
+      run.parseError,
+    );
+    return {
+      feedback: `ERROR: ${errorMessage}`,
+      correct: undefined,
+      evaluationRaw: run.stdout || null,
+      status: 'FAILED',
+    };
+  }
+
+  if (run.outcome === 'invalid-json') {
+    const errorMessage = `Invalid JSON response from evaluator: ${run.stdout}`;
+    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
+      error: errorMessage,
+      stdout: run.stdout,
+    });
+    return {
+      feedback: `ERROR: ${errorMessage}`,
+      correct: undefined,
+      evaluationRaw: run.evaluation,
+      status: 'FAILED',
+    };
+  }
+
+  /**
+   * The similarity report, which must never cost somebody their grade.
+   *
+   * It runs *after* the evaluator, so by this point the submission has already been marked
+   * right or wrong. Without this guard a report that could not be produced threw, landed in
+   * the caller's catch, and returned `status: 'FAILED'` with `evaluationRaw: null`:
+   * a graded submission discarded and the student shown "Evaluation failed" because a
+   * *reporting* step could not read the file.
+   *
+   * That is reachable from ordinary input. `jflapSimilarityParser` returns null for a path
+   * that is not `.jff`, an empty file or an unreadable one, and leaves `calcHashData`
+   * undefined for a file with no `<structure>` element; `check_file_status` throws on
+   * exactly that. Nothing tested any of it, which is why nobody knew.
+   *
+   * A missing report is a supported state: all three columns are nullable. So a failure here
+   * is logged and the grade stands.
+   */
+  let fileHashData: string | undefined;
+  let calcHashData: string | undefined;
+  let similarityReportJson: FileStatusReturn | undefined;
+  try {
+    const similarityData = await jflapSimilarityParser(uploadedFilePath);
+
+    fileHashData = similarityData?.fileHashData ?? undefined;
+    calcHashData = similarityData?.calcHashData ?? undefined;
+    const fileHashEmail = similarityData?.fileHashEmail ?? undefined;
+
+    similarityReportJson = await check_file_status(
+      fileHashData,
+      calcHashData,
+      fileHashEmail,
+      submission.studentId,
+    );
+  } catch (similarityErr) {
+    // Recorded, because a report that stops being produced should be visible rather than
+    // quietly absent for a term. Severity WARNING, not ERROR: nothing about the grade is
+    // wrong, and the log is read by people deciding what to act on.
+    await logSubmissionActivity(submission, 'SUBMISSION_SIMILARITY_SKIPPED', 'WARNING', {
+      error: errMessage(similarityErr),
+    });
+    console.warn(
+      `[SubmissionWorker] Similarity report skipped for submission ${submission.id}:`,
+      similarityErr,
+    );
+  }
+
+  await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_SUCCESS', 'INFO', {
+    correct: run.correct ?? false,
+    evaluation: run.evaluation,
+  });
+
+  return {
+    feedback: run.feedback,
+    correct: run.correct,
+    evaluationRaw: run.evaluation,
+    status: 'COMPLETED',
+    similarityReportJson,
+    fileHashData: fileHashData ?? null,
+    calcHashData: calcHashData ?? null,
+  };
 }
