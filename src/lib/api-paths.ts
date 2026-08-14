@@ -249,6 +249,7 @@ export const apiPaths = {
     statusSessions: () => '/api/admin/status/sessions',
     statusFiles: () => '/api/admin/status/files',
     statusRateLimits: () => '/api/admin/status/rate-limits',
+    statusWorkers: () => '/api/admin/status/workers',
     statusRateLimitsClear: () => '/api/admin/status/rate-limits/clear',
     submissions: () => '/api/admin/submissions',
   },

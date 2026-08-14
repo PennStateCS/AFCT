@@ -453,7 +453,7 @@ describe('runWorkerLoop — claiming and prioritization', () => {
 
   it('idles without claiming anything when the queue is empty', async () => {
     prismaMock.submission.findFirst.mockResolvedValue(null);
-    await runWorkerLoop();
+    await runWorkerLoop(1);
     expect(prismaMock.submission.updateMany).not.toHaveBeenCalled();
     expect(prismaMock.submission.findUnique).not.toHaveBeenCalled();
   });
@@ -463,7 +463,7 @@ describe('runWorkerLoop — claiming and prioritization', () => {
     prismaMock.submission.updateMany.mockResolvedValue({ count: 1 }); // claim wins
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
 
-    await runWorkerLoop();
+    await runWorkerLoop(1);
 
     // The claim flips the row to PROCESSING and bumps attempts...
     expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
@@ -477,7 +477,7 @@ describe('runWorkerLoop — claiming and prioritization', () => {
     prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
     prismaMock.submission.updateMany.mockResolvedValue({ count: 0 }); // lost the race
 
-    await runWorkerLoop();
+    await runWorkerLoop(1);
 
     expect(prismaMock.submission.findUnique).not.toHaveBeenCalled();
   });
@@ -493,7 +493,7 @@ describe('runWorkerLoop — claiming and prioritization', () => {
       problemId: 'p-1',
     });
 
-    await runWorkerLoop();
+    await runWorkerLoop(1);
 
     expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
@@ -503,7 +503,7 @@ describe('runWorkerLoop — claiming and prioritization', () => {
 
   it('logs a queue error when the loop query throws', async () => {
     prismaMock.submission.findMany.mockRejectedValue(new Error('db down'));
-    await runWorkerLoop();
+    await runWorkerLoop(1);
     expect(loggedActions()).toContain('SUBMISSION_QUEUE_ERROR');
   });
 });
@@ -541,7 +541,7 @@ describe('idle backoff', () => {
     prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
     prismaMock.submission.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
-    await runWorkerLoop();
+    await runWorkerLoop(1);
 
     expect(idleDelayMs()).toBe(3_000);
   });
@@ -551,7 +551,7 @@ describe('idle backoff', () => {
 
     prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
     prismaMock.submission.updateMany.mockResolvedValue({ count: 0 }); // another loop won
-    await runWorkerLoop();
+    await runWorkerLoop(1);
 
     // It graded nothing, but a row existed, so the queue is active.
     expect(idleDelayMs()).toBe(3_000);
@@ -575,7 +575,7 @@ describe('idle backoff', () => {
     prismaMock.submission.findFirst.mockResolvedValue(null);
     const scheduled = vi.spyOn(globalThis, 'setTimeout');
 
-    await runWorkerLoop();
+    await runWorkerLoop(1);
 
     expect(scheduled).toHaveBeenCalledWith(expect.any(Function), 30_000);
     scheduled.mockRestore();
@@ -588,7 +588,7 @@ describe('idle backoff', () => {
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
     const scheduled = vi.spyOn(globalThis, 'setTimeout');
 
-    await runWorkerLoop();
+    await runWorkerLoop(1);
 
     expect(scheduled).toHaveBeenCalledWith(expect.any(Function), 100);
     scheduled.mockRestore();

@@ -1715,3 +1715,56 @@ model MailQueue {
   /// The order the sender reads in.
   @@index([state, nextAttemptAt])
 }
+
+/// Where a worker process is running.
+///
+/// Production grades in a dedicated, network-isolated container. Development starts the same
+/// loops inside the web app instead (`RUN_SUBMISSION_WORKER`), and the two must not be mistaken
+/// for one another on the status page.
+enum WorkerSource {
+  WORKER_CONTAINER
+  APP_PROCESS
+}
+
+/// One evaluator slot: a single grading loop, alive and saying so.
+///
+/// The worker runs one process with several concurrent loops, as many as
+/// `SystemSettings.submissionMaxConcurrent`, so these are slots rather than machines. Each one
+/// keeps a row here and touches it every few seconds.
+///
+/// It exists because the queue alone cannot answer the question the status page is for. You can
+/// see what is PROCESSING, but an empty queue looks exactly the same whether the loops are
+/// healthy and waiting or dead and silent, and the second case is how submissions pile up on a
+/// production box without anybody noticing. A heartbeat is the difference.
+///
+/// Deliberately separate from ActivityLog: that log is research data with fixed semantics, and
+/// operational noise has no business in it.
+///
+/// @namespace System
+model WorkerSlot {
+  id String @id @default(cuid())
+
+  /// Identifies one run of one worker process. A restart gets a new value, so rows left behind
+  /// by a process that died without cleaning up are recognisable rather than looking current.
+  runId String
+  /// Position within the run, 1..N. Stable for the life of the loop.
+  slot   Int
+  source WorkerSource
+
+  /// When this loop started, which is also how the page orders slots for display.
+  startedAt DateTime @default(now())
+  /// Touched on every state change and on a timer in between. Staleness is the health signal.
+  lastSeenAt DateTime
+
+  /// The submission being graded, or null when the slot is waiting for work. A plain id, not a
+  /// relation: this is disposable operational state and must never keep a Submission alive or
+  /// complicate deleting one.
+  submissionId String?
+  /// When the current submission was claimed, for showing how long it has been running.
+  busySince DateTime?
+
+  /// One row per slot per run.
+  @@unique([runId, slot])
+  /// The health query reads by recency.
+  @@index([lastSeenAt])
+}

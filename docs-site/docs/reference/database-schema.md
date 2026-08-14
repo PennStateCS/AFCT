@@ -1352,6 +1352,16 @@ erDiagram
   DateTime createdAt
   DateTime updatedAt
 }
+"WorkerSlot" {
+  String id PK
+  String runId
+  Int slot
+  WorkerSource source
+  DateTime startedAt
+  DateTime lastSeenAt
+  String submissionId "nullable"
+  DateTime busySince "nullable"
+}
 "User" {
   String id PK
   String email UK
@@ -1582,3 +1592,35 @@ Properties as follows:
 - `sentAt`: When the mail server accepted it.
 - `createdAt`: When this record was created.
 - `updatedAt`: When it was last changed.
+
+### `WorkerSlot`
+
+One evaluator slot: a single grading loop, alive and saying so.
+
+The worker runs one process with several concurrent loops, as many as
+`SystemSettings.submissionMaxConcurrent`, so these are slots rather than machines. Each one
+keeps a row here and touches it every few seconds.
+
+It exists because the queue alone cannot answer the question the status page is for. You can
+see what is PROCESSING, but an empty queue looks exactly the same whether the loops are
+healthy and waiting or dead and silent, and the second case is how submissions pile up on a
+production box without anybody noticing. A heartbeat is the difference.
+
+Deliberately separate from ActivityLog: that log is research data with fixed semantics, and
+operational noise has no business in it.
+
+Properties as follows:
+
+- `id`:
+- `runId`
+  > Identifies one run of one worker process. A restart gets a new value, so rows left behind
+  > by a process that died without cleaning up are recognisable rather than looking current.
+- `slot`: Position within the run, 1..N. Stable for the life of the loop.
+- `source`:
+- `startedAt`: When this loop started, which is also how the page orders slots for display.
+- `lastSeenAt`: Touched on every state change and on a timer in between. Staleness is the health signal.
+- `submissionId`
+  > The submission being graded, or null when the slot is waiting for work. A plain id, not a
+  > relation: this is disposable operational state and must never keep a Submission alive or
+  > complicate deleting one.
+- `busySince`: When the current submission was claimed, for showing how long it has been running.

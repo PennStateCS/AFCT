@@ -12,6 +12,11 @@
 // Run with: `npx tsx src/worker.ts` (tsx is a production dependency and resolves the
 // `@/*` path alias from tsconfig.json).
 import { startSubmissionWorker } from '@/lib/submission-worker';
+import { closeAllSlots, setWorkerSource } from '@/lib/worker-slots';
+
+// Say which process this is before any slot row is written, so the status page can tell the
+// dedicated container apart from a development app process running the same loops.
+setWorkerSource('WORKER_CONTAINER');
 
 startSubmissionWorker();
 
@@ -21,6 +26,11 @@ startSubmissionWorker();
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {
     console.log(`[worker] received ${signal}, shutting down`);
-    process.exit(0);
+    // Drop this run's slot rows on the way out so the status page shows the worker gone
+    // immediately rather than waiting for the heartbeats to age out. Bounded: a stop must not
+    // hang on the database, and stale rows are handled anyway.
+    void Promise.race([closeAllSlots(), new Promise((r) => setTimeout(r, 2_000))]).finally(() =>
+      process.exit(0),
+    );
   });
 }

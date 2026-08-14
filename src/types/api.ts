@@ -572,6 +572,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/status/workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Wrapped rather than passed directly: collectWorkers takes an injectable clock for tests,  and statusGet hands its collector a Request.
+         * @description Wrapped rather than passed directly: collectWorkers takes an injectable clock for tests,  and statusGet hands its collector a Request.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/workers/route.ts)
+         */
+        get: operations["getAdminStatusWorkers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/submissions": {
         parameters: {
             query?: never;
@@ -4540,6 +4562,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Error"];
                 };
+            };
+        };
+    };
+    getAdminStatusWorkers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
