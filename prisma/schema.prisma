@@ -2,6 +2,28 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Entity-relationship diagram, emitted as Mermaid inside Markdown and published on
+// the docs site, which renders Mermaid natively.
+//
+// Deliberately NOT prisma-erd-generator: that renders to SVG through mermaid-cli,
+// which drags in puppeteer and a ~150MB Chromium purely to rasterise a picture.
+// This one has a single dependency and writes text.
+//
+// The output is COMMITTED and CI checks it for drift, the same arrangement as
+// src/types/api.ts. Regenerate with `npm run docs`. This generator is not part of the
+// app's runtime: postinstall, both images and the container entrypoint all run
+// `prisma generate --generator client`, so nothing outside a developer machine or CI
+// does documentation work.
+//
+// Models are appended at the END of this file, so anything that must stay next to its
+// explanation belongs up here with the other generators. This block and its comment had
+// already drifted a couple of hundred lines apart.
+generator erd {
+  provider = "prisma-markdown"
+  output   = "../docs-site/docs/reference/database-schema.md"
+  title    = "Database schema"
+}
+
 datasource db {
   provider = "postgresql"
 }
@@ -120,6 +142,10 @@ enum IdentityLinkMethod {
 /// course comes from their Roster row, not from this record.
 ///
 /// @namespace Identity
+/// @erd Assignments
+/// @erd Courses
+/// @erd Submissions
+/// @erd System
 model User {
   /// Unique identifier.
   id                String  @id @default(cuid())
@@ -408,6 +434,10 @@ model SingleUseToken {
 /// instant for everyone enrolled.
 ///
 /// @namespace Courses
+/// @erd Assignments
+/// @erd Identity
+/// @erd Submissions
+/// @erd System
 model Course {
   /// Unique identifier.
   id                  String    @id @default(cuid())
@@ -470,6 +500,7 @@ model Course {
 /// standing, so a student who drops keeps their record and can be restored.
 ///
 /// @namespace Courses
+/// @erd Submissions
 model Roster {
   /// Unique identifier.
   id   String     @id @default(cuid())
@@ -513,6 +544,9 @@ model Roster {
 /// a group set.
 ///
 /// @namespace Assignments
+/// @erd Identity
+/// @erd Submissions
+/// @erd System
 model Assignment {
   /// Unique identifier.
   id                 String            @id @default(cuid())
@@ -667,6 +701,8 @@ model AssignmentOverride {
 /// its assignments.
 ///
 /// @namespace Assignments
+/// @erd Submissions
+/// @erd System
 model Problem {
   /// Unique identifier.
   id                String            @id @default(cuid())
@@ -718,6 +754,7 @@ model Problem {
 /// one assignment with different settings.
 ///
 /// @namespace Assignments
+/// @erd Submissions
 model AssignmentProblem {
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   /// The assignment.
@@ -805,6 +842,7 @@ model SubmissionGrant {
 /// records after the fact.
 ///
 /// @namespace Courses
+/// @erd Assignments
 model GroupSet {
   /// Unique identifier.
   id   String @id @default(cuid())
@@ -838,6 +876,8 @@ model GroupSet {
 /// uses the set.
 ///
 /// @namespace Courses
+/// @erd Assignments
+/// @erd Submissions
 model StudentGroup {
   /// Unique identifier.
   id   String @id @default(cuid())
@@ -916,6 +956,7 @@ model GroupMembership {
 /// available.
 ///
 /// @namespace Submissions
+/// @erd System
 model Submission {
   /// Unique identifier.
   id            String   @id @default(cuid())
@@ -1302,18 +1343,6 @@ model SystemSettings {
   updatedAt DateTime @updatedAt
 }
 
-// Entity-relationship diagram, emitted as Mermaid inside Markdown and published on
-// the docs site, which renders Mermaid natively.
-//
-// Deliberately NOT prisma-erd-generator: that renders to SVG through mermaid-cli,
-// which drags in puppeteer and a ~150MB Chromium purely to rasterise a picture.
-// This one has a single dependency and writes text.
-//
-// The output is COMMITTED and CI checks it for drift, the same arrangement as
-// src/types/api.ts. Regenerate with `npm run docs`. This generator is not part of the
-// app's runtime: postinstall, both images and the container entrypoint all run
-// `prisma generate --generator client`, so nothing outside a developer machine or CI
-// does documentation work.
 /// Which AFCT course an LMS course opens into.
 ///
 /// Created the first time somebody who can link launches from an unlinked LMS course, and
@@ -1554,12 +1583,6 @@ model LtiPendingDeepLink {
   @@index([expiresAt])
 }
 
-generator erd {
-  provider = "prisma-markdown"
-  output   = "../docs-site/docs/reference/database-schema.md"
-  title    = "Database schema"
-}
-
 /// One LTI launch, from the login the platform initiates to the token it posts back.
 ///
 /// The state and the nonce used to be two unrelated single-use tokens, which proved each was
@@ -1567,6 +1590,8 @@ generator erd {
 /// with the platform and the target link URI is what lets the returning token be checked
 /// against the login that started it, which LTI Core requires and which two loose tokens
 /// cannot express. Consuming the row is also the single point at which a launch is spent.
+///
+/// @namespace Identity
 model LtiLaunchTransaction {
   /// Unique identifier.
   id String @id @default(cuid())
@@ -1604,6 +1629,8 @@ model LtiLaunchTransaction {
 /// one section could put an AFCT column in another, and a student in both got their grade
 /// wherever the query happened to order first. Recorded on every launch and on every roster
 /// sync, which are the two moments the LMS tells AFCT who is in which course.
+///
+/// @namespace Identity
 model LtiContextMember {
   /// Unique identifier.
   id String @id @default(cuid())
@@ -1644,6 +1671,8 @@ enum MailState {
 /// Queueing turns a variable multi-second SMTP conversation into a row insert, which is what
 /// closes the timing side channel: the work that differs between the two cases now happens after
 /// the response has gone.
+///
+/// @namespace System
 model MailQueue {
   /// Unique identifier.
   id String @id @default(cuid())
