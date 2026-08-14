@@ -379,3 +379,46 @@ describe('POST /api/auth/signup', () => {
     expect(rateLimiterMock.applyBotFriction).toHaveBeenCalledWith(500);
   });
 });
+
+const signupRequest = () =>
+  new Request('http://localhost/api/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({
+      firstName: 'A',
+      lastName: 'B',
+      email: 'a@example.com',
+      password: 'Strong1!a',
+    }),
+  });
+
+/**
+ * Two people submitting the same address at the same moment both get past the existence
+ * check, and only the unique index stops the second account. What the loser is told matters:
+ * this used to surface as a 500.
+ */
+describe('when the email is taken between the check and the write', () => {
+  it('answers 409 rather than failing', async () => {
+    const { Prisma } = await import('@prisma/client');
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('unique', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    const res = await POST(signupRequest());
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ error: 'Email already registered.' });
+  });
+
+  it('still fails loudly on any other database error', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockRejectedValue(new Error('connection lost'));
+
+    const res = await POST(signupRequest());
+
+    expect(res.status).toBe(500);
+  });
+});

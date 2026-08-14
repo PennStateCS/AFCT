@@ -66,6 +66,10 @@ beforeEach(() => {
   canArchiveMock.mockResolvedValue({ canArchive: true, reason: '' });
   canUnpublishMock.mockResolvedValue({ canUnpublish: true, reason: '' });
   toDateTimeMock.mockImplementation((val: string) => new Date(val));
+  // Run the transaction callback against the same mock.
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
+    fn(prismaMock),
+  );
 });
 
 describe('GET /api/courses/[id]', () => {
@@ -1197,6 +1201,33 @@ describe('DELETE /api/courses/[id]', () => {
     expect(prismaMock.course.delete).toHaveBeenCalledWith({ where: { id: 'course-1' } });
     expect(prismaMock.course.update).not.toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  /**
+   * The counts and the write have to be one serializable transaction.
+   *
+   * Separately, this was a check-then-act on a destructive path: count, then delete, with a
+   * gap in between. A submission arriving in that gap was cascaded away by the hard delete,
+   * with no soft-delete left to recover it. Serializable is what makes the emptiness test
+   * mean anything, because Postgres aborts on the conflict rather than letting the insert
+   * through.
+   */
+  it('decides and deletes inside one serializable transaction', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'course-1', name: 'Course 1', code: 'C1' });
+    prismaMock.assignment.count.mockResolvedValue(0);
+    prismaMock.problem.count.mockResolvedValue(0);
+    prismaMock.roster.count.mockResolvedValue(0);
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.course.delete.mockResolvedValue({ id: 'course-1' });
+
+    const req = new Request('http://localhost/api/courses/1', { method: 'DELETE' });
+    await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
+
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'Serializable' }),
+    );
   });
 
   it('soft-deletes a course that has students or work', async () => {
