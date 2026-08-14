@@ -112,6 +112,14 @@ Some releases change more than the application image: they add a service, a heal
 
 This means the console is normally not needed to keep a deployment current. The host-side `sh install.sh self-update` remains available as a manual path and as the way to update the installer script, but routine upgrades, including ones that change the stack layout, can be done entirely from the Updates tab.
 
+### "Not enough disk space"
+
+An upgrade downloads the new images before it replaces anything, and the previous ones stay on disk until the new version is confirmed healthy, so the machine has to hold both for a while. The updater checks for room before it starts and refuses the upgrade rather than running out halfway through, which would leave the stack in a state it could not roll back from.
+
+It wants about 12 GB free on the filesystem holding Docker's image store, and the installer applies the same figure when you update from the host. `UPDATER_DISK_MIN_MB` and `AFCT_UPDATE_MIN_FREE_MB` change it if your deployment genuinely needs a different number, but the requirement is real rather than cautious: the application image is a large one and an upgrade briefly holds two of them.
+
+Old images left by earlier upgrades are the usual cause. `docker image prune -af` removes anything no running container is using. Superseded images are cleaned up automatically once an upgrade is confirmed healthy, so a deployment that stays current should rarely need this, but one that has rolled back or been interrupted can collect them.
+
 ### "The update service needs restarting before it can upgrade"
 
 A container keeps the file paths it was created with. So if a release moves the settings file or the stack file, an update service that has been running since before the move keeps looking in the old place, and it will be the correct _version_ while still being unable to perform an upgrade. It reports this itself, and the Updates tab shows the warning above along with the path it cannot find.

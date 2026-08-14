@@ -14,6 +14,8 @@ The pickers at the top build on one another:
 
 Leaving a picker empty means **all of them**, which is why the page opens showing everything. Narrow from the top down: choose courses to unlock the assignment picker, then assignments to unlock the problem picker. Use **Clear Filters** to start over.
 
+The pickers below the one you change keep up with it. Drop a course and the assignments that came with it leave your selection too, so you are never left filtering on something the page can no longer show you. Anything still on offer stays selected, so adding a second course to compare against the first does not cost you the assignment you had already picked.
+
 ## Read the table
 
 Each row is one submission, and shows when it arrived, whether it was on time, who submitted it, the course, assignment and problem, the submitted file, the grade, and the grading status. Course, assignment, and problem names link back to the related review pages.
