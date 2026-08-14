@@ -3,7 +3,6 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import {
   getReviewStatusChip,
   getTimingStatusChip,
-  statusToneClass,
 } from '@/lib/submission-status';
 
 const sub = (over: Partial<ProblemSubmission> = {}): ProblemSubmission => ({
@@ -18,7 +17,7 @@ describe('getTimingStatusChip', () => {
 
   it('marks a submission Late when its status is "late", ignoring the due date', () => {
     const chip = getTimingStatusChip(sub({ status: 'late' }), false, null);
-    expect(chip).toMatchObject({ label: 'Late', tone: 'amber' });
+    expect(chip).toMatchObject({ label: 'Late' });
   });
 
   it('marks Late when submitted after a valid due date', () => {
@@ -36,7 +35,7 @@ describe('getTimingStatusChip', () => {
       true,
       due,
     );
-    expect(chip).toMatchObject({ label: 'On time', tone: 'green' });
+    expect(chip).toMatchObject({ label: 'On time' });
   });
 
   it('treats a submission as On time when there is no valid due date', () => {
@@ -46,12 +45,19 @@ describe('getTimingStatusChip', () => {
 });
 
 describe('getReviewStatusChip', () => {
+  /**
+   * Label and badge variant, which is all a chip carries now. It used to carry a `tone` as well,
+   * naming one of nine dot colours; nothing ever read it, and the tables show a badge whose text
+   * carries the status rather than a dot whose colour does. Asserting on the variant is what
+   * keeps the distinctions the tones were protecting: Failed is the only danger here, because it
+   * means the autograder broke rather than that a student got the answer wrong.
+   */
   it.each([
-    ['pending', 'Pending', 'violet'],
-    ['processing', 'Processing', 'yellow'],
-    ['failed', 'Failed', 'pink'],
-  ] as const)('maps status "%s" to the %s chip', (status, label, tone) => {
-    expect(getReviewStatusChip(sub({ status }))).toMatchObject({ label, tone });
+    ['pending', 'Pending', 'neutral'],
+    ['processing', 'Processing', 'info'],
+    ['failed', 'Failed', 'danger'],
+  ] as const)('maps status "%s" to the %s chip', (status, label, variant) => {
+    expect(getReviewStatusChip(sub({ status }))).toMatchObject({ label, variant });
   });
 
   it('is case-insensitive on status', () => {
@@ -61,7 +67,6 @@ describe('getReviewStatusChip', () => {
   it('reports Correct when correct is true and status is terminal', () => {
     expect(getReviewStatusChip(sub({ status: 'complete', correct: true }))).toMatchObject({
       label: 'Correct',
-      tone: 'blue',
     });
   });
 
@@ -83,11 +88,3 @@ describe('getReviewStatusChip', () => {
   });
 });
 
-describe('statusToneClass', () => {
-  it('provides a class for every tone a chip can produce', () => {
-    expect(statusToneClass.amber).toMatch(/^bg-/);
-    expect(statusToneClass.green).toMatch(/^bg-/);
-    expect(statusToneClass.blue).toMatch(/^bg-/);
-    expect(Object.keys(statusToneClass)).toHaveLength(9);
-  });
-});

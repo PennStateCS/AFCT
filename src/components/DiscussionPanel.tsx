@@ -220,7 +220,7 @@ export default function DiscussionPanel({
                           {audienceLabel(comment) ? (
                             <Badge
                               variant="outline"
-                              className={`mr-6 mb-1 text-[0.7rem] font-normal ${
+                              className={`mr-6 mb-1 text-2xs font-normal ${
                                 comment.aboutGroupId
                                   ? 'bg-status-info-bg border-status-info-border text-status-info'
                                   : 'bg-status-warning-bg border-status-warning-border text-status-warning'

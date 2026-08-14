@@ -783,7 +783,6 @@ export default function SubmissionsClient() {
                 // hand-graded problem may have no grade at all. It also has to stay clear of
                 // the grade-source wording, where "Manual" means a person entered the grade.
                 label: 'Not autograded',
-                tone: 'gray',
                 variant: 'neutral',
                 title: 'The autograder is switched off for this problem.',
               }}
