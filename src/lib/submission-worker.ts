@@ -4,6 +4,7 @@ import {
   markSlotBusy,
   markSlotIdle,
   openSlot,
+  purgeAbandonedSlots,
   SLOT_BEAT_MS,
   touchSlot,
 } from '@/lib/worker-slots';
@@ -242,6 +243,10 @@ async function reapStuckSubmissions() {
       where: { status: 'PROCESSING', updatedAt: { lt: cutoff } },
       data: { status: 'PENDING' },
     });
+
+    // Rows belonging to a process that was killed rather than stopped. Only ones far past
+    // stale, so a worker running alongside this one keeps its slots.
+    await purgeAbandonedSlots();
 
     if (reaped.count > 0) {
       // The reaper puts work back on the queue, so the loops should stop backing off.

@@ -41,8 +41,27 @@ export function setWorkerSource(next: WorkerSource): void {
  */
 export const SLOT_STALE_MS = 90_000;
 
-/** How often a busy slot beats while it waits for the evaluator. */
+/** How often a slot writes a beat, however often it is asked to. */
 export const SLOT_BEAT_MS = 15_000;
+
+/**
+ * Rows this old are deleted rather than shown.
+ *
+ * A process killed rather than asked to stop leaves its rows behind, and nothing else would
+ * ever remove them, so the table would grow by one row per slot per hard kill forever. Well
+ * past the stale threshold, so a recently-dead worker still reports as not reporting for a good
+ * while before its rows disappear. Once they do the tab reads as down either way, via the empty
+ * state instead of a list of tombstones.
+ */
+export const SLOT_PURGE_MS = 15 * 60_000;
+
+/**
+ * When each slot last actually wrote, so a fast loop does not write on every pass.
+ *
+ * The idle backoff exists because polling every three seconds across several loops was a lot of
+ * database traffic for nothing, and beating on every pass would have put much of that back.
+ */
+const lastBeatAt = new Map<number, number>();
 
 async function quietly(what: string, run: () => Promise<unknown>): Promise<void> {
   try {
@@ -68,6 +87,8 @@ export async function openSlot(slot: number): Promise<void> {
 /** This slot has claimed a submission and is grading it. */
 export async function markSlotBusy(slot: number, submissionId: string): Promise<void> {
   const now = new Date();
+  // A state change is always worth a write, and it counts as this slot's beat.
+  lastBeatAt.set(slot, now.getTime());
   await quietly('markSlotBusy', () =>
     prisma.workerSlot.updateMany({
       where: { runId: RUN_ID, slot },
@@ -78,6 +99,7 @@ export async function markSlotBusy(slot: number, submissionId: string): Promise<
 
 /** Finished, failed, or found nothing: either way the slot is free and still alive. */
 export async function markSlotIdle(slot: number): Promise<void> {
+  lastBeatAt.set(slot, Date.now());
   await quietly('markSlotIdle', () =>
     prisma.workerSlot.updateMany({
       where: { runId: RUN_ID, slot },
@@ -95,6 +117,10 @@ export async function markSlotIdle(slot: number): Promise<void> {
  * event loop has stopped turning stops beating either way, which is the honest answer.
  */
 export async function touchSlot(slot: number): Promise<void> {
+  const since = Date.now() - (lastBeatAt.get(slot) ?? 0);
+  if (since < SLOT_BEAT_MS) return;
+  lastBeatAt.set(slot, Date.now());
+
   await quietly('touchSlot', () =>
     prisma.workerSlot.updateMany({
       where: { runId: RUN_ID, slot },
@@ -105,6 +131,7 @@ export async function touchSlot(slot: number): Promise<void> {
 
 /** A loop retiring because concurrency was lowered. */
 export async function closeSlot(slot: number): Promise<void> {
+  lastBeatAt.delete(slot);
   await quietly('closeSlot', () =>
     prisma.workerSlot.deleteMany({ where: { runId: RUN_ID, slot } }),
   );
@@ -118,4 +145,21 @@ export async function closeSlot(slot: number): Promise<void> {
  */
 export async function closeAllSlots(): Promise<void> {
   await quietly('closeAllSlots', () => prisma.workerSlot.deleteMany({ where: { runId: RUN_ID } }));
+}
+
+/**
+ * Delete rows nobody has touched for a long time.
+ *
+ * Only rows that are already well past stale, so a worker running alongside this one cannot
+ * lose its slots: a live slot beats far more often than this.
+ */
+export async function purgeAbandonedSlots(now = new Date()): Promise<number> {
+  let removed = 0;
+  await quietly('purgeAbandonedSlots', async () => {
+    const { count } = await prisma.workerSlot.deleteMany({
+      where: { lastSeenAt: { lt: new Date(now.getTime() - SLOT_PURGE_MS) } },
+    });
+    removed = count;
+  });
+  return removed;
 }
