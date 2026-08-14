@@ -338,3 +338,101 @@ test.describe('accessibility: paginated tables (axe, contrast excluded)', () => 
     expect(violations, summarize(violations)).toEqual([]);
   });
 });
+
+/**
+ * The pages the scan never reached.
+ *
+ * The suite above is thorough about the surfaces it visits and silent about the rest: seven
+ * dashboard routes had never been loaded by axe at all, so every rule it enables proved nothing
+ * there. That is a worse gap than the two contrast rules this file excludes, because it is
+ * invisible: a green run said "no violations" about pages nobody had looked at.
+ *
+ * Admin-facing screens come first. They are dialog-heavy, they are where the tables and scrolling
+ * panels live, and they are operated by faculty rather than by anyone who wrote them.
+ */
+test.describe('accessibility: the rest of the dashboard (axe, contrast excluded)', () => {
+  /**
+   * Sign in, open a route, wait for the page to actually be there, and scan it.
+   *
+   * The heading is waited for rather than the `main` landmark, and that is the whole point of
+   * the argument. The layout renders `main` before the page has loaded anything into it, so a
+   * scan gated on the landmark would pass just as happily against an empty shell, a redirect to
+   * the dashboard, or a route that had quietly 404'd. "No violations" would then be true and
+   * worthless. The level-1 heading is the first thing that only exists if the page rendered.
+   */
+  async function scanRoute(
+    page: Page,
+    role: 'admin' | 'student',
+    path: string,
+    heading: string,
+  ) {
+    await signIn(page, role);
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible({
+      timeout: 60_000,
+    });
+    return scan(page);
+  }
+
+  test('user accounts', async ({ page }) => {
+    const { violations } = await scanRoute(page, 'admin', '/dashboard/users', 'User Accounts');
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('system status', async ({ page }) => {
+    const { violations } = await scanRoute(page, 'admin', '/dashboard/system-status', 'System Status');
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('system logs', async ({ page }) => {
+    const { violations } = await scanRoute(page, 'admin', '/dashboard/system-logs', 'System Logs');
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the course list', async ({ page }) => {
+    const { violations } = await scanRoute(page, 'admin', '/dashboard/courses', 'Courses');
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('archived courses', async ({ page }) => {
+    const { violations } = await scanRoute(page, 'admin', '/dashboard/archived-courses', 'Archived Courses');
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  /** A student surface, and one of the least-visited parts of the app. */
+  test('the calendar', async ({ page }) => {
+    const { violations } = await scanRoute(page, 'student', '/dashboard/calendar', 'Calendar');
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the account page', async ({ page }) => {
+    const { violations } = await scanRoute(page, 'student', '/dashboard/account', 'Account');
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+});
+
+/**
+ * Account recovery, signed out.
+ *
+ * Reached by somebody who cannot get in, which is the worst moment to meet an unlabelled control,
+ * and the one surface where nobody can ask a colleague to read the screen for them. Both states
+ * are worth scanning: the form as it arrives, and what a spent or invented link produces, since
+ * the second is what most people who follow an old email will see.
+ */
+test.describe('accessibility: account recovery (axe, contrast excluded)', () => {
+  test('the request form', async ({ page }) => {
+    await page.goto('/forgot-password');
+    // The control itself, not the landmark: the landmark renders either way.
+    await expect(page.getByRole('textbox').first()).toBeVisible({ timeout: 30_000 });
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('a link that is no longer any good', async ({ page }) => {
+    await page.goto('/reset-password?token=not-a-real-token');
+    // Whatever the page decides to say about a dead link, it has to say something.
+    await expect(page.getByRole('main')).not.toBeEmpty({ timeout: 30_000 });
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+});
