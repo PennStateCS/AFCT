@@ -56,5 +56,5 @@ AFCT works with a Java evaluator that uses [JFLAP](https://www.jflap.org/) to pr
 | Jesse Burdick-Pless | RIT         | [jb4411](https://github.com/jb4411)           |
 | Jeffrey Chiampi     | PSU         | [jdc308](https://github.com/jdc308)           |
 | Edwin Kimsal        | PSU         | [EdwinKimsal](https://github.com/EdwinKimsal) |
-| Adam Manowski       | PSU         | [Adam-Manowski](https://github.com/astermaxed)   |
+| Adam Manowski       | PSU         | [Adam-Manowski](https://github.com/Adam-Manowski)   |
 | Andrew Sutton       | PSU         | [asutton24](https://github.com/asutton24)     |
