@@ -1,104 +1,114 @@
 /**
- * Evaluator slot health for the System Status page.
+ * Evaluator status for the System Status page, read entirely from the queue.
  *
- * Two questions, and the second is the one that needs the heartbeat: how much work is waiting,
- * and are the loops that should be doing it actually alive. A queue-derived answer alone is
- * reassuring exactly when it should not be, because an empty queue looks the same whether the
- * loops are healthy and waiting or dead and silent.
+ * There is no heartbeat and no worker-side state. An earlier version had one, on the argument
+ * that an empty queue cannot distinguish a healthy evaluator waiting from a dead one. That is
+ * true and it bought less than it cost: a dead evaluator harms nothing until a submission
+ * arrives, and the moment one does, the queue says so within a minute. The symptom this page
+ * exists to catch, work that stops draining, is itself the detector.
  *
- * **Nothing here surfaces a student.** The queue is grade data, so a slot reports the kind of
- * work it is doing and how long it has been doing it, and the submission id for anyone who needs
+ * So the page reports what it can actually know, and says plainly when it knows nothing. It
+ * never claims the evaluator is up on the strength of an empty queue.
+ *
+ * **Nothing here surfaces a student.** The queue is grade data, so in-flight work reports the
+ * kind of problem and how long it has been running, and the submission id for anyone who needs
  * to go and look. No names, no feedback, no evaluator output.
  */
 
 import { prisma } from '@/lib/prisma';
-import { SLOT_STALE_MS } from '@/lib/worker-slots';
-import { getQueueSettings } from '@/lib/eval-config';
-import type { WorkerSource } from '@prisma/client';
+import { getQueueSettings, getEvaluatorConfig } from '@/lib/eval-config';
 
-export type SlotState = 'grading' | 'waiting' | 'stale';
+/**
+ * Grace beyond the evaluator's own timeout before work counts as wedged.
+ *
+ * The same figure the worker's reaper uses to decide a row is stuck, so the page and the reaper
+ * cannot disagree about what they are looking at.
+ */
+const STUCK_GRACE_MS = 60_000;
 
-export type WorkerSlotItem = {
-  /** Display position, 1..N in the order the slots started. */
-  position: number;
-  state: SlotState;
-  source: WorkerSource;
-  startedAt: string;
-  lastSeenAt: string;
-  /** Set only while grading. The problem type, never the student. */
+/** How long a queue may sit undrained before that is worth saying out loud. */
+const STALLED_AFTER_MS = 2 * 60_000;
+
+export type WorkItem = {
+  submissionId: string;
+  /** The kind of problem, never whose it is. */
   problemType: string | null;
-  submissionId: string | null;
-  busySinceMs: number | null;
+  runningForMs: number;
+  /** Past the evaluator timeout plus grace: the reaper will return it to the queue. */
+  stuck: boolean;
 };
 
 export type WorkersStatusResponse = {
-  /** healthy: every configured slot reporting. degraded: some missing or stale. down: none. */
-  health: 'healthy' | 'degraded' | 'down';
-  /** What the admin set: SystemSettings.submissionMaxConcurrent. */
+  /**
+   * working: grading now. stuck: something is past its timeout. stalled: work queued and
+   * nothing picking it up. idle: nothing to do, which is NOT a claim that the evaluator is up.
+   */
+  health: 'working' | 'stuck' | 'stalled' | 'idle';
+  /** Concurrent slots the admin configured: SystemSettings.submissionMaxConcurrent. */
   configured: number;
-  live: number;
-  grading: number;
-  slots: WorkerSlotItem[];
+  busy: number;
+  inFlight: WorkItem[];
   queue: { pending: number; processing: number; failedLastHour: number };
-  /** True when the queue has work and nothing is reporting: the case worth an alert. */
-  backlogWithNoWorkers: boolean;
+  /** How long the oldest waiting submission has waited, for the stalled case. */
+  oldestPendingMs: number | null;
 };
 
 export async function collectWorkers(now = new Date()): Promise<WorkersStatusResponse> {
-  const staleBefore = new Date(now.getTime() - SLOT_STALE_MS);
   const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
-  const [settings, rows, pending, processing, failedLastHour] = await Promise.all([
-    getQueueSettings(),
-    prisma.workerSlot.findMany({ orderBy: { startedAt: 'asc' } }),
-    prisma.submission.count({ where: { status: 'PENDING' } }),
-    prisma.submission.count({ where: { status: 'PROCESSING' } }),
-    prisma.submission.count({ where: { status: 'FAILED', updatedAt: { gte: hourAgo } } }),
-  ]);
+  const [settings, evalConfig, processing, oldestPending, pending, failedLastHour] =
+    await Promise.all([
+      getQueueSettings(),
+      getEvaluatorConfig(),
+      prisma.submission.findMany({
+        where: { status: 'PROCESSING' },
+        // Deliberately narrow. Everything else on a submission is the student's.
+        select: {
+          id: true,
+          updatedAt: true,
+          assignmentProblem: { select: { problem: { select: { type: true } } } },
+        },
+        orderBy: { updatedAt: 'asc' },
+      }),
+      prisma.submission.findFirst({
+        where: { status: 'PENDING' },
+        select: { submittedAt: true },
+        orderBy: { submittedAt: 'asc' },
+      }),
+      prisma.submission.count({ where: { status: 'PENDING' } }),
+      prisma.submission.count({ where: { status: 'FAILED', updatedAt: { gte: hourAgo } } }),
+    ]);
 
-  // The problem type for whatever is being graded, in one query rather than one per slot.
-  const busyIds = rows.map((r) => r.submissionId).filter((id): id is string => id !== null);
-  const problemTypes = new Map<string, string | null>();
-  if (busyIds.length > 0) {
-    const subs = await prisma.submission.findMany({
-      where: { id: { in: busyIds } },
-      // Deliberately narrow. Everything else on a submission is the student's.
-      select: { id: true, assignmentProblem: { select: { problem: { select: { type: true } } } } },
-    });
-    for (const s of subs) problemTypes.set(s.id, s.assignmentProblem?.problem?.type ?? null);
-  }
+  // Claiming a submission sets it PROCESSING and stamps updatedAt, so that is when the work
+  // started. The same reading the reaper takes.
+  const stuckBefore = now.getTime() - (evalConfig.timeoutMs + STUCK_GRACE_MS);
+  const inFlight: WorkItem[] = processing.map((s) => ({
+    submissionId: s.id,
+    problemType: s.assignmentProblem?.problem?.type ?? null,
+    runningForMs: now.getTime() - s.updatedAt.getTime(),
+    stuck: s.updatedAt.getTime() < stuckBefore,
+  }));
 
-  const slots: WorkerSlotItem[] = rows.map((row, i) => {
-    const stale = row.lastSeenAt < staleBefore;
-    return {
-      position: i + 1,
-      // A stale row may still name a submission; the state says not to believe it.
-      state: stale ? 'stale' : row.submissionId ? 'grading' : 'waiting',
-      source: row.source,
-      startedAt: row.startedAt.toISOString(),
-      lastSeenAt: row.lastSeenAt.toISOString(),
-      problemType: row.submissionId ? (problemTypes.get(row.submissionId) ?? null) : null,
-      submissionId: row.submissionId,
-      busySinceMs: row.busySince ? now.getTime() - row.busySince.getTime() : null,
-    };
-  });
+  const oldestPendingMs = oldestPending
+    ? now.getTime() - oldestPending.submittedAt.getTime()
+    : null;
 
-  const live = slots.filter((s) => s.state !== 'stale').length;
-  const grading = slots.filter((s) => s.state === 'grading').length;
-  const configured = settings.maxConcurrent;
-
-  // Down means nothing is reporting at all, whatever rows are lying around. Degraded covers both
-  // "fewer than configured" and "some went quiet", which read the same to an operator: the
-  // evaluator is not at full strength and somebody should look.
-  const health = live === 0 ? 'down' : live < configured ? 'degraded' : 'healthy';
+  const health: WorkersStatusResponse['health'] = inFlight.some((w) => w.stuck)
+    ? 'stuck'
+    : inFlight.length > 0
+      ? 'working'
+      : // Nothing being graded. Work waiting and waiting a while means nothing is collecting it,
+        // which is as close to "the evaluator is down" as the queue can honestly get.
+        pending > 0 && (oldestPendingMs ?? 0) > STALLED_AFTER_MS
+        ? 'stalled'
+        : 'idle';
 
   return {
     health,
-    configured,
-    live,
-    grading,
-    slots,
-    queue: { pending, processing, failedLastHour },
-    backlogWithNoWorkers: live === 0 && pending > 0,
+    configured: settings.maxConcurrent,
+    busy: inFlight.length,
+    inFlight,
+    queue: { pending, processing: inFlight.length, failedLastHour },
+    oldestPendingMs,
   };
 }

@@ -1,13 +1,4 @@
 import { prisma } from '@/lib/prisma';
-import {
-  closeSlot,
-  markSlotBusy,
-  markSlotIdle,
-  openSlot,
-  purgeAbandonedSlots,
-  SLOT_BEAT_MS,
-  touchSlot,
-} from '@/lib/worker-slots';
 import { Prisma } from '@prisma/client';
 import type { SubmissionStatus } from '@prisma/client';
 import type { FileStatusReturn } from './simulatiry_report/types';
@@ -70,8 +61,6 @@ const workerFlags = globalThis as unknown as { __submissionWorkerStarted?: boole
 // a time). desiredWorkers and maxAttempts are refreshed from SystemSettings, so
 // an admin can retune the queue without a restart; see refreshQueueSettings().
 let loopCount = 0;
-// Never reused within a run, so a retired slot's number cannot be mistaken for a new loop.
-let nextSlot = 1;
 let desiredWorkers = DEFAULT_SUBMISSION_MAX_CONCURRENT;
 let maxAttempts = DEFAULT_SUBMISSION_MAX_ATTEMPTS;
 
@@ -201,10 +190,7 @@ export function startSubmissionWorker() {
 function ensureWorkers() {
   while (loopCount < desiredWorkers) {
     loopCount++;
-    // The slot number is the loop's identity for its whole life, which is what lets the
-    // status page show a stable row per slot rather than a count that shuffles.
-    const slot = nextSlot++;
-    void openSlot(slot).then(() => runWorkerLoop(slot));
+    void runWorkerLoop();
   }
 }
 
@@ -243,10 +229,6 @@ async function reapStuckSubmissions() {
       where: { status: 'PROCESSING', updatedAt: { lt: cutoff } },
       data: { status: 'PENDING' },
     });
-
-    // Rows belonging to a process that was killed rather than stopped. Only ones far past
-    // stale, so a worker running alongside this one keeps its slots.
-    await purgeAbandonedSlots();
 
     if (reaped.count > 0) {
       // The reaper puts work back on the queue, so the loops should stop backing off.
@@ -308,17 +290,12 @@ export async function writeIfStillOwned(
   return written.count > 0;
 }
 
-async function runWorkerLoop(slot: number) {
+async function runWorkerLoop() {
   // Scale down: if concurrency was lowered, retire this loop.
   if (loopCount > desiredWorkers) {
     loopCount--;
-    await closeSlot(slot);
     return;
   }
-
-  // Beat before the work, not after: a loop that is about to spend a minute inside the
-  // evaluator should look alive going in, and stale if it never comes out.
-  await touchSlot(slot);
 
   try {
     // Fairness: a student who already has a submission being processed is skipped
@@ -343,7 +320,7 @@ async function runWorkerLoop(slot: number) {
 
     // No work to be done
     if (nextSubmission === null) {
-      scheduleAsync(() => runWorkerLoop(slot), idleDelayMs());
+      scheduleAsync(runWorkerLoop, idleDelayMs());
       return;
     }
 
@@ -381,40 +358,29 @@ async function runWorkerLoop(slot: number) {
           });
         }
       }
-      scheduleAsync(() => runWorkerLoop(slot), LOOP_DELAY_MS.NEXT);
+      scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
       return;
     }
 
     // false means another loop/instance beat us to it. Move on.
     if (!(await claimSubmission(nextSubmission.id))) {
-      scheduleAsync(() => runWorkerLoop(slot), LOOP_DELAY_MS.NEXT);
+      scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
       return;
     }
 
     // Hold this loop until the evaluation finishes: one loop, one submission,
     // so the live loop count is the real concurrency limit.
-    await markSlotBusy(slot, nextSubmission.id);
-    // Keep beating while the evaluator runs. Without this a legitimate long grading job would
-    // cross the stale threshold and report as a dead slot. It also still tells the truth about
-    // a genuinely wedged process: if the event loop stops turning, so does this timer.
-    const beat = setInterval(() => void touchSlot(slot), SLOT_BEAT_MS);
-    try {
-      await evaluateSubmission(nextSubmission.id);
-    } finally {
-      clearInterval(beat);
-      // In a finally so a throw cannot leave the slot showing work it is no longer doing.
-      await markSlotIdle(slot);
-    }
+    await evaluateSubmission(nextSubmission.id);
 
     // Move to next check
-    scheduleAsync(() => runWorkerLoop(slot), LOOP_DELAY_MS.NEXT);
+    scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
     return;
   } catch (error) {
     console.error('[SubmissionWorker] Database or loop error:', error);
     await logQueueEvent('SUBMISSION_QUEUE_ERROR', 'ERROR', {
       error: errMessage(error),
     });
-    scheduleAsync(() => runWorkerLoop(slot), LOOP_DELAY_MS.ERROR);
+    scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.ERROR);
     return;
   }
 }

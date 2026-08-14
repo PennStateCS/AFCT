@@ -1,154 +1,131 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
-  workerSlot: { findMany: vi.fn() },
-  submission: { count: vi.fn(), findMany: vi.fn() },
+  submission: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
 }));
 const getQueueSettings = vi.hoisted(() => vi.fn());
+const getEvaluatorConfig = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
-vi.mock('@/lib/eval-config', () => ({ getQueueSettings }));
+vi.mock('@/lib/eval-config', () => ({ getQueueSettings, getEvaluatorConfig }));
 
 import { collectWorkers } from './workers';
-import { SLOT_STALE_MS } from '@/lib/worker-slots';
 
 const NOW = new Date('2026-08-14T12:00:00.000Z');
-const fresh = new Date(NOW.getTime() - 5_000);
-const stale = new Date(NOW.getTime() - SLOT_STALE_MS - 1_000);
+const TIMEOUT_MS = 30_000;
+/** Anything older than the evaluator timeout plus the reaper's grace is overdue. */
+const overdueBy = (ms: number) => new Date(NOW.getTime() - (TIMEOUT_MS + 60_000) - ms);
+const startedAgo = (ms: number) => new Date(NOW.getTime() - ms);
 
-const slot = (over: Record<string, unknown> = {}) => ({
-  runId: 'run-1',
-  slot: 1,
-  source: 'WORKER_CONTAINER',
-  startedAt: new Date(NOW.getTime() - 600_000),
-  lastSeenAt: fresh,
-  submissionId: null,
-  busySince: null,
+const processing = (over: Record<string, unknown> = {}) => ({
+  id: 's1',
+  updatedAt: startedAgo(5_000),
+  assignmentProblem: { problem: { type: 'FA' } },
   ...over,
 });
 
-/** counts are called in order: pending, processing, failed-in-the-last-hour */
-const counts = (pending = 0, processing = 0, failed = 0) => {
-  // Reset first: these are queued one-shot values, so a call inside a test would otherwise sit
-  // behind the defaults set in beforeEach and never be reached.
+/** counts are called in order: pending, then failed-in-the-last-hour */
+const counts = (pending = 0, failed = 0) => {
   prismaMock.submission.count.mockReset();
-  prismaMock.submission.count
-    .mockResolvedValueOnce(pending)
-    .mockResolvedValueOnce(processing)
-    .mockResolvedValueOnce(failed);
+  prismaMock.submission.count.mockResolvedValueOnce(pending).mockResolvedValueOnce(failed);
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getQueueSettings.mockResolvedValue({ maxConcurrent: 3, maxAttempts: 5 });
-  prismaMock.workerSlot.findMany.mockResolvedValue([]);
+  getQueueSettings.mockResolvedValue({ maxConcurrent: 5, maxAttempts: 5 });
+  getEvaluatorConfig.mockResolvedValue({ timeoutMs: TIMEOUT_MS, maxMemoryMb: 512 });
   prismaMock.submission.findMany.mockResolvedValue([]);
+  prismaMock.submission.findFirst.mockResolvedValue(null);
   counts();
 });
 
-describe('health', () => {
-  it('is healthy when every configured slot is reporting', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([slot({ slot: 1 }), slot({ slot: 2 }), slot({ slot: 3 })]);
+describe('what the queue can say', () => {
+  it('reports grading while work is in flight', async () => {
+    prismaMock.submission.findMany.mockResolvedValue([processing()]);
 
     const res = await collectWorkers(NOW);
 
-    expect(res.health).toBe('healthy');
-    expect(res.live).toBe(3);
-    expect(res.configured).toBe(3);
-  });
-
-  it('is degraded when fewer slots report than are configured', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([slot({ slot: 1 })]);
-
-    expect((await collectWorkers(NOW)).health).toBe('degraded');
+    expect(res.health).toBe('working');
+    expect(res.busy).toBe(1);
+    expect(res.configured).toBe(5);
   });
 
   /**
-   * The reason the heartbeat exists. A row left behind by a process that died is still a row,
-   * so presence proves nothing and only recency does.
+   * The case worth acting on: work queued, nothing collecting it. This is what a dead evaluator
+   * looks like from the outside, and it needs no heartbeat to see.
    */
-  it('does not count a slot that has stopped reporting as live', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([
-      slot({ slot: 1 }),
-      slot({ slot: 2, lastSeenAt: stale }),
+  it('reports a queue nothing is collecting', async () => {
+    prismaMock.submission.findFirst.mockResolvedValue({ submittedAt: startedAgo(5 * 60_000) });
+    counts(3);
+
+    const res = await collectWorkers(NOW);
+
+    expect(res.health).toBe('stalled');
+    expect(res.oldestPendingMs).toBe(5 * 60_000);
+  });
+
+  /** A submission queued seconds ago has not been ignored yet; the loops poll on a delay. */
+  it('gives a fresh submission time to be picked up before calling it stalled', async () => {
+    prismaMock.submission.findFirst.mockResolvedValue({ submittedAt: startedAgo(10_000) });
+    counts(1);
+
+    expect((await collectWorkers(NOW)).health).toBe('idle');
+  });
+
+  it('flags work past the evaluator timeout', async () => {
+    prismaMock.submission.findMany.mockResolvedValue([processing({ updatedAt: overdueBy(1_000) })]);
+
+    const res = await collectWorkers(NOW);
+
+    expect(res.health).toBe('stuck');
+    expect(res.inFlight[0].stuck).toBe(true);
+  });
+
+  it('does not flag work that is merely slow', async () => {
+    prismaMock.submission.findMany.mockResolvedValue([
+      processing({ updatedAt: startedAgo(TIMEOUT_MS) }),
     ]);
 
     const res = await collectWorkers(NOW);
 
-    expect(res.live).toBe(1);
-    expect(res.slots.map((s) => s.state)).toEqual(['waiting', 'stale']);
+    expect(res.health).toBe('working');
+    expect(res.inFlight[0].stuck).toBe(false);
   });
 
-  it('is down when nothing is reporting, even with rows left behind', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([slot({ lastSeenAt: stale })]);
+  /**
+   * The honest limit of this approach, stated as a test so nobody quietly changes it: an empty
+   * queue is reported as idle, never as healthy. The page says the same in words.
+   */
+  it('reports an empty queue as idle rather than claiming the evaluator is up', async () => {
+    const res = await collectWorkers(NOW);
 
-    expect((await collectWorkers(NOW)).health).toBe('down');
-  });
-
-  /** A stale row can still name a submission. The state has to win over the field. */
-  it('reports a stale slot as not reporting rather than as grading', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([
-      slot({ lastSeenAt: stale, submissionId: 's1', busySince: NOW }),
-    ]);
-    prismaMock.submission.findMany.mockResolvedValue([
-      { id: 's1', assignmentProblem: { problem: { type: 'FA' } } },
-    ]);
-
-    expect((await collectWorkers(NOW)).slots[0].state).toBe('stale');
+    expect(res.health).toBe('idle');
+    expect(res.busy).toBe(0);
   });
 });
 
-describe('the alarm worth raising', () => {
-  it('flags work waiting with nothing to collect it', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([]);
-    counts(4);
-
-    const res = await collectWorkers(NOW);
-
-    expect(res.backlogWithNoWorkers).toBe(true);
-  });
-
-  it('does not flag an empty queue with the evaluator stopped', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([]);
-    counts(0);
-
-    const res = await collectWorkers(NOW);
-
-    // Still down, but nothing is being held up, so it is not the same alarm.
-    expect(res.health).toBe('down');
-    expect(res.backlogWithNoWorkers).toBe(false);
-  });
-
-  it('does not flag a backlog that slots are working through', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([slot()]);
-    counts(9);
-
-    expect((await collectWorkers(NOW)).backlogWithNoWorkers).toBe(false);
-  });
-});
-
-describe('what a busy slot reports', () => {
-  beforeEach(() => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([
-      slot({ submissionId: 's1', busySince: new Date(NOW.getTime() - 90_000) }),
-    ]);
+describe('what it reports about work in flight', () => {
+  it('gives the problem type and how long it has been running', async () => {
     prismaMock.submission.findMany.mockResolvedValue([
-      { id: 's1', assignmentProblem: { problem: { type: 'PDA' } } },
+      processing({ updatedAt: startedAgo(90_000), assignmentProblem: { problem: { type: 'PDA' } } }),
     ]);
+
+    const [w] = (await collectWorkers(NOW)).inFlight;
+
+    expect(w.problemType).toBe('PDA');
+    expect(w.runningForMs).toBe(90_000);
   });
 
-  it('names the kind of problem and how long it has been running', async () => {
-    const [s] = (await collectWorkers(NOW)).slots;
+  it('copes with a submission whose problem has no type', async () => {
+    prismaMock.submission.findMany.mockResolvedValue([processing({ assignmentProblem: null })]);
 
-    expect(s.state).toBe('grading');
-    expect(s.problemType).toBe('PDA');
-    expect(s.busySinceMs).toBe(90_000);
+    expect((await collectWorkers(NOW)).inFlight[0].problemType).toBeNull();
   });
 
   /**
    * The queue is grade data and this is an operations page. It may say what kind of work is in
-   * flight and for how long; it may not say whose it is. This asserts the query, because a
-   * later `include` would leak a student without changing anything visible here.
+   * flight and for how long; it may not say whose it is. Asserted on the query, because a later
+   * `include` would leak a student without changing anything visible here.
    */
   it('asks the database for nothing that identifies a student', async () => {
     await collectWorkers(NOW);
@@ -156,28 +133,20 @@ describe('what a busy slot reports', () => {
     const args = prismaMock.submission.findMany.mock.calls[0][0];
     expect(args.select).toEqual({
       id: true,
+      updatedAt: true,
       assignmentProblem: { select: { problem: { select: { type: true } } } },
     });
     expect(args.include).toBeUndefined();
     expect(JSON.stringify(args)).not.toMatch(/student|user|email|feedback|evaluationRaw/i);
   });
 
-  it('asks once for every busy slot rather than once per slot', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([
-      slot({ slot: 1, submissionId: 's1', busySince: NOW }),
-      slot({ slot: 2, submissionId: 's2', busySince: NOW }),
-    ]);
+  it('counts failures from the last hour only', async () => {
+    counts(0, 7);
 
-    await collectWorkers(NOW);
+    const res = await collectWorkers(NOW);
 
-    expect(prismaMock.submission.findMany).toHaveBeenCalledTimes(1);
-  });
-
-  it('asks nothing when no slot is busy', async () => {
-    prismaMock.workerSlot.findMany.mockResolvedValue([slot()]);
-
-    await collectWorkers(NOW);
-
-    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
+    expect(res.queue.failedLastHour).toBe(7);
+    const failedArgs = prismaMock.submission.count.mock.calls[1][0];
+    expect(failedArgs.where.updatedAt.gte).toEqual(new Date(NOW.getTime() - 60 * 60 * 1000));
   });
 });
