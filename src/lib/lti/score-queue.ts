@@ -46,11 +46,27 @@ export async function queueScore(opts: {
 }
 
 /**
- * Take the next grade to send, marking it as being worked on.
+ * How long a claim holds a grade before another sender may take it.
  *
- * The claim is a conditional update rather than a read followed by a write, so two senders
- * running at once cannot both take the same row and post the same score twice. The loser sees
- * nothing claimed and moves on.
+ * Doubles as crash recovery: a sender that dies mid-send leaves the row claimed, and this is how
+ * long before somebody picks it up again. Long enough for a slow LMS to answer, short enough
+ * that a grade is not stranded.
+ */
+const CLAIM_LEASE_MS = 5 * 60 * 1000;
+
+/**
+ * Take the next grade to send, reserving it.
+ *
+ * The comment here used to say that bumping `attempts` stopped two senders taking the same row.
+ * It does not: the row stays `PENDING` and still due, so a second caller reads it, sees the new
+ * attempt count, and claims it too. Only a genuinely simultaneous pair of reads collides on the
+ * old guard. The lease is what makes this exclusive, by moving the row out of the due window
+ * while it is being worked on.
+ *
+ * Nothing could trigger it when this was written: one loop per process, one process, and the
+ * "Send grades now" button only queues. But two senders claiming one grade would both call
+ * `ensureLineItem`, and two of those racing can each create a gradebook column, which is the
+ * duplicate this file exists to avoid.
  */
 export async function claimNextScore(now = new Date()) {
   const candidate = await prisma.ltiScoreQueue.findFirst({
@@ -61,10 +77,18 @@ export async function claimNextScore(now = new Date()) {
   if (!candidate) return null;
 
   const { count } = await prisma.ltiScoreQueue.updateMany({
-    // `attempts` is the guard: it is what the winner changes, so the loser's update matches
-    // nothing.
-    where: { id: candidate.id, state: 'PENDING', attempts: candidate.attempts },
-    data: { attempts: candidate.attempts + 1 },
+    // Both guards matter: `attempts` catches a simultaneous claim, and `nextAttemptAt` is what
+    // the winner moves, so a loser arriving afterwards matches nothing.
+    where: {
+      id: candidate.id,
+      state: 'PENDING',
+      attempts: candidate.attempts,
+      nextAttemptAt: { lte: now },
+    },
+    data: {
+      attempts: candidate.attempts + 1,
+      nextAttemptAt: new Date(now.getTime() + CLAIM_LEASE_MS),
+    },
   });
   if (count !== 1) return null;
 
