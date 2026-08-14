@@ -60,7 +60,9 @@ Syncing is always something you ask for. AFCT does not quietly change your roste
 
 Some LMSs let you pick the AFCT assignment while adding the link, so students land on that assignment rather than on the AFCT course. If yours supports it, choosing AFCT while adding an assignment or module item shows a list of the assignments in your linked AFCT course, and the one you pick becomes the link.
 
-The course has to be linked first, and you have to be the one who runs it. These links need to open in a new tab as well, so check that setting on the assignment or module item once it has been added.
+The course has to be linked first, and you have to be the one who runs it. These links need to open in a new tab as well, so check that setting on the assignment or module item once it has been added. You pick one assignment at a time, even in an LMS that would let you select several at once.
+
+Not every spot in an LMS accepts this kind of link. If you add AFCT somewhere that only takes a page or a file, AFCT tells you so instead of quietly doing nothing, and the message says what to do about it. The fix is normally to add AFCT somewhere that takes an external tool link, or to ask your administrator to look at how the AFCT placement is set up.
 
 ## Disconnecting
 
