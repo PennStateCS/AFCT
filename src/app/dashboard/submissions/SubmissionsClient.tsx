@@ -43,23 +43,14 @@ import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import {
   attemptPointsFor,
-  fetchAssignmentsForCourses,
-  fetchCourseList,
-  fetchProblemsForAssignments,
   fetchSubmissions,
   formatStudentName,
-  type AssignmentItem,
-  type CourseItem,
-  type ProblemItem,
   type SubmissionItem,
   type SubmissionsQuery,
 } from './submissions-data';
+import { useSubmissionFilters } from './use-submission-filters';
 
-// Stable empty arrays so `data ?? EMPTY` keeps a constant identity between renders, which
-// keeps the option memos below from rebuilding on every render.
-const EMPTY_COURSES: CourseItem[] = [];
-const EMPTY_ASSIGNMENTS: AssignmentItem[] = [];
-const EMPTY_PROBLEMS: ProblemItem[] = [];
+// A stable empty array, so `data ?? EMPTY_ROWS` keeps a constant identity between renders.
 const EMPTY_ROWS: SubmissionItem[] = [];
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -75,14 +66,6 @@ const SEARCH_FIELDS = [
 ];
 
 export default function SubmissionsClient() {
-  // Scope. Empty means "everything", so the page opens unfiltered without enumerating every
-  // id in the installation, and the assignment/problem lists are only fetched once the admin
-  // actually narrows. Selecting all of them used to fan out one request per course and then
-  // one per assignment before the table could show anything.
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
-  const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
-  const [selectedProblems, setSelectedProblems] = useState<string[]>([]);
-
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -113,67 +96,25 @@ export default function SubmissionsClient() {
   // each assignment in ITS course's zone.
   const { timezone } = useEffectiveTimezone();
 
-  // --- Filter data (cascading: courses → assignments → problems) -------------
-  // Each list is a cached, deduped, retried query. staleTime:Infinity means a
-  // list only refetches when the selection above it changes (its key), so a
-  // background refetch never re-runs the select-all cascade and wipes a manual
-  // narrowing.
+  // The three cascading pickers, with their queries and their pruning. See
+  // `use-submission-filters.ts`: a selected id is dropped as soon as the list it came from
+  // stops offering it.
   const {
-    data: courses = EMPTY_COURSES,
-    isLoading: loadingCourses,
-    isError: coursesError,
-  } = useQuery({
-    queryKey: queryKeys.admin.submissionFilters.courses(),
-    queryFn: fetchCourseList,
-    staleTime: Infinity,
-  });
-
-  const {
-    data: assignments = EMPTY_ASSIGNMENTS,
-    isFetching: loadingAssignments,
-    isError: assignmentsError,
-  } = useQuery({
-    queryKey: queryKeys.admin.submissionFilters.assignments(selectedCourses),
-    queryFn: () => fetchAssignmentsForCourses(selectedCourses),
-    enabled: selectedCourses.length > 0,
-    staleTime: Infinity,
-  });
-
-  const {
-    data: problems = EMPTY_PROBLEMS,
-    isFetching: loadingProblems,
-    isError: problemsError,
-  } = useQuery({
-    queryKey: queryKeys.admin.submissionFilters.problems(selectedAssignments),
-    queryFn: () => fetchProblemsForAssignments(selectedAssignments),
-    enabled: selectedAssignments.length > 0,
-    staleTime: Infinity,
-  });
-
-  // Narrowing a level clears the levels below it, so a stale assignment or problem id
-  // cannot outlive the course that offered it and silently keep filtering the table.
-  useEffect(() => {
-    setSelectedAssignments((prev) =>
-      prev.filter((id) => assignments.some((assignment) => assignment.id === id)),
-    );
-  }, [assignments]);
-
-  useEffect(() => {
-    setSelectedProblems((prev) => prev.filter((id) => problems.some((p) => p.id === id)));
-  }, [problems]);
-
-  useEffect(() => {
-    if (coursesError) showToast.error('Could not load courses. Refresh the page to try again.');
-  }, [coursesError]);
-
-  useEffect(() => {
-    if (assignmentsError)
-      showToast.error('Could not load assignments. Refresh the page to try again.');
-  }, [assignmentsError]);
-
-  useEffect(() => {
-    if (problemsError) showToast.error('Could not load problems. Refresh the page to try again.');
-  }, [problemsError]);
+    selectedCourses,
+    selectedAssignments,
+    selectedProblems,
+    setSelectedCourses,
+    setSelectedAssignments,
+    setSelectedProblems,
+    courseOptions,
+    assignmentOptions,
+    problemOptions,
+    loadingCourses,
+    loadingAssignments,
+    loadingProblems,
+    clearScope,
+    anyScopeActive,
+  } = useSubmissionFilters();
 
   // Debounce typing, and jump back to the first page when the query changes.
   useEffect(() => {
@@ -282,32 +223,8 @@ export default function SubmissionsClient() {
     link.click();
   };
 
-  const courseOptions = useMemo(
-    () =>
-      courses.map((course) => ({ id: course.id, label: course.name ?? course.code ?? course.id })),
-    [courses],
-  );
-
-  const assignmentOptions = useMemo(
-    () =>
-      assignments
-        .map((assignment) => ({ id: assignment.id, label: assignment.title }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [assignments],
-  );
-
-  const problemOptions = useMemo(
-    () =>
-      problems
-        .map((problem) => ({ id: problem.id, label: problem.title || problem.id }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [problems],
-  );
-
   const handleClearFilters = () => {
-    setSelectedCourses([]);
-    setSelectedAssignments([]);
-    setSelectedProblems([]);
+    clearScope();
     setTiming([]);
     setStatusFilter([]);
     setSearchInput('');
@@ -315,9 +232,7 @@ export default function SubmissionsClient() {
   };
 
   const anyFilterActive =
-    selectedCourses.length > 0 ||
-    selectedAssignments.length > 0 ||
-    selectedProblems.length > 0 ||
+    anyScopeActive ||
     timing.length > 0 ||
     statusFilter.length > 0 ||
     searchInput.length > 0;
