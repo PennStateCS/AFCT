@@ -141,6 +141,10 @@ describe('claiming the next one', () => {
    * The case this design exists for. Two senders running at once must not both take the same
    * row, or the LMS receives the same score twice and the second overwrites a grade that may
    * have changed in between.
+   *
+   * This one only ever caught half of it: both reads land before either write, so they collide
+   * on the attempt count and one loses. Whether that happens is down to how the two queries
+   * interleave, so passing here never proved much. The test below is the half it missed.
    */
   it('is taken by exactly one of two senders racing', async () => {
     await queue();
@@ -149,8 +153,35 @@ describe('claiming the next one', () => {
 
     const claimed = [first, second].filter(Boolean);
     expect(claimed).toHaveLength(1);
-    const row = await prisma.ltiScoreQueue.findFirstOrThrow();
-    expect(row.attempts).toBe(1);
+  });
+
+  /**
+   * A second sender arriving *after* the first has claimed, which is the ordering the old guard
+   * let through: the row stayed PENDING and still due, so the newcomer read the bumped attempt
+   * count and claimed it again quite happily. Both would then call `ensureLineItem`, and two of
+   * those racing can each create a gradebook column.
+   *
+   * Deterministic, unlike the race above: the first claim has definitely finished.
+   */
+  it('is not handed out again while the first sender still holds it', async () => {
+    await queue();
+
+    const first = await claimNextScore();
+    const second = await claimNextScore();
+
+    expect(first).not.toBeNull();
+    expect(second).toBeNull();
+  });
+
+  /** The lease lapses, so a sender that died holding a grade does not strand it for ever. */
+  it('becomes available again once the claim has lapsed', async () => {
+    await queue();
+    await claimNextScore();
+
+    // Six minutes on, past the five-minute lease.
+    const later = new Date(Date.now() + 6 * 60 * 1000);
+
+    expect(await claimNextScore(later)).not.toBeNull();
   });
 });
 

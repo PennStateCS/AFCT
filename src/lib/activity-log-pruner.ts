@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { purgeExpiredSingleUseTokens } from '@/lib/single-use-token';
 import { purgeExpiredLaunches } from '@/lib/lti/launch-transaction';
 import { purgeExpiredPendingLinks } from '@/lib/lti/course-link';
+import { purgeSentMail } from '@/lib/mail-queue';
 import {
   DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
   clampActivityLogRetentionDays,
@@ -82,10 +83,44 @@ async function purgePendingLinksOnce(): Promise<void> {
   }
 }
 
-async function loop(): Promise<void> {
+/**
+ * Messages that have been sent, or given up on.
+ *
+ * Their bodies are already cleared when they finish, so what is left is small; the reason to
+ * sweep them is that nothing else ever would, and an unbounded table on a box where disk is the
+ * binding constraint is a slow leak rather than no problem. A week is long enough to answer
+ * "did my reset email go out last Tuesday" and short enough that the table stays flat.
+ *
+ * Same daily pass and the same swallow-and-continue rule as the sweeps above.
+ */
+async function purgeSentMailOnce(): Promise<void> {
+  try {
+    const count = await purgeSentMail();
+    if (count > 0) {
+      console.log(`[mail] deleted ${count} finished messages`);
+    }
+  } catch (error) {
+    console.error('[mail] purge failed:', error);
+  }
+}
+
+/**
+ * One daily pass: every sweep, in order, none of them able to stop another.
+ *
+ * Separate from `loop` so a test can prove a sweep is actually *in* the pass. Testing each one
+ * on its own says only that it works when called, which is no help against the failure that
+ * matters here: a sweep that exists and is never reached. `purgeSentMail` sat written and
+ * uncalled for exactly that reason.
+ */
+async function runOnce(): Promise<void> {
   await pruneOnce();
   await purgeTokensOnce();
   await purgePendingLinksOnce();
+  await purgeSentMailOnce();
+}
+
+async function loop(): Promise<void> {
+  await runOnce();
   setTimeout(() => void loop(), PRUNE_INTERVAL_MS);
 }
 
@@ -97,4 +132,4 @@ export function startActivityLogPruner(): void {
 }
 
 // Exposed for unit tests only.
-export const __test__ = { pruneOnce, purgeTokensOnce, getRetentionDays };
+export const __test__ = { pruneOnce, purgeTokensOnce, purgeSentMailOnce, runOnce, getRetentionDays };
