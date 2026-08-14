@@ -415,6 +415,64 @@ current_app_tag() {
 # stale env-file path is exactly the failure this function hits.
 SET_APP_TAG_ERROR=""
 
+# Append a KEY=value to the env file if the key is absent, preserving everything else.
+#
+# Only used for the backup key today, and deliberately narrow: it never replaces a value and
+# never touches a line it did not add.
+append_env_key() {
+  _key=$1
+  _val=$2
+  _tmp="${ENV_FILE}.updtmp.$$"
+
+  [ -f "$ENV_FILE" ] && [ -r "$ENV_FILE" ] || return 1
+  [ -w "$(dirname "$ENV_FILE")" ] || return 1
+
+  _owner=$(stat -c '%u:%g' "$ENV_FILE" 2>/dev/null || true)
+  { cat "$ENV_FILE" && printf '%s=%s\n' "$_key" "$_val"; } > "$_tmp" || {
+    rm -f "$_tmp"
+    return 1
+  }
+  chmod 600 "$_tmp" 2>/dev/null || true
+  [ -n "$_owner" ] && chown "$_owner" "$_tmp" 2>/dev/null || true
+  mv "$_tmp" "$ENV_FILE" || { rm -f "$_tmp"; return 1; }
+  return 0
+}
+
+# Make sure a backup-encryption key exists before the new images come up.
+#
+# This has to happen here as well as in the host installer, because an in-app upgrade never runs
+# the installer. From this release the backup service refuses to write an archive without a key
+# rather than writing one in the clear, so an upgrade that did not top the key up would stop
+# backups silently: the container would come up, log a refusal once a day, and nobody would look
+# until they needed a backup that was never taken.
+#
+# Same two rules as the installer. An existing key is never replaced, because that strands every
+# archive already written; an explicit BACKUP_ALLOW_UNENCRYPTED is left alone, because somebody
+# who chose plaintext should not have a key appear behind them.
+ensure_backup_key() {
+  [ -f "$ENV_FILE" ] || return 0
+  grep -qE '^BACKUP_ENCRYPTION_KEY=.' "$ENV_FILE" 2>/dev/null && return 0
+
+  if grep -qE '^BACKUP_ALLOW_UNENCRYPTED=(true|TRUE|1|yes)' "$ENV_FILE" 2>/dev/null; then
+    progress_note "backups are set to stay unencrypted (BACKUP_ALLOW_UNENCRYPTED); no key generated"
+    return 0
+  fi
+
+  _key=$(head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n' | cut -c1-48)
+  if [ -z "$_key" ]; then
+    progress_note "could not generate a backup-encryption key; backups will not run until one is set"
+    return 1
+  fi
+
+  if append_env_key BACKUP_ENCRYPTION_KEY "$_key"; then
+    progress_note "generated a backup-encryption key; backups are encrypted from now on. Keep .env.production safe: without it an encrypted backup cannot be restored."
+  else
+    progress_note "could not write a backup-encryption key to the environment file; backups will not run until one is set"
+    return 1
+  fi
+  return 0
+}
+
 # Rewrite only the AFCT_APP_TAG line, preserving every other line (and the file's
 # secrets). Writes in place so a bind-mounted env file is updated on the host.
 set_app_tag() {
@@ -1155,6 +1213,10 @@ process_request() {
   fi
   _TXN_ENV_CHANGED=true
   txn_save
+
+  # Before the new images come up: the backup sidecar moves with the app, and from this release
+  # it refuses to write an archive without a key.
+  ensure_backup_key || true
 
   # If this release changed the stack layout, pull its compose in before recreating,
   # so a new service or healthcheck is applied as part of the same upgrade. Best
