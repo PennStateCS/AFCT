@@ -632,6 +632,14 @@ const render = (value: unknown): string => {
  * first, then who and where, then the rest. Identifiers stay, because support questions turn on
  * them, but they sit below the things that answer the question at a glance.
  */
+/** The records an entry points at, named rather than left as identifiers. */
+export type RelatedRecords = {
+  course?: string | null;
+  assignment?: string | null;
+  problem?: string | null;
+  submission?: string | null;
+};
+
 export function formatActivityDetails(entry: {
   action: string;
   timestamp?: string | Date | null;
@@ -639,6 +647,7 @@ export function formatActivityDetails(entry: {
   category?: string | null;
   ipAddress?: string | null;
   metadata?: Metadata;
+  related?: RelatedRecords | null;
 }): string {
   const meta = (entry.metadata ?? {}) as Record<string, unknown>;
   const summary = describeActivity(entry.action, meta);
@@ -661,11 +670,30 @@ export function formatActivityDetails(entry: {
 
   if (entry.ipAddress) who.push({ label: 'IP address', value: entry.ipAddress });
 
+  /**
+   * What the entry is about.
+   *
+   * These live in columns on the row rather than in metadata, so they were simply absent from
+   * this view: somebody reading an entry about a grade could not see which assignment it was
+   * for without going and looking the id up. Named, because "Course ID: cmr7x2..." is not an
+   * answer to anything.
+   */
+  const about: DetailRow[] = (
+    [
+      ['Course', entry.related?.course],
+      ['Assignment', entry.related?.assignment],
+      ['Problem', entry.related?.problem],
+      ['Submission', entry.related?.submission],
+    ] as const
+  )
+    .filter(([, value]) => typeof value === 'string' && value.length > 0)
+    .map(([label, value]) => ({ label, value: value as string }));
+
   const rest: DetailRow[] = Object.entries(meta)
     .filter(([key]) => !whoKeys.includes(key) && !['ipAddress', 'userAgent'].includes(key))
     .map(([key, value]) => ({ label: label(key), value: render(value) }));
 
-  const width = Math.max(...[...head, ...who, ...rest].map((r) => r.label.length), 0);
+  const width = Math.max(...[...head, ...who, ...about, ...rest].map((r) => r.label.length), 0);
   const block = (rows: DetailRow[]) =>
     rows.map((r) => `${r.label.padEnd(width)}  ${r.value}`).join('\n');
 
@@ -673,6 +701,9 @@ export function formatActivityDetails(entry: {
     summary ? `What happened\n${summary}` : null,
     block(head),
     who.length > 0 ? block(who) : null,
+    // Above the raw metadata: what the entry is about is read far more often than the fields
+    // the action happened to record.
+    about.length > 0 ? `About\n${block(about)}` : null,
     rest.length > 0 ? `Details\n${block(rest)}` : null,
   ].filter(Boolean);
 

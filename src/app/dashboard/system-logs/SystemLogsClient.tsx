@@ -45,6 +45,13 @@ type LogRow = {
   metadata?: unknown;
   ipAddress?: string | null;
   userAgent?: string | null;
+  /** The course, assignment, problem or submission this entry is about, named by the API. */
+  related?: {
+    course?: string | null;
+    assignment?: string | null;
+    problem?: string | null;
+    submission?: string | null;
+  } | null;
 };
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -152,6 +159,7 @@ export default function SystemLogsClient() {
       formatActivityDetails({
         ...row,
         metadata: row.metadata as Record<string, unknown> | null,
+        related: row.related ?? null,
       }),
     );
     const formatted = new Date(row.timestamp).toLocaleString(undefined, {

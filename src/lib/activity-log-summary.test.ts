@@ -364,6 +364,62 @@ describe('a deep link returned to the LMS', () => {
 });
 
 /**
+ * What an entry is about.
+ *
+ * The course, assignment, problem and submission live in columns on the row rather than in
+ * metadata, so this view simply did not show them: somebody reading an entry about a grade could
+ * not tell which assignment it was for without going and looking the id up elsewhere.
+ */
+describe('the records an entry points at', () => {
+  const entry = (related: Record<string, string | null> | null) =>
+    formatActivityDetails({
+      action: 'PROBLEM_GRADE_UPDATED',
+      metadata: { grade: 8, previousGrade: 5 },
+      related,
+    });
+
+  it('names them rather than showing identifiers', () => {
+    const text = entry({
+      course: 'CMPSC 464, Theory of Computation',
+      assignment: 'Problem set 1',
+      problem: 'Deterministic finite automata',
+    });
+
+    expect(text).toContain('About');
+    expect(text).toContain('CMPSC 464, Theory of Computation');
+    expect(text).toContain('Problem set 1');
+    expect(text).toContain('Deterministic finite automata');
+  });
+
+  // A record deleted since resolves to nothing, and a heading over an empty list is worse than
+  // no heading.
+  it('leaves the section out when the entry points at nothing', () => {
+    expect(entry(null)).not.toContain('About');
+    expect(entry({ course: null, assignment: null })).not.toContain('About');
+  });
+
+  it('shows only the parts that resolved', () => {
+    const text = entry({ course: 'CMPSC 464, Theory', assignment: null, problem: null });
+
+    expect(text).toContain('CMPSC 464, Theory');
+    expect(text).not.toContain('Assignment');
+  });
+
+  /** A submission has no title of its own, so its id is what somebody would search for. */
+  it('falls back to the identifier for a submission', () => {
+    expect(entry({ submission: 'sub-123' })).toContain('sub-123');
+  });
+
+  // It sits above the raw metadata: what the entry is about is read more often than the fields
+  // the action happened to record.
+  it('comes before the details', () => {
+    const text = entry({ course: 'CMPSC 464, Theory' });
+
+    expect(text.indexOf('About')).toBeLessThan(text.indexOf('Details'));
+  });
+});
+
+/**
  * Looking at a student's work.
  *
  * These carry the most weight of anything here: under FERPA the log is the disclosure record,
