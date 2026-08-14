@@ -6,6 +6,7 @@ import {
   linkLaunchCourse,
   enrolFromLaunch,
   purgeExpiredPendingLinks,
+  rememberContextMember,
 } from './course-link';
 import type { LaunchIdentity } from './launch';
 
@@ -372,5 +373,58 @@ describe('sweeping pending links', () => {
 
     expect(await purgeExpiredPendingLinks()).toBe(0);
     expect(await prisma.ltiPendingLink.count()).toBe(1);
+  });
+});
+
+/**
+ * Bookkeeping that must never cost somebody their launch.
+ *
+ * `rememberContextMember` records which LMS course a person came through, so a grade can later be
+ * sent to the right gradebook. It is written on every launch, and it is deliberately best effort:
+ * the worst case if it fails is a grade that cannot be placed later, and that reports itself. A
+ * launch that failed instead would lock a student out of their course at the moment they clicked
+ * a link in their LMS.
+ *
+ * The guard was there and nothing exercised it, which is the same state the similarity report was
+ * in when it turned out to be failing graded submissions. A guard nobody tests is a guard the next
+ * person can delete without anything going red.
+ *
+ * These reach it directly. Forcing the write to fail *underneath a real launch* would need the
+ * context link to exist for the lookup and not for the upsert, which cannot be arranged against a
+ * real database without mocking the client, and a test that mocked it would prove the mock. So the
+ * guard is proven here and the launch path is left to the tests above it.
+ */
+describe('recording which LMS course somebody came through', () => {
+  /** A membership write that cannot succeed: the context link it points at does not exist. */
+  const doomed = () =>
+    rememberContextMember({
+      contextLinkId: 'a-context-link-that-does-not-exist',
+      userId: ids.student,
+      ltiUserId: 'lms-user-1',
+    });
+
+  it('swallows a write it cannot make', async () => {
+    await expect(doomed()).resolves.toBeUndefined();
+  });
+
+  it('records nothing when it fails', async () => {
+    await doomed();
+
+    expect(await prisma.ltiContextMember.count({ where: { userId: ids.student } })).toBe(0);
+  });
+
+  // The ordinary path still writes the row, so the guard is not hiding a broken feature.
+  it('records the membership when it can', async () => {
+    await linkLaunchCourse({
+      identity: identity(),
+      courseId: COURSE,
+      userId: ids.faculty,
+      context: CTX,
+    });
+
+    await resolveLaunchTarget({ identity: identity(), userId: ids.student });
+
+    const member = await prisma.ltiContextMember.findFirst({ where: { userId: ids.student } });
+    expect(member?.ltiUserId).toBe(identity().subject);
   });
 });
