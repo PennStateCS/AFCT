@@ -740,14 +740,51 @@ async function evaluateWithJar(
         };
       }
 
-      // Run simularity report
-      const similarityData = await jflapSimilarityParser(uploadedFilePath);
+      /**
+       * The similarity report, which must never cost somebody their grade.
+       *
+       * It runs *after* the evaluator, so by this point the submission has already been marked
+       * right or wrong. Without this guard a report that could not be produced threw, landed in
+       * the evaluator's catch below, and returned `status: 'FAILED'` with `evaluationRaw: null`:
+       * a graded submission discarded and the student shown "Evaluation failed" because a
+       * *reporting* step could not read the file.
+       *
+       * That is reachable from ordinary input. `jflapSimilarityParser` returns null for a path
+       * that is not `.jff`, an empty file or an unreadable one, and leaves `calcHashData`
+       * undefined for a file with no `<structure>` element; `check_file_status` throws on
+       * exactly that. Nothing tested any of it, which is why nobody knew.
+       *
+       * A missing report is a supported state: all three columns are nullable. So a failure here
+       * is logged and the grade stands.
+       */
+      let fileHashData: string | undefined;
+      let calcHashData: string | undefined;
+      let similarityReportJson: FileStatusReturn | undefined;
+      try {
+        const similarityData = await jflapSimilarityParser(uploadedFilePath);
 
-      const fileHashData = similarityData?.fileHashData ?? undefined;
-      const calcHashData = similarityData?.calcHashData ?? undefined;
-      const fileHashEmail = similarityData?.fileHashEmail ?? undefined;
+        fileHashData = similarityData?.fileHashData ?? undefined;
+        calcHashData = similarityData?.calcHashData ?? undefined;
+        const fileHashEmail = similarityData?.fileHashEmail ?? undefined;
 
-      const similarityReportJson = await check_file_status(fileHashData, calcHashData, fileHashEmail, submission.studentId);
+        similarityReportJson = await check_file_status(
+          fileHashData,
+          calcHashData,
+          fileHashEmail,
+          submission.studentId,
+        );
+      } catch (similarityErr) {
+        // Recorded, because a report that stops being produced should be visible rather than
+        // quietly absent for a term. Severity WARNING, not ERROR: nothing about the grade is
+        // wrong, and the log is read by people deciding what to act on.
+        await logSubmissionActivity(submission, 'SUBMISSION_SIMILARITY_SKIPPED', 'WARNING', {
+          error: errMessage(similarityErr),
+        });
+        console.warn(
+          `[SubmissionWorker] Similarity report skipped for submission ${submission.id}:`,
+          similarityErr,
+        );
+      }
 
       const correct = typeof evaluation.correct === 'boolean' ? evaluation.correct : undefined;
       let feedback: string;
