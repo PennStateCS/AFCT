@@ -12,7 +12,8 @@ Set-StrictMode -Version Latest
 # The keys the installer owns. Everything else in the file (comments, app-specific
 # settings) is preserved verbatim across a rewrite.
 $script:AfctManagedKeys = @('NODE_ENV', 'POSTGRES_PASSWORD', 'DATABASE_URL', 'ADMIN_EMAIL',
-    'ADMIN_PASSWORD', 'NEXTAUTH_SECRET', 'AFCT_SECRET_KEY', 'NEXTAUTH_URL', 'AUTH_TRUST_HOST')
+    'ADMIN_PASSWORD', 'NEXTAUTH_SECRET', 'AFCT_SECRET_KEY', 'BACKUP_ENCRYPTION_KEY',
+    'NEXTAUTH_URL', 'AUTH_TRUST_HOST')
 
 # Apply the restrictive ACL to a file with icacls: strip inheritance and grant the current
 # account (by SID) FullControl. The SID is given as a literal (the leading '*'), so icacls
@@ -90,6 +91,29 @@ function Confirm-AfctSecretKey {
 
     Set-AfctEnvFlag 'AFCT_SECRET_KEY' (New-AfctSecret) $File
     Write-AfctInfo "generated a secret-encryption key; it protects stored settings such as mail and sign-in credentials. Keep $File with your backups."
+}
+
+# Guarantee the backup-encryption key exists, generating one if it does not. Mirrors
+# ensure_backup_key in deploy/unix/lib/environment.sh; the two installers must agree.
+#
+# A missing key used to mean "write the backup in the clear", which is the wrong default for
+# what that archive holds: the whole database plus both upload volumes. Nobody chooses plaintext
+# by leaving a variable unset; they get it by not knowing the variable exists.
+#
+# Never replaces an existing key, and for a sharper reason than the secret key above: replacing
+# it strands every encrypted archive already written, not just future ones.
+function Confirm-AfctBackupKey {
+    param([string]$File)
+    if (-not (Test-Path -LiteralPath $File)) { return }
+    if (Read-AfctEnvValue 'BACKUP_ENCRYPTION_KEY' $File) { return }
+
+    # An explicit opt-out is respected, so somebody who has decided on plaintext archives does
+    # not get a key generated behind them on every update.
+    $optOut = Read-AfctEnvValue 'BACKUP_ALLOW_UNENCRYPTED' $File
+    if ($optOut -in @('true', 'TRUE', '1', 'yes')) { return }
+
+    Set-AfctEnvFlag 'BACKUP_ENCRYPTION_KEY' (New-AfctSecret) $File
+    Write-AfctInfo "generated a backup-encryption key; backups are now encrypted. Keep $File somewhere safe and separate: without it an encrypted backup cannot be restored."
 }
 
 function Read-AfctEnvValue {
@@ -195,6 +219,7 @@ function Write-AfctEnvironmentFile {
         (& $assign 'ADMIN_PASSWORD' $Config.AdminPassword),
         (& $assign 'NEXTAUTH_SECRET' $Config.NextAuthSecret),
         (& $assign 'AFCT_SECRET_KEY' $Config.SecretKey),
+        (& $assign 'BACKUP_ENCRYPTION_KEY' $Config.BackupKey),
         (& $assign 'NEXTAUTH_URL' $Config.AppUrl),
         (& $assign 'AUTH_TRUST_HOST' 'true'),
         '# END AFCT INSTALLER MANAGED SETTINGS'

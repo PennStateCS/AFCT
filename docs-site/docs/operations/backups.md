@@ -18,17 +18,29 @@ Archives are stored in the `db_backups` Docker volume. Each one is verified imme
 
 A backup is a complete copy of every education record, so it should not sit on disk in the clear.
 
-Set `BACKUP_ENCRYPTION_KEY` in `.env.production` to a long random passphrase. The backup service encrypts each archive with GnuPG symmetric AES-256:
+**The installer generates `BACKUP_ENCRYPTION_KEY` for you**, on a new install and when updating an older one, so encryption is on without anyone having to know the setting exists. The backup service encrypts each archive with GnuPG symmetric AES-256. There is nothing to do unless you want to set your own passphrase, in which case put one in `.env.production`:
 
 ```bash
 openssl rand -base64 48
 ```
 
+The installer never replaces a passphrase that is already there. Replacing it would make every archive already written unreadable, which is the one unrecoverable mistake available here.
+
 :::danger Store the passphrase off this server
 Without the passphrase the backups **cannot be restored**, not by you, not by anyone. Keep it in a password manager or another system, not only on the AFCT host, and not only in `.env.production` (which is on the same disk as the backups it protects).
 :::
 
-If the variable is unset, backups are still written, but unencrypted, and the service logs a warning on every run. The Backups tab shows each archive's encryption state.
+### If there is no passphrase
+
+A backup is **not taken**, and the service logs why. It used to write the archive unencrypted with a warning, which is the wrong way round: a backup that did not happen shows up on the Backups tab and in the log, while a plaintext copy of the whole site shows up nowhere until it is somewhere it should not be.
+
+If you genuinely want plaintext archives, because the volume underneath is encrypted or you ship them somewhere that encrypts them, say so deliberately:
+
+```bash
+BACKUP_ALLOW_UNENCRYPTED=true
+```
+
+With that set the installer stops generating a passphrase and the service writes the archive in the clear, with a warning on every run. The Backups tab shows each archive's encryption state either way.
 
 To decrypt an archive by hand:
 

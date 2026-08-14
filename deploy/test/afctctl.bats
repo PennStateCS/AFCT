@@ -172,6 +172,48 @@ EOF
   [ "$status" -eq 0 ]
 
   run grep -Eq '^AFCT_SECRET_KEY=.{32,}$' .env.production; [ "$status" -eq 0 ]
+  run grep -Eq '^BACKUP_ENCRYPTION_KEY=.{32,}$' .env.production; [ "$status" -eq 0 ]
+}
+
+# The backup key follows the same three rules as the secret key above, and one it does not:
+# an explicit opt-out. A missing key used to mean "write the archive in the clear", and that
+# archive is the whole database plus both upload volumes. Nobody chooses plaintext by leaving
+# a variable unset.
+@test "an update tops up a missing backup-encryption key" {
+  write_complete_env
+  run grep -q 'BACKUP_ENCRYPTION_KEY' .env.production; [ "$status" -ne 0 ]
+
+  run sh install.sh update
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^BACKUP_ENCRYPTION_KEY=.{32,}$' .env.production; [ "$status" -eq 0 ]
+}
+
+# Sharper than the secret key: replacing this one strands every archive already written with
+# it, not just future ones.
+@test "an existing backup-encryption key is never replaced" {
+  write_complete_env
+  printf 'BACKUP_ENCRYPTION_KEY=keepthisexactbackupkeykeepthisexact\n' >> .env.production
+
+  run sh install.sh update
+  [ "$status" -eq 0 ]
+
+  run grep -q '^BACKUP_ENCRYPTION_KEY=keepthisexactbackupkeykeepthisexact$' .env.production
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^BACKUP_ENCRYPTION_KEY=' .env.production)" -eq 1 ]
+}
+
+# Somebody who has decided on plaintext archives, because they encrypt the volume underneath or
+# ship them somewhere that does, must not get a key generated behind them on every update.
+@test "an explicit opt-out is left alone" {
+  write_complete_env
+  printf 'BACKUP_ALLOW_UNENCRYPTED=true\n' >> .env.production
+
+  run sh install.sh update
+  [ "$status" -eq 0 ]
+
+  run grep -q 'BACKUP_ENCRYPTION_KEY' .env.production
+  [ "$status" -ne 0 ]
 }
 
 # Installing over an existing complete configuration deploys without rewriting the file, so

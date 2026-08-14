@@ -24,6 +24,32 @@ concurrency:
 
 
 jobs:
+  # Secrets are a hard gate rather than a warning, because the cost of a miss is unbounded: a
+  # key in git history stays there after the commit that removed it, so the only cheap moment to
+  # catch one is before it lands.
+  #
+  # The action scopes its scan to the commits in the event, which is what makes it a *gate* on
+  # new work rather than a re-litigation of the past on every run. The full history was scanned
+  # once by hand when this was added and was clean.
+  #
+  # CodeQL already runs as SAST (GitHub default setup, so it has no workflow file here) and
+  # Dependabot handles dependencies. This is the third leg neither of those covers.
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          # The whole history, not just the tip: a secret is still a secret three commits back,
+          # and a shallow clone would find nothing in the one place it most matters.
+          fetch-depth: 0
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@44c470ffc35caa8b1eb3e8012ca53c2f9bea4eb5 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 15

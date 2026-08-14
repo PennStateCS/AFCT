@@ -1,0 +1,36 @@
+# What counts as a secret here.
+#
+# The default rules, with a deliberately short allowlist. As of writing they find nothing across
+# the whole history, so nothing below is load-bearing yet; it exists to keep the obvious future
+# false positives from making a hard gate annoying enough to switch off.
+#
+# Note what is NOT excluded: the test directories. A throwaway key in a fixture is the most
+# likely false positive, and also the most likely place for somebody to paste a real credential
+# "just to try it". If a fixture ever trips this, add that path here with a note saying why the
+# value is fake, rather than excluding the directories in advance.
+title = "AFCT"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated files, lockfiles, and three checked fixtures"
+paths = [
+  # Generated from the route files by `npm run docs`; nothing is authored here.
+  '''src/types/api\.ts$''',
+  '''docs-site/docs/api-reference/.*''',
+  # Integrity hashes look like high-entropy strings and are not secrets.
+  '''package-lock\.json$''',
+  '''docs-site/package-lock\.json$''',
+
+  # The two files below were each opened and checked when this gate was added. They are listed
+  # by name rather than by directory on purpose: excluding `src/**/*.test.ts` wholesale would
+  # also excuse the next real credential somebody pastes into a test to see if it works.
+
+  # `ASSIGNMENT_SECRET = 'SECRET-ASSIGNMENT-BODY-9f3a'`, a marker string the test then hunts for
+  # in a serialised response to prove the field never reaches the client. Unlocks nothing.
+  '''src/lib/student-assignments\.lock\.test\.ts$''',
+  # Two self-signed keypairs, generated for these tests, used to prove the certificate parser
+  # reads a valid one and rejects an expired one. They belong to no server.
+  '''src/lib/tls-cert\.test\.ts$''',
+]

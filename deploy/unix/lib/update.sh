@@ -138,6 +138,7 @@ do_update() {
   # Before the new images start, so the version being deployed comes up with a key rather
   # than discovering it is missing the first time an admin saves a credential.
   ensure_secret_key
+  ensure_backup_key
 
   _prev_tag=$(read_env_value AFCT_APP_TAG "$ENV_FILE")
   [ -n "$_prev_tag" ] || _prev_tag="main"

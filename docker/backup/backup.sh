@@ -109,8 +109,24 @@ run_backup() {
   retention="$1"
   ts="$(date +%Y%m%d-%H%M%S)"
 
+  # An archive here is the whole database plus both upload volumes: every student's work and
+  # record on the site, in one file. A missing key used to mean "write it in the clear", which
+  # nobody chooses on purpose; they get it by not knowing the variable exists. The installers
+  # generate one now, so a blank key means something went wrong or somebody removed it.
+  #
+  # Refused rather than written unencrypted. A backup that did not happen is visible in the log
+  # and on the Backups tab; a plaintext archive of the whole site is not visible at all until it
+  # is somewhere it should not be.
   if [ -z "$KEYFILE" ]; then
-    log "WARNING: BACKUP_ENCRYPTION_KEY is not set - writing an UNENCRYPTED backup"
+    case "${BACKUP_ALLOW_UNENCRYPTED:-}" in
+      true | TRUE | 1 | yes)
+        log "WARNING: writing an UNENCRYPTED backup because BACKUP_ALLOW_UNENCRYPTED is set"
+        ;;
+      *)
+        log "ERROR: BACKUP_ENCRYPTION_KEY is not set, so this backup was not taken. Set it in .env.production, or set BACKUP_ALLOW_UNENCRYPTED=true if you really want plaintext archives."
+        return
+        ;;
+    esac
   fi
 
   work="$(mktemp -d "${TMPDIR:-/tmp}/afct-backup.XXXXXX")" || { log "no temp space"; return; }
