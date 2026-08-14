@@ -90,9 +90,11 @@ export default function RateLimitsTab({
           emptyTitle="No IP addresses are currently rate limited"
           emptyDescription="Addresses appear here when they make too many sign-in, sign-up, or email-availability requests."
           defaultSorting={[{ id: 'startedAt', desc: true }]}
-          // Filter-only columns: the detail is already inside the IP and Seen before
-          // cells, so they stay out of the table but remain in the Filters popover.
-          defaultColumnVisibility={{ addressType: false, familiarity: false }}
+          // No toolbar: this is a short operational list, not something to search or export.
+          // The two filter-only columns went with it, since the Filters popover was the only
+          // thing that could reach them and their detail is already in the IP and Seen before
+          // cells.
+          showToolbar={false}
         />
       </div>
     </Section>
