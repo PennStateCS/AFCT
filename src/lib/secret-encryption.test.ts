@@ -174,3 +174,40 @@ describe('hasSecretKey', () => {
     expect(hasSecretKey()).toBe(false);
   });
 });
+
+/**
+ * The authentication tag is what makes a stored secret tamper-evident, so its length is not a
+ * detail the caller gets to choose. Node accepts several shorter GCM tags unless told
+ * otherwise, and a shorter tag is cheaper to forge, so both sides pin 16 bytes.
+ */
+describe('authentication tag length', () => {
+  const parts = (stored: string) => stored.split(':');
+
+  it('writes a full 16-byte tag', () => {
+    const [, , tag] = parts(encryptSecret('hunter2'));
+
+    expect(Buffer.from(tag, 'base64url')).toHaveLength(16);
+  });
+
+  it('refuses a stored value whose tag has been truncated', () => {
+    const [prefix, iv, tag, ciphertext] = parts(encryptSecret('hunter2'));
+    const short = Buffer.from(tag, 'base64url').subarray(0, 8).toString('base64url');
+
+    const tampered = [prefix, iv, short, ciphertext].join(':');
+
+    // Without the pinned length Node would accept the 8-byte tag and authenticate against
+    // half the bits, and because it is a genuine prefix of the real tag it would decrypt
+    // cleanly. Pinned, it fails closed like any other unreadable secret.
+    expect(() => decryptSecret(tampered)).toThrow(SecretKeyError);
+  });
+
+  it('still refuses a full-length tag that is wrong', () => {
+    const [prefix, iv, tag, ciphertext] = parts(encryptSecret('hunter2'));
+    const flipped = Buffer.from(tag, 'base64url');
+    flipped[0] ^= 0xff;
+
+    const tampered = [prefix, iv, flipped.toString('base64url'), ciphertext].join(':');
+
+    expect(() => decryptSecret(tampered)).toThrow(SecretKeyError);
+  });
+});
