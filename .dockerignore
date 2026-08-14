@@ -63,3 +63,8 @@ prisma/dev.db*
 # The docs site builds separately (github pages), never in the app image
 docs-site
 docs-dist
+
+# Dev-seed avatars: 56 MB of PNGs read only by prisma/seed-dev.ts, which this image can
+# never run (NODE_ENV=production selects the production seed). The dev container bind-mounts
+# the repo, so `npm run docker:dev` still has them.
+prisma/profile_photos
