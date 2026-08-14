@@ -867,3 +867,45 @@ supending() { printf '%s' "$1" > "$TESTDIR/triggers/.self-update-pending.json"; 
   [ "$(jq -r '.envFileOk' triggers/updater.readiness.json)" = "false" ]
   [ "$(jq -r '.composeFileOk' triggers/updater.readiness.json)" = "true" ]
 }
+
+# An in-app upgrade never runs the host installer, so the key top-up has to live here as well.
+# From the release that added it, the backup service refuses to write an archive without a key
+# rather than writing one in the clear; an upgrade that did not top it up would stop backups
+# silently, which is the worst shape a backup failure can take.
+@test "an upgrade generates a backup-encryption key when there is none" {
+  run grep -q 'BACKUP_ENCRYPTION_KEY' "$TESTDIR/.env.production"; [ "$status" -ne 0 ]
+
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"bkey","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^BACKUP_ENCRYPTION_KEY=.{32,}$' "$TESTDIR/.env.production"; [ "$status" -eq 0 ]
+  # Everything else in the file survives the rewrite.
+  run grep -q '^NEXTAUTH_SECRET=keepme$' "$TESTDIR/.env.production"; [ "$status" -eq 0 ]
+}
+
+# Replacing one strands every archive already written with it, which is worse than any upgrade
+# problem it could solve.
+@test "an upgrade never replaces an existing backup-encryption key" {
+  printf 'BACKUP_ENCRYPTION_KEY=keepthisexactbackupkeykeepthisexact\n' >> "$TESTDIR/.env.production"
+
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"bkeep","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+
+  run grep -q '^BACKUP_ENCRYPTION_KEY=keepthisexactbackupkeykeepthisexact$' "$TESTDIR/.env.production"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^BACKUP_ENCRYPTION_KEY=' "$TESTDIR/.env.production")" -eq 1 ]
+}
+
+# Somebody who chose plaintext archives must not have a key appear behind them on upgrade.
+@test "an upgrade respects an explicit opt-out" {
+  printf 'BACKUP_ALLOW_UNENCRYPTED=true\n' >> "$TESTDIR/.env.production"
+
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"bopt","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+
+  run grep -q 'BACKUP_ENCRYPTION_KEY' "$TESTDIR/.env.production"
+  [ "$status" -ne 0 ]
+}
