@@ -93,6 +93,7 @@ export default function SystemLogsClient() {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
 
   const [selectedData, setSelectedData] = useState('');
+  const [selectedJson, setSelectedJson] = useState('');
   const [title, setTitle] = useState('');
   const [viewerOpen, setViewerOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
@@ -163,6 +164,9 @@ export default function SystemLogsClient() {
         userAgent: row.userAgent ?? null,
       }),
     );
+    // The entry as it arrived, for the Copy JSON button: the rendered text above reads well
+    // but renames things, and a bug report or a disclosure record wants the real field names.
+    setSelectedJson(JSON.stringify(row, null, 2));
     const formatted = new Date(row.timestamp).toLocaleString(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short',
@@ -357,6 +361,7 @@ export default function SystemLogsClient() {
         {/* Dialogs */}
         <LogViewerDialog
           data={selectedData}
+          json={selectedJson}
           open={viewerOpen}
           onOpenChange={setViewerOpen}
           title={title}

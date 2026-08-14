@@ -18,12 +18,16 @@ vi.mock('@/lib/toast', () => ({
 // Deliberately NOT mocking @/components/ui/dialog: the point of this file is the real
 // header/body/footer structure, which a stubbed dialog would render away.
 
-const DATA = JSON.stringify({ action: 'LOGIN', userId: 'u1' }, null, 2);
+// The two are deliberately different: the dialog shows the readable rendering and copies the
+// raw entry, so a test that used one string for both could not tell the buttons apart.
+const DATA = 'Signed in\nWho: Ada Lovelace';
+const JSON_DATA = JSON.stringify({ action: 'LOGIN', userId: 'u1' }, null, 2);
 
 const renderDialog = (props: Partial<React.ComponentProps<typeof LogViewerDialog>> = {}) =>
   render(
     <LogViewerDialog
       data={DATA}
+      json={JSON_DATA}
       open
       onOpenChange={vi.fn()}
       title="System Log"
@@ -40,7 +44,8 @@ describe('LogViewerDialog', () => {
     renderDialog({ title: null });
 
     expect(screen.getByRole('heading', { name: 'System Log' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Log contents' })).toHaveTextContent('"LOGIN"');
+    // The readable rendering, not the raw entry: that is what the body shows.
+    expect(screen.getByRole('region', { name: 'Log contents' })).toHaveTextContent('Signed in');
   });
 
   // jsdom does no layout, so this cannot prove the footer stays put. What it can prove is the
@@ -64,16 +69,32 @@ describe('LogViewerDialog', () => {
     expect(screen.getByRole('region', { name: 'Log contents' })).toHaveAttribute('tabindex', '0');
   });
 
-  it('copies the entry and confirms it', async () => {
+  it('copies the readable text', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
     renderDialog();
-    await userEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Copy text' }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(DATA));
-    expect(showToastSuccess).toHaveBeenCalledWith('Copied to clipboard');
+    expect(showToastSuccess).toHaveBeenCalledWith('Text copied to clipboard');
     expect(showToastError).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The reason both buttons exist: the rendered text renames things to read well, and a bug
+   * report or a disclosure record needs the field names as they actually are.
+   */
+  it('copies the raw entry, not the rendered text', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    renderDialog();
+    await userEvent.click(screen.getByRole('button', { name: 'Copy JSON' }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(JSON_DATA));
+    expect(writeText).not.toHaveBeenCalledWith(DATA);
+    expect(showToastSuccess).toHaveBeenCalledWith('JSON copied to clipboard');
   });
 
   it('reports a failed copy instead of silently doing nothing', async () => {
@@ -83,9 +104,9 @@ describe('LogViewerDialog', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     renderDialog();
-    await userEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Copy text' }));
 
-    await waitFor(() => expect(showToastError).toHaveBeenCalledWith('Error copying data'));
+    await waitFor(() => expect(showToastError).toHaveBeenCalledWith('Could not copy the text'));
     expect(showToastSuccess).not.toHaveBeenCalled();
   });
 });
