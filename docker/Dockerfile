@@ -138,7 +138,6 @@ COPY --from=builder --chown=node:node --chmod=755 /app/docker/entrypoint.sh ./do
 # Fail the build now if the copied JRE can't run, not later at grading time.
 RUN java -version
 
-USER node
 EXPOSE 3000
 
 # tini forwards signals and reaps zombies; the entrypoint preps the DB then
