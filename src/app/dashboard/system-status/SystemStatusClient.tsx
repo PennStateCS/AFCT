@@ -9,7 +9,16 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar } from '@/components/course/course-tabs';
-import { Server, Database, Container, Network, Users, HardDrive, ShieldAlert } from 'lucide-react';
+import {
+  Server,
+  Database,
+  Container,
+  Network,
+  Users,
+  HardDrive,
+  ShieldAlert,
+  Cpu,
+} from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -25,6 +34,7 @@ import NetworkTab from './tabs/NetworkTab';
 import SessionsTab from './tabs/SessionsTab';
 import FilesTab from './tabs/FilesTab';
 import RateLimitsTab from './tabs/RateLimitsTab';
+import WorkersTab from './tabs/WorkersTab';
 
 const TABS = [
   { value: 'server', label: 'Server', icon: Server },
@@ -34,6 +44,7 @@ const TABS = [
   { value: 'sessions', label: 'Session', icon: Users },
   { value: 'files', label: 'Files', icon: HardDrive },
   { value: 'rate-limits', label: 'Rate Limits', icon: ShieldAlert },
+  { value: 'workers', label: 'Workers', icon: Cpu },
 ] as const;
 
 export default function SystemStatusClient() {
@@ -219,6 +230,9 @@ export default function SystemStatusClient() {
             </TabsContent>
             <TabsContent value="rate-limits">
               <RateLimitsTab active={tab === 'rate-limits'} autoRefresh={autoRefresh} />
+            </TabsContent>
+            <TabsContent value="workers">
+              <WorkersTab active={tab === 'workers'} autoRefresh={autoRefresh} />
             </TabsContent>
           </div>
         </CardContent>
