@@ -189,6 +189,9 @@ export default function DuplicateCourseDialog({
     reset(vals);
     setStep(0);
     setConfirmChecked(false);
+    // Runs when the dialog opens or its subject changes, not when the form does. `reset` and
+    // the setters are deliberately absent: including them would re-seed the form mid-edit and
+    // throw away what has been typed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, course, timeZone]);
 

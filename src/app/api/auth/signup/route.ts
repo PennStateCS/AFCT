@@ -14,6 +14,7 @@ import {
 } from '@/lib/security/rate-limiter';
 import { verifyCaptchaToken } from '@/lib/security/captcha';
 import { isEmailDomainAllowed, getEmailDomain, parseDomainList } from '@/lib/email';
+import { Prisma } from '@prisma/client';
 
 /**
  * Self-service account registration. New accounts are created with no elevated
@@ -152,14 +153,26 @@ export async function POST(req: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        firstName,
-        lastName,
-        password: hashedPassword,
-      },
-    });
+    // The check above is for the message; the unique index on email is what actually stops a
+    // second account. Two signups for the same address at the same moment both pass the check,
+    // and the loser used to get a 500. The data was never at risk, but "something went wrong"
+    // is the wrong thing to tell somebody whose account already exists.
+    let newUser;
+    try {
+      newUser = await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          firstName,
+          lastName,
+          password: hashedPassword,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return NextResponse.json({ error: 'Email already registered.' }, { status: 409 });
+      }
+      throw err;
+    }
 
     await createEnhancedActivityLog(prisma, req, {
       userId: newUser.id,

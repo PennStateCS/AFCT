@@ -159,6 +159,9 @@ export function AssignmentSettingsCard({
             },
       ),
     }),
+    // Depends on the assignment's individual fields rather than the object, because a
+    // fresh object identity on every refetch would rebuild these defaults and discard
+    // whatever the faculty member had typed but not yet saved.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       assignment.allowLateSubmissions,

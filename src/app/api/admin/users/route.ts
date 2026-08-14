@@ -10,6 +10,7 @@ import { readJson } from '@/lib/api/request';
 import { isValidEmail } from '@/lib/email';
 import { isStrongPassword } from '@/lib/password-policy';
 import { UserCreateApiSchema } from '@/schemas/user';
+import { Prisma } from '@prisma/client';
 
 /**
  * Lists users for the admin-facing users table. System administrators only; the
@@ -116,23 +117,35 @@ export const POST = withAdminAuth(
         select: { timezone: true },
       });
 
-      const newUser = await prisma.user.create({
-        data: {
-          email,
-          firstName,
-          lastName,
-          password: hashedPassword,
-          timezone: timezone || systemSettings?.timezone || 'UTC',
-        },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          createdAt: true,
-          timezone: true,
-        },
-      });
+      // The unique index on email is the real guard, so a clash is answered here rather than
+      // pre-checked: an admin adding an address that already has an account should be told
+      // so, not shown a server error.
+      let newUser;
+      try {
+        newUser = await prisma.user.create({
+          data: {
+            email,
+            firstName,
+            lastName,
+            password: hashedPassword,
+            timezone: timezone || systemSettings?.timezone || 'UTC',
+          },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            createdAt: true,
+            timezone: true,
+          },
+        });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          // Same message as the pre-check above: one condition, one thing said about it.
+          return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
+        }
+        throw err;
+      }
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

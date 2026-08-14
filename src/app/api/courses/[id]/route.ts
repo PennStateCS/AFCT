@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import type { CourseRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -727,23 +728,45 @@ export const DELETE = withCourseAuth(
       // A course is "empty" only when it holds no work and no students. Such a
       // course can be dropped permanently; anything with real data is soft-deleted
       // so grades/submissions/audit survive.
-      const [assignmentCount, problemCount, studentCount, submissionCount] = await Promise.all([
-        prisma.assignment.count({ where: { courseId: id } }),
-        prisma.problem.count({ where: { courseId: id } }),
-        prisma.roster.count({ where: { courseId: id, role: 'STUDENT' } }),
-        prisma.submission.count({ where: { courseId: id } }),
-      ]);
-      const isEmpty =
-        assignmentCount === 0 && problemCount === 0 && studentCount === 0 && submissionCount === 0;
+      //
+      // Counting and deleting in one serializable transaction, because this was a
+      // check-then-act on a destructive path: the counts ran, then the delete ran, and
+      // anything that arrived in between was cascaded away with no soft-delete to recover
+      // it. Serializable is what makes the emptiness test mean anything, since Postgres
+      // then aborts on the read-write conflict rather than letting the insert slip through
+      // the gap. A rare admin action failing and being retried is the cheap outcome; the
+      // expensive one is a submission deleted because it landed a moment too late.
+      const { isEmpty, assignmentCount, problemCount, studentCount, submissionCount } =
+        await prisma.$transaction(
+          async (tx) => {
+            const [assignments, problems, students, submissions] = await Promise.all([
+              tx.assignment.count({ where: { courseId: id } }),
+              tx.problem.count({ where: { courseId: id } }),
+              tx.roster.count({ where: { courseId: id, role: 'STUDENT' } }),
+              tx.submission.count({ where: { courseId: id } }),
+            ]);
+            const empty =
+              assignments === 0 && problems === 0 && students === 0 && submissions === 0;
 
-      if (isEmpty) {
-        // Hard delete: the schema cascades remove the (staff-only) roster, and the
-        // audit log's courseId is SetNull, so the log survives with a null pointer.
-        await prisma.course.delete({ where: { id } });
-      } else {
-        // Soft delete: retain the row and its data, but hide it everywhere.
-        await prisma.course.update({ where: { id }, data: { deletedAt: new Date() } });
-      }
+            if (empty) {
+              // Hard delete: the schema cascades remove the (staff-only) roster, and the
+              // audit log's courseId is SetNull, so the log survives with a null pointer.
+              await tx.course.delete({ where: { id } });
+            } else {
+              // Soft delete: retain the row and its data, but hide it everywhere.
+              await tx.course.update({ where: { id }, data: { deletedAt: new Date() } });
+            }
+
+            return {
+              isEmpty: empty,
+              assignmentCount: assignments,
+              problemCount: problems,
+              studentCount: students,
+              submissionCount: submissions,
+            };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
 
       // Record which course was deleted (and how). The course row may be gone, so its
       // id goes in metadata only (not the log's courseId FK).
