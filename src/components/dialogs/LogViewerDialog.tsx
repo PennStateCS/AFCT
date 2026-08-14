@@ -10,25 +10,36 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
-import { Copy } from 'lucide-react';
+import { Braces, Copy } from 'lucide-react';
 
 export function LogViewerDialog({
   data,
+  json,
   open,
   onOpenChange,
   title,
 }: {
   data: string;
+  /**
+   * The entry as it was received, pretty-printed.
+   *
+   * Two buttons rather than a choice made on the reader's behalf. The rendered text is what
+   * somebody pastes into an email about a student; the JSON is what they attach to a bug
+   * report or keep as the disclosure record, where the exact field names matter.
+   */
+  json: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   title: string | null | undefined;
 }) {
-  const handleCopy = async () => {
+  const copy = async (value: string, what: string) => {
     try {
-      await navigator.clipboard.writeText(data);
-      showToast.success('Copied to clipboard');
+      await navigator.clipboard.writeText(value);
+      showToast.success(`${what} copied to clipboard`);
     } catch (err) {
-      showToast.error('Error copying data');
+      // Denied permission, or an insecure origin. Say so rather than leaving the button
+      // looking like it worked.
+      showToast.error(`Could not copy the ${what.toLowerCase()}`);
       console.error(err);
     }
   };
@@ -59,9 +70,18 @@ export function LogViewerDialog({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => copy(data, 'Text')}
+          >
             <Copy className="h-4 w-4" />
-            Copy
+            Copy text
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => copy(json, 'JSON')}>
+            <Braces className="h-4 w-4" />
+            Copy JSON
           </Button>
         </DialogFooter>
       </DialogContent>
