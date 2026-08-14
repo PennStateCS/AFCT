@@ -51,6 +51,9 @@ src/generated/prisma
 
 # Testing
 coverage/
+# The per-suite runs the merge script reads; see merge-coverage.mjs.
+coverage-unit/
+coverage-db/
 
 # OS files
 .DS_Store
