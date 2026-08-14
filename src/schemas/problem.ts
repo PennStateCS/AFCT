@@ -46,8 +46,11 @@ const FileRequired = z
   .refine((f) => f.size > 0, 'Answer file is required.')
   .refine((f) => isAllowedProblemExtension(f.name), {
     message: `Allowed: .${ALLOWED_PROBLEM_EXTENSIONS.join(', .')}`,
-  })
-  .refine((f) => f.size <= 5 * 1024 * 1024, 'File must be ≤ 5MB');
+  });
+// No size limit here on purpose: the cap is the admin's `maxUploadSizeMb` setting, which a
+// schema built at module load cannot see. This used to hardcode 5MB while the upload input
+// beside it and the route behind it both used the configured value, so raising the setting
+// changed nothing and the dialog refused a file the server would have taken.
 
 /**
  * Base object schema for add/edit Problem (without effects)

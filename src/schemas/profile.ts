@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { formBoolean } from './fields';
+import { ImageFileOptional } from './image-file';
 
 /**
  * Server body for the profile update route (POST /api/me, multipart). Validates
@@ -31,27 +32,8 @@ export const UserProfileApiSchema = z.object({
     ),
 });
 
-// Server-side safe image file validation
-const createImageFileSchema = () => {
-  // Check if File constructor is available (browser environment)
-  if (typeof File !== 'undefined') {
-    return z
-      .instanceof(File, { message: 'Invalid file.' })
-      .refine((f) => f.size <= 5 * 1024 * 1024, 'Avatar must be ≤ 5MB.')
-      .refine((f) => f.type.startsWith('image/'), 'Avatar must be an image.')
-      .optional();
-  }
-  
-  // Server-side fallback
-  return z.any().refine((f) => {
-    if (f && typeof f === 'object' && 'size' in f && 'type' in f) {
-      return f.size <= 5 * 1024 * 1024 && f.type.startsWith('image/');
-    }
-    return true; // Let server handle validation
-  }, 'Avatar must be a valid image ≤ 5MB').optional();
-};
+// The avatar field, and why it carries no size limit, live in one place now.
 
-const ImageFileOptional = createImageFileSchema();
 
 export const UpdateProfileSchema = z.object({
     firstName: z.string().trim().min(1, 'First name is required.').max(60, 'First name is too long.'),
