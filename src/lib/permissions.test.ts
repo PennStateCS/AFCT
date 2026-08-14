@@ -13,6 +13,7 @@ import {
   canAccessCourse,
   canManageCourse,
   isCourseArchived,
+  isCourseStaffAnywhere,
   staffManagesStudent,
   isMemberOfGroup,
   canViewStudentData,
@@ -181,6 +182,33 @@ describe('isCourseArchived', () => {
     await expect(isCourseArchived('c')).resolves.toBe(false);
     prismaMock.course.findUnique.mockResolvedValue(null);
     await expect(isCourseArchived('c')).resolves.toBe(false);
+  });
+});
+
+describe('isCourseStaffAnywhere', () => {
+  it('is true for an admin without asking the database', async () => {
+    await expect(isCourseStaffAnywhere({ id: 'a', isAdmin: true })).resolves.toBe(true);
+    expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('is true for somebody with a staff role in a live course', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    await expect(isCourseStaffAnywhere({ id: 'f1' })).resolves.toBe(true);
+    expect(prismaMock.roster.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId: 'f1',
+          role: { in: ['FACULTY', 'TA'] },
+          course: { deletedAt: null },
+        },
+      }),
+    );
+  });
+
+  it('is false for a student, and for nobody at all', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+    await expect(isCourseStaffAnywhere({ id: 's1' })).resolves.toBe(false);
+    await expect(isCourseStaffAnywhere(null)).resolves.toBe(false);
   });
 });
 

@@ -1,10 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import type { Problem } from '@prisma/client';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus, FileText, Download } from 'lucide-react';
+import { Plus, FileText, Download, FlaskConical } from 'lucide-react';
 
 interface ProblemsCardProps {
   courseId: string;
@@ -35,6 +36,14 @@ export function ProblemsCard({
           Problems
         </h2>
         <div className="flex flex-wrap items-center gap-2">
+          {/* The faculty way in to the evaluator trial page (admins also have it in the
+              Administration menu). Shown on an archived course too: trying a file out
+              changes nothing here. */}
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/evaluator-test">
+              <FlaskConical /> Test the Evaluator
+            </Link>
+          </Button>
           {onImportProblem && (
             <Button variant="outline" onClick={onImportProblem} hidden={courseIsArchived}>
               <Download /> Import Problem

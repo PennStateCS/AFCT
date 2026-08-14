@@ -486,6 +486,36 @@ describe('runWorkerLoop — claiming and prioritization', () => {
     expect(prismaMock.submission.findUnique).toHaveBeenCalled();
   });
 
+  it('runs a waiting staff trial before it looks at the submission queue', async () => {
+    prismaMock.evaluatorTrial.findFirst.mockResolvedValue({ id: 'trial-1' });
+    prismaMock.evaluatorTrial.findUnique.mockResolvedValue({
+      answerFileName: 'a.jff',
+      submissionFileName: 's.jff',
+      problemType: 'FA',
+      maxStates: 5,
+      isDeterministic: true,
+    });
+
+    await runWorkerLoop();
+
+    expect(prismaMock.evaluatorTrial.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'trial-1', state: 'PENDING' } }),
+    );
+    expect(prismaMock.submission.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('grades submissions as usual when the trial ceiling is already reached', async () => {
+    prismaMock.evaluatorTrial.findFirst.mockResolvedValue({ id: 'trial-1' });
+    prismaMock.evaluatorTrial.count.mockResolvedValue(2);
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+
+    await runWorkerLoop();
+
+    expect(prismaMock.submission.findUnique).toHaveBeenCalled();
+  });
+
   it('backs off without evaluating when another worker wins the claim', async () => {
     prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
     prismaMock.submission.updateMany.mockResolvedValue({ count: 0 }); // lost the race

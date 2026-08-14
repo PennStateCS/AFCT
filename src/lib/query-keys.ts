@@ -135,6 +135,9 @@ export const queryKeys = {
     },
   },
 
+  // --- Evaluator trials (staff dry runs) -----------------------------------
+  evaluatorTrial: (id: string) => ['evaluator-trial', id] as const,
+
   // --- Public / self -------------------------------------------------------
   systemSettingsPublic: () => ['system-settings', 'public'] as const,
   profile: () => ['profile'] as const,
