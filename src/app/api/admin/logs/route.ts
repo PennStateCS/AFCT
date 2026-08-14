@@ -193,14 +193,17 @@ export const GET = withAdminAuth(
           userFirstName: u?.firstName ?? null,
           userLastName: u?.lastName ?? null,
           /**
-           * What the entry is about, named. A record deleted since is simply absent: the
-           * relations are `SetNull` on delete, and an id that no longer resolves says only that
-           * something used to be there.
+           * What the entry is about: the name where there is one, the id where there is not.
+           *
+           * The relations are `SetNull` on delete, so an id can outlive what it pointed at.
+           * Falling back to it rather than to nothing keeps the entry saying it was about
+           * *something*, which in an audit trail is the difference between a partial answer and
+           * no answer at all.
            */
           related: {
-            course: course ? `${course.code}, ${course.name}` : null,
-            assignment: assignment?.title ?? null,
-            problem: problem?.title ?? null,
+            course: course ? `${course.code}, ${course.name}` : (log.courseId ?? null),
+            assignment: assignment?.title ?? log.assignmentId ?? null,
+            problem: problem?.title ?? log.problemId ?? null,
             // Submissions have no name of their own; the id is what somebody would search for.
             submission: log.submissionId ?? null,
           },

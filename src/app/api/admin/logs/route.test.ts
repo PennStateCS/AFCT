@@ -297,10 +297,11 @@ describe('the records an entry points at', () => {
   });
 
   /**
-   * The relations are `SetNull` on delete, so an id can outlive what it pointed at. A name that
-   * will not resolve becomes nothing rather than a dangling identifier.
+   * The relations are `SetNull` on delete, so an id can outlive what it pointed at. The id is
+   * kept rather than dropped: it still says the entry was about something, which in an audit
+   * trail beats saying nothing.
    */
-  it('leaves out a record that has since been deleted', async () => {
+  it('keeps the identifier for a record that has since been deleted', async () => {
     asAdmin();
     withLogs([
       { id: 'log1', userId: null, action: 'A', timestamp: new Date(), courseId: 'gone' },
@@ -311,7 +312,7 @@ describe('the records an entry points at', () => {
 
     const body = await (await GET(request(), routeCtx())).json();
 
-    expect(body.rows[0].related.course).toBeNull();
+    expect(body.rows[0].related.course).toBe('gone');
   });
 
   // One query per kind for the whole page, not one per row.

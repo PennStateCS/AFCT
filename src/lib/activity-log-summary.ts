@@ -646,6 +646,7 @@ export function formatActivityDetails(entry: {
   severity?: string | null;
   category?: string | null;
   ipAddress?: string | null;
+  userAgent?: string | null;
   metadata?: Metadata;
   related?: RelatedRecords | null;
 }): string {
@@ -669,6 +670,14 @@ export function formatActivityDetails(entry: {
     .map((key) => ({ label: label(key), value: render(meta[key]) }));
 
   if (entry.ipAddress) who.push({ label: 'IP address', value: entry.ipAddress });
+  // Long, and rarely the answer, but it is audit data and the view being replaced showed it.
+  // Trimmed rather than dropped: the readable part is at the front.
+  if (entry.userAgent) {
+    who.push({
+      label: 'Browser',
+      value: entry.userAgent.length > 80 ? `${entry.userAgent.slice(0, 80)}...` : entry.userAgent,
+    });
+  }
 
   /**
    * What the entry is about.

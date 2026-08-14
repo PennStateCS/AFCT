@@ -10,6 +10,7 @@ import { Clock, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
+import { formatActivityDetails } from '@/lib/activity-log-summary';
 
 export interface ActivityUser {
   id: string;
@@ -80,73 +81,37 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
     };
   }, [expanded]);
 
-  const formatMetadataForDisplay = (
-    metadata: Record<string, unknown> | null,
-    activity: ActivityLog,
-  ) => {
-    if (!metadata || Object.keys(metadata).length === 0) {
-      // Even if metadata is empty, show enhanced field information if available
-      const enhancedInfo: string[] = [];
-      if (activity.courseId) enhancedInfo.push(`Course ID: ${activity.courseId}`);
-      if (activity.assignmentId) enhancedInfo.push(`Assignment ID: ${activity.assignmentId}`);
-      if (activity.problemId) enhancedInfo.push(`Problem ID: ${activity.problemId}`);
-      if (activity.submissionId) enhancedInfo.push(`Submission ID: ${activity.submissionId}`);
-      if (activity.category) enhancedInfo.push(`Category: ${activity.category}`);
-      if (activity.ipAddress) enhancedInfo.push(`IP Address: ${activity.ipAddress}`);
-
-      return enhancedInfo.length > 0 ? enhancedInfo.join('\n') : 'No metadata available';
-    }
-
-    // Group related information for better display
-    const sections: string[] = [];
-
-    // Enhanced entity information section
-    const entityInfo: string[] = [];
-    if (activity.course)
-      entityInfo.push(`Course: ${activity.course.name} (${activity.course.code})`);
-    if (activity.assignment) entityInfo.push(`Assignment: ${activity.assignment.title}`);
-    if (activity.problem) entityInfo.push(`Problem: ${activity.problem.title}`);
-    if (activity.submission)
-      entityInfo.push(`Assignment: ${activity.submission.assignmentProblem.assignment.title}`);
-
-    if (entityInfo.length > 0) {
-      sections.push('Related Entities:\n' + entityInfo.join('\n'));
-    }
-
-    // Enhanced fields section
-    const enhancedFields: string[] = [];
-    if (activity.courseId) enhancedFields.push(`Course ID: ${activity.courseId}`);
-    if (activity.assignmentId) enhancedFields.push(`Assignment ID: ${activity.assignmentId}`);
-    if (activity.problemId) enhancedFields.push(`Problem ID: ${activity.problemId}`);
-    if (activity.submissionId) enhancedFields.push(`Submission ID: ${activity.submissionId}`);
-    if (activity.category) enhancedFields.push(`Category: ${activity.category}`);
-    if (activity.ipAddress) enhancedFields.push(`IP Address: ${activity.ipAddress}`);
-    if (activity.userAgent)
-      enhancedFields.push(`User Agent: ${activity.userAgent.substring(0, 50)}...`);
-
-    if (enhancedFields.length > 0) {
-      sections.push('Enhanced Fields:\n' + enhancedFields.join('\n'));
-    }
-
-    // Metadata section
-    const metadataEntries = Object.entries(metadata)
-      .filter(([key]) => !['ipAddress', 'userAgent'].includes(key)) // Exclude duplicates
-      .map(([key, value]) => {
-        if (value === null || value === undefined) {
-          return `${key}: null`;
-        }
-        if (typeof value === 'object') {
-          return `${key}: ${JSON.stringify(value, null, 2)}`;
-        }
-        return `${key}: ${value}`;
-      });
-
-    if (metadataEntries.length > 0) {
-      sections.push('Metadata:\n' + metadataEntries.join('\n'));
-    }
-
-    return sections.join('\n\n') || 'No additional information available';
-  };
+  /**
+   * The same rendering the System Logs dialog uses.
+   *
+   * This built its own blob before, with raw keys: "Enhanced Fields", "Course ID: cmr7x2...",
+   * and metadata printed as `key: value` straight off the object. Two renderers of the same
+   * data, and the one somebody looking at a course saw was the worse of them. The shared
+   * formatter names the records the entry points at, so the ids go.
+   *
+   * The timestamp is deliberately not passed: the row it hangs off already shows it, twice.
+   */
+  const details = formatActivityDetails({
+    action: activity.action,
+    category: activity.category ?? null,
+    ipAddress: activity.ipAddress ?? null,
+    userAgent: activity.userAgent ?? null,
+    metadata: activity.metadata,
+    // Name where there is one, id where there is not. An older row can carry the foreign key
+    // without the relation being included, and an id is worse than a name but far better than
+    // silence: it still says the entry was about something.
+    related: {
+      course: activity.course
+        ? `${activity.course.code}, ${activity.course.name}`
+        : (activity.courseId ?? null),
+      assignment: activity.assignment?.title ?? activity.assignmentId ?? null,
+      problem: activity.problem?.title ?? activity.problemId ?? null,
+      // A submission has no name of its own. The assignment it belongs to is the useful part,
+      // and the id is what somebody would search for.
+      submission:
+        activity.submission?.assignmentProblem.assignment.title ?? activity.submissionId ?? null,
+    },
+  });
 
   // Show metadata button if there's metadata OR enhanced field data
   const hasMetadataOrEnhancedData =
@@ -185,9 +150,9 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
           ref={containerRef}
           className="bg-popover absolute top-2 right-0 max-h-60 w-80 max-w-[90vw] overflow-auto rounded-md border p-3 shadow-md"
         >
-          <div className="mb-2 text-xs font-medium">Metadata</div>
+          <div className="mb-2 text-xs font-medium">Activity details</div>
           <pre className="text-muted-foreground font-mono text-xs break-words whitespace-pre-wrap">
-            {formatMetadataForDisplay(activity.metadata, activity)}
+            {details}
           </pre>
         </div>
       </CollapsibleContent>
