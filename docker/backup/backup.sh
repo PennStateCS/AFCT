@@ -170,7 +170,17 @@ run_backup() {
   # 3) Verify before publishing: read the archive back the way a restore would and
   #    confirm the database dump is actually in it. A backup that only *looks*
   #    written is worse than a failed one, because nobody goes looking.
-  if [ ! -s "$tmp" ] || ! decrypt_from "$tmp" | tar tzf - 2>/dev/null | grep -q '^db/database\.dump$'; then
+  #
+  #    `grep -c` rather than `grep -q`, and the difference matters. The dump is the first entry
+  #    in the archive, so `-q` matched and exited with tens of megabytes still to come; that
+  #    closed the pipe, tar took SIGPIPE, and gpg logged "error writing to '-': Broken pipe" on
+  #    every successful backup. Alarming lines in the log an administrator reads when something
+  #    has actually gone wrong, about the one thing that had not.
+  #
+  #    Counting reads the listing to the end and costs nothing measurable: tar has to read the
+  #    whole archive to list it either way. Keeping gpg's stderr quiet on success is what makes
+  #    it worth reading on failure.
+  if [ ! -s "$tmp" ] || ! decrypt_from "$tmp" | tar tzf - 2>/dev/null | grep -c '^db/database\.dump$' >/dev/null; then
     log "archive failed verification; discarding"
     rm -f "$tmp"
     rm -rf "$work"
