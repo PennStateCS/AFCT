@@ -212,7 +212,9 @@ write_environment_file() {
     write_env_assignment ADMIN_PASSWORD "$ADMIN_PASSWORD_IN"
     write_env_assignment NEXTAUTH_SECRET "$NEXTAUTH_SECRET_IN"
     write_env_assignment AFCT_SECRET_KEY "$AFCT_SECRET_KEY_IN"
-    write_env_assignment BACKUP_ENCRYPTION_KEY "$BACKUP_ENCRYPTION_KEY_IN"
+    # Only when there is one. An install that opted out of encryption has none, and writing the
+    # key with an empty value would read as a broken key rather than a deliberate choice.
+    [ -z "$BACKUP_ENCRYPTION_KEY_IN" ] || write_env_assignment BACKUP_ENCRYPTION_KEY "$BACKUP_ENCRYPTION_KEY_IN"
     write_env_assignment NEXTAUTH_URL "$APP_URL_IN"
     write_env_assignment AUTH_TRUST_HOST true
     printf '# END AFCT INSTALLER MANAGED SETTINGS\n'

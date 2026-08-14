@@ -204,6 +204,14 @@ function Write-AfctEnvironmentFile {
         }
     }
 
+    # The backup key is the one managed value that may legitimately be absent: an install with
+    # BACKUP_ALLOW_UNENCRYPTED set has none, and writing `BACKUP_ENCRYPTION_KEY=` would turn a
+    # deliberate opt-out into an empty key. Read defensively because a caller that predates this
+    # will not have the property at all, which under StrictMode is a throw rather than a null.
+    $backupKey = if ($Config.PSObject.Properties.Name -contains 'BackupKey') { $Config.BackupKey }
+                 elseif ($Config -is [hashtable] -and $Config.ContainsKey('BackupKey')) { $Config['BackupKey'] }
+                 else { $null }
+
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     $block = @(
         '',
@@ -219,11 +227,14 @@ function Write-AfctEnvironmentFile {
         (& $assign 'ADMIN_PASSWORD' $Config.AdminPassword),
         (& $assign 'NEXTAUTH_SECRET' $Config.NextAuthSecret),
         (& $assign 'AFCT_SECRET_KEY' $Config.SecretKey),
-        (& $assign 'BACKUP_ENCRYPTION_KEY' $Config.BackupKey),
+        $(if ($backupKey) { & $assign 'BACKUP_ENCRYPTION_KEY' $backupKey }),
         (& $assign 'NEXTAUTH_URL' $Config.AppUrl),
         (& $assign 'AUTH_TRUST_HOST' 'true'),
         '# END AFCT INSTALLER MANAGED SETTINGS'
     )
+
+    # Drop the empty slot an absent backup key leaves behind, so the file gains no blank line.
+    $block = $block | Where-Object { $null -ne $_ }
 
     $tmp = "$File.tmp.$PID"
     Write-AfctEnvContent $tmp ($kept + $block)
