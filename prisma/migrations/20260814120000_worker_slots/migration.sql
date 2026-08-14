@@ -16,7 +16,4 @@ CREATE TABLE "WorkerSlot" (
 );
 
 -- CreateIndex
-CREATE INDEX "WorkerSlot_lastSeenAt_idx" ON "WorkerSlot"("lastSeenAt");
-
--- CreateIndex
 CREATE UNIQUE INDEX "WorkerSlot_runId_slot_key" ON "WorkerSlot"("runId", "slot");

@@ -1765,6 +1765,9 @@ model WorkerSlot {
 
   /// One row per slot per run.
   @@unique([runId, slot])
-  /// The health query reads by recency.
-  @@index([lastSeenAt])
+  // No index on lastSeenAt, deliberately. It is the column every heartbeat updates, so
+  // indexing it would write a new index entry on every beat and rule out Postgres's
+  // heap-only-tuple optimisation, for a table that holds one row per grading slot. At that
+  // size the planner sequentially scans regardless, so the index would have been write cost
+  // buying nothing.
 }
