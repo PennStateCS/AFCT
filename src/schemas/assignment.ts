@@ -16,12 +16,18 @@ const DateTimeLocalFormOptional = DateTimeLocalForm.or(z.literal(''))
     return val;
   });
 
+/**
+ * The date rules, shared by the wizard and by the API schemas.
+ *
+ * Nullable as well as optional, because the form writes an empty string for "not set" and the
+ * API writes null. Both are falsy, which is all the checks below care about.
+ */
 const validateLateSubmissionStrings = (
   data: {
     allowLateSubmissions?: boolean;
-    lateCutoff?: string;
-    dueDate?: string;
-    unlockAt?: string;
+    lateCutoff?: string | null;
+    dueDate?: string | null;
+    unlockAt?: string | null;
   },
   ctx: z.RefinementCtx,
 ) => {
@@ -89,73 +95,6 @@ const BaseAssignmentFormSchemaObject = z
 /**
  * CREATE FORM: includes publish flag and rule: if publishing, maxPoints > 0.
  * Uses form-only date validation (no transformation)
- */
-const AssignmentFormSchemaWithValidation = BaseAssignmentFormSchemaObject.superRefine(
-  validateLateSubmissionStrings,
-);
-
-export const CreateAssignmentFormSchema = AssignmentFormSchemaWithValidation;
-
-/**
- * UPDATE: partial base schema + id + optional isPublished with validation.
- */
-export const UpdateAssignmentSchema = BaseAssignmentFormSchemaObject.partial()
-  .extend({
-    id: z.string().min(1, 'Assignment id is required.'),
-    isPublished: z.boolean().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.unlockAt && data.dueDate && new Date(data.unlockAt) > new Date(data.dueDate)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['unlockAt'],
-        message: 'Available-from must be on or before the due date.',
-      });
-    }
-
-    if (
-      data.allowLateSubmissions === undefined &&
-      data.lateCutoff === undefined &&
-      data.dueDate === undefined
-    ) {
-      return;
-    }
-
-    const allowLate = data.allowLateSubmissions ?? false;
-    const dueRaw = data.dueDate;
-    const cutoffRaw = data.lateCutoff;
-
-    // A cutoff is optional when late is enabled (blank = no deadline). Nothing to
-    // cross-check unless both a due date and a cutoff are present.
-    if (!dueRaw || !cutoffRaw) return;
-
-    const dueDate = new Date(dueRaw);
-    const cutoffDate = new Date(cutoffRaw);
-
-    if (allowLate && cutoffDate < dueDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['lateCutoff'],
-        message: 'Cutoff must be on or after the due date.',
-      });
-    }
-
-    if (!allowLate && cutoffRaw) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['lateCutoff'],
-        message: 'Remove the cutoff or enable late submissions.',
-      });
-    }
-  });
-
-/** Export a form-only schema for UI, if you want the bare form without publish logic */
-export const AssignmentFormSchema = AssignmentFormSchemaWithValidation;
-
-/**
- * One override card in the create wizard (dates as datetime-local strings). A card targets
- * EITHER a student (userId + studentName) OR a group (groupId + groupName), never both. The
- * server enforces the exactly-one-target rule; the form just carries whichever it holds.
  */
 const OverrideFormItem = z.object({
   userId: z.string().min(1).optional(),
@@ -238,7 +177,12 @@ export const AssignmentCreateApiSchema = z.object({
   // The audience when assignedToEveryone is false: students (individual) or groups (group).
   // The handler validates each target and materializes AssignmentAssignee rows.
   assignees: z.array(AssigneeApiItem).optional(),
-});
+})
+  // The same date rules the wizard applies. They used to live on the form only, so a client
+  // posting straight to the API could create an assignment that unlocks after it is due, or
+  // carry a cutoff with late submissions switched off. The native client talks to this API,
+  // so "the form checks it" was never the whole story.
+  .superRefine(validateLateSubmissionStrings);
 
 // What to do with the source assignment's problems when duplicating it:
 //   none      - the copy starts with no problems
@@ -383,8 +327,6 @@ export const AssigneesPutApiSchema = z
   });
 
 /** Types */
-export type UpdateAssignmentInput = z.infer<typeof UpdateAssignmentSchema>;
-export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
 export type OverrideCreateInput = z.infer<typeof OverrideCreateApiSchema>;
 export type OverrideUpdateInput = z.infer<typeof OverrideUpdateApiSchema>;
 export type SubmissionGrantCreateInput = z.infer<typeof SubmissionGrantCreateApiSchema>;
