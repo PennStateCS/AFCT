@@ -26,6 +26,7 @@ on:
 permissions:
   contents: write # commit the manifest entry back to main; create the release
   packages: write # push the image to GHCR
+  security-events: write # upload the Trivy results to the Security tab
 
 concurrency:
   group: release-${{ github.ref_name }}
@@ -94,17 +95,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      # Informational scan (exit-code 0 never blocks); flip to '1' to gate on findings.
-      - name: Scan image for vulnerabilities (Trivy)
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ghcr.io/pennstatecs/afct-dashboard@${{ steps.build.outputs.digest }}
-          format: table
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: '0'
-
       # Sidecars, versioned in lockstep with the app so an upgrade moves the whole
       # stack. Each gets the same immutable :vX.Y.Z tag as the dashboard image.
       - name: Build and push nginx image
@@ -133,6 +123,33 @@ jobs:
           cache-from: type=gha,scope=updater
           cache-to: type=gha,mode=max,scope=updater
           tags: ghcr.io/pennstatecs/afct-updater:${{ github.ref_name }}
+
+      # Scan all four published images, not just the dashboard.
+      #
+      # Other institutions run these, so a CVE in the nginx or backup sidecar is as much
+      # theirs as one in the app. Results go to the Security tab as SARIF rather than a
+      # table in the log: a table nobody opens is not a scan, it is a formality. Still
+      # non-blocking, so a scanner outage cannot hold up a release.
+      - name: Scan the published images (Trivy)
+        continue-on-error: true
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -uo pipefail
+          mkdir -p trivy-results
+          for img in dashboard nginx backup updater; do
+            docker run --rm -v "$PWD/trivy-results:/out" \
+              aquasec/trivy:0.58.1@sha256:ab70a02200597efa04748f210f793936eb647cbcdb0ea69cc30b226d6f5a22c7 image \
+              --format sarif --output "/out/${img}.sarif" \
+              --severity CRITICAL,HIGH --ignore-unfixed --scanners vuln \
+              "ghcr.io/pennstatecs/afct-${img}:${TAG}" || echo "scan failed for ${img}"
+          done
+
+      - name: Upload the scan results
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@d6317709a54fd87078d323eeb0e48ec331c8e621 # v3
+        with:
+          sarif_file: trivy-results
 
       # Add the new version to the curated manifest on main so the updater offers it.
       # Idempotent (skips if already listed) and race-safe against concurrent main
