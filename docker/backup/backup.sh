@@ -295,9 +295,16 @@ while true; do
 
     case "$enabled" in
       t | true | TRUE | 1)
+        # The `10#` prefixes force base 10. Without them `date +%H` returning 08 or 09 is
+        # read as an invalid octal literal and the arithmetic fails outright, which would
+        # silently stop the nightly backup for two hours of the day. ShellCheck flags this
+        # as undefined in POSIX sh (SC3052) and it is, but busybox ash (this image's shell)
+        # supports it, and the bare form is verifiably broken there.
+        # shellcheck disable=SC3052
         now_hour=$((10#$(date +%H)))
         today="$(date +%Y-%m-%d)"
         last_run="$(cat "$LAST_RUN_FILE" 2>/dev/null || echo '')"
+        # shellcheck disable=SC3052
         if [ "$last_run" != "$today" ] && [ "$now_hour" -ge "$((10#$hour))" ]; then
           run_backup "$retention"
           echo "$today" > "$LAST_RUN_FILE"
