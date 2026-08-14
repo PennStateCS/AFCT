@@ -29,6 +29,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:coverage:merged": "vitest run --coverage --coverage.reporter=json --coverage.reportsDirectory=coverage-unit && vitest run --config vitest.db.config.ts --coverage --coverage.reporter=json --coverage.reportsDirectory=coverage-db && node merge-coverage.mjs coverage-unit coverage-db",
     "test:db": "vitest run --config vitest.db.config.ts",
     "test:evaluator": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/evaluator-smoke.mjs",
     "e2e": "node scripts/e2e-db.mjs && playwright test",
