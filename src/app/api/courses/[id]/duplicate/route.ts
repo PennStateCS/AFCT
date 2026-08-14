@@ -364,7 +364,13 @@ export const POST = withAdminAuth(
             // assignment->problem links; the links then go in one batched insert.
             // In 'assignments' mode no links are created.
             if (mode === 'assignments' || mode === 'assignments_with_problems') {
-              const links: { assignmentId: string; problemId: string }[] = [];
+              const links: {
+                assignmentId: string;
+                problemId: string;
+                maxPoints: number;
+                maxSubmissions: number;
+                autograderEnabled: boolean;
+              }[] = [];
               for (const a of originalAssignments) {
                 const createdA = await tx.assignment.create({
                   data: {
@@ -374,6 +380,13 @@ export const POST = withAdminAuth(
                     dueDate: a.dueDate,
                     unlockAt: a.unlockAt,
                     assignedToEveryone: a.assignedToEveryone,
+                    // The late policy and the LMS sync setting are the faculty member's
+                    // choices about this assignment, so a copy keeps them. They were being
+                    // dropped, which quietly turned late submissions off and grade sync on.
+                    allowLateSubmissions: a.allowLateSubmissions,
+                    lateCutoff: a.lateCutoff,
+                    ltiAutoSync: a.ltiAutoSync,
+                    // Always unpublished: a copied course is set up before it is opened.
                     isPublished: false,
                     courseId: newCourse.id,
                   },
@@ -383,7 +396,17 @@ export const POST = withAdminAuth(
                   for (const ap of a.problems) {
                     const newProblemId = problemIdMap[ap.problemId];
                     if (!newProblemId) continue; // skip if the problem wasn't copied
-                    links.push({ assignmentId: createdA.id, problemId: newProblemId });
+                    // What the problem is worth on this assignment, how many attempts it
+                    // allows, and whether the autograder runs. Omitting these fell back to
+                    // the column defaults, so every problem in a copied course came out
+                    // worth zero points, capped at one submission, with autograding forced on.
+                    links.push({
+                      assignmentId: createdA.id,
+                      problemId: newProblemId,
+                      maxPoints: ap.maxPoints,
+                      maxSubmissions: ap.maxSubmissions,
+                      autograderEnabled: ap.autograderEnabled,
+                    });
                   }
                 }
               }

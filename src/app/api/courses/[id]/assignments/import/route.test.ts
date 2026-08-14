@@ -44,6 +44,8 @@ const sourceAssignment = {
   unlockAt: null,
   allowLateSubmissions: true,
   lateCutoff: new Date('2026-03-12T00:00:00.000Z'),
+  // Off in the source course: practice work kept out of the gradebook.
+  ltiAutoSync: false,
   problems: [
     {
       maxPoints: 40,
@@ -176,5 +178,21 @@ describe('POST /api/courses/[id]/assignments/import', () => {
       expect.objectContaining({ action: 'ASSIGNMENT_IMPORT_DENIED' }),
     );
     expect(prismaMock.assignment.create).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Importing crosses courses, so the audience is deliberately reset. Whether grades go to the
+ * LMS is not audience: it is a statement about the assignment, and an import that flipped it
+ * on would publish grades from work the faculty member had marked as practice.
+ */
+describe('LMS grade sync on import', () => {
+  it('carries the source assignment\'s sync setting', async () => {
+    const res = await call(validBody({ problemMode: 'none' }));
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ltiAutoSync: false }) }),
+    );
   });
 });

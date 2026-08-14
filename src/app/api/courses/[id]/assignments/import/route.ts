@@ -93,6 +93,7 @@ export const POST = withCourseAuth(
         where: { id: sourceAssignmentId, courseId: sourceCourseId },
         select: {
           id: true,
+          ltiAutoSync: true,
           dueDate: true,
           unlockAt: true,
           allowLateSubmissions: true,
@@ -128,7 +129,12 @@ export const POST = withCourseAuth(
             lateCutoff: source.lateCutoff,
             // Reset for the new course: unpublished, individual, everyone. Audience,
             // group set, and overrides reference the source course and are not carried.
+            // Carried for the same reason as in Duplicate: sync being off is a decision
+            // about the assignment, not about the course it came from.
+            ltiAutoSync: source.ltiAutoSync,
             isPublished: false,
+            // Audience does not transfer between courses: the destination has its own people
+            // and its own group sets.
             assignedToEveryone: true,
             groupSetId: null,
             courseId,

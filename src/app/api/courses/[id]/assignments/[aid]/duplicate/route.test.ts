@@ -49,6 +49,8 @@ const source = {
   assignedToEveryone: false,
   allowLateSubmissions: true,
   lateCutoff: new Date('2026-03-12T00:00:00.000Z'),
+  // Deliberately off: this is practice work the faculty member keeps out of the LMS gradebook.
+  ltiAutoSync: false,
   groupSetId: null,
   assignees: [{ targetType: 'STUDENT', userId: 'u1', groupId: null }],
   overrides: [
@@ -238,5 +240,31 @@ describe('POST /api/courses/[id]/assignments/[aid]/duplicate', () => {
   it('rejects an empty title', async () => {
     const res = await call({ title: '', problemMode: 'none' });
     expect(res.status).toBe(400);
+  });
+});
+
+/**
+ * Sending grades to the LMS is a per-assignment choice, and the docs tell faculty to switch
+ * it off for practice work they do not want in the gradebook. A copy that turned it back on
+ * would start publishing those grades the first time the copy was graded.
+ */
+describe('LMS grade sync', () => {
+  it('keeps sync off when the source had it off', async () => {
+    const res = await call({ title: 'Copy', problemMode: 'none' });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ltiAutoSync: false }) }),
+    );
+  });
+
+  it('keeps sync on when the source had it on', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...source, ltiAutoSync: true });
+
+    await call({ title: 'Copy', problemMode: 'none' });
+
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ltiAutoSync: true }) }),
+    );
   });
 });
