@@ -141,6 +141,8 @@ export default function WorkersTab({
         <DataTable
           columns={columns}
           data={data.slots}
+          // No toolbar, same as the other status tables: a handful of rows read at a glance.
+          showToolbar={false}
           emptyTitle="No slot is reporting"
           emptyDescription="The evaluator container may be stopped, or unable to reach the database."
         />
