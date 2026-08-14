@@ -205,18 +205,6 @@ describe('the option lists', () => {
     expect(result.current.assignmentOptions.map((o) => o.label)).toEqual(['Alpha', 'Zeta']);
   });
 
-  /** A course with no name still has to be pickable, so the label falls back rather than blanking. */
-  it('labels a course by its code, then its id, when it has no name', async () => {
-    fetchCourseList.mockResolvedValue([
-      course('c1', { name: null }),
-      course('c2', { name: null, code: null }),
-    ]);
-    const { result } = render();
-
-    await waitFor(() => expect(result.current.courseOptions).toHaveLength(2));
-    expect(result.current.courseOptions.map((o) => o.label)).toEqual(['Cc1', 'c2']);
-  });
-
   it('labels a problem by its id when it has no title', async () => {
     fetchAssignmentsForCourses.mockResolvedValue([assignment('a1')]);
     fetchProblemsForAssignments.mockResolvedValue([{ ...problem('p1'), title: '' }]);

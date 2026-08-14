@@ -109,8 +109,7 @@ export function useSubmissionFilters() {
   }, [problemsError]);
 
   const courseOptions: FilterOption[] = useMemo(
-    () =>
-      courses.map((course) => ({ id: course.id, label: course.name ?? course.code ?? course.id })),
+    () => courses.map((course) => ({ id: course.id, label: course.name })),
     [courses],
   );
 
