@@ -499,7 +499,7 @@ export default function CalendarClient({
                       caption_label: 'hidden',
                       dropdowns: 'hidden',
                       weekday:
-                        'text-muted-foreground rounded-md flex-1 font-semibold text-[0.8rem] select-none text-center',
+                        'text-muted-foreground rounded-md flex-1 font-semibold text-xs select-none text-center',
                       day: 'relative box-border -m-px w-full h-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day aspect-square select-none border border-border/60',
                       today: 'rounded-none bg-transparent text-inherit',
                     }}

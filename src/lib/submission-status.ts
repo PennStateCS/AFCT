@@ -1,16 +1,5 @@
 import type { ProblemSubmission } from '@/lib/problem-submission';
 
-export type StatusTone =
-  | 'green'
-  | 'amber'
-  | 'red'
-  | 'gray'
-  | 'blue'
-  | 'violet'
-  | 'yellow'
-  | 'lime'
-  | 'pink';
-
 /**
  * Which of the Badge component's tinted colour pairs a chip wears when it is rendered as
  * a badge (see StatusBadge). These are the app's contrast-checked tokens, so there are
@@ -21,23 +10,19 @@ export type StatusTone =
  */
 export type StatusBadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
+/**
+ * One status, as the table renders it.
+ *
+ * There used to be a `tone` here and a `statusToneClass` map of nine dot colours beside it. Both
+ * went on 2026-08-14: nothing read them. A dot conveying meaning by colour alone is not a
+ * conveyance anyone can rely on, so the tables moved to a badge whose *text* carries the status
+ * (see the note in ProblemWorkspace), and the colours were left behind as the only raw Tailwind
+ * palette in this file. If a dot ever comes back it needs a token and a label, not nine shades.
+ */
 export type StatusChip = {
   label: string;
-  tone: StatusTone;
   title: string;
   variant: StatusBadgeVariant;
-};
-
-export const statusToneClass: Record<StatusTone, string> = {
-  green: 'bg-emerald-500',
-  amber: 'bg-amber-500',
-  red: 'bg-rose-500',
-  gray: 'bg-slate-400',
-  blue: 'bg-sky-500',
-  violet: 'bg-violet-500',
-  yellow: 'bg-yellow-300',
-  lime: 'bg-lime-400',
-  pink: 'bg-pink-500',
 };
 
 export const getTimingStatusChip = (
@@ -53,7 +38,6 @@ export const getTimingStatusChip = (
   if (isLate) {
     return {
       label: 'Late',
-      tone: 'amber',
       title: 'Submitted after due date',
       variant: 'warning',
     };
@@ -61,7 +45,6 @@ export const getTimingStatusChip = (
 
   return {
     label: 'On time',
-    tone: 'green',
     title: 'Submitted before due date',
     variant: 'success',
   };
@@ -72,7 +55,6 @@ export const getReviewStatusChip = (submission: ProblemSubmission): StatusChip =
   if (subm_status === 'pending') {
     return {
       label: 'Pending',
-      tone: 'violet',
       title: 'Submission analysis is pending',
       variant: 'neutral',
     };
@@ -81,7 +63,6 @@ export const getReviewStatusChip = (submission: ProblemSubmission): StatusChip =
   if (subm_status === 'processing') {
     return {
       label: 'Processing',
-      tone: 'yellow',
       title: 'Submission is being processed',
       variant: 'info',
     };
@@ -90,7 +71,6 @@ export const getReviewStatusChip = (submission: ProblemSubmission): StatusChip =
   if (subm_status === 'failed') {
     return {
       label: 'Failed',
-      tone: 'pink',
       title: 'Submission analysis failed',
       variant: 'danger',
     };
@@ -99,7 +79,6 @@ export const getReviewStatusChip = (submission: ProblemSubmission): StatusChip =
   if (submission.correct == true) {
     return {
       label: 'Correct',
-      tone: 'blue',
       title: 'Submission is correct',
       variant: 'success',
     };
@@ -107,7 +86,6 @@ export const getReviewStatusChip = (submission: ProblemSubmission): StatusChip =
 
   return {
     label: 'Incorrect',
-    tone: 'red',
     title: 'Submission is incorrect',
     variant: 'warning',
   }
