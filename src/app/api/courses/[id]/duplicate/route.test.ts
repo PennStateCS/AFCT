@@ -254,12 +254,26 @@ describe('POST /api/courses/[id]/duplicate', () => {
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    // A realistic source row. The settings below are the point of the assertions further
+    // down: with a bare {problemId, problem} mock the link assertion passed whether or not
+    // the route carried anything, because there was nothing on the source to drop.
     prismaMock.assignment.findMany.mockResolvedValue([
       {
         id: 'a1',
         title: 'Assignment 1',
         dueDate: new Date(),
-        problems: [{ problemId: 'p1', problem: { id: 'p1', title: 'P1' } }],
+        allowLateSubmissions: true,
+        lateCutoff: new Date('2026-05-01T00:00:00.000Z'),
+        ltiAutoSync: false,
+        problems: [
+          {
+            problemId: 'p1',
+            maxPoints: 25,
+            maxSubmissions: 5,
+            autograderEnabled: false,
+            problem: { id: 'p1', title: 'P1' },
+          },
+        ],
       },
     ]);
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1', title: 'Problem 1' }]);
@@ -284,10 +298,34 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     expect(res.status).toBe(201);
     expect(tx.assignment.create).toHaveBeenCalled();
-    // The assignment->problem links go in one batched insert.
+
+    // What a problem is worth has to survive the copy. These fell back to the column
+    // defaults before, so every problem in a duplicated course came out worth zero points,
+    // capped at one submission, with autograding switched on regardless of the source.
     expect(tx.assignmentProblem.createMany).toHaveBeenCalledWith({
-      data: [{ assignmentId: 'new-a1', problemId: 'new-p1' }],
+      data: [
+        {
+          assignmentId: 'new-a1',
+          problemId: 'new-p1',
+          maxPoints: 25,
+          maxSubmissions: 5,
+          autograderEnabled: false,
+        },
+      ],
     });
+
+    // Same for the assignment's own settings: a late policy of "allowed until 1 May" must
+    // not come back as "late submissions off", and sync deliberately off must stay off.
+    expect(tx.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          allowLateSubmissions: true,
+          lateCutoff: new Date('2026-05-01T00:00:00.000Z'),
+          ltiAutoSync: false,
+          isPublished: false,
+        }),
+      }),
+    );
   });
 
   it('copies faculty and TAs when requested', async () => {

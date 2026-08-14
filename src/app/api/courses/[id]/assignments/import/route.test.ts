@@ -4,6 +4,7 @@ const prismaMock = vi.hoisted(() => ({
   course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
   assignment: { findFirst: vi.fn(), create: vi.fn() },
+  ltiContextLink: { findFirst: vi.fn() },
   assignmentProblem: { create: vi.fn() },
   problem: { create: vi.fn() },
   $transaction: vi.fn(),
@@ -44,6 +45,8 @@ const sourceAssignment = {
   unlockAt: null,
   allowLateSubmissions: true,
   lateCutoff: new Date('2026-03-12T00:00:00.000Z'),
+  // Off in the source course: practice work kept out of the gradebook.
+  ltiAutoSync: false,
   problems: [
     {
       maxPoints: 40,
@@ -88,6 +91,8 @@ beforeEach(() => {
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false, deletedAt: null });
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.assignment.findFirst.mockResolvedValue(sourceAssignment);
+  // Not connected to an LMS unless a test says otherwise.
+  prismaMock.ltiContextLink.findFirst.mockResolvedValue(null);
   prismaMock.assignment.create.mockResolvedValue({ id: 'a2', title: 'Imported Lab' });
   prismaMock.problem.create.mockResolvedValue({ id: 'p2' });
   prismaMock.assignmentProblem.create.mockResolvedValue({ id: 'ap2' });
@@ -176,5 +181,70 @@ describe('POST /api/courses/[id]/assignments/import', () => {
       expect.objectContaining({ action: 'ASSIGNMENT_IMPORT_DENIED' }),
     );
     expect(prismaMock.assignment.create).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Grade sync on an imported assignment.
+ *
+ * The destination course decides. Somewhere not connected to an LMS, the setting does nothing
+ * today but would come alive the moment somebody links the course, so an import starts it off
+ * and faculty turn it on deliberately. Somewhere already connected, the source assignment's
+ * choice is the best available reading of what was meant and carries over.
+ */
+describe('LMS grade sync on import', () => {
+  /**
+   * The case the whole rule exists for: sync is ON in the source, and the destination is not
+   * connected to anything. Carrying the value straight across would leave an assignment armed
+   * to publish grades as soon as somebody linked the course.
+   */
+  it('starts off when the destination is unconnected, even if the source had sync on', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...sourceAssignment, ltiAutoSync: true });
+
+    const res = await call(validBody({ problemMode: 'none' }));
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ltiAutoSync: false }) }),
+    );
+  });
+
+  it('starts off when the destination is unconnected and the source had sync off', async () => {
+    const res = await call(validBody({ problemMode: 'none' }));
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ltiAutoSync: false }) }),
+    );
+  });
+
+  it('keeps the source setting when the destination course is connected', async () => {
+    prismaMock.ltiContextLink.findFirst.mockResolvedValue({ id: 'link-1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...sourceAssignment, ltiAutoSync: true });
+
+    await call(validBody({ problemMode: 'none' }));
+
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ltiAutoSync: true }) }),
+    );
+  });
+
+  /** Connected, but the source had sync off: that stays off rather than reverting to the default. */
+  it('keeps sync off in a connected course when the source had it off', async () => {
+    prismaMock.ltiContextLink.findFirst.mockResolvedValue({ id: 'link-1' });
+
+    await call(validBody({ problemMode: 'none' }));
+
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ltiAutoSync: false }) }),
+    );
+  });
+
+  it('asks about the destination course, not the source', async () => {
+    await call(validBody({ problemMode: 'none' }));
+
+    expect(prismaMock.ltiContextLink.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { courseId: 'dest' } }),
+    );
   });
 });

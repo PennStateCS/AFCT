@@ -68,6 +68,7 @@ export const POST = withAssignmentAuth(
         where: { id: assignment.id, courseId },
         select: {
           id: true,
+          ltiAutoSync: true,
           dueDate: true,
           unlockAt: true,
           assignedToEveryone: true,
@@ -115,6 +116,10 @@ export const POST = withAssignmentAuth(
             assignedToEveryone: source.assignedToEveryone,
             allowLateSubmissions: source.allowLateSubmissions,
             lateCutoff: source.lateCutoff,
+            // Whether grades go to the LMS is a choice about this assignment, so the copy
+            // keeps it. Left out, a copy of an assignment with sync deliberately off came
+            // back with it on, and a linked course would start publishing its grades.
+            ltiAutoSync: source.ltiAutoSync,
             // Always unpublished, regardless of the source's publish state.
             isPublished: false,
             groupSetId: source.groupSetId,
