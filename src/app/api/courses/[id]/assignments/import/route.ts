@@ -105,6 +105,14 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
 
+      // Is the destination course connected to an LMS at all? One row is enough: a course
+      // carries several context links when cross-listed sections point at it.
+      const destinationLinked =
+        (await prisma.ltiContextLink.findFirst({
+          where: { courseId },
+          select: { id: true },
+        })) !== null;
+
       // Copied before the DB transaction so the transaction is pure database writes and a
       // failure can unlink whatever was already written. See `copyAnswerKeysForProblems`.
       const solutionByProblemId = new Map<string, CopiedAnswerKey>();
@@ -129,9 +137,14 @@ export const POST = withCourseAuth(
             lateCutoff: source.lateCutoff,
             // Reset for the new course: unpublished, individual, everyone. Audience,
             // group set, and overrides reference the source course and are not carried.
-            // Carried for the same reason as in Duplicate: sync being off is a decision
-            // about the assignment, not about the course it came from.
-            ltiAutoSync: source.ltiAutoSync,
+            // Off unless the destination course is already connected to an LMS.
+            //
+            // Importing crosses courses, and it is the destination's situation that matters.
+            // Where it is connected, the source's choice is the best available reading of
+            // intent and carries over. Where it is not, the setting is inert today but comes
+            // alive the moment somebody links the course, and an import that quietly starts
+            // publishing grades months later is the wrong kind of surprise.
+            ltiAutoSync: destinationLinked ? source.ltiAutoSync : false,
             isPublished: false,
             // Audience does not transfer between courses: the destination has its own people
             // and its own group sets.
