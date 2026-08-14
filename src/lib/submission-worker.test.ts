@@ -636,3 +636,86 @@ describe('reapStuckSubmissions', () => {
     expect(loggedActions()).toContain('SUBMISSION_QUEUE_REAPER_ERROR');
   });
 });
+
+/**
+ * The similarity report must never cost somebody their grade.
+ *
+ * It runs after the evaluator, so the submission has already been marked right or wrong by the
+ * time it starts. Until 2026-08-14 a report that could not be produced threw, landed in the
+ * evaluator's catch, and returned `status: 'FAILED'` with `evaluationRaw: null`: a graded
+ * submission thrown away and the student told "Evaluation failed" because a *reporting* step
+ * could not read the file.
+ *
+ * Reachable from ordinary input. The parser gives up on a path that is not `.jff`, an empty file
+ * or an unreadable one, and leaves the calculated hash undefined for a file with no `<structure>`
+ * element; `check_file_status` throws on exactly that. None of it was tested, which is why nobody
+ * knew. These mocks reproduce each half.
+ */
+describe('runJavaEvaluator — the similarity report cannot fail a grade', () => {
+  /** The evaluator succeeding, so anything that goes wrong afterwards is the report's doing. */
+  function evaluatorSucceeds() {
+    executeMock.mockResolvedValue({
+      stdout: JSON.stringify({ correct: true, feedback: 'Accepts the language.' }),
+      stderr: '',
+    });
+  }
+
+  it('still records the grade when the report throws', async () => {
+    evaluatorSucceeds();
+    checkFileStatusMock.mockRejectedValue(
+      new Error('Calculated hash is undefined. Cannot check file status without a calculated hash.'),
+    );
+
+    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
+
+    expect(result.status).toBe('COMPLETED');
+    expect(result.correct).toBe(true);
+    expect(result.feedback).toBe('Accepts the language.');
+  });
+
+  // The report is absent rather than wrong. All three columns are nullable, so this is a state
+  // the schema already allows.
+  it('leaves the report off rather than inventing one', async () => {
+    evaluatorSucceeds();
+    checkFileStatusMock.mockRejectedValue(new Error('no hash'));
+
+    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
+
+    expect(result.similarityReportJson).toBeUndefined();
+  });
+
+  // The parser failing is the other half of the same chain, and reaches the checker as undefined.
+  it('survives the parser giving up on the file', async () => {
+    evaluatorSucceeds();
+    jflapSimilarityParserMock.mockResolvedValue(null);
+    checkFileStatusMock.mockRejectedValue(new Error('Calculated hash is undefined.'));
+
+    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
+
+    expect(result.status).toBe('COMPLETED');
+  });
+
+  /**
+   * Visible, though. A report that quietly stops being produced for a term is its own problem,
+   * and this is research data. WARNING rather than ERROR: nothing about the grade is wrong.
+   */
+  it('records that the report was skipped', async () => {
+    evaluatorSucceeds();
+    checkFileStatusMock.mockRejectedValue(new Error('no hash'));
+
+    await runJavaEvaluator(makeSubmission(), CONFIG);
+
+    expect(loggedActions()).toContain('SUBMISSION_SIMILARITY_SKIPPED');
+    expect(loggedActions()).not.toContain('SUBMISSION_EVALUATION_ERROR');
+  });
+
+  // The ordinary path is unchanged: a report that works is still attached.
+  it('attaches the report when it works', async () => {
+    evaluatorSucceeds();
+    checkFileStatusMock.mockResolvedValue({ status: 'ok' });
+
+    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
+
+    expect(result.similarityReportJson).toMatchObject({ status: 'ok' });
+  });
+});

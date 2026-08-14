@@ -11,8 +11,12 @@ Checks the plagiarism status of a file based on the given file hash and the calc
         fileUserId: The file user ID of the user who submitted the file
         user_id: The user ID of the user who is checking the file status
     returns:
-        file_hash_code: 0-2 | null (0: only user submitted file; 1: no user submitted file; 2: atleast one other user submitted file; null: no file hash provided)
-        calc_hash_code: 0-2 | null (0: only user submitted file; 1: no user submitted file; 2: atleast one other user submitted file)
+        file_hash_code: 0-2 | null (0: nobody submitted this file; 1: only this user submitted it; 2: at least one other user submitted it; null: no file hash provided)
+        calc_hash_code: 0-2 | null (same three codes; see get_info_from_hash, which is what sets them)
+
+        NOTE: 0 and 1 were documented the wrong way round here until 2026-08-14. Anyone reading a
+        stored report against the old wording would have read "nobody submitted this" as "only
+        this student did", which is the opposite conclusion about a plagiarism check.
         file_hash_email: boolean | null
         calc_hash_email: boolean | null
         is_user_hash: boolean | null (true: file user email hashes match; false: file user email hashes does not match; undefined: no file ID provided)
