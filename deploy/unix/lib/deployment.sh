@@ -330,6 +330,10 @@ configure_new_install() {
   POSTGRES_PASSWORD_IN=$(gen_secret) || die "could not generate a PostgreSQL password."
   NEXTAUTH_SECRET_IN=$(gen_secret) || die "could not generate an authentication secret."
   AFCT_SECRET_KEY_IN=$(gen_secret) || die "could not generate a secret-encryption key."
+  # Generated on every fresh install, so a backup is encrypted from the first one. A blank
+  # variable used to mean plaintext, and what that archive holds is the whole database plus
+  # both upload volumes: nobody chooses that by not knowing the variable exists.
+  BACKUP_ENCRYPTION_KEY_IN=$(gen_secret) || die "could not generate a backup-encryption key."
   DATABASE_URL_IN="postgresql://afct_user:${POSTGRES_PASSWORD_IN}@postgres:5432/afct"
   ADMIN_PASSWORD_GENERATED=$_password_generated
 }
@@ -372,6 +376,7 @@ configure_existing_install() {
   DATABASE_URL_IN=$(read_env_value DATABASE_URL "$ENV_FILE")
   NEXTAUTH_SECRET_IN=$(read_env_value NEXTAUTH_SECRET "$ENV_FILE")
   AFCT_SECRET_KEY_IN=$(read_env_value AFCT_SECRET_KEY "$ENV_FILE")
+  BACKUP_ENCRYPTION_KEY_IN=$(read_env_value BACKUP_ENCRYPTION_KEY "$ENV_FILE")
 
   require_value "$POSTGRES_PASSWORD_IN" "POSTGRES_PASSWORD is missing from ${ENV_FILE}."
   require_value "$DATABASE_URL_IN" "DATABASE_URL is missing from ${ENV_FILE}."
@@ -384,6 +389,20 @@ configure_existing_install() {
   if [ -z "$AFCT_SECRET_KEY_IN" ]; then
     AFCT_SECRET_KEY_IN=$(gen_secret) || die "could not generate a secret-encryption key."
     info "generated a secret-encryption key for this install; it protects stored settings such as mail and sign-in credentials."
+  fi
+
+  # Same reasoning for backups, with a sharper consequence: an existing key must survive
+  # untouched or every archive already written with it becomes unreadable. An explicit
+  # opt-out is left alone, so somebody who wants plaintext archives keeps them.
+  if [ -z "$BACKUP_ENCRYPTION_KEY_IN" ]; then
+    _backup_optout=$(read_env_value BACKUP_ALLOW_UNENCRYPTED "$ENV_FILE")
+    case "$_backup_optout" in
+      true | TRUE | 1 | yes) : ;;
+      *)
+        BACKUP_ENCRYPTION_KEY_IN=$(gen_secret) || die "could not generate a backup-encryption key."
+        info "generated a backup-encryption key; backups are now encrypted. Keep ${ENV_FILE} somewhere safe and separate: without it an encrypted backup cannot be restored."
+        ;;
+    esac
   fi
 
   if [ -n "${POSTGRES_PASSWORD:-}${DATABASE_URL:-}${NEXTAUTH_SECRET:-}" ]; then
@@ -473,6 +492,7 @@ do_install() {
       info "using the existing ${ENV_FILE}. Pass --reconfigure to replace managed settings."
       # This path deploys without rewriting the file, so the key has to be topped up here.
       ensure_secret_key
+      ensure_backup_key
       step "Deploy"
       DIAG_ON_EXIT="true"
       deploy_stack

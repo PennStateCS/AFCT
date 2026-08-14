@@ -96,6 +96,8 @@ function Get-AfctNewInstallConfig {
         DatabaseUrl       = "postgresql://afct_user:$postgres@postgres:5432/afct"
         NextAuthSecret    = New-AfctSecret
         SecretKey         = New-AfctSecret
+        # Generated on every fresh install, so a backup is encrypted from the first one.
+        BackupKey         = New-AfctSecret
         PasswordGenerated = $generated
         Reconfiguring     = $false
     }
@@ -157,6 +159,18 @@ function Get-AfctReconfigureConfig {
         Write-AfctInfo 'generated a secret-encryption key for this install; it protects stored settings such as mail and sign-in credentials.'
     }
 
+    # Same reasoning for backups, with a sharper consequence: an existing key must survive
+    # untouched or every archive already written with it becomes unreadable. An explicit
+    # opt-out is left alone, so somebody who wants plaintext archives keeps them.
+    $backupKey = Read-AfctEnvValue 'BACKUP_ENCRYPTION_KEY' $EnvFile
+    if (-not $backupKey) {
+        $optOut = Read-AfctEnvValue 'BACKUP_ALLOW_UNENCRYPTED' $EnvFile
+        if ($optOut -notin @('true', 'TRUE', '1', 'yes')) {
+            $backupKey = New-AfctSecret
+            Write-AfctInfo "generated a backup-encryption key; backups are now encrypted. Keep $EnvFile somewhere safe and separate: without it an encrypted backup cannot be restored."
+        }
+    }
+
     if ([Environment]::GetEnvironmentVariable('POSTGRES_PASSWORD') -or
         [Environment]::GetEnvironmentVariable('DATABASE_URL') -or
         [Environment]::GetEnvironmentVariable('NEXTAUTH_SECRET')) {
@@ -171,6 +185,7 @@ function Get-AfctReconfigureConfig {
         DatabaseUrl       = $databaseUrl
         NextAuthSecret    = $nextAuth
         SecretKey         = $secretKey
+        BackupKey         = $backupKey
         PasswordGenerated = $false
         Reconfiguring     = $true
     }

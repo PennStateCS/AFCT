@@ -93,6 +93,33 @@ ensure_secret_key() {
   info "generated a secret-encryption key; it protects stored settings such as mail and sign-in credentials. Keep ${ENV_FILE} with your backups."
 }
 
+# Guarantee the backup-encryption key exists, generating one if it does not.
+#
+# A missing key used to mean "write the backup in the clear", which is the wrong default for
+# what that archive holds: the whole database plus both upload volumes, which is to say every
+# student's work and record on the site. Nobody chooses plaintext by leaving a variable unset;
+# they get it by not knowing the variable exists.
+#
+# Same never-replace rule as the secret key above, and for a sharper reason: replacing it does
+# not just make new backups unreadable, it strands every encrypted archive already written.
+ensure_backup_key() {
+  [ -f "$ENV_FILE" ] || return 0
+  _existing_backup_key=$(read_env_value BACKUP_ENCRYPTION_KEY "$ENV_FILE")
+  [ -z "$_existing_backup_key" ] || return 0
+
+  # An explicit opt-out is respected. Somebody who has decided they want plaintext archives,
+  # because they encrypt the volume underneath or ship them somewhere that does, should not
+  # have a key generated behind them on every update.
+  _optout=$(read_env_value BACKUP_ALLOW_UNENCRYPTED "$ENV_FILE")
+  case "$_optout" in
+    true | TRUE | 1 | yes) return 0 ;;
+  esac
+
+  _new_backup_key=$(gen_secret) || die "could not generate a backup-encryption key."
+  set_env_flag BACKUP_ENCRYPTION_KEY "$_new_backup_key"
+  info "generated a backup-encryption key; backups are now encrypted. Keep ${ENV_FILE} somewhere safe and separate: without it an encrypted backup cannot be restored."
+}
+
 set_env_flag() {
   _key=$1
   _val=$2
@@ -151,6 +178,7 @@ write_environment_file() {
         managed["ADMIN_PASSWORD"] = 1
         managed["NEXTAUTH_SECRET"] = 1
         managed["AFCT_SECRET_KEY"] = 1
+        managed["BACKUP_ENCRYPTION_KEY"] = 1
         managed["NEXTAUTH_URL"] = 1
         managed["AUTH_TRUST_HOST"] = 1
       }
@@ -184,6 +212,7 @@ write_environment_file() {
     write_env_assignment ADMIN_PASSWORD "$ADMIN_PASSWORD_IN"
     write_env_assignment NEXTAUTH_SECRET "$NEXTAUTH_SECRET_IN"
     write_env_assignment AFCT_SECRET_KEY "$AFCT_SECRET_KEY_IN"
+    write_env_assignment BACKUP_ENCRYPTION_KEY "$BACKUP_ENCRYPTION_KEY_IN"
     write_env_assignment NEXTAUTH_URL "$APP_URL_IN"
     write_env_assignment AUTH_TRUST_HOST true
     printf '# END AFCT INSTALLER MANAGED SETTINGS\n'

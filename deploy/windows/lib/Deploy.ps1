@@ -87,6 +87,7 @@ function Invoke-AfctInstall {
         Write-AfctInfo "using the existing $EnvFile. Pass -Reconfigure to replace managed settings."
         # This path deploys without rewriting the file, so the key has to be topped up here.
         Confirm-AfctSecretKey $EnvFile
+        Confirm-AfctBackupKey $EnvFile
         Invoke-AfctDeployStack
         $cfg = @{
             AppUrl = (Read-AfctEnvValue 'NEXTAUTH_URL' $EnvFile)

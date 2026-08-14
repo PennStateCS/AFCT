@@ -258,10 +258,12 @@ services:
     # Settings. Copy the db_backups volume off-host regularly; it protects against
     # bad data/migrations, not host loss.
     #
-    # Set BACKUP_ENCRYPTION_KEY in .env.production (picked up via env_file below) to
-    # encrypt the archive with gpg AES-256 -- a backup is a full copy of every
-    # education record. Store that passphrase OFF this server: without it the
-    # backups cannot be restored. Unset means backups are written in the clear.
+    # BACKUP_ENCRYPTION_KEY in .env.production (picked up via env_file below) encrypts the
+    # archive with gpg AES-256. The installers generate one, so this is normally already set;
+    # without it the backup is REFUSED rather than written in the clear, because the archive is
+    # a full copy of every education record on the site. Set BACKUP_ALLOW_UNENCRYPTED=true to
+    # choose plaintext deliberately. Store the passphrase OFF this server: without it an
+    # encrypted backup cannot be restored.
     # Versioned in lockstep with the app (see the app service above).
     image: ghcr.io/pennstatecs/afct-backup:${AFCT_APP_TAG:-main}
     container_name: afct-db-backup
