@@ -105,7 +105,7 @@ export default function ProblemGradeForm({
             ]}
           />
           {isAdjusted ? (
-            <Badge variant="outline" className="text-[0.7rem] font-normal">
+            <Badge variant="outline" className="text-2xs font-normal">
               Adjusted from {groupGradeValue}
             </Badge>
           ) : null}
