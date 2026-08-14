@@ -88,6 +88,56 @@ jobs:
       - name: ESLint
         run: npm run lint -- --max-warnings=0
 
+  # Dockerfile linting. Five Dockerfiles ship to other institutions, and hadolint runs
+  # ShellCheck over every RUN block, which nothing else here does. See .hadolint.yaml for
+  # which rules are off and why.
+  dockerfiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      # The binary rather than the action, and checked against its digest, for the same
+      # reason gitleaks is fetched this way above.
+      - name: Lint the Dockerfiles
+        env:
+          HADOLINT_VERSION: 2.12.0
+          HADOLINT_SHA256: 56de6d5e5ec427e17b74fa48d51271c7fc0d61244bf5c90e828aab8362d55010
+        run: |
+          set -euo pipefail
+          curl -sSfL -o hadolint \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64"
+          echo "${HADOLINT_SHA256}  hadolint" | sha256sum -c -
+          chmod +x hadolint
+          ./hadolint docker/Dockerfile docker/Dockerfile.dev docker/nginx/Dockerfile \
+            docker/updater/Dockerfile docker/backup/Dockerfile
+
+  # Unused dependencies and imports that were never declared. Scoped to those two checks:
+  # knip also reports unused files and exports, which on this codebase is mostly deliberate
+  # convention (shadcn primitives kept whole, types exported for symmetry) and would make
+  # the gate noise rather than signal. Run `npx knip` locally to see the full picture.
+  deadcode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        env:
+          SKIP_PRISMA_GENERATE: '1'
+
+      - name: Check for unused and undeclared dependencies
+        run: npm run knip
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15

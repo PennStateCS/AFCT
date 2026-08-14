@@ -1,0 +1,28 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/worker.ts",
+    "src/env.mjs",
+    "scripts/*.mjs",
+    "merge-coverage.mjs",
+    "e2e/**/*.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx,mjs}",
+    "prisma/**/*.ts",
+    "scripts/**/*.mjs"
+  ],
+  "ignore": [
+    "src/types/api.ts",
+    "docs-site/**"
+  ],
+  "ignoreDependencies": [
+    "pg",
+    "@types/pg",
+    "@auth/core",
+    "cmdk",
+    "react-resizable-panels",
+    "tailwindcss",
+    "tw-animate-css"
+  ]
+}
