@@ -68,11 +68,21 @@ export function SimilarityMatchCard({
 
       <div className="space-y-1 text-sm">
         <p className={common ? 'text-muted-foreground' : ''}>{matchHeadline(group)}</p>
-        {matchDetails(group).map((line) => (
-          <p key={line} className="text-muted-foreground">
-            {line}
-          </p>
-        ))}
+        {group.kind === 'near' ? (
+          // A list, because each line is a separate thing a reader can check against the
+          // files rather than one paragraph to take on trust.
+          <ul className="text-muted-foreground list-disc space-y-0.5 ps-5">
+            {matchDetails(group).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        ) : (
+          matchDetails(group).map((line) => (
+            <p key={line} className="text-muted-foreground">
+              {line}
+            </p>
+          ))
+        )}
         {group.matchesAnswerFile ? (
           <p className="text-muted-foreground">Matches the instructor reference solution.</p>
         ) : null}

@@ -53,6 +53,8 @@ const submission = (over: Record<string, unknown> = {}) => ({
 
 const group = (over: Record<string, unknown> = {}) => ({
   matchId: 'abcd1234',
+  kind: 'same-work' as const,
+  evidence: [] as string[],
   problem: { id: 'p1', title: 'Strings ending in 01', type: 'FA' },
   studentCount: 2,
   problemStudentCount: 38,
@@ -258,6 +260,29 @@ describe('AssignmentSimilarityPanel', () => {
     expect(text).not.toContain('cheat');
     // No implementation vocabulary either.
     expect(text).not.toContain('hash');
+  });
+
+  it('shows a near match as the evidence behind it, not as a score', async () => {
+    getMock.mockResolvedValue([
+      group({
+        kind: 'near',
+        studentCount: 2,
+        identicalStudentCount: 1,
+        evidence: [
+          '9 of 10 pieces of local structure are the same, 3 of them uncommon in this class',
+          'They differ by 1 transition',
+          '2 transitions have the same hand-adjusted curve',
+        ],
+      }),
+    ]);
+
+    renderPanel();
+
+    expect(await screen.findByRole('heading', { name: 'Structurally similar' })).toBeInTheDocument();
+    expect(screen.getByText('They differ by 1 transition')).toBeInTheDocument();
+    expect(
+      screen.getByText('2 of 38 students share uncommon structure in their machines'),
+    ).toBeInTheDocument();
   });
 
   it('opens the comparison from the card, earliest student first', async () => {

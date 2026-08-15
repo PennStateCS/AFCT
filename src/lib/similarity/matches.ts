@@ -12,6 +12,9 @@
 // students who worked it out the same way.
 
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+import { findNearMatches, type NearMatchInput } from './near-matches';
+import { PROVENANCE_FEATURE_VERSION, type ProvenanceFeatures } from './provenance';
 
 // Re-exported for the server side, which has no reason to know the rule moved. Client
 // components must import it from './rarity' directly: this module reaches for Prisma.
@@ -54,6 +57,17 @@ export type MatchSubmission = {
 export type SubmissionMatchGroup = {
   /** Short, stable label for this set of identical files. Not the hash itself. */
   matchId: string;
+  /**
+   * How the submissions were found to go together.
+   *
+   * `same-work` covers the two exact checks: the same file, or the same work once layout and
+   * names are set aside. `near` is the third check, which finds pairs that share uncommon
+   * structure without being equal, and is the only kind that carries evidence, because it is
+   * the only one where "why is this here" is not obvious from the counts.
+   */
+  kind: 'same-work' | 'near';
+  /** Factual statements about what the two submissions share. Near matches only. */
+  evidence: string[];
   problem: { id: string; title: string | null; type: string | null };
   /** How many different students submitted this exact content. Always 2 or more. */
   studentCount: number;
@@ -217,6 +231,8 @@ export async function findSubmissionMatches(
       ({
         // The hash is an internal value and long; the reader only needs a stable handle.
         matchId: shapeKey.slice(0, 8),
+        kind: 'same-work' as const,
+        evidence: [],
         problem: {
           id: submission.problemId,
           title: problems.get(submission.problemId)?.title ?? null,
@@ -288,6 +304,9 @@ export async function findSubmissionMatches(
     );
     reportable.push(group);
   }
+
+  // The third check, over everything the first two left behind.
+  reportable.push(...(await findNearMatchGroups(problemIds, problems, attemptNumbers)));
 
   // Work that was reused after it had already passed comes first whatever its size: it is
   // the case a large course is most likely to miss. Then rarest first, so what needs reading
@@ -378,4 +397,134 @@ function closestGap(times: TimedSubmission[]): number | null {
     }
   }
   return closest;
+}
+
+
+/**
+ * Pairs that share uncommon structure without being equal.
+ *
+ * Read in the same breath as the exact checks, from the features stored at upload, so the
+ * grading path carries none of this. One pair is one group of two, because the evidence is
+ * about those two files: rolling several pairs into a cluster would attach a sentence like
+ * "9 of 10 transitions match" to submissions it was never measured against.
+ */
+async function findNearMatchGroups(
+  problemIds: string[],
+  problems: Map<
+    string,
+    {
+      title: string | null;
+      type: string | null;
+      answerContentHash?: string | null;
+      answerShapeHash?: string | null;
+    }
+  >,
+  attemptNumbers: Map<string, number>,
+): Promise<SubmissionMatchGroup[]> {
+  const rows = await prisma.submission.findMany({
+    where: { problemId: { in: problemIds }, provenanceFeatures: { not: Prisma.DbNull } },
+    orderBy: { submittedAt: 'asc' },
+    select: {
+      id: true,
+      problemId: true,
+      studentId: true,
+      studentGroupId: true,
+      submittedAt: true,
+      correct: true,
+      assignmentId: true,
+      fileName: true,
+      originalFileName: true,
+      contentHash: true,
+      shapeHash: true,
+      provenanceFeatures: true,
+      student: { select: studentSelect },
+      studentGroup: { select: { id: true, name: true } },
+    },
+  });
+
+  // The exact checks only numbered the submissions they matched, and a near match usually
+  // involves different ones, so number these too rather than showing a blank where the other
+  // cards show "Submission 3".
+  const nearAttempts = await numberAttempts(rows);
+
+  const groups: SubmissionMatchGroup[] = [];
+
+  // A problem at a time: a match only means something among students answering the same
+  // question, and the rarity weighting needs one cohort to count against.
+  for (const problemId of problemIds) {
+    const forProblem = rows.filter((row) => row.problemId === problemId);
+    if (forProblem.length < 2) continue;
+
+    const studentsInProblem = new Set(forProblem.map((row) => row.studentId)).size;
+
+    const inputs: NearMatchInput[] = [];
+    for (const row of forProblem) {
+      const features = row.provenanceFeatures as unknown as ProvenanceFeatures | null;
+      // Only the version this code understands. An older row is left out rather than
+      // compared under rules it was not extracted with.
+      if (!features || features.version !== PROVENANCE_FEATURE_VERSION) continue;
+      inputs.push({
+        id: row.id,
+        studentId: row.studentId,
+        studentGroupId: row.studentGroupId,
+        submittedAt: row.submittedAt,
+        // Already grouped by an exact or shape match, so a near match would say it twice.
+        shapeKey: row.shapeHash ?? (row.contentHash ? `exact-${row.contentHash}` : null),
+        features,
+      });
+    }
+
+    const byId = new Map(forProblem.map((row) => [row.id, row]));
+
+    for (const near of findNearMatches(inputs)) {
+      const pair = [byId.get(near.a.id), byId.get(near.b.id)].filter(
+        (row): row is (typeof forProblem)[number] => Boolean(row),
+      );
+      if (pair.length !== 2) continue;
+
+      groups.push({
+        matchId: `near-${near.a.id.slice(-4)}${near.b.id.slice(-4)}`,
+        kind: 'near',
+        evidence: near.evidence.map((item) => item.detail),
+        problem: {
+          id: problemId,
+          title: problems.get(problemId)?.title ?? null,
+          type: problems.get(problemId)?.type ?? null,
+        },
+        studentCount: 2,
+        problemStudentCount: studentsInProblem,
+        // Neither is the other's file; that is what makes this the third check.
+        identicalStudentCount: 1,
+        closestGapMs: Math.abs(
+          near.a.submittedAt.getTime() - near.b.submittedAt.getTime(),
+        ),
+        reusedAfterPass: pair.some((row) =>
+          pair.some(
+            (other) =>
+              other.correct === true &&
+              other.studentId !== row.studentId &&
+              other.submittedAt < row.submittedAt,
+          ),
+        ),
+        matchesAnswerFile: false,
+        submissions: pair
+          .slice()
+          .sort((x, y) => y.submittedAt.getTime() - x.submittedAt.getTime())
+          .map((row) => ({
+            id: row.id,
+            submittedAt: row.submittedAt.toISOString(),
+            correct: row.correct,
+            attempt: attemptNumbers.get(row.id) ?? nearAttempts.get(row.id) ?? null,
+            assignmentId: row.assignmentId,
+            fileName: row.fileName,
+            originalFileName: row.originalFileName,
+            contentKey: (row.contentHash ?? '').slice(0, 8),
+            student: row.student,
+            studentGroup: row.studentGroup,
+          })),
+      });
+    }
+  }
+
+  return groups;
 }
