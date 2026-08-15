@@ -161,6 +161,28 @@ export async function staffManagesStudent(
   return rel !== null;
 }
 
+/**
+ * Is the caller course staff (FACULTY/TA) somewhere, or a system admin?
+ *
+ * For the few surfaces that are staff tools without belonging to any one course, the
+ * evaluator trial page being the first: the work has no course, so there is no course
+ * id to gate on, but it still must not be reachable by students. Soft-deleted courses
+ * do not count, matching every course-scoped check.
+ */
+export async function isCourseStaffAnywhere(user: PermissionUser): Promise<boolean> {
+  if (isAdmin(user)) return true;
+  if (!user?.id) return false;
+  const staffRow = await prisma.roster.findFirst({
+    where: {
+      userId: user.id,
+      role: { in: COURSE_STAFF_ROLES },
+      course: { deletedAt: null },
+    },
+    select: { id: true },
+  });
+  return staffRow !== null;
+}
+
 /** Is `userId` a member of this specific student group? */
 export async function isMemberOfGroup(
   groupId: string | null | undefined,

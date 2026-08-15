@@ -86,7 +86,9 @@ export default function WorkersTab({
   return (
     <div className="space-y-6">
       <Section title="Evaluator">
-        <div className="space-y-2">
+        {/* Capped like every other status tab: full-width rows put each value an inch from
+            the right edge of the display, a long way from the label it belongs to. */}
+        <div className="max-w-xl space-y-2">
           <Stat label="Status" value={<Badge variant={health.variant}>{health.text}</Badge>} />
           <Stat label="Grading now" value={`${data.busy} of ${data.configured} slots`} />
           <Stat label="Waiting to be graded" value={data.queue.pending} />
@@ -94,7 +96,7 @@ export default function WorkersTab({
         </div>
 
         {data.health === 'stalled' ? (
-          <p role="status" className="text-destructive text-sm">
+          <p role="status" className="text-destructive max-w-xl text-sm">
             {data.queue.pending} submission{data.queue.pending === 1 ? ' has' : 's have'} been
             waiting {elapsed(data.oldestPendingMs ?? 0)} with nothing grading. Check that the
             evaluator container is running.
@@ -102,7 +104,7 @@ export default function WorkersTab({
         ) : null}
 
         {data.health === 'stuck' ? (
-          <p role="status" className="text-muted-foreground text-sm">
+          <p role="status" className="text-muted-foreground max-w-xl text-sm">
             Work below is past the evaluator timeout. The worker returns overdue submissions to
             the queue by itself, so this usually clears; the same submission appearing repeatedly
             points at one the evaluator cannot finish.
@@ -112,7 +114,7 @@ export default function WorkersTab({
         {data.health === 'idle' ? (
           // Said carefully. An empty queue proves there is nothing to do; it says nothing about
           // whether anything is there to do it, and the page must not imply otherwise.
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground max-w-xl text-sm">
             Nothing is queued, so there is nothing for the evaluator to pick up. A quiet queue
             does not confirm the evaluator is running: submit something to test it.
           </p>
@@ -120,7 +122,7 @@ export default function WorkersTab({
       </Section>
 
       <Section title="Being graded now">
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground max-w-3xl text-sm">
           Slots are concurrent grading loops inside one evaluator container, not separate
           machines. How many there are comes from the submission concurrency limit in System
           Settings.

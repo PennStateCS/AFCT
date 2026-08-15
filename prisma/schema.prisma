@@ -220,6 +220,7 @@ model User {
   ltiPendingDeepLinks LtiPendingDeepLink[] // deep-linking requests waiting on this user
   ltiContextMembers   LtiContextMember[] // the LMS courses this person has been seen in
   ltiScores           LtiScoreQueue[] // their grades queued for an LMS gradebook
+  evaluatorTrials     EvaluatorTrial[] // staff dry runs of the evaluator this user asked for
 
   @@index([isAdmin])
   @@index([inactive])
@@ -1714,4 +1715,89 @@ model MailQueue {
 
   /// The order the sender reads in.
   @@index([state, nextAttemptAt])
+}
+
+/// Where a staff evaluator trial has got to. Mirrors SubmissionStatus, but kept separate
+/// so the two queues can diverge without one changing the meaning of the other's rows.
+enum EvaluatorTrialState {
+  /// Waiting for a worker.
+  PENDING
+  /// A worker has it.
+  PROCESSING
+  /// The evaluator returned a verdict.
+  COMPLETED
+  /// The evaluator could not produce one.
+  FAILED
+}
+
+/// A staff dry run of the evaluator: an answer file and a submitted file, run through the
+/// real jar, with no grade attached to the result.
+///
+/// Deliberately not a Submission. That table is what grades are computed from, and its
+/// foreign keys require an assignment, a problem and a student, none of which a trial has.
+///
+/// The uploads are usually a real student's work, being re-run to reproduce a grading
+/// complaint, so they are education records even though staff uploaded them. Keeping them
+/// would create a second store of student work outside the submission system and outside
+/// the access controls around it. That is why the files are deleted the moment the run
+/// ends and the row itself expires: it is a safety property, not housekeeping.
+///
+/// @namespace System
+model EvaluatorTrial {
+  /// Unique identifier.
+  id String @id @default(cuid())
+
+  /// The staff member who asked for the run. Only they (and admins) can read it back.
+  requestedBy   User   @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+  /// Who asked for it.
+  requestedById String
+
+  /// Which mode to run the evaluator in. The CLI arguments differ by type: FA and PDA
+  /// carry a state bound, and FA a determinism flag as well.
+  problemType     ProblemType
+  /// State bound for FA/PDA, as on the problem itself. Empty means unbounded.
+  maxStates       Int?
+  /// Whether an FA answer must be deterministic.
+  isDeterministic Boolean?
+
+  /// Stored upload names under the trials directory. Cleared when the files are deleted,
+  /// which is what tells the orphan sweep it has nothing left to remove for this row.
+  answerFileName         String?
+  submissionFileName     String?
+  /// What the uploader called the files, kept for display after the uploads are gone.
+  answerOriginalName     String
+  submissionOriginalName String
+
+  /// Where the run has got to.
+  state EvaluatorTrialState @default(PENDING)
+
+  /// Whether the evaluator judged the submitted file correct. Empty until it finishes.
+  correct       Boolean?
+  /// The evaluator's feedback, or the reason it produced none.
+  feedback      String?
+  /// Full evaluator output, which is the point of the page.
+  evaluationRaw Json?
+  /// Anything the jar wrote to stderr, shown as a diagnostic.
+  stderr        String?
+  /// How long the jar ran, in milliseconds.
+  durationMs    Int?
+
+  /// When this record was created.
+  createdAt   DateTime  @default(now())
+  /// When a worker claimed it.
+  startedAt   DateTime?
+  /// When it finished, either way.
+  completedAt DateTime?
+  /// When the row itself may be removed. See the note above: results are short-lived on
+  /// purpose, so a trial is never a lasting copy of somebody's work.
+  expiresAt   DateTime
+  /// When this record was last changed.
+  updatedAt   DateTime  @updatedAt
+
+  /// The order a worker claims trials in, oldest first.
+  @@index([state, createdAt])
+  /// The per-user cap: how many trials this person already has running.
+  @@index([requestedById, state])
+  /// The expiry sweep.
+  @@index([expiresAt])
 }

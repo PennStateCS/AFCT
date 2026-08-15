@@ -10,6 +10,7 @@ const createLogMock = vi.hoisted(() => vi.fn());
 const canManageMock = vi.hoisted(() => vi.fn());
 const canAccessMock = vi.hoisted(() => vi.fn());
 const isArchivedMock = vi.hoisted(() => vi.fn());
+const staffAnywhereMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -20,9 +21,10 @@ vi.mock('@/lib/permissions', async (orig) => ({
   canManageCourse: canManageMock,
   canAccessCourse: canAccessMock,
   isCourseArchived: isArchivedMock,
+  isCourseStaffAnywhere: staffAnywhereMock,
 }));
 
-import { withAdminAuth, withCourseAuth, withAssignmentAuth } from './with-auth';
+import { withAdminAuth, withStaffAuth, withCourseAuth, withAssignmentAuth } from './with-auth';
 
 const DENIED = { deniedAction: 'THING_DENIED' };
 
@@ -80,6 +82,53 @@ describe('withAdminAuth', () => {
       req,
       expect.objectContaining({ userId: 'u1', action: 'THING_DENIED', severity: 'SECURITY' }),
     );
+  });
+});
+
+describe('withStaffAuth', () => {
+  it('runs the handler for course staff, whichever course they are staff of', async () => {
+    const session = { user: { id: 'f1', isAdmin: false } };
+    authMock.mockResolvedValue(session);
+    staffAnywhereMock.mockResolvedValue(true);
+    const handler = vi.fn().mockResolvedValue(new Response('ok'));
+
+    const res = await withStaffAuth(handler, DENIED)(new Request('http://localhost/x'), {});
+
+    expect(await (res as Response).text()).toBe('ok');
+  });
+
+  it('refuses a student and leaves a SECURITY trail', async () => {
+    authMock.mockResolvedValue({ user: { id: 's1', isAdmin: false } });
+    staffAnywhereMock.mockResolvedValue(false);
+    const handler = vi.fn();
+
+    const res = await withStaffAuth(handler, DENIED)(new Request('http://localhost/x'), {});
+
+    expect((res as Response).status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+    expect(createLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'THING_DENIED', severity: 'SECURITY' }),
+    );
+  });
+
+  it('turns away an unsigned request, and one from a disabled account, without a log', async () => {
+    const handler = vi.fn();
+    authMock.mockResolvedValue(null);
+    expect(
+      ((await withStaffAuth(handler, DENIED)(new Request('http://localhost/x'), {})) as Response)
+        .status,
+    ).toBe(401);
+
+    authMock.mockResolvedValue({ user: { id: 'f1', inactive: true } });
+    expect(
+      ((await withStaffAuth(handler, DENIED)(new Request('http://localhost/x'), {})) as Response)
+        .status,
+    ).toBe(401);
+
+    expect(createLogMock).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
   });
 });
 

@@ -11,6 +11,15 @@ const prismaMock = vi.hoisted(() => ({
   },
   assignmentProblemGrade: { upsert: vi.fn(), updateMany: vi.fn(), createMany: vi.fn() },
   groupMembership: { findMany: vi.fn() },
+  // The loop checks for a staff evaluator trial before it looks for a submission. Mocked
+  // fully, not just the method the happy path calls: a missing one throws inside the loop
+  // and every assertion about scheduling then measures the error path instead.
+  evaluatorTrial: {
+    findFirst: vi.fn(),
+    count: vi.fn(),
+    updateMany: vi.fn(),
+    findUnique: vi.fn(),
+  },
   // The grade fan-out runs in one transaction; the callback gets the same mock client so the
   // existing assertions on updateMany/createMany still see the calls.
   $transaction: vi.fn(),
@@ -94,6 +103,10 @@ beforeEach(() => {
     calcHashData: 'content-hash-value',
   });
   checkFileStatusMock.mockResolvedValue({ status: 'ok' });
+  // No trial waiting, unless a test says otherwise.
+  prismaMock.evaluatorTrial.findFirst.mockResolvedValue(null);
+  prismaMock.evaluatorTrial.count.mockResolvedValue(0);
+  prismaMock.evaluatorTrial.updateMany.mockResolvedValue({ count: 1 });
   delete process.env.CFGANALYZER_BINARY;
 });
 
@@ -470,6 +483,36 @@ describe('runWorkerLoop — claiming and prioritization', () => {
       expect.objectContaining({ data: { status: 'PROCESSING', attempts: { increment: 1 } } }),
     );
     // ...and evaluation runs (findUnique is only reached inside evaluateSubmission).
+    expect(prismaMock.submission.findUnique).toHaveBeenCalled();
+  });
+
+  it('runs a waiting staff trial before it looks at the submission queue', async () => {
+    prismaMock.evaluatorTrial.findFirst.mockResolvedValue({ id: 'trial-1' });
+    prismaMock.evaluatorTrial.findUnique.mockResolvedValue({
+      answerFileName: 'a.jff',
+      submissionFileName: 's.jff',
+      problemType: 'FA',
+      maxStates: 5,
+      isDeterministic: true,
+    });
+
+    await runWorkerLoop();
+
+    expect(prismaMock.evaluatorTrial.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'trial-1', state: 'PENDING' } }),
+    );
+    expect(prismaMock.submission.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('grades submissions as usual when the trial ceiling is already reached', async () => {
+    prismaMock.evaluatorTrial.findFirst.mockResolvedValue({ id: 'trial-1' });
+    prismaMock.evaluatorTrial.count.mockResolvedValue(2);
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+
+    await runWorkerLoop();
+
     expect(prismaMock.submission.findUnique).toHaveBeenCalled();
   });
 

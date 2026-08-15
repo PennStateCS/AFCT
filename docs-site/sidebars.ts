@@ -82,6 +82,7 @@ const sidebars: SidebarsConfig = {
                   ],
                 },
                 'faculty/descriptions',
+                'faculty/evaluator-sandbox',
                 'faculty/grades',
                 'faculty/groups',
                 'faculty/problems',

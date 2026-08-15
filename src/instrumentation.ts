@@ -22,5 +22,10 @@ export async function register() {
     startScoreSender();
     const { startMailSender } = await import('./lib/mail-sender');
     startMailSender();
+
+    // Trial uploads are removed here, not in the worker: the worker mounts the uploads
+    // volume read-only, and that is worth keeping.
+    const { startEvaluatorTrialJanitor } = await import('./lib/evaluator-trials');
+    startEvaluatorTrialJanitor();
   }
 }
