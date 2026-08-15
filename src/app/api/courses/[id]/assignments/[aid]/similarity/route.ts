@@ -38,13 +38,23 @@ export const GET = withAssignmentAuth<Ctx>(
     try {
       const links = await prisma.assignmentProblem.findMany({
         where: { assignmentId: assignment.id },
-        select: { problemId: true, problem: { select: { title: true, type: true } } },
+        select: {
+          problemId: true,
+          problem: {
+            select: { title: true, type: true, answerContentHash: true, answerShapeHash: true },
+          },
+        },
       });
 
       const problems = new Map(
         links.map((link) => [
           link.problemId,
-          { title: link.problem?.title ?? null, type: link.problem?.type ?? null },
+          {
+            title: link.problem?.title ?? null,
+            type: link.problem?.type ?? null,
+            answerContentHash: link.problem?.answerContentHash ?? null,
+            answerShapeHash: link.problem?.answerShapeHash ?? null,
+          },
         ]),
       );
       const groups = await findSubmissionMatches([...problems.keys()], problems);

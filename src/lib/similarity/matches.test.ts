@@ -379,6 +379,25 @@ describe('findSubmissionMatches', () => {
     expect(groups[0]?.reusedAfterPass).toBe(true);
   });
 
+  it('knows when the matching work is the problem\'s own answer file', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1') }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2') }),
+    ]);
+
+    const withAnswer = new Map([
+      ['p1', { title: 'Even zeros', type: 'FA', answerContentHash: 'hash-a', answerShapeHash: null }],
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], withAnswer);
+
+    expect(group?.matchesAnswerFile).toBe(true);
+  });
+
   it('only looks at submissions that have a hash', async () => {
     prismaMock.submission.groupBy.mockResolvedValue([]);
 

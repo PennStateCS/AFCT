@@ -75,6 +75,12 @@ export type SubmissionMatchGroup = {
    * people arriving at the same answer, and it sorts to the top because of that.
    */
   reusedAfterPass: boolean;
+  /**
+   * This work IS the problem's own reference solution, byte for byte or once layout is set
+   * aside. Everybody who has the answer file has the same work by definition, so a reader
+   * needs to know that before reading anything into the match.
+   */
+  matchesAnswerFile: boolean;
   submissions: MatchSubmission[];
 };
 
@@ -100,7 +106,15 @@ const studentSelect = {
  */
 export async function findSubmissionMatches(
   problemIds: string[],
-  problems: Map<string, { title: string | null; type: string | null }>,
+  problems: Map<
+    string,
+    {
+      title: string | null;
+      type: string | null;
+      answerContentHash?: string | null;
+      answerShapeHash?: string | null;
+    }
+  >,
 ): Promise<SubmissionMatchGroup[]> {
   if (problemIds.length === 0) return [];
 
@@ -203,6 +217,11 @@ export async function findSubmissionMatches(
         identicalStudentCount: 1,
         closestGapMs: null,
         reusedAfterPass: false,
+        matchesAnswerFile:
+          (!!submission.contentHash &&
+            submission.contentHash === problems.get(submission.problemId)?.answerContentHash) ||
+          (!!submission.shapeHash &&
+            submission.shapeHash === problems.get(submission.problemId)?.answerShapeHash),
         submissions: [],
       } satisfies SubmissionMatchGroup);
 

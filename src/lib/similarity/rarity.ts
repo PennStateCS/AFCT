@@ -7,13 +7,17 @@
 
 /**
  * Past this share of a problem's students, identical work is what a correct answer looks
- * like rather than a finding. One definition, so the tab badge and the panel cannot disagree
- * about which matches are worth a reader's attention.
+ * like rather than a finding.
+ *
+ * A starting point rather than a truth: the right number depends on the problem and on the
+ * course, which is why the panel lets a reader move it. It is the default the tab badge
+ * counts with, and what the panel opens on before anybody touches the dial.
  */
 export const COMMON_SHARE = 0.25;
 
-export function isCommon(group: { studentCount: number; problemStudentCount: number }): boolean {
-  return (
-    group.problemStudentCount > 0 && group.studentCount / group.problemStudentCount >= COMMON_SHARE
-  );
+export function isCommon(
+  group: { studentCount: number; problemStudentCount: number },
+  share: number = COMMON_SHARE,
+): boolean {
+  return group.problemStudentCount > 0 && group.studentCount / group.problemStudentCount >= share;
 }

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -45,6 +45,7 @@ const group = (over: Record<string, unknown> = {}) => ({
   identicalStudentCount: 2,
   closestGapMs: 6 * 60 * 1000,
   reusedAfterPass: false,
+  matchesAnswerFile: false,
   submissions: [
     {
       id: 'sub-1',
@@ -177,6 +178,54 @@ describe('AssignmentSimilarityPanel', () => {
     ).toBeInTheDocument();
   });
 
+  it('lists the students in the order they submitted, and says who was first', async () => {
+    getMock.mockResolvedValue([group()]);
+
+    renderPanel();
+    await screen.findByText(/2 of 40 students/);
+
+    const names = screen.getAllByText(/Student$/).map((node) => node.textContent);
+    expect(names).toEqual(['Grace Student', 'Ada Student']);
+    expect(screen.getByText('First')).toBeInTheDocument();
+  });
+
+  it('shows the time of day, not just the date', async () => {
+    getMock.mockResolvedValue([group()]);
+
+    renderPanel();
+
+    // "6 minutes apart" is no use without knowing which side of it each student is on.
+    expect(await screen.findByText(/08\/14\/26 11:54 AM UTC/)).toBeInTheDocument();
+    expect(screen.getByText(/08\/14\/26 12:00 PM UTC/)).toBeInTheDocument();
+  });
+
+  it('lets the reader move where common begins', async () => {
+    const person = userEvent.setup();
+    // 10 of 40 is a quarter: common at the default, not common below it.
+    getMock.mockResolvedValue([
+      group({ studentCount: 10, problemStudentCount: 40, identicalStudentCount: 10 }),
+    ]);
+
+    renderPanel();
+    expect(await screen.findByText('Common')).toBeInTheDocument();
+
+    const slider = screen.getByLabelText('Treat as the answer at');
+    await person.clear(slider).catch(() => {});
+    fireEvent.change(slider, { target: { value: '0.5' } });
+
+    await waitFor(() => expect(screen.queryByText('Common')).not.toBeInTheDocument());
+    expect(screen.getByText(/50% of a problem/)).toBeInTheDocument();
+  });
+
+  it('says when the matching work is simply the posted answer', async () => {
+    getMock.mockResolvedValue([group({ matchesAnswerFile: true })]);
+
+    renderPanel();
+
+    expect(await screen.findByText('The posted answer')).toBeInTheDocument();
+    expect(screen.getByText(/reference solution/)).toBeInTheDocument();
+  });
+
   it('never calls anybody suspicious', async () => {
     getMock.mockResolvedValue([group()]);
 
@@ -196,6 +245,7 @@ describe('AssignmentSimilarityPanel', () => {
     await person.click(screen.getByRole('button', { name: /Compare files/ }));
 
     await waitFor(() => expect(screen.getByTestId('compare')).toBeInTheDocument());
-    expect(screen.getByTestId('compare').textContent).toBe('sub-1 vs sub-2');
+    // Earliest first: sub-2 landed at 11:54, sub-1 at 12:00.
+    expect(screen.getByTestId('compare').textContent).toBe('sub-2 vs sub-1');
   });
 });

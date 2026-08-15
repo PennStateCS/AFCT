@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { Fingerprint, Columns2 } from 'lucide-react';
@@ -8,15 +8,16 @@ import { Fingerprint, Columns2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import Spinner from '@/components/ui/spinner';
 import { CompareSubmissionsDialog } from '@/components/assignments/CompareSubmissionsDialog';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
 import { getInitials } from '@/app/utils/initials';
-import { formatDateInTimeZone, zoneAbbrev, parseValidDate } from '@/lib/date-format';
+import { formatDateTimeInTimeZone, zoneAbbrev, parseValidDate } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { isCommon } from '@/lib/similarity/rarity';
+import { COMMON_SHARE, isCommon } from '@/lib/similarity/rarity';
 import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/matches';
 
 /**
@@ -35,13 +36,22 @@ import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/mat
 const studentName = (student: MatchSubmission['student']) =>
   `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || 'Unknown student';
 
-/** One entry per student: a student who submitted the same file twice is one person. */
+/**
+ * One entry per student, earliest first.
+ *
+ * A student who submitted the same file twice is one person, and it is their FIRST
+ * submission of it that matters: the question a reader is asking is who had this work
+ * before whom, and the order the card lists them in is half the answer.
+ */
 function distinctStudents(group: SubmissionMatchGroup): MatchSubmission[] {
-  const seen = new Map<string, MatchSubmission>();
+  const earliest = new Map<string, MatchSubmission>();
   for (const submission of group.submissions) {
-    if (!seen.has(submission.student.id)) seen.set(submission.student.id, submission);
+    const held = earliest.get(submission.student.id);
+    if (!held || submission.submittedAt < held.submittedAt) {
+      earliest.set(submission.student.id, submission);
+    }
   }
-  return [...seen.values()];
+  return [...earliest.values()].sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
 }
 
 /** "6 minutes apart", "2 days apart". Null when there is nothing to say. */
@@ -74,10 +84,10 @@ function describeMatch(group: SubmissionMatchGroup): string {
 }
 
 /** The line that answers "do I need to read any of this". */
-function summarise(groups: SubmissionMatchGroup[]): string {
+function summarise(groups: SubmissionMatchGroup[], commonShare: number): string {
   if (groups.length === 0) return 'No two students submitted matching work.';
   const problems = new Set(groups.map((group) => group.problem.id)).size;
-  const common = groups.filter(isCommon).length;
+  const common = groups.filter((group) => isCommon(group, commonShare)).length;
   const reused = groups.filter((group) => group.reusedAfterPass).length;
   const sets = `${groups.length} set${groups.length === 1 ? '' : 's'} of matching work`;
   const across = `across ${problems} problem${problems === 1 ? '' : 's'}`;
@@ -93,9 +103,31 @@ function summarise(groups: SubmissionMatchGroup[]): string {
   return `${lead}${sets} ${across}, ${common} of them shared by much of the class.`;
 }
 
+/** Where the reader's own commonality setting is kept, so it survives a reload. */
+const THRESHOLD_KEY = 'afct.similarityCommonShare';
+
 export function AssignmentSimilarityPanel() {
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
   const { timezone } = useEffectiveTimezone();
+
+  // How much of a class has to share work before it reads as the answer rather than a
+  // finding. There is no right number for this: it depends on the problem and on how the
+  // course teaches, so the reader gets the dial rather than a constant somebody guessed.
+  // Their own setting only, and no course-wide default: it changes what is shown, never what
+  // is recorded.
+  const [commonShare, setCommonShare] = useState(COMMON_SHARE);
+  useEffect(() => {
+    const saved = Number(window.localStorage.getItem(THRESHOLD_KEY));
+    if (Number.isFinite(saved) && saved > 0 && saved <= 1) setCommonShare(saved);
+  }, []);
+  const changeThreshold = (value: number) => {
+    setCommonShare(value);
+    try {
+      window.localStorage.setItem(THRESHOLD_KEY, String(value));
+    } catch {
+      /* ignore storage the browser will not give us */
+    }
+  };
   const [comparing, setComparing] = useState<{
     submissions: MatchSubmission[];
     problemType: string | null;
@@ -110,10 +142,13 @@ export function AssignmentSimilarityPanel() {
     staleTime: 30_000,
   });
 
+  // With the time, not just the date. "6 minutes apart" says nothing about who was first,
+  // and on a card where everybody submitted the same afternoon a date alone makes every row
+  // look identical.
   const formatSubmittedAt = (iso: string) => {
     const date = parseValidDate(iso);
     if (!date) return 'Unknown';
-    return `${formatDateInTimeZone(date, timezone)} ${zoneAbbrev(date, timezone)}`;
+    return `${formatDateTimeInTimeZone(date, timezone)} ${zoneAbbrev(date, timezone)}`;
   };
 
   // Grouped under their problem, and a problem whose rarest match is rarer comes first, so
@@ -146,7 +181,7 @@ export function AssignmentSimilarityPanel() {
             <span>Looking for matching submissions...</span>
           </div>
         ) : (
-          <p className="text-base font-medium">{summarise(data ?? [])}</p>
+          <p className="text-base font-medium">{summarise(data ?? [], commonShare)}</p>
         )}
         <p className="text-muted-foreground text-sm">
           Identical work is not by itself evidence of anything: a problem with one obvious
@@ -155,13 +190,35 @@ export function AssignmentSimilarityPanel() {
         </p>
       </div>
 
+      {(data?.length ?? 0) > 0 ? (
+        <div className="flex max-w-3xl flex-wrap items-center gap-3">
+          <Label htmlFor="common-share" className="text-sm font-medium">
+            Treat as the answer at
+          </Label>
+          <input
+            id="common-share"
+            type="range"
+            min="0.05"
+            max="1"
+            step="0.05"
+            value={commonShare}
+            aria-valuetext={`${Math.round(commonShare * 100)} percent of the class`}
+            onChange={(event) => changeThreshold(Number(event.target.value))}
+            className="bg-primary-foreground accent-primary h-2 w-48 cursor-pointer rounded-lg"
+          />
+          <span className="text-muted-foreground text-sm">
+            {Math.round(commonShare * 100)}% of a problem&apos;s students
+          </span>
+        </div>
+      ) : null}
+
       {byProblem.map(([problemId, section]) => (
         <section key={problemId} className="max-w-3xl space-y-2">
           <h3 className="text-lg font-semibold">{section.title ?? 'Unknown problem'}</h3>
 
           {section.matches.map((group) => {
             const students = distinctStudents(group);
-            const common = isCommon(group);
+            const common = isCommon(group, commonShare);
             const gap = gapLabel(group.closestGapMs);
 
             return (
@@ -175,6 +232,11 @@ export function AssignmentSimilarityPanel() {
                         title="This exact file had already been marked correct for another student when it was submitted again"
                       >
                         Reused after passing
+                      </Badge>
+                    ) : null}
+                    {group.matchesAnswerFile ? (
+                      <Badge variant="info" title="This is the reference solution for the problem">
+                        The posted answer
                       </Badge>
                     ) : null}
                     {common ? (
@@ -193,6 +255,13 @@ export function AssignmentSimilarityPanel() {
                   </p>
                 ) : null}
 
+                {group.matchesAnswerFile ? (
+                  <p className="text-muted-foreground text-sm">
+                    This is the problem&apos;s own reference solution. Anyone holding that file
+                    has this work, so the match says nothing on its own.
+                  </p>
+                ) : null}
+
                 {common ? (
                   <p className="text-muted-foreground text-sm">
                     Most of the class submitted this same work, so it is probably just the
@@ -201,7 +270,7 @@ export function AssignmentSimilarityPanel() {
                 ) : null}
 
                 <ul className="space-y-2">
-                  {students.map((submission) => (
+                  {students.map((submission, index) => (
                     <li key={submission.id} className="flex flex-wrap items-center gap-3">
                       <Avatar className="h-9 w-9">
                         <AvatarImage
@@ -224,7 +293,14 @@ export function AssignmentSimilarityPanel() {
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium">{studentName(submission.student)}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{studentName(submission.student)}</span>
+                          {/* Which of them had it first is the thing a reader is looking for,
+                              and it is not obvious from two timestamps a few minutes apart. */}
+                          {index === 0 && students.length > 1 ? (
+                            <Badge variant="neutral">First</Badge>
+                          ) : null}
+                        </div>
                         <div className="text-muted-foreground text-xs">
                           {formatSubmittedAt(submission.submittedAt)}
                           {submission.studentGroup

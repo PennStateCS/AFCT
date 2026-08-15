@@ -28,6 +28,10 @@ Each match card carries the count that gives it its meaning, and says which kind
 
 Identical work on its own proves nothing. A problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of forty is worth reading. Twenty-five out of forty is what a correct answer looks like, and AFCT marks those cards **Common**, says so in plain words, and sorts them last.
 
+### The posted answer
+
+A match badged **The posted answer** is the problem's own reference solution. Anyone holding that file has this work by definition, so the match says nothing on its own. AFCT keeps a fingerprint of each problem's answer file for exactly this reason, taken when the file is uploaded or replaced.
+
 ### Reused after passing
 
 A match badged **Reused after passing** means the byte-identical file had already been marked correct for another student when it was submitted again. That is the pattern a large course is most likely to miss: submit, watch the autograder award full marks, pass the file on. These sort above everything else and their count leads the summary line at the top of the tab.

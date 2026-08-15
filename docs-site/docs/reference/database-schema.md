@@ -797,6 +797,8 @@ erDiagram
   Json descriptionJson "nullable"
   String fileName "nullable"
   String originalFileName "nullable"
+  String answerContentHash "nullable"
+  String answerShapeHash "nullable"
   ProblemType type "nullable"
   Int maxStates "nullable"
   Boolean isDeterministic "nullable"
@@ -982,6 +984,11 @@ Properties as follows:
 - `descriptionJson`: Formatted statement, when the problem uses rich text.
 - `fileName`: Stored reference solution file.
 - `originalFileName`: Name of the reference file as uploaded, for display.
+- `answerContentHash`
+  > The same two fingerprints a submission carries, taken over the reference solution. A
+  > submission matching either of these IS the posted answer, which the Similarity tab says
+  > out loud: it is a very different situation from two students matching each other.
+- `answerShapeHash`:
 - `type`: What kind of problem this is: finite automaton, regular expression, grammar, pushdown automaton or Turing machine.
 - `maxStates`: Largest number of states a solution may use. Empty means no limit.
 - `isDeterministic`: Whether the solution must be deterministic.
@@ -1149,6 +1156,8 @@ erDiagram
   Json descriptionJson "nullable"
   String fileName "nullable"
   String originalFileName "nullable"
+  String answerContentHash "nullable"
+  String answerShapeHash "nullable"
   ProblemType type "nullable"
   Int maxStates "nullable"
   Boolean isDeterministic "nullable"
@@ -1444,6 +1453,8 @@ erDiagram
   Json descriptionJson "nullable"
   String fileName "nullable"
   String originalFileName "nullable"
+  String answerContentHash "nullable"
+  String answerShapeHash "nullable"
   ProblemType type "nullable"
   Int maxStates "nullable"
   Boolean isDeterministic "nullable"
