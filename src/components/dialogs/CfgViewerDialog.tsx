@@ -43,24 +43,20 @@ function parseCfg(xmlText: string, epsSymbol: string) {
   return { type: type, left: left, right: right };
 }
 
-export function CfgViewerDialog({
+/**
+ * The production table itself, without a dialog around it.
+ *
+ * Split out so two submissions can be shown side by side on the Similarity tab; the dialog
+ * below is the same view with its own frame, and stays the way every other caller uses it.
+ */
+export function CfgViewerContent({
   src,
-  open,
-  onOpenChange,
-  title,
   epsSymbol = DEFAULT_EPS,
 }: {
   src: string;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  title: string | null | undefined;
   epsSymbol?: string;
 }) {
   const [data, setData] = React.useState<string | null>(null);
-
-  if (!title) {
-    title = '';
-  }
 
   React.useEffect(() => {
     const load = async () => {
@@ -75,9 +71,62 @@ export function CfgViewerDialog({
     };
 
     void load();
-  }, [src, open]);
+  }, [src]);
+
   if (!data) return null;
   const parsed = parseCfg(data, epsSymbol);
+
+  return (
+    <table className="w-full text-sm">
+      {/* The caption names the table for a screen reader; LHS and RHS alone do not say what
+          is being listed. Sighted users get that from the dialog title, which the caption
+          deliberately does not repeat. */}
+      <caption className="sr-only">Grammar productions</caption>
+      <thead className="border-foreground border-b">
+        <tr>
+          <th
+            scope="col"
+            className="text-foreground border-foreground border-r py-2 text-center font-medium"
+          >
+            LHS
+          </th>
+          <th scope="col" className="text-foreground py-2 text-center font-medium">
+            RHS
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {parsed.left.map((left, index) => (
+          <tr key={index} className="border-foreground border-b last:border-0">
+            <td className="text-foreground border-foreground border-r py-2 text-center font-medium">
+              {left}
+            </td>
+            <td className="text-foreground py-2 text-center font-medium">{parsed.right[index]}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export function CfgViewerDialog({
+  src,
+  open,
+  onOpenChange,
+  title,
+  epsSymbol = DEFAULT_EPS,
+}: {
+  src: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  title: string | null | undefined;
+  epsSymbol?: string;
+}) {
+  if (!title) {
+    title = '';
+  }
+
   return (
     <div className="p-8">
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -94,38 +143,7 @@ export function CfgViewerDialog({
             <DialogDescription className="sr-only">
               Context-free grammar productions.
             </DialogDescription>
-            <table className="w-full text-sm">
-              {/* The caption names the table for a screen reader; LHS and RHS alone do not
-                  say what is being listed. Sighted users get that from the dialog title,
-                  which the caption deliberately does not repeat. */}
-              <caption className="sr-only">Grammar productions</caption>
-              <thead className="border-foreground border-b">
-                <tr>
-                  <th
-                    scope="col"
-                    className="text-foreground border-foreground border-r py-2 text-center font-medium"
-                  >
-                    LHS
-                  </th>
-                  <th scope="col" className="text-foreground py-2 text-center font-medium">
-                    RHS
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {parsed.left.map((left, index) => (
-                  <tr key={index} className="border-foreground border-b last:border-0">
-                    <td className="text-foreground border-foreground border-r py-2 text-center font-medium">
-                      {left}
-                    </td>
-                    <td className="text-foreground py-2 text-center font-medium">
-                      {parsed.right[index]}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <CfgViewerContent src={src} epsSymbol={epsSymbol} />
           </DialogHeader>
         </DialogContent>
       </Dialog>

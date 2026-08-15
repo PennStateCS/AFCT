@@ -30,22 +30,15 @@ function parseRegex(xmlText: string) {
   return { type: type, expression: expression };
 }
 
-export function RegexViewerDialog({
-  src,
-  open,
-  onOpenChange,
-  title,
-}: {
-  src: string;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  title: string | null | undefined;
-}) {
+/**
+ * The expression itself, without a dialog around it.
+ *
+ * Split out so two submissions can be shown side by side on the Similarity tab; the dialog
+ * below is the same view with its own frame, and stays the way every other caller uses it.
+ */
+export function RegexViewerContent({ src }: { src: string }) {
   const [data, setData] = React.useState<string | null>(null);
 
-  if (!title) {
-    title = '';
-  }
   React.useEffect(() => {
     const load = async () => {
       try {
@@ -59,9 +52,27 @@ export function RegexViewerDialog({
     };
 
     void load();
-  }, [src, open]);
+  }, [src]);
+
   if (!data) return null;
-  const parsed = parseRegex(data);
+  return <div className="p-4 pt-2 text-center">{parseRegex(data).expression}</div>;
+}
+
+export function RegexViewerDialog({
+  src,
+  open,
+  onOpenChange,
+  title,
+}: {
+  src: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  title: string | null | undefined;
+}) {
+  if (!title) {
+    title = '';
+  }
+
   return (
     <div className="p-8">
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -73,7 +84,7 @@ export function RegexViewerDialog({
             </DialogTitle>
             <DialogDescription className="sr-only">Regular expression contents.</DialogDescription>
           </DialogHeader>
-          <div className="p-4 pt-2 text-center">{parsed.expression}</div>
+          <RegexViewerContent src={src} />
         </DialogContent>
       </Dialog>
     </div>

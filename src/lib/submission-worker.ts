@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import type { SubmissionStatus } from '@prisma/client';
-import type { FileStatusReturn } from './simulatiry_report/types';
 
 import fs from 'fs';
 import path from 'path';
@@ -17,8 +16,6 @@ import {
   DEFAULT_SUBMISSION_MAX_CONCURRENT,
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
 } from './system-settings';
-import { check_file_status } from './simulatiry_report/check_file_status';
-import { jflapSimilarityParser } from './simulatiry_report/jflap_simulatiry_parser';
 
 // The activity logger accepts either a Request or an explicit {ipAddress, userAgent}
 // context. The worker has no HTTP request behind it, so it logs a "system" origin
@@ -110,9 +107,6 @@ interface SubmissionEvaluationResult {
   correct?: boolean;
   evaluationRaw: unknown | null;
   status: SubmissionEvaluationStatus;
-  fileHashData?: string | null;
-  calcHashData?: string | null;
-  similarityReportJson?: FileStatusReturn;
 }
 
 async function logSubmissionActivity(
@@ -440,9 +434,6 @@ async function evaluateSubmission(id: string) {
           ? Prisma.JsonNull
           : (evaluation.evaluationRaw as Prisma.InputJsonValue),
       status: evaluation.status,
-      fileHashData: evaluation.fileHashData,
-      calcHashData: evaluation.calcHashData,
-      similarityReportJson: evaluation.similarityReportJson,
     });
 
     if (!written) {
@@ -722,52 +713,6 @@ async function evaluateWithJar(
     };
   }
 
-  /**
-   * The similarity report, which must never cost somebody their grade.
-   *
-   * It runs *after* the evaluator, so by this point the submission has already been marked
-   * right or wrong. Without this guard a report that could not be produced threw, landed in
-   * the caller's catch, and returned `status: 'FAILED'` with `evaluationRaw: null`:
-   * a graded submission discarded and the student shown "Evaluation failed" because a
-   * *reporting* step could not read the file.
-   *
-   * That is reachable from ordinary input. `jflapSimilarityParser` returns null for a path
-   * that is not `.jff`, an empty file or an unreadable one, and leaves `calcHashData`
-   * undefined for a file with no `<structure>` element; `check_file_status` throws on
-   * exactly that. Nothing tested any of it, which is why nobody knew.
-   *
-   * A missing report is a supported state: all three columns are nullable. So a failure here
-   * is logged and the grade stands.
-   */
-  let fileHashData: string | undefined;
-  let calcHashData: string | undefined;
-  let similarityReportJson: FileStatusReturn | undefined;
-  try {
-    const similarityData = await jflapSimilarityParser(uploadedFilePath);
-
-    fileHashData = similarityData?.fileHashData ?? undefined;
-    calcHashData = similarityData?.calcHashData ?? undefined;
-    const fileHashEmail = similarityData?.fileHashEmail ?? undefined;
-
-    similarityReportJson = await check_file_status(
-      fileHashData,
-      calcHashData,
-      fileHashEmail,
-      submission.studentId,
-    );
-  } catch (similarityErr) {
-    // Recorded, because a report that stops being produced should be visible rather than
-    // quietly absent for a term. Severity WARNING, not ERROR: nothing about the grade is
-    // wrong, and the log is read by people deciding what to act on.
-    await logSubmissionActivity(submission, 'SUBMISSION_SIMILARITY_SKIPPED', 'WARNING', {
-      error: errMessage(similarityErr),
-    });
-    console.warn(
-      `[SubmissionWorker] Similarity report skipped for submission ${submission.id}:`,
-      similarityErr,
-    );
-  }
-
   await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_SUCCESS', 'INFO', {
     correct: run.correct ?? false,
     evaluation: run.evaluation,
@@ -778,8 +723,5 @@ async function evaluateWithJar(
     correct: run.correct,
     evaluationRaw: run.evaluation,
     status: 'COMPLETED',
-    similarityReportJson,
-    fileHashData: fileHashData ?? null,
-    calcHashData: calcHashData ?? null,
   };
 }

@@ -119,7 +119,10 @@ export function JffCytoscapeViewer({
       )}
     >
       {/* Toolbar: muted gray so it reads as a distinct control strip above the white body */}
-      <div className="bg-background flex shrink-0 items-center justify-between gap-2 overflow-x-auto border-b p-2">
+      {/* Wraps rather than overflowing: in the Similarity tab's side-by-side comparison this
+          toolbar sits in a half-width pane, where a single row ran its controls into each
+          other. At full width it still fits on one line. */}
+      <div className="bg-background flex shrink-0 flex-wrap items-center justify-between gap-2 border-b p-2">
         <div className="flex min-w-0 items-center gap-2">
           {/* Title is shown in the dialog header above; only the type label lives here. */}
           <TypeBadge t={type} />

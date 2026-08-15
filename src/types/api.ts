@@ -1528,6 +1528,28 @@ export interface paths {
         patch: operations["patchCoursesByIdAssignmentsByAid"];
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/similarity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List submissions matching each other in an assignment
+         * @description Submissions to this assignment's problems that are the same file as somebody else's.  Course staff (faculty or TAs) or a system admin.   Groups are scoped to one problem, so a group never reaches outside the course, and each  carries how many students share that content against how many submitted the problem at  all. Read that ratio before reading anything into a match: on an easy problem identical  work is what a correct answer looks like. Nothing here is a verdict.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/similarity/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidSimilarity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/statistics": {
         parameters: {
             query?: never;
@@ -7925,6 +7947,65 @@ export interface operations {
                 };
             };
             /** @description Not course staff or a system admin, or a state guard blocked the change. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidSimilarity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Groups of submissions sharing identical content, rarest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;

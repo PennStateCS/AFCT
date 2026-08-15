@@ -587,6 +587,31 @@ describe('createSubmission', () => {
       expect(fsMock.writeFileSync).not.toHaveBeenCalled();
     });
 
+    it('fingerprints the file it stores, so matching never depends on the client', async () => {
+      const { tx } = setup();
+
+      await call({ file: file('<structure><type>fa</type></structure>') });
+
+      const [{ data }] = tx.submission.create.mock.calls[0] as [{ data: { contentHash: string } }];
+      expect(data.contentHash).toMatch(/^[0-9a-f]{64}$/);
+      // Same content, second submission: the whole point is that these agree.
+      const second = setup();
+      await call({ file: file('<structure><type>fa</type></structure>', 'other-name.jff') });
+      const [{ data: secondData }] = second.tx.submission.create.mock.calls[0] as [
+        { data: { contentHash: string } },
+      ];
+      expect(secondData.contentHash).toBe(data.contentHash);
+    });
+
+    it('records no fingerprint for a submission with no file', async () => {
+      const { tx } = setup();
+
+      await call({ file: null });
+
+      const [{ data }] = tx.submission.create.mock.calls[0] as [{ data: { contentHash: null } }];
+      expect(data.contentHash).toBeNull();
+    });
+
     it('stores an accepted file under a generated name, never the client-supplied one', async () => {
       const { tx } = setup();
       const res = await call({ file: file('<structure></structure>', '../../etc/passwd') });
