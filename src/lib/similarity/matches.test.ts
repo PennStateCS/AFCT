@@ -25,6 +25,8 @@ const submission = (over: Record<string, unknown>) => ({
   submittedAt: new Date('2026-08-14T12:00:00Z'),
   fileName: 'stored.jff',
   originalFileName: 'answer.jff',
+  studentId: 's1',
+  studentGroupId: null,
   student: student('s1'),
   studentGroup: null,
   ...over,
@@ -53,8 +55,8 @@ describe('findSubmissionMatches', () => {
       { problemId: 'p1', contentHash: 'hash-b', studentId: 's3' },
     ]);
     prismaMock.submission.findMany.mockResolvedValue([
-      submission({ id: 'sub-1', student: student('s1') }),
-      submission({ id: 'sub-2', student: student('s2') }),
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1') }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2') }),
     ]);
 
     const [group, ...rest] = await findSubmissionMatches(['p1'], problems);
@@ -85,9 +87,9 @@ describe('findSubmissionMatches', () => {
       { problemId: 'p1', contentHash: 'hash-a', studentId: 's2' },
     ]);
     prismaMock.submission.findMany.mockResolvedValue([
-      submission({ id: 'sub-1', student: student('s1') }),
-      submission({ id: 'sub-2', student: student('s1') }),
-      submission({ id: 'sub-3', student: student('s2') }),
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1') }),
+      submission({ id: 'sub-2', studentId: 's1', student: student('s1') }),
+      submission({ id: 'sub-3', studentId: 's2', student: student('s2') }),
     ]);
 
     const [group] = await findSubmissionMatches(['p1'], problems);
@@ -108,13 +110,14 @@ describe('findSubmissionMatches', () => {
       })),
     ]);
     prismaMock.submission.findMany.mockResolvedValue([
-      submission({ id: 'sub-1', problemId: 'p1', contentHash: 'hash-a', student: student('s1') }),
-      submission({ id: 'sub-2', problemId: 'p1', contentHash: 'hash-a', student: student('s2') }),
+      submission({ id: 'sub-1', problemId: 'p1', contentHash: 'hash-a', studentId: 's1', student: student('s1') }),
+      submission({ id: 'sub-2', problemId: 'p1', contentHash: 'hash-a', studentId: 's2', student: student('s2') }),
       ...['s1', 's2', 's3', 's4', 's5'].map((id, index) => ({
         ...submission({
           id: `sub-c${index}`,
           problemId: 'p2',
           contentHash: 'hash-c',
+          studentId: id,
           student: student(id),
         }),
       })),
@@ -136,6 +139,71 @@ describe('findSubmissionMatches', () => {
     ]);
 
     await expect(findSubmissionMatches(['p1', 'p2'], problems)).resolves.toEqual([]);
+  });
+
+  it('says how close together two students submitted, ignoring their own resubmissions', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({
+        id: 'sub-1',
+        studentId: 's1',
+        student: student('s1'),
+        submittedAt: new Date('2026-08-14T12:00:00Z'),
+      }),
+      // The same student again a minute later: closer, but not two people.
+      submission({
+        id: 'sub-2',
+        studentId: 's1',
+        student: student('s1'),
+        submittedAt: new Date('2026-08-14T12:01:00Z'),
+      }),
+      submission({
+        id: 'sub-3',
+        studentId: 's2',
+        student: student('s2'),
+        submittedAt: new Date('2026-08-14T12:06:00Z'),
+      }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.closestGapMs).toBe(5 * 60 * 1000);
+  });
+
+  it('ignores teammates on a group assignment holding the same file', async () => {
+    // Every member's submit writes its own row against the shared set, so a whole team
+    // matching itself is the feature working rather than anything to report.
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1'), studentGroupId: 'g1' }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2'), studentGroupId: 'g1' }),
+    ]);
+
+    await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
+  });
+
+  it('still reports a match that reaches outside the team', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', contentHash: 'hash-a', studentId: 's2' },
+      { problemId: 'p1', contentHash: 'hash-a', studentId: 's3' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1'), studentGroupId: 'g1' }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2'), studentGroupId: 'g1' }),
+      // Not on that team.
+      submission({ id: 'sub-3', studentId: 's3', student: student('s3'), studentGroupId: null }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.studentCount).toBe(3);
   });
 
   it('only looks at submissions that have a hash', async () => {

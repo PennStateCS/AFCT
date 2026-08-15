@@ -13,11 +13,16 @@ vi.mock('@/lib/api/fetch-client', () => ({ apiClient: { get: getMock } }));
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
-// The real submission viewer pulls in the automaton renderers, which have nothing to do
-// with what this panel decides.
-vi.mock('@/components/dialogs/ViewSubmissionDialog', () => ({
-  ViewSubmissionDialog: ({ open, submission }: { open: boolean; submission: unknown }) =>
-    open ? <div data-testid="submission-viewer">{JSON.stringify(submission)}</div> : null,
+// The real compare dialog pulls in cytoscape, which has nothing to do with what this panel
+// decides. Its own contract (two panes, the right files) is covered where it lives.
+vi.mock('@/components/assignments/CompareSubmissionsDialog', () => ({
+  CompareSubmissionsDialog: ({
+    open,
+    submissions,
+  }: {
+    open: boolean;
+    submissions: { id: string }[] | null;
+  }) => (open ? <div data-testid="compare">{submissions?.map((s) => s.id).join(' vs ')}</div> : null),
 }));
 
 import { AssignmentSimilarityPanel } from './AssignmentSimilarityPanel';
@@ -37,6 +42,7 @@ const group = (over: Record<string, unknown> = {}) => ({
   problem: { id: 'p1', title: 'Even zeros', type: 'FA' },
   studentCount: 2,
   problemStudentCount: 40,
+  closestGapMs: 6 * 60 * 1000,
   submissions: [
     {
       id: 'sub-1',
@@ -49,7 +55,7 @@ const group = (over: Record<string, unknown> = {}) => ({
     },
     {
       id: 'sub-2',
-      submittedAt: '2026-08-14T11:00:00.000Z',
+      submittedAt: '2026-08-14T11:54:00.000Z',
       assignmentId: 'a1',
       fileName: 'stored-2.jff',
       originalFileName: 'answer.jff',
@@ -75,57 +81,79 @@ beforeEach(() => {
 });
 
 describe('AssignmentSimilarityPanel', () => {
-  it('says plainly when nothing matches', async () => {
+  it('answers the question in one line when there is nothing to read', async () => {
     renderPanel();
 
-    expect(await screen.findByText('No matching submissions')).toBeInTheDocument();
+    expect(await screen.findByText('No two students submitted the same file.')).toBeInTheDocument();
   });
 
-  it('shows who matched and how rare the content is', async () => {
+  it('summarises what there is before any of the detail', async () => {
     getMock.mockResolvedValue([group()]);
 
     renderPanel();
 
-    expect(await screen.findByText(/Ada Student/)).toBeInTheDocument();
-    expect(screen.getByText(/Grace Student/)).toBeInTheDocument();
-    expect(screen.getByText('2 of 40 students')).toBeInTheDocument();
+    expect(await screen.findByText('1 set of identical work across 1 problem.')).toBeInTheDocument();
   });
 
-  it('marks content most of the class shares as common, rather than hiding it', async () => {
+  it('says how much of the class shares it, and how far apart they submitted', async () => {
+    getMock.mockResolvedValue([group()]);
+
+    renderPanel();
+
+    expect(await screen.findByText(/2 of 40 students submitted identical work/)).toBeInTheDocument();
+    expect(screen.getByText('6 minutes apart')).toBeInTheDocument();
+    expect(screen.getByText('Ada Student')).toBeInTheDocument();
+    expect(screen.getByText('Grace Student')).toBeInTheDocument();
+  });
+
+  it('groups the cards under their problem', async () => {
+    getMock.mockResolvedValue([
+      group(),
+      group({
+        matchId: 'ffff0000',
+        problem: { id: 'p2', title: 'a^n b^n', type: 'CFG' },
+        studentCount: 25,
+        problemStudentCount: 40,
+      }),
+    ]);
+
+    renderPanel();
+
+    expect(await screen.findByRole('heading', { name: 'Even zeros' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'a^n b^n' })).toBeInTheDocument();
+    expect(
+      screen.getByText('2 sets of identical work across 2 problems, 1 of them shared by much of the class.'),
+    ).toBeInTheDocument();
+  });
+
+  it('explains a match most of the class shares rather than hiding it', async () => {
     getMock.mockResolvedValue([group({ studentCount: 25, problemStudentCount: 40 })]);
 
     renderPanel();
 
-    expect(await screen.findByText('25 of 40 students')).toBeInTheDocument();
-    expect(screen.getByText('Common')).toBeInTheDocument();
+    expect(await screen.findByText('Common')).toBeInTheDocument();
+    expect(screen.getByText(/probably just the answer/)).toBeInTheDocument();
   });
 
   it('never calls anybody suspicious', async () => {
     getMock.mockResolvedValue([group()]);
 
     const { container } = renderPanel();
-    await screen.findByText('2 of 40 students');
+    await screen.findByText(/2 of 40 students/);
 
     expect(container.textContent?.toLowerCase()).not.toContain('suspicious');
     expect(container.textContent?.toLowerCase()).not.toContain('plagiar');
   });
 
-  it('opens the files behind a match, one dialog at a time', async () => {
+  it('opens the two files side by side', async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([group()]);
     renderPanel();
-    await screen.findByText('2 of 40 students');
+    await screen.findByText(/2 of 40 students/);
 
-    await person.click(screen.getByRole('button', { name: /Manage match/ }));
-    await person.click(await screen.findByText('View these submissions'));
+    await person.click(screen.getByRole('button', { name: /Compare files/ }));
 
-    expect(await screen.findByText('Matching submissions')).toBeInTheDocument();
-
-    await person.click(screen.getByRole('button', { name: "View Ada Student's submission" }));
-
-    await waitFor(() => expect(screen.getByTestId('submission-viewer')).toBeInTheDocument());
-    // The list closed rather than stacking behind the viewer.
-    expect(screen.queryByText('Matching submissions')).not.toBeInTheDocument();
-    expect(screen.getByTestId('submission-viewer').textContent).toContain('stored-1.jff');
+    await waitFor(() => expect(screen.getByTestId('compare')).toBeInTheDocument());
+    expect(screen.getByTestId('compare').textContent).toBe('sub-1 vs sub-2');
   });
 });

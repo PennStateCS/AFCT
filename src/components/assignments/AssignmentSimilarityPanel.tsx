@@ -3,21 +3,13 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import type { ColumnDef } from '@tanstack/react-table';
-import { ChevronDown, Eye, Fingerprint } from 'lucide-react';
+import { Fingerprint, Columns2 } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DataTable } from '@/components/ui/data-table';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { ViewSubmissionDialog } from '@/components/dialogs/ViewSubmissionDialog';
-import { SubmissionMatchDialog } from '@/components/assignments/SubmissionMatchDialog';
+import Spinner from '@/components/ui/spinner';
+import { CompareSubmissionsDialog } from '@/components/assignments/CompareSubmissionsDialog';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
@@ -32,28 +24,61 @@ import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/mat
  * Staff-only: rendered inside PrivilegeAssignmentView, which the server renders only for
  * admins and the course's FACULTY/TA.
  *
- * The panel reports, it does not accuse. Every row says how many students share the content
- * against how many submitted the problem, because that ratio is the whole meaning: two of
- * forty is worth reading, twenty-five of forty is what a correct answer looks like. Nothing
- * here is labelled suspicious, and no flag is stored against a student.
+ * Cards rather than a table, and grouped under their problem, because there are usually
+ * none to three of these and the reader's question is "is there anything here", not "sort
+ * this by column". The panel reports and never accuses: every card says how many students
+ * share the content against how many submitted the problem, nothing is labelled suspicious,
+ * and no flag is stored against a student.
  */
 
-/** Past this share of the class, identical work is the answer rather than a finding. */
+/** Past this share of a problem's students, identical work is the answer, not a finding. */
 const COMMON_SHARE = 0.25;
 
 const studentName = (student: MatchSubmission['student']) =>
   `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || 'Unknown student';
 
+const isCommon = (group: SubmissionMatchGroup) =>
+  group.problemStudentCount > 0 && group.studentCount / group.problemStudentCount >= COMMON_SHARE;
+
+/** One entry per student: a student who submitted the same file twice is one person. */
+function distinctStudents(group: SubmissionMatchGroup): MatchSubmission[] {
+  const seen = new Map<string, MatchSubmission>();
+  for (const submission of group.submissions) {
+    if (!seen.has(submission.student.id)) seen.set(submission.student.id, submission);
+  }
+  return [...seen.values()];
+}
+
+/** "6 minutes apart", "2 days apart". Null when there is nothing to say. */
+function gapLabel(ms: number | null): string | null {
+  if (ms === null) return null;
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return 'less than a minute apart';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} apart`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'} apart`;
+  return `${Math.round(hours / 24)} days apart`;
+}
+
+/** The line that answers "do I need to read any of this". */
+function summarise(groups: SubmissionMatchGroup[]): string {
+  if (groups.length === 0) return 'No two students submitted the same file.';
+  const problems = new Set(groups.map((group) => group.problem.id)).size;
+  const common = groups.filter(isCommon).length;
+  const sets = `${groups.length} set${groups.length === 1 ? '' : 's'} of identical work`;
+  const across = `across ${problems} problem${problems === 1 ? '' : 's'}`;
+  if (common === 0) return `${sets} ${across}.`;
+  if (common === groups.length) return `${sets} ${across}, all of it shared by much of the class.`;
+  return `${sets} ${across}, ${common} of them shared by much of the class.`;
+}
+
 export function AssignmentSimilarityPanel() {
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
   const { timezone } = useEffectiveTimezone();
-
-  const [openGroup, setOpenGroup] = useState<SubmissionMatchGroup | null>(null);
-  // The problem type travels with the submission being viewed: the viewer needs it to pick
-  // a renderer, and the group it came from is closed by then.
-  const [viewing, setViewing] = useState<{
-    submission: MatchSubmission;
+  const [comparing, setComparing] = useState<{
+    submissions: [MatchSubmission, MatchSubmission];
     problemType: string | null;
+    problemTitle: string | null;
   } | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -70,130 +95,19 @@ export function AssignmentSimilarityPanel() {
     return `${formatDateInTimeZone(date, timezone)} ${zoneAbbrev(date, timezone)}`;
   };
 
-  const columns = useMemo<ColumnDef<SubmissionMatchGroup, unknown>[]>(
-    () => [
-      {
-        id: 'students',
-        header: 'Students',
-        accessorFn: (row) => row.submissions.map((s) => studentName(s.student)).join(', '),
-        cell: ({ row }) => {
-          // One entry per student, not per submission: a student who submitted the same
-          // file twice is one person, and listing them twice reads as two people.
-          const seen = new Map<string, MatchSubmission>();
-          for (const submission of row.original.submissions) {
-            if (!seen.has(submission.student.id)) seen.set(submission.student.id, submission);
-          }
-          const students = [...seen.values()];
-          const shown = students.slice(0, 3);
-
-          return (
-            <div className="flex items-center gap-3">
-              <div className="flex -space-x-2">
-                {shown.map((submission) => {
-                  const name = studentName(submission.student);
-                  return (
-                    <Avatar key={submission.student.id} className="border-background h-9 w-9 border-2">
-                      <AvatarImage
-                        src={
-                          submission.student.avatar
-                            ? apiPaths.files.pfp(submission.student.avatar)
-                            : undefined
-                        }
-                        alt={name}
-                        cropX={submission.student.cropX ?? 0.5}
-                        cropY={submission.student.cropY ?? 0.5}
-                        zoom={submission.student.zoom ?? 1}
-                      />
-                      <AvatarFallback>
-                        {getInitials(submission.student.firstName, submission.student.lastName, undefined)}
-                      </AvatarFallback>
-                    </Avatar>
-                  );
-                })}
-              </div>
-              <div className="min-w-0">
-                <div className="font-medium">
-                  {shown.map((submission) => studentName(submission.student)).join(', ')}
-                  {students.length > shown.length ? ` and ${students.length - shown.length} more` : ''}
-                </div>
-              </div>
-            </div>
-          );
-        },
-        meta: { priority: 1, rowHeader: true, align: 'left' },
-      },
-      {
-        id: 'problem',
-        header: 'Problem',
-        accessorFn: (row) => row.problem.title ?? 'Unknown problem',
-        cell: ({ row }) => row.original.problem.title ?? 'Unknown problem',
-        meta: { priority: 2, align: 'left' },
-      },
-      {
-        id: 'shared',
-        header: 'Identical work',
-        accessorFn: (row) => row.studentCount,
-        cell: ({ row }) => {
-          const { studentCount, problemStudentCount } = row.original;
-          const common =
-            problemStudentCount > 0 && studentCount / problemStudentCount >= COMMON_SHARE;
-          return (
-            <div className="flex items-center gap-2">
-              <span>
-                {studentCount} of {problemStudentCount} students
-              </span>
-              {common ? (
-                <Badge variant="neutral" title="Shared by much of the class, so probably just the answer">
-                  Common
-                </Badge>
-              ) : null}
-            </div>
-          );
-        },
-        meta: { priority: 2, align: 'left' },
-      },
-      {
-        id: 'submittedAt',
-        header: 'Latest',
-        accessorFn: (row) => row.submissions[0]?.submittedAt ?? '',
-        cell: ({ row }) => {
-          const latest = row.original.submissions[0]?.submittedAt;
-          return latest ? formatSubmittedAt(latest) : '—';
-        },
-        meta: { priority: 3, align: 'left' },
-      },
-      {
-        id: 'manage',
-        header: 'Manage',
-        cell: ({ row }) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="secondary"
-                aria-label={`Manage match ${row.original.matchId}`}
-              >
-                <ChevronDown />
-                Manage
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => setOpenGroup(row.original)}
-                className="flex items-center gap-2"
-              >
-                <Eye className="mr-2 h-4 w-4" />
-                View these submissions
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
-        meta: { priority: 4, align: 'right' },
-      },
-    ],
-    // formatSubmittedAt closes over the timezone, which is the only thing that changes it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [timezone],
-  );
+  // Grouped under their problem, and a problem whose rarest match is rarer comes first, so
+  // the one worth reading is at the top and "everybody wrote this" sinks.
+  const byProblem = useMemo(() => {
+    const sections = new Map<string, { title: string | null; matches: SubmissionMatchGroup[] }>();
+    for (const group of data ?? []) {
+      const section = sections.get(group.problem.id) ?? { title: group.problem.title, matches: [] };
+      section.matches.push(group);
+      sections.set(group.problem.id, section);
+    }
+    return [...sections.entries()].sort(
+      ([, a], [, b]) => (a.matches[0]?.studentCount ?? 0) - (b.matches[0]?.studentCount ?? 0),
+    );
+  }, [data]);
 
   return (
     <div className="space-y-4">
@@ -202,51 +116,138 @@ export function AssignmentSimilarityPanel() {
         Similarity
       </h2>
 
-      <p className="text-muted-foreground max-w-3xl text-sm">
-        Submissions to this assignment that are the same file as another student&apos;s, rarest
-        first. Identical work is not by itself evidence of anything: on a problem with one
-        obvious answer most of the class can submit the same thing. Read the ratio, then read
-        the files.
-      </p>
-
-      <div className="overflow-x-auto">
-        <DataTable
-          columns={columns}
-          data={data ?? []}
-          loading={isLoading}
-          tableLabel="Matching submissions table"
-          emptyTitle="No matching submissions"
-          emptyDescription="No two students have submitted the same file for this assignment's problems."
-          emptyIcon={Fingerprint}
-          loadingMessage="Looking for matching submissions, please wait..."
-        />
+      {/* One live region for the panel's state, so a screen reader hears the answer once
+          rather than a card at a time. */}
+      <div aria-live="polite" className="max-w-3xl space-y-2">
+        {isLoading ? (
+          <div className="flex items-center gap-3 text-sm">
+            <Spinner />
+            <span>Looking for matching submissions...</span>
+          </div>
+        ) : (
+          <p className="text-base font-medium">{summarise(data ?? [])}</p>
+        )}
+        <p className="text-muted-foreground text-sm">
+          Identical work is not by itself evidence of anything: a problem with one obvious
+          answer will have students submitting the same thing honestly, and a grammar or
+          regular expression has no layout to differ in. Read the numbers, then read the files.
+        </p>
       </div>
 
-      <SubmissionMatchDialog
-        open={openGroup !== null}
-        onOpenChange={(open) => !open && setOpenGroup(null)}
-        group={openGroup}
-        formatSubmittedAt={formatSubmittedAt}
-        onViewSubmission={(submission) => {
-          // The viewer replaces the list rather than stacking on top of it: two dialogs deep
-          // is somewhere a reader cannot find the way out of.
-          setOpenGroup(null);
-          setViewing({ submission, problemType: openGroup?.problem.type ?? null });
-        }}
-      />
+      {byProblem.map(([problemId, section]) => (
+        <section key={problemId} className="max-w-3xl space-y-2">
+          <h3 className="text-lg font-semibold">{section.title ?? 'Unknown problem'}</h3>
 
-      <ViewSubmissionDialog
-        open={viewing !== null}
-        onOpenChange={(open) => !open && setViewing(null)}
-        submission={
-          viewing
-            ? {
-                fileName: viewing.submission.fileName,
-                originalFileName: viewing.submission.originalFileName,
-                problem: { type: viewing.problemType },
-              }
-            : null
-        }
+          {section.matches.map((group) => {
+            const students = distinctStudents(group);
+            const common = isCommon(group);
+            const gap = gapLabel(group.closestGapMs);
+
+            return (
+              <div key={group.matchId} className="space-y-3 rounded-lg border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <span>
+                      {group.studentCount} of {group.problemStudentCount} students submitted
+                      identical work
+                    </span>
+                    {common ? (
+                      <Badge variant="neutral" title="Shared by much of the class">
+                        Common
+                      </Badge>
+                    ) : null}
+                  </div>
+                  {gap ? <span className="text-muted-foreground text-sm">{gap}</span> : null}
+                </div>
+
+                {common ? (
+                  <p className="text-muted-foreground text-sm">
+                    Most of the class submitted this same work, so it is probably just the
+                    answer.
+                  </p>
+                ) : null}
+
+                <ul className="space-y-2">
+                  {students.map((submission) => (
+                    <li key={submission.id} className="flex flex-wrap items-center gap-3">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage
+                          src={
+                            submission.student.avatar
+                              ? apiPaths.files.pfp(submission.student.avatar)
+                              : undefined
+                          }
+                          alt={studentName(submission.student)}
+                          cropX={submission.student.cropX ?? 0.5}
+                          cropY={submission.student.cropY ?? 0.5}
+                          zoom={submission.student.zoom ?? 1}
+                        />
+                        <AvatarFallback>
+                          {getInitials(
+                            submission.student.firstName,
+                            submission.student.lastName,
+                            undefined,
+                          )}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium">{studentName(submission.student)}</div>
+                        <div className="text-muted-foreground text-xs">
+                          {formatSubmittedAt(submission.submittedAt)}
+                          {submission.studentGroup
+                            ? ` · Group: ${submission.studentGroup.name}`
+                            : ''}
+                        </div>
+                      </div>
+                      {submission.fileName ? (
+                        <a
+                          className="text-sm underline"
+                          href={apiPaths.files.submission(encodeURIComponent(submission.fileName), {
+                            download: true,
+                          })}
+                          download={submission.originalFileName ?? 'submission'}
+                        >
+                          {submission.originalFileName ?? submission.fileName}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">No file</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+
+                {students.length >= 2 ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      setComparing({
+                        submissions: [
+                          students[0] as MatchSubmission,
+                          students[1] as MatchSubmission,
+                        ],
+                        problemType: group.problem.type,
+                        problemTitle: group.problem.title,
+                      })
+                    }
+                  >
+                    <Columns2 />
+                    Compare files
+                  </Button>
+                ) : null}
+              </div>
+            );
+          })}
+        </section>
+      ))}
+
+      <CompareSubmissionsDialog
+        open={comparing !== null}
+        onOpenChange={(open) => !open && setComparing(null)}
+        submissions={comparing?.submissions ?? null}
+        problemType={comparing?.problemType ?? null}
+        problemTitle={comparing?.problemTitle ?? null}
+        formatSubmittedAt={formatSubmittedAt}
       />
     </div>
   );

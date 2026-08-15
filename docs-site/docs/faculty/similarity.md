@@ -12,15 +12,19 @@ Comparison is per problem. A match is only ever between students answering the s
 
 ## How to read it
 
-Each row is a set of submissions holding identical work, with the students involved and a count that is the important part:
+The tab opens with one line telling you whether there is anything to read at all, for example "1 set of identical work across 1 problem". Below it, matches are grouped under the problem they belong to, rarest first.
 
-> **2 of 40 students**
+Each match card carries the count that gives it its meaning:
 
-Identical work on its own proves nothing. A problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of forty is worth reading. Twenty-five out of forty is what a correct answer looks like, and AFCT marks those rows **Common** and sorts them to the bottom.
+> **2 of 40 students submitted identical work** · 6 minutes apart
 
-Rows are ordered rarest first, so what is worth your attention is at the top.
+Identical work on its own proves nothing. A problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of forty is worth reading. Twenty-five out of forty is what a correct answer looks like, and AFCT marks those cards **Common**, says so in plain words, and sorts them last.
 
-Open **Manage → View these submissions** to see everyone in the match, when each was submitted, and to open or download the files themselves.
+How far apart the two submissions arrived is shown beside the count. Six minutes apart and three weeks apart are very different situations, and you are the one who knows which matters here.
+
+**Compare files** opens both submissions side by side, drawn the way that problem type is normally read: two automata, two grammars, two expressions. Node positions are kept as the student left them, because where somebody placed their states is exactly what separates a copied file from the same answer worked out twice. Each student's file can also be downloaded from the card.
+
+Teammates on a group assignment are not reported. Every member's submission writes its own record against the group's shared set, so a team holding the same file is the group feature working, not a finding.
 
 ## What it does not do
 
