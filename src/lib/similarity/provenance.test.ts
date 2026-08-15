@@ -161,6 +161,85 @@ describe('extractProvenanceFeatures', () => {
     expect(withPrefix(shared, 'f').length).toBeGreaterThan(0);
   });
 
+  it('records a state nothing can reach', () => {
+    const stranded = fa().replace(
+      '</automaton>',
+      '<state id="7" name="q7"><x>800</x><y>400</y></state></automaton>',
+    );
+
+    const features = featuresOf(stranded);
+    expect(features.some((feature) => feature.startsWith('u:unreachable:'))).toBe(true);
+    // The machine it came from has no such state.
+    expect(featuresOf(fa()).some((feature) => feature.startsWith('u:unreachable:'))).toBe(false);
+  });
+
+  it('records a dead end, and keys it on what the state looks like rather than its name', () => {
+    // A state that is reachable but from which nothing accepts.
+    const trap = fa().replace(
+      '</automaton>',
+      '<state id="8" name="trap"><x>430</x><y>400</y></state>' +
+        '<transition><from>1</from><to>8</to><read>0</read></transition></automaton>',
+    );
+    const sameTrapRenamed = trap.replace('name="trap"', 'name="sink"');
+
+    const dead = featuresOf(trap).filter((feature) => feature.startsWith('u:dead:'));
+    expect(dead.length).toBeGreaterThan(0);
+    // Renaming it changes nothing, which is the point of keying on the shape of the state.
+    expect(featuresOf(sameTrapRenamed)).toEqual(expect.arrayContaining(dead));
+  });
+
+  it('records the same transition being entered twice', () => {
+    const twice = fa().replace(
+      '</automaton>',
+      '<transition><from>1</from><to>2</to><read>1</read></transition></automaton>',
+    );
+
+    expect(featuresOf(twice).some((feature) => feature.startsWith('u:repeated:'))).toBe(true);
+    expect(featuresOf(fa()).some((feature) => feature.startsWith('u:repeated:'))).toBe(false);
+  });
+
+  it('takes what was written on the drawing exactly as written', () => {
+    const annotated = fa()
+      .replace('<initial/>', '<initial/><label>start here!!</label>')
+      .replace('</automaton>', '</automaton><note><text>remember the epsilon</text><x>10</x><y>10</y></note>');
+
+    const features = featuresOf(annotated);
+    expect(features).toContain('l:start here!!');
+    expect(features).toContain('n:remember the epsilon');
+    // Nothing is invented for a drawing with nothing written on it.
+    expect(featuresOf(fa()).some((f) => f.startsWith('l:') || f.startsWith('n:'))).toBe(false);
+  });
+
+  it('does not decide that two different notes are close enough', () => {
+    const noteOf = (body: string) =>
+      featuresOf(fa().replace('</automaton>', `</automaton><note><text>${body}</text></note>`));
+
+    // Exact only: judging two wordings "similar enough" is the kind of call this must not make.
+    expect(noteOf('remember the epsilon')).not.toEqual(
+      expect.arrayContaining(noteOf('Remember the epsilon')),
+    );
+  });
+
+  it('keeps a Turing machine\'s building blocks apart from the top-level machine', () => {
+    const withBlocks = `<structure><type>turing</type><automaton>
+      <state id="0" name="q0"><x>10</x><y>10</y><initial/></state>
+      <state id="1" name="q1"><x>90</x><y>10</y><final/></state>
+      <transition><from>0</from><to>1</to><read>a</read><write>b</write><move>R</move></transition>
+      <block id="2" name="shift-right"><x>50</x><y>90</y><automaton>
+        <state id="0" name="b0"><x>5</x><y>5</y><initial/></state>
+        <state id="1" name="b1"><x>60</x><y>5</y><final/></state>
+        <transition><from>0</from><to>1</to><read>a</read><write>a</write><move>R</move></transition>
+      </automaton></block>
+    </automaton></structure>`;
+
+    const features = featuresOf(withBlocks);
+    expect(features).toContain('b:shift-right');
+    expect(features).toContain('b:shift-right:2,1');
+    // The block's own 0>1 is recorded against the block, so it cannot be mistaken for the
+    // top-level 0>1 and inflate a match between two unrelated machines.
+    expect(features).toContain('b:shift-right:0>1');
+  });
+
   it('keeps a grammar as written, which the shape hash deliberately forgets', () => {
     const grammar = (order: 'ab' | 'ba', variable = 'S') =>
       `<structure><type>grammar</type>${

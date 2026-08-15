@@ -41,17 +41,25 @@ export type ProvenanceFeatures = {
    *   nothing.
    * - `c:` transition control points, placed relative to the states they join. A student who
    *   moves states around often leaves hand-adjusted curvature exactly where it was.
+   * - `u:` the oddities: a state nothing reaches, a state nothing can accept from, a
+   *   transition entered twice. A shared mistake says more than shared correctness.
+   * - `l:` and `n:` what was written on the drawing: state labels and sticky notes, compared
+   *   exactly.
+   * - `b:` Turing-machine building blocks: their names, their size, and the identifiers
+   *   inside them, kept apart from the top-level ones because they start again from zero.
    */
   features: string[];
 };
 
-/** A state as this module needs it: identity, role, position. */
+/** A state as this module needs it: identity, role, position, and whatever it was labelled. */
 type StateInfo = {
   id: string;
   initial: boolean;
   final: boolean;
   x: number | null;
   y: number | null;
+  /** JFLAP's own state label, which is not the name. Usually empty. */
+  label: string;
 };
 
 type TransitionInfo = {
@@ -74,36 +82,48 @@ const numberOrNull = (raw: string): number | null => {
   return Number.isFinite(value) ? value : null;
 };
 
-function readStates(doc: XmlDocument): StateInfo[] {
-  return Array.from(doc.getElementsByTagName('state')).map((state) => ({
-    id: state.getAttribute('id') ?? '',
-    initial: state.getElementsByTagName('initial').length > 0,
-    final: state.getElementsByTagName('final').length > 0,
-    x: numberOrNull(text(state, 'x')),
-    y: numberOrNull(text(state, 'y')),
-  }));
+const toState = (state: XmlElement): StateInfo => ({
+  id: state.getAttribute('id') ?? '',
+  initial: state.getElementsByTagName('initial').length > 0,
+  final: state.getElementsByTagName('final').length > 0,
+  x: numberOrNull(text(state, 'x')),
+  y: numberOrNull(text(state, 'y')),
+  label: text(state, 'label'),
+});
+
+/** Direct children only: a Turing machine's blocks hold automata of their own. */
+function childrenNamed(parent: XmlElement, tag: string): XmlElement[] {
+  return Array.from(parent.childNodes ?? []).filter(
+    (node): node is XmlElement => (node as XmlElement).nodeName === tag,
+  );
 }
 
+function readStates(doc: XmlDocument): StateInfo[] {
+  return Array.from(doc.getElementsByTagName('state')).map(toState);
+}
+
+const toTransition = (transition: XmlElement): TransitionInfo => {
+  // Everything except the endpoints and the control point is what the transition reads,
+  // pops, pushes, writes or moves; it differs by machine type, so take it as it comes.
+  const label = Array.from(transition.getElementsByTagName('*'))
+    .filter((node) => !['from', 'to', 'controlx', 'controly'].includes(node.nodeName))
+    .map((node) => `${node.nodeName}=${(node.textContent ?? '').trim()}`)
+    .sort()
+    .join(',');
+
+  const controlX = numberOrNull(text(transition, 'controlx'));
+  const controlY = numberOrNull(text(transition, 'controly'));
+
+  return {
+    from: text(transition, 'from'),
+    to: text(transition, 'to'),
+    label,
+    control: controlX !== null && controlY !== null ? { x: controlX, y: controlY } : null,
+  };
+};
+
 function readTransitions(doc: XmlDocument): TransitionInfo[] {
-  return Array.from(doc.getElementsByTagName('transition')).map((transition) => {
-    // Everything except the endpoints and the control point is what the transition reads,
-    // pops, pushes, writes or moves; it differs by machine type, so take it as it comes.
-    const label = Array.from(transition.getElementsByTagName('*'))
-      .filter((node) => !['from', 'to', 'controlx', 'controly'].includes(node.nodeName))
-      .map((node) => `${node.nodeName}=${(node.textContent ?? '').trim()}`)
-      .sort()
-      .join(',');
-
-    const controlX = numberOrNull(text(transition, 'controlx'));
-    const controlY = numberOrNull(text(transition, 'controly'));
-
-    return {
-      from: text(transition, 'from'),
-      to: text(transition, 'to'),
-      label,
-      control: controlX !== null && controlY !== null ? { x: controlX, y: controlY } : null,
-    };
-  });
+  return Array.from(doc.getElementsByTagName('transition')).map(toTransition);
 }
 
 /**
@@ -260,6 +280,140 @@ function grammarFeatures(doc: XmlDocument): string[] {
   return features;
 }
 
+
+/**
+ * The states a machine does not need, and the transitions it has twice.
+ *
+ * Shared correct structure is what a class produces; a shared oddity is not. A state
+ * nothing can reach, a state from which nothing can accept, or the same transition entered
+ * twice are all the kind of thing that gets carried along when a file is passed on and
+ * edited, and each is keyed on what the state looks like rather than on its name, so it
+ * survives renaming.
+ *
+ * A trap state is perfectly ordinary in a complete DFA, so this cannot mean anything on its
+ * own. That is what the class-frequency weighting is for: if half the class has one, it
+ * counts for nothing.
+ */
+function oddityFeatures(
+  states: StateInfo[],
+  transitions: TransitionInfo[],
+  signatures: Map<string, string>,
+): string[] {
+  const features: string[] = [];
+  const outgoing = new Map<string, TransitionInfo[]>();
+  for (const transition of transitions) {
+    outgoing.set(transition.from, [...(outgoing.get(transition.from) ?? []), transition]);
+  }
+
+  const initial = states.find((state) => state.initial);
+  if (initial) {
+    const reachable = new Set<string>([initial.id]);
+    const queue = [initial.id];
+    while (queue.length > 0) {
+      for (const transition of outgoing.get(queue.pop() as string) ?? []) {
+        if (reachable.has(transition.to)) continue;
+        reachable.add(transition.to);
+        queue.push(transition.to);
+      }
+    }
+    for (const state of states) {
+      if (!reachable.has(state.id)) {
+        features.push(`u:unreachable:${signatures.get(state.id) ?? ''}`);
+      }
+    }
+  }
+
+  // Backwards from the accepting states: anything they cannot be reached from is a dead end.
+  const incoming = new Map<string, string[]>();
+  for (const transition of transitions) {
+    incoming.set(transition.to, [...(incoming.get(transition.to) ?? []), transition.from]);
+  }
+  const accepting = states.filter((state) => state.final).map((state) => state.id);
+  if (accepting.length > 0) {
+    const canAccept = new Set<string>(accepting);
+    const queue = [...accepting];
+    while (queue.length > 0) {
+      for (const from of incoming.get(queue.pop() as string) ?? []) {
+        if (canAccept.has(from)) continue;
+        canAccept.add(from);
+        queue.push(from);
+      }
+    }
+    for (const state of states) {
+      if (!canAccept.has(state.id)) {
+        features.push(`u:dead:${signatures.get(state.id) ?? ''}`);
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  for (const transition of transitions) {
+    const key = `${signatures.get(transition.from) ?? ''}-[${transition.label}]->${signatures.get(transition.to) ?? ''}`;
+    if (seen.has(key)) features.push(`u:repeated:${key}`);
+    seen.add(key);
+  }
+
+  return features;
+}
+
+/**
+ * What somebody wrote on the drawing: state labels and sticky notes.
+ *
+ * Compared exactly, never fuzzily. Two students choosing the same unusual wording is worth
+ * knowing; deciding that two different notes are "similar enough" is exactly the kind of
+ * judgement this system should not be making. Empty text is skipped, and text half the class
+ * wrote is dropped later by the same weighting as everything else.
+ */
+function writtenFeatures(doc: XmlDocument, states: StateInfo[]): string[] {
+  const features: string[] = [];
+
+  for (const state of states) {
+    if (state.label) features.push(`l:${state.label}`);
+  }
+
+  for (const note of Array.from(doc.getElementsByTagName('note'))) {
+    // JFLAP keeps the note's text in a child element alongside its position; take the text
+    // and leave the position, which says nothing a moved note would not break.
+    const body = (text(note, 'text') || (note.textContent ?? '')).trim();
+    if (body) features.push(`n:${body}`);
+  }
+
+  return features;
+}
+
+/**
+ * A Turing machine's building blocks: what they are called, how big each one is, and the
+ * state identifiers inside them.
+ *
+ * Two people who decompose a machine into the same blocks, with the same names and the same
+ * insides, have made the same unusual choice. Ids inside a block start again from zero, so
+ * they are recorded against the block they belong to rather than being thrown in with the
+ * top-level ones, where they would collide with them and invent matches.
+ */
+function blockFeatures(doc: XmlDocument): string[] {
+  const blocks = Array.from(doc.getElementsByTagName('block'));
+  if (blocks.length === 0) return [];
+
+  const features: string[] = [];
+  for (const block of blocks) {
+    const name = (block.getAttribute('name') ?? text(block, 'name')).trim();
+    if (!name) continue;
+    features.push(`b:${name}`);
+
+    // The block's own machine, if it carries one.
+    const inner = childrenNamed(block, 'automaton')[0];
+    if (!inner) continue;
+
+    const innerStates = childrenNamed(inner, 'state').map(toState);
+    const innerTransitions = childrenNamed(inner, 'transition').map(toTransition);
+    features.push(`b:${name}:${innerStates.length},${innerTransitions.length}`);
+    for (const transition of innerTransitions) {
+      features.push(`b:${name}:${transition.from}>${transition.to}`);
+    }
+  }
+  return features;
+}
+
 /**
  * Describe a submission. Returns null when there is nothing useful to describe, which is
  * the honest answer for a regular expression and for anything that will not parse.
@@ -323,6 +477,9 @@ export function extractProvenanceFeatures(content: Buffer | string): ProvenanceF
 
   for (const cell of geometryCells(states, transitions)) features.push(`g:${cell}`);
   for (const control of controlFeatures(states, transitions)) features.push(`c:${control}`);
+  features.push(...oddityFeatures(states, transitions, signatures));
+  features.push(...writtenFeatures(doc, states));
+  features.push(...blockFeatures(doc));
 
   return {
     version: PROVENANCE_FEATURE_VERSION,

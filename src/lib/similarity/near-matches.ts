@@ -238,6 +238,30 @@ function describe(
     });
   }
 
+  const oddShared = countByPrefix(sharedRare, 'u');
+  if (oddShared >= 1) {
+    evidence.push({
+      detail:
+        oddShared === 1
+          ? 'Both contain the same unusual feature: a state nothing reaches, a dead end, or a repeated transition'
+          : `Both contain the same ${oddShared} unusual features, such as a state nothing reaches or a dead end`,
+    });
+  }
+
+  const writtenShared = countByPrefix(sharedRare, 'l') + countByPrefix(sharedRare, 'n');
+  if (writtenShared >= 1) {
+    evidence.push({
+      detail: `${writtenShared} piece${writtenShared === 1 ? '' : 's'} of text written on the drawing ${writtenShared === 1 ? 'is' : 'are'} word for word the same`,
+    });
+  }
+
+  const blockShared = countByPrefix(sharedRare, 'b');
+  if (blockShared >= 2) {
+    evidence.push({
+      detail: `${blockShared} building-block details are the same, including how the machine is divided up`,
+    });
+  }
+
   const curveShared = countByPrefix(sharedRare, 'c');
   if (curveShared >= 1) {
     evidence.push({

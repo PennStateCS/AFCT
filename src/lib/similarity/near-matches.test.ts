@@ -150,6 +150,45 @@ describe('findNearMatches', () => {
     }
   });
 
+  it('says when the two share the same mistake', () => {
+    const odd = [...ordinary, 'u:dead:the-same-trap', 'f:s:odd-a', 'f:e:odd-b', 't:4>7', 't:7>4'];
+    const [match] = findNearMatches([...crowd(20), person('a', odd), person('b', odd)]);
+
+    expect((match?.evidence ?? []).map((item) => item.detail).join(' ')).toContain(
+      'the same unusual feature',
+    );
+  });
+
+  it('says when the same words were written on both drawings', () => {
+    const written = [
+      ...ordinary,
+      'n:remember the epsilon',
+      'l:start here',
+      'f:s:odd-a',
+      'f:e:odd-b',
+    ];
+    const [match] = findNearMatches([...crowd(20), person('a', written), person('b', written)]);
+
+    expect((match?.evidence ?? []).map((item) => item.detail).join(' ')).toContain(
+      'word for word the same',
+    );
+  });
+
+  it('says when a machine is divided into the same building blocks', () => {
+    const blocks = [
+      ...ordinary,
+      'b:shift-right',
+      'b:shift-right:2,1',
+      'b:shift-right:0>1',
+      'f:s:odd-a',
+    ];
+    const [match] = findNearMatches([...crowd(20), person('a', blocks), person('b', blocks)]);
+
+    expect((match?.evidence ?? []).map((item) => item.detail).join(' ')).toContain(
+      'building-block details are the same',
+    );
+  });
+
   it('says how the two differ, not only how they agree', () => {
     const a = person('a', [...ordinary, ...peculiar]);
     const b = person('b', [...ordinary, ...peculiar]);
