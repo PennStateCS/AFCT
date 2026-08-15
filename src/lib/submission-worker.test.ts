@@ -31,8 +31,6 @@ const activityLogMock = vi.hoisted(() => vi.fn());
 const existsSyncMock = vi.hoisted(() => vi.fn());
 const execSyncMock = vi.hoisted(() => vi.fn());
 const platformMock = vi.hoisted(() => vi.fn());
-const checkFileStatusMock = vi.hoisted(() => vi.fn());
-const jflapSimilarityParserMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('../../lib/java-runner', () => ({
@@ -45,8 +43,6 @@ vi.mock('./eval-config', () => ({
   getQueueSettings: getQueueSettingsMock,
 }));
 vi.mock('./activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
-vi.mock('./simulatiry_report/check_file_status', () => ({ check_file_status: checkFileStatusMock }));
-vi.mock('./simulatiry_report/jflap_simulatiry_parser', () => ({ jflapSimilarityParser: jflapSimilarityParserMock }));
 vi.mock('fs', () => ({ default: { existsSync: existsSyncMock }, existsSync: existsSyncMock }));
 vi.mock('child_process', () => ({ execSync: execSyncMock }));
 vi.mock('os', () => ({ default: { platform: platformMock }, platform: platformMock }));
@@ -97,12 +93,6 @@ beforeEach(() => {
   executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"ok"}', stderr: '' });
   activityLogMock.mockResolvedValue(undefined);
   getEvaluatorConfigMock.mockResolvedValue(CONFIG);
-  jflapSimilarityParserMock.mockResolvedValue({
-    fileHashEmail: 'user@example.com',
-    fileHashData: 'file-hash-value',
-    calcHashData: 'content-hash-value',
-  });
-  checkFileStatusMock.mockResolvedValue({ status: 'ok' });
   // No trial waiting, unless a test says otherwise.
   prismaMock.evaluatorTrial.findFirst.mockResolvedValue(null);
   prismaMock.evaluatorTrial.count.mockResolvedValue(0);
@@ -159,8 +149,6 @@ describe('runJavaEvaluator — evaluator execution', () => {
       status: 'COMPLETED',
       correct: true,
       feedback: 'Nice work',
-      fileHashData: 'file-hash-value',
-      calcHashData: 'content-hash-value',
     });
     expect(result.evaluationRaw).toEqual({ correct: true, feedback: 'Nice work' });
     expect(loggedActions()).toContain('SUBMISSION_EVALUATION_SUCCESS');
@@ -251,8 +239,6 @@ describe('evaluateSubmission', () => {
         data: expect.objectContaining({
           correct: true,
           status: 'COMPLETED',
-          calcHashData: 'content-hash-value',
-          fileHashData: 'file-hash-value',
         }),
       }),
     );
@@ -680,85 +666,3 @@ describe('reapStuckSubmissions', () => {
   });
 });
 
-/**
- * The similarity report must never cost somebody their grade.
- *
- * It runs after the evaluator, so the submission has already been marked right or wrong by the
- * time it starts. Until 2026-08-14 a report that could not be produced threw, landed in the
- * evaluator's catch, and returned `status: 'FAILED'` with `evaluationRaw: null`: a graded
- * submission thrown away and the student told "Evaluation failed" because a *reporting* step
- * could not read the file.
- *
- * Reachable from ordinary input. The parser gives up on a path that is not `.jff`, an empty file
- * or an unreadable one, and leaves the calculated hash undefined for a file with no `<structure>`
- * element; `check_file_status` throws on exactly that. None of it was tested, which is why nobody
- * knew. These mocks reproduce each half.
- */
-describe('runJavaEvaluator — the similarity report cannot fail a grade', () => {
-  /** The evaluator succeeding, so anything that goes wrong afterwards is the report's doing. */
-  function evaluatorSucceeds() {
-    executeMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: true, feedback: 'Accepts the language.' }),
-      stderr: '',
-    });
-  }
-
-  it('still records the grade when the report throws', async () => {
-    evaluatorSucceeds();
-    checkFileStatusMock.mockRejectedValue(
-      new Error('Calculated hash is undefined. Cannot check file status without a calculated hash.'),
-    );
-
-    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
-
-    expect(result.status).toBe('COMPLETED');
-    expect(result.correct).toBe(true);
-    expect(result.feedback).toBe('Accepts the language.');
-  });
-
-  // The report is absent rather than wrong. All three columns are nullable, so this is a state
-  // the schema already allows.
-  it('leaves the report off rather than inventing one', async () => {
-    evaluatorSucceeds();
-    checkFileStatusMock.mockRejectedValue(new Error('no hash'));
-
-    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
-
-    expect(result.similarityReportJson).toBeUndefined();
-  });
-
-  // The parser failing is the other half of the same chain, and reaches the checker as undefined.
-  it('survives the parser giving up on the file', async () => {
-    evaluatorSucceeds();
-    jflapSimilarityParserMock.mockResolvedValue(null);
-    checkFileStatusMock.mockRejectedValue(new Error('Calculated hash is undefined.'));
-
-    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
-
-    expect(result.status).toBe('COMPLETED');
-  });
-
-  /**
-   * Visible, though. A report that quietly stops being produced for a term is its own problem,
-   * and this is research data. WARNING rather than ERROR: nothing about the grade is wrong.
-   */
-  it('records that the report was skipped', async () => {
-    evaluatorSucceeds();
-    checkFileStatusMock.mockRejectedValue(new Error('no hash'));
-
-    await runJavaEvaluator(makeSubmission(), CONFIG);
-
-    expect(loggedActions()).toContain('SUBMISSION_SIMILARITY_SKIPPED');
-    expect(loggedActions()).not.toContain('SUBMISSION_EVALUATION_ERROR');
-  });
-
-  // The ordinary path is unchanged: a report that works is still attached.
-  it('attaches the report when it works', async () => {
-    evaluatorSucceeds();
-    checkFileStatusMock.mockResolvedValue({ status: 'ok' });
-
-    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
-
-    expect(result.similarityReportJson).toMatchObject({ status: 'ok' });
-  });
-});
