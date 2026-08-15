@@ -9,6 +9,7 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { submissionContentHash, submissionShapeHash } from '@/lib/similarity/content-hash';
 import { readFormData } from '@/lib/api/request';
 import { descriptionWriteData } from '@/lib/description-write';
 import {
@@ -168,6 +169,10 @@ export const POST = withCourseAuth(
             courseId,
             fileName,
             originalFileName: file.name,
+            // The same fingerprints a submission gets, so the Similarity tab can tell a
+            // reader when matching work is simply the answer they posted.
+            answerContentHash: submissionContentHash(buffer),
+            answerShapeHash: submissionShapeHash(buffer),
             maxStates: ['FA', 'PDA'].includes(type) ? (data.maxStates ?? 0) || null : null,
             isDeterministic: type === 'FA' ? (data.isDeterministic ?? false) : null,
           },

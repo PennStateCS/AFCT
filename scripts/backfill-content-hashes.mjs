@@ -23,6 +23,7 @@ const { submissionContentHash, submissionShapeHash } = require('../src/lib/simil
 const { prisma } = require('../src/lib/prisma.ts');
 
 const UPLOAD_DIR = path.join('/private', 'uploads', 'submissions');
+const SOLUTION_DIR = path.join('/private', 'uploads', 'solutions');
 const BATCH = 200;
 const dryRun = process.argv.includes('--dry-run');
 
@@ -80,6 +81,35 @@ try {
     dryRun
       ? `Dry run: ${hashed} submissions would be fingerprinted, ${missing} skipped.`
       : `Done: ${hashed} submissions fingerprinted, ${missing} skipped.`,
+  );
+
+  // Reference solutions too: without these the tab cannot say when matching work is simply
+  // the answer the instructor posted.
+  const problems = await prisma.problem.findMany({
+    where: { fileName: { not: null }, answerContentHash: null },
+    select: { id: true, fileName: true },
+  });
+  let answers = 0;
+  for (const problem of problems) {
+    try {
+      const buffer = await readFile(path.join(SOLUTION_DIR, problem.fileName));
+      const answerContentHash = submissionContentHash(buffer);
+      if (!answerContentHash) continue;
+      if (!dryRun) {
+        await prisma.problem.update({
+          where: { id: problem.id },
+          data: { answerContentHash, answerShapeHash: submissionShapeHash(buffer) },
+        });
+      }
+      answers++;
+    } catch (error) {
+      console.warn(`  skipped problem ${problem.id}: ${error.message}`);
+    }
+  }
+  console.log(
+    dryRun
+      ? `Dry run: ${answers} answer files would be fingerprinted.`
+      : `Done: ${answers} answer files fingerprinted.`,
   );
 } finally {
   await prisma.$disconnect();

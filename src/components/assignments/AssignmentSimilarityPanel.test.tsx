@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,7 +14,7 @@ vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
 // The real compare dialog pulls in cytoscape, which has nothing to do with what this panel
-// decides. Its own contract (two panes, the right files) is covered where it lives.
+// decides. Its own contract is covered where it lives.
 vi.mock('@/components/assignments/CompareSubmissionsDialog', () => ({
   CompareSubmissionsDialog: ({
     open,
@@ -37,33 +37,42 @@ const student = (id: string, firstName: string) => ({
   zoom: null,
 });
 
+const submission = (over: Record<string, unknown> = {}) => ({
+  id: 'sub-1',
+  submittedAt: '2026-08-14T22:42:00.000Z',
+  correct: true,
+  attempt: 1,
+  assignmentId: 'a1',
+  fileName: 'stored-1.jff',
+  originalFileName: 'mine.jff',
+  contentKey: 'aaaa1111',
+  student: student('s1', 'Alex'),
+  studentGroup: null,
+  ...over,
+});
+
 const group = (over: Record<string, unknown> = {}) => ({
   matchId: 'abcd1234',
-  problem: { id: 'p1', title: 'Even zeros', type: 'FA' },
+  problem: { id: 'p1', title: 'Strings ending in 01', type: 'FA' },
   studentCount: 2,
-  problemStudentCount: 40,
+  problemStudentCount: 38,
   identicalStudentCount: 2,
-  closestGapMs: 6 * 60 * 1000,
+  closestGapMs: 11 * 60 * 1000,
   reusedAfterPass: false,
+  matchesAnswerFile: false,
   submissions: [
-    {
+    submission({
       id: 'sub-1',
-      submittedAt: '2026-08-14T12:00:00.000Z',
-      assignmentId: 'a1',
-      fileName: 'stored-1.jff',
-      originalFileName: 'mine.jff',
-      student: student('s1', 'Ada'),
-      studentGroup: null,
-    },
-    {
+      submittedAt: '2026-08-14T22:53:00.000Z',
+      student: student('s2', 'Jamie'),
+      attempt: 1,
+    }),
+    submission({
       id: 'sub-2',
-      submittedAt: '2026-08-14T11:54:00.000Z',
-      assignmentId: 'a1',
-      fileName: 'stored-2.jff',
-      originalFileName: 'answer.jff',
-      student: student('s2', 'Grace'),
-      studentGroup: null,
-    },
+      submittedAt: '2026-08-14T22:42:00.000Z',
+      student: student('s1', 'Alex'),
+      attempt: 3,
+    }),
   ],
   ...over,
 });
@@ -80,122 +89,186 @@ const renderPanel = () => {
 beforeEach(() => {
   getMock.mockReset();
   getMock.mockResolvedValue([]);
+  window.localStorage.clear();
 });
 
 describe('AssignmentSimilarityPanel', () => {
-  it('answers the question in one line when there is nothing to read', async () => {
+  it('answers "is there anything to review" in one line', async () => {
     renderPanel();
 
     expect(await screen.findByText('No two students submitted matching work.')).toBeInTheDocument();
   });
 
-  it('summarises what there is before any of the detail', async () => {
+  it('counts what is worth reviewing, and says when work was reused after a pass', async () => {
+    getMock.mockResolvedValue([group({ reusedAfterPass: true })]);
+
+    renderPanel();
+
+    expect(await screen.findByText('1 match worth reviewing across 1 problem.')).toBeInTheDocument();
+    expect(
+      screen.getByText('1 includes work reused after another student received a correct result.'),
+    ).toBeInTheDocument();
+  });
+
+  it('heads each problem with its title and how many submitted it', async () => {
     getMock.mockResolvedValue([group()]);
 
     renderPanel();
 
-    expect(await screen.findByText('1 set of matching work across 1 problem.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Strings ending in 01' })).toBeInTheDocument();
+    expect(screen.getByText('38 students submitted · 1 match')).toBeInTheDocument();
   });
 
-  it('says how much of the class shares it, and how far apart they submitted', async () => {
+  it('leads a card with what kind of match it is, then what that means', async () => {
     getMock.mockResolvedValue([group()]);
 
     renderPanel();
 
-    expect(await screen.findByText('2 of 40 students submitted the identical file')).toBeInTheDocument();
-    expect(screen.getByText('6 minutes apart')).toBeInTheDocument();
-    expect(screen.getByText('Ada Student')).toBeInTheDocument();
-    expect(screen.getByText('Grace Student')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Identical file' })).toBeInTheDocument();
+    expect(screen.getByText('2 of 38 students submitted the identical file')).toBeInTheDocument();
+    expect(screen.getByText('Closest submissions were 11 minutes apart.')).toBeInTheDocument();
   });
 
-  it('groups the cards under their problem', async () => {
+  it('describes a shape-only match in the words of the problem type', async () => {
+    getMock.mockResolvedValue([group({ identicalStudentCount: 1 })]);
+
+    renderPanel();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Same work, drawn differently' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('2 of 38 students submitted the same machine')).toBeInTheDocument();
+    expect(screen.getByText('State names or positions differ.')).toBeInTheDocument();
+  });
+
+  it('says how many of a mixed match sent the very same file', async () => {
     getMock.mockResolvedValue([
-      group(),
       group({
-        matchId: 'ffff0000',
-        problem: { id: 'p2', title: 'a^n b^n', type: 'CFG' },
-        studentCount: 25,
-        problemStudentCount: 40,
-        identicalStudentCount: 25,
+        studentCount: 3,
+        identicalStudentCount: 2,
+        problem: { id: 'p1', title: 'P', type: 'CFG' },
       }),
     ]);
 
     renderPanel();
 
-    expect(await screen.findByRole('heading', { name: 'Even zeros' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'a^n b^n' })).toBeInTheDocument();
-    expect(
-      screen.getByText('2 sets of matching work across 2 problems, 1 of them shared by much of the class.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Same work' })).toBeInTheDocument();
+    // A grammar is not a machine.
+    expect(screen.getByText('3 of 38 students submitted the same grammar')).toBeInTheDocument();
+    expect(screen.getByText('2 of them submitted the identical file.')).toBeInTheDocument();
   });
 
-  it('says when the same work was submitted drawn differently', async () => {
-    getMock.mockResolvedValue([group({ studentCount: 2, identicalStudentCount: 1 })]);
+  it('lists the students in order, with times, results and the gap from the first', async () => {
+    getMock.mockResolvedValue([group()]);
 
     renderPanel();
 
-    expect(
-      await screen.findByText('2 of 40 students submitted the same work, drawn differently'),
-    ).toBeInTheDocument();
+    const rows = await screen.findAllByRole('listitem');
+    expect(within(rows[0] as HTMLElement).getByText('Alex Student')).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText('First')).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText(/10:42 PM/)).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText('Submission 3 · Correct')).toBeInTheDocument();
+
+    expect(within(rows[1] as HTMLElement).getByText('Jamie Student')).toBeInTheDocument();
+    expect(within(rows[1] as HTMLElement).getByText('+11 min')).toBeInTheDocument();
   });
 
-  it('separates the students who submitted the very same file from the rest', async () => {
-    getMock.mockResolvedValue([group({ studentCount: 3, identicalStudentCount: 2 })]);
-
-    renderPanel();
-
-    expect(
-      await screen.findByText('3 of 40 students submitted the same work, 2 of them the identical file'),
-    ).toBeInTheDocument();
-  });
-
-  it('explains a match most of the class shares rather than hiding it', async () => {
+  it('marks an ungraded attempt as such rather than guessing', async () => {
     getMock.mockResolvedValue([
-      group({ studentCount: 25, problemStudentCount: 40, identicalStudentCount: 25 }),
+      group({
+        submissions: [
+          submission({ id: 'sub-1', correct: null, student: student('s1', 'Alex') }),
+          submission({
+            id: 'sub-2',
+            correct: false,
+            submittedAt: '2026-08-14T23:00:00.000Z',
+            student: student('s2', 'Jamie'),
+          }),
+        ],
+      }),
     ]);
 
     renderPanel();
 
-    expect(await screen.findByText('Common')).toBeInTheDocument();
-    expect(screen.getByText(/probably just the answer/)).toBeInTheDocument();
+    expect(await screen.findByText(/Not graded/)).toBeInTheDocument();
+    expect(screen.getByText(/Incorrect/)).toBeInTheDocument();
   });
 
-  it('says plainly when a file was submitted after the same one had already passed', async () => {
-    getMock.mockResolvedValue([group({ reusedAfterPass: true })]);
+  it('notes the reference solution quietly, without a badge', async () => {
+    getMock.mockResolvedValue([group({ matchesAnswerFile: true })]);
 
     renderPanel();
 
-    expect(await screen.findByText('Reused after passing')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'This exact file had already been marked correct for another student when it was submitted again.',
-      ),
-    ).toBeInTheDocument();
-    // And it leads the summary, because it is what a reader with thirty seconds needs.
-    expect(
-      screen.getByText(/^1 of them submitted after the same file had already passed\./),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Matches the instructor reference solution.')).toBeInTheDocument();
   });
 
-  it('never calls anybody suspicious', async () => {
-    getMock.mockResolvedValue([group()]);
+  it('folds common matches away, and says what they are', async () => {
+    const person = userEvent.setup();
+    getMock.mockResolvedValue([
+      group({ matchId: 'common-1', studentCount: 14, identicalStudentCount: 14 }),
+    ]);
+
+    renderPanel();
+
+    expect(
+      await screen.findByText('No matches worth reviewing. 1 common answer set aside.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Common matches (1)' })).toBeInTheDocument();
+    // Collapsed to start: the card is not in the document until it is asked for.
+    expect(screen.queryByRole('heading', { name: /Common answer/ })).not.toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: /Show common matches/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await person.click(toggle);
+
+    expect(await screen.findByRole('heading', { name: /Common answer/ })).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('lets the reader move where common begins, and remembers it', async () => {
+    const person = userEvent.setup();
+    // 10 of 38 is over a quarter: common at the default, not common at half.
+    getMock.mockResolvedValue([group({ studentCount: 10, identicalStudentCount: 10 })]);
+
+    renderPanel();
+    expect(await screen.findByRole('heading', { name: 'Common matches (1)' })).toBeInTheDocument();
+
+    await person.click(screen.getByRole('button', { name: /Adjust/ }));
+    fireEvent.change(await screen.findByLabelText('Common threshold'), {
+      target: { value: '0.5' },
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: /Common matches/ })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('Common threshold: 50%')).toBeInTheDocument();
+    expect(window.localStorage.getItem('afct.similarityCommonShare')).toBe('0.5');
+  });
+
+  it('never calls anybody suspicious, and shows no percentage of similarity', async () => {
+    getMock.mockResolvedValue([group({ reusedAfterPass: true, matchesAnswerFile: true })]);
 
     const { container } = renderPanel();
-    await screen.findByText(/2 of 40 students/);
+    await screen.findByText(/2 of 38 students/);
 
-    expect(container.textContent?.toLowerCase()).not.toContain('suspicious');
-    expect(container.textContent?.toLowerCase()).not.toContain('plagiar');
+    const text = container.textContent?.toLowerCase() ?? '';
+    expect(text).not.toContain('suspicious');
+    expect(text).not.toContain('plagiar');
+    expect(text).not.toContain('cheat');
+    // No implementation vocabulary either.
+    expect(text).not.toContain('hash');
   });
 
-  it('opens the two files side by side', async () => {
+  it('opens the comparison from the card, earliest student first', async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([group()]);
     renderPanel();
-    await screen.findByText(/2 of 40 students/);
+    await screen.findByText(/2 of 38 students/);
 
-    await person.click(screen.getByRole('button', { name: /Compare files/ }));
+    await person.click(screen.getByRole('button', { name: /Compare submissions/ }));
 
     await waitFor(() => expect(screen.getByTestId('compare')).toBeInTheDocument());
-    expect(screen.getByTestId('compare').textContent).toBe('sub-1 vs sub-2');
+    expect(screen.getByTestId('compare').textContent).toBe('sub-2 vs sub-1');
   });
 });

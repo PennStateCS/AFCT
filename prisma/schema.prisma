@@ -721,6 +721,12 @@ model Problem {
   fileName          String?
   /// Name of the reference file as uploaded, for display.
   originalFileName  String?
+
+  /// The same two fingerprints a submission carries, taken over the reference solution. A
+  /// submission matching either of these IS the posted answer, which the Similarity tab says
+  /// out loud: it is a very different situation from two students matching each other.
+  answerContentHash String?
+  answerShapeHash   String?
   /// What kind of problem this is: finite automaton, regular expression, grammar, pushdown automaton or Turing machine.
   type              ProblemType?
   // FA/PDA state cap and FA determinism are intrinsic to the problem definition.

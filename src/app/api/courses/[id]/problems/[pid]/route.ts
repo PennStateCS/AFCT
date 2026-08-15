@@ -9,6 +9,7 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { submissionContentHash, submissionShapeHash } from '@/lib/similarity/content-hash';
 import { readFormData } from '@/lib/api/request';
 import { descriptionWriteData } from '@/lib/description-write';
 import {
@@ -77,6 +78,10 @@ export const PUT = withCourseAuth(
       let originalFileName = existingProblem.originalFileName;
       // The previous solution file, kept until the database update commits.
       let replacedFileName: string | null = null;
+      // Left undefined unless a new answer file arrives, so an edit that only changes the
+      // title does not blank the fingerprints.
+      let answerContentHash: string | null | undefined;
+      let answerShapeHash: string | null | undefined;
 
       // Handle file update if a new file is provided
       if (file && file.size > 0) {
@@ -126,6 +131,10 @@ export const PUT = withCourseAuth(
         // update destroyed the answer key while the row still pointed at it.
         fileName = safeStoredFilename(file.name);
         originalFileName = file.name;
+        // Re-fingerprint whenever the answer file is replaced; a stale hash would have the
+        // Similarity tab calling a submission the posted answer after the answer changed.
+        answerContentHash = submissionContentHash(buffer);
+        answerShapeHash = submissionShapeHash(buffer);
         await fs.promises.writeFile(resolveInsideDir(uploadsDir, fileName), buffer, {
           mode: 0o644,
         });
@@ -142,6 +151,9 @@ export const PUT = withCourseAuth(
             type: type as ProblemType,
             fileName,
             originalFileName,
+            // Left out entirely when no new file arrived, so editing a title does not blank
+            // the fingerprints.
+            ...(answerContentHash !== undefined ? { answerContentHash, answerShapeHash } : {}),
             maxStates: ['FA', 'PDA'].includes(type) ? (data.maxStates ?? 0) || null : null,
             isDeterministic: type === 'FA' ? (data.isDeterministic ?? false) : null,
           },

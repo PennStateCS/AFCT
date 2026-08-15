@@ -16,29 +16,47 @@ Comparison is per problem. A match is only ever between students answering the s
 
 ## How to read it
 
-The tab opens with one line telling you whether there is anything to read at all, for example "1 set of matching work across 1 problem". Below it, matches are grouped under the problem they belong to. The Similarity tab itself carries a count of the matches worth a look, so you can see there is something to read without opening it.
+The tab opens with one line answering the only question that matters at a glance: whether there is anything to review. For example, "1 match worth reviewing across 1 problem", followed where relevant by "1 includes work reused after another student received a correct result".
 
-Each match card carries the count that gives it its meaning, and says which kind of match it is:
+Below that, matches are grouped under the problem they belong to, with a heading giving the problem's title and how many students submitted it.
 
-> **2 of 40 students submitted the identical file** · 6 minutes apart
+### A match card
 
-> **3 of 40 students submitted the same work, 2 of them the identical file**
+Each card leads with what kind of match it is:
 
-> **2 of 40 students submitted the same work, drawn differently**
+- **Identical file**, where every student in the match submitted the same file
+- **Same work**, where some submitted the identical file and others the same work with cosmetic differences
+- **Same work, drawn differently**, where the work is the same but state names or positions differ
 
-Identical work on its own proves nothing. A problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of forty is worth reading. Twenty-five out of forty is what a correct answer looks like, and AFCT marks those cards **Common**, says so in plain words, and sorts them last.
+Underneath is the count that gives it its meaning, for example "2 of 38 students submitted the identical file", and how far apart the closest two submissions were.
+
+Identical work on its own proves nothing. A problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of thirty-eight is worth reading. Fourteen out of thirty-eight is what a correct answer looks like.
 
 ### Reused after passing
 
-A match badged **Reused after passing** means the byte-identical file had already been marked correct for another student when it was submitted again. That is the pattern a large course is most likely to miss: submit, watch the autograder award full marks, pass the file on. These sort above everything else and their count leads the summary line at the top of the tab.
+A match marked **Reused after passing** means the byte-identical file had already been marked correct for another student when it was submitted again. That is the pattern a large course is most likely to miss: submit, watch the autograder award full marks, pass the file on. These sort above everything else and are counted in the summary line.
 
 It is still not a verdict. It says what happened and in what order, and leaves the conclusion to you.
 
-How far apart the two submissions arrived is shown beside the count. Six minutes apart and three weeks apart are very different situations, and you are the one who knows which matters here.
+### The instructor reference solution
 
-**Compare files** opens two of the submissions side by side, drawn the way that problem type is normally read: two automata, two grammars, two expressions. It opens on the two that were submitted closest together, and when a match involves more than two students each side can be switched to any of the others. Node positions are kept as the student left them, because where somebody placed their states is exactly what separates a copied file from the same answer worked out twice. Each student's file can also be downloaded from the card.
+A card noting that it "matches the instructor reference solution" is the problem's own answer file. Anyone holding that file has this work by definition, so the match says nothing on its own.
 
-Teammates on a group assignment are not reported. Every member's submission writes its own record against the group's shared set, so a team holding the same file is the group feature working, not a finding.
+### Chronology
+
+Each card lists its students earliest first, showing the time each submitted, which attempt of theirs it was, what the autograder made of it, a **First** marker on the earliest, and how long after the first each of the others arrived. The order and the elapsed times are the story: "11 minutes apart" only means something once you know which way round.
+
+### Common matches
+
+Work shared by at least a quarter of a problem's students is treated as the expected answer. Those matches are collected at the bottom of the page, collapsed, under **Common matches**. They are not hidden, only deprioritised: less useful, not more serious.
+
+The **Common threshold** control at the top sets where that line falls. A quarter is a starting point rather than a truth, since the right number depends on the problem and on how you teach the course. The setting is yours alone, is remembered between visits, and changes only what is shown, never what is recorded.
+
+### Comparing
+
+**Compare submissions** opens two of the files side by side, drawn the way that problem type is normally read: two automata, two grammars, two expressions. Node positions are kept as the students left them, because where somebody placed their states is exactly what separates a copied file from the same answer worked out twice. When a match involves more than two students, either side can be switched to any of the others. Individual files can also be opened from the chronology.
+
+The Similarity tab itself carries a count of the matches worth reviewing, so you can see there is something to read without opening it.
 
 ## What it does not do
 

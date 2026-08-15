@@ -33,6 +33,12 @@ export type MatchSubmission = {
   submittedAt: string;
   /** Whether the autograder marked this attempt correct. Null while it is still pending. */
   correct: boolean | null;
+  /**
+   * Which of this student's attempts at the problem this was, counting from one. A file that
+   * matches somebody else's on a first attempt reads differently from one that appears on a
+   * fourth, and the tab has no other way to show that.
+   */
+  attempt: number | null;
   assignmentId: string;
   fileName: string | null;
   originalFileName: string | null;
@@ -75,6 +81,12 @@ export type SubmissionMatchGroup = {
    * people arriving at the same answer, and it sorts to the top because of that.
    */
   reusedAfterPass: boolean;
+  /**
+   * This work IS the problem's own reference solution, byte for byte or once layout is set
+   * aside. Everybody who has the answer file has the same work by definition, so a reader
+   * needs to know that before reading anything into the match.
+   */
+  matchesAnswerFile: boolean;
   submissions: MatchSubmission[];
 };
 
@@ -100,7 +112,15 @@ const studentSelect = {
  */
 export async function findSubmissionMatches(
   problemIds: string[],
-  problems: Map<string, { title: string | null; type: string | null }>,
+  problems: Map<
+    string,
+    {
+      title: string | null;
+      type: string | null;
+      answerContentHash?: string | null;
+      answerShapeHash?: string | null;
+    }
+  >,
 ): Promise<SubmissionMatchGroup[]> {
   if (problemIds.length === 0) return [];
 
@@ -171,6 +191,10 @@ export async function findSubmissionMatches(
     },
   });
 
+  // Which attempt each matched submission was for its student. One query over the students
+  // and problems already in play, so it stays proportional to the matches, not the course.
+  const attemptNumbers = await numberAttempts(submissions);
+
   const groups = new Map<string, SubmissionMatchGroup>();
   // Which student group (if any) owns each submission in a match, and when each landed.
   const groupOwners = new Map<string, Set<string | null>>();
@@ -203,6 +227,11 @@ export async function findSubmissionMatches(
         identicalStudentCount: 1,
         closestGapMs: null,
         reusedAfterPass: false,
+        matchesAnswerFile:
+          (!!submission.contentHash &&
+            submission.contentHash === problems.get(submission.problemId)?.answerContentHash) ||
+          (!!submission.shapeHash &&
+            submission.shapeHash === problems.get(submission.problemId)?.answerShapeHash),
         submissions: [],
       } satisfies SubmissionMatchGroup);
 
@@ -211,6 +240,7 @@ export async function findSubmissionMatches(
       submittedAt: submission.submittedAt.toISOString(),
       assignmentId: submission.assignmentId,
       correct: submission.correct,
+      attempt: attemptNumbers.get(submission.id) ?? null,
       fileName: submission.fileName,
       originalFileName: submission.originalFileName,
       contentKey: (submission.contentHash ?? '').slice(0, 8),
@@ -268,6 +298,41 @@ export async function findSubmissionMatches(
       a.studentCount - b.studentCount ||
       (b.submissions[0]?.submittedAt ?? '').localeCompare(a.submissions[0]?.submittedAt ?? ''),
   );
+}
+
+/**
+ * Number every matched submission within its student's attempts at that problem.
+ *
+ * Counted over all of a student's attempts, not only the matched ones: "their third
+ * attempt" has to mean their third, or it is worse than saying nothing.
+ */
+async function numberAttempts(
+  matched: { id: string; problemId: string; studentId: string }[],
+): Promise<Map<string, number>> {
+  const numbers = new Map<string, number>();
+  if (matched.length === 0) return numbers;
+
+  const attempts = await prisma.submission.findMany({
+    where: {
+      OR: [
+        ...new Set(matched.map((row) => `${row.problemId}:${row.studentId}`)),
+      ].map((pair) => {
+        const [problemId, studentId] = pair.split(':') as [string, string];
+        return { problemId, studentId };
+      }),
+    },
+    orderBy: { submittedAt: 'asc' },
+    select: { id: true, problemId: true, studentId: true },
+  });
+
+  const seen = new Map<string, number>();
+  for (const attempt of attempts) {
+    const key = `${attempt.problemId}:${attempt.studentId}`;
+    const next = (seen.get(key) ?? 0) + 1;
+    seen.set(key, next);
+    numbers.set(attempt.id, next);
+  }
+  return numbers;
 }
 
 type TimedSubmission = {
