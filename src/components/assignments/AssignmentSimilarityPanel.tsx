@@ -60,12 +60,30 @@ function gapLabel(ms: number | null): string | null {
   return `${Math.round(hours / 24)} days apart`;
 }
 
+/**
+ * What a match is, in one sentence.
+ *
+ * A match groups work that is the same once layout, state names and ordering are set aside,
+ * so it can hold both students who submitted the very same file and students who submitted
+ * that file after moving things around. Those are different claims and the card says which.
+ */
+function describeMatch(group: SubmissionMatchGroup): string {
+  const of = `of ${group.problemStudentCount} students`;
+  if (group.identicalStudentCount >= group.studentCount) {
+    return `${group.studentCount} ${of} submitted the identical file`;
+  }
+  if (group.identicalStudentCount > 1) {
+    return `${group.studentCount} ${of} submitted the same work, ${group.identicalStudentCount} of them the identical file`;
+  }
+  return `${group.studentCount} ${of} submitted the same work, drawn differently`;
+}
+
 /** The line that answers "do I need to read any of this". */
 function summarise(groups: SubmissionMatchGroup[]): string {
-  if (groups.length === 0) return 'No two students submitted the same file.';
+  if (groups.length === 0) return 'No two students submitted matching work.';
   const problems = new Set(groups.map((group) => group.problem.id)).size;
   const common = groups.filter(isCommon).length;
-  const sets = `${groups.length} set${groups.length === 1 ? '' : 's'} of identical work`;
+  const sets = `${groups.length} set${groups.length === 1 ? '' : 's'} of matching work`;
   const across = `across ${problems} problem${problems === 1 ? '' : 's'}`;
   if (common === 0) return `${sets} ${across}.`;
   if (common === groups.length) return `${sets} ${across}, all of it shared by much of the class.`;
@@ -147,10 +165,7 @@ export function AssignmentSimilarityPanel() {
               <div key={group.matchId} className="space-y-3 rounded-lg border p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm font-medium">
-                    <span>
-                      {group.studentCount} of {group.problemStudentCount} students submitted
-                      identical work
-                    </span>
+                    <span>{describeMatch(group)}</span>
                     {common ? (
                       <Badge variant="neutral" title="Shared by much of the class">
                         Common

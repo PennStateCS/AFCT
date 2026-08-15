@@ -983,6 +983,13 @@ model Submission {
   /// to differ in. What carries meaning is how rare a value is within one problem.
   contentHash String?
 
+  /// sha256 of the same file with everything incidental removed: where the states sit, what
+  /// they are called, the order things were written in. Two submissions sharing this are the
+  /// same machine drawn differently, which is what a copied file looks like once somebody
+  /// has dragged the nodes about. Empty for a regular expression, which has no layout, and
+  /// for anything that could not be parsed.
+  shapeHash String?
+
   /// When this record was created.
   createdAt DateTime @default(now())
   /// When this record was last changed.
@@ -1034,6 +1041,7 @@ model Submission {
   // a match only means something among students answering the same question, and a
   // course-wide or system-wide search would show staff work from courses they do not teach.
   @@index([problemId, contentHash])
+  @@index([problemId, shapeHash])
   // Performance indexes
   @@index([assignmentId, problemId])
   @@index([studentId, courseId, assignmentId, problemId, submittedAt])

@@ -30,6 +30,11 @@ export type MatchSubmission = {
   assignmentId: string;
   fileName: string | null;
   originalFileName: string | null;
+  /**
+   * Short handle for the exact file. Two submissions in a match sharing this are byte for
+   * byte the same; two that differ are the same machine drawn differently.
+   */
+  contentKey: string;
   student: MatchStudent;
   studentGroup: { id: string; name: string } | null;
 };
@@ -42,6 +47,12 @@ export type SubmissionMatchGroup = {
   studentCount: number;
   /** How many different students have submitted this problem at all: the denominator. */
   problemStudentCount: number;
+  /**
+   * The largest number of students in this match who submitted the byte-identical file.
+   * Equal to `studentCount` when the whole match is one file, and 1 when every student's
+   * file differs in some incidental way.
+   */
+  identicalStudentCount: number;
   /**
    * The shortest time between two different students submitting this same content, in
    * milliseconds. Context, not a verdict: six minutes apart reads differently from three
@@ -77,40 +88,61 @@ export async function findSubmissionMatches(
 ): Promise<SubmissionMatchGroup[]> {
   if (problemIds.length === 0) return [];
 
-  // One row per (problem, content, student), so a student who submits the same file five
-  // times counts once. This is also what gives the denominator below without a second read.
+  // One row per (problem, shape, student), so a student who submits five times counts once.
+  // This is also what gives the denominator below without a second read.
+  //
+  // Grouped on the SHAPE rather than the exact bytes: a copied file that has had its nodes
+  // dragged about or its states renamed is still the same work, and belongs in the same
+  // match as the file it came from. Which of them are byte-identical is recorded inside the
+  // group instead, because that is a different claim and reads differently.
   const perStudent = await prisma.submission.groupBy({
-    by: ['problemId', 'contentHash', 'studentId'],
+    by: ['problemId', 'shapeHash', 'contentHash', 'studentId'],
     where: { problemId: { in: problemIds }, contentHash: { not: null } },
   });
 
   const studentsPerProblem = new Map<string, Set<string>>();
-  const studentsPerContent = new Map<string, Set<string>>();
+  const studentsPerShape = new Map<string, Set<string>>();
   for (const row of perStudent) {
     if (!row.contentHash) continue;
     const problemStudents = studentsPerProblem.get(row.problemId) ?? new Set<string>();
     problemStudents.add(row.studentId);
     studentsPerProblem.set(row.problemId, problemStudents);
 
-    const key = `${row.problemId}:${row.contentHash}`;
-    const contentStudents = studentsPerContent.get(key) ?? new Set<string>();
-    contentStudents.add(row.studentId);
-    studentsPerContent.set(key, contentStudents);
+    // A file with no shape (a regular expression, or one that would not parse) can still be
+    // matched on its exact contents, so it groups under its own hash.
+    const key = `${row.problemId}:${row.shapeHash ?? `exact-${row.contentHash}`}`;
+    const shapeStudents = studentsPerShape.get(key) ?? new Set<string>();
+    shapeStudents.add(row.studentId);
+    studentsPerShape.set(key, shapeStudents);
   }
 
-  // Only content two or more different students submitted. One student's own resubmissions
-  // are not a match with anybody.
-  const sharedKeys = [...studentsPerContent.entries()].filter(([, students]) => students.size > 1);
+  // Only work two or more different students submitted. One student's own resubmissions are
+  // not a match with anybody.
+  const sharedKeys = [...studentsPerShape.entries()].filter(([, students]) => students.size > 1);
   if (sharedKeys.length === 0) return [];
 
-  const sharedHashes = [...new Set(sharedKeys.map(([key]) => key.split(':')[1] as string))];
+  const sharedShapes: string[] = [];
+  const sharedContents: string[] = [];
+  for (const [key] of sharedKeys) {
+    const value = key.slice(key.indexOf(':') + 1);
+    if (value.startsWith('exact-')) sharedContents.push(value.slice('exact-'.length));
+    else sharedShapes.push(value);
+  }
+
   const submissions = await prisma.submission.findMany({
-    where: { problemId: { in: problemIds }, contentHash: { in: sharedHashes } },
+    where: {
+      problemId: { in: problemIds },
+      OR: [
+        ...(sharedShapes.length ? [{ shapeHash: { in: sharedShapes } }] : []),
+        ...(sharedContents.length ? [{ contentHash: { in: sharedContents } }] : []),
+      ],
+    },
     orderBy: { submittedAt: 'desc' },
     select: {
       id: true,
       problemId: true,
       contentHash: true,
+      shapeHash: true,
       assignmentId: true,
       submittedAt: true,
       fileName: true,
@@ -127,18 +159,23 @@ export async function findSubmissionMatches(
   const groupOwners = new Map<string, Set<string | null>>();
   const submissionTimes = new Map<string, { studentId: string; at: number }[]>();
 
+  // Distinct students per exact file within a match, for the "and these two are the same
+  // file" claim the group carries.
+  const studentsPerContentInGroup = new Map<string, Map<string, Set<string>>>();
+
   for (const submission of submissions) {
-    const key = `${submission.problemId}:${submission.contentHash}`;
-    // A hash shared in one problem can appear in another where only one student used it;
-    // that is not a match, so skip it rather than reporting a group of one.
-    const students = studentsPerContent.get(key);
+    const shapeKey = submission.shapeHash ?? `exact-${submission.contentHash}`;
+    const key = `${submission.problemId}:${shapeKey}`;
+    // Work shared in one problem can appear in another where only one student used it; that
+    // is not a match, so skip it rather than reporting a group of one.
+    const students = studentsPerShape.get(key);
     if (!students || students.size < 2) continue;
 
     const group =
       groups.get(key) ??
       ({
         // The hash is an internal value and long; the reader only needs a stable handle.
-        matchId: (submission.contentHash ?? '').slice(0, 8),
+        matchId: shapeKey.slice(0, 8),
         problem: {
           id: submission.problemId,
           title: problems.get(submission.problemId)?.title ?? null,
@@ -146,6 +183,7 @@ export async function findSubmissionMatches(
         },
         studentCount: students.size,
         problemStudentCount: studentsPerProblem.get(submission.problemId)?.size ?? 0,
+        identicalStudentCount: 1,
         closestGapMs: null,
         submissions: [],
       } satisfies SubmissionMatchGroup);
@@ -156,10 +194,17 @@ export async function findSubmissionMatches(
       assignmentId: submission.assignmentId,
       fileName: submission.fileName,
       originalFileName: submission.originalFileName,
+      contentKey: (submission.contentHash ?? '').slice(0, 8),
       student: submission.student,
       studentGroup: submission.studentGroup,
     });
     groups.set(key, group);
+
+    const perContent = studentsPerContentInGroup.get(key) ?? new Map<string, Set<string>>();
+    const sameFile = perContent.get(submission.contentHash ?? '') ?? new Set<string>();
+    sameFile.add(submission.studentId);
+    perContent.set(submission.contentHash ?? '', sameFile);
+    studentsPerContentInGroup.set(key, perContent);
 
     const owners = groupOwners.get(key) ?? new Set<string | null>();
     owners.add(submission.studentGroupId);
@@ -181,6 +226,10 @@ export async function findSubmissionMatches(
     if (onlyOwner) continue;
 
     group.closestGapMs = closestGap(submissionTimes.get(key) ?? []);
+    group.identicalStudentCount = Math.max(
+      1,
+      ...[...(studentsPerContentInGroup.get(key)?.values() ?? [])].map((set) => set.size),
+    );
     reportable.push(group);
   }
 

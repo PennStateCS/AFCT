@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { submissionContentHash } from './content-hash';
+import { submissionContentHash, submissionShapeHash } from './content-hash';
 
 const fa = (opts: { x?: string; comment?: string; crlf?: boolean; trailing?: string } = {}) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>${opts.comment ?? ''}<structure>
@@ -69,5 +69,47 @@ describe('submissionContentHash', () => {
   it('has nothing to say about an empty file', () => {
     expect(submissionContentHash('')).toBeNull();
     expect(submissionContentHash('   \n  ')).toBeNull();
+  });
+});
+
+describe('submissionShapeHash', () => {
+  // The two easiest things to do to a file somebody handed you.
+  it('is the same after the states are dragged somewhere else', () => {
+    expect(submissionShapeHash(fa({ x: '900.0' }))).toBe(submissionShapeHash(fa()));
+  });
+
+  it('is the same after the states are renamed', () => {
+    const renamed = fa().replace('name="q0"', 'name="start"');
+    expect(submissionShapeHash(renamed)).toBe(submissionShapeHash(fa()));
+  });
+
+  it('changes when the machine itself changes', () => {
+    const extraTransition = fa().replace(
+      '</automaton>',
+      '<transition><from>0</from><to>0</to><read>b</read></transition></automaton>',
+    );
+    expect(submissionShapeHash(extraTransition)).not.toBe(submissionShapeHash(fa()));
+  });
+
+  it('separates an accepting state from an ordinary one', () => {
+    const accepting = fa().replace('<initial/>', '<initial/><final/>');
+    expect(submissionShapeHash(accepting)).not.toBe(submissionShapeHash(fa()));
+  });
+
+  it('does not care what order the productions of a grammar were written in', () => {
+    const one =
+      '<structure><type>grammar</type><production><left>S</left><right>aSb</right></production><production><left>S</left><right>ab</right></production></structure>';
+    const other =
+      '<structure><type>grammar</type><production><left>S</left><right>ab</right></production><production><left>S</left><right>aSb</right></production></structure>';
+
+    expect(submissionShapeHash(one)).toBe(submissionShapeHash(other));
+    // ...and the exact fingerprint still tells them apart, which is the difference between
+    // "the same file" and "the same work".
+    expect(submissionContentHash(one)).not.toBe(submissionContentHash(other));
+  });
+
+  it('has nothing to say about a file with no structure to speak of', () => {
+    expect(submissionShapeHash('(a|b)*abb')).toBeNull();
+    expect(submissionShapeHash('<structure><type>re</type><expression>a*</expression></structure>')).toBeNull();
   });
 });
