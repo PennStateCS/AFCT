@@ -99,3 +99,20 @@ You can see what is attached to any account from [User Accounts](user-accounts.m
 Removing an LMS from the **LTI** tab stops every launch from it immediately, for every course. Existing AFCT accounts, courses, submissions and grades are untouched, but people who signed in only through that LMS will not be able to get in until they have another way to sign in.
 
 To disconnect a single course instead, leave the registration alone; faculty can disconnect their own course from the **Course status** card on the course **Settings** tab.
+
+## Why your LMS can display AFCT inside a page
+
+Deep linking, where you pick an AFCT assignment from inside your LMS, happens in a dialog your
+LMS draws around AFCT. That only works if AFCT permits your LMS to embed it, and by default it
+permits nobody at all.
+
+Registering a platform is what grants that permission, and it grants it narrowly: only the
+addresses you entered for the authorization, token and keyset URLs may embed AFCT, and only the
+LTI pages themselves. The rest of AFCT can never be placed inside another site's page. Remove
+the registration and the permission goes with it.
+
+Two things follow. A registration with the wrong URLs will fail deep linking even when launches
+work, because launches do not need embedding and deep linking does. And a change to a
+registration takes up to a minute to be reflected, so if a picker is blank immediately after an
+edit, try again shortly before looking for another cause.
+

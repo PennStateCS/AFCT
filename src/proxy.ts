@@ -3,6 +3,9 @@ import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { isSessionIdleExpired } from '@/lib/session-timeout';
 import { requireAuthSecret } from '@/lib/auth-secret';
+// Next 16 runs Proxy on the Node.js runtime, so the database is reachable here. It is read
+// once a minute at most, and only for the LTI routes.
+import { prisma } from '@/lib/prisma';
 
 /**
  * Coarse, edge-level authentication net.
@@ -68,14 +71,14 @@ function isPublicApi(pathname: string): boolean {
 // old 'unsafe-inline', so an injected inline script can't run. style-src keeps
 // 'unsafe-inline' (React inline style={} and Next's injected styles need it; style
 // XSS is low-risk). Dev keeps 'unsafe-eval' for React Fast Refresh.
-function buildCsp(nonce: string): string {
+function buildCsp(nonce: string, frameAncestors: string): string {
   const isProd = process.env.NODE_ENV === 'production';
   const hcaptcha = 'https://hcaptcha.com https://*.hcaptcha.com';
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
-    "frame-ancestors 'self'",
+    `frame-ancestors ${frameAncestors}`,
     "form-action 'self'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
@@ -94,11 +97,70 @@ const CSP_ENFORCE =
   process.env.CSP_ENFORCE === 'true' ||
   (process.env.NODE_ENV === 'production' && process.env.CSP_ENFORCE !== 'false');
 
+
+/**
+ * Which origins may put AFCT in an iframe.
+ *
+ * An LMS embeds its tools: Canvas's deep-linking picker is a modal iframe and offers no way to
+ * open a new tab, so `frame-ancestors 'self'` makes deep linking impossible rather than merely
+ * awkward. The answer is not to drop the protection but to name the platforms an administrator
+ * has actually registered, and only on the LTI routes an LMS ever frames. Every other page on
+ * the site stays unframeable.
+ *
+ * The issuer is deliberately not used here. A self-hosted Canvas reports the issuer
+ * `https://canvas.instructure.com` while living at its own hostname, so the issuer would name an
+ * origin that never sends a request. The three endpoint URLs are where the LMS really is.
+ */
+const FRAME_ANCESTOR_TTL_MS = 60_000;
+let frameAncestorCache: { value: string; expires: number } | null = null;
+
+function isLtiPath(pathname: string): boolean {
+  return pathname === '/lti' || pathname.startsWith('/lti/') || pathname.startsWith('/api/lti');
+}
+
+async function ltiFrameAncestors(): Promise<string> {
+  const now = Date.now();
+  if (frameAncestorCache && frameAncestorCache.expires > now) return frameAncestorCache.value;
+
+  let value = "'self'";
+  try {
+    const platforms = await prisma.ltiPlatform.findMany({
+      select: { authLoginUrl: true, tokenUrl: true, keysetUrl: true },
+    });
+    const origins = new Set<string>();
+    for (const platform of platforms) {
+      for (const url of [platform.authLoginUrl, platform.tokenUrl, platform.keysetUrl]) {
+        try {
+          origins.add(new URL(url).origin);
+        } catch {
+          // A stored value that will not parse is a registration problem, not a reason to
+          // refuse every launch. The route that uses it reports it properly.
+        }
+      }
+    }
+    if (origins.size > 0) value = `'self' ${[...origins].sort().join(' ')}`;
+  } catch {
+    // The database being unreachable must not decide the security policy. Falling back to
+    // 'self' fails closed: deep linking stops working, nothing becomes frameable.
+    return "'self'";
+  }
+
+  frameAncestorCache = { value, expires: now + FRAME_ANCESTOR_TTL_MS };
+  return value;
+}
+
+/** Exported for tests, which need each case to start from a known cache. */
+export function resetFrameAncestorCache(): void {
+  frameAncestorCache = null;
+}
+
 // Generate a nonce, return the request headers Next reads it from plus a helper that
 // stamps the browser-facing (enforced or report-only) header onto a response.
-function prepareCsp(req: NextRequest) {
+async function prepareCsp(req: NextRequest, pathname: string) {
   const nonce = btoa(crypto.randomUUID());
-  const csp = buildCsp(nonce);
+  // Only the LTI routes pay for the lookup; everything else keeps the strict default and
+  // never touches the database.
+  const csp = buildCsp(nonce, isLtiPath(pathname) ? await ltiFrameAncestors() : "'self'");
   const requestHeaders = new Headers(req.headers);
   // A request header is invisible to the browser (so it doesn't enforce anything);
   // Next uses it only to discover the nonce and apply it to its script tags.
@@ -122,7 +184,7 @@ function prepareCsp(req: NextRequest) {
 
 export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
-  const { pass, withCsp } = prepareCsp(req);
+  const { pass, withCsp } = await prepareCsp(req, pathname);
 
   const isApi = pathname.startsWith('/api/');
   const isDashboard = pathname.startsWith('/dashboard');
