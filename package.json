@@ -15,7 +15,7 @@
   "scripts": {
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch(e){}\"",
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/check-prerendered-pages.mjs",
     "start": "next start",
     "start:prod": "next start -p 3000",
     "typecheck": "tsc --noEmit -p tsconfig.json",

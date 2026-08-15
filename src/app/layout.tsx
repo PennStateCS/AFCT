@@ -10,6 +10,24 @@ export const metadata: Metadata = {
   description: 'Automata-focused course tooling for building and grading assignments.',
 };
 
+/**
+ * Every page renders per request, because every page needs a nonce.
+ *
+ * `src/proxy.ts` sends a Content-Security-Policy carrying a fresh nonce on each response, and
+ * Next stamps that nonce onto its script tags only while rendering per request. A page
+ * prerendered at build time has HTML that predates the nonce, so the browser blocks every script
+ * on it: the page loads, nothing hydrates, and the reader sees a blank screen with no error.
+ * That is what happened to /lti/complete, /forgot-password and /reset-password at once.
+ *
+ * Set here rather than page by page because the rule follows from the policy, not from any one
+ * page, and because route segment config is silently ignored in a 'use client' file, which is
+ * what two of those three pages are. Nothing is lost: this app is session-scoped and
+ * database-backed, so there was nothing worth prerendering.
+ *
+ * `scripts/check-prerendered-pages.mjs` fails the build if a page escapes this.
+ */
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
