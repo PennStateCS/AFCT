@@ -42,6 +42,7 @@ const group = (over: Record<string, unknown> = {}) => ({
   problem: { id: 'p1', title: 'Even zeros', type: 'FA' },
   studentCount: 2,
   problemStudentCount: 40,
+  identicalStudentCount: 2,
   closestGapMs: 6 * 60 * 1000,
   submissions: [
     {
@@ -84,7 +85,7 @@ describe('AssignmentSimilarityPanel', () => {
   it('answers the question in one line when there is nothing to read', async () => {
     renderPanel();
 
-    expect(await screen.findByText('No two students submitted the same file.')).toBeInTheDocument();
+    expect(await screen.findByText('No two students submitted matching work.')).toBeInTheDocument();
   });
 
   it('summarises what there is before any of the detail', async () => {
@@ -92,7 +93,7 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
-    expect(await screen.findByText('1 set of identical work across 1 problem.')).toBeInTheDocument();
+    expect(await screen.findByText('1 set of matching work across 1 problem.')).toBeInTheDocument();
   });
 
   it('says how much of the class shares it, and how far apart they submitted', async () => {
@@ -100,7 +101,7 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
-    expect(await screen.findByText(/2 of 40 students submitted identical work/)).toBeInTheDocument();
+    expect(await screen.findByText('2 of 40 students submitted the identical file')).toBeInTheDocument();
     expect(screen.getByText('6 minutes apart')).toBeInTheDocument();
     expect(screen.getByText('Ada Student')).toBeInTheDocument();
     expect(screen.getByText('Grace Student')).toBeInTheDocument();
@@ -114,6 +115,7 @@ describe('AssignmentSimilarityPanel', () => {
         problem: { id: 'p2', title: 'a^n b^n', type: 'CFG' },
         studentCount: 25,
         problemStudentCount: 40,
+        identicalStudentCount: 25,
       }),
     ]);
 
@@ -122,12 +124,34 @@ describe('AssignmentSimilarityPanel', () => {
     expect(await screen.findByRole('heading', { name: 'Even zeros' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'a^n b^n' })).toBeInTheDocument();
     expect(
-      screen.getByText('2 sets of identical work across 2 problems, 1 of them shared by much of the class.'),
+      screen.getByText('2 sets of matching work across 2 problems, 1 of them shared by much of the class.'),
+    ).toBeInTheDocument();
+  });
+
+  it('says when the same work was submitted drawn differently', async () => {
+    getMock.mockResolvedValue([group({ studentCount: 2, identicalStudentCount: 1 })]);
+
+    renderPanel();
+
+    expect(
+      await screen.findByText('2 of 40 students submitted the same work, drawn differently'),
+    ).toBeInTheDocument();
+  });
+
+  it('separates the students who submitted the very same file from the rest', async () => {
+    getMock.mockResolvedValue([group({ studentCount: 3, identicalStudentCount: 2 })]);
+
+    renderPanel();
+
+    expect(
+      await screen.findByText('3 of 40 students submitted the same work, 2 of them the identical file'),
     ).toBeInTheDocument();
   });
 
   it('explains a match most of the class shares rather than hiding it', async () => {
-    getMock.mockResolvedValue([group({ studentCount: 25, problemStudentCount: 40 })]);
+    getMock.mockResolvedValue([
+      group({ studentCount: 25, problemStudentCount: 40, identicalStudentCount: 25 }),
+    ]);
 
     renderPanel();
 

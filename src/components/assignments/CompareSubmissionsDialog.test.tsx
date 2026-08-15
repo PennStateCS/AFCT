@@ -26,6 +26,7 @@ const submission = (id: string, firstName: string, fileName: string | null): Mat
   assignmentId: 'a1',
   fileName,
   originalFileName: `${firstName}.jff`,
+  contentKey: `key-${id}`,
   student: {
     id: `student-${id}`,
     firstName,

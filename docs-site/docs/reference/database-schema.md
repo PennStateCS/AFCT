@@ -1037,6 +1037,7 @@ erDiagram
   String fileName "nullable"
   String originalFileName "nullable"
   String contentHash "nullable"
+  String shapeHash "nullable"
   DateTime createdAt
   DateTime updatedAt
   String assignmentId FK
@@ -1213,6 +1214,12 @@ Properties as follows:
   > On its own it means "these are the same file", never "somebody copied": students
   > converge on the same right answer, and a grammar or regular expression has no layout
   > to differ in. What carries meaning is how rare a value is within one problem.
+- `shapeHash`
+  > sha256 of the same file with everything incidental removed: where the states sit, what
+  > they are called, the order things were written in. Two submissions sharing this are the
+  > same machine drawn differently, which is what a copied file looks like once somebody
+  > has dragged the nodes about. Empty for a regular expression, which has no layout, and
+  > for anything that could not be parsed.
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
 - `assignmentId`: The assignment.
@@ -1452,6 +1459,7 @@ erDiagram
   String fileName "nullable"
   String originalFileName "nullable"
   String contentHash "nullable"
+  String shapeHash "nullable"
   DateTime createdAt
   DateTime updatedAt
   String assignmentId FK
