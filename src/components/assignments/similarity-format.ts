@@ -6,7 +6,7 @@
 // nor do verdicts.
 
 import type { MatchSubmission } from '@/lib/similarity/matches';
-import { MATCH_LABEL, type MatchCluster, type MatchType } from './similarity-evidence';
+import { MATCH_LABEL, type MatchCluster, type MatchType } from '@/lib/similarity/evidence';
 
 /** What the students in this problem were asked to build, in the reader's words. */
 export function workNoun(problemType: string | null): string {
@@ -64,7 +64,9 @@ export function sizeLabel(cluster: {
   stateCount: number | null;
   transitionCount: number | null;
 }): string | null {
-  if (cluster.stateCount === null) return null;
+  // A grammar or an expression has no states, and describing one as having none is worse
+  // than saying nothing about its size.
+  if (!cluster.stateCount) return null;
   const states = `${cluster.stateCount} state${cluster.stateCount === 1 ? '' : 's'}`;
   if (cluster.transitionCount === null) return states;
   return `${states} · ${cluster.transitionCount} transition${cluster.transitionCount === 1 ? '' : 's'}`;
@@ -75,7 +77,9 @@ export function clusterHeadline(cluster: MatchCluster): string {
   const students = cluster.students.length;
   const of = `${students} of ${cluster.problemStudentCount} students`;
 
-  if (cluster.type === 'exact') return `${of} submitted the same saved machine`;
+  if (cluster.type === 'exact') {
+    return `${of} submitted the same saved ${workNoun(cluster.problem.type)}`;
+  }
   if (cluster.type === 'same-machine') {
     return `${of} submitted the same ${workNoun(cluster.problem.type)} with cosmetic differences`;
   }
@@ -96,7 +100,13 @@ export function clusterDetails(cluster: MatchCluster): string[] {
   const lines: string[] = [];
 
   if (cluster.type === 'exact') {
-    lines.push('The machine structure and the saved drawing coordinates are identical.');
+    // A grammar or an expression has no drawing to agree on, so saying the coordinates
+    // match would be describing something that does not exist.
+    lines.push(
+      cluster.stateCount
+        ? 'The structure and the saved drawing coordinates are identical.'
+        : 'The contents are identical once formatting is set aside.',
+    );
     if (cluster.stateCount !== null && cluster.stateCount > 0) {
       lines.push(
         `All ${cluster.stateCount} state position${cluster.stateCount === 1 ? '' : 's'} are identical.`,
@@ -133,8 +143,9 @@ export function clusterDetails(cluster: MatchCluster): string[] {
 /** What the group is made of, for a cluster holding more than one relationship. */
 export function relationshipSummary(cluster: MatchCluster): string[] {
   const parts: string[] = [];
+  // Lowercased to sit inside a sentence, except JFLAP, which is a name.
   const say = (count: number, kind: MatchType) =>
-    `${count} ${MATCH_LABEL[kind].toLowerCase()} relationship${count === 1 ? '' : 's'}`;
+    `${count} ${MATCH_LABEL[kind].toLowerCase().replace('jflap', 'JFLAP')} relationship${count === 1 ? '' : 's'}`;
 
   if (cluster.counts.exact > 0) parts.push(say(cluster.counts.exact, 'exact'));
   if (cluster.counts['same-machine'] > 0) {

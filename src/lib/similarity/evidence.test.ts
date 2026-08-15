@@ -5,8 +5,8 @@ import {
   matchTypeOf,
   summarise,
   STRENGTH_OF,
-} from './similarity-evidence';
-import type { SubmissionMatchGroup } from '@/lib/similarity/matches';
+} from './evidence';
+import type { SubmissionMatchGroup } from './matches';
 
 const submission = (studentId: string, at = '2026-08-15T12:00:00.000Z') => ({
   id: `sub-${studentId}-${at}`,

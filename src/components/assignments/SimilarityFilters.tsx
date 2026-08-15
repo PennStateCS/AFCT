@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { MATCH_ICON } from './SimilarityEvidenceBadge';
-import { MATCH_LABEL, type MatchType } from './similarity-evidence';
+import { MATCH_LABEL, type MatchType } from '@/lib/similarity/evidence';
 
 export type MatchFilter = MatchType | 'all';
 
@@ -49,7 +49,12 @@ export function SimilarityFilters({
           >
             {Icon ? <Icon className="size-3.5" aria-hidden="true" /> : null}
             {LABEL[filter]}
-            <span className="text-muted-foreground tabular-nums">{counts[filter]}</span>
+            {/* Quieter than the label only when the button is unselected. On the filled
+                selected button, muted grey sits on a dark background and stops being
+                readable, so the count takes the button's own foreground colour. */}
+            <span className={`tabular-nums ${selected ? '' : 'text-muted-foreground'}`}>
+              {counts[filter]}
+            </span>
           </Button>
         );
       })}

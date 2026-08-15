@@ -119,11 +119,38 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
-    expect(await screen.findByText('Very strong')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Exact JFLAP artifact' })).toBeInTheDocument();
-    expect(screen.getByText('2 of 84 students submitted the same saved machine')).toBeInTheDocument();
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Very strong')).toBeInTheDocument();
+    expect(within(card).getByText('Exact JFLAP artifact')).toBeInTheDocument();
+    expect(
+      within(card).getByRole('heading', {
+        name: '2 of 84 students submitted the same saved machine',
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText('All 11 state positions are identical.')).toBeInTheDocument();
     expect(screen.getByText('11 states · 17 transitions')).toBeInTheDocument();
+  });
+
+  it('calls a grammar a grammar, and claims nothing about its layout', async () => {
+    getMock.mockResolvedValue([
+      group({
+        problem: { id: 'p2', title: 'Balanced parentheses', type: 'CFG' },
+        stateCount: 0,
+        transitionCount: 0,
+      }),
+    ]);
+
+    renderPanel();
+
+    const card = await screen.findByRole('article');
+    expect(
+      within(card).getByRole('heading', { name: '2 of 84 students submitted the same saved grammar' }),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByText('The contents are identical once formatting is set aside.'),
+    ).toBeInTheDocument();
+    // Nothing has states, so nothing says it has none.
+    expect(within(card).queryByText(/0 states/)).not.toBeInTheDocument();
   });
 
   it('gives the same machine the middle presentation', async () => {
@@ -131,8 +158,9 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
-    expect(await screen.findByText('Strong')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Same machine' })).toBeInTheDocument();
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Strong')).toBeInTheDocument();
+    expect(within(card).getByText('Same machine')).toBeInTheDocument();
     expect(screen.getByText('State names or positions differ.')).toBeInTheDocument();
   });
 
@@ -147,8 +175,9 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
-    expect(await screen.findByText('Possible')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Structurally similar' })).toBeInTheDocument();
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Possible')).toBeInTheDocument();
+    expect(within(card).getByText('Structurally similar')).toBeInTheDocument();
     expect(screen.getByText('They differ by 2 transitions')).toBeInTheDocument();
   });
 
@@ -157,16 +186,17 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
-    // Both are present, and the match type is the heading; the reuse is a badge next to it.
-    expect(await screen.findByRole('heading', { name: 'Exact JFLAP artifact' })).toBeInTheDocument();
-    expect(screen.getByText('Reused after passing')).toBeInTheDocument();
+    // Both are present, and reuse is a badge beside the match type rather than in place of it.
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Exact JFLAP artifact')).toBeInTheDocument();
+    expect(within(card).getByText('Reused after passing')).toBeInTheDocument();
   });
 
   it('explains a match type in a popover reachable by keyboard', async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([group()]);
     renderPanel();
-    await screen.findByRole('heading', { name: 'Exact JFLAP artifact' });
+    await screen.findByRole('button', { name: 'Explain exact jflap artifact match' });
 
     await person.click(screen.getByRole('button', { name: 'Explain exact jflap artifact match' }));
 
@@ -193,7 +223,9 @@ describe('AssignmentSimilarityPanel', () => {
 
     const cards = await screen.findAllByRole('article');
     expect(cards).toHaveLength(1);
-    expect(screen.getByRole('heading', { name: 'Related submission group' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '3 of 84 students submitted the same saved machine' }),
+    ).toBeInTheDocument();
     expect(screen.getByText(/3 exact jflap artifact relationships/i)).toBeInTheDocument();
   });
 
@@ -258,7 +290,7 @@ describe('AssignmentSimilarityPanel', () => {
     const card = await screen.findByRole('article');
     // Named by its kind, and by the problem it belongs to, since this list is not grouped.
     expect(
-      within(card).getByRole('heading', { name: /Common answer.*Strings ending in 01/ }),
+      within(card).getByRole('heading', { name: /Strings ending in 01/ }),
     ).toBeInTheDocument();
   });
 
@@ -280,7 +312,7 @@ describe('AssignmentSimilarityPanel', () => {
     getMock.mockResolvedValue([group({ reusedAfterPass: true, matchesAnswerFile: true })]);
 
     const { container } = renderPanel();
-    await screen.findByRole('heading', { name: 'Exact JFLAP artifact' });
+    await screen.findByRole('article');
 
     const text = container.textContent?.toLowerCase() ?? '';
     for (const word of ['suspicious', 'plagiar', 'cheat', 'guilty', 'misconduct', 'likely copied']) {
@@ -293,7 +325,7 @@ describe('AssignmentSimilarityPanel', () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([group()]);
     renderPanel();
-    await screen.findByRole('heading', { name: 'Exact JFLAP artifact' });
+    await screen.findByRole('article');
 
     await person.click(screen.getByRole('button', { name: /Compare submissions/ }));
 
@@ -307,7 +339,7 @@ describe('AssignmentSimilarityPanel', () => {
     getMock.mockResolvedValue([group({ studentCount: 20, identicalStudentCount: 20 })]);
 
     renderPanel();
-    await screen.findByRole('heading', { name: 'Exact JFLAP artifact' });
+    await screen.findByRole('article');
 
     await person.click(screen.getByRole('button', { name: /Adjust/ }));
     fireEvent.change(await screen.findByLabelText('Common threshold'), {

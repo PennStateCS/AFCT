@@ -18,7 +18,7 @@ import {
   countByType,
   summarise,
   type MatchCluster,
-} from '@/components/assignments/similarity-evidence';
+} from '@/lib/similarity/evidence';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';

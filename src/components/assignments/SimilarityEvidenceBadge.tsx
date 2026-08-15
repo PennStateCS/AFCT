@@ -3,7 +3,7 @@
 import { Fingerprint, GitBranch, ScanSearch, Users, History } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { MATCH_LABEL, STRENGTH_LABEL, STRENGTH_OF, type MatchType } from './similarity-evidence';
+import { MATCH_LABEL, STRENGTH_LABEL, STRENGTH_OF, type MatchType } from '@/lib/similarity/evidence';
 
 /**
  * How strong the artifact evidence is, and what kind it is.

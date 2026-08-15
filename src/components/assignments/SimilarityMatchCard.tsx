@@ -12,7 +12,7 @@ import {
 } from './SimilarityEvidenceBadge';
 import { SimilarityInfoPopover } from './SimilarityInfoPopover';
 import { SimilarityTimeline } from './SimilarityTimeline';
-import { MATCH_LABEL, type MatchCluster } from './similarity-evidence';
+import type { MatchCluster } from '@/lib/similarity/evidence';
 import {
   clusterDetails,
   clusterFacts,
@@ -73,13 +73,14 @@ export function SimilarityMatchCard({
       </div>
 
       <div className="space-y-1">
+        {/* The heading is the fact rather than the kind, because the badge above already
+            says the kind and a reader who has read it once does not need it twice. */}
         <h4 id={headingId} className="font-semibold">
-          {isGroup ? 'Related submission group' : MATCH_LABEL[cluster.type]}
+          {clusterHeadline(cluster)}
           {showProblem && cluster.problem.title ? (
             <span className="text-muted-foreground font-normal"> · {cluster.problem.title}</span>
           ) : null}
         </h4>
-        <p className="text-sm">{clusterHeadline(cluster)}</p>
         {isGroup ? (
           <p className="text-muted-foreground text-sm">{relationshipSummary(cluster).join(' · ')}</p>
         ) : (
