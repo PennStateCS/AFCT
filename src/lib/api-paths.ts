@@ -173,6 +173,9 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/statistics`,
   assignmentSimilarity: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/similarity`,
+  /** Counts only, for the tab badge: no names, and no access entry in the activity log. */
+  assignmentSimilarityCount: (courseId: string, aid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/similarity?part=count`,
   assignmentReviewData: (courseId: string, aid: string, studentId: string) =>
     `/api/courses/${courseId}/assignments/${aid}/review-data/${studentId}`,
   assignmentSubmissions: (courseId: string, aid: string, sid: string) =>

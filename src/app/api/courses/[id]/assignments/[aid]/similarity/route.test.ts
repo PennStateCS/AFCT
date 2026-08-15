@@ -21,6 +21,11 @@ import { GET } from './route';
 const req = () => new Request('http://localhost/api/courses/c1/assignments/a1/similarity');
 const ctx = () => ({ params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 const call = () => GET(req(), ctx());
+const callCount = () =>
+  GET(
+    new Request('http://localhost/api/courses/c1/assignments/a1/similarity?part=count'),
+    ctx(),
+  );
 
 const student = (id: string) => ({
   id,
@@ -129,6 +134,58 @@ describe('GET /api/courses/[id]/assignments/[aid]/similarity', () => {
     });
     // Never a verdict: no field here says suspicious, and none is stored on the submission.
     expect(JSON.stringify(body)).not.toContain('uspicious');
+  });
+
+  it('answers the tab badge with counts and no names', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+      { problemId: 'p1', shapeHash: 'shape-b', contentHash: 'hash-b', studentId: 's3' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        problemId: 'p1',
+        contentHash: 'hash-a',
+        shapeHash: 'shape-a',
+        assignmentId: 'a1',
+        submittedAt: new Date('2026-08-14T12:00:00Z'),
+        correct: true,
+        fileName: 'stored.jff',
+        originalFileName: 'answer.jff',
+        studentId: 's1',
+        studentGroupId: null,
+        student: student('s1'),
+        studentGroup: null,
+      },
+      {
+        id: 'sub-2',
+        problemId: 'p1',
+        contentHash: 'hash-a',
+        shapeHash: 'shape-a',
+        assignmentId: 'a1',
+        submittedAt: new Date('2026-08-14T12:30:00Z'),
+        correct: true,
+        fileName: 'stored2.jff',
+        originalFileName: 'mine.jff',
+        studentId: 's2',
+        studentGroupId: null,
+        student: student('s2'),
+        studentGroup: null,
+      },
+    ]);
+
+    const body = await (await callCount()).json();
+
+    expect(body).toEqual({ matches: 1, notable: 0, reusedAfterPass: 1 });
+    // 2 of 3 students is most of them, so it is Common and not notable, but it IS reuse.
+    expect(JSON.stringify(body)).not.toContain('s1');
+  });
+
+  it('writes no access entry for a count, which discloses nobody', async () => {
+    await callCount();
+
+    expect(activityLogMock).not.toHaveBeenCalled();
   });
 
   it('records that staff looked, with counts rather than names', async () => {

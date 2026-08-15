@@ -4,6 +4,7 @@ import { apiError } from '@/lib/api/http';
 import { withAssignmentAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { findSubmissionMatches } from '@/lib/similarity/matches';
+import { isCommon } from '@/lib/similarity/rarity';
 
 type Ctx = { params: Promise<{ id: string; aid: string }> };
 
@@ -20,6 +21,7 @@ type Ctx = { params: Promise<{ id: string; aid: string }> };
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
  *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: part, in: query, required: false, schema: { type: string, enum: [count] }, description: "Counts only, for the tab badge" }
  * responses:
  *   200:
  *     description: Groups of submissions sharing identical content, rarest first.
@@ -46,6 +48,18 @@ export const GET = withAssignmentAuth<Ctx>(
         ]),
       );
       const groups = await findSubmissionMatches([...problems.keys()], problems);
+
+      // `?part=count` answers the tab badge: how many matches there are, without who they
+      // are. Deliberately not logged, because nothing about a student is disclosed by a
+      // number, and the assignment page would otherwise write an access entry every time
+      // anybody opened any tab.
+      if (new URL(req.url).searchParams.get('part') === 'count') {
+        return NextResponse.json({
+          matches: groups.length,
+          notable: groups.filter((group) => !isCommon(group)).length,
+          reusedAfterPass: groups.filter((group) => group.reusedAfterPass).length,
+        });
+      }
 
       // Staff reading who matched whom is access to student work, so it leaves a trail like
       // any other. Counts only: the names are in the response, not in the log.

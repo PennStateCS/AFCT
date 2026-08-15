@@ -7977,7 +7977,10 @@ export interface operations {
     };
     getCoursesByIdAssignmentsByAidSimilarity: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Counts only, for the tab badge */
+                part?: "count";
+            };
             header?: never;
             path: {
                 id: string;

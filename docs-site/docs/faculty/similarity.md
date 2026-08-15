@@ -16,7 +16,7 @@ Comparison is per problem. A match is only ever between students answering the s
 
 ## How to read it
 
-The tab opens with one line telling you whether there is anything to read at all, for example "1 set of identical work across 1 problem". Below it, matches are grouped under the problem they belong to, rarest first.
+The tab opens with one line telling you whether there is anything to read at all, for example "1 set of matching work across 1 problem". Below it, matches are grouped under the problem they belong to. The Similarity tab itself carries a count of the matches worth a look, so you can see there is something to read without opening it.
 
 Each match card carries the count that gives it its meaning, and says which kind of match it is:
 
@@ -27,6 +27,12 @@ Each match card carries the count that gives it its meaning, and says which kind
 > **2 of 40 students submitted the same work, drawn differently**
 
 Identical work on its own proves nothing. A problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of forty is worth reading. Twenty-five out of forty is what a correct answer looks like, and AFCT marks those cards **Common**, says so in plain words, and sorts them last.
+
+### Reused after passing
+
+A match badged **Reused after passing** means the byte-identical file had already been marked correct for another student when it was submitted again. That is the pattern a large course is most likely to miss: submit, watch the autograder award full marks, pass the file on. These sort above everything else and their count leads the summary line at the top of the tab.
+
+It is still not a verdict. It says what happened and in what order, and leaves the conclusion to you.
 
 How far apart the two submissions arrived is shown beside the count. Six minutes apart and three weeks apart are very different situations, and you are the one who knows which matters here.
 

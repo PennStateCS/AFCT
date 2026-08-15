@@ -24,6 +24,7 @@ const submission = (over: Record<string, unknown>) => ({
   shapeHash: 'shape-a',
   assignmentId: 'a1',
   submittedAt: new Date('2026-08-14T12:00:00Z'),
+  correct: null,
   fileName: 'stored.jff',
   originalFileName: 'answer.jff',
   studentId: 's1',
@@ -260,6 +261,122 @@ describe('findSubmissionMatches', () => {
 
     expect(group?.studentCount).toBe(2);
     expect(group?.identicalStudentCount).toBe(2);
+  });
+
+  it('flags a file submitted after another student had already passed with it', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({
+        id: 'sub-1',
+        studentId: 's1',
+        student: student('s1'),
+        correct: true,
+        submittedAt: new Date('2026-08-14T12:00:00Z'),
+      }),
+      submission({
+        id: 'sub-2',
+        studentId: 's2',
+        student: student('s2'),
+        correct: true,
+        submittedAt: new Date('2026-08-14T12:30:00Z'),
+      }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.reusedAfterPass).toBe(true);
+  });
+
+  it('does not flag it when the first copy had not passed', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({
+        id: 'sub-1',
+        studentId: 's1',
+        student: student('s1'),
+        correct: false,
+        submittedAt: new Date('2026-08-14T12:00:00Z'),
+      }),
+      submission({
+        id: 'sub-2',
+        studentId: 's2',
+        student: student('s2'),
+        correct: false,
+        submittedAt: new Date('2026-08-14T12:30:00Z'),
+      }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.reusedAfterPass).toBe(false);
+  });
+
+  it('does not flag a student resubmitting their own passing file', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1'), correct: true, submittedAt: new Date('2026-08-14T12:00:00Z') }),
+      submission({ id: 'sub-2', studentId: 's1', student: student('s1'), correct: true, submittedAt: new Date('2026-08-14T12:30:00Z') }),
+      // The other student got there first, so nothing here was reused from a pass.
+      submission({ id: 'sub-3', studentId: 's2', student: student('s2'), correct: null, submittedAt: new Date('2026-08-14T11:00:00Z') }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.reusedAfterPass).toBe(false);
+  });
+
+  it('needs the identical file, not merely the same work redrawn', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-moved', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1'), correct: true, submittedAt: new Date('2026-08-14T12:00:00Z') }),
+      submission({
+        id: 'sub-2',
+        studentId: 's2',
+        student: student('s2'),
+        contentHash: 'hash-moved',
+        correct: true,
+        submittedAt: new Date('2026-08-14T12:30:00Z'),
+      }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.reusedAfterPass).toBe(false);
+  });
+
+  it('puts a reused pass above a rarer ordinary match', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's3' },
+      { problemId: 'p2', shapeHash: 'shape-z', contentHash: 'hash-z', studentId: 's4' },
+      { problemId: 'p2', shapeHash: 'shape-z', contentHash: 'hash-z', studentId: 's5' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      // Three students, so ordinarily this would sort below the pair below.
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1'), correct: true, submittedAt: new Date('2026-08-14T12:00:00Z') }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2'), correct: true, submittedAt: new Date('2026-08-14T12:30:00Z') }),
+      submission({ id: 'sub-3', studentId: 's3', student: student('s3'), correct: true, submittedAt: new Date('2026-08-14T13:00:00Z') }),
+      submission({ id: 'sub-4', problemId: 'p2', shapeHash: 'shape-z', contentHash: 'hash-z', studentId: 's4', student: student('s4') }),
+      submission({ id: 'sub-5', problemId: 'p2', shapeHash: 'shape-z', contentHash: 'hash-z', studentId: 's5', student: student('s5') }),
+    ]);
+
+    const groups = await findSubmissionMatches(['p1', 'p2'], problems);
+
+    expect(groups[0]?.problem.id).toBe('p1');
+    expect(groups[0]?.reusedAfterPass).toBe(true);
   });
 
   it('only looks at submissions that have a hash', async () => {

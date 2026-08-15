@@ -44,6 +44,7 @@ const group = (over: Record<string, unknown> = {}) => ({
   problemStudentCount: 40,
   identicalStudentCount: 2,
   closestGapMs: 6 * 60 * 1000,
+  reusedAfterPass: false,
   submissions: [
     {
       id: 'sub-1',
@@ -157,6 +158,23 @@ describe('AssignmentSimilarityPanel', () => {
 
     expect(await screen.findByText('Common')).toBeInTheDocument();
     expect(screen.getByText(/probably just the answer/)).toBeInTheDocument();
+  });
+
+  it('says plainly when a file was submitted after the same one had already passed', async () => {
+    getMock.mockResolvedValue([group({ reusedAfterPass: true })]);
+
+    renderPanel();
+
+    expect(await screen.findByText('Reused after passing')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'This exact file had already been marked correct for another student when it was submitted again.',
+      ),
+    ).toBeInTheDocument();
+    // And it leads the summary, because it is what a reader with thirty seconds needs.
+    expect(
+      screen.getByText(/^1 of them submitted after the same file had already passed\./),
+    ).toBeInTheDocument();
   });
 
   it('never calls anybody suspicious', async () => {
