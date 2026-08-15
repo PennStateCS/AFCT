@@ -4,13 +4,27 @@ import { NextRequest } from 'next/server';
 const getTokenMock = vi.hoisted(() => vi.fn());
 vi.mock('next-auth/jwt', () => ({ getToken: getTokenMock }));
 
-import { proxy } from './proxy';
+const findManyMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/prisma', () => ({ prisma: { ltiPlatform: { findMany: findManyMock } } }));
+
+import { proxy, resetFrameAncestorCache } from './proxy';
 
 const req = (path: string) => new NextRequest(new URL(`http://localhost${path}`));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetFrameAncestorCache();
+  findManyMock.mockResolvedValue([]);
 });
+
+/** The frame-ancestors list out of whichever CSP header the response carries. */
+const frameAncestors = (res: Response): string => {
+  const csp =
+    res.headers.get('content-security-policy') ??
+    res.headers.get('content-security-policy-report-only') ??
+    '';
+  return (csp.split(';').find((part) => part.trim().startsWith('frame-ancestors')) ?? '').trim();
+};
 
 describe('proxy', () => {
   /**
@@ -226,4 +240,75 @@ describe('proxy', () => {
       expect((await proxy(req('/api/courses/c1'))).status).toBe(200);
     });
   });
+
+  /**
+   * An LMS embeds its tools, and Canvas's deep-linking picker is a modal iframe with no way to
+   * open a new tab. `frame-ancestors 'self'` therefore does not merely inconvenience deep
+   * linking, it makes it impossible. The answer is to name the platforms an administrator has
+   * registered, and only where an LMS actually frames us.
+   */
+  describe('who may put AFCT in an iframe', () => {
+    const platform = {
+      authLoginUrl: 'https://canvas.school.edu/api/lti/authorize_redirect',
+      tokenUrl: 'https://canvas.school.edu/login/oauth2/token',
+      keysetUrl: 'https://canvas.school.edu/api/lti/security/jwks',
+    };
+
+    it('lets a registered platform frame the LTI routes', async () => {
+      findManyMock.mockResolvedValue([platform]);
+
+      const res = await proxy(req('/lti/deep-link'));
+
+      expect(frameAncestors(res)).toBe("frame-ancestors 'self' https://canvas.school.edu");
+    });
+
+    it('keeps every other page unframeable, however many platforms are registered', async () => {
+      findManyMock.mockResolvedValue([platform]);
+
+      const res = await proxy(req('/login'));
+
+      expect(frameAncestors(res)).toBe("frame-ancestors 'self'");
+      // The lookup is skipped entirely rather than merely ignored.
+      expect(findManyMock).not.toHaveBeenCalled();
+    });
+
+    it('names the platform by where it answers, not by the issuer it reports', async () => {
+      // A self-hosted Canvas reports the issuer https://canvas.instructure.com while living
+      // somewhere else entirely. Trusting the issuer would allow an origin that never calls.
+      findManyMock.mockResolvedValue([platform]);
+
+      const res = await proxy(req('/api/lti/login'));
+
+      expect(frameAncestors(res)).not.toContain('canvas.instructure.com');
+      expect(frameAncestors(res)).toContain('https://canvas.school.edu');
+    });
+
+    it('falls back to self when the database cannot be read', async () => {
+      findManyMock.mockRejectedValue(new Error('connection refused'));
+
+      const res = await proxy(req('/lti/link'));
+
+      // Fails closed: deep linking stops working, nothing becomes frameable.
+      expect(frameAncestors(res)).toBe("frame-ancestors 'self'");
+    });
+
+    it('ignores a stored URL that will not parse rather than refusing every launch', async () => {
+      findManyMock.mockResolvedValue([{ ...platform, tokenUrl: 'not a url' }]);
+
+      const res = await proxy(req('/lti/deep-link'));
+
+      expect(frameAncestors(res)).toBe("frame-ancestors 'self' https://canvas.school.edu");
+    });
+
+    it('reads the platforms once for a burst of launches rather than once per request', async () => {
+      findManyMock.mockResolvedValue([platform]);
+
+      await proxy(req('/lti/deep-link'));
+      await proxy(req('/lti/deep-link'));
+      await proxy(req('/api/lti/login'));
+
+      expect(findManyMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
 });
