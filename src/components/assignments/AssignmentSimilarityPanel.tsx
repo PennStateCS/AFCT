@@ -76,7 +76,7 @@ export function AssignmentSimilarityPanel() {
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
   const { timezone } = useEffectiveTimezone();
   const [comparing, setComparing] = useState<{
-    submissions: [MatchSubmission, MatchSubmission];
+    submissions: MatchSubmission[];
     problemType: string | null;
     problemTitle: string | null;
   } | null>(null);
@@ -221,11 +221,11 @@ export function AssignmentSimilarityPanel() {
                     variant="secondary"
                     size="sm"
                     onClick={() =>
+                      // The whole match goes to the dialog, not a pair chosen here: it opens
+                      // on the two closest together in time and lets either side be swapped
+                      // to anyone else in the match.
                       setComparing({
-                        submissions: [
-                          students[0] as MatchSubmission,
-                          students[1] as MatchSubmission,
-                        ],
+                        submissions: students,
                         problemType: group.problem.type,
                         problemTitle: group.problem.title,
                       })

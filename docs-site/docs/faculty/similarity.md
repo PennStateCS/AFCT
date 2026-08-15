@@ -22,7 +22,7 @@ Identical work on its own proves nothing. A problem with one obvious answer will
 
 How far apart the two submissions arrived is shown beside the count. Six minutes apart and three weeks apart are very different situations, and you are the one who knows which matters here.
 
-**Compare files** opens both submissions side by side, drawn the way that problem type is normally read: two automata, two grammars, two expressions. Node positions are kept as the student left them, because where somebody placed their states is exactly what separates a copied file from the same answer worked out twice. Each student's file can also be downloaded from the card.
+**Compare files** opens two of the submissions side by side, drawn the way that problem type is normally read: two automata, two grammars, two expressions. It opens on the two that were submitted closest together, and when a match involves more than two students each side can be switched to any of the others. Node positions are kept as the student left them, because where somebody placed their states is exactly what separates a copied file from the same answer worked out twice. Each student's file can also be downloaded from the card.
 
 Teammates on a group assignment are not reported. Every member's submission writes its own record against the group's shared set, so a team holding the same file is the group feature working, not a finding.
 
