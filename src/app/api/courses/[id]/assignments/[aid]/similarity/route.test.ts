@@ -200,7 +200,7 @@ describe('GET /api/courses/[id]/assignments/[aid]/similarity', () => {
         category: 'SUBMISSION',
         courseId: 'c1',
         assignmentId: 'a1',
-        metadata: { matchGroups: 0, matchedSubmissions: 0 },
+        metadata: { matchGroups: 0, matchedSubmissions: 0, nearMatches: 0 },
       }),
     );
   });

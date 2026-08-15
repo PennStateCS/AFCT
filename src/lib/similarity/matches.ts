@@ -168,8 +168,11 @@ export async function findSubmissionMatches(
 
   // Only work two or more different students submitted. One student's own resubmissions are
   // not a match with anybody.
+  //
+  // No early return when there is nothing here: the third check runs over what these two
+  // leave behind, and a problem where nobody submitted the same file is exactly where it has
+  // something to say. Returning here skipped it entirely.
   const sharedKeys = [...studentsPerShape.entries()].filter(([, students]) => students.size > 1);
-  if (sharedKeys.length === 0) return [];
 
   const sharedShapes: string[] = [];
   const sharedContents: string[] = [];
@@ -179,7 +182,7 @@ export async function findSubmissionMatches(
     else sharedShapes.push(value);
   }
 
-  const submissions = await prisma.submission.findMany({
+  const submissions = sharedKeys.length === 0 ? [] : await prisma.submission.findMany({
     where: {
       problemId: { in: problemIds },
       OR: [

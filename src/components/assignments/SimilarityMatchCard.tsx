@@ -42,19 +42,23 @@ export function SimilarityMatchCard({
   showProblem?: boolean;
 }) {
   const students = studentsInOrder(group);
+  // A named region: with several cards on a page, "Identical file" is what a screen reader
+  // user needs to hear to know which one they have landed in.
+  const headingId = `match-${group.matchId}-heading`;
   const firstAt = students[0] ? Date.parse(students[0].submittedAt) : 0;
   const spansDays =
     new Set(students.map((submission) => formatDay(submission.submittedAt))).size > 1;
 
   return (
     <article
+      aria-labelledby={headingId}
       className={
         common ? 'bg-muted/30 space-y-3 rounded-lg border p-4' : 'space-y-3 rounded-lg border p-4'
       }
     >
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div className="min-w-0">
-          <h4 className="font-semibold">
+          <h4 id={headingId} className="font-semibold">
             {common ? 'Common answer' : matchTitle(group)}
             {showProblem && group.problem.title ? (
               <span className="text-muted-foreground font-normal"> · {group.problem.title}</span>

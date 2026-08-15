@@ -248,6 +248,16 @@ describe('AssignmentSimilarityPanel', () => {
     expect(window.localStorage.getItem('afct.similarityCommonShare')).toBe('0.5');
   });
 
+  it('names each match region so a reader can tell which one they are in', async () => {
+    getMock.mockResolvedValue([group()]);
+
+    renderPanel();
+
+    expect(
+      await screen.findByRole('article', { name: 'Identical file' }),
+    ).toBeInTheDocument();
+  });
+
   it('never calls anybody suspicious, and shows no percentage of similarity', async () => {
     getMock.mockResolvedValue([group({ reusedAfterPass: true, matchesAnswerFile: true })]);
 
