@@ -437,6 +437,22 @@ export default function AssignmentDashboardPage({
     }
   }
 
+  // How many matches are worth a look, for the Similarity tab's count. Counts only, so it
+  // discloses nothing about a student and writes no access entry; without it nobody in a
+  // large course finds out there is anything to read without opening the tab on the off
+  // chance.
+  const similarityCountQuery = useQuery({
+    queryKey: queryKeys.assignment.similarityCount(id, aid),
+    queryFn: async () => {
+      const res = await fetch(apiPaths.assignmentSimilarityCount(id, aid));
+      if (!res.ok) throw new Error('Failed to fetch similarity counts');
+      return (await res.json()) as { matches: number; notable: number; reusedAfterPass: number };
+    },
+    enabled: !!id && !!aid,
+    staleTime: 60_000,
+  });
+  const notableMatches = similarityCountQuery.data?.notable ?? 0;
+
   if (loading) return <LoadingSpinner label="Loading" />;
   if (!assignment) return <div className="text-destructive p-6">Assignment not found.</div>;
 
@@ -452,6 +468,7 @@ export default function AssignmentDashboardPage({
       }
     : undefined;
 
+
   // Single source of truth for the assignment tab strip and its mobile select
   // fallback, so the two stay in sync.
   const assignmentTabs = [
@@ -461,7 +478,13 @@ export default function AssignmentDashboardPage({
     { value: 'problems', label: 'Problems', Icon: FileText },
     { value: 'submissions', label: 'Submissions', Icon: Package },
     { value: 'statistics', label: 'Statistics', Icon: BarChart3 },
-    { value: 'similarity', label: 'Similarity', Icon: Fingerprint },
+    {
+      value: 'similarity',
+      label: 'Similarity',
+      Icon: Fingerprint,
+      // No badge at zero: an empty count on every assignment trains people to ignore it.
+      ...(notableMatches > 0 ? { count: notableMatches } : {}),
+    },
     { value: 'settings', label: 'Settings', Icon: SlidersHorizontal },
   ] as const;
 

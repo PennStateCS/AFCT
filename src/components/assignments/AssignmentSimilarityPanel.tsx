@@ -16,6 +16,7 @@ import { apiClient } from '@/lib/api/fetch-client';
 import { getInitials } from '@/app/utils/initials';
 import { formatDateInTimeZone, zoneAbbrev, parseValidDate } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { isCommon } from '@/lib/similarity/rarity';
 import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/matches';
 
 /**
@@ -31,14 +32,8 @@ import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/mat
  * and no flag is stored against a student.
  */
 
-/** Past this share of a problem's students, identical work is the answer, not a finding. */
-const COMMON_SHARE = 0.25;
-
 const studentName = (student: MatchSubmission['student']) =>
   `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || 'Unknown student';
-
-const isCommon = (group: SubmissionMatchGroup) =>
-  group.problemStudentCount > 0 && group.studentCount / group.problemStudentCount >= COMMON_SHARE;
 
 /** One entry per student: a student who submitted the same file twice is one person. */
 function distinctStudents(group: SubmissionMatchGroup): MatchSubmission[] {
@@ -83,11 +78,19 @@ function summarise(groups: SubmissionMatchGroup[]): string {
   if (groups.length === 0) return 'No two students submitted matching work.';
   const problems = new Set(groups.map((group) => group.problem.id)).size;
   const common = groups.filter(isCommon).length;
+  const reused = groups.filter((group) => group.reusedAfterPass).length;
   const sets = `${groups.length} set${groups.length === 1 ? '' : 's'} of matching work`;
   const across = `across ${problems} problem${problems === 1 ? '' : 's'}`;
-  if (common === 0) return `${sets} ${across}.`;
-  if (common === groups.length) return `${sets} ${across}, all of it shared by much of the class.`;
-  return `${sets} ${across}, ${common} of them shared by much of the class.`;
+
+  // The reused-after-passing count leads when there is one: it is the thing a reader with
+  // thirty seconds needs to know, and the rest is context.
+  const lead = reused > 0 ? `${reused} of them submitted after the same file had already passed. ` : '';
+
+  if (common === 0) return `${lead}${sets} ${across}.`;
+  if (common === groups.length) {
+    return `${lead}${sets} ${across}, all of it shared by much of the class.`;
+  }
+  return `${lead}${sets} ${across}, ${common} of them shared by much of the class.`;
 }
 
 export function AssignmentSimilarityPanel() {
@@ -166,6 +169,14 @@ export function AssignmentSimilarityPanel() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <span>{describeMatch(group)}</span>
+                    {group.reusedAfterPass ? (
+                      <Badge
+                        variant="warning"
+                        title="This exact file had already been marked correct for another student when it was submitted again"
+                      >
+                        Reused after passing
+                      </Badge>
+                    ) : null}
                     {common ? (
                       <Badge variant="neutral" title="Shared by much of the class">
                         Common
@@ -174,6 +185,13 @@ export function AssignmentSimilarityPanel() {
                   </div>
                   {gap ? <span className="text-muted-foreground text-sm">{gap}</span> : null}
                 </div>
+
+                {group.reusedAfterPass ? (
+                  <p className="text-sm">
+                    This exact file had already been marked correct for another student when it
+                    was submitted again.
+                  </p>
+                ) : null}
 
                 {common ? (
                   <p className="text-muted-foreground text-sm">

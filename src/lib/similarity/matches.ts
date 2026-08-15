@@ -13,6 +13,10 @@
 
 import { prisma } from '@/lib/prisma';
 
+// Re-exported for the server side, which has no reason to know the rule moved. Client
+// components must import it from './rarity' directly: this module reaches for Prisma.
+export { isCommon, COMMON_SHARE } from './rarity';
+
 /** A student as the Similarity tab shows them. */
 export type MatchStudent = {
   id: string;
@@ -27,6 +31,8 @@ export type MatchStudent = {
 export type MatchSubmission = {
   id: string;
   submittedAt: string;
+  /** Whether the autograder marked this attempt correct. Null while it is still pending. */
+  correct: boolean | null;
   assignmentId: string;
   fileName: string | null;
   originalFileName: string | null;
@@ -59,6 +65,16 @@ export type SubmissionMatchGroup = {
    * weeks apart, and the reader is the one who knows which of those matters here.
    */
   closestGapMs: number | null;
+  /**
+   * A student submitted the byte-identical file AFTER another student's copy of it had
+   * already been marked correct.
+   *
+   * This is the shape of the thing a large course is most likely to miss: submit, see the
+   * autograder say full marks, pass the file on. It is still not a verdict, and the reader
+   * still has to decide what it means, but it is a materially different situation from two
+   * people arriving at the same answer, and it sorts to the top because of that.
+   */
+  reusedAfterPass: boolean;
   submissions: MatchSubmission[];
 };
 
@@ -145,6 +161,7 @@ export async function findSubmissionMatches(
       shapeHash: true,
       assignmentId: true,
       submittedAt: true,
+      correct: true,
       fileName: true,
       originalFileName: true,
       studentId: true,
@@ -157,7 +174,7 @@ export async function findSubmissionMatches(
   const groups = new Map<string, SubmissionMatchGroup>();
   // Which student group (if any) owns each submission in a match, and when each landed.
   const groupOwners = new Map<string, Set<string | null>>();
-  const submissionTimes = new Map<string, { studentId: string; at: number }[]>();
+  const submissionTimes = new Map<string, TimedSubmission[]>();
 
   // Distinct students per exact file within a match, for the "and these two are the same
   // file" claim the group carries.
@@ -185,6 +202,7 @@ export async function findSubmissionMatches(
         problemStudentCount: studentsPerProblem.get(submission.problemId)?.size ?? 0,
         identicalStudentCount: 1,
         closestGapMs: null,
+        reusedAfterPass: false,
         submissions: [],
       } satisfies SubmissionMatchGroup);
 
@@ -192,6 +210,7 @@ export async function findSubmissionMatches(
       id: submission.id,
       submittedAt: submission.submittedAt.toISOString(),
       assignmentId: submission.assignmentId,
+      correct: submission.correct,
       fileName: submission.fileName,
       originalFileName: submission.originalFileName,
       contentKey: (submission.contentHash ?? '').slice(0, 8),
@@ -211,7 +230,12 @@ export async function findSubmissionMatches(
     groupOwners.set(key, owners);
 
     const times = submissionTimes.get(key) ?? [];
-    times.push({ studentId: submission.studentId, at: submission.submittedAt.getTime() });
+    times.push({
+      studentId: submission.studentId,
+      at: submission.submittedAt.getTime(),
+      correct: submission.correct,
+      contentHash: submission.contentHash ?? '',
+    });
     submissionTimes.set(key, times);
   }
 
@@ -225,7 +249,9 @@ export async function findSubmissionMatches(
     const onlyOwner = owners?.size === 1 ? [...owners][0] : undefined;
     if (onlyOwner) continue;
 
-    group.closestGapMs = closestGap(submissionTimes.get(key) ?? []);
+    const times = submissionTimes.get(key) ?? [];
+    group.closestGapMs = closestGap(times);
+    group.reusedAfterPass = wasReusedAfterPassing(times);
     group.identicalStudentCount = Math.max(
       1,
       ...[...(studentsPerContentInGroup.get(key)?.values() ?? [])].map((set) => set.size),
@@ -233,12 +259,41 @@ export async function findSubmissionMatches(
     reportable.push(group);
   }
 
-  // Rarest first, then the most recent activity, so what needs reading is at the top and a
-  // problem the whole class answered identically sinks to the bottom.
+  // Work that was reused after it had already passed comes first whatever its size: it is
+  // the case a large course is most likely to miss. Then rarest first, so what needs reading
+  // is at the top and a problem the whole class answered identically sinks to the bottom.
   return reportable.sort(
     (a, b) =>
+      Number(b.reusedAfterPass) - Number(a.reusedAfterPass) ||
       a.studentCount - b.studentCount ||
       (b.submissions[0]?.submittedAt ?? '').localeCompare(a.submissions[0]?.submittedAt ?? ''),
+  );
+}
+
+type TimedSubmission = {
+  studentId: string;
+  at: number;
+  correct: boolean | null;
+  contentHash: string;
+};
+
+/**
+ * Did somebody submit the byte-identical file after another student's copy had already been
+ * marked correct?
+ *
+ * Byte-identical, not merely the same work: the claim is that this exact file had already
+ * been shown to pass, which is only true of the file itself. Ordering alone, with no gap
+ * limit: a file passed along a week later is the same act as one passed along in the corridor.
+ */
+function wasReusedAfterPassing(times: TimedSubmission[]): boolean {
+  return times.some((later) =>
+    times.some(
+      (earlier) =>
+        earlier.correct === true &&
+        earlier.studentId !== later.studentId &&
+        earlier.contentHash === later.contentHash &&
+        earlier.at < later.at,
+    ),
   );
 }
 
@@ -246,7 +301,7 @@ export async function findSubmissionMatches(
  * The shortest interval between two DIFFERENT students submitting this content. One
  * student's own resubmissions are minutes apart by nature and would drown the signal.
  */
-function closestGap(times: { studentId: string; at: number }[]): number | null {
+function closestGap(times: TimedSubmission[]): number | null {
   let closest: number | null = null;
   for (let i = 0; i < times.length; i++) {
     for (let j = i + 1; j < times.length; j++) {

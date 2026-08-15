@@ -99,6 +99,8 @@ export const queryKeys = {
       ['course', courseId, 'assignment', assignmentId, 'statistics'] as const,
     similarity: (courseId: string, assignmentId: string) =>
       ['course', courseId, 'assignment', assignmentId, 'similarity'] as const,
+    similarityCount: (courseId: string, assignmentId: string) =>
+      ['course', courseId, 'assignment', assignmentId, 'similarity', 'count'] as const,
   },
 
   /** Calendar: assignments due in a date range (self-scoped to the caller). */
