@@ -1,0 +1,284 @@
+// How the Similarity tab decides what to show first, and how strongly.
+//
+// Pure functions over what the API returns, kept apart from the components so the judgements
+// on this page can be read and tested in one place. Nothing here decides anything about a
+// student: it grades the strength of the *artifact evidence*, which is a statement about two
+// files, and orders the page so the strongest is read first.
+
+import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/matches';
+import { isCommon } from '@/lib/similarity/rarity';
+
+/**
+ * What kind of thing two submissions have in common.
+ *
+ * The order matters and is the whole point of the scale: the same saved artifact says far
+ * more than the same machine, which says more than shared structure. Students do
+ * independently reach the same correct answer; they do not independently save it with every
+ * state in the same place.
+ */
+export type MatchType = 'exact' | 'same-machine' | 'structural' | 'common';
+
+/** How strong the artifact evidence is. Never how likely misconduct is. */
+export type EvidenceStrength = 'very-strong' | 'strong' | 'possible' | 'none';
+
+export const MATCH_LABEL: Record<MatchType, string> = {
+  exact: 'Exact JFLAP artifact',
+  'same-machine': 'Same machine',
+  structural: 'Structurally similar',
+  common: 'Common answer',
+};
+
+export const STRENGTH_LABEL: Record<EvidenceStrength, string> = {
+  'very-strong': 'Very strong',
+  strong: 'Strong',
+  possible: 'Possible',
+  none: 'Expected',
+};
+
+export const STRENGTH_OF: Record<MatchType, EvidenceStrength> = {
+  exact: 'very-strong',
+  'same-machine': 'strong',
+  structural: 'possible',
+  // Common answers are outside the scale rather than at the bottom of it: they are what a
+  // correct answer looks like, not weak evidence of anything.
+  common: 'none',
+};
+
+/**
+ * Which kind a match is.
+ *
+ * A group where every student sent the same saved artifact is exact. One where only some did
+ * is the same machine, with the exact part called out inside it. Anything the provenance
+ * check found is structural. Commonality wins over all of it: at that share of a class it is
+ * convergence whatever the files look like.
+ */
+export function matchTypeOf(group: SubmissionMatchGroup, commonShare: number): MatchType {
+  if (isCommon(group, commonShare)) return 'common';
+  if (group.kind === 'near') return 'structural';
+  return group.identicalStudentCount >= group.studentCount ? 'exact' : 'same-machine';
+}
+
+/**
+ * A set of submissions that are related to each other, directly or through somebody else.
+ *
+ * In a large course the same students turn up in relationship after relationship: four
+ * students who all share work produce six pairs, and six near-identical cards is not a
+ * review, it is a scrolling exercise. Anything connected through a shared student is one
+ * group with one summary, and the relationships inside it stay available underneath.
+ */
+export type MatchCluster = {
+  id: string;
+  problem: SubmissionMatchGroup['problem'];
+  /** The relationships this group is made of, strongest first. */
+  relationships: SubmissionMatchGroup[];
+  /** Every student involved, earliest submission first. */
+  students: MatchSubmission[];
+  type: MatchType;
+  strength: EvidenceStrength;
+  counts: Record<Exclude<MatchType, 'common'>, number>;
+  problemStudentCount: number;
+  reusedAfterPass: boolean;
+  matchesAnswerFile: boolean;
+  /** The shortest interval between two different students anywhere in the group. */
+  closestGapMs: number | null;
+  earliest: MatchSubmission | null;
+  stateCount: number | null;
+  transitionCount: number | null;
+};
+
+const TYPE_RANK: Record<MatchType, number> = {
+  exact: 0,
+  'same-machine': 1,
+  structural: 2,
+  common: 3,
+};
+
+/** One entry per student, earliest submission first. */
+function studentsOf(groups: SubmissionMatchGroup[]): MatchSubmission[] {
+  const earliest = new Map<string, MatchSubmission>();
+  for (const group of groups) {
+    for (const submission of group.submissions) {
+      const held = earliest.get(submission.student.id);
+      if (!held || submission.submittedAt < held.submittedAt) {
+        earliest.set(submission.student.id, submission);
+      }
+    }
+  }
+  return [...earliest.values()].sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+}
+
+/**
+ * Group relationships that share a student into one cluster, per problem.
+ *
+ * Connected components, which is the simplest thing that answers the question a reader is
+ * asking: who is involved in this, all of them, in one place. No clustering cleverness
+ * beyond that; the data model already carries everything it needs.
+ */
+export function clusterMatches(
+  groups: SubmissionMatchGroup[],
+  commonShare: number,
+): MatchCluster[] {
+  const clusters: MatchCluster[] = [];
+
+  const byProblem = new Map<string, SubmissionMatchGroup[]>();
+  for (const group of groups) {
+    byProblem.set(group.problem.id, [...(byProblem.get(group.problem.id) ?? []), group]);
+  }
+
+  for (const [problemId, problemGroups] of byProblem) {
+    // Common answers stand alone: folding one into a cluster of real findings would hide it
+    // in something it does not belong to, and the page sets them aside on purpose.
+    const commonGroups = problemGroups.filter((group) => matchTypeOf(group, commonShare) === 'common');
+    const rest = problemGroups.filter((group) => matchTypeOf(group, commonShare) !== 'common');
+
+    // Union-find over students, so anything connected through a shared student comes out
+    // together however the relationships were discovered.
+    const parent = new Map<string, string>();
+    const find = (id: string): string => {
+      const seen = parent.get(id);
+      if (seen === undefined || seen === id) return id;
+      const root = find(seen);
+      parent.set(id, root);
+      return root;
+    };
+    const union = (a: string, b: string) => {
+      const rootA = find(a);
+      const rootB = find(b);
+      if (rootA !== rootB) parent.set(rootA, rootB);
+    };
+
+    for (const group of rest) {
+      const ids = group.submissions.map((submission) => submission.student.id);
+      for (const id of ids) if (!parent.has(id)) parent.set(id, id);
+      for (let index = 1; index < ids.length; index++) union(ids[0] as string, ids[index] as string);
+    }
+
+    const members = new Map<string, SubmissionMatchGroup[]>();
+    for (const group of rest) {
+      const root = find(group.submissions[0]?.student.id ?? group.matchId);
+      members.set(root, [...(members.get(root) ?? []), group]);
+    }
+
+    for (const [root, related] of members) {
+      clusters.push(buildCluster(`${problemId}:${root}`, related, commonShare));
+    }
+    for (const group of commonGroups) {
+      clusters.push(buildCluster(`${problemId}:${group.matchId}`, [group], commonShare));
+    }
+  }
+
+  return clusters.sort(compareClusters);
+}
+
+function buildCluster(
+  id: string,
+  relationships: SubmissionMatchGroup[],
+  commonShare: number,
+): MatchCluster {
+  const ranked = [...relationships].sort(
+    (a, b) => TYPE_RANK[matchTypeOf(a, commonShare)] - TYPE_RANK[matchTypeOf(b, commonShare)],
+  );
+  const first = ranked[0] as SubmissionMatchGroup;
+  const type = matchTypeOf(first, commonShare);
+
+  const counts = { exact: 0, 'same-machine': 0, structural: 0 } as MatchCluster['counts'];
+  for (const group of ranked) {
+    const groupType = matchTypeOf(group, commonShare);
+    if (groupType !== 'common') counts[groupType] += 1;
+  }
+
+  const students = studentsOf(ranked);
+  const gaps = ranked
+    .map((group) => group.closestGapMs)
+    .filter((gap): gap is number => gap !== null);
+  const sized = ranked.find((group) => group.stateCount !== null);
+
+  return {
+    id,
+    problem: first.problem,
+    relationships: ranked,
+    students,
+    type,
+    strength: STRENGTH_OF[type],
+    counts,
+    problemStudentCount: first.problemStudentCount,
+    reusedAfterPass: ranked.some((group) => group.reusedAfterPass),
+    matchesAnswerFile: ranked.some((group) => group.matchesAnswerFile),
+    closestGapMs: gaps.length > 0 ? Math.min(...gaps) : null,
+    earliest: students[0] ?? null,
+    stateCount: sized?.stateCount ?? null,
+    transitionCount: sized?.transitionCount ?? null,
+  };
+}
+
+/**
+ * Strongest evidence first, and within a kind the rarer and the more recent.
+ *
+ * Reuse after passing lifts a group above its equals rather than above everything: it is
+ * context about timing, and a weaker artifact match does not become a stronger one because
+ * of when it arrived.
+ */
+function compareClusters(a: MatchCluster, b: MatchCluster): number {
+  return (
+    TYPE_RANK[a.type] - TYPE_RANK[b.type] ||
+    Number(b.reusedAfterPass) - Number(a.reusedAfterPass) ||
+    a.students.length - b.students.length ||
+    (b.earliest?.submittedAt ?? '').localeCompare(a.earliest?.submittedAt ?? '')
+  );
+}
+
+/** The page's opening lines: what is here, and whether any of it is the strongest kind. */
+export function summarise(clusters: MatchCluster[]): string[] {
+  const worthReviewing = clusters.filter((cluster) => cluster.type !== 'common');
+  const common = clusters.length - worthReviewing.length;
+
+  if (worthReviewing.length === 0) {
+    return common === 0
+      ? ['No two students submitted related work.']
+      : [`No matches worth reviewing. ${common} common answer${common === 1 ? '' : 's'} set aside.`];
+  }
+
+  const problems = new Set(worthReviewing.map((cluster) => cluster.problem.id)).size;
+  const lines = [
+    `${worthReviewing.length} match group${worthReviewing.length === 1 ? '' : 's'} worth reviewing across ` +
+      `${problems} problem${problems === 1 ? '' : 's'}.`,
+  ];
+
+  const exact = worthReviewing.filter((cluster) => cluster.type === 'exact').length;
+  if (exact > 0) {
+    lines.push(
+      `${exact} contain${exact === 1 ? 's' : ''} an exact artifact match.`,
+    );
+  }
+
+  const reused = worthReviewing.filter((cluster) => cluster.reusedAfterPass).length;
+  if (reused > 0) {
+    lines.push(
+      `${reused} include${reused === 1 ? 's' : ''} work reused after another student received a correct result.`,
+    );
+  }
+
+  // The pair count stays available but stops being the mental model for the page.
+  const relationships = worthReviewing.reduce(
+    (total, cluster) => total + cluster.relationships.length,
+    0,
+  );
+  if (relationships > worthReviewing.length) {
+    lines.push(`${relationships} similarity relationships are contained in these groups.`);
+  }
+
+  return lines;
+}
+
+/** How many clusters each filter would show, for the filter row's counts. */
+export function countByType(clusters: MatchCluster[]): Record<MatchType | 'all', number> {
+  const counts = { all: 0, exact: 0, 'same-machine': 0, structural: 0, common: 0 } as Record<
+    MatchType | 'all',
+    number
+  >;
+  for (const cluster of clusters) {
+    counts.all += 1;
+    counts[cluster.type] += 1;
+  }
+  return counts;
+}
