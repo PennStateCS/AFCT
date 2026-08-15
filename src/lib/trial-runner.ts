@@ -13,6 +13,7 @@ import { runEvaluatorJar } from './evaluator-runner';
 import { TRIALS_DIR, trialConcurrencyLimit } from './evaluator-trials';
 import { resolveInsideDir } from './safe-upload';
 import { errMessage } from './errors';
+import { createEnhancedActivityLog } from './activity-log-utils';
 
 /**
  * Claim and run one waiting trial, if there is one and the ceiling allows it.
@@ -48,12 +49,51 @@ export async function claimAndRunTrial(workerLoops: number): Promise<boolean> {
   return true;
 }
 
-/** Record the outcome, unless the reaper already gave up on this trial (state fencing). */
+// The worker has no HTTP request behind it, so it records a "system" origin rather than
+// letting the IP fall through to the literal "unknown". Same convention as the submission
+// worker's WORKER_CONTEXT.
+const WORKER_CONTEXT = { ipAddress: 'system', userAgent: 'submission-worker' } as const;
+
+/**
+ * Record the outcome, unless the reaper already gave up on this trial (state fencing).
+ *
+ * The activity log entry names the staff member who asked for the run, who is the only
+ * person the trial is about: whose file went in is not something we know. Categorised
+ * SYSTEM, not SUBMISSION, because nothing here is a submission and the study reads
+ * SUBMISSION events as student activity.
+ */
 async function finishTrial(id: string, data: Prisma.EvaluatorTrialUpdateManyMutationInput) {
-  await prisma.evaluatorTrial.updateMany({
+  const written = await prisma.evaluatorTrial.updateMany({
     where: { id, state: 'PROCESSING' },
     data: { ...data, completedAt: new Date() },
   });
+  if (written.count === 0) return; // reaped mid-run; the reaper's own entry covers it
+
+  const failed = data.state === 'FAILED';
+  try {
+    const trial = await prisma.evaluatorTrial.findUnique({
+      where: { id },
+      select: { requestedById: true, problemType: true, correct: true, durationMs: true, feedback: true },
+    });
+    if (!trial) return;
+    await createEnhancedActivityLog(prisma, WORKER_CONTEXT, {
+      userId: trial.requestedById,
+      action: failed ? 'EVALUATOR_TRIAL_FAILED' : 'EVALUATOR_TRIAL_COMPLETED',
+      // A failed trial is nobody's grade going wrong, so it is a WARNING rather than an
+      // ERROR: the log is read by people deciding what to act on.
+      severity: failed ? 'WARNING' : 'INFO',
+      category: 'SYSTEM',
+      metadata: {
+        trialId: id,
+        problemType: trial.problemType,
+        correct: trial.correct,
+        durationMs: trial.durationMs,
+        ...(failed ? { reason: trial.feedback } : {}),
+      },
+    });
+  } catch (error) {
+    console.error(`[TrialRunner] Failed to write activity log for trial ${id}:`, error);
+  }
 }
 
 async function runTrial(id: string, config: EvaluatorConfig): Promise<void> {

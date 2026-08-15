@@ -11,7 +11,7 @@ The **Admin Menu** contains the platform-wide tools:
 | [Courses](../admin/courses.md)                     | Create, duplicate, archive, restore, and delete courses.                         |
 | [Development Tests](../admin/development-tests.md) | Check interface components that are available only in development builds.        |
 | [Submissions](../admin/submissions.md)             | Review and rerun submissions across courses.                                     |
-| [Test the Evaluator](../faculty/evaluator-test.md) | Run two files through the autograder on their own, with no course or grade.      |
+| [Evaluator Sandbox](../faculty/evaluator-sandbox.md) | Run two files through the autograder on their own, with no course or grade.    |
 | [System Logs](../admin/system-logs.md)             | Search the system audit trail and export records.                                |
 | [System Settings](../admin/system-settings.md)     | Configure accounts, uploads, the evaluator, backups, security, TLS, and updates. |
 | [System Status](../admin/system-status.md)         | Check the server, database, Docker, network, sessions, and uploaded files.       |

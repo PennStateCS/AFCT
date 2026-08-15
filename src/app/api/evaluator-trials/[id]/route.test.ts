@@ -125,6 +125,21 @@ describe('DELETE /api/evaluator-trials/[id]', () => {
     expect(prismaMock.evaluatorTrial.delete).toHaveBeenCalledWith({ where: { id: 'trial-1' } });
   });
 
+  it('records the discard, since nothing survives it', async () => {
+    await del();
+
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        userId: 'fac-1',
+        action: 'EVALUATOR_TRIAL_DISCARDED',
+        category: 'SYSTEM',
+        metadata: expect.objectContaining({ trialId: 'trial-1' }),
+      }),
+    );
+  });
+
   it('will not discard somebody else’s trial', async () => {
     prismaMock.evaluatorTrial.findUnique.mockResolvedValue(trial({ requestedById: 'fac-2' }));
 

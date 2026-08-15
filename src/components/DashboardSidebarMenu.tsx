@@ -95,7 +95,7 @@ const COURSE_SECTIONS = [
 const adminMenu = [
   { title: 'Submissions', url: '/dashboard/submissions', icon: CircleCheckBig },
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
-  { title: 'Test the Evaluator', url: '/dashboard/evaluator-test', icon: FlaskConical },
+  { title: 'Evaluator Sandbox', url: '/dashboard/evaluator-sandbox', icon: FlaskConical },
   { title: 'System Logs', url: '/dashboard/system-logs', icon: Logs },
   { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
   { title: 'System Status', url: '/dashboard/system-status', icon: Activity },

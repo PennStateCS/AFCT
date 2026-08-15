@@ -105,6 +105,40 @@ describe('POST /api/evaluator-trials', () => {
     );
   });
 
+  it('records who ran what, with the file names the uploads no longer keep', async () => {
+    await submit();
+
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        userId: 'fac-1',
+        action: 'EVALUATOR_TRIAL_STARTED',
+        severity: 'INFO',
+        // SYSTEM, not SUBMISSION: the study reads SUBMISSION events as student activity.
+        category: 'SYSTEM',
+        metadata: expect.objectContaining({
+          trialId: 'trial-1',
+          problemType: 'FA',
+          answerFileName: 'answer.jff',
+          submissionFileName: 'student.jff',
+        }),
+      }),
+    );
+  });
+
+  it('records a file the evaluator could not read', async () => {
+    validateMock.mockReturnValue({ isValid: false, error: 'not an automaton' });
+
+    await submit();
+
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'EVALUATOR_TRIAL_INVALID_FILE', severity: 'WARNING' }),
+    );
+  });
+
   it('drops the state bound and determinism flag for a type that has neither', async () => {
     await submit({ type: 'CFG', maxStates: '5', isDeterministic: 'true' });
 

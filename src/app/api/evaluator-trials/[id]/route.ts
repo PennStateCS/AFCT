@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { apiError } from '@/lib/api/http';
 import { withStaffAuth } from '@/lib/api/with-auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isAdmin } from '@/lib/permissions';
 import { deleteTrialInputs } from '@/lib/evaluator-trials';
 import { serializeTrial, isTrialFinished } from '@/lib/evaluator-trial-view';
@@ -66,7 +67,7 @@ export const GET = withStaffAuth<Ctx>(
  *   500: { description: Server error. }
  */
 export const DELETE = withStaffAuth<Ctx>(
-  async (_req, ctx, { user }) => {
+  async (req, ctx, { user }) => {
     try {
       const { id } = await ctx.params;
       const trial = await prisma.evaluatorTrial.findUnique({ where: { id } });
@@ -76,6 +77,15 @@ export const DELETE = withStaffAuth<Ctx>(
 
       await deleteTrialInputs(trial);
       await prisma.evaluatorTrial.delete({ where: { id } });
+      // Recorded because the row and its uploads are gone afterwards: without this there
+      // is nothing left to say the run happened at all.
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'EVALUATOR_TRIAL_DISCARDED',
+        severity: 'INFO',
+        category: 'SYSTEM',
+        metadata: { trialId: id, state: trial.state, discardedForOwner: trial.requestedById },
+      });
       return new NextResponse(null, { status: 204 });
     } catch (error) {
       console.error('Error discarding evaluator trial:', error);

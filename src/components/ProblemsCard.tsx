@@ -36,12 +36,12 @@ export function ProblemsCard({
           Problems
         </h2>
         <div className="flex flex-wrap items-center gap-2">
-          {/* The faculty way in to the evaluator trial page (admins also have it in the
+          {/* The faculty way in to the evaluator sandbox (admins also have it in the
               Administration menu). Shown on an archived course too: trying a file out
               changes nothing here. */}
           <Button variant="outline" asChild>
-            <Link href="/dashboard/evaluator-test">
-              <FlaskConical /> Test the Evaluator
+            <Link href="/dashboard/evaluator-sandbox">
+              <FlaskConical /> Evaluator Sandbox
             </Link>
           </Button>
           {onImportProblem && (

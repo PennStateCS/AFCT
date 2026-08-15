@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { apiError } from '@/lib/api/http';
 import { withStaffAuth } from '@/lib/api/with-auth';
 import { readFormData } from '@/lib/api/request';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { safeStoredFilename, resolveInsideDir, safeUnlinkInDir } from '@/lib/safe-upload';
@@ -89,6 +91,13 @@ export const POST = withStaffAuth(
         const buffer = Buffer.from(await file.arrayBuffer());
         const validation = validateStructureXML(buffer.toString('utf8'), type);
         if (!validation.isValid) {
+          await createEnhancedActivityLog(prisma, req, {
+            userId: user.id,
+            action: 'EVALUATOR_TRIAL_INVALID_FILE',
+            severity: 'WARNING',
+            category: 'SYSTEM',
+            metadata: { which: label, fileName: file.name, problemType: type, error: validation.error },
+          });
           return apiError(400, `The ${label} file could not be read: ${validation.error}`);
         }
         uploads.push({ file, buffer });
@@ -118,6 +127,25 @@ export const POST = withStaffAuth(
         },
       });
 
+      // Categorised SYSTEM rather than SUBMISSION on purpose: nothing here is a
+      // submission, and the study reads SUBMISSION events as student activity. The file
+      // names go in because they are the only record of what was run, the uploads
+      // themselves being deleted minutes later.
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'EVALUATOR_TRIAL_STARTED',
+        severity: 'INFO',
+        category: 'SYSTEM',
+        metadata: {
+          trialId: trial.id,
+          problemType: type,
+          maxStates: trial.maxStates,
+          isDeterministic: trial.isDeterministic,
+          answerFileName: answerFile.name,
+          submissionFileName: submissionFile.name,
+        },
+      });
+
       // Cheap moment to take out the rubbish: this is the only route that runs often
       // enough to matter and rarely enough not to.
       void pruneExpiredTrials().catch(() => {});
@@ -128,6 +156,12 @@ export const POST = withStaffAuth(
       // usual path, so take them back out on the way past.
       for (const name of written) await safeUnlinkInDir(TRIALS_DIR, name);
       console.error('Error starting evaluator trial:', error);
+      await logError(req, {
+        userId: user.id,
+        action: 'EVALUATOR_TRIAL_ERROR',
+        category: 'SYSTEM',
+        error,
+      });
       return apiError(500, 'Internal server error');
     }
   },

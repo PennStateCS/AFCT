@@ -246,6 +246,9 @@ async function reapStuckSubmissions() {
     const reapedTrials = await reapStuckTrials(cutoff);
     if (reapedTrials > 0) {
       console.warn(`[SubmissionWorker] Failed ${reapedTrials} stuck evaluator trial(s)`);
+      // One entry for the sweep rather than one per row: this is the queue recovering,
+      // and the trials themselves record nothing after the fact.
+      await logQueueEvent('EVALUATOR_TRIAL_QUEUE_REAPED', 'WARNING', { count: reapedTrials });
     }
   } catch (error) {
     console.error('[SubmissionWorker] Reaper error:', error);

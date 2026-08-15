@@ -43,7 +43,7 @@ function statusText(trial: EvaluatorTrialView): string {
   return trial.state === 'COMPLETED' ? 'Finished.' : 'Could not finish.';
 }
 
-export default function EvaluatorTestClient() {
+export default function EvaluatorSandboxClient() {
   const queryClient = useQueryClient();
   const { maxMb } = useMaxUploadSize();
 
@@ -127,7 +127,7 @@ export default function EvaluatorTestClient() {
         <CardHeader>
           <CardTitle role="heading" aria-level={1} className="flex items-center gap-2 text-2xl">
             <FlaskConical className="h-6 w-6" aria-hidden="true" />
-            Test the Evaluator
+            Evaluator Sandbox
           </CardTitle>
           <p className="text-muted-foreground text-sm">
             Run a pair of files through the autograder without building a course around them.
@@ -135,15 +135,20 @@ export default function EvaluatorTestClient() {
           </p>
         </CardHeader>
 
-        <CardContent className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2">
+        {/* Capped rather than full-bleed: these are a handful of short controls, and on a
+            wide screen a full-width row leaves a label and its own control at opposite
+            ends of the display with nothing between them. */}
+        <CardContent className="max-w-3xl space-y-6">
+          {/* One narrow column rather than a grid. Max States grows a second row when it is
+              limited, which left it half a control lower than whatever sat beside it. */}
+          <div className="max-w-sm space-y-4">
             <div>
-              <Label htmlFor="trial-type" className="mb-2 block">
+              <Label htmlFor="trial-type" className="mb-2 block text-sm font-medium">
                 Problem Type
               </Label>
               <select
                 id="trial-type"
-                className="bg-card border-input w-full rounded border p-2"
+                className="bg-card border-input h-9 w-full rounded border px-2"
                 value={type}
                 disabled={running}
                 onChange={(e) => setType(e.target.value as typeof type)}
@@ -170,20 +175,20 @@ export default function EvaluatorTestClient() {
                 disabled={running}
               />
             )}
+
+            {type === 'FA' && (
+              <SwitchField
+                label="Deterministic"
+                name="trial-deterministic"
+                id="trial-deterministic"
+                checked={isDeterministic}
+                onCheckedChange={setIsDeterministic}
+                disabled={running}
+              />
+            )}
           </div>
 
-          {type === 'FA' && (
-            <SwitchField
-              label="Deterministic"
-              name="trial-deterministic"
-              id="trial-deterministic"
-              checked={isDeterministic}
-              onCheckedChange={setIsDeterministic}
-              disabled={running}
-            />
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
             <FileUploadInput
               id="trial-answer-file"
               name="answerFile"
@@ -217,6 +222,12 @@ export default function EvaluatorTestClient() {
                 Clear
               </Button>
             )}
+            {/* Say why the button is dead rather than leaving it greyed with no reason. */}
+            {!answerFile || !submissionFile ? (
+              <span className="text-muted-foreground text-sm">
+                Choose both files to run a test.
+              </span>
+            ) : null}
           </div>
 
           {error && (
@@ -229,12 +240,14 @@ export default function EvaluatorTestClient() {
 
       {trialId !== null && (
         <Card>
-          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+          {/* The verdict sits beside the heading, not at the far edge of the card: on a wide
+              screen "Correct" ended up an arm's length from the thing it describes. */}
+          <CardHeader className="flex flex-row flex-wrap items-center gap-3">
             <CardTitle className="text-xl">Result</CardTitle>
             {verdict && <Badge variant={verdict.variant}>{verdict.label}</Badge>}
           </CardHeader>
 
-          <CardContent className="space-y-4">
+          <CardContent className="max-w-3xl space-y-4">
             {/* One live region for the whole run, so a screen reader hears each step once. */}
             <div aria-live="polite" className="flex items-center gap-3 text-sm">
               {running && <Spinner />}

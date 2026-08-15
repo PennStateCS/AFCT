@@ -1,8 +1,8 @@
-# Test the Evaluator
+# Evaluator Sandbox
 
-**Test the Evaluator** runs a pair of files through the autograder on their own, without a course, an assignment or a student. Use it to check an answer file before you build a problem around it, or to reproduce what a student saw when they say a correct answer was marked wrong.
+The **Evaluator Sandbox** runs a pair of files through the autograder on their own, without a course, an assignment or a student. Use it to check an answer file before you build a problem around it, or to reproduce what a student saw when they say a correct answer was marked wrong.
 
-Faculty, TAs and administrators can reach it. Open a course, select **Problems**, then **Test the Evaluator**; administrators also have it in the **Administration** menu.
+Faculty, TAs and administrators can reach it. Open a course, select **Problems**, then **Evaluator Sandbox**; administrators also have it in the **Administration** menu.
 
 ## Run a test
 

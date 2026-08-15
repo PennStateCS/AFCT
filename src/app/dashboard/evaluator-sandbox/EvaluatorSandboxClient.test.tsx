@@ -4,7 +4,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import EvaluatorTestClient from './EvaluatorTestClient';
+import EvaluatorSandboxClient from './EvaluatorSandboxClient';
 
 vi.mock('@/hooks/use-max-upload-size', () => ({
   useMaxUploadSize: () => ({ maxMb: 25, loading: false, error: null }),
@@ -14,7 +14,7 @@ const renderPage = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={client}>
-      <EvaluatorTestClient />
+      <EvaluatorSandboxClient />
     </QueryClientProvider>,
   );
 };
@@ -62,7 +62,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('EvaluatorTestClient', () => {
+describe('EvaluatorSandboxClient', () => {
   it('will not run until both files are chosen', () => {
     renderPage();
 

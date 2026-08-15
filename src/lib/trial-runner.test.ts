@@ -9,12 +9,14 @@ const prismaMock = vi.hoisted(() => ({
   },
 }));
 const runEvaluatorJarMock = vi.hoisted(() => vi.fn());
+const activityLogMock = vi.hoisted(() => vi.fn());
 const getEvaluatorConfigMock = vi.hoisted(() => vi.fn());
 const existsSyncMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('./evaluator-runner', () => ({ runEvaluatorJar: runEvaluatorJarMock }));
 vi.mock('./eval-config', () => ({ getEvaluatorConfig: getEvaluatorConfigMock }));
+vi.mock('./activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('fs', () => ({ default: { existsSync: existsSyncMock }, existsSync: existsSyncMock }));
 
 import { claimAndRunTrial, reapStuckTrials } from './trial-runner';
@@ -150,6 +152,67 @@ describe('claimAndRunTrial', () => {
 
     expect(runEvaluatorJarMock).not.toHaveBeenCalled();
     expect(String(finishData().feedback)).toContain('no longer available');
+  });
+});
+
+describe('what the run records', () => {
+  it('logs the outcome against the person who asked for it', async () => {
+    prismaMock.evaluatorTrial.findUnique.mockResolvedValue({
+      ...TRIAL,
+      requestedById: 'fac-1',
+      correct: true,
+      durationMs: 900,
+      feedback: 'Accepted',
+    });
+
+    await claimAndRunTrial(5);
+
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      { ipAddress: 'system', userAgent: 'submission-worker' },
+      expect.objectContaining({
+        userId: 'fac-1',
+        action: 'EVALUATOR_TRIAL_COMPLETED',
+        severity: 'INFO',
+        category: 'SYSTEM',
+      }),
+    );
+  });
+
+  it('logs a failure as a warning, not an error: no grade is wrong', async () => {
+    prismaMock.evaluatorTrial.findUnique.mockResolvedValue({
+      ...TRIAL,
+      requestedById: 'fac-1',
+      correct: null,
+      durationMs: 5000,
+      feedback: 'The evaluator could not run: Evaluation timed out',
+    });
+    runEvaluatorJarMock.mockResolvedValue({
+      outcome: 'error',
+      error: 'Evaluation timed out',
+      stdout: '',
+      stderr: '',
+      durationMs: 5000,
+    });
+
+    await claimAndRunTrial(5);
+
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'EVALUATOR_TRIAL_FAILED', severity: 'WARNING' }),
+    );
+  });
+
+  it('writes nothing when the reaper got there first', async () => {
+    // The claim wins, then the outcome write matches no row: the reaper already failed it.
+    prismaMock.evaluatorTrial.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+
+    await claimAndRunTrial(5);
+
+    expect(activityLogMock).not.toHaveBeenCalled();
   });
 });
 
