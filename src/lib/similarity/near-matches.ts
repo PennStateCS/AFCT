@@ -65,9 +65,36 @@ export const FEATURE_COMMON_SHARE = 0.25;
 export const MIN_SHARED_RARE_FEATURES = 4;
 export const MIN_SHARED_SHARE = 0.5;
 
-/** Weight a feature by how unusual it is: rarer counts for more, common counts for nothing. */
+/**
+ * How different in size two submissions may be and still be versions of one another.
+ *
+ * A copied file that was edited differs by a state or two. Two machines differing by half
+ * their size are two machines, however much skeleton they have in common, and calling them
+ * "structurally similar" would be wrong in a way a reader could see at a glance, which is
+ * the fastest way to lose their trust in the rest of the page.
+ */
+export const MAX_SIZE_DIFFERENCE_SHARE = 0.4;
+
+function comparableInSize(a: ProvenanceFeatures, b: ProvenanceFeatures): boolean {
+  const compare = (x: number, y: number) => {
+    const larger = Math.max(x, y);
+    return larger === 0 ? true : Math.abs(x - y) / larger <= MAX_SIZE_DIFFERENCE_SHARE;
+  };
+  return (
+    compare(a.stateCount, b.stateCount) && compare(a.transitionCount, b.transitionCount)
+  );
+}
+
+/**
+ * Weight a feature by how unusual it is: rarer counts for more, common counts for nothing.
+ *
+ * A feature only one student holds counts for nothing either. It cannot be shared, so it is
+ * no evidence about any pair; and being the rarest thing in the problem it would otherwise
+ * carry the heaviest weight in the denominator below, quietly penalising a submission for
+ * being distinctive. Two files differing in a couple of places fell under the bar that way.
+ */
 function weightOf(studentsWithFeature: number, studentsInProblem: number): number {
-  if (studentsInProblem === 0) return 0;
+  if (studentsInProblem === 0 || studentsWithFeature < 2) return 0;
   const share = studentsWithFeature / studentsInProblem;
   if (share > FEATURE_COMMON_SHARE) return 0;
   // 1/share, so a feature two of forty students have counts twenty times one that ten have.
@@ -79,6 +106,10 @@ const prefixOf = (feature: string): string => feature.slice(0, feature.indexOf('
 /**
  * Pairs of submissions that share uncommon structure, most convincing first.
  *
+ * Every attempt is compared, not just one per student: a copied file can arrive on a fourth
+ * try as easily as a first. Two students still get one card between them, showing the two
+ * attempts that match each other best.
+ *
  * Only pairs the exact and shape checks left behind: if two submissions already sit in the
  * same match because their shape hashes agree, saying so again here adds nothing. Group
  * assignments are skipped for the same reason they are elsewhere, since teammates sharing
@@ -87,40 +118,31 @@ const prefixOf = (feature: string): string => feature.slice(0, feature.indexOf('
 export function findNearMatches(submissions: NearMatchInput[]): NearMatch[] {
   if (submissions.length < 2) return [];
 
-  // One submission per student: their earliest, so a student who tried five times is not
-  // five chances to match somebody. Comparing every attempt would also make a student's own
-  // revisions look like a crowd.
-  const byStudent = new Map<string, NearMatchInput>();
-  for (const submission of submissions) {
-    const held = byStudent.get(submission.studentId);
-    if (!held || submission.submittedAt < held.submittedAt) {
-      byStudent.set(submission.studentId, submission);
-    }
-  }
-  const entries = [...byStudent.values()];
-  if (entries.length < 2) return [];
+  const students = new Set(submissions.map((submission) => submission.studentId));
+  if (students.size < 2) return [];
 
-  // How many students hold each feature, which is what makes it rare or ordinary.
-  const holders = new Map<string, number>();
-  for (const entry of entries) {
-    for (const feature of new Set(entry.features.features)) {
-      holders.set(feature, (holders.get(feature) ?? 0) + 1);
+  // How many STUDENTS hold each feature, counted once each however many times they
+  // submitted: a student who tried five times must not make their own quirks look common.
+  const holders = new Map<string, Set<string>>();
+  for (const submission of submissions) {
+    for (const feature of new Set(submission.features.features)) {
+      holders.set(feature, (holders.get(feature) ?? new Set<string>()).add(submission.studentId));
     }
   }
 
   const weights = new Map<string, number>();
-  for (const [feature, count] of holders) {
-    const weight = weightOf(count, entries.length);
+  for (const [feature, studentsWithIt] of holders) {
+    const weight = weightOf(studentsWithIt.size, students.size);
     if (weight > 0) weights.set(feature, weight);
   }
 
   // Index the rare features so candidates come from sharing one, rather than from comparing
   // everybody with everybody.
   const index = new Map<string, NearMatchInput[]>();
-  for (const entry of entries) {
-    for (const feature of new Set(entry.features.features)) {
+  for (const submission of submissions) {
+    for (const feature of new Set(submission.features.features)) {
       if (!weights.has(feature)) continue;
-      index.set(feature, [...(index.get(feature) ?? []), entry]);
+      index.set(feature, [...(index.get(feature) ?? []), submission]);
     }
   }
 
@@ -131,6 +153,8 @@ export function findNearMatches(submissions: NearMatchInput[]): NearMatch[] {
       for (let j = i + 1; j < holdersOfFeature.length; j++) {
         const a = holdersOfFeature[i]!;
         const b = holdersOfFeature[j]!;
+        // One student's own attempts are not a pair with each other.
+        if (a.studentId === b.studentId) continue;
         if (a.features.machineType !== b.features.machineType) continue;
         // Teammates on a group assignment share their work by design.
         if (a.studentGroupId && a.studentGroupId === b.studentGroupId) continue;
@@ -142,13 +166,19 @@ export function findNearMatches(submissions: NearMatchInput[]): NearMatch[] {
     }
   }
 
-  const matches: NearMatch[] = [];
+  // Every attempt is compared, because a file can be copied on a fourth try as easily as a
+  // first, and comparing only one attempt each would miss exactly that. But two students get
+  // one card between them: the attempts that match each other best, not one per combination.
+  const bestPerStudentPair = new Map<string, NearMatch>();
   for (const { a, b } of candidates.values()) {
     const match = scorePair(a, b, weights);
-    if (match) matches.push(match);
+    if (!match) continue;
+    const pairKey = [a.studentId, b.studentId].sort().join(':');
+    const held = bestPerStudentPair.get(pairKey);
+    if (!held || match.score > held.score) bestPerStudentPair.set(pairKey, match);
   }
 
-  return matches.sort((x, y) => y.score - x.score);
+  return [...bestPerStudentPair.values()].sort((x, y) => y.score - x.score);
 }
 
 function scorePair(
@@ -160,6 +190,8 @@ function scorePair(
   const bFeatures = new Set(b.features.features);
   const shared = [...aFeatures].filter((feature) => bFeatures.has(feature));
 
+  if (!comparableInSize(a.features, b.features)) return null;
+
   const sharedRare = shared.filter((feature) => weights.has(feature));
   if (sharedRare.length < MIN_SHARED_RARE_FEATURES) return null;
 
@@ -168,7 +200,8 @@ function scorePair(
 
   const sharedWeight = weightOfSet(sharedRare);
   // Measured against the smaller of the two, so adding material to a copy cannot dilute the
-  // evidence away.
+  // evidence away. Only weighted features count on either side, so what is being asked is
+  // "of the shareable uncommon structure this submission carries, how much is in both".
   const smaller = Math.min(weightOfSet(aFeatures), weightOfSet(bFeatures));
   if (smaller === 0) return null;
 

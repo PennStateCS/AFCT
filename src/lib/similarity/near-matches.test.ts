@@ -101,14 +101,47 @@ describe('findNearMatches', () => {
     expect(matches).toEqual([]);
   });
 
-  it('counts a student once however many times they submitted', () => {
+  it('does not pair a student with themselves', () => {
     const again = person('a', [...ordinary, ...peculiar], {
       id: 'sub-a2',
       submittedAt: new Date(Date.UTC(2026, 7, 15, 23, 0)),
     });
 
-    // One student's own resubmissions are not a pair.
     expect(findNearMatches([person('a', [...ordinary, ...peculiar]), again])).toEqual([]);
+  });
+
+  it('compares every attempt, not only a student\'s first', () => {
+    // Their first attempt is their own work; the copy arrives on the second.
+    const firstTry = person('a', [...ordinary, 'f:s:my-own-attempt', 'f:e:my-own-attempt']);
+    const later = person('a', [...ordinary, ...peculiar], {
+      id: 'sub-a-later',
+      submittedAt: new Date(Date.UTC(2026, 7, 15, 22, 0)),
+    });
+
+    const matches = findNearMatches([
+      ...crowd(20),
+      firstTry,
+      later,
+      person('b', [...ordinary, ...peculiar]),
+    ]);
+
+    expect(matches).toHaveLength(1);
+    // And it is the attempt that actually matches which is reported, not the earlier one.
+    expect([matches[0]?.a.id, matches[0]?.b.id]).toContain('sub-a-later');
+  });
+
+  it('gives two students one card, not one per pair of attempts', () => {
+    const twice = (id: string) => [
+      person(id, [...ordinary, ...peculiar]),
+      person(id, [...ordinary, ...peculiar], {
+        id: `sub-${id}-2`,
+        submittedAt: new Date(Date.UTC(2026, 7, 15, 21, 0)),
+      }),
+    ];
+
+    const matches = findNearMatches([...crowd(20), ...twice('a'), ...twice('b')]);
+
+    expect(matches).toHaveLength(1);
   });
 
   it('will not pair submissions of different machine types', () => {
@@ -187,6 +220,24 @@ describe('findNearMatches', () => {
     expect((match?.evidence ?? []).map((item) => item.detail).join(' ')).toContain(
       'building-block details are the same',
     );
+  });
+
+  it('will not call two machines of very different sizes versions of each other', () => {
+    const a = person('a', [...ordinary, ...peculiar]);
+    const b = person('b', [...ordinary, ...peculiar]);
+    // Four states against sixteen: whatever skeleton they share, these are two machines.
+    b.features = { ...b.features, stateCount: 16, transitionCount: 20 };
+
+    expect(findNearMatches([...crowd(20), a, b])).toEqual([]);
+  });
+
+  it('accepts the difference an edit actually makes', () => {
+    const a = person('a', [...ordinary, ...peculiar]);
+    const b = person('b', [...ordinary, ...peculiar]);
+    // One state and one transition added, which is the case this check exists for.
+    b.features = { ...b.features, stateCount: 5, transitionCount: 6 };
+
+    expect(findNearMatches([...crowd(20), a, b])).toHaveLength(1);
   });
 
   it('says how the two differ, not only how they agree', () => {

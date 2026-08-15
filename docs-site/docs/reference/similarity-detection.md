@@ -55,23 +55,27 @@ Rules it applies, all of which have tests:
 
 - **Scoped by problem.** A problem belongs to one course, so a match can never cross into another instructor's course. Do not widen this.
 - **Group assignments.** A group whose submissions all belong to one student group is dropped: every member's submit writes its own row against the shared set, so a team matching itself is the group feature working.
-- **A student's own resubmissions are not a match.**
+- **A student's own attempts are never paired with each other.**
 - **No repeats.** A pair already matched by content or shape is not reported again as a near match.
 
 ## The provenance check
 
 `findNearMatches` (`lib/similarity/near-matches.ts`) is a pure function over rows already loaded, so it is testable without a database.
 
-1. One submission per student, their earliest.
-2. Count how many students hold each feature.
-3. Discard anything held by more than `FEATURE_COMMON_SHARE` of them (0.25).
-4. Index the survivors; candidate pairs come only from sharing one, never from comparing everybody with everybody.
+1. Count how many **students** hold each feature, once each however many times they submitted.
+2. Discard anything held by more than `FEATURE_COMMON_SHARE` of them (0.25), and anything only one student holds: it cannot be shared, so it is evidence about nobody, and being the rarest thing in the problem it would otherwise dominate the denominator in step 5 and penalise a submission for being distinctive.
+3. Index the survivors; candidate pairs come only from sharing one, never from comparing everybody with everybody.
+4. Reject a pair whose sizes differ by more than `MAX_SIZE_DIFFERENCE_SHARE` (0.4). Two versions of one file differ by a state or two; machines of very different sizes are two machines however much skeleton they share.
 5. Score a pair by the summed rarity weight of its shared features, measured against the smaller of the two.
 6. Report it when it clears both `MIN_SHARED_RARE_FEATURES` (4) and `MIN_SHARED_SHARE` (0.5).
 
+Every attempt is compared, not one per student: a file can be copied on a fourth try as easily as a first. Two students still get one card between them, showing the attempts that match each other best.
+
 The score exists to rank and to gate. It is never shown, never stored, and can be recomputed at any time. What a reader sees is the evidence list, and every line of it is a count the code can point at.
 
-**The three constants are judgement, not measurement.** They were chosen against fixtures, not against a real class, and they are the first thing to revisit once real submissions exist. They live together at the top of the file for that reason.
+**The constants are judgement, not measurement.** They were chosen against fixtures, not against a real class, and they are the first thing to revisit once real submissions exist. They live together at the top of the file for that reason.
+
+What seeded demo data already shows: with twenty students and machines of three to six states, a submission carries only a handful of features, so four shared uncommon ones is a low bar and the check reports pairs a professor would shrug at. Small machines and small cohorts are where it is chattiest. Resist tuning the numbers against invented data, which only fits them to whatever the generator happens to produce; tune them against a real assignment.
 
 ## Where false positives remain
 
